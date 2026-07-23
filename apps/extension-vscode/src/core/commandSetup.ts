@@ -826,61 +826,70 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         return s.charAt(0).toUpperCase() + s.slice(1);
       }
 
-      const items: vscode.QuickPickItem[] = [
+      type ActionSheetAction =
+        | 'attach-file'
+        | 'mention-file-project'
+        | 'clear'
+        | 'switch-model'
+        | 'effort'
+        | 'thinking'
+        | 'mode'
+        | 'account';
+      type ActionSheetItem = vscode.QuickPickItem & { action?: ActionSheetAction };
+      const items: ActionSheetItem[] = [
         { label: 'Context', kind: vscode.QuickPickItemKind.Separator },
         {
           label: '$(file-add) Attach file',
           description: 'Add a workspace file to conversation context',
-          detail: 'attach-file',
+          action: 'attach-file',
         },
         {
           label: '$(mention) Mention file from project',
           description: 'Open file picker and insert mention into @agi chat',
-          detail: 'mention-file-project',
+          action: 'mention-file-project',
         },
         {
           label: '$(trash) Clear conversation',
           description: 'Start a fresh conversation',
-          detail: 'clear',
+          action: 'clear',
         },
         { label: 'Model', kind: vscode.QuickPickItemKind.Separator },
         {
           label: '$(symbol-color) Switch model…',
           description: `Current: ${currentModel}`,
-          detail: 'switch-model',
+          action: 'switch-model',
         },
         {
           label: `$(brain) Effort: ${cap(currentEffort)}`,
           description: 'Set reasoning effort (Low / Medium / High / Max)',
-          detail: 'effort',
+          action: 'effort',
         },
         {
           label: `$(lightbulb) Thinking: ${currentThinking ? 'On' : 'Off'}`,
           description: 'Extended thinking — model shows reasoning before responding',
-          detail: 'thinking',
+          action: 'thinking',
         },
         {
           label: `$(robot) Mode: ${cap(currentMode)}`,
           description: 'Set agent operating mode',
-          detail: 'mode',
+          action: 'mode',
         },
         {
           label: '$(account) Account & usage',
           description: 'View model dashboard and token usage',
-          detail: 'account',
+          action: 'account',
         },
       ];
 
       const pick = await vscode.window.showQuickPick(items, {
         title: 'AGI Workforce — Actions',
         placeHolder: 'Search actions…',
-        matchOnDetail: true,
         matchOnDescription: true,
       });
 
       if (pick === undefined) return;
 
-      switch (pick.detail) {
+      switch (pick.action) {
         case 'attach-file': {
           const uris = await vscode.window.showOpenDialog({
             canSelectMany: true,
@@ -902,71 +911,83 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           await vscode.commands.executeCommand('agi-workforce.selectModel');
           break;
         case 'effort': {
-          const effortItems: vscode.QuickPickItem[] = [
+          type EffortItem = vscode.QuickPickItem & {
+            value: 'low' | 'medium' | 'high' | 'max';
+          };
+          const effortItems: EffortItem[] = [
             {
               label: '$(circle-outline) Low',
               description: 'Minimal reasoning — fastest, lowest cost',
-              detail: 'low',
+              value: 'low',
             },
             {
               label: '$(circle-filled) Medium',
               description: 'Balanced reasoning — default',
-              detail: 'medium',
+              value: 'medium',
             },
             {
               label: '$(pulse) High',
               description: 'Extended reasoning — slower, higher quality',
-              detail: 'high',
+              value: 'high',
             },
-            { label: '$(sparkle) Max', description: 'Maximum reasoning budget', detail: 'max' },
+            {
+              label: '$(sparkle) Max',
+              description: 'Maximum reasoning budget',
+              value: 'max',
+            },
           ];
           const effortPick = await vscode.window.showQuickPick(effortItems, {
             title: 'AGI Workforce — Set Effort',
             placeHolder: `Current: ${cap(currentEffort)}`,
           });
-          if (effortPick?.detail !== undefined) {
+          const selectedEffort = effortPick?.value;
+          if (selectedEffort !== undefined) {
             await vscode.workspace
               .getConfiguration('agiWorkforce')
-              .update('agent.effort', effortPick.detail, vscode.ConfigurationTarget.Global);
+              .update('agent.effort', selectedEffort, vscode.ConfigurationTarget.Global);
             vscode.window.showInformationMessage(
-              `AGI Workforce effort set to: ${cap(effortPick.detail)}`,
+              `AGI Workforce effort set to: ${cap(selectedEffort)}`,
             );
           }
           break;
         }
         case 'mode': {
-          const modeItems: vscode.QuickPickItem[] = [
+          type AgentModeItem = vscode.QuickPickItem & {
+            value: 'ask' | 'auto' | 'plan' | 'bypass';
+          };
+          const modeItems: AgentModeItem[] = [
             {
               label: '$(comment-discussion) Ask before edits',
               description: 'Confirm every edit before it runs',
-              detail: 'ask',
+              value: 'ask',
             },
             {
               label: '$(robot) Auto safe operations',
               description: 'Safe reads run automatically; writes and commands require approval',
-              detail: 'auto',
+              value: 'auto',
             },
             {
               label: '$(checklist) Plan mode',
               description: 'Generate a plan; no edits until approved',
-              detail: 'plan',
+              value: 'plan',
             },
             {
               label: '$(warning) Bypass permissions',
               description: 'Skip all approval prompts (dangerous)',
-              detail: 'bypass',
+              value: 'bypass',
             },
           ];
           const modePick = await vscode.window.showQuickPick(modeItems, {
             title: 'AGI Workforce — Set Agent Mode',
             placeHolder: `Current: ${cap(currentMode)}`,
           });
-          if (modePick?.detail !== undefined) {
+          const selectedMode = modePick?.value;
+          if (selectedMode !== undefined) {
             await vscode.workspace
               .getConfiguration('agiWorkforce')
-              .update('agent.mode', modePick.detail, vscode.ConfigurationTarget.Global);
+              .update('agent.mode', selectedMode, vscode.ConfigurationTarget.Global);
             vscode.window.showInformationMessage(
-              `AGI Workforce agent mode set to: ${cap(modePick.detail)}`,
+              `AGI Workforce agent mode set to: ${cap(selectedMode)}`,
             );
           }
           break;
@@ -1311,7 +1332,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const tier =
         tierInfo?.tier ?? context.globalState.get<string>('tierStatus.cachedTier') ?? 'local';
 
-      const items: vscode.QuickPickItem[] = [
+      type AccountAction = 'sign-in' | 'sign-out' | 'settings' | 'reset-counter';
+      type AccountItem = vscode.QuickPickItem & { action?: AccountAction };
+      const items: AccountItem[] = [
         { label: 'Session usage', kind: vscode.QuickPickItemKind.Separator },
         {
           label: `$(request-changes) Requests this session`,
@@ -1355,18 +1378,23 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         items.push({
           label: '$(sign-out) Sign out of AGI Cloud',
           description: 'Remove this editor session',
-          detail: 'sign-out',
+          action: 'sign-out',
         });
       } else {
         items.push({
           label: '$(cloud) Sign in to AGI Cloud',
           description: 'Approve this editor in your browser',
-          detail: 'sign-in',
+          action: 'sign-in',
         });
       }
       items.push({
+        label: '$(settings-gear) AGI settings',
+        description: 'Models, providers, runtime, tools, and permissions',
+        action: 'settings',
+      });
+      items.push({
         label: '$(trash) Reset session counter',
-        detail: 'reset-counter',
+        action: 'reset-counter',
       });
 
       const pick = await vscode.window.showQuickPick(items, {
@@ -1375,11 +1403,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         matchOnDescription: true,
       });
 
-      if (pick?.detail === 'sign-in') {
+      if (pick?.action === 'sign-in') {
         await vscode.commands.executeCommand('agi-workforce.signIn');
-      } else if (pick?.detail === 'sign-out') {
+      } else if (pick?.action === 'sign-out') {
         await vscode.commands.executeCommand('agi-workforce.signOut');
-      } else if (pick?.detail === 'reset-counter') {
+      } else if (pick?.action === 'settings') {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'agiWorkforce');
+      } else if (pick?.action === 'reset-counter') {
         counter.reset();
         vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');
       }

@@ -165,8 +165,26 @@ describe('getWebviewContent — structural smoke', () => {
     expect(doc.querySelector('#meterDismissBtn')?.getAttribute('aria-label')).toBe(
       'Collapse usage meter',
     );
-    expect(doc.querySelector('#plusMenuPlanMode')?.textContent).toContain('Change agent mode');
+    expect(doc.querySelector('#plusMenuPlanMode')?.textContent).toContain('Plan mode');
     expect(doc.querySelector('#plusMenuPlanMode')?.textContent).not.toContain('Add context');
+  });
+
+  it('presents a polished workspace-first empty state and capability-aware add menu', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    expect(doc.querySelector('#emptyState .empty-state-mark')).not.toBeNull();
+    expect(doc.querySelector('#emptyState .empty-state-headline')?.textContent).toContain(
+      'Build with AGI',
+    );
+    expect(doc.querySelector('#emptyState .empty-state-copy')?.textContent).toContain(
+      'edit files, run commands, and test this workspace',
+    );
+    expect(doc.querySelector('#composerHint')?.textContent).toContain('to send');
+    expect(doc.querySelector('#plusMenuLabel')?.textContent).toBe('Add to this chat');
+    expect(doc.querySelector('#plusMenuUpload')?.textContent).toContain('Files and folders');
+    expect(doc.querySelector('#plusMenuPlanMode')?.textContent).toContain('Plan mode');
+    expect(doc.querySelector('#plusMenuActions')?.textContent).toContain('Tools and actions');
   });
 
   it('submits an attachment-only turn with a visible trusted prompt', () => {
