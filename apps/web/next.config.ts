@@ -147,6 +147,14 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Narrow exception for the authenticated native PDF viewer. The file
+        // route validates `preview=pdf` against the stored MIME before serving
+        // bytes, so generated HTML/code can never use this frame permission.
+        source: '/api/files/:id',
+        has: [{ type: 'query', key: 'preview', value: 'pdf' }],
+        headers: [{ key: 'X-Frame-Options', value: 'SAMEORIGIN' }],
+      },
     ];
   },
 };

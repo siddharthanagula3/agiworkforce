@@ -19,7 +19,7 @@ import { NextResponse } from 'next/server';
  * NOTE on style-src 'unsafe-inline': Tailwind, Radix, and ~28 components use
  * inline `style=` attributes, so style-src 'unsafe-inline' must stay regardless.
  */
-function buildCspWithNonce(nonce: string): string {
+function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = "'none'"): string {
   // WEB-13 / WEB-20 (audit 2026-05-19): allow framing the artifact sandbox
   // origin so the cross-origin renderer at sandbox.agiworkforce.com can be
   // embedded by the chat UI. When NEXT_PUBLIC_SANDBOX_ORIGIN is unset the
@@ -37,7 +37,7 @@ function buildCspWithNonce(nonce: string): string {
     connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
-    frame-ancestors 'none';
+    frame-ancestors ${frameAncestors};
     form-action 'self';
     base-uri 'self';
     object-src 'none';
@@ -51,7 +51,14 @@ function buildCspWithNonce(nonce: string): string {
 function buildCspResponse(request: NextRequest): NextResponse {
   // Generate a cryptographically-secure per-request nonce.
   const nonce = btoa(crypto.randomUUID());
-  const csp = buildCspWithNonce(nonce);
+  // Generated PDFs are served from an authenticated, owner-scoped route and
+  // intentionally embedded by the same-origin artifact viewer. The route
+  // rejects this preview mode for every non-PDF MIME, so source HTML and other
+  // generated files keep the site-wide frame-ancestors 'none' boundary.
+  const isPdfPreview =
+    request.nextUrl.pathname.startsWith('/api/files/') &&
+    request.nextUrl.searchParams.get('preview') === 'pdf';
+  const csp = buildCspWithNonce(nonce, isPdfPreview ? "'self'" : "'none'");
 
   // Forward the nonce to Server Components via request headers (read in the root
   // layout via next/headers → headersList.get('x-nonce')). Setting the CSP on

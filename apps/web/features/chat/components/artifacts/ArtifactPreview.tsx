@@ -261,6 +261,7 @@ export function ArtifactPreview({
             url.origin === window.location.origin &&
             (url.pathname.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))
           ) {
+            if (url.pathname.startsWith('/api/files/')) url.searchParams.set('preview', 'pdf');
             return url.href;
           }
         } catch {
@@ -269,6 +270,11 @@ export function ArtifactPreview({
       }
       // Relative same-origin path.
       if (value.startsWith('/') && (value.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))) {
+        if (value.startsWith('/api/files/')) {
+          const url = new URL(value, window.location.origin);
+          url.searchParams.set('preview', 'pdf');
+          return `${url.pathname}${url.search}${url.hash}`;
+        }
         return value;
       }
     }
