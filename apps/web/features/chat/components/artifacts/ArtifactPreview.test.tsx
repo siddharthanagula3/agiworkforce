@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ArtifactPreview, type ArtifactData } from './ArtifactPreview';
 
 // The renderable-artifact path drags in the cross-origin sandbox iframe; these
@@ -110,6 +110,54 @@ describe('ArtifactPreview · PDF viewer', () => {
       '/api/files/11111111-2222-4333-8444-555555555555?preview=pdf',
     );
     expect(screen.queryByTestId('artifact-pdf-fallback')).toBeNull();
+  });
+
+  it('downloads a generated PDF from its authenticated byte route', async () => {
+    const bytes = new Uint8Array([37, 80, 68, 70]);
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => bytes.buffer,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const createObjectURL = vi.fn(() => 'blob:https://app.local/generated-pdf');
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    render(
+      <ArtifactPreview
+        variant="panel"
+        artifact={pdfArtifact({
+          generatedFile: {
+            id: 'gf-download',
+            computeSessionId: 'cs-1',
+            ownerUserId: 'u1',
+            sourceSurface: 'web',
+            privacyMode: 'managed',
+            providerMode: 'ManagedGateway',
+            kind: 'pdf',
+            fileName: 'Trip.pdf',
+            mimeType: 'application/pdf',
+            uri: '/api/files/11111111-2222-4333-8444-555555555555',
+            byteCount: bytes.byteLength,
+            checksumSha256: 'c'.repeat(64),
+            previewDerivatives: [],
+            createdAt: '2026-07-10T00:00:00Z',
+          },
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download file' }));
+
+    await waitFor(() => expect(click).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/files/11111111-2222-4333-8444-555555555555',
+      expect.objectContaining({ credentials: 'same-origin' }),
+    );
+    expect(createObjectURL).toHaveBeenCalledWith(
+      expect.objectContaining({ size: bytes.byteLength, type: 'application/pdf' }),
+    );
   });
 
   it('REJECTS a cross-origin storage url on a generated file (fallback, no off-origin iframe)', () => {

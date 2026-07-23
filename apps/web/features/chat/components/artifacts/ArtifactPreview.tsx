@@ -621,7 +621,10 @@ export function ArtifactPreview({
   // string representation, so binary docs get this dedicated handler instead.
   const handleDownloadBinaryDoc = () => {
     const ext = artifact.language || (isPdf ? 'pdf' : 'docx');
-    const filename = `${artifact.title || 'artifact'}.${ext}`;
+    const title = artifact.title || 'artifact';
+    const filename = title.toLowerCase().endsWith(`.${ext.toLowerCase()}`)
+      ? title
+      : `${title}.${ext}`;
     const a = document.createElement('a');
     let objectUrl: string | null = null;
     if (artifact.content.startsWith('data:')) {
@@ -930,7 +933,11 @@ export function ArtifactPreview({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleDownloadBinaryDoc}
+                onClick={
+                  generatedFileSummary.primaryUri
+                    ? () => void handleDownloadGeneratedFile()
+                    : handleDownloadBinaryDoc
+                }
                 className="h-7 px-2"
                 aria-label="Download file"
                 title="Download"
