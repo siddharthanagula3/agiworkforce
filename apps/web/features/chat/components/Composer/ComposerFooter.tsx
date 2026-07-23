@@ -576,6 +576,11 @@ export function ComposerFooter({
     reasoning.control === 'always_on' ||
     (reasoning.capable && reasoning.canDisableThinking === false);
   const effortChips = effortChipsFor(reasoning);
+  // A model can support provider-managed thinking without accepting a user
+  // effort value (Haiku 4.5 is the important case). Only an explicit catalog
+  // effort ladder earns UI; never turn a token-budget capability into a dead
+  // or misleading effort switch.
+  const hasEffortControl = supportsAdaptive && effortChips.length > 0;
   const showThinkingSwitch = showsThinkingSwitch(reasoning);
   // Store efforts this model actually supports (for clamping the persisted pref).
   const supportedStoreEfforts = new Set<Effort>(effortChips.map(chipToStoreEffort));
@@ -630,7 +635,7 @@ export function ComposerFooter({
   // switch, it only shows while thinking is enabled. When the slider itself
   // carries the off state (a `none` mark) or the model is always-on, it is
   // always shown.
-  const effortChipsVisible = supportsAdaptive && effortChips.length > 0;
+  const effortChipsVisible = hasEffortControl;
   const selectedEffortIndex = effortChips.findIndex(isEffortChipActive);
   const defaultEffortIndex = effortChips.findIndex(
     (chip) => chipToStoreEffort(chip) === defaultStoreEffort(reasoning),
@@ -710,7 +715,7 @@ export function ComposerFooter({
                   <span className="min-w-[3.5rem] max-w-[140px] shrink truncate">
                     {selectedModel.name}
                   </span>
-                  {supportsAdaptive && effortChips.length > 0 && (
+                  {hasEffortControl && (
                     <span className="text-xs text-muted-foreground/70">
                       {EFFORT_LABEL[effectiveEffort]}
                     </span>
@@ -742,7 +747,7 @@ export function ComposerFooter({
                 {/* Keep the selected model's reasoning control at the top of the
                     popover, where it remains discoverable without scrolling through
                     the model roster. Values come only from catalog-supportedEfforts. */}
-                {!isSearching && supportsAdaptive && (
+                {!isSearching && hasEffortControl && (
                   <div className="border-b border-border/40 px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <span className="min-w-0 flex-1">

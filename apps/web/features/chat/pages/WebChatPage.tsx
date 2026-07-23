@@ -839,6 +839,8 @@ export default function WebChatPage() {
       // the stale-active reconciler can never null the just-created conversation
       // during the first-message → navigate window. Cleared in `finally`.
       isSendingRef.current = true;
+      let targetConversationId =
+        options.conversationId || urlConversationId || bareChatSessionId || null;
       try {
         // Project scope for a NEW conversation: the composer's send meta is the
         // value the user saw at submit time; fall back to the shared store for
@@ -860,6 +862,7 @@ export default function WebChatPage() {
           }));
 
         if (!convId) return;
+        targetConversationId = convId;
         if (!urlConversationId) setBareChatSessionId(convId);
 
         // Navigate to the canonical /chat/[id] URL after the first message so the
@@ -909,7 +912,7 @@ export default function WebChatPage() {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Could not attach the selected files.';
-        setChatError(message);
+        setChatError(message, targetConversationId ?? undefined);
         toast.error(message);
       } finally {
         // Release the guard once the send has fully settled (or bailed). By now
@@ -1620,17 +1623,18 @@ export default function WebChatPage() {
   const deletePersistedMessages = useCallback(
     async (ids: string[]): Promise<boolean> => {
       if (!displayedConversationId || ids.length === 0) return false;
+      const conversationId = displayedConversationId;
 
       const authToken = await getToken();
       if (!authToken) {
-        setChatError('Not authenticated');
+        setChatError('Not authenticated', conversationId);
         return false;
       }
 
       try {
         for (const messageId of ids) {
           await deleteConversationMessage({
-            conversationId: displayedConversationId,
+            conversationId,
             messageId,
             authToken,
           });
@@ -1638,7 +1642,10 @@ export default function WebChatPage() {
         }
         return true;
       } catch (error) {
-        setChatError(error instanceof Error ? error.message : 'Failed to delete message');
+        setChatError(
+          error instanceof Error ? error.message : 'Failed to delete message',
+          conversationId,
+        );
         return false;
       }
     },
@@ -1806,7 +1813,7 @@ export default function WebChatPage() {
         assistantMetadata: assistantMsg?.metadata,
       });
       if (!replayDecision.ok) {
-        setChatError(replayDecision.message);
+        setChatError(replayDecision.message, displayedConversationId);
         return;
       }
       const replayOptions = replayToSendOptions(replayDecision.replay);
@@ -1862,9 +1869,10 @@ export default function WebChatPage() {
   const handleReactMessage = useCallback(
     async (id: string, reactionType: 'up' | 'down' | null) => {
       if (!displayedConversationId) return;
+      const conversationId = displayedConversationId;
       const authToken = await getToken();
       if (!authToken) {
-        setChatError('Not authenticated');
+        setChatError('Not authenticated', conversationId);
         return;
       }
 
@@ -1873,7 +1881,7 @@ export default function WebChatPage() {
 
       try {
         await patchConversationMessageMetadata({
-          conversationId: displayedConversationId,
+          conversationId,
           messageId: id,
           patch: { reaction },
           authToken,
@@ -1886,7 +1894,10 @@ export default function WebChatPage() {
           },
         });
       } catch (error) {
-        setChatError(error instanceof Error ? error.message : 'Failed to update reaction');
+        setChatError(
+          error instanceof Error ? error.message : 'Failed to update reaction',
+          conversationId,
+        );
       }
     },
     [displayedConversationId, getToken, setChatError, updateMessage],
@@ -1897,16 +1908,17 @@ export default function WebChatPage() {
   const handlePinMessage = useCallback(
     async (id: string) => {
       if (!displayedConversationId) return;
+      const conversationId = displayedConversationId;
       const authToken = await getToken();
       if (!authToken) {
-        setChatError('Not authenticated');
+        setChatError('Not authenticated', conversationId);
         return;
       }
       const current = useChatStore.getState().messages.find((message) => message.id === id);
       const nextPinned = !(current?.metadata as { isPinned?: boolean } | undefined)?.isPinned;
       try {
         await patchConversationMessageMetadata({
-          conversationId: displayedConversationId,
+          conversationId,
           messageId: id,
           patch: { isPinned: nextPinned },
           authToken,
@@ -1918,7 +1930,10 @@ export default function WebChatPage() {
           },
         });
       } catch (error) {
-        setChatError(error instanceof Error ? error.message : 'Failed to pin message');
+        setChatError(
+          error instanceof Error ? error.message : 'Failed to pin message',
+          conversationId,
+        );
       }
     },
     [displayedConversationId, getToken, setChatError, updateMessage],

@@ -33,7 +33,6 @@ import {
   findActiveCloudAgentRunForConversation,
   isCloudAgentRunCancellationRequested,
   saveCloudAgentApprovalCheckpoint,
-  transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import type {
   CloudAgentOriginSurface,
@@ -43,11 +42,10 @@ import type {
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 
-/** Current Vercel Hobby maximum; durable AGI Work will span workflow steps. */
+/** Current Vercel Hobby maximum for the request-scoped managed agent stream. */
 export const maxDuration = 300;
 
 /**
@@ -57,9 +55,12 @@ export const maxDuration = 300;
  * Routes to 10+ LLM providers based on model. Auth: Clerk JWT. Billing: cloud credits.
  * Service modules: auth-gate | request-processor | stream-transform | response-builder
  *
- * Agentic extension: every AGI Work stream enters the durable Workflow-backed
+ * Agentic extension: every AGI Work stream enters the managed request-scoped
  * tool-loop driver, including turns that begin without an explicit tool. Normal
- * chat enters the request-scoped loop only when MCP/platform tools are present.
+ * chat enters that loop only when MCP/platform tools are present. Run state and
+ * canonical events remain journaled durably; the Vercel Workflow transport is
+ * intentionally not on this initial dispatch path because a poisoned callback
+ * can prevent `start()` from returning and leave the client at startup forever.
  * The approval_mode query parameter controls gating: ?approval_mode=auto skips
  * the per-tool prompt; the default 'manual' persists a signed checkpoint before
  * emitting x_tool_approval_request events.
@@ -365,54 +366,6 @@ async function handleChatCompletions(request: NextRequest) {
       );
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
-
-      if (processed.chatRequest.work_mode === 'agiwork') {
-        try {
-          const workflow = await startCloudAgentWorkflowExecution({
-            db: runDb,
-            runId: run.id,
-            userId,
-            processed,
-            mcpTools,
-            approvalMode: loopInputs.approvalMode,
-          });
-          const workflowHeaders: Record<string, string> = {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            Connection: 'keep-alive',
-            'X-AGI-Tool-Loop': 'workflow',
-            'X-AGI-Workflow-Run-Id': workflow.workflowRunId,
-            ...getCorsHeaders(request),
-            ...getSecurityHeaders(),
-          };
-          addAgentRunHeaders(workflowHeaders, run);
-          if (processed.quotaWarningHeader) {
-            workflowHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
-          }
-          return new NextResponse(workflow.readable, { headers: workflowHeaders });
-        } catch (error) {
-          logger.error(
-            { error, userId, requestId: processed.requestId, runId: run.id },
-            'Durable Cloud agent workflow could not be started',
-          );
-          await transitionCloudAgentRun(runDb, {
-            userId,
-            runId: run.id,
-            state: 'failed',
-          }).catch(() => undefined);
-          await refundFailedReservation(userId, processed, 'request_failure');
-          return NextResponse.json(
-            {
-              error: {
-                message: 'Durable agent execution is temporarily unavailable.',
-                type: 'server_error',
-                code: 'agent_workflow_unavailable',
-              },
-            },
-            { status: 503, headers: getSecurityHeaders() },
-          );
-        }
-      }
 
       // Approval mode:
       //   - Built-in platform tools only: 'auto' — E2B tools run in an isolated sandbox,

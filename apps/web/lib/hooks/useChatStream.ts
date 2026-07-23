@@ -1555,7 +1555,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           error: true,
         });
         persistAssistant(partialContent);
-        useChatStore.getState().setError(errorMessage);
+        useChatStore.getState().setError(errorMessage, conversationId);
         stopStreaming(conversationId);
         setLoading(false, conversationId);
         return { suspended, pendingCalls, runHandle };
@@ -1654,7 +1654,7 @@ export function useChatStream(): UseChatStreamReturn {
       try {
         authToken = await getAuthToken();
       } catch {
-        setError('Your session has expired. Please sign in again.');
+        setError('Your session has expired. Please sign in again.', conversationId);
         return false;
       }
 
@@ -1718,7 +1718,7 @@ export function useChatStream(): UseChatStreamReturn {
       addMessage(assistantMessage);
       startStreaming(assistantMessageId, conversationId);
       setLoading(true);
-      setError(null);
+      setError(null, conversationId);
 
       try {
         const currentMessages = useChatStore.getState().messages;
@@ -1921,7 +1921,7 @@ export function useChatStream(): UseChatStreamReturn {
       try {
         authToken = await getAuthToken();
       } catch {
-        setError('Not authenticated');
+        setError('Not authenticated', conversationId);
         return;
       }
 
@@ -1949,7 +1949,7 @@ export function useChatStream(): UseChatStreamReturn {
       });
       startStreaming(assistantMessageId, conversationId);
       setLoading(true);
-      setError(null);
+      setError(null, conversationId);
 
       try {
         const continuationOperationId = crypto.randomUUID();
@@ -2021,7 +2021,7 @@ export function useChatStream(): UseChatStreamReturn {
             useFreeTrialStore.getState().markLimitReached();
           }
           updateMessage(assistantMessageId, { isStreaming: false, metadata: priorMetadata });
-          setError(errorMessage);
+          setError(errorMessage, conversationId);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
           return;
@@ -2039,7 +2039,7 @@ export function useChatStream(): UseChatStreamReturn {
           content: mergedContent,
           error: true,
         });
-        setError(errorMessage);
+        setError(errorMessage, conversationId);
         if (!isTemporaryConversation) {
           saveMessageToDb(
             conversationId,
@@ -2219,7 +2219,7 @@ export function useResolveToolApproval(
             result: undefined,
           });
         }
-        setError('Not authenticated');
+        setError('Not authenticated', turn.conversationId);
         return;
       }
 
@@ -2240,7 +2240,7 @@ export function useResolveToolApproval(
 
       startStreaming(assistantMessageId, turn.conversationId);
       setLoading(true);
-      setError(null);
+      setError(null, turn.conversationId);
 
       try {
         const resumeOperationId = crypto.randomUUID();
@@ -2323,7 +2323,7 @@ export function useResolveToolApproval(
             });
           }
           updateMessage(assistantMessageId, { isStreaming: false });
-          setError(getVisibleErrorMessage(error));
+          setError(getVisibleErrorMessage(error), turn.conversationId);
           stopStreaming(turn.conversationId);
           setLoading(false, turn.conversationId);
           return;
@@ -2354,7 +2354,7 @@ interface StreamErrorContext {
   conversationId: string;
   isTemporaryConversation: boolean;
   getAuthToken: AuthTokenProvider;
-  setError: (message: string | null) => void;
+  setError: (message: string | null, conversationId?: string) => void;
   stopStreaming: (conversationId?: string) => void;
   setLoading: (loading: boolean, conversationId?: string) => void;
   updateMessage: (id: string, updates: Partial<Message>) => void;
@@ -2433,7 +2433,7 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
         paywall: buildFreeTrialPaywallSlot(errorCode, errorMessage),
       },
     });
-    setError(errorMessage);
+    setError(errorMessage, conversationId);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
     return;
@@ -2457,7 +2457,7 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
         }
       : {}),
   });
-  setError(errorMessage);
+  setError(errorMessage, conversationId);
 
   if (!isTemporaryConversation) {
     const metadata = useChatStore
