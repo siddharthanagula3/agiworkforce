@@ -58,6 +58,50 @@ describe('web proxy', () => {
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
   });
 
+  it('allows direct uploads only to the configured exact R2 account origin', async () => {
+    const original = process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
+    try {
+      process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = '0123456789abcdef0123456789abcdef';
+      const { proxy } = await import('../proxy');
+
+      const response = await proxy(
+        new NextRequest('http://localhost/chat', {
+          headers: { Cookie: '__session=test-session' },
+        }),
+        {} as never,
+      );
+
+      expect(response?.headers.get('Content-Security-Policy')).toContain(
+        "connect-src 'self' https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com ",
+      );
+    } finally {
+      if (original === undefined) delete process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
+      else process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = original;
+    }
+  });
+
+  it('does not trust a malformed R2 account id as a CSP origin', async () => {
+    const original = process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
+    try {
+      process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = 'evil.example.com';
+      const { proxy } = await import('../proxy');
+
+      const response = await proxy(
+        new NextRequest('http://localhost/chat', {
+          headers: { Cookie: '__session=test-session' },
+        }),
+        {} as never,
+      );
+
+      const csp = response?.headers.get('Content-Security-Policy') ?? '';
+      expect(csp).not.toContain('evil.example.com');
+      expect(csp).not.toContain('.r2.cloudflarestorage.com');
+    } finally {
+      if (original === undefined) delete process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
+      else process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = original;
+    }
+  });
+
   it('redirects signed-out app routes before Clerk session middleware', async () => {
     clerkState.clerkPaths = [];
     const { proxy } = await import('../proxy');
