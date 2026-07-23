@@ -53,6 +53,38 @@ describe('isReadOnlyTool — prefix match only (no substring false positives)', 
 });
 
 describe('collectProviderStream — untrusted accumulation bounds', () => {
+  it('collects provider-native generated-file references from normalized SSE events', async () => {
+    const { generatedFileRefs } = await collectProviderStream(
+      sseStream([
+        {
+          x_code_result: {
+            content: [{ type: 'code_execution_output', file_id: 'file_anthropic' }],
+          },
+        },
+        {
+          annotations: [
+            {
+              type: 'container_file_citation',
+              file_id: 'file_openai',
+              container_id: 'container_openai',
+              filename: 'report.csv',
+            },
+          ],
+        },
+      ]),
+    );
+
+    expect(generatedFileRefs).toEqual([
+      { provider: 'anthropic', fileId: 'file_anthropic' },
+      {
+        provider: 'openai',
+        fileId: 'file_openai',
+        containerId: 'container_openai',
+        filename: 'report.csv',
+      },
+    ]);
+  });
+
   it('re-mints duplicate provider tool_call ids so every accepted call is unique', async () => {
     const stream = sseStream([
       toolCallChunk(0, 'dup', 'get_a', '{}'),

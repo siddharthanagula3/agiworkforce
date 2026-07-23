@@ -38,6 +38,15 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
   persistGeneratedFileBytes: (...args: unknown[]) => mockPersistGeneratedFileBytes(...args),
 }));
 
+const mockPersistGeneratedFiles = vi.fn();
+vi.mock('@/lib/server/container-files', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/container-files')>();
+  return {
+    ...actual,
+    persistGeneratedFiles: (...args: unknown[]) => mockPersistGeneratedFiles(...args),
+  };
+});
+
 const mockReserveManagedUsageProviderStep = vi.fn();
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   reserveManagedUsageProviderStep: (...args: unknown[]) =>
@@ -123,6 +132,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     mockGetE2BExecutor.mockReset();
     mockPauseE2BSession.mockReset();
     mockPersistGeneratedFileBytes.mockReset();
+    mockPersistGeneratedFiles.mockReset();
     mockReserveManagedUsageProviderStep.mockReset();
     // The E2B execution intercept now fail-closes unless the cut-over flag is on
     // (a model-emitted execute_code must never run on key presence alone). These
@@ -316,6 +326,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
           pendingToolCalls: [{ id: 'call_1', qualifiedName: 'execute_code', args: {} }],
           textContent: '',
           publicTextTail: '',
+          generatedFileRefs: [],
           thinkingBlocks: [],
           canonicalText: '',
           usage: {
@@ -335,6 +346,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
         pendingToolCalls: [],
         textContent: 'done',
         publicTextTail: '',
+        generatedFileRefs: [],
         thinkingBlocks: [],
         canonicalText: 'done',
         usage: {
@@ -382,6 +394,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       pendingToolCalls: [{ id: 'call_1', qualifiedName: 'execute_code', args: {} }],
       textContent: '',
       publicTextTail: '',
+      generatedFileRefs: [],
       thinkingBlocks: [],
       canonicalText: '',
       usage: {
@@ -443,6 +456,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
           step === 1 ? [{ id: 'call_paid', qualifiedName: 'execute_code', args: {} }] : [],
         textContent: step === 1 ? '' : 'done',
         publicTextTail: '',
+        generatedFileRefs: [],
         thinkingBlocks: [],
         canonicalText: step === 1 ? '' : 'done',
         usage: {
@@ -495,6 +509,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
           pendingToolCalls: [],
           textContent: 'done',
           publicTextTail: '',
+          generatedFileRefs: [],
           thinkingBlocks: [],
           canonicalText: 'done',
           usage: {
@@ -972,6 +987,52 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       uri: '/api/files/asset-png',
       sizeBytes: 9,
     });
+  });
+
+  it('persists provider-native file refs and emits a downloadable artifact before DONE', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([
+        chunk({
+          x_code_result: {
+            content: [{ type: 'code_execution_output', file_id: 'file_provider' }],
+          },
+        }),
+        chunk({}, 'stop'),
+      ]),
+    );
+    mockPersistGeneratedFiles.mockResolvedValue({
+      failedCount: 0,
+      files: [
+        {
+          wire: {
+            id: 'asset-provider',
+            file_name: 'analysis.csv',
+            mime_type: 'text/csv',
+            uri: '/api/files/asset-provider',
+            byte_count: 18,
+            kind: 'document',
+            checksum_sha256: 'd'.repeat(64),
+          },
+        },
+      ],
+    });
+
+    const output = await drain(
+      runToolLoop(makeProcessed(), { approvalMode: 'auto', userId: 'user-1' }),
+    );
+
+    expect(mockPersistGeneratedFiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        refs: [{ provider: 'anthropic', fileId: 'file_provider' }],
+      }),
+    );
+    expect(output).toContain('x_generated_files');
+    expect(output).toContain('/api/files/asset-provider');
+    expect(output.indexOf('x_generated_files')).toBeLessThan(output.lastIndexOf('data: [DONE]'));
+    expect(agentEvents(output).some((entry) => entry.event.type === 'artifact-produced')).toBe(
+      true,
+    );
   });
 
   it('emits an honest inline note (never silence) when chart persistence fails', async () => {

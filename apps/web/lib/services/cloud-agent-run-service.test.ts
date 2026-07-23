@@ -174,6 +174,29 @@ describe('cloud agent run service', () => {
     );
   });
 
+  it('normalizes PostgreSQL Date timestamps returned by Neon', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      {
+        ...RUN_ROW,
+        created_at: new Date(RUN_ROW.created_at),
+        updated_at: new Date(RUN_ROW.updated_at),
+      },
+    ]);
+
+    const run = await createCloudAgentRun(db, {
+      userId: 'user-1',
+      requestId: 'agi.chat.web.send.turn-1',
+      conversationId: '0190a000-0000-7000-8000-000000000099',
+      originSurface: 'web',
+      workMode: 'agiwork',
+      provider: 'openai',
+      model: 'gpt-test',
+    });
+
+    expect(run.createdAt).toBe(RUN_ROW.created_at);
+    expect(run.updatedAt).toBe(RUN_ROW.updated_at);
+  });
+
   it('finds an active guarding run for a conversation, excluding the caller retry and cancelling runs', async () => {
     vi.mocked(db.query).mockResolvedValueOnce([RUN_ROW]);
 

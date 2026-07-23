@@ -33,6 +33,21 @@ function extractErrorMessage(body: unknown, fallback: string): string {
   return fallback;
 }
 
+function extractErrorCode(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const error = (body as { error?: unknown }).error;
+  if (!error || typeof error !== 'object') return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
+export class CheckoutRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CheckoutRequiredError';
+  }
+}
+
 /**
  * Open Stripe Customer Portal for subscription management
  */
@@ -172,6 +187,18 @@ async function upgradeToPlan(data: {
   }
 }
 
+export async function startPlanCheckout(data: {
+  plan: SelfServePaidPlanTier;
+  billingInterval?: 'monthly' | 'yearly';
+}): Promise<void> {
+  return upgradeToPlan({
+    userId: '',
+    userEmail: '',
+    plan: data.plan,
+    billingPeriod: data.billingInterval,
+  });
+}
+
 /**
  * Read-only preview of a mid-cycle upgrade's immediate prorated charge, so the
  * UI can show "you'll be charged $X today" and get explicit confirmation BEFORE
@@ -202,6 +229,11 @@ export async function previewUpgrade(data: {
   };
 
   if (!response.ok) {
+    if (extractErrorCode(result) === 'checkout_required') {
+      throw new CheckoutRequiredError(
+        extractErrorMessage(result, 'Start a new checkout to continue.'),
+      );
+    }
     throw new Error(extractErrorMessage(result, `Could not preview the ${data.plan} upgrade`));
   }
   if (typeof result.amountDueNowCents !== 'number' || typeof result.currency !== 'string') {
@@ -266,6 +298,11 @@ export async function upgradePlanMidCycle(data: {
   }
 
   if (!response.ok) {
+    if (extractErrorCode(result) === 'checkout_required') {
+      throw new CheckoutRequiredError(
+        extractErrorMessage(result, 'Start a new checkout to continue.'),
+      );
+    }
     throw new Error(extractErrorMessage(result, `Failed to upgrade to ${data.plan}`));
   }
 

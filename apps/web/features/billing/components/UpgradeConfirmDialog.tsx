@@ -10,7 +10,12 @@ import {
   DialogTitle,
   Button,
 } from '@agiworkforce/ui';
-import { previewUpgrade, upgradePlanMidCycle } from '../services/stripe-payments';
+import {
+  CheckoutRequiredError,
+  previewUpgrade,
+  startPlanCheckout,
+  upgradePlanMidCycle,
+} from '../services/stripe-payments';
 import {
   getBillingPlanDisplay,
   formatCatalogPrice,
@@ -52,6 +57,7 @@ export function UpgradeConfirmDialog({
   const [amountDue, setAmountDue] = useState<{ cents: number; currency: string } | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [checkoutRequired, setCheckoutRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,19 +65,25 @@ export function UpgradeConfirmDialog({
       setAmountDue(null);
       setError(null);
       setConfirming(false);
+      setCheckoutRequired(false);
       return;
     }
     let cancelled = false;
     setPreviewing(true);
     setError(null);
     setAmountDue(null);
+    setCheckoutRequired(false);
     previewUpgrade({ plan: request.plan, billingInterval: request.billingInterval })
       .then((r) => {
         if (!cancelled) setAmountDue({ cents: r.amountDueNowCents, currency: r.currency });
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Could not calculate the upgrade cost.');
+          if (e instanceof CheckoutRequiredError) {
+            setCheckoutRequired(true);
+          } else {
+            setError(e instanceof Error ? e.message : 'Could not calculate the upgrade cost.');
+          }
         }
       })
       .finally(() => {
@@ -97,6 +109,13 @@ export function UpgradeConfirmDialog({
     setConfirming(true);
     setError(null);
     try {
+      if (checkoutRequired) {
+        await startPlanCheckout({
+          plan: request.plan,
+          billingInterval: request.billingInterval,
+        });
+        return;
+      }
       await upgradePlanMidCycle({ plan: request.plan, billingInterval: request.billingInterval });
       onConfirmed();
     } catch (e) {
@@ -118,9 +137,11 @@ export function UpgradeConfirmDialog({
           <DialogDescription>
             {previewing
               ? 'Calculating your prorated cost…'
-              : amountDue
-                ? `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today, prorated for the rest of your billing period. Your plan then renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
-                : 'Review your upgrade before it is charged to your saved card.'}
+              : checkoutRequired
+                ? 'Your current plan is not attached to a live Stripe subscription. Continue through secure checkout to upgrade safely.'
+                : amountDue
+                  ? `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today, prorated for the rest of your billing period. Your plan then renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
+                  : 'Review your upgrade before it is charged to your saved card.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -130,12 +151,17 @@ export function UpgradeConfirmDialog({
           <Button variant="outline" onClick={onCancel} disabled={confirming}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={previewing || confirming || !amountDue}>
+          <Button
+            onClick={handleConfirm}
+            disabled={previewing || confirming || (!amountDue && !checkoutRequired)}
+          >
             {confirming
               ? 'Upgrading…'
-              : amountDue
-                ? `Confirm · pay ${formatMoney(amountDue.cents, amountDue.currency)}`
-                : 'Confirm'}
+              : checkoutRequired
+                ? 'Continue to checkout'
+                : amountDue
+                  ? `Confirm · pay ${formatMoney(amountDue.cents, amountDue.currency)}`
+                  : 'Confirm'}
           </Button>
         </DialogFooter>
       </DialogContent>

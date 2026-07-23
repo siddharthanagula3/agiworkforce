@@ -226,6 +226,10 @@ describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
     expect(() => validateEgressUrl('https://api.moonshot.cn/v1/chat/completions')).not.toThrow();
   });
 
+  it('allows the configured MuleRouter fallback endpoint', () => {
+    expect(() => validateEgressUrl('https://api.mulerouter.ai/v1/chat/completions')).not.toThrow();
+  });
+
   it('blocks unlisted host', () => {
     expect(() => validateEgressUrl('https://attacker.example/v1/messages')).toThrow(
       EgressPolicyError,

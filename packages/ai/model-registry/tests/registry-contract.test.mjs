@@ -136,6 +136,7 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.deepEqual(registry.policies.auto.tierAllowedSlots.free, [
     'workhorse_general',
     'reasoning_economy',
+    'coding_fast',
   ]);
   assert.ok(registry.policies.auto.providerPolicies.usOnly.excludedProviders.includes('moonshot'));
   assert.deepEqual(registry.policies.auto.providerPolicies.usOnly.allowedTiers, [
