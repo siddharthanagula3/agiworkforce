@@ -40,6 +40,30 @@ function activity(overrides: Partial<AgentActivityState> = {}): AgentActivitySta
 }
 
 describe('AgentActivityTimeline', () => {
+  it('keeps the local pre-provider status compact until real activity arrives', () => {
+    render(
+      <AgentActivityTimeline
+        activity={activity({
+          lastSequence: -1,
+          entries: [
+            {
+              kind: 'progress',
+              id: 'progress:local-starting',
+              progressId: 'local-starting',
+              summary: 'Starting AGI Work',
+              status: 'running',
+              startedAtMs: 1_000,
+            },
+          ],
+        })}
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: /show agent activity/i });
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getAllByText('Starting AGI Work')).toHaveLength(1);
+  });
+
   it('auto-expands a running run live and collapses on a manual toggle', () => {
     // Claude/ChatGPT behaviour: while the run is active the timeline streams its
     // steps live (expanded), not a single collapsed summary line.
