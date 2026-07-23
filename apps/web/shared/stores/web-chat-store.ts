@@ -74,6 +74,10 @@ export interface GeneratedFileMetadataEntry {
   kind: string;
   /** SHA-256 of the stored bytes (integrity verification across surfaces). */
   checksumSha256?: string;
+  /** Server-owned UI classification: editable/renderable source vs byte deliverable. */
+  surface?: 'artifact' | 'file';
+  /** Whether the owning surface can offer an inline preview for this descriptor. */
+  previewable?: boolean;
 }
 
 export interface MessageMetadata {
@@ -148,9 +152,10 @@ export interface MessageMetadata {
   artifactManifest?: ArtifactManifest;
   /**
    * Files produced by tool/provider runs this turn (`x_generated_files` SSE
-   * delta). Images render inline (thumbnail + lightbox), PDFs feed the
-   * artifact PDF viewer, CSVs the spreadsheet renderer, everything else a
-   * download chip. Persisted in messages.metadata so a reload re-renders them.
+   * delta). Images render inline (thumbnail + lightbox), source artifacts feed
+   * the artifact workbench, PDFs feed the PDF viewer, CSVs the spreadsheet
+   * renderer, and non-previewable binaries remain honest download chips.
+   * Persisted in messages.metadata so a reload re-renders them.
    */
   generatedFiles?: GeneratedFileMetadataEntry[];
   documentData?: { title?: string; content?: string; [key: string]: unknown };

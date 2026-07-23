@@ -119,6 +119,41 @@ interface Attachment {
   thumbnailUrl?: string;
 }
 
+const MAX_INLINE_GENERATED_TEXT_BYTES = 2 * 1024 * 1024;
+
+function generatedFileLanguage(file: GeneratedFileMetadataEntry): string {
+  const extension = file.fileName.toLowerCase().split('.').pop() ?? '';
+  const candidate = file.kind === 'other' ? extension : file.kind;
+  if (candidate === 'htm') return 'html';
+  if (candidate === 'md') return 'markdown';
+  if (candidate === 'mmd') return 'mermaid';
+  return candidate || 'text';
+}
+
+function generatedFileArtifactType(file: GeneratedFileMetadataEntry): ArtifactData['type'] {
+  const language = generatedFileLanguage(file);
+  if (language === 'html') return 'html';
+  if (language === 'svg') return 'svg';
+  if (language === 'mermaid') return 'mermaid';
+  if (language === 'csv' || language === 'tsv') return 'csv';
+  if (language === 'markdown' || language === 'txt' || language === 'text') return 'document';
+  return 'code';
+}
+
+function isGeneratedTextArtifact(file: GeneratedFileMetadataEntry): boolean {
+  if (file.previewable === false) return false;
+  if (file.surface === 'artifact') return true;
+  if (file.kind === 'csv') return true;
+
+  // Backward-compatible fallback for descriptors emitted before `surface`
+  // became mandatory on the shared generated-file contract.
+  const language = generatedFileLanguage(file);
+  return (
+    ['html', 'svg', 'markdown', 'mermaid', 'json', 'txt', 'text'].includes(language) ||
+    file.mimeType.toLowerCase().startsWith('text/')
+  );
+}
+
 interface Message {
   id: string;
   sessionId?: string;
@@ -399,18 +434,17 @@ const MessageBubbleComponent = function MessageBubble({
     [isUser, message.metadata?.generatedFiles],
   );
 
-  /** Max CSV bytes fetched for the inline spreadsheet renderer. */
-  const MAX_INLINE_CSV_BYTES = 2 * 1024 * 1024;
-  // Fetched CSV text per generated-file id; 'error' → honest chip fallback.
-  const [generatedCsvContent, setGeneratedCsvContent] = useState<Record<string, string | 'error'>>(
-    {},
-  );
+  // Fetched source text per generated-file id; 'error' → honest chip fallback.
+  // The same authenticated byte route powers HTML/code/text artifacts and CSV.
+  const [generatedTextContent, setGeneratedTextContent] = useState<
+    Record<string, string | 'error'>
+  >({});
   useEffect(() => {
     const pending = generatedFiles.filter(
       (f) =>
-        f.kind === 'csv' &&
-        f.byteCount <= MAX_INLINE_CSV_BYTES &&
-        generatedCsvContent[f.id] === undefined,
+        isGeneratedTextArtifact(f) &&
+        f.byteCount <= MAX_INLINE_GENERATED_TEXT_BYTES &&
+        generatedTextContent[f.id] === undefined,
     );
     if (pending.length === 0) return;
     let cancelled = false;
@@ -418,16 +452,16 @@ const MessageBubbleComponent = function MessageBubble({
       fetch(file.uri, { credentials: 'same-origin' })
         .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
         .then((text) => {
-          if (!cancelled) setGeneratedCsvContent((prev) => ({ ...prev, [file.id]: text }));
+          if (!cancelled) setGeneratedTextContent((prev) => ({ ...prev, [file.id]: text }));
         })
         .catch(() => {
-          if (!cancelled) setGeneratedCsvContent((prev) => ({ ...prev, [file.id]: 'error' }));
+          if (!cancelled) setGeneratedTextContent((prev) => ({ ...prev, [file.id]: 'error' }));
         });
     }
     return () => {
       cancelled = true;
     };
-  }, [generatedFiles, generatedCsvContent, MAX_INLINE_CSV_BYTES]);
+  }, [generatedFiles, generatedTextContent]);
 
   const toGeneratedFile = useCallback(
     (f: GeneratedFileMetadataEntry): GeneratedFile => ({
@@ -465,15 +499,16 @@ const MessageBubbleComponent = function MessageBubble({
           content: '',
           generatedFile: toGeneratedFile(f),
         });
-      } else if (f.kind === 'csv') {
-        const csv = generatedCsvContent[f.id];
-        if (typeof csv === 'string' && csv !== 'error') {
+      } else if (isGeneratedTextArtifact(f)) {
+        const source = generatedTextContent[f.id];
+        if (typeof source === 'string' && source !== 'error') {
+          const language = generatedFileLanguage(f);
           out.push({
             id: `genfile-${f.id}`,
-            type: 'csv',
-            language: 'csv',
+            type: generatedFileArtifactType(f),
+            language,
             title: f.fileName,
-            content: csv,
+            content: source,
             generatedFile: toGeneratedFile(f),
           });
         }
@@ -517,7 +552,7 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata,
     message.timestamp,
     generatedFiles,
-    generatedCsvContent,
+    generatedTextContent,
     toGeneratedFile,
   ]);
 
@@ -534,27 +569,24 @@ const MessageBubbleComponent = function MessageBubble({
   }, [existingArtifacts, extractedArtifacts, generatedFileArtifacts]);
 
   // Generated files rendered through the EXISTING attachment grid: images get
-  // the thumbnail + ImageLightbox path; non-renderable kinds (docx/xlsx/zip/…)
-  // and CSVs whose content fetch failed get the download chip. PDFs and
-  // successfully-loaded CSVs are excluded here — they render as artifacts.
-  const generatedFileAttachments = useMemo<Attachment[]>(
-    () =>
-      generatedFiles
-        .filter(
-          (f) =>
-            f.kind === 'image' ||
-            (f.kind === 'csv' && generatedCsvContent[f.id] === 'error') ||
-            !['image', 'pdf', 'csv'].includes(f.kind),
-        )
-        .map((f) => ({
-          id: `genfile-${f.id}`,
-          name: f.fileName,
-          type: f.mimeType,
-          size: f.byteCount,
-          url: f.uri,
-        })),
-    [generatedFiles, generatedCsvContent],
-  );
+  // the thumbnail + ImageLightbox path; descriptors without a successfully
+  // constructed workbench artifact remain honest download chips.
+  const generatedFileAttachments = useMemo<Attachment[]>(() => {
+    const artifactFileIds = new Set(
+      generatedFileArtifacts
+        .map((artifact) => artifact.generatedFile?.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    return generatedFiles
+      .filter((file) => file.kind === 'image' || !artifactFileIds.has(file.id))
+      .map((f) => ({
+        id: `genfile-${f.id}`,
+        name: f.fileName,
+        type: f.mimeType,
+        size: f.byteCount,
+        url: f.uri,
+      }));
+  }, [generatedFiles, generatedFileArtifacts]);
 
   const displayAttachments = useMemo<Attachment[]>(
     () => [...(message.attachments ?? []), ...generatedFileAttachments],
