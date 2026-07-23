@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as vscode from 'vscode';
 import { DesktopBridge, getBridgeAuthHeaders } from '../features/desktop-bridge';
 import type { BridgeMessage } from '../features/desktop-bridge';
 
@@ -34,6 +35,19 @@ describe('DesktopBridge', () => {
 
   it('starts with disconnected status', () => {
     expect(bridge.status).toBe('disconnected');
+  });
+
+  it('treats an unpaired optional Desktop app as neutral, not as an error', async () => {
+    const unpairedBridge = new DesktopBridge(8787, () => undefined);
+    const statusBar = unpairedBridge.initStatusBar();
+
+    await unpairedBridge.connect();
+
+    expect(unpairedBridge.status).toBe('disconnected');
+    expect(statusBar.text).toBe('$(plug) Desktop: Not connected');
+    expect(statusBar.backgroundColor).toBeUndefined();
+    expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    unpairedBridge.dispose();
   });
 
   it('exposes the correct baseUrl and wsUrl', () => {
