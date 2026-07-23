@@ -5669,6 +5669,8 @@ function buildUI(): void {
     signinBtn.textContent = 'Opening sign in…';
     try {
       await openClerkSignIn();
+      signinDescription.textContent =
+        'Finish sign-in in the new tab, then return here and reopen the side panel.';
     } catch (error) {
       signinDescription.textContent =
         error instanceof Error ? error.message : 'Unable to open AGI account sign-in.';
@@ -6944,6 +6946,11 @@ function buildUI(): void {
     try {
       if (action === 'sign_in') {
         await openClerkSignIn();
+        setManagedCloudChatState('signed_out', {
+          message: 'Finish sign-in in the new tab, then return here and reopen the side panel.',
+          action: 'retry',
+          actionLabel: 'Check sign-in',
+        });
       } else if (action === 'open_web') {
         await chrome.tabs.create({ url: 'https://agiworkforce.com' });
       } else if (action === 'upgrade') {

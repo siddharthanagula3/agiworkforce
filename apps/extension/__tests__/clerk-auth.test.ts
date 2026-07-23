@@ -21,6 +21,9 @@ describe('Clerk Chrome Extension auth', () => {
       runtime: {
         getURL: vi.fn((path: string) => `chrome-extension://stable-extension/${path}`),
       },
+      tabs: {
+        create: vi.fn().mockResolvedValue({ id: 42 }),
+      },
     });
   });
 
@@ -85,29 +88,17 @@ describe('Clerk Chrome Extension auth', () => {
     expect(createClerkClient).not.toHaveBeenCalled();
   });
 
-  it('hides auth methods that Clerk does not support inside extension side panels', async () => {
+  it('opens the web sign-in flow so OAuth is supported outside the side panel', async () => {
     process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
     process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
-    const openSignIn = vi.fn();
-    createClerkClient.mockReturnValue({
-      load: vi.fn().mockResolvedValue(undefined),
-      session: null,
-      addListener: vi.fn(),
-      openSignIn,
-      signOut: vi.fn(),
-    });
 
     const auth = await importClerkAuth();
     await auth.openClerkSignIn();
 
-    expect(openSignIn).toHaveBeenCalledWith({
-      appearance: {
-        elements: {
-          dividerRow: { display: 'none' },
-          socialButtonsRoot: { display: 'none' },
-        },
-      },
+    expect(chrome.tabs.create).toHaveBeenCalledWith({
+      url: 'https://agiworkforce.com/sign-in?redirectTo=%2Fauth%2Fchrome-extension',
     });
+    expect(createClerkClient).not.toHaveBeenCalled();
   });
 
   it('uses the background service-worker client so tokens remain fresh', async () => {

@@ -1,5 +1,6 @@
 const publishableKey = process.env.CLERK_PUBLISHABLE_KEY?.trim() ?? '';
 const configuredSyncHost = process.env.CLERK_SYNC_HOST?.trim() ?? '';
+const WEB_SIGN_IN_URL = 'https://agiworkforce.com/sign-in?redirectTo=%2Fauth%2Fchrome-extension';
 
 interface ClerkOriginResult {
   origin?: string;
@@ -127,15 +128,8 @@ export async function getFreshClerkToken(): Promise<string | null> {
 }
 
 export async function openClerkSignIn(): Promise<void> {
-  const clerk = await getForegroundClient();
-  clerk.openSignIn({
-    appearance: {
-      elements: {
-        dividerRow: { display: 'none' },
-        socialButtonsRoot: { display: 'none' },
-      },
-    },
-  });
+  assertClerkExtensionAuthConfigured();
+  await chrome.tabs.create({ url: WEB_SIGN_IN_URL });
 }
 
 export async function signOutClerk(): Promise<void> {
