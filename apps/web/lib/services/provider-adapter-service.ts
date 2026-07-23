@@ -181,6 +181,14 @@ export function buildServerProviderAdapter(
   if (providerId === 'anthropic' && options.anthropicCache) {
     return createProviderAdapter('anthropic', { ...baseConfig, ...options.anthropicCache });
   }
+  if (providerId === 'openai') {
+    return createProviderAdapter('openai', {
+      ...baseConfig,
+      onResponsesDiagnostics(responses) {
+        logger.info({ providerId: 'openai', responses }, 'OpenAI Responses request completed');
+      },
+    });
+  }
   if (providerId === 'qwen') {
     // Qwen resilience: DashScope (primary, above) → MuleRouter (fallback) on a
     // pre-first-byte availability error. The fallback endpoint carries its own
