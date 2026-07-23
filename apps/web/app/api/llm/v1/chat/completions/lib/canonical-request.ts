@@ -239,7 +239,7 @@ export function toCanonicalGoogleThinking(
   // are not a contract: an unknown future/custom model must not inherit a
   // request shape merely because its ID resembles a known release family.
   if (usesGoogleThinkingLevel(model)) {
-    const thinkingLevel = GOOGLE_THINKING_LEVEL[effort as 'low' | 'medium' | 'high'];
+    const thinkingLevel = GOOGLE_THINKING_LEVEL[effort as 'minimal' | 'low' | 'medium' | 'high'];
     if (thinkingLevel === undefined) return undefined;
     return { type: 'enabled', thinkingLevel, includeThoughts: false };
   }
@@ -267,8 +267,9 @@ const GOOGLE_THINKING_BUDGET: Readonly<Record<'low' | 'medium' | 'high', number>
  * mirroring the legacy budget map's tier coverage.
  */
 const GOOGLE_THINKING_LEVEL: Readonly<
-  Record<'low' | 'medium' | 'high', 'low' | 'medium' | 'high'>
+  Record<'minimal' | 'low' | 'medium' | 'high', 'minimal' | 'low' | 'medium' | 'high'>
 > = {
+  minimal: 'minimal',
   low: 'low',
   medium: 'medium',
   high: 'high',

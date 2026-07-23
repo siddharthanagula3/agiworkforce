@@ -1,4 +1,5 @@
 import type { TaskMetadata } from '../lib/taskMetadata';
+import type { Effort } from '@agiworkforce/types';
 import type { ToolCallUI, ToolExecutionWorkflow, ToolResultUI } from './toolCalling';
 
 export type MessageRole = 'user' | 'assistant' | 'system';
@@ -146,8 +147,8 @@ export interface ChatSendMessageRequest extends ChatRoutingPreferences {
   enableThinking?: boolean;
   /** Token budget for extended thinking (0 = off, >0 = enabled with that budget) */
   thinkingBudget?: number;
-  /** OpenAI o-series reasoning effort: "low" | "medium" | "high" */
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  /** Exact catalog-supported provider reasoning effort. */
+  reasoningEffort?: Effort;
   /** Override model temperature (0.0–2.0) */
   temperature?: number;
   /** Override max output tokens */

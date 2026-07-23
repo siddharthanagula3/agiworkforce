@@ -5,9 +5,9 @@ mod tests {
     use crate::core::llm::provider_adapter::{OpenAIServerTool, ProviderAdapterFactory};
     use crate::core::llm::{
         AudioData, AudioFormat, AudioInput, ChatMessage, ContentPart, DocumentFormat,
-        DocumentInput, ImageDetail, ImageFormat, ImageInput, LLMRequest, Provider, ResponseFormat,
-        ThinkingParameter, ToolCall, ToolChoice, ToolDefinition, ToolResultInput, ToolUseInput,
-        VideoData, VideoFormat, VideoInput,
+        DocumentInput, ImageDetail, ImageFormat, ImageInput, LLMRequest, OutputConfig,
+        OutputFormat, Provider, ResponseFormat, ThinkingParameter, ToolCall, ToolChoice,
+        ToolDefinition, ToolResultInput, ToolUseInput, VideoData, VideoFormat, VideoInput,
     };
     use serde_json::json;
 
@@ -979,6 +979,68 @@ mod tests {
         assert_eq!(adapter.provider_name(), "Anthropic");
         assert!(adapter.supports_prompt_caching());
         assert!(adapter.supports_extended_thinking());
+    }
+
+    #[test]
+    fn test_anthropic_effort_is_model_scoped_and_uses_output_config() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+        let request_for = |model: &str, output_config: Option<OutputConfig>| LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Think carefully.".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: model.to_string(),
+            temperature: None,
+            max_tokens: Some(512),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: None,
+            response_format: None,
+            output_config,
+            cache_control: None,
+            effort: Some("high".to_string()),
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let opus = adapter
+            .adapt_request(&request_for("claude-opus-4.8", None))
+            .expect("Opus effort request should adapt");
+        assert!(opus.get("effort").is_none());
+        assert_eq!(opus["output_config"]["effort"], "high");
+
+        let haiku = adapter
+            .adapt_request(&request_for("claude-haiku-4.5", None))
+            .expect("Haiku request should adapt without unsupported effort");
+        assert!(haiku.get("effort").is_none());
+        assert!(haiku.get("output_config").is_none());
+
+        let structured = adapter
+            .adapt_request(&request_for(
+                "claude-opus-4.8",
+                Some(OutputConfig {
+                    format: OutputFormat::JsonSchema {
+                        name: "answer".to_string(),
+                        schema: json!({"type": "object"}),
+                        description: None,
+                    },
+                }),
+            ))
+            .expect("structured output and effort should coexist");
+        assert_eq!(structured["output_config"]["effort"], "high");
+        assert_eq!(structured["output_config"]["format"]["type"], "json_schema");
     }
 
     #[test]

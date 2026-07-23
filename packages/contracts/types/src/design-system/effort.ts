@@ -1,9 +1,11 @@
 // packages/contracts/types/src/design-system/effort.ts
 
-/** UI-facing effort axis. Locked vocabulary per DECISIONS.md D5. */
-export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+/** Provider-facing effort axis. Every surface filters this through model metadata. */
+export type Effort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export const EFFORT_LABEL: Readonly<Record<Effort, string>> = Object.freeze({
+  none: 'None',
+  minimal: 'Minimal',
   low: 'Low',
   medium: 'Medium',
   high: 'High',
@@ -12,7 +14,9 @@ export const EFFORT_LABEL: Readonly<Record<Effort, string>> = Object.freeze({
 });
 
 /** Anthropic thinking.budget_tokens by effort level. */
-export const ANTHROPIC_THINKING_BUDGET: Readonly<Record<Effort, number>> = Object.freeze({
+export const ANTHROPIC_THINKING_BUDGET: Readonly<
+  Record<Exclude<Effort, 'none' | 'minimal'>, number>
+> = Object.freeze({
   low: 4096,
   medium: 16384,
   high: 32768,

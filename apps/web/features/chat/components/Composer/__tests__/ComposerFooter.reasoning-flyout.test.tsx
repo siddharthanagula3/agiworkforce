@@ -13,7 +13,7 @@
  *   (f) GPT-5.6 Sol is live/selectable, while a synthetic future preview is disabled.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 // Mutable selected model, controlled per-test.
@@ -200,73 +200,57 @@ vi.mock('zustand/middleware', async () => {
 
 import { ComposerFooter } from '../ComposerFooter';
 
-/** Text labels of the effort marks currently rendered in the flyout group. */
-function effortMarkLabels(): string[] {
-  const group = screen.queryByRole('group', { name: /reasoning effort level/i });
-  if (!group) return [];
-  return within(group)
-    .getAllByRole('button')
-    .map((button) => button.textContent?.trim() ?? '')
-    .filter(Boolean);
-}
-
 describe('ComposerFooter · reasoning/effort flyout (real component + real catalog)', () => {
   beforeEach(() => {
     thinking.enabled = true;
     thinking.effort = 'medium';
   });
 
-  it('(a) GPT-5.6 Sol shows none/low/medium/high/xhigh/max', () => {
+  it('(a) GPT-5.6 Sol exposes its six exact levels through one compact slider', () => {
     sel.id = 'gpt-5.6-sol';
     render(<ComposerFooter />);
-    const marks = effortMarkLabels();
-    expect(marks).toEqual(['None', 'Low', 'Medium', 'High', 'xHigh', 'Max']);
-    expect(marks).not.toContain('Minimal');
+    const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
+    expect(slider).toHaveAttribute('min', '0');
+    expect(slider).toHaveAttribute('max', '5');
+    expect(slider).toHaveAttribute('aria-valuetext', 'Medium');
+    expect(screen.getByRole('button', { name: 'Change model' })).toHaveTextContent('Medium');
+    expect(screen.queryByRole('button', { name: 'Reasoning effort High' })).not.toBeInTheDocument();
   });
 
   it('(b) non-reasoning Sonar shows NO effort control', () => {
     sel.id = 'sonar';
     render(<ComposerFooter />);
-    expect(effortMarkLabels()).toEqual([]);
     expect(screen.queryByRole('group', { name: /reasoning effort/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('slider', { name: /reasoning effort/i })).not.toBeInTheDocument();
   });
 
-  it('Gemini 3.5 Flash-Lite exposes its catalog-backed low/medium/high slider', () => {
+  it('Gemini 3.5 Flash-Lite exposes its catalog-backed minimal/low/medium/high slider', () => {
     sel.id = 'gemini-3.5-flash-lite';
     thinking.effort = 'low';
     render(<ComposerFooter />);
 
-    expect(effortMarkLabels()).toEqual(['Low', 'Medium', 'High']);
-    expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute(
-      'aria-valuetext',
-      'Low',
-    );
+    const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
+    expect(slider).toHaveAttribute('max', '3');
+    expect(slider).toHaveAttribute('aria-valuetext', 'Low');
     expect(screen.getByText('Always on for this model')).toBeInTheDocument();
   });
 
-  it('(c) Anthropic Opus 4.8 shows low/medium/high/xhigh/max', () => {
+  it('(c) Anthropic Opus 4.8 exposes five catalog levels through the slider', () => {
     sel.id = 'claude-opus-4.8';
     render(<ComposerFooter />);
-    expect(effortMarkLabels()).toEqual(['Low', 'Medium', 'High', 'xHigh', 'Max']);
+    expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute('max', '4');
   });
 
-  it('(a2) Gemini 3.6 Flash exposes a low/medium/high slider without a duplicate minimal mark', () => {
+  it('(a2) Gemini 3.6 Flash exposes its exact minimal/low/medium/high slider', () => {
     sel.id = 'gemini-3.6-flash';
-    thinking.effort = 'low';
+    thinking.effort = 'minimal';
     render(<ComposerFooter />);
-    const marks = effortMarkLabels();
-    // supportedEfforts is [minimal,low,medium,high]; `minimal` (→ store 'low') is
-    // dropped so it can't double-highlight with Low.
-    expect(marks).toEqual(['Low', 'Medium', 'High']);
-    expect(marks).not.toContain('Minimal');
-    expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute(
-      'aria-valuetext',
-      'Low',
-    );
+    const slider = screen.getByRole('slider', { name: 'Reasoning effort' });
+    expect(slider).toHaveAttribute('max', '3');
+    expect(slider).toHaveAttribute('aria-valuetext', 'Minimal');
   });
 
-  it('places the effort slider before the model list and updates through catalog-backed marks', () => {
+  it('places the effort slider before the model list and updates by discrete catalog index', () => {
     sel.id = 'gemini-3.6-flash';
     thinking.effort = 'medium';
     render(<ComposerFooter />);
@@ -277,16 +261,19 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
       slider.compareDocumentPosition(available) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
-    fireEvent.change(slider, { target: { value: '2' } });
+    fireEvent.change(slider, { target: { value: '3' } });
     expect(thinking.effort).toBe('high');
   });
 
-  it('(d) Haiku 4.5 now supports thinking (effort control is present)', () => {
+  it('(d) Haiku 4.5 offers extended thinking without an effort control', () => {
     sel.id = 'claude-haiku-4.5';
+    thinking.effort = 'low';
     render(<ComposerFooter />);
-    // thinking_budget control → an on/off switch + budget chips (thinking supported).
+    // Haiku accepts manual extended thinking with a server-owned token budget,
+    // but Anthropic does not support output_config.effort for this model.
     expect(screen.getAllByTestId('switch').length).toBeGreaterThan(0);
-    expect(effortMarkLabels().length).toBeGreaterThan(0);
+    expect(screen.queryByRole('slider', { name: 'Reasoning effort' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change model' })).not.toHaveTextContent('Low');
   });
 
   it('(e) Fable 5 shows mandatory reasoning without an off switch', () => {

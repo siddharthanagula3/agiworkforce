@@ -27,6 +27,7 @@ import type { Provider } from './provider';
 import type { ModelInfo } from './provider-adapter';
 import type { RoutingTaskType } from './runtime';
 import type { SubscriptionTier } from './user';
+import type { Effort } from './design-system/effort';
 export type { Provider };
 
 /** Boolean capability flags for a model. */
@@ -154,8 +155,8 @@ export interface ModelReasoning {
   capable: boolean;
   control: ReasoningControl;
   /** effort_levels / always_on-with-levels: the model's ALLOWED effort set only. */
-  supportedEfforts?: string[];
-  defaultEffort?: string;
+  supportedEfforts?: Effort[];
+  defaultEffort?: Effort;
   /** false for always_on reasoners that cannot turn thinking off. */
   canDisableThinking?: boolean;
   /** thinking_budget control only. */
@@ -1480,6 +1481,30 @@ export function isModelLive(model: ModelMetadata): boolean {
 export function getModelReasoning(modelId: string | null | undefined): ModelReasoning {
   const meta = getModelMetadataById(modelId);
   return meta?.reasoning ?? { capable: false, control: 'none' };
+}
+
+/** Exact effort values accepted by this model's declared provider request path. */
+export function getModelEffortOptions(modelId: string | null | undefined): readonly Effort[] {
+  const reasoning = getModelReasoning(modelId);
+  const request = reasoning.request;
+  if (!request?.effortPath && !request?.responsesEffortPath) return [];
+  return reasoning.supportedEfforts ?? [];
+}
+
+/**
+ * Resolve a persisted effort preference against the selected model. Unknown or
+ * effort-less models fail closed; stale cross-model values fall back to the
+ * selected model's catalog default (or first supported value).
+ */
+export function resolveModelEffort(
+  modelId: string | null | undefined,
+  requested: string | null | undefined,
+): Effort | undefined {
+  const options = getModelEffortOptions(modelId);
+  if (requested && options.includes(requested as Effort)) return requested as Effort;
+  const defaultEffort = getModelReasoning(modelId).defaultEffort;
+  if (defaultEffort && options.includes(defaultEffort)) return defaultEffort;
+  return options[0];
 }
 
 /**

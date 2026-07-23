@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Pressable } from 'react-native';
+import Slider from '@react-native-community/slider';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -27,7 +28,7 @@ import {
 } from '@/src/features/model-picker/service';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 
-// Reasoning-effort chips are driven entirely by the selected model's catalog
+// Reasoning-effort slider stops are driven entirely by the selected model's catalog
 // metadata (models.json `reasoning.supportedEfforts`, see
 // docs/research/reasoning-effort-capability-matrix-2026-07-10.md) — never a
 // hardcoded per-provider list. The allowed set differs per model (e.g.
@@ -60,7 +61,7 @@ const REASONING_EFFORT_LABEL: Readonly<Record<string, string>> = {
   max: 'Max',
 };
 
-/** Sort a model's `supportedEfforts` into a stable, ladder-order chip row. */
+/** Sort a model's `supportedEfforts` into stable discrete slider stops. */
 function sortEffortLadder(efforts: readonly string[]): PickerEffort[] {
   return [...efforts]
     .sort((a, b) => EFFORT_LADDER_ORDER.indexOf(a) - EFFORT_LADDER_ORDER.indexOf(b))
@@ -223,7 +224,7 @@ export function ModelPickerSheet({
   // Reasoning controls are catalog-driven, per selected model id — including
   // auto-mode ids, which also carry a `reasoning` block in models.json (no
   // special-casing needed, and none baked in here survives a model rename).
-  // Only `control:'effort_levels'` renders the discrete chip row this sheet
+  // Only `control:'effort_levels'` renders the discrete slider this sheet
   // builds; 'always_on'/'thinking_toggle'/'thinking_budget' models use a
   // different control shape (e.g. the per-model "With thinking" switch below,
   // driven by ModelDef.supportsThinking) and are deliberately NOT shown here
@@ -596,46 +597,35 @@ export function ModelPickerSheet({
               testID="model-picker-effort-selector"
               style={{
                 flex: 1,
-                flexDirection: 'row',
                 borderRadius: 18,
                 borderWidth: 1,
                 borderColor: colors.border,
                 backgroundColor: colors.surfaceElevated,
-                padding: 2,
-                gap: 2,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
               }}
             >
-              {effortOptions.map((effort) => {
-                const selected = selectedEffort === effort;
-                return (
-                  <Pressable
-                    key={effort}
-                    onPress={() => handleSelectEffort(effort)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Reasoning effort ${REASONING_EFFORT_LABEL[effort] ?? effort}`}
-                    accessibilityState={{ selected }}
-                    style={{
-                      flex: 1,
-                      minHeight: 30,
-                      borderRadius: 16,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: selected ? colors.accentSurface : colors.transparent,
-                    }}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: selected ? colors.teal : colors.textSecondary,
-                        fontSize: 13,
-                        fontWeight: '600',
-                      }}
-                    >
-                      {REASONING_EFFORT_LABEL[effort] ?? effort}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              <Slider
+                minimumValue={0}
+                maximumValue={effortOptions.length - 1}
+                step={1}
+                value={Math.max(effortOptions.indexOf(selectedEffort), 0)}
+                onValueChange={(value) => {
+                  const effort = effortOptions[Math.round(value)];
+                  if (effort) handleSelectEffort(effort);
+                }}
+                minimumTrackTintColor={colors.teal}
+                maximumTrackTintColor={colors.border}
+                thumbTintColor={colors.textPrimary}
+                accessibilityRole="adjustable"
+                accessibilityLabel="Reasoning effort"
+                accessibilityValue={{
+                  min: 0,
+                  max: effortOptions.length - 1,
+                  now: Math.max(effortOptions.indexOf(selectedEffort), 0),
+                  text: REASONING_EFFORT_LABEL[selectedEffort] ?? selectedEffort,
+                }}
+              />
             </View>
           </View>
         ) : null}

@@ -18,22 +18,11 @@ import type { AgentControlState, AgentMode, Effort } from '@agiworkforce/types';
 /**
  * Effort ladder as the model picker renders it, per-model, from models.json
  * `reasoning.supportedEfforts` (docs/research/reasoning-effort-capability-matrix-2026-07-10.md).
- * A superset of the shared `Effort` (packages/contracts/types/design-system/effort.ts,
- * locked vocabulary D5, used by web/desktop's request-wire path): some models
- * legitimately expose `'none'` (e.g. gpt-5.6-terra) as a selectable level.
- * `'minimal'` is kept in the union too for any model that exposes it —
- * current Gemini/Sonar catalog entries do, and BYOK/future catalog
- * entries may. Widened here rather than in the shared
- * `Effort` union because that union backs non-partial `Record<Effort, …>`
- * maps in web/desktop-shared files (e.g. packages/ui/unified-chat's
- * AgentControl.tsx) that this mobile-only change must not break.
- *
- * `chatExecutionStore` coerces `'none'`/`'minimal'` to "omit the effort
- * param" at the `streamChat` request boundary until per-model request-path
- * support for those two values is verified server-side — tracked gap, not
- * silently assumed correct.
+ * The shared `Effort` vocabulary includes every provider-native catalog value,
+ * including `none` and `minimal`. Keep this alias so the picker/store boundary
+ * stays explicit even though it no longer needs a mobile-only widening.
  */
-export type PickerEffort = Effort | 'none' | 'minimal';
+export type PickerEffort = Effort;
 
 type AgentControlStateUI = Omit<AgentControlState, 'effort'> & { effort: PickerEffort };
 

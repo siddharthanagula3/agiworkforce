@@ -46,7 +46,12 @@ import {
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
 import { useRouter } from 'next/navigation';
-import { EFFORT_LABEL, getModels, type CloudWorkMode } from '@agiworkforce/types';
+import {
+  EFFORT_LABEL,
+  getModels,
+  resolveModelEffort,
+  type CloudWorkMode,
+} from '@agiworkforce/types';
 import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
@@ -469,6 +474,7 @@ const ChatComposerNewComponent = ({
   const activeCustomStyleId = useStyleStore((s) => s.activeCustomStyleId);
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
   const thinkingEffort = useThinkingStore((s) => s.effort);
+  const selectedModelEffort = resolveModelEffort(composerSelectedModelId, thinkingEffort);
   const setThinkingEffort = useThinkingStore((s) => s.setEffort);
   const setThinkingEnabled = useThinkingStore((s) => s.setEnabled);
   const thinkingCycle = useThinkingStore((s) => s.cycleEffort);
@@ -1601,8 +1607,8 @@ const ChatComposerNewComponent = ({
                       <MenuToggleRow
                         icon={Brain}
                         label={
-                          thinkingEnabled
-                            ? `Extended thinking · ${EFFORT_LABEL[thinkingEffort]}`
+                          thinkingEnabled && selectedModelEffort
+                            ? `Extended thinking · ${EFFORT_LABEL[selectedModelEffort]}`
                             : 'Extended thinking'
                         }
                         checked={thinkingEnabled}

@@ -1854,6 +1854,8 @@ fn crate_builders_cannot_express_desktop_features() {
     // max_tokens). Remaining anthropic non-crate shapes (output_config,
     // server tools, documents, cache_control) are guarded by the production
     // fallback — pinned in anthropic_inexpressible_shapes_fall_back_to_legacy.
+    // The crate can express the effort member of output_config, but not the
+    // typed structured-output format member guarded by that fallback.
     let anthropic = agiworkforce_llm::build_anthropic_request_body(&req);
     assert!(
         anthropic.get("output_config").is_none(),

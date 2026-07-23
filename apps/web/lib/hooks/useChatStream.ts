@@ -20,7 +20,12 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
-import { getModelMetadataById, type CloudWorkMode, type Effort } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  resolveModelEffort,
+  type CloudWorkMode,
+  type Effort,
+} from '@agiworkforce/types';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   createManagedCloudChatClient,
@@ -1731,6 +1736,15 @@ export function useChatStream(): UseChatStreamReturn {
         const thinkingEnabled =
           requestedThinking && (selectedModelMetadata?.capabilities.thinking ?? true);
         const thinkingEffort = options.thinkingEffort ?? thinkingState.effort;
+        const reasoningRequest = selectedModelMetadata?.reasoning?.request;
+        const supportsEffort = selectedModelMetadata
+          ? Boolean(reasoningRequest?.effortPath || reasoningRequest?.responsesEffortPath)
+          : true;
+        const resolvedEffort = selectedModelMetadata
+          ? resolveModelEffort(model, thinkingEffort)
+          : thinkingEffort;
+        const sendsEffortWithoutThinking =
+          selectedModelMetadata?.reasoning?.control === 'effort_levels';
         const response = await fetch('/api/llm/v1/chat/completions', {
           method: 'POST',
           headers,
@@ -1749,7 +1763,10 @@ export function useChatStream(): UseChatStreamReturn {
             skill_name: options.skillName,
             work_mode: options.workMode,
             thinking_mode: thinkingEnabled || undefined,
-            effort: thinkingEnabled ? thinkingEffort : undefined,
+            effort:
+              supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)
+                ? resolvedEffort
+                : undefined,
             use_prompt_cache: true,
           }),
           signal: abortControllerRef.current?.signal,
