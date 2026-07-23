@@ -217,6 +217,17 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  const checkoutMetadata = {
+    user_id: user.id,
+    plan_tier: plan,
+    ...(replacesUnlinkedEntitlement
+      ? {
+          upgrade_from: existingSubscription.plan_tier,
+          replace_unlinked_entitlement: 'true',
+        }
+      : {}),
+  };
+
   // Create Stripe Checkout Session
   try {
     const checkoutSession = await stripe.checkout.sessions.create({
@@ -239,15 +250,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       // back to client_reference_id or a Stripe customer lookup. This is intentional
       // - not redundant - because Stripe customer IDs are not always available at
       // webhook time (e.g. first-time checkout before the customer object is linked).
-      metadata: {
-        user_id: user.id,
-        plan_tier: plan,
-        ...(replacesUnlinkedEntitlement
-          ? {
-              upgrade_from: existingSubscription.plan_tier,
-              replace_unlinked_entitlement: 'true',
-            }
-          : {}),
+      metadata: checkoutMetadata,
+      // Stripe may deliver customer.subscription.created before
+      // checkout.session.completed. Copy ownership and replacement context onto
+      // the Subscription so that earlier event cannot reset carried usage.
+      subscription_data: {
+        metadata: checkoutMetadata,
       },
       allow_promotion_codes: true,
     });

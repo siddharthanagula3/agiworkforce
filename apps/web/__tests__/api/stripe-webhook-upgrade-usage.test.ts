@@ -122,6 +122,61 @@ describe('subscription webhook usage rollover', () => {
     expect(serviceMocks.carryUpgrade).not.toHaveBeenCalled();
   });
 
+  it('carries usage when subscription.created arrives before checkout completion', async () => {
+    const periodStart = Date.parse('2026-07-23T18:00:00.000Z') / 1000;
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes('from subscriptions where stripe_subscription_id')) return [];
+        if (sql.includes('select id from profiles where id')) return [{ id: 'user-123' }];
+        if (sql.includes('from subscriptions where user_id')) {
+          return [
+            {
+              id: 'sub_db_1',
+              plan_tier: 'max',
+              stripe_subscription_id: null,
+            },
+          ];
+        }
+        if (sql.includes('insert into subscriptions')) return [{ id: 'sub_db_1' }];
+        return [];
+      }),
+      execute: vi.fn(async () => 1),
+    };
+    const stripe = {
+      customers: {
+        retrieve: vi.fn(async () => ({
+          id: 'cus_1',
+          deleted: false,
+          email: 'investor@example.com',
+        })),
+      },
+    };
+
+    await updateSubscriptionFromStripeSubscription(
+      db as never,
+      stripe as never,
+      subscription('max', periodStart, {
+        metadata: {
+          user_id: 'user-123',
+          plan_tier: 'max',
+          upgrade_from: 'max',
+          replace_unlinked_entitlement: 'true',
+        },
+      }),
+    );
+
+    expect(serviceMocks.carryUpgrade).toHaveBeenCalledWith(
+      'user-123',
+      'sub_db_1',
+      'max',
+      'max',
+      new Date(periodStart * 1000),
+      new Date((periodStart + 30 * 24 * 60 * 60) * 1000),
+    );
+    expect(serviceMocks.allocate).not.toHaveBeenCalled();
+    expect(serviceMocks.reset).not.toHaveBeenCalled();
+  });
+
   it('does not provision a plan while Stripe is still waiting for upgrade payment', async () => {
     const db = database('pro', '2026-07-01T00:00:00.000Z');
     const nextPeriodStart = Date.parse('2026-07-18T18:00:00.000Z') / 1000;

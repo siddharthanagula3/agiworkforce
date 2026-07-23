@@ -109,11 +109,11 @@ describe('Subscription', () => {
     expect(screen.getByText('Upgrade to Max 15x')).toBeTruthy();
   });
 
-  it('does not invent a paid subscription price, currency, or billing cadence', () => {
+  it('shows the actual paid period without inventing a price, currency, or cadence', () => {
     renderSubscription('pro');
 
     expect(screen.getByText('See invoice')).toBeTruthy();
-    expect(screen.getByText('Not available')).toBeTruthy();
+    expect(screen.getByText('2026-07-01T00:00:00.000Z – 2026-08-01T00:00:00.000Z')).toBeTruthy();
     expect(screen.queryByText('$0.00')).toBeNull();
     expect(screen.queryByText('Monthly', { selector: 'p.text-sm.font-medium' })).toBeNull();
   });
