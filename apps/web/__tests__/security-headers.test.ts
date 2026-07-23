@@ -48,4 +48,10 @@ describe('WEB-13 · production security headers', () => {
     expect(proxy).toContain("response.headers.set('Content-Security-Policy'");
     expect(proxy.toLowerCase()).toContain('nonce');
   });
+
+  it('keeps the PDF frame exception narrow and query-gated', () => {
+    expect(config).toContain("source: '/api/files/:id'");
+    expect(config).toContain("key: 'preview', value: 'pdf'");
+    expect(config).toContain("value: 'SAMEORIGIN'");
+  });
 });

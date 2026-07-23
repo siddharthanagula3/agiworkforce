@@ -106,7 +106,9 @@ describe('ArtifactPreview · PDF viewer', () => {
       />,
     );
     const iframe = screen.getByTitle('Trip.pdf') as HTMLIFrameElement;
-    expect(iframe.getAttribute('src')).toBe('/api/files/11111111-2222-4333-8444-555555555555');
+    expect(iframe.getAttribute('src')).toBe(
+      '/api/files/11111111-2222-4333-8444-555555555555?preview=pdf',
+    );
     expect(screen.queryByTestId('artifact-pdf-fallback')).toBeNull();
   });
 

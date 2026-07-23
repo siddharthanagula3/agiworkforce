@@ -51,8 +51,8 @@ import { createError } from '@/lib/errors';
 
 const ASSET_ID = '22222222-2222-4222-8222-222222222222';
 
-function makeRequest(id: string) {
-  return new Request(`http://localhost:3000/api/files/${id}`) as never;
+function makeRequest(id: string, query = '') {
+  return new Request(`http://localhost:3000/api/files/${id}${query}`) as never;
 }
 
 function makeContext(id: string) {
@@ -139,6 +139,32 @@ describe('GET /api/files/[id]', () => {
     const servedHash = createHash('sha256').update(served).digest('hex');
     expect(servedHash).toBe(storedHash);
     expect(mockGetObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf');
+  });
+
+  it('allows the authenticated PDF preview to frame only PDF bytes from the same origin', async () => {
+    const stored = Buffer.from('%PDF-1.7\n%%EOF', 'utf8');
+    mockGetMediaAssetById.mockResolvedValue(makeAsset({ byteSize: stored.byteLength }));
+    mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
+
+    const res = await GET(makeRequest(ASSET_ID, '?preview=pdf'), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'self'");
+  });
+
+  it('rejects the PDF frame exception for generated HTML without reading its bytes', async () => {
+    mockGetMediaAssetById.mockResolvedValue(
+      makeAsset({
+        mimeType: 'text/html',
+        storagePathname: 'media/file/user-owner/dashboard.html',
+      }),
+    );
+
+    const res = await GET(makeRequest(ASSET_ID, '?preview=pdf'), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(404);
+    expect(mockGetObject).not.toHaveBeenCalled();
   });
 
   it('sanitizes hostile filenames in Content-Disposition', async () => {
