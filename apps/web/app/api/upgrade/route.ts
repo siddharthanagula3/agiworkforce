@@ -191,7 +191,6 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         // credit only the unused TIME on the old plan.
         billing_cycle_anchor: 'now',
         proration_behavior: 'always_invoice',
-        proration_date: prorationDate,
         // Stripe applies the plan change only after the immediate invoice is paid.
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],

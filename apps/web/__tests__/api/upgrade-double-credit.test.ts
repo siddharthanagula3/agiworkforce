@@ -152,12 +152,12 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
         items: [{ id: 'si_1', price: 'price_max_monthly' }],
         billing_cycle_anchor: 'now',
         proration_behavior: 'always_invoice',
-        proration_date: 1_700_000_000,
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
       }),
       expect.objectContaining({ idempotencyKey: expect.any(String) }),
     );
+    expect(stripeMocks.updateSubscription.mock.calls[0]?.[1]).not.toHaveProperty('proration_date');
     expect(stripeMocks.retrieveCustomer).not.toHaveBeenCalled();
     expect(stripeMocks.updateCustomer).not.toHaveBeenCalled();
     expect(dbMocks.execute).not.toHaveBeenCalledWith(

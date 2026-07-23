@@ -201,7 +201,6 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
         items: [{ id: stripeItemId, price: newPriceId }],
         proration_behavior: 'always_invoice',
         billing_cycle_anchor: 'now',
-        proration_date: prorationDate,
       },
     });
   } catch (err) {
