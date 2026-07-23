@@ -560,10 +560,25 @@ const MessageBubbleComponent = function MessageBubble({
     const baseArtifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
     // Dedupe by id: the upsert effect below writes generated-file artifacts
     // into the artifacts store, so on the next render they ALSO arrive via
-    // existingArtifacts — without this they would render twice.
+    // existingArtifacts — without this they would render twice. Persisted
+    // SharedArtifacts intentionally omit web-only generated-file provenance,
+    // so a reload must also enrich the matching persisted entry with the
+    // freshly reconstructed side-map fields instead of discarding them.
     const merged = [...baseArtifacts];
     for (const artifact of generatedFileArtifacts) {
-      if (!merged.some((existing) => existing.id === artifact.id)) merged.push(artifact);
+      const existingIndex = merged.findIndex((existing) => existing.id === artifact.id);
+      if (existingIndex === -1) {
+        merged.push(artifact);
+        continue;
+      }
+      const existing = merged[existingIndex];
+      if (!existing) continue;
+      merged[existingIndex] = {
+        ...existing,
+        computeSession: artifact.computeSession ?? existing.computeSession,
+        generatedFile: artifact.generatedFile ?? existing.generatedFile,
+        artifactManifest: artifact.artifactManifest ?? existing.artifactManifest,
+      };
     }
     return merged;
   }, [existingArtifacts, extractedArtifacts, generatedFileArtifacts]);
