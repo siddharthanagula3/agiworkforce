@@ -65,6 +65,13 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
     throw createError.forbidden('You do not have access to this file');
   }
 
+  const isPdfPreview = new URL(request.url).searchParams.get('preview') === 'pdf';
+  if (isPdfPreview && asset.mimeType.toLowerCase() !== 'application/pdf') {
+    // Fail closed: the same-origin frame exception belongs only to inert PDF
+    // bytes. In particular, never allow generated text/html through it.
+    throw createError.notFound('PDF preview not available');
+  }
+
   if (asset.byteSize != null && asset.byteSize > MAX_SERVE_BYTES) {
     return NextResponse.json(
       { error: { code: 'PAYLOAD_TOO_LARGE', message: 'File exceeds the inline serving limit' } },
@@ -100,6 +107,13 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
       // Private: bytes are owner-scoped; never let a shared cache hold them.
       'Cache-Control': 'private, max-age=3600',
       'X-Content-Type-Options': 'nosniff',
+      ...(isPdfPreview
+        ? {
+            'Content-Security-Policy':
+              "default-src 'none'; frame-ancestors 'self'; object-src 'none'",
+            'X-Frame-Options': 'SAMEORIGIN',
+          }
+        : {}),
     },
   });
 }

@@ -100,4 +100,25 @@ describe('web proxy', () => {
     expect(clerkState.clerkPaths).toEqual([]);
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
   });
+
+  it('allows same-origin framing only for the explicit generated PDF preview request', async () => {
+    clerkState.clerkPaths = [];
+    const { proxy } = await import('../proxy');
+
+    const preview = await proxy(
+      new NextRequest(
+        'http://localhost/api/files/11111111-2222-4333-8444-555555555555?preview=pdf',
+      ),
+      {} as never,
+    );
+    const ordinaryFile = await proxy(
+      new NextRequest('http://localhost/api/files/11111111-2222-4333-8444-555555555555'),
+      {} as never,
+    );
+
+    expect(preview?.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'self'");
+    expect(ordinaryFile?.headers.get('Content-Security-Policy')).toContain(
+      "frame-ancestors 'none'",
+    );
+  });
 });
