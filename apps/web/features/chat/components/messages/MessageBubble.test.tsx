@@ -693,6 +693,50 @@ describe('MessageBubble', () => {
       expect(screen.queryByRole('link', { name: /report\.pdf/i })).toBeNull();
     });
 
+    it('restores generated-file provenance onto a matching persisted PDF artifact', async () => {
+      useArtifactsStore.getState().addArtifactForMessage(
+        'message-1',
+        {
+          id: 'genfile-gf-pdf',
+          type: 'document',
+          language: 'pdf',
+          title: 'report.pdf',
+          content: '',
+        },
+        'conv-generated-files',
+      );
+
+      render(
+        <MessageBubble
+          message={makeMessage({
+            id: 'message-1',
+            role: 'assistant',
+            content: 'Report attached.',
+            metadata: {
+              generatedFiles: [
+                genFile({
+                  id: 'gf-pdf',
+                  fileName: 'report.pdf',
+                  mimeType: 'application/pdf',
+                  uri: '/api/files/gf-pdf',
+                  kind: 'pdf',
+                }),
+              ],
+            },
+          })}
+        />,
+      );
+
+      await waitFor(() =>
+        expect(
+          useArtifactsStore
+            .getState()
+            .getConversationArtifacts('conv-generated-files')
+            .find((artifact) => artifact.id === 'genfile-gf-pdf')?.generatedFile,
+        ).toEqual(expect.objectContaining({ uri: '/api/files/gf-pdf' })),
+      );
+    });
+
     it('fetches CSV content same-origin and renders it as a spreadsheet artifact', async () => {
       const fetchMock = vi
         .fn()
