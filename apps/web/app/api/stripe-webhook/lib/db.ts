@@ -510,6 +510,38 @@ export async function upsertSubscriptionFromSession(
     );
   }
 
+  let replacedEntitlement: { id: string; planTier: string } | null = null;
+  if (session.metadata?.['replace_unlinked_entitlement'] === 'true') {
+    const previousPlanTier = session.metadata?.['upgrade_from']?.toLowerCase();
+    const existingRows = await db.query<{ id: string; plan_tier: string }>(
+      'select id, plan_tier from subscriptions where user_id = $1 limit 1',
+      [resolvedUserId],
+    );
+    const existing = existingRows[0];
+    const previousBudget = getPlanUsageBudgetCents(previousPlanTier ?? '', 'monthly');
+    const nextBudget = getPlanUsageBudgetCents(planTier, 'monthly');
+    if (
+      existing &&
+      previousPlanTier &&
+      existing.plan_tier === previousPlanTier &&
+      previousBudget > 0 &&
+      nextBudget >= previousBudget
+    ) {
+      replacedEntitlement = { id: existing.id, planTier: previousPlanTier };
+    } else {
+      logger.warn(
+        {
+          sessionId: session.id,
+          resolvedUserId,
+          previousPlanTier,
+          storedPlanTier: existing?.plan_tier,
+          planTier,
+        },
+        'Ignoring invalid unlinked-entitlement replacement metadata',
+      );
+    }
+  }
+
   logger.debug(
     { sessionId: session.id, resolvedUserId, planTier, stripeCustomerId, stripeSubId },
     'Session details',
@@ -595,16 +627,35 @@ export async function upsertSubscriptionFromSession(
 
     for (let attempt = 1; attempt <= WEBHOOK_MAX_RETRIES; attempt++) {
       try {
-        await SubscriptionService.allocateCreditsForPeriod(
-          resolvedUserId,
-          data.id,
-          planTier,
-          new Date(currentPeriodStart),
-          new Date(currentPeriodEnd),
-        );
+        if (replacedEntitlement && replacedEntitlement.id === data.id) {
+          await SubscriptionService.carryCreditsForUpgradePeriod(
+            resolvedUserId,
+            data.id,
+            replacedEntitlement.planTier,
+            planTier,
+            new Date(currentPeriodStart),
+            new Date(currentPeriodEnd),
+          );
+        } else {
+          await SubscriptionService.allocateCreditsForPeriod(
+            resolvedUserId,
+            data.id,
+            planTier,
+            new Date(currentPeriodStart),
+            new Date(currentPeriodEnd),
+          );
+        }
         logger.info(
-          { userId: resolvedUserId, subscriptionId: data.id, planTier, attempt },
-          'Credits allocated for new subscription',
+          {
+            userId: resolvedUserId,
+            subscriptionId: data.id,
+            planTier,
+            attempt,
+            carriedUsage: !!replacedEntitlement,
+          },
+          replacedEntitlement
+            ? 'Usage carried into paid replacement subscription'
+            : 'Credits allocated for new subscription',
         );
         lastError = null;
         break;

@@ -9,12 +9,14 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { CheckoutRequestSchema } from '@/lib/validations/checkout';
+import { UpgradeApplyRequestSchema } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
-import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
+import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
+import { verifyUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
 
 const TIER_ORDER: Record<string, number> = {
   free: 0,
@@ -55,21 +57,24 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Invalid request body');
   }
 
-  const parsed = CheckoutRequestSchema.safeParse(rawBody);
+  const parsed = UpgradeApplyRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     const msg = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
     throw createError.validation(`Invalid request: ${msg}`);
   }
-  const { plan: targetPlan, billingInterval } = parsed.data;
+  const { plan: targetPlan, billingInterval, previewToken } = parsed.data;
 
   const db = getNeonDb();
   const stripe = getStripe();
 
   // Fetch current subscription
-  type SubRow = Pick<SubscriptionRow, 'status' | 'plan_tier' | 'stripe_subscription_id'>;
+  type SubRow = Pick<
+    SubscriptionRow,
+    'status' | 'plan_tier' | 'stripe_customer_id' | 'stripe_subscription_id'
+  >;
   const subRows = await db
     .query<SubRow>(
-      `select status, plan_tier, stripe_subscription_id
+      `select status, plan_tier, stripe_customer_id, stripe_subscription_id
        from subscriptions where user_id = $1 limit 1`,
       [userId],
     )
@@ -89,36 +94,35 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const stripeSubId = sub.stripe_subscription_id;
-  if (!isStripeSubscriptionId(stripeSubId)) {
-    return NextResponse.json(
-      {
-        error: {
-          message:
-            'Your current plan is not attached to a live Stripe subscription. Continue through secure checkout.',
-          type: 'invalid_request_error',
-          code: 'checkout_required',
-        },
-      },
-      { status: 409 },
-    );
+  let stripeCustomerId = sub.stripe_customer_id;
+  if (!isStripeCustomerId(stripeCustomerId)) {
+    const profileRows = await db
+      .query<
+        Pick<SubscriptionRow, 'stripe_customer_id'>
+      >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
+      .catch(() => [] as Pick<SubscriptionRow, 'stripe_customer_id'>[]);
+    stripeCustomerId = profileRows[0]?.stripe_customer_id ?? null;
   }
 
+  let stripeSubId = sub.stripe_subscription_id;
   let stripeItem: Stripe.SubscriptionItem | null = null;
   let subscriptionCurrency = 'usd';
   try {
-    const stripeSub = await stripe.subscriptions.retrieve(stripeSubId, {
-      expand: ['items.data'],
-    });
-    stripeItem = stripeSub.items.data[0] ?? null;
-    subscriptionCurrency = stripeSub.currency;
-  } catch (err) {
-    if (err instanceof Stripe.errors.StripeInvalidRequestError && err.code === 'resource_missing') {
+    const resolved = await resolveStripeSubscriptionForUpgrade(
+      stripe,
+      {
+        planTier: currentTier,
+        stripeCustomerId,
+        stripeSubscriptionId: stripeSubId,
+      },
+      userId,
+    );
+    if (!resolved) {
       return NextResponse.json(
         {
           error: {
             message:
-              'Your previous Stripe subscription no longer exists. Continue through secure checkout.',
+              'Your current plan has no paid Stripe subscription to credit. Starting a paid plan requires full-price checkout.',
             type: 'invalid_request_error',
             code: 'checkout_required',
           },
@@ -126,10 +130,44 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         { status: 409 },
       );
     }
-    logger.error({ err, stripeSubId }, 'Failed to retrieve Stripe subscription for item ID');
+    const stripeSub = resolved.subscription;
+    stripeSubId = stripeSub.id;
+    if (resolved.recovered) {
+      const recoveredCustomerId =
+        typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
+      const recoveredPriceId = stripeSub.items.data[0]?.price.id ?? null;
+      await db.execute(
+        `update subscriptions
+         set stripe_subscription_id = $1, stripe_customer_id = $2, stripe_price_id = $3
+         where user_id = $4`,
+        [stripeSub.id, recoveredCustomerId, recoveredPriceId, userId],
+      );
+    }
+    stripeItem = stripeSub.items.data[0] ?? null;
+    subscriptionCurrency = stripeSub.currency;
+  } catch (err) {
+    logger.error({ err, stripeSubId }, 'Failed to resolve Stripe subscription for item ID');
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
   if (!stripeItem) throw createError.internal('Subscription has no items');
+
+  let prorationDate: number;
+  try {
+    prorationDate = verifyUpgradePreviewToken(
+      previewToken,
+      {
+        userId,
+        plan: targetPlan,
+        billingInterval,
+        stripeSubscriptionId: stripeSubId,
+      },
+      requireEnv('STRIPE_SECRET_KEY'),
+    ).prorationDate;
+  } catch {
+    throw createError.validation(
+      'Your upgrade preview expired or no longer matches this subscription. Preview the price again.',
+    );
+  }
 
   const priceSelection = await getPriceSelectionForCurrency(
     targetPlan,
@@ -153,13 +191,14 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         // credit only the unused TIME on the old plan.
         billing_cycle_anchor: 'now',
         proration_behavior: 'always_invoice',
+        proration_date: prorationDate,
         // Stripe applies the plan change only after the immediate invoice is paid.
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
         metadata: { plan_tier: targetPlan, user_id: userId, upgrade_from: currentTier },
       },
       {
-        idempotencyKey: `upgrade:${stripeSubId}:${stripeItem.price.id}:${newPriceId}`,
+        idempotencyKey: `upgrade:${stripeSubId}:${stripeItem.price.id}:${newPriceId}:${prorationDate}`,
       },
     );
   } catch (err) {

@@ -13,8 +13,13 @@ import { CheckoutRequestSchema } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
-import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
-import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import {
+  getLocalizedPricingCatalog,
+  getPriceSelectionForCurrency,
+} from '@/lib/server/localized-pricing-service';
+import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
+import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
+import { createUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
 
 // Tier order MUST match app/api/upgrade/route.ts so preview and apply agree on
 // what counts as an upgrade.
@@ -76,10 +81,13 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   const db = getNeonDb();
   const stripe = getStripe();
 
-  type SubRow = Pick<SubscriptionRow, 'status' | 'plan_tier' | 'stripe_subscription_id'>;
+  type SubRow = Pick<
+    SubscriptionRow,
+    'status' | 'plan_tier' | 'stripe_customer_id' | 'stripe_subscription_id'
+  >;
   const subRows = await db
     .query<SubRow>(
-      `select status, plan_tier, stripe_subscription_id
+      `select status, plan_tier, stripe_customer_id, stripe_subscription_id
        from subscriptions where user_id = $1 limit 1`,
       [userId],
     )
@@ -99,47 +107,74 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     );
   }
 
-  const stripeSubId = sub.stripe_subscription_id;
-  if (!isStripeSubscriptionId(stripeSubId)) {
-    return NextResponse.json(
-      {
-        error: {
-          message:
-            'Your current plan is not attached to a live Stripe subscription. Continue through secure checkout.',
-          type: 'invalid_request_error',
-          code: 'checkout_required',
-        },
-      },
-      { status: 409 },
-    );
+  let stripeCustomerId = sub.stripe_customer_id;
+  if (!isStripeCustomerId(stripeCustomerId)) {
+    const profileRows = await db
+      .query<
+        Pick<SubscriptionRow, 'stripe_customer_id'>
+      >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
+      .catch(() => [] as Pick<SubscriptionRow, 'stripe_customer_id'>[]);
+    stripeCustomerId = profileRows[0]?.stripe_customer_id ?? null;
   }
 
+  let stripeSubId = sub.stripe_subscription_id;
   let stripeItemId: string | null = null;
   let customerId: string | null = null;
   let subscriptionCurrency = 'usd';
   try {
-    const stripeSub = await stripe.subscriptions.retrieve(stripeSubId, {
-      expand: ['items.data'],
-    });
-    stripeItemId = stripeSub.items.data[0]?.id ?? null;
-    customerId =
-      typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
-    subscriptionCurrency = stripeSub.currency;
-  } catch (err) {
-    if (err instanceof Stripe.errors.StripeInvalidRequestError && err.code === 'resource_missing') {
+    const resolved = await resolveStripeSubscriptionForUpgrade(
+      stripe,
+      {
+        planTier: currentTier,
+        stripeCustomerId,
+        stripeSubscriptionId: stripeSubId,
+      },
+      userId,
+    );
+    if (!resolved) {
+      const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
+      const catalog = await getLocalizedPricingCatalog(country);
+      const checkoutPrice = catalog.plans[targetPlan]?.[billingInterval];
+      if (!checkoutPrice?.checkoutReady) {
+        throw createError.validation(
+          `Checkout pricing is not configured for ${targetPlan} ${billingInterval} in your region.`,
+        );
+      }
       return NextResponse.json(
         {
           error: {
             message:
-              'Your previous Stripe subscription no longer exists. Continue through secure checkout.',
+              'Your current plan has no paid Stripe subscription to credit. Starting a paid plan requires full-price checkout.',
             type: 'invalid_request_error',
             code: 'checkout_required',
+          },
+          checkout: {
+            amountDueNowCents: checkoutPrice.amountMinor,
+            currency: checkoutPrice.currency,
           },
         },
         { status: 409 },
       );
     }
-    logger.error({ err, stripeSubId }, 'Failed to retrieve Stripe subscription for preview');
+    const stripeSub = resolved.subscription;
+    stripeSubId = stripeSub.id;
+    if (resolved.recovered) {
+      const recoveredCustomerId =
+        typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
+      const recoveredPriceId = stripeSub.items.data[0]?.price.id ?? null;
+      await db.execute(
+        `update subscriptions
+         set stripe_subscription_id = $1, stripe_customer_id = $2, stripe_price_id = $3
+         where user_id = $4`,
+        [stripeSub.id, recoveredCustomerId, recoveredPriceId, userId],
+      );
+    }
+    stripeItemId = stripeSub.items.data[0]?.id ?? null;
+    customerId =
+      typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
+    subscriptionCurrency = stripeSub.currency;
+  } catch (err) {
+    logger.error({ err, stripeSubId }, 'Failed to resolve Stripe subscription for preview');
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
   if (!stripeItemId || !customerId) throw createError.internal('Subscription has no items');
@@ -155,6 +190,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     );
   }
   const newPriceId = priceSelection.priceId;
+  const prorationDate = Math.floor(Date.now() / 1000);
 
   let preview: Stripe.Invoice;
   try {
@@ -165,6 +201,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
         items: [{ id: stripeItemId, price: newPriceId }],
         proration_behavior: 'always_invoice',
         billing_cycle_anchor: 'now',
+        proration_date: prorationDate,
       },
     });
   } catch (err) {
@@ -180,6 +217,16 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     // the old plan. This is the ONLY figure the server must compute — the going-
     // forward recurring price is a static catalog value the client already knows.
     amountDueNowCents: preview.amount_due,
+    previewToken: createUpgradePreviewToken(
+      {
+        userId,
+        plan: targetPlan,
+        billingInterval,
+        stripeSubscriptionId: stripeSubId,
+        prorationDate,
+      },
+      requireEnv('STRIPE_SECRET_KEY'),
+    ),
   });
 }
 

@@ -42,9 +42,18 @@ function extractErrorCode(body: unknown): string | null {
 }
 
 export class CheckoutRequiredError extends Error {
-  constructor(message: string) {
+  readonly amountDueNowCents: number | null;
+  readonly currency: string | null;
+
+  constructor(
+    message: string,
+    amountDueNowCents: number | null = null,
+    currency: string | null = null,
+  ) {
     super(message);
     this.name = 'CheckoutRequiredError';
+    this.amountDueNowCents = amountDueNowCents;
+    this.currency = currency;
   }
 }
 
@@ -208,7 +217,7 @@ export async function startPlanCheckout(data: {
 export async function previewUpgrade(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
-}): Promise<{ amountDueNowCents: number; currency: string }> {
+}): Promise<{ amountDueNowCents: number; currency: string; previewToken: string }> {
   const authToken = await getAuthToken();
   if (!authToken) throw new Error('User not authenticated. Please log in to upgrade.');
 
@@ -225,21 +234,39 @@ export async function previewUpgrade(data: {
   const result = (await response.json().catch(() => ({}))) as {
     amountDueNowCents?: unknown;
     currency?: unknown;
+    previewToken?: unknown;
     error?: unknown;
+    checkout?: {
+      amountDueNowCents?: unknown;
+      currency?: unknown;
+    };
   };
 
   if (!response.ok) {
     if (extractErrorCode(result) === 'checkout_required') {
+      const checkoutAmount = result.checkout?.amountDueNowCents;
+      const checkoutCurrency = result.checkout?.currency;
       throw new CheckoutRequiredError(
         extractErrorMessage(result, 'Start a new checkout to continue.'),
+        typeof checkoutAmount === 'number' ? checkoutAmount : null,
+        typeof checkoutCurrency === 'string' ? checkoutCurrency : null,
       );
     }
     throw new Error(extractErrorMessage(result, `Could not preview the ${data.plan} upgrade`));
   }
-  if (typeof result.amountDueNowCents !== 'number' || typeof result.currency !== 'string') {
+  if (
+    typeof result.amountDueNowCents !== 'number' ||
+    typeof result.currency !== 'string' ||
+    typeof result.previewToken !== 'string' ||
+    !result.previewToken
+  ) {
     throw new Error('Upgrade preview returned an unexpected response.');
   }
-  return { amountDueNowCents: result.amountDueNowCents, currency: result.currency };
+  return {
+    amountDueNowCents: result.amountDueNowCents,
+    currency: result.currency,
+    previewToken: result.previewToken,
+  };
 }
 
 /**
@@ -250,6 +277,7 @@ export async function previewUpgrade(data: {
 export async function upgradePlanMidCycle(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
+  previewToken: string;
 }): Promise<{ activation: 'webhook_pending' }> {
   const authToken = await getAuthToken();
   if (!authToken) throw new Error('User not authenticated. Please log in to upgrade.');
@@ -261,7 +289,11 @@ export async function upgradePlanMidCycle(data: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${authToken}`,
     }),
-    body: JSON.stringify({ plan: data.plan, billingInterval }),
+    body: JSON.stringify({
+      plan: data.plan,
+      billingInterval,
+      previewToken: data.previewToken,
+    }),
   });
 
   const result = (await response.json().catch(() => ({}))) as {

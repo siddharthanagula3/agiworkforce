@@ -24,6 +24,11 @@ export const CheckoutRequestSchema = z
     }
   });
 
+export const UpgradeApplyRequestSchema = CheckoutRequestSchema.safeExtend({
+  previewToken: z.string().min(1).max(4096),
+});
+
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
+export type UpgradeApplyRequest = z.infer<typeof UpgradeApplyRequestSchema>;
 export type PlanTier = z.infer<typeof PlanTierSchema>;
 export type BillingInterval = z.infer<typeof BillingIntervalSchema>;
