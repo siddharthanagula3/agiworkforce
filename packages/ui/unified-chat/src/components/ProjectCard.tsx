@@ -92,7 +92,7 @@ export function ProjectCard({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [menuOpen]);
 
-  const conversationCount = project.conversationIds?.length ?? 0;
+  const conversationCount = project.conversationCount ?? project.conversationIds?.length ?? 0;
 
   const menuItemCls =
     'flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] transition-colors';

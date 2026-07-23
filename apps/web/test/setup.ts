@@ -27,6 +27,14 @@ if (typeof HTMLElement !== 'undefined') {
   }
 }
 
+// Radix primitives measure trigger/content elements during layout effects.
+// Real browsers provide ResizeObserver; jsdom does not.
+globalThis.ResizeObserver = class ResizeObserver {
+  disconnect() {}
+  observe() {}
+  unobserve() {}
+} as unknown as typeof ResizeObserver;
+
 // Mock environment variables
 process.env['STRIPE_SECRET_KEY'] = 'sk_test_key';
 process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_test_secret';

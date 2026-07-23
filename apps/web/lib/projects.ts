@@ -58,6 +58,7 @@ export interface MappedProject {
   defaultProviderMode: ProviderMode;
   allowedSurfaces: SourceSurface[];
   defaultModelId: string | null;
+  conversationCount: number;
   lastUsedAt: string | null;
   iconEmoji: string | null;
   accentColor: ProjectAccentColor | null;
@@ -149,6 +150,8 @@ export function mapProjectRow(row: Record<string, unknown>): MappedProject {
     defaultProviderMode: asProviderMode(row['default_provider_mode']),
     allowedSurfaces: asAllowedSurfaces(row['allowed_surfaces']),
     defaultModelId: asString(row['default_model_id']),
+    conversationCount:
+      typeof row['conversation_count'] === 'number' ? row['conversation_count'] : 0,
     lastUsedAt: asString(row['last_used_at']),
     iconEmoji: asString(row['icon_emoji']),
     accentColor: asAccentColor(row['accent_color']),

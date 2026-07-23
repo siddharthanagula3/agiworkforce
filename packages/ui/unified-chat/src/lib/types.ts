@@ -202,6 +202,8 @@ export interface Project {
   updatedAt: string;
   starred?: boolean;
   conversationIds?: string[];
+  /** Canonical server count when the host does not hydrate every conversation id. */
+  conversationCount?: number | null;
   instructions?: string;
   /**
    * Single emoji for visual identity. Capped at one grapheme by host.

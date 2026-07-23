@@ -54,6 +54,8 @@ export const MAX_KNOWLEDGE_FILES = 20;
 const MAX_FILE_SUMMARY_CHARS = 300;
 const MAX_FILE_CONTENT_CHARS = 16_000;
 const MAX_TOTAL_FILE_CONTENT_CHARS = 48_000;
+const PG_UNDEFINED_TABLE = '42P01';
+const PG_UNDEFINED_COLUMN = '42703';
 /**
  * Cross-reference at most this many sibling chats per turn (most-recent first)
  * so a project with hundreds of chats can never blow the prompt budget. Title +
@@ -68,6 +70,12 @@ function truncate(value: string, max: number): string {
 
 function singleLine(value: string, max: number): string {
   return truncate(value.replace(/[\r\n\t]+/g, ' ').trim(), max);
+}
+
+function isKnowledgeFileSchemaUnavailable(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = (error as Record<string, unknown>)['code'];
+  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
 }
 
 /**
@@ -93,20 +101,32 @@ export async function loadProjectContext(
   );
   if (!project) return null;
 
-  const files = await db.query<{
+  let files: Array<{
     file_name: string;
     summary: string | null;
     extracted_text: string | null;
-  }>(
-    `select file_name,
-            summary,
-            to_jsonb(project_knowledge_files)->>'extracted_text' as extracted_text
-       from project_knowledge_files
-      where project_id = $1 and deleted_at is null
-      order by added_at desc
-      limit ${MAX_KNOWLEDGE_FILES}`,
-    [params.projectId],
-  );
+  }> = [];
+  try {
+    files = await db.query<{
+      file_name: string;
+      summary: string | null;
+      extracted_text: string | null;
+    }>(
+      `select file_name,
+              summary,
+              to_jsonb(project_knowledge_files)->>'extracted_text' as extracted_text
+         from project_knowledge_files
+        where project_id = $1 and deleted_at is null
+        order by added_at desc
+        limit ${MAX_KNOWLEDGE_FILES}`,
+      [params.projectId],
+    );
+  } catch (error) {
+    // Knowledge files shipped behind additive migrations. A partially migrated
+    // database must not suppress the independent sibling-chat context that
+    // makes project conversation recall work.
+    if (!isKnowledgeFileSchemaUnavailable(error)) throw error;
+  }
 
   // Sibling chats in the same project (excluding the current conversation) so
   // the model can cross-reference prior chats. Owner-scoped by user_id in

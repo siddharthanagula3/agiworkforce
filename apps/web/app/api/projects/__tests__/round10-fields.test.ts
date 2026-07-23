@@ -85,7 +85,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 // ── Route imports (after mocks) ───────────────────────────────────────────────
 
 import { DELETE, GET, PUT } from '@/app/api/projects/[id]/route';
-import { POST } from '@/app/api/projects/route';
+import { GET as GET_PROJECTS, POST } from '@/app/api/projects/route';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -122,6 +122,10 @@ function makePostRequest(body: unknown): NextRequest {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+function makeListProjectsRequest(): NextRequest {
+  return new NextRequest('http://localhost/api/projects?limit=50&offset=0');
 }
 
 // Wire auth mock.
@@ -163,6 +167,23 @@ function setupInsertChain(resolvedValue: { data: unknown; error: unknown }) {
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe('GET /api/projects · conversation counts', () => {
+  beforeEach(() => {
+    wireAuthAndDb();
+  });
+
+  it('returns the canonical count of live conversations for each project', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ ...BASE_DB_ROW, conversation_count: 2 }]);
+
+    const res = await GET_PROJECTS(makeListProjectsRequest());
+    const json = (await res.json()) as { projects: Array<Record<string, unknown>> };
+
+    expect(res.status).toBe(200);
+    expect(json.projects[0]?.['conversationCount']).toBe(2);
+    expect(String(mockNeonQuery.mock.calls[0]?.[0])).toContain('conversation_count');
+  });
+});
 
 describe('PUT /api/projects/[id] · round-10 fields', () => {
   beforeEach(() => {
