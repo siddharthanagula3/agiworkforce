@@ -111,7 +111,12 @@ export function ArtifactsPanel() {
   // When there is no active conversation (new/empty chat), the list is empty.
   const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
 
-  const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId);
+  // `selectedArtifactId` is global UI state and may still point at an artifact
+  // from the conversation the user just left. Always give the active
+  // conversation an immediately useful viewer by falling back to its first
+  // artifact; otherwise the rail can list files while the content pane lies
+  // with the unrelated "No artifacts yet" state.
+  const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId) ?? artifacts[0];
 
   // Live-streaming artifact (Claude-style streamed file write): shown while a
   // renderable fence is still open in the streaming message. Hidden as soon as
@@ -229,7 +234,7 @@ export function ArtifactsPanel() {
                   <ArtifactTab
                     key={artifact.id}
                     artifact={artifact}
-                    isSelected={artifact.id === selectedArtifactId}
+                    isSelected={artifact.id === selectedArtifact?.id}
                     onSelect={() => selectArtifact(artifact.id)}
                   />
                 ))}
