@@ -178,6 +178,8 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     mockGetE2BExecutor.mockResolvedValue(executor);
 
     const processed = makeProcessed();
+    processed.chatRequest.code_execution = true;
+    processed.llmRequest.tool_choice = 'required';
     const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
 
     // The executor was actually invoked with the model's args -- proves the loop is
@@ -191,7 +193,13 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     // stepRequest is the 3rd positional arg (index 2), not the 2nd.
     const secondCallRequest = mockBuildToolLoopStream.mock.calls[1]?.[2] as {
       messages: Array<{ role: string; content: string; tool_call_id?: string }>;
+      tool_choice?: unknown;
     };
+    const firstCallRequest = mockBuildToolLoopStream.mock.calls[0]?.[2] as {
+      tool_choice?: unknown;
+    };
+    expect(firstCallRequest.tool_choice).toBe('required');
+    expect(secondCallRequest.tool_choice).toBe('auto');
     const toolResultMessage = secondCallRequest.messages.find((m) => m.role === 'tool');
     expect(toolResultMessage?.content).toBe('2\n');
     expect(toolResultMessage?.tool_call_id).toBe('call_1');

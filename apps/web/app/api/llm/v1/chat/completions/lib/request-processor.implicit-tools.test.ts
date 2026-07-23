@@ -149,3 +149,55 @@ describe('implicit managed-tool intent', () => {
     expect(chatRequest.office_creation).toBeUndefined();
   });
 });
+
+describe('managed code tool choice', () => {
+  it('requires an initial E2B tool call when Run code is enabled', () => {
+    expect(
+      requestProcessor.resolveInitialManagedCodeToolChoice({
+        requestedToolChoice: undefined,
+        codeExecution: true,
+        stream: true,
+        provider: 'openai',
+        e2bEnabled: true,
+        toolsCapable: true,
+      }),
+    ).toBe('required');
+  });
+
+  it('preserves an explicit caller tool choice', () => {
+    expect(
+      requestProcessor.resolveInitialManagedCodeToolChoice({
+        requestedToolChoice: 'auto',
+        codeExecution: true,
+        stream: true,
+        provider: 'openai',
+        e2bEnabled: true,
+        toolsCapable: true,
+      }),
+    ).toBe('auto');
+  });
+
+  it('does not force native-provider or disabled E2B execution', () => {
+    const base = {
+      requestedToolChoice: undefined,
+      codeExecution: true,
+      stream: true,
+      toolsCapable: true,
+    } as const;
+
+    expect(
+      requestProcessor.resolveInitialManagedCodeToolChoice({
+        ...base,
+        provider: 'anthropic',
+        e2bEnabled: true,
+      }),
+    ).toBeUndefined();
+    expect(
+      requestProcessor.resolveInitialManagedCodeToolChoice({
+        ...base,
+        provider: 'openai',
+        e2bEnabled: false,
+      }),
+    ).toBeUndefined();
+  });
+});
