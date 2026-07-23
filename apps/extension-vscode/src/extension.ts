@@ -13,6 +13,7 @@ import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
 import { validateAdvancedFeatureFlags } from './core/advancedFeatures';
+import { buildExtensionStatusBarText } from './core/statusBar';
 import { setupChat } from './core/chatSetup';
 import { setupProviders } from './core/providerSetup';
 import { setupCommands } from './core/commandSetup';
@@ -103,15 +104,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   function updateStatusBar(): void {
     const model = normalizeConfiguredModelId(Config.model());
-    const chips: string[] = [];
-
-    const mode = Config.agentMode();
-    if (mode !== 'auto') chips.push(mode);
-    if (Config.mcpEnabled()) chips.push('mcp');
-    if (Config.desktopBridgeEnabled()) chips.push(`bridge:${Config.desktopBridgePort()}`);
-
-    statusBar.text =
-      chips.length > 0 ? `$(hubot) AGI: ${model} · ${chips.join(' · ')}` : `$(hubot) AGI: ${model}`;
+    statusBar.text = buildExtensionStatusBarText(model, Config.agentMode(), Config.mcpEnabled());
     statusBar.show();
   }
 
@@ -176,7 +169,6 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // ── 5. First-run prompts ─────────────────────────────────────────────────────
-  void checkFirstRun(context);
   void checkInlineCompletionsFirstRun(context);
 
   // ── 6. Fetch tier info on activation (fire-and-forget) ──────────────────────
@@ -217,6 +209,8 @@ export function sessionHistoryRelativeTime(timestamp: number): string {
 // ─── First-run helpers ────────────────────────────────────────────────────────
 
 async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext): Promise<void> {
+  if (!Config.inlineCompletionsEnabled()) return;
+
   const inspected = vscode.workspace
     .getConfiguration()
     .inspect('agiWorkforce.inlineCompletions.enabled');
@@ -237,21 +231,4 @@ async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext):
 
   await context.globalState.update('inlineCompletions.firstRunNoticeShown', true);
   void choice;
-}
-
-async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
-  const hasShownWelcome = context.globalState.get<boolean>('agiWorkforce.shownWelcome');
-  if (hasShownWelcome === true) return;
-
-  const choice = await vscode.window.showInformationMessage(
-    'Welcome to AGI for VS Code. Developer sessions run through the local AGI CLI app-server. Install the CLI or configure its path in Settings.',
-    'Open Settings',
-    'Later',
-  );
-
-  await context.globalState.update('agiWorkforce.shownWelcome', true);
-
-  if (choice === 'Open Settings') {
-    await vscode.commands.executeCommand('workbench.action.openSettings', 'agiWorkforce.cliPath');
-  }
 }

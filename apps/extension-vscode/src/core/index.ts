@@ -3,11 +3,8 @@
  *
  * Phase 6 reorg: moved from lifecycle/, registry/, and services/ (telemetry + subsystemHealth).
  */
-export {
-  validateAdvancedFeatureFlags,
-  updateBridgeReachabilityStatus,
-  clearBridgeReachabilityStatus,
-} from './advancedFeatures';
+export { validateAdvancedFeatureFlags, hasInlineCompletionCredential } from './advancedFeatures';
+export { buildExtensionStatusBarText } from './statusBar';
 export { setupChat, type ChatState } from './chatSetup';
 export { setupCommands, type CommandDeps } from './commandSetup';
 export {

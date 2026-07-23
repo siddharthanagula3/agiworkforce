@@ -83,6 +83,19 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     ).toEqual([]);
   });
 
+  it('keeps the optional Desktop bridge opt-in for a clean public install', () => {
+    expect(__CONFIG_DEFAULTS.desktopBridgeEnabled).toBe(false);
+    expect(pkgSettings['agiWorkforce.desktopBridge.enabled']?.default).toBe(false);
+  });
+
+  it('requires an explicit opt-in before sending editor context for inline completions', () => {
+    expect(__CONFIG_DEFAULTS.inlineCompletionsEnabled).toBe(false);
+    expect(pkgSettings['agiWorkforce.inlineCompletions.enabled']?.default).toBe(false);
+    expect(pkgSettings['agiWorkforce.inlineCompletions.enabled']?.description).toContain(
+      'surrounding code',
+    );
+  });
+
   it('describes Auto mode using the runtime safe-tool approval boundary', () => {
     const description = pkgSettings['agiWorkforce.agent.mode']?.description ?? '';
     const commandSetup = fs.readFileSync(

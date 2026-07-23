@@ -214,14 +214,6 @@ export class DesktopBridge implements vscode.Disposable {
   private _reconnectAttempts = 0;
   /** Whether we were previously connected (for disconnect notification). */
   private _wasConnected = false;
-  /**
-   * Guards the "bridge token not found" warning so it fires once per outage
-   * instead of once per reconnect attempt — without this, exponential-backoff
-   * retries stack a fresh toast every attempt, permanently burying the chat
-   * panel's controls under an ever-growing pile of identical notifications.
-   */
-  private _tokenMissingWarningShown = false;
-
   private readonly _onStatusChange = new vscode.EventEmitter<BridgeStatus>();
   public readonly onStatusChange = this._onStatusChange.event;
 
@@ -236,7 +228,10 @@ export class DesktopBridge implements vscode.Disposable {
   private static readonly HEALTH_CHECK_INTERVAL_MS = 30_000;
   private static readonly HANDSHAKE_TIMEOUT_MS = 5_000;
 
-  constructor(port: number) {
+  constructor(
+    port: number,
+    private readonly _readBridgeToken: () => string | undefined = readBridgeToken,
+  ) {
     this._port = port;
     this._reconnectBackoffMs = DesktopBridge.BACKOFF_INITIAL_MS;
   }
@@ -286,11 +281,10 @@ export class DesktopBridge implements vscode.Disposable {
         this._statusBarItem.backgroundColor = undefined;
         break;
       case 'disconnected':
-        this._statusBarItem.text = '$(debug-disconnect) Bridge: Disconnected';
-        this._statusBarItem.tooltip = `Desktop bridge disconnected. Click to reconnect.`;
-        this._statusBarItem.backgroundColor = new vscode.ThemeColor(
-          'statusBarItem.warningBackground',
-        );
+        this._statusBarItem.text = '$(plug) Desktop: Not connected';
+        this._statusBarItem.tooltip =
+          'Optional AGI Desktop connection is not active. Click to connect after opening the Desktop app.';
+        this._statusBarItem.backgroundColor = undefined;
         break;
       case 'error':
         this._statusBarItem.text = '$(error) Bridge: Error';
@@ -308,18 +302,9 @@ export class DesktopBridge implements vscode.Disposable {
     if (this._disposed) return;
     this._setStatus('connecting');
 
-    if (getBridgeAuthHeaders() === undefined) {
-      if (!this._tokenMissingWarningShown) {
-        this._tokenMissingWarningShown = true;
-        void vscode.window.showWarningMessage(
-          'AGI Workforce: Desktop bridge token not found. ' +
-            'Make sure the AGI Workforce desktop app is running, or run ' +
-            '`agiworkforce desktop --reset-bridge-token` from a terminal.',
-          'Dismiss',
-        );
-      }
-      this._setStatus('error');
-      this._scheduleReconnect();
+    this._bridgeToken = this._readBridgeToken();
+    if (getBridgeAuthHeaders(this._bridgeToken) === undefined) {
+      this._setStatus('disconnected');
       return;
     }
 
@@ -407,13 +392,11 @@ export class DesktopBridge implements vscode.Disposable {
     this._closeWebSocket();
     // VSCODE-03: reset auth state on each new connection.
     this._authOk = false;
-    this._bridgeToken = readBridgeToken();
 
     try {
       const authHeaders = getBridgeAuthHeaders(this._bridgeToken);
       if (authHeaders === undefined) {
-        this._setStatus('error');
-        this._scheduleReconnect();
+        this._setStatus('disconnected');
         return;
       }
 
@@ -434,21 +417,6 @@ export class DesktopBridge implements vscode.Disposable {
             this._startHandshakeTimeout();
           }
           // Stay in 'connecting' until auth_ok is received.
-        } else {
-          // No token file — bridge may not be running yet. Show actionable notice
-          // (once per outage — see _tokenMissingWarningShown).
-          if (!this._tokenMissingWarningShown) {
-            this._tokenMissingWarningShown = true;
-            void vscode.window.showWarningMessage(
-              'AGI Workforce: Desktop bridge token not found. ' +
-                'Make sure the AGI Workforce desktop app is running, or run ' +
-                '`agiworkforce desktop --reset-bridge-token` from a terminal.',
-              'Dismiss',
-            );
-          }
-          this._setStatus('error');
-          this._closeWebSocket();
-          this._scheduleReconnect();
         }
       };
 
@@ -669,11 +637,6 @@ export class DesktopBridge implements vscode.Disposable {
   private _resetBackoff(): void {
     this._reconnectBackoffMs = DesktopBridge.BACKOFF_INITIAL_MS;
     this._reconnectAttempts = 0;
-    // A fresh connection attempt is starting (manual reconnect, successful
-    // WS open, or explicit disconnect) — if the bridge goes down again for a
-    // new reason, the user should be warned again rather than staying
-    // permanently silenced by the guard in connect()/_connectWebSocket().
-    this._tokenMissingWarningShown = false;
   }
 
   private _clearReconnect(): void {

@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { MODEL_PICKER_OPTIONS } from '../features/model-picker/modelConstants';
+import { buildExtensionStatusBarText } from '../core/statusBar';
 
 // ── commandLabel helper ──────────────────────────────────────────────────────
 
@@ -45,52 +46,28 @@ describe('commandLabel', () => {
   });
 });
 
-// ── Status bar text builder ──────────────────────────────────────────────────
-
-function buildStatusBarText(
-  model: string,
-  planMode: boolean,
-  mcpEnabled: boolean,
-  desktopBridgeEnabled: boolean,
-  desktopBridgePort: number,
-): string {
-  const chips: string[] = [];
-  if (planMode) chips.push('plan');
-  if (mcpEnabled) chips.push('mcp');
-  if (desktopBridgeEnabled) chips.push(`bridge:${desktopBridgePort}`);
-
-  return chips.length > 0
-    ? `$(hubot) AGI: ${model} · ${chips.join(' · ')}`
-    : `$(hubot) AGI: ${model}`;
-}
-
 describe('buildStatusBarText', () => {
   it('shows model only when no features enabled', () => {
-    expect(buildStatusBarText('auto', false, false, false, 8787)).toBe('$(hubot) AGI: auto');
+    expect(buildExtensionStatusBarText('auto', 'auto', false)).toBe('$(hubot) AGI: auto');
   });
 
   it('shows plan mode chip', () => {
-    const text = buildStatusBarText('current-model', true, false, false, 8787);
+    const text = buildExtensionStatusBarText('current-model', 'plan', false);
     expect(text).toContain('plan');
     expect(text).toContain('current-model');
   });
 
   it('shows mcp chip', () => {
-    const text = buildStatusBarText('auto', false, true, false, 8787);
+    const text = buildExtensionStatusBarText('auto', 'auto', true);
     expect(text).toContain('mcp');
   });
 
-  it('shows bridge chip with port', () => {
-    const text = buildStatusBarText('auto', false, false, true, 9090);
-    expect(text).toContain('bridge:9090');
-  });
-
-  it('shows all chips together', () => {
-    const text = buildStatusBarText('gpt-5.6-sol', true, true, true, 8787);
+  it('keeps optional desktop connectivity out of the primary model status', () => {
+    const text = buildExtensionStatusBarText('gpt-5.6-sol', 'plan', true);
     expect(text).toContain('plan');
     expect(text).toContain('mcp');
-    expect(text).toContain('bridge:8787');
     expect(text).toContain('gpt-5.6-sol');
+    expect(text).not.toContain('bridge');
   });
 });
 
