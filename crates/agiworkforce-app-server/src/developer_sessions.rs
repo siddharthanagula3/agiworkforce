@@ -1,10 +1,10 @@
 use agiworkforce_protocol::developer_session::{
     method, AcknowledgedResponse, AppServerCapabilities, AppServerClientInfo,
     AppServerNotification, AppServerRequest, AppServerResponse, ApprovalResponseParams,
-    InitializeParams, InitializeResponse, ThreadForkParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
-    TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary,
-    DEVELOPER_SESSION_PROTOCOL_VERSION,
+    InitializeParams, InitializeResponse, LocalModelListResponse, ThreadForkParams, ThreadIdParams,
+    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStartResponse,
+    TurnSteerParams, TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -39,6 +39,8 @@ pub trait DeveloperSessionHost: Send + Sync {
         &self,
         params: ThreadListParams,
     ) -> Result<ThreadListResponse, DeveloperSessionHostError>;
+
+    async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError>;
 
     async fn resume_thread(
         &self,
@@ -205,6 +207,11 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(serde_json::to_value)
             }
+            method::MODEL_LIST => self
+                .host
+                .list_local_models()
+                .await
+                .map(serde_json::to_value),
             method::THREAD_RESUME => {
                 let params = match parse_params::<ThreadIdParams>(&request) {
                     Ok(params) => params,

@@ -166,6 +166,34 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       background: var(--bg-overlay);
     }
 
+    .runtime-status {
+      margin: 8px 10px 0;
+      padding: 10px;
+      border: 1px solid var(--vscode-editorWarning-foreground, #cca700);
+      border-radius: var(--radius-md);
+      background: var(--vscode-inputValidation-warningBackground, rgba(204, 167, 0, 0.12));
+      color: var(--text-primary);
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .runtime-status strong {
+      font-size: 12px;
+    }
+
+    .runtime-status button {
+      align-self: flex-start;
+      border: 0;
+      border-radius: 5px;
+      padding: 4px 8px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      cursor: pointer;
+    }
+
     button:focus-visible,
     [role="menuitem"]:focus-visible {
       outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
@@ -461,6 +489,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     .model-popover__option.is-active {
       outline: 1px solid rgba(33, 128, 141, 0.45);
     }
+    .model-popover__option:disabled {
+      cursor: default;
+      opacity: 0.62;
+    }
+    .model-popover__option:disabled:hover { background: transparent; }
     .model-popover__label {
       font-size: 12px;
       font-weight: 600;
@@ -936,6 +969,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     </div>
   </div>
 
+  <div class="runtime-status" id="runtimeStatus" role="status">
+    <strong>Local runtime needs setup</strong>
+    <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
+    <button type="button" id="runtimeSettingsBtn">Open setup</button>
+  </div>
+
   <!-- ── Usage meter banner ── -->
   <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
     <span class="byok-icon codicon codicon-key" id="meterByokIcon" style="display:none" aria-hidden="true"></span>
@@ -972,7 +1011,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <div class="input-area">
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
-      <option value="auto-balanced">Auto (Balanced)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-premium">Auto (Premium)</option><option value="gpt-5.6-sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna">GPT-5.6 Luna</option><option value="claude-fable-5">Claude Fable 5</option><option value="claude-opus-4.8">Claude 4.8 Opus</option><option value="claude-sonnet-5">Claude Sonnet 5</option><option value="claude-haiku-4.5">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash">Gemini 3.5 Flash</option><option value="glm-5.2">GLM-5.2</option><option value="qwen-3.7-plus">Qwen 3.7 Plus</option><option value="kimi-k3">Kimi K3</option><option value="grok-4.5">Grok 4.5</option><option value="minimax-m3">MiniMax M3</option>
+      <option value="auto" data-display-label="Auto">Auto</option><option value="gpt-5.6-sol" data-display-label="GPT-5.6 Sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra" data-display-label="GPT-5.6 Terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna" data-display-label="GPT-5.6 Luna">GPT-5.6 Luna</option><option value="gpt-5.4-mini" data-display-label="GPT-5.4 Mini">GPT-5.4 Mini</option><option value="claude-fable-5" data-display-label="Claude Fable 5">Claude Fable 5</option><option value="claude-opus-4.8" data-display-label="Claude 4.8 Opus">Claude 4.8 Opus</option><option value="claude-sonnet-5" data-display-label="Claude Sonnet 5">Claude Sonnet 5</option><option value="claude-haiku-4.5" data-display-label="Claude 4.5 Haiku">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview" data-display-label="Gemini 3.1 Pro">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite" data-display-label="Gemini 3.5 Flash-Lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash" data-display-label="DeepSeek V4 Flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro" data-display-label="DeepSeek V4 Pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash" data-display-label="Qwen 3.5 Flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash" data-display-label="Gemini 3.6 Flash">Gemini 3.6 Flash</option><option value="glm-5.2" data-display-label="GLM-5.2">GLM-5.2</option><option value="qwen-3.7-plus" data-display-label="Qwen 3.7 Plus">Qwen 3.7 Plus</option><option value="kimi-k3" data-display-label="Kimi K3">Kimi K3</option><option value="grok-4.5" data-display-label="Grok 4.5">Grok 4.5</option><option value="minimax-m3" data-display-label="MiniMax M3">MiniMax M3</option>
     </select>
 
     <!-- Plus-menu popover -->
@@ -1039,6 +1078,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     const providerBadgeTextEl = document.getElementById('providerBadgeText');
     const modeChip = document.getElementById('modeChip');
     const effortChip = document.getElementById('effortChip');
+    const runtimeStatusEl = document.getElementById('runtimeStatus');
+    const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
+    const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
     const usageMeterBanner = document.getElementById('usageMeterBanner');
@@ -1059,6 +1101,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
       if (!providerBadgeEl || !providerBadgeDotEl || !providerBadgeTextEl) return;
+      if (!providerLabel) {
+        providerBadgeTextEl.textContent = '';
+        providerBadgeEl.style.display = 'none';
+        return;
+      }
       providerBadgeEl.style.background = brandColor;
       providerBadgeDotEl.style.background = 'rgba(0,0,0,0.35)';
       providerBadgeTextEl.textContent = providerLabel;
@@ -1137,6 +1184,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       meterRestoreBtn.addEventListener('click', function() {
         applyMeterCollapsed(false);
         vscode.postMessage({ type: 'restoreUsageMeter' });
+      });
+    }
+
+    if (runtimeSettingsBtn) {
+      runtimeSettingsBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openSettings' });
       });
     }
 
@@ -1252,6 +1305,8 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           option.setAttribute('role', 'menuitemradio');
           option.setAttribute('aria-checked', String(model.id === currentModel));
           option.dataset.modelId = model.id;
+          option.disabled = Boolean(model.disabled);
+          if (model.disabled) option.setAttribute('aria-disabled', 'true');
 
           var label = document.createElement('span');
           label.className = 'model-popover__label';
@@ -1266,6 +1321,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           }
 
           option.addEventListener('click', function(event) {
+            if (event.currentTarget.disabled) return;
             var target = event.currentTarget;
             var modelId = target && target.dataset ? target.dataset.modelId : '';
             if (!modelId) return;
@@ -1358,7 +1414,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       vscode.postMessage({
         type: 'sendMessage',
-        payload: { text, model: modelSelect.value }
+        payload: { text }
       });
     }
 
@@ -1732,7 +1788,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         }
         if (opt) {
           modelSelect.value = msg.payload.model;
-          if (modelPill) modelPill.textContent = opt.text;
+          if (modelPill) modelPill.textContent = opt.dataset.displayLabel || opt.text;
+        } else if (modelPill) {
+          modelPill.textContent = msg.payload.model;
         }
       }
 
@@ -1743,6 +1801,16 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'providerBadge') {
         updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor);
+      }
+
+      else if (msg.type === 'runtimeStatus') {
+        if (!runtimeStatusEl || !runtimeStatusMessageEl) return;
+        if (msg.payload.status === 'ready') {
+          runtimeStatusEl.style.display = 'none';
+        } else {
+          runtimeStatusMessageEl.textContent = msg.payload.message || 'The AGI CLI is unavailable.';
+          runtimeStatusEl.style.display = 'flex';
+        }
       }
 
       else if (msg.type === 'fileSearchResults') {
@@ -2323,6 +2391,34 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       background: var(--bg-overlay);
     }
 
+    .runtime-status {
+      margin: 8px 10px 0;
+      padding: 10px;
+      border: 1px solid var(--vscode-editorWarning-foreground, #cca700);
+      border-radius: var(--radius-md);
+      background: var(--vscode-inputValidation-warningBackground, rgba(204, 167, 0, 0.12));
+      color: var(--text-primary);
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .runtime-status strong {
+      font-size: 12px;
+    }
+
+    .runtime-status button {
+      align-self: flex-start;
+      border: 0;
+      border-radius: 5px;
+      padding: 4px 8px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      cursor: pointer;
+    }
+
     button:focus-visible,
     [role="menuitem"]:focus-visible {
       outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
@@ -2618,6 +2714,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     .model-popover__option.is-active {
       outline: 1px solid rgba(33, 128, 141, 0.45);
     }
+    .model-popover__option:disabled {
+      cursor: default;
+      opacity: 0.62;
+    }
+    .model-popover__option:disabled:hover { background: transparent; }
     .model-popover__label {
       font-size: 12px;
       font-weight: 600;
@@ -3093,6 +3194,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     </div>
   </div>
 
+  <div class="runtime-status" id="runtimeStatus" role="status">
+    <strong>Local runtime needs setup</strong>
+    <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
+    <button type="button" id="runtimeSettingsBtn">Open setup</button>
+  </div>
+
   <!-- ── Usage meter banner ── -->
   <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
     <span class="byok-icon codicon codicon-key" id="meterByokIcon" style="display:none" aria-hidden="true"></span>
@@ -3129,7 +3236,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <div class="input-area">
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
-      <option value="auto-balanced">Auto (Balanced)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-premium">Auto (Premium)</option><option value="gpt-5.6-sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna">GPT-5.6 Luna</option><option value="claude-fable-5">Claude Fable 5</option><option value="claude-opus-4.8">Claude 4.8 Opus</option><option value="claude-sonnet-5">Claude Sonnet 5</option><option value="claude-haiku-4.5">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash">Gemini 3.5 Flash</option><option value="glm-5.2">GLM-5.2</option><option value="qwen-3.7-plus">Qwen 3.7 Plus</option><option value="kimi-k3">Kimi K3</option><option value="grok-4.5">Grok 4.5</option><option value="minimax-m3">MiniMax M3</option>
+      <option value="auto" data-display-label="Auto">Auto</option><option value="gpt-5.6-sol" data-display-label="GPT-5.6 Sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra" data-display-label="GPT-5.6 Terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna" data-display-label="GPT-5.6 Luna">GPT-5.6 Luna</option><option value="gpt-5.4-mini" data-display-label="GPT-5.4 Mini">GPT-5.4 Mini</option><option value="claude-fable-5" data-display-label="Claude Fable 5">Claude Fable 5</option><option value="claude-opus-4.8" data-display-label="Claude 4.8 Opus">Claude 4.8 Opus</option><option value="claude-sonnet-5" data-display-label="Claude Sonnet 5">Claude Sonnet 5</option><option value="claude-haiku-4.5" data-display-label="Claude 4.5 Haiku">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview" data-display-label="Gemini 3.1 Pro">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite" data-display-label="Gemini 3.5 Flash-Lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash" data-display-label="DeepSeek V4 Flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro" data-display-label="DeepSeek V4 Pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash" data-display-label="Qwen 3.5 Flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash" data-display-label="Gemini 3.6 Flash">Gemini 3.6 Flash</option><option value="glm-5.2" data-display-label="GLM-5.2">GLM-5.2</option><option value="qwen-3.7-plus" data-display-label="Qwen 3.7 Plus">Qwen 3.7 Plus</option><option value="kimi-k3" data-display-label="Kimi K3">Kimi K3</option><option value="grok-4.5" data-display-label="Grok 4.5">Grok 4.5</option><option value="minimax-m3" data-display-label="MiniMax M3">MiniMax M3</option>
     </select>
 
     <!-- Plus-menu popover -->
@@ -3196,6 +3303,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     const providerBadgeTextEl = document.getElementById('providerBadgeText');
     const modeChip = document.getElementById('modeChip');
     const effortChip = document.getElementById('effortChip');
+    const runtimeStatusEl = document.getElementById('runtimeStatus');
+    const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
+    const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
     const usageMeterBanner = document.getElementById('usageMeterBanner');
@@ -3216,6 +3326,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
       if (!providerBadgeEl || !providerBadgeDotEl || !providerBadgeTextEl) return;
+      if (!providerLabel) {
+        providerBadgeTextEl.textContent = '';
+        providerBadgeEl.style.display = 'none';
+        return;
+      }
       providerBadgeEl.style.background = brandColor;
       providerBadgeDotEl.style.background = 'rgba(0,0,0,0.35)';
       providerBadgeTextEl.textContent = providerLabel;
@@ -3294,6 +3409,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       meterRestoreBtn.addEventListener('click', function() {
         applyMeterCollapsed(false);
         vscode.postMessage({ type: 'restoreUsageMeter' });
+      });
+    }
+
+    if (runtimeSettingsBtn) {
+      runtimeSettingsBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openSettings' });
       });
     }
 
@@ -3409,6 +3530,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           option.setAttribute('role', 'menuitemradio');
           option.setAttribute('aria-checked', String(model.id === currentModel));
           option.dataset.modelId = model.id;
+          option.disabled = Boolean(model.disabled);
+          if (model.disabled) option.setAttribute('aria-disabled', 'true');
 
           var label = document.createElement('span');
           label.className = 'model-popover__label';
@@ -3423,6 +3546,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           }
 
           option.addEventListener('click', function(event) {
+            if (event.currentTarget.disabled) return;
             var target = event.currentTarget;
             var modelId = target && target.dataset ? target.dataset.modelId : '';
             if (!modelId) return;
@@ -3515,7 +3639,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       vscode.postMessage({
         type: 'sendMessage',
-        payload: { text, model: modelSelect.value }
+        payload: { text }
       });
     }
 
@@ -3889,7 +4013,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         }
         if (opt) {
           modelSelect.value = msg.payload.model;
-          if (modelPill) modelPill.textContent = opt.text;
+          if (modelPill) modelPill.textContent = opt.dataset.displayLabel || opt.text;
+        } else if (modelPill) {
+          modelPill.textContent = msg.payload.model;
         }
       }
 
@@ -3900,6 +4026,16 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'providerBadge') {
         updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor);
+      }
+
+      else if (msg.type === 'runtimeStatus') {
+        if (!runtimeStatusEl || !runtimeStatusMessageEl) return;
+        if (msg.payload.status === 'ready') {
+          runtimeStatusEl.style.display = 'none';
+        } else {
+          runtimeStatusMessageEl.textContent = msg.payload.message || 'The AGI CLI is unavailable.';
+          runtimeStatusEl.style.display = 'flex';
+        }
       }
 
       else if (msg.type === 'fileSearchResults') {
@@ -4480,6 +4616,34 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       background: var(--bg-overlay);
     }
 
+    .runtime-status {
+      margin: 8px 10px 0;
+      padding: 10px;
+      border: 1px solid var(--vscode-editorWarning-foreground, #cca700);
+      border-radius: var(--radius-md);
+      background: var(--vscode-inputValidation-warningBackground, rgba(204, 167, 0, 0.12));
+      color: var(--text-primary);
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .runtime-status strong {
+      font-size: 12px;
+    }
+
+    .runtime-status button {
+      align-self: flex-start;
+      border: 0;
+      border-radius: 5px;
+      padding: 4px 8px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      cursor: pointer;
+    }
+
     button:focus-visible,
     [role="menuitem"]:focus-visible {
       outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
@@ -4775,6 +4939,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     .model-popover__option.is-active {
       outline: 1px solid rgba(33, 128, 141, 0.45);
     }
+    .model-popover__option:disabled {
+      cursor: default;
+      opacity: 0.62;
+    }
+    .model-popover__option:disabled:hover { background: transparent; }
     .model-popover__label {
       font-size: 12px;
       font-weight: 600;
@@ -5250,6 +5419,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     </div>
   </div>
 
+  <div class="runtime-status" id="runtimeStatus" role="status">
+    <strong>Local runtime needs setup</strong>
+    <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
+    <button type="button" id="runtimeSettingsBtn">Open setup</button>
+  </div>
+
   <!-- ── Usage meter banner ── -->
   <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
     <span class="byok-icon codicon codicon-key" id="meterByokIcon" style="display:none" aria-hidden="true"></span>
@@ -5286,7 +5461,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <div class="input-area">
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
-      <option value="auto-balanced">Auto (Balanced)</option><option value="auto-economy">Auto (Economy)</option><option value="auto-premium">Auto (Premium)</option><option value="gpt-5.6-sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna">GPT-5.6 Luna</option><option value="claude-fable-5">Claude Fable 5</option><option value="claude-opus-4.8">Claude 4.8 Opus</option><option value="claude-sonnet-5">Claude Sonnet 5</option><option value="claude-haiku-4.5">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash">Gemini 3.5 Flash</option><option value="glm-5.2">GLM-5.2</option><option value="qwen-3.7-plus">Qwen 3.7 Plus</option><option value="kimi-k3">Kimi K3</option><option value="grok-4.5">Grok 4.5</option><option value="minimax-m3">MiniMax M3</option>
+      <option value="auto" data-display-label="Auto">Auto</option><option value="gpt-5.6-sol" data-display-label="GPT-5.6 Sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra" data-display-label="GPT-5.6 Terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna" data-display-label="GPT-5.6 Luna">GPT-5.6 Luna</option><option value="gpt-5.4-mini" data-display-label="GPT-5.4 Mini">GPT-5.4 Mini</option><option value="claude-fable-5" data-display-label="Claude Fable 5">Claude Fable 5</option><option value="claude-opus-4.8" data-display-label="Claude 4.8 Opus">Claude 4.8 Opus</option><option value="claude-sonnet-5" data-display-label="Claude Sonnet 5">Claude Sonnet 5</option><option value="claude-haiku-4.5" data-display-label="Claude 4.5 Haiku">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview" data-display-label="Gemini 3.1 Pro">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite" data-display-label="Gemini 3.5 Flash-Lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash" data-display-label="DeepSeek V4 Flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro" data-display-label="DeepSeek V4 Pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash" data-display-label="Qwen 3.5 Flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash" data-display-label="Gemini 3.6 Flash">Gemini 3.6 Flash</option><option value="glm-5.2" data-display-label="GLM-5.2">GLM-5.2</option><option value="qwen-3.7-plus" data-display-label="Qwen 3.7 Plus">Qwen 3.7 Plus</option><option value="kimi-k3" data-display-label="Kimi K3">Kimi K3</option><option value="grok-4.5" data-display-label="Grok 4.5">Grok 4.5</option><option value="minimax-m3" data-display-label="MiniMax M3">MiniMax M3</option>
     </select>
 
     <!-- Plus-menu popover -->
@@ -5353,6 +5528,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     const providerBadgeTextEl = document.getElementById('providerBadgeText');
     const modeChip = document.getElementById('modeChip');
     const effortChip = document.getElementById('effortChip');
+    const runtimeStatusEl = document.getElementById('runtimeStatus');
+    const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
+    const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
     const usageMeterBanner = document.getElementById('usageMeterBanner');
@@ -5373,6 +5551,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
       if (!providerBadgeEl || !providerBadgeDotEl || !providerBadgeTextEl) return;
+      if (!providerLabel) {
+        providerBadgeTextEl.textContent = '';
+        providerBadgeEl.style.display = 'none';
+        return;
+      }
       providerBadgeEl.style.background = brandColor;
       providerBadgeDotEl.style.background = 'rgba(0,0,0,0.35)';
       providerBadgeTextEl.textContent = providerLabel;
@@ -5451,6 +5634,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       meterRestoreBtn.addEventListener('click', function() {
         applyMeterCollapsed(false);
         vscode.postMessage({ type: 'restoreUsageMeter' });
+      });
+    }
+
+    if (runtimeSettingsBtn) {
+      runtimeSettingsBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openSettings' });
       });
     }
 
@@ -5566,6 +5755,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           option.setAttribute('role', 'menuitemradio');
           option.setAttribute('aria-checked', String(model.id === currentModel));
           option.dataset.modelId = model.id;
+          option.disabled = Boolean(model.disabled);
+          if (model.disabled) option.setAttribute('aria-disabled', 'true');
 
           var label = document.createElement('span');
           label.className = 'model-popover__label';
@@ -5580,6 +5771,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           }
 
           option.addEventListener('click', function(event) {
+            if (event.currentTarget.disabled) return;
             var target = event.currentTarget;
             var modelId = target && target.dataset ? target.dataset.modelId : '';
             if (!modelId) return;
@@ -5672,7 +5864,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       vscode.postMessage({
         type: 'sendMessage',
-        payload: { text, model: modelSelect.value }
+        payload: { text }
       });
     }
 
@@ -6046,7 +6238,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         }
         if (opt) {
           modelSelect.value = msg.payload.model;
-          if (modelPill) modelPill.textContent = opt.text;
+          if (modelPill) modelPill.textContent = opt.dataset.displayLabel || opt.text;
+        } else if (modelPill) {
+          modelPill.textContent = msg.payload.model;
         }
       }
 
@@ -6057,6 +6251,16 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'providerBadge') {
         updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor);
+      }
+
+      else if (msg.type === 'runtimeStatus') {
+        if (!runtimeStatusEl || !runtimeStatusMessageEl) return;
+        if (msg.payload.status === 'ready') {
+          runtimeStatusEl.style.display = 'none';
+        } else {
+          runtimeStatusMessageEl.textContent = msg.payload.message || 'The AGI CLI is unavailable.';
+          runtimeStatusEl.style.display = 'flex';
+        }
       }
 
       else if (msg.type === 'fileSearchResults') {

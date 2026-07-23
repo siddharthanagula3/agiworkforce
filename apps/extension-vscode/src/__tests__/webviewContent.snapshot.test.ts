@@ -96,7 +96,7 @@ describe('model dropdown availability invariant', () => {
     for (const tag of optionTags) {
       if (tag.includes('disabled')) continue;
       const id = /value="([^"]+)"/.exec(tag)?.[1] ?? '';
-      if (id.startsWith('auto-')) continue; // routing pseudo-models, not catalog entries
+      if (id === 'auto' || id.startsWith('auto-')) continue; // routing pseudo-models, not catalog entries
       expect(isModelSelectable(id), `non-live model "${id}" rendered as selectable`).toBe(true);
     }
   });

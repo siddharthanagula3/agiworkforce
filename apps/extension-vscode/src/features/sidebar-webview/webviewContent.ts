@@ -61,13 +61,14 @@ export function getWebviewContent(
   // or Local-mode user no longer sees the managed-cloud catalog as selectable.
   const modelOptionsHtml = getModelPickerOptionsForTier(tier)
     .map((option) => {
+      const displayLabel = escapeHtml(option.label);
       if (option.availability !== 'live') {
-        return `<option value="${option.id}" disabled>${escapeHtml(option.label)} — Coming soon</option>`;
+        return `<option value="${option.id}" data-display-label="${displayLabel}" disabled>${displayLabel} — Coming soon</option>`;
       }
       if (!option.reachable) {
-        return `<option value="${option.id}" disabled>${escapeHtml(option.label)} — ${escapeHtml(MODEL_LOCKED_HINT)}</option>`;
+        return `<option value="${option.id}" data-display-label="${displayLabel}" disabled>${displayLabel} — ${escapeHtml(MODEL_LOCKED_HINT)}</option>`;
       }
-      return `<option value="${option.id}">${escapeHtml(option.label)}</option>`;
+      return `<option value="${option.id}" data-display-label="${displayLabel}">${displayLabel}</option>`;
     })
     .join('');
   const modeLabel = escapeHtml(AGENT_MODE_LABEL[initialMode]);
@@ -230,6 +231,34 @@ export function getWebviewContent(
     .icon-btn:hover {
       color: var(--text-primary);
       background: var(--bg-overlay);
+    }
+
+    .runtime-status {
+      margin: 8px 10px 0;
+      padding: 10px;
+      border: 1px solid var(--vscode-editorWarning-foreground, #cca700);
+      border-radius: var(--radius-md);
+      background: var(--vscode-inputValidation-warningBackground, rgba(204, 167, 0, 0.12));
+      color: var(--text-primary);
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .runtime-status strong {
+      font-size: 12px;
+    }
+
+    .runtime-status button {
+      align-self: flex-start;
+      border: 0;
+      border-radius: 5px;
+      padding: 4px 8px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      cursor: pointer;
     }
 
     button:focus-visible,
@@ -527,6 +556,11 @@ export function getWebviewContent(
     .model-popover__option.is-active {
       outline: 1px solid rgba(33, 128, 141, 0.45);
     }
+    .model-popover__option:disabled {
+      cursor: default;
+      opacity: 0.62;
+    }
+    .model-popover__option:disabled:hover { background: transparent; }
     .model-popover__label {
       font-size: 12px;
       font-weight: 600;
@@ -1002,6 +1036,12 @@ export function getWebviewContent(
     </div>
   </div>
 
+  <div class="runtime-status" id="runtimeStatus" role="status">
+    <strong>Local runtime needs setup</strong>
+    <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
+    <button type="button" id="runtimeSettingsBtn">Open setup</button>
+  </div>
+
   <!-- ── Usage meter banner ── -->
   <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
     <span class="byok-icon codicon codicon-key" id="meterByokIcon" style="display:none" aria-hidden="true"></span>
@@ -1105,6 +1145,9 @@ export function getWebviewContent(
     const providerBadgeTextEl = document.getElementById('providerBadgeText');
     const modeChip = document.getElementById('modeChip');
     const effortChip = document.getElementById('effortChip');
+    const runtimeStatusEl = document.getElementById('runtimeStatus');
+    const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
+    const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
     const usageMeterBanner = document.getElementById('usageMeterBanner');
@@ -1125,6 +1168,11 @@ export function getWebviewContent(
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
       if (!providerBadgeEl || !providerBadgeDotEl || !providerBadgeTextEl) return;
+      if (!providerLabel) {
+        providerBadgeTextEl.textContent = '';
+        providerBadgeEl.style.display = 'none';
+        return;
+      }
       providerBadgeEl.style.background = brandColor;
       providerBadgeDotEl.style.background = 'rgba(0,0,0,0.35)';
       providerBadgeTextEl.textContent = providerLabel;
@@ -1203,6 +1251,12 @@ export function getWebviewContent(
       meterRestoreBtn.addEventListener('click', function() {
         applyMeterCollapsed(false);
         vscode.postMessage({ type: 'restoreUsageMeter' });
+      });
+    }
+
+    if (runtimeSettingsBtn) {
+      runtimeSettingsBtn.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openSettings' });
       });
     }
 
@@ -1318,6 +1372,8 @@ export function getWebviewContent(
           option.setAttribute('role', 'menuitemradio');
           option.setAttribute('aria-checked', String(model.id === currentModel));
           option.dataset.modelId = model.id;
+          option.disabled = Boolean(model.disabled);
+          if (model.disabled) option.setAttribute('aria-disabled', 'true');
 
           var label = document.createElement('span');
           label.className = 'model-popover__label';
@@ -1332,6 +1388,7 @@ export function getWebviewContent(
           }
 
           option.addEventListener('click', function(event) {
+            if (event.currentTarget.disabled) return;
             var target = event.currentTarget;
             var modelId = target && target.dataset ? target.dataset.modelId : '';
             if (!modelId) return;
@@ -1424,7 +1481,7 @@ export function getWebviewContent(
 
       vscode.postMessage({
         type: 'sendMessage',
-        payload: { text, model: modelSelect.value }
+        payload: { text }
       });
     }
 
@@ -1798,7 +1855,9 @@ export function getWebviewContent(
         }
         if (opt) {
           modelSelect.value = msg.payload.model;
-          if (modelPill) modelPill.textContent = opt.text;
+          if (modelPill) modelPill.textContent = opt.dataset.displayLabel || opt.text;
+        } else if (modelPill) {
+          modelPill.textContent = msg.payload.model;
         }
       }
 
@@ -1809,6 +1868,16 @@ export function getWebviewContent(
 
       else if (msg.type === 'providerBadge') {
         updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor);
+      }
+
+      else if (msg.type === 'runtimeStatus') {
+        if (!runtimeStatusEl || !runtimeStatusMessageEl) return;
+        if (msg.payload.status === 'ready') {
+          runtimeStatusEl.style.display = 'none';
+        } else {
+          runtimeStatusMessageEl.textContent = msg.payload.message || 'The AGI CLI is unavailable.';
+          runtimeStatusEl.style.display = 'flex';
+        }
       }
 
       else if (msg.type === 'fileSearchResults') {

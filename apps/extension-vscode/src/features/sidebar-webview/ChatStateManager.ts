@@ -19,6 +19,7 @@ import {
   type AgentEventToolCategory,
   type AgentMode,
   type DeveloperReasoningEffort,
+  type LocalModelSummary,
   type UsageMeter,
   type UserInput,
 } from '@agiworkforce/types';
@@ -78,6 +79,10 @@ export type ExtToWebviewMessage =
   | { type: 'error'; payload: { message: string } }
   | { type: 'model'; payload: { model: string } }
   | { type: 'providerBadge'; payload: { providerLabel: string; brandColor: string } }
+  | {
+      type: 'runtimeStatus';
+      payload: { status: 'ready' | 'unavailable'; message?: string };
+    }
   | { type: 'fileSearchResults'; payload: { files: string[] } }
   | { type: 'conversationCleared' }
   | { type: 'addUserMessage'; payload: { text: string } }
@@ -121,7 +126,7 @@ export type ExtToWebviewMessage =
       payload: {
         groups: Array<{
           label: string;
-          models: Array<{ id: string; label: string; description: string }>;
+          models: Array<{ id: string; label: string; description: string; disabled?: boolean }>;
         }>;
         currentModel: string;
       };
@@ -154,7 +159,13 @@ export interface UsageMeterWebviewPayload {
 // ─── ChatStateManager ─────────────────────────────────────────────────────────
 
 export class ChatStateManager {
-  private _thread?: { id: string; cwd: string; runtime: LocalRuntimeClient };
+  private _thread?: {
+    id: string;
+    cwd: string;
+    model: string;
+    provider?: LocalModelSummary['provider'];
+    runtime: LocalRuntimeClient;
+  };
   private _activeTurn?: {
     threadId: string;
     turnId: string;
@@ -174,6 +185,8 @@ export class ChatStateManager {
   private readonly _pendingAttachments: Array<{ id: string; input: UserInput }> = [];
   /** Session-local sequence for pending-attachment ids (webview removal protocol). */
   private _attachmentSeq = 0;
+  /** Model ids admitted by the trusted workspace-scoped CLI discovery response. */
+  private readonly _localModelProviders = new Map<string, LocalModelSummary['provider']>();
 
   constructor(
     private readonly _secrets: vscode.SecretStorage,
@@ -206,6 +219,7 @@ export class ChatStateManager {
   }
 
   modelSupportsEffort(modelId: string): boolean {
+    if (this._localModelProviders.has(modelId)) return false;
     const { providerId } = getModelProviderInfo(modelId);
     if (providerId === null) return false;
     return PROVIDER_DISPLAY[providerId]?.supportsEffort ?? false;
@@ -214,7 +228,8 @@ export class ChatStateManager {
   async handleMessage(msg: WebviewToExtMessage): Promise<void> {
     switch (msg.type) {
       case 'ready': {
-        const model = normalizeConfiguredModelId(
+        await this._discoverLocalModels();
+        const model = this._normalizeModelSelection(
           vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
         );
         this._post({ type: 'model', payload: { model } });
@@ -255,8 +270,10 @@ export class ChatStateManager {
       }
 
       case 'sendMessage': {
-        const incomingModel = msg.payload.model ?? this._activeModel;
-        this._activeModel = incomingModel;
+        const incomingModel = msg.payload.model?.trim();
+        if (incomingModel !== undefined && incomingModel !== '') {
+          this._activeModel = this._normalizeModelSelection(incomingModel);
+        }
         await this._handleSendMessage(msg.payload.text, msg.payload.model);
         break;
       }
@@ -401,7 +418,8 @@ export class ChatStateManager {
 
       // ── v3: inline model popover ──────────────────────────────────────────────
       case 'openModelPopover': {
-        const currentModel = normalizeConfiguredModelId(
+        const localModels = await this._discoverLocalModels();
+        const currentModel = this._normalizeModelSelection(
           vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
         );
         // VSCODE-PICKER-TIER-01: same tier gate as the QuickPick command, so the
@@ -409,10 +427,33 @@ export class ChatStateManager {
         const allItems = buildGroupedQuickPickItems(await resolveTier(this._context));
         const groups: Array<{
           label: string;
-          models: Array<{ id: string; label: string; description: string }>;
-        }> = [];
+          models: Array<{ id: string; label: string; description: string; disabled?: boolean }>;
+        }> = [
+          {
+            label: 'Local',
+            models:
+              localModels.length > 0
+                ? localModels.map((model) => ({
+                    id: model.id,
+                    label: model.id,
+                    description:
+                      model.provider === 'ollama' ? 'Ollama · On device' : 'LM Studio · On device',
+                  }))
+                : [
+                    {
+                      id: '__local_setup__',
+                      label: 'No local models found',
+                      description: 'Start Ollama or LM Studio and load a model',
+                      disabled: true,
+                    },
+                  ],
+          },
+        ];
         let currentGroup:
-          | { label: string; models: Array<{ id: string; label: string; description: string }> }
+          | {
+              label: string;
+              models: Array<{ id: string; label: string; description: string; disabled?: boolean }>;
+            }
           | undefined;
 
         for (const item of allItems) {
@@ -441,7 +482,8 @@ export class ChatStateManager {
       // ── v3: model selection from inline popover ───────────────────────────────
       case 'selectModel': {
         const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
-        const normalized = normalizeConfiguredModelId(modelId);
+        if (modelId === '__local_setup__') break;
+        const normalized = this._normalizeModelSelection(modelId);
         await vscode.workspace
           .getConfiguration('agiWorkforce')
           .update('model', normalized, vscode.ConfigurationTarget.Global);
@@ -648,11 +690,54 @@ export class ChatStateManager {
     });
   }
 
+  private _normalizeModelSelection(modelId: string | null | undefined): string {
+    if (modelId !== null && modelId !== undefined && this._localModelProviders.has(modelId)) {
+      return modelId;
+    }
+    return normalizeConfiguredModelId(modelId);
+  }
+
+  private async _discoverLocalModels(runtime?: LocalRuntimeClient): Promise<LocalModelSummary[]> {
+    try {
+      let activeRuntime = runtime;
+      if (activeRuntime === undefined) {
+        const workspace = await getActiveWorkspaceFolder();
+        if (workspace === undefined || this._localRuntimes === undefined) return [];
+        activeRuntime = this._localRuntimes.forWorkspace(workspace.uri.fsPath);
+      }
+      const response = await activeRuntime.listLocalModels();
+      this._localModelProviders.clear();
+      for (const model of response.models) {
+        this._localModelProviders.set(model.id, model.provider);
+      }
+      this._post({ type: 'runtimeStatus', payload: { status: 'ready' } });
+      return response.models;
+    } catch {
+      this._post({
+        type: 'runtimeStatus',
+        payload: {
+          status: 'unavailable',
+          message: 'Install or update the AGI CLI, then configure its path in Settings.',
+        },
+      });
+      return [];
+    }
+  }
+
   private _postProviderBadge(modelId: string): void {
-    if (modelId.startsWith('auto-')) {
+    if (modelId === 'auto' || modelId.startsWith('auto-')) {
       this._post({
         type: 'providerBadge',
-        payload: { providerLabel: 'Local Runtime', brandColor: '#6b7280' },
+        payload: { providerLabel: '', brandColor: 'transparent' },
+      });
+      return;
+    }
+    const localProvider = this._localModelProviders.get(modelId);
+    if (localProvider !== undefined) {
+      const display = PROVIDER_DISPLAY[localProvider];
+      this._post({
+        type: 'providerBadge',
+        payload: { providerLabel: display.label, brandColor: display.brandColor },
       });
       return;
     }
@@ -683,21 +768,34 @@ export class ChatStateManager {
 
     const cwd = workspace.uri.fsPath;
     const runtime = this._localRuntimes.forWorkspace(cwd);
-    const requestedModel = normalizeConfiguredModelId(model ?? Config.model());
+    await this._discoverLocalModels(runtime);
+    const requestedModel = this._normalizeModelSelection(
+      model?.trim() === '' || model === undefined ? this._activeModel : model,
+    );
+    const requestedProvider = this._localModelProviders.get(requestedModel);
     this._cancelRequested = false;
 
     try {
       if (
         this._thread === undefined ||
         this._thread.cwd !== cwd ||
-        this._thread.runtime !== runtime
+        this._thread.runtime !== runtime ||
+        this._thread.model !== requestedModel ||
+        this._thread.provider !== requestedProvider
       ) {
         const thread = await runtime.startThread({
           cwd,
           title: text.trim().slice(0, 80) || 'Developer session',
           model: requestedModel,
+          ...(requestedProvider === undefined ? {} : { provider: requestedProvider }),
         });
-        this._thread = { id: thread.id, cwd, runtime };
+        this._thread = {
+          id: thread.id,
+          cwd,
+          model: requestedModel,
+          ...(requestedProvider === undefined ? {} : { provider: requestedProvider }),
+          runtime,
+        };
       }
 
       const thread = this._thread;
@@ -902,7 +1000,14 @@ export class ChatStateManager {
     if (event.type === 'turn_completed') {
       const resolvedModel =
         this._thread?.id === event.threadId ? this._activeModel : Config.model();
-      const { providerLabel, brandColor } = getModelProviderInfo(resolvedModel);
+      const localProvider = this._localModelProviders.get(resolvedModel);
+      const { providerLabel, brandColor } =
+        localProvider === undefined
+          ? getModelProviderInfo(resolvedModel)
+          : {
+              providerLabel: PROVIDER_DISPLAY[localProvider].label,
+              brandColor: PROVIDER_DISPLAY[localProvider].brandColor,
+            };
       this._post({
         type: 'done',
         payload: { model: resolvedModel, providerLabel, brandColor },

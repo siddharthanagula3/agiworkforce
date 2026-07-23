@@ -25,6 +25,7 @@ async fn cli_and_vscode_share_one_persisted_thread_store() {
         .start_thread(
             ThreadStartParams {
                 model: None,
+                provider: None,
                 cwd: Some(workspace.display().to_string()),
                 title: Some("Fix the parser".to_string()),
             },
@@ -131,6 +132,7 @@ async fn auto_model_selection_is_resolved_before_a_thread_is_persisted() {
         .start_thread(
             ThreadStartParams {
                 model: Some("auto-balanced".to_string()),
+                provider: None,
                 cwd: Some(workspace.display().to_string()),
                 title: Some("Resolve Auto".to_string()),
             },
@@ -177,6 +179,7 @@ async fn a_workspace_scoped_host_cannot_fork_or_archive_another_workspace_thread
         .start_thread(
             ThreadStartParams {
                 model: None,
+                provider: None,
                 cwd: Some(workspace_a.path().display().to_string()),
                 title: Some("Workspace A".to_string()),
             },
@@ -246,6 +249,7 @@ async fn a_turn_rejects_context_files_outside_its_workspace() {
         .start_thread(
             ThreadStartParams {
                 model: None,
+                provider: None,
                 cwd: Some(workspace.path().display().to_string()),
                 title: Some("Scoped context".to_string()),
             },

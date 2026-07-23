@@ -4,10 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
 
 function fakeRuntime(
-  protocolVersion = 5,
+  protocolVersion = 6,
   options: {
     approvals?: boolean;
     ignoreMethods?: readonly string[];
+    legacyInitialize?: boolean;
   } = {},
 ): {
   spawn: SpawnLocalRuntime;
@@ -35,20 +36,26 @@ function fakeRuntime(
       if (typeof method === 'string' && options.ignoreMethods?.includes(method) === true) continue;
       const result =
         method === 'initialize'
-          ? {
-              serverInfo: { name: 'agiworkforce-app-server', title: 'AGI', version: '0.1.0' },
-              protocolVersion,
-              capabilities: {
-                threads: true,
-                turns: true,
-                streaming: true,
-                approvals: options.approvals ?? true,
-                tools: true,
-                mcp: true,
-                checkpoints: false,
-                worktrees: false,
-              },
-            }
+          ? options.legacyInitialize === true
+            ? {
+                serverInfo: { name: 'agiworkforce-app-server', version: '0.1.0' },
+                capabilities: { streaming: true, tools: true },
+              }
+            : {
+                serverInfo: { name: 'agiworkforce-app-server', title: 'AGI', version: '0.1.0' },
+                protocolVersion,
+                capabilities: {
+                  threads: true,
+                  turns: true,
+                  streaming: true,
+                  approvals: options.approvals ?? true,
+                  tools: true,
+                  mcp: true,
+                  checkpoints: false,
+                  worktrees: false,
+                  models: true,
+                },
+              }
           : method === 'thread/start' || method === 'thread/resume'
             ? {
                 thread: {
@@ -62,39 +69,46 @@ function fakeRuntime(
                   status: 'idle',
                 },
               }
-            : method === 'thread/list'
+            : method === 'model/list'
               ? {
-                  threads: [
-                    {
-                      id: 'thread-1',
-                      title: 'Test',
-                      model: 'model-1',
-                      cwd: '/workspace',
-                      createdAt: '2026-07-14T00:00:00Z',
-                      updatedAt: '2026-07-14T00:00:00Z',
-                      createdBy: 'vscode',
-                      status: 'idle',
-                    },
+                  models: [
+                    { id: 'gemma4:e4b', provider: 'ollama' },
+                    { id: 'qwen3-coder', provider: 'lmstudio' },
                   ],
                 }
-              : method === 'thread/read'
+              : method === 'thread/list'
                 ? {
-                    thread: {
-                      id: 'thread-1',
-                      title: 'Test',
-                      model: 'model-1',
-                      cwd: '/workspace',
-                      createdAt: '2026-07-14T00:00:00Z',
-                      updatedAt: '2026-07-14T00:00:00Z',
-                      createdBy: 'vscode',
-                      status: 'idle',
-                    },
-                    messages: [{ role: 'user', text: 'Fix it' }],
+                    threads: [
+                      {
+                        id: 'thread-1',
+                        title: 'Test',
+                        model: 'model-1',
+                        cwd: '/workspace',
+                        createdAt: '2026-07-14T00:00:00Z',
+                        updatedAt: '2026-07-14T00:00:00Z',
+                        createdBy: 'vscode',
+                        status: 'idle',
+                      },
+                    ],
                   }
-                : method === 'turn/start' || method === 'turn/steer'
-                  ? { turn: { id: 'turn-1', threadId: 'thread-1', status: 'running' } }
-                  : { acknowledged: true };
-      stdout.write(`${JSON.stringify({ id: request.id, result })}\n`);
+                : method === 'thread/read'
+                  ? {
+                      thread: {
+                        id: 'thread-1',
+                        title: 'Test',
+                        model: 'model-1',
+                        cwd: '/workspace',
+                        createdAt: '2026-07-14T00:00:00Z',
+                        updatedAt: '2026-07-14T00:00:00Z',
+                        createdBy: 'vscode',
+                        status: 'idle',
+                      },
+                      messages: [{ role: 'user', text: 'Fix it' }],
+                    }
+                  : method === 'turn/start' || method === 'turn/steer'
+                    ? { turn: { id: 'turn-1', threadId: 'thread-1', status: 'running' } }
+                    : { acknowledged: true };
+      stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, result })}\n`);
     }
   });
 
@@ -128,12 +142,12 @@ describe('LocalRuntimeClient', () => {
       spawn: runtime.spawn,
     });
 
-    await expect(client.initialize()).rejects.toThrow('version 5 or newer is required');
+    await expect(client.initialize()).rejects.toThrow('version 6 or newer is required');
     client.dispose();
   });
 
   it('rejects a runtime that cannot carry approval decisions', async () => {
-    const runtime = fakeRuntime(5, { approvals: false });
+    const runtime = fakeRuntime(6, { approvals: false });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -142,6 +156,21 @@ describe('LocalRuntimeClient', () => {
     });
 
     await expect(client.initialize()).rejects.toThrow('required developer-session protocol');
+    client.dispose();
+  });
+
+  it('gives an actionable upgrade error for the legacy CLI handshake', async () => {
+    const runtime = fakeRuntime(6, { legacyInitialize: true });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.initialize()).rejects.toThrow(
+      'Update the AGI CLI or set agiWorkforce.cliPath to a current binary',
+    );
     client.dispose();
   });
 
@@ -171,7 +200,36 @@ describe('LocalRuntimeClient', () => {
       'thread/start',
       'turn/start',
     ]);
+    expect(runtime.requests).toEqual(
+      expect.arrayContaining([expect.objectContaining({ jsonrpc: '2.0', id: expect.any(Number) })]),
+    );
     expect(turn.id).toBe('turn-1');
+    client.dispose();
+  });
+
+  it('surfaces a standard null-id JSON-RPC parse error from the runtime', async () => {
+    const runtime = fakeRuntime(6, { ignoreMethods: ['initialize'] });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    const initialization = client.initialize();
+    runtime.stdout.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32700, message: 'Parse error' },
+      })}\n`,
+    );
+
+    await expect(initialization).rejects.toMatchObject({
+      name: 'LocalRuntimeProtocolError',
+      code: -32700,
+      message: 'Parse error',
+    });
     client.dispose();
   });
 
@@ -427,6 +485,25 @@ describe('LocalRuntimeClient', () => {
     client.dispose();
   });
 
+  it('discovers local model ids and providers through the shared runtime', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.listLocalModels()).resolves.toEqual({
+      models: [
+        { id: 'gemma4:e4b', provider: 'ollama' },
+        { id: 'qwen3-coder', provider: 'lmstudio' },
+      ],
+    });
+    expect(runtime.requests.map((request) => request.method)).toEqual(['initialize', 'model/list']);
+    client.dispose();
+  });
+
   it('resumes a persisted thread through the runtime owner', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
@@ -506,7 +583,7 @@ describe('LocalRuntimeClient', () => {
   });
 
   it('force-terminates a runtime that does not acknowledge shutdown', async () => {
-    const runtime = fakeRuntime(5, { ignoreMethods: ['shutdown'] });
+    const runtime = fakeRuntime(6, { ignoreMethods: ['shutdown'] });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',

@@ -9,4 +9,5 @@ export type AppServerCapabilities = {
   mcp: boolean;
   checkpoints: boolean;
   worktrees: boolean;
+  models: boolean;
 };

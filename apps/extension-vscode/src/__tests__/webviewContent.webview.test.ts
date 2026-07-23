@@ -32,7 +32,7 @@ function makeExtensionUri() {
   };
 }
 
-function render(): string {
+function render(tier?: string): string {
   // The webview/uri parameters are constructed structurally above; cast
   // through `unknown` to bridge the local stub shape to the imported
   // vscode types without depending on the real vscode runtime.
@@ -44,6 +44,7 @@ function render(): string {
     'medium',
     true,
     false,
+    tier,
   );
 }
 
@@ -123,6 +124,19 @@ describe('getWebviewContent — structural smoke', () => {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     expect(doc.querySelector('#userInput')).not.toBeNull();
     expect(doc.querySelector('#sendBtn')).not.toBeNull();
+  });
+
+  it('provides an inline first-run recovery path for an unavailable local runtime', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(doc.querySelector('#runtimeStatus')?.getAttribute('role')).toBe('status');
+    expect(doc.querySelector('#runtimeSettingsBtn')?.textContent).toContain('Open setup');
+    expect(scriptBody).toContain("msg.type === 'runtimeStatus'");
+    expect(scriptBody).toContain("vscode.postMessage({ type: 'openSettings' })");
   });
 
   it('keeps async chat updates announced and exposes keyboard-native popup controls', () => {
@@ -210,6 +224,33 @@ describe('getWebviewContent — structural smoke', () => {
     expect(scriptBody).toContain("msg.type === 'modelPickerData'");
     expect(scriptBody).toContain("vscode.postMessage({ type: 'selectModel'");
     expect(scriptBody).toContain('if (options[i].disabled) continue;');
+    expect(scriptBody).toContain('modelPill.textContent = msg.payload.model');
+  });
+
+  it('keeps locked model guidance out of the compact composer label', () => {
+    const html = render('local');
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const autoOption = doc.querySelector<HTMLOptionElement>('option[value="auto"]');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(autoOption?.disabled).toBe(true);
+    expect(autoOption?.dataset.displayLabel).toBe('Auto');
+    expect(autoOption?.textContent).toContain('Sign in or add a provider key');
+    expect(scriptBody).toContain('opt.dataset.displayLabel || opt.text');
+  });
+
+  it('hides the provider badge when Auto has not resolved a provider yet', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(doc.querySelector('#providerBadge')?.getAttribute('style')).toContain('display:none');
+    expect(scriptBody).toContain('if (!providerLabel)');
+    expect(scriptBody).toContain("providerBadgeEl.style.display = 'none'");
   });
 
   it('nonce is present on style and script tags', () => {
