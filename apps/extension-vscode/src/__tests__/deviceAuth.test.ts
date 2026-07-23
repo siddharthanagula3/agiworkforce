@@ -3,6 +3,7 @@ import {
   pollDeviceAuthorization,
   requestDeviceAuthorization,
   revokeDeviceAuthorization,
+  tryOpenDeviceAuthorizationUrl,
   type DeviceAuthPost,
 } from '../features/account-auth/deviceAuth';
 
@@ -138,5 +139,34 @@ describe('VS Code AGI Cloud device authorization', () => {
     await expect(
       revokeDeviceAuthorization('https://api.agiworkforce.com', 'signed-developer-token', post),
     ).resolves.toBe(false);
+  });
+
+  it('does not block device polling when VS Code cannot confirm the browser launch', async () => {
+    const neverResolves = vi.fn(() => new Promise<boolean>(() => undefined));
+
+    await expect(
+      tryOpenDeviceAuthorizationUrl(
+        'https://agiworkforce.com/auth/device?user_code=ABCD-2345',
+        neverResolves,
+        1,
+      ),
+    ).resolves.toBe('unconfirmed');
+  });
+
+  it('distinguishes a rejected browser launch from an accepted launch', async () => {
+    await expect(
+      tryOpenDeviceAuthorizationUrl(
+        'https://agiworkforce.com/auth/device?user_code=ABCD-2345',
+        vi.fn().mockResolvedValue(false),
+        25,
+      ),
+    ).resolves.toBe('rejected');
+    await expect(
+      tryOpenDeviceAuthorizationUrl(
+        'https://agiworkforce.com/auth/device?user_code=ABCD-2345',
+        vi.fn().mockResolvedValue(true),
+        25,
+      ),
+    ).resolves.toBe('opened');
   });
 });

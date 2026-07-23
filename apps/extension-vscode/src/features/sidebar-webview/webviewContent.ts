@@ -135,7 +135,8 @@ export function getWebviewContent(
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 12px;
+      min-height: 44px;
+      padding: 8px 10px;
       border-bottom: 1px solid var(--border);
       background: var(--bg-elevated);
       flex-shrink: 0;
@@ -214,7 +215,8 @@ export function getWebviewContent(
 
     .header-actions {
       display: flex;
-      gap: 4px;
+      gap: 2px;
+      align-items: center;
     }
 
     .account-status-dot {
@@ -238,9 +240,14 @@ export function getWebviewContent(
       border: none;
       color: var(--text-secondary);
       cursor: pointer;
-      padding: 4px;
-      border-radius: 4px;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-radius: 7px;
       font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       transition: color 0.15s var(--transition),
                   background 0.15s var(--transition);
     }
@@ -287,7 +294,7 @@ export function getWebviewContent(
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 12px;
+      padding: 10px 12px 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -365,7 +372,7 @@ export function getWebviewContent(
     /* ── Input area / composer (design-spec §7) ── */
     .input-area {
       background: var(--bg-base);
-      padding: 8px 10px 10px;
+      padding: 8px 10px 12px;
       display: flex;
       flex-direction: column;
       gap: 0;
@@ -377,9 +384,10 @@ export function getWebviewContent(
     .composer-card {
       background: var(--bg-elevated);
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 16px;
       display: flex;
       flex-direction: column;
+      min-height: 102px;
       overflow: visible;
       transition: border-color 0.15s var(--transition),
                   box-shadow 0.15s var(--transition);
@@ -395,7 +403,7 @@ export function getWebviewContent(
       display: flex;
       gap: 0;
       align-items: flex-end;
-      padding: 8px 10px 0;
+      padding: 11px 12px 0;
     }
 
     #userInput {
@@ -407,7 +415,7 @@ export function getWebviewContent(
       font-family: inherit;
       font-size: 13px;
       line-height: 1.5;
-      min-height: 28px;
+      min-height: 46px;
       max-height: 140px;
       padding: 0;
       resize: none;
@@ -419,7 +427,8 @@ export function getWebviewContent(
       display: flex;
       align-items: center;
       gap: 4px;
-      padding: 4px 6px 6px;
+      min-width: 0;
+      padding: 5px 7px 7px;
     }
 
     /* Plus button */
@@ -502,9 +511,10 @@ export function getWebviewContent(
       border: 1px solid var(--border);
       border-radius: 10px;
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-      min-width: 200px;
+      width: min(300px, calc(100vw - 20px));
       z-index: 20;
       overflow: hidden;
+      padding: 5px;
     }
     .plus-menu.open { display: block; }
 
@@ -512,19 +522,46 @@ export function getWebviewContent(
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 12px;
+      padding: 8px;
       font-size: 12px;
       color: var(--text-secondary);
       cursor: pointer;
       transition: background 0.1s;
       width: 100%;
       border: 0;
+      border-radius: 7px;
       background: transparent;
       text-align: left;
       font-family: inherit;
     }
     .plus-menu-item:hover { background: var(--bg-overlay); color: var(--text-primary); }
     .plus-menu-item .pm-icon { font-size: 13px; flex-shrink: 0; }
+    .plus-menu-label {
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 8px 7px;
+    }
+    .plus-menu-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .plus-menu-title {
+      color: var(--text-primary);
+      font-weight: 500;
+      line-height: 1.25;
+    }
+    .plus-menu-description {
+      color: var(--text-secondary);
+      font-size: 10px;
+      line-height: 1.3;
+    }
+    .plus-menu-divider {
+      border-top: 1px solid var(--border);
+      margin: 5px 3px;
+    }
 
     /* ── Model popover ── */
     .model-popover {
@@ -748,6 +785,21 @@ export function getWebviewContent(
 
     /* ── @mention dropdown ── */
     .input-wrapper { position: relative; flex: 1; }
+    .composer-hint {
+      color: var(--text-secondary);
+      font-size: 10px;
+      line-height: 1;
+      margin-top: 4px;
+      opacity: 0.72;
+      text-align: right;
+    }
+    .composer-hint kbd {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 9px;
+      padding: 1px 3px;
+    }
     .mention-dropdown {
       position: absolute;
       bottom: 100%;
@@ -917,20 +969,56 @@ export function getWebviewContent(
 
     /* ── Empty state (design-spec §8) ── */
     .empty-state {
+      position: relative;
+      isolation: isolate;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      padding: 24px 12px 12px;
+      gap: 10px;
+      min-height: 100%;
+      padding: 32px 12px 20px;
       text-align: center;
     }
 
-    .empty-state-headline {
-      font-size: 15px;
-      font-weight: 500;
+    .empty-state::before {
+      position: absolute;
+      z-index: -1;
+      width: min(280px, 90vw);
+      aspect-ratio: 1;
+      border: 1px solid var(--vscode-widget-border, var(--border));
+      border-radius: 50%;
+      background: var(--vscode-editorHoverWidget-background, var(--bg-elevated));
+      content: '';
+      opacity: 0.3;
+    }
+
+    .empty-state-mark {
+      width: 42px;
+      height: 42px;
+      padding: 9px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      background: var(--bg-elevated);
       color: var(--text-primary);
-      line-height: 1.4;
+      box-shadow: 0 10px 30px var(--vscode-widget-shadow, transparent);
+      line-height: 0;
+    }
+    .empty-state-mark svg { width: 100%; height: 100%; }
+
+    .empty-state-headline {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.015em;
+      line-height: 1.3;
+    }
+
+    .empty-state-copy {
+      max-width: 280px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     .prompt-chips {
@@ -938,6 +1026,7 @@ export function getWebviewContent(
       flex-wrap: wrap;
       justify-content: center;
       gap: 6px;
+      margin-top: 4px;
     }
 
     .prompt-chip {
@@ -955,6 +1044,25 @@ export function getWebviewContent(
       transition: background 0.12s, color 0.12s;
     }
     .prompt-chip:hover { background: var(--bg-overlay); color: var(--text-primary); }
+
+    @media (max-width: 340px) {
+      .runtime-pill { display: none; }
+      .provider-badge { display: none !important; }
+      .header { padding-inline: 8px; }
+      .header-actions { gap: 0; }
+      .model-pill { max-width: 88px; }
+      .composer-hint { display: none; }
+      .empty-state-copy { max-width: 230px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
 
     /* ── Composer drag-drop overlay + attachment strip (2026-05-21 P0 #3) ── */
     .composer-card.dragover {
@@ -1084,7 +1192,9 @@ export function getWebviewContent(
   <!-- ── Messages ── -->
   <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
     <div class="empty-state" id="emptyState">
-      <div class="empty-state-headline">What to do first? Ask about<br/>this codebase or we can<br/>start writing code.</div>
+      <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
+      <div class="empty-state-headline">Build with AGI</div>
+      <div class="empty-state-copy">Ask about your code, edit files, run commands, and test this workspace.</div>
       <div class="prompt-chips">
         <button class="prompt-chip" data-prompt="/explain ">/explain</button>
         <button class="prompt-chip" data-prompt="/fix ">/fix</button>
@@ -1103,11 +1213,28 @@ export function getWebviewContent(
 
     <!-- Plus-menu popover -->
     <div class="plus-menu" id="plusMenu" role="menu" aria-label="Attach or add context">
+      <div class="plus-menu-label" id="plusMenuLabel">Add to this chat</div>
       <button type="button" class="plus-menu-item" id="plusMenuUpload" role="menuitem">
-        <span class="pm-icon codicon codicon-cloud-upload" aria-hidden="true"></span>&nbsp;Upload from computer
+        <span class="pm-icon codicon codicon-files" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Files and folders</span>
+          <span class="plus-menu-description">Attach local workspace context</span>
+        </span>
       </button>
       <button type="button" class="plus-menu-item" id="plusMenuPlanMode" role="menuitem">
-        <span class="pm-icon codicon codicon-list-tree" aria-hidden="true"></span>&nbsp;Change agent mode
+        <span class="pm-icon codicon codicon-lightbulb" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Plan mode</span>
+          <span class="plus-menu-description">Review an approach before edits</span>
+        </span>
+      </button>
+      <div class="plus-menu-divider" aria-hidden="true"></div>
+      <button type="button" class="plus-menu-item" id="plusMenuActions" role="menuitem">
+        <span class="pm-icon codicon codicon-tools" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Tools and actions</span>
+          <span class="plus-menu-description">Models, reasoning, account, and context</span>
+        </span>
       </button>
     </div>
 
@@ -1123,11 +1250,12 @@ export function getWebviewContent(
           <div class="mention-dropdown" id="mentionDropdown"></div>
           <textarea
             id="userInput"
-            placeholder="Ask about your code…"
+            placeholder="Ask AGI to do anything…"
             rows="1"
             spellcheck="true"
             aria-label="Chat input"
           ></textarea>
+          <div class="composer-hint" id="composerHint"><kbd>⌘↵</kbd> to send</div>
         </div>
       </div>
       <div class="composer-bottom">
@@ -1603,6 +1731,13 @@ export function getWebviewContent(
           vscode.postMessage({ type: 'openModePicker' });
         });
       }
+      var plusMenuActions = document.getElementById('plusMenuActions');
+      if (plusMenuActions) {
+        plusMenuActions.addEventListener('click', () => {
+          plusMenu.classList.remove('open');
+          vscode.postMessage({ type: 'openActionSheet' });
+        });
+      }
     }
 
     // Model pill opens inline model popover (v3)
@@ -1931,7 +2066,9 @@ export function getWebviewContent(
         var freshEmpty = document.createElement('div');
         freshEmpty.className = 'empty-state';
         freshEmpty.id = 'emptyState';
-        freshEmpty.innerHTML = '<div class="empty-state-headline">What to do first? Ask about<br/>this codebase or we can<br/>start writing code.</div>' +
+        freshEmpty.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"></use></svg></div>' +
+          '<div class="empty-state-headline">Build with AGI</div>' +
+          '<div class="empty-state-copy">Ask about your code, edit files, run commands, and test this workspace.</div>' +
           '<div class="prompt-chips">' +
           '<button class="prompt-chip" data-prompt="/explain ">/explain</button>' +
           '<button class="prompt-chip" data-prompt="/fix ">/fix</button>' +
