@@ -20,10 +20,18 @@ interface SliderProps extends React.ComponentPropsWithoutRef<typeof SliderPrimit
    * readers via `aria-valuetext` on the thumb. Additive and opt-in.
    */
   valueLabel?: string;
+  /** Accessible name for the slider thumb. Defaults to a generic label. */
+  thumbAriaLabel?: string;
   ref?: React.Ref<React.ElementRef<typeof SliderPrimitive.Root>>;
 }
 
-function Slider({ className, valueLabel, ref, ...props }: SliderProps) {
+function Slider({
+  className,
+  valueLabel,
+  thumbAriaLabel = 'Slider thumb',
+  ref,
+  ...props
+}: SliderProps) {
   return (
     <SliderPrimitive.Root
       ref={ref}
@@ -34,7 +42,7 @@ function Slider({ className, valueLabel, ref, ...props }: SliderProps) {
         <SliderPrimitive.Range className="absolute h-full bg-primary" />
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb
-        aria-label="Slider thumb"
+        aria-label={thumbAriaLabel}
         aria-valuetext={valueLabel}
         className="block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
       />

@@ -31,7 +31,7 @@ const LOCKS_DIR = join(
 );
 
 // Regex patterns for model ID references in lock markdown.
-// Greedy suffix so we capture the full ID (e.g. gemini-3.1-flash-lite, not just gemini-3.1).
+// Greedy suffix so we capture the full ID (e.g. gemini-3.5-flash-lite, not just gemini-3.1).
 // The negative lookahead (?!-\w) prevents partial-version captures: we want the longest match.
 // sonar model IDs are short: sonar, sonar-pro, sonar-reasoning, sonar-deep-research.
 // Exclude sonar-[word]-[word] patterns that look like ESLint rule names (e.g. sonar-naming-convention).

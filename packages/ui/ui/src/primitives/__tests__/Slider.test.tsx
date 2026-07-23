@@ -12,4 +12,20 @@ describe('Slider', () => {
     render(<Slider defaultValue={[50]} max={100} step={1} valueLabel="50 percent" />);
     expect(screen.getByRole('slider').getAttribute('aria-valuetext')).toBe('50 percent');
   });
+
+  it('accepts a control-specific accessible name for the thumb', () => {
+    render(
+      <Slider
+        defaultValue={[1]}
+        max={2}
+        step={1}
+        thumbAriaLabel="Reasoning effort"
+        valueLabel="Medium"
+      />,
+    );
+
+    expect(
+      screen.getByRole('slider', { name: 'Reasoning effort' }).getAttribute('aria-valuetext'),
+    ).toBe('Medium');
+  });
 });

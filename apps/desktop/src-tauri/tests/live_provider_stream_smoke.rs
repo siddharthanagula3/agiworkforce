@@ -200,7 +200,7 @@ async fn live_provider_stream_smoke() {
         (
             Provider::Google,
             "google",
-            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
             &["GOOGLE_API_KEY", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY"],
         ),
         // Renamed from gpt-5-nano 2026-07-11 (model-version bump). This live probe

@@ -24,7 +24,7 @@ fi
 
 # The minimum set for the free-tier public MVP, plus the hero extras.
 VARS=(
-  GOOGLE_API_KEY                       # free chat model gemini-3.1-flash-lite (free tier, no card)
+  GOOGLE_API_KEY                       # free chat model gemini-3.5-flash-lite (free tier, no card)
   CLERK_PUBLISHABLE_KEY                # auth (wraps every page)
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY    # auth (client)
   CLERK_SECRET_KEY                     # auth (server)

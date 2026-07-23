@@ -1255,13 +1255,14 @@ function parseAssistantToolCalls(toolCalls: unknown[]): PendingToolCall[] {
 /**
  * True when a tool name was actually OFFERED on this request — i.e. it is in the
  * freshly-loaded per-request `mcpTools` catalog (operator MCP + the user's
- * connected connectors), or it is an E2B execution tool. Used by the resume
+ * connected connectors), or it is present in the current request's normalized
+ * tool offerings. Used by the resume
  * preamble as a fail-closed gate: an approval for a tool the model was never
  * offered (a hallucinated/forged qualified name) is NOT executed. This is a
  * defense-in-depth layer ON TOP of the per-tool guards inside runMcpTool
  * (connector re-gate, SSRF, unknown-server rejection).
  */
-function isToolOffered(
+export function isToolOffered(
   qualifiedName: string,
   mcpTools: WebMcpToolDef[],
   availableTools: ReadonlySet<string>,
@@ -1270,9 +1271,13 @@ function isToolOffered(
   if (isManagedOfficeFileTool(qualifiedName)) {
     return availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME);
   }
-  if (isExecutionTool(qualifiedName)) return true;
-  if (isUrlFetchTool(qualifiedName)) return true;
-  if (isWebSearchTool(qualifiedName)) return true;
+  if (
+    isExecutionTool(qualifiedName) ||
+    isUrlFetchTool(qualifiedName) ||
+    isWebSearchTool(qualifiedName)
+  ) {
+    return availableTools.has(qualifiedName);
+  }
   return mcpTools.some((t) => t.qualifiedName === qualifiedName);
 }
 

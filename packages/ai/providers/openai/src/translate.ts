@@ -62,6 +62,9 @@ function translateUserContent(blocks: ContentBlock[]): string | OpenAIChatUserMe
           : b.source.url;
       return [{ type: 'image_url', image_url: { url } }];
     }
+    if (b.type === 'file') {
+      throw new TypeError('File inputs require an OpenAI Responses-capable model');
+    }
     // tool_result / tool_use / thinking are not valid in user content;
     // caller routes those elsewhere.
     return [];

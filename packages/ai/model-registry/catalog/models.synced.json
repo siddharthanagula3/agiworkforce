@@ -114,17 +114,17 @@
       "speed": "fast",
       "released": "February 2026"
     },
-    "gemini-3.1-flash-lite": {
-      "contextWindow": 1000000,
-      "inputCost": 0.25,
-      "outputCost": 1.5,
-      "cached_input": 0.025,
+    "gemini-3.5-flash-lite": {
+      "contextWindow": 1048576,
+      "inputCost": 0.3,
+      "outputCost": 2.5,
+      "cached_input": 0.03,
       "capabilities": {
         "streaming": true,
         "tools": true,
         "vision": true,
         "json": true,
-        "thinking": false,
+        "thinking": true,
         "computerUse": false,
         "agentic": true,
         "imageGen": false,
@@ -134,15 +134,8 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": {
-        "swebench": 76.2,
-        "humaneval": 91,
-        "mmlu": 88.6,
-        "gpqa": 60,
-        "aime": 88
-      },
       "speed": "very-fast",
-      "released": "March 2026"
+      "released": "July 2026"
     },
     "deepseek-v4-flash": {
       "contextWindow": 1000000,
@@ -329,9 +322,9 @@
       "released": "April 2026"
     },
     "gemini-3.6-flash": {
-      "contextWindow": 1000000,
+      "contextWindow": 1048576,
       "inputCost": 1.5,
-      "outputCost": 9,
+      "outputCost": 7.5,
       "cached_input": 0.15,
       "capabilities": {
         "streaming": true,
@@ -354,7 +347,7 @@
         "osWorldVerified": 78.4
       },
       "speed": "fast",
-      "released": "May 2026"
+      "released": "July 2026"
     },
     "glm-5.2": {
       "contextWindow": 1000000,

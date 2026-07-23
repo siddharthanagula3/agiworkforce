@@ -89,6 +89,7 @@ import {
   createManagedOfficeFileToolDefinition,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
+import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-attachment-hydration';
 
 // OpenAI-compatible request schema
 export const ChatCompletionRequestSchema = z.object({
@@ -119,6 +120,11 @@ export const ChatCompletionRequestSchema = z.object({
                   }
                 }),
                 detail: z.enum(['auto', 'low', 'high']).optional(),
+              })
+              .optional(),
+            file: z
+              .object({
+                asset_id: z.string().uuid(),
               })
               .optional(),
           }),
@@ -1066,6 +1072,40 @@ export async function processRequest(
         ),
       };
     }
+  }
+
+  try {
+    await hydrateChatAttachments(chatRequest.messages, userId);
+  } catch (error) {
+    if (error instanceof ChatAttachmentHydrationError) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: error.message,
+              type: 'invalid_request_error',
+              code: error.code,
+            },
+          },
+          { status: error.status },
+        ),
+      };
+    }
+    logger.error({ error, userId }, 'Chat attachment hydration failed');
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: 'Attached files could not be loaded.',
+            type: 'server_error',
+            code: 'attachment_load_unavailable',
+          },
+        },
+        { status: 503 },
+      ),
+    };
   }
 
   // Managed account memory is server-owned context shared by every Cloud

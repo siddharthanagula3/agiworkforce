@@ -182,7 +182,13 @@ pub fn default_temperature(model_id: &str) -> Option<f64> {
         return Some(0.0);
     }
 
-    // Gemini models default to 1.0
+    // Current Gemini 3.5+ models deprecate sampling parameters and may reject
+    // them in future API revisions, so omit temperature for these exact IDs.
+    if matches!(lower.as_str(), "gemini-3.5-flash-lite" | "gemini-3.6-flash") {
+        return None;
+    }
+
+    // Earlier Gemini models default to 1.0.
     if lower.starts_with("gemini") {
         return Some(1.0);
     }
@@ -478,7 +484,7 @@ mod tests {
         assert!(ids.contains(&"gpt-5.6-luna"));
         assert!(ids.contains(&"gemini-3.6-flash"));
         assert!(ids.contains(&"gemini-3.1-pro-preview"));
-        assert!(ids.contains(&"gemini-3.1-flash-lite"));
+        assert!(ids.contains(&"gemini-3.5-flash-lite"));
         // xAI flagship is sourced from models.json.
         assert!(ids.contains(&"grok-4.5"));
         assert!(ids.contains(&"MiniMax-M3"));
@@ -594,11 +600,9 @@ mod tests {
     }
 
     #[test]
-    fn test_non_reasoning_models_not_flagged() {
-        // Spot-check a model that is non-reasoning per the SSOT
-        // (packages/contracts/types/src/models.json capabilities.thinking=false).
-        let model = find_model("gemini-3.1-flash-lite").unwrap();
-        assert!(!model.supports_reasoning);
+    fn test_current_flash_lite_supports_reasoning() {
+        let model = find_model("gemini-3.5-flash-lite").unwrap();
+        assert!(model.supports_reasoning);
     }
 
     /// Guard against test-vs-SSOT drift: derive reasoning expectations from
@@ -653,9 +657,10 @@ mod tests {
         assert!(!gpt56_sol.supports_audio_input);
         assert!(!gpt56_sol.supports_audio_output);
 
-        let gemini_flash = find_model("gemini-3.1-flash-lite").unwrap();
-        assert!(!gemini_flash.supports_audio_input);
+        let gemini_flash = find_model("gemini-3.5-flash-lite").unwrap();
+        assert!(gemini_flash.supports_audio_input);
         assert!(!gemini_flash.supports_audio_output);
+        assert!(gemini_flash.supports_pdf);
 
         // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
         let claude = find_model("claude-opus-4-8").unwrap();
@@ -708,7 +713,7 @@ mod tests {
         assert!(find_model("gpt-5.6-luna").is_some());
         assert!(find_model("gemini-3.6-flash").is_some());
         assert!(find_model("gemini-3.1-pro-preview").is_some());
-        assert!(find_model("gemini-3.1-flash-lite").is_some());
+        assert!(find_model("gemini-3.5-flash-lite").is_some());
         // xAI flagship is sourced from models.json.
         assert!(find_model("grok-4.5").is_some());
         assert!(find_model("minimax-m3").is_some());
@@ -858,7 +863,8 @@ mod tests {
     #[test]
     fn test_default_temperature_gemini() {
         assert_eq!(default_temperature("gemini-3.1-pro-preview"), Some(1.0));
-        assert_eq!(default_temperature("gemini-3.1-flash-lite"), Some(1.0));
+        assert_eq!(default_temperature("gemini-3.5-flash-lite"), None);
+        assert_eq!(default_temperature("gemini-3.6-flash"), None);
     }
 
     #[test]
@@ -901,7 +907,7 @@ mod tests {
     #[test]
     fn test_supports_reasoning_false() {
         assert!(!supports_reasoning("llama3.1"));
-        assert!(!supports_reasoning("gemini-3.1-flash-lite"));
+        assert!(supports_reasoning("gemini-3.5-flash-lite"));
     }
 
     #[test]
@@ -1007,7 +1013,7 @@ mod tests {
         assert!(list.contains("gpt-5.6-luna"));
         assert!(list.contains("gemini-3.6-flash"));
         assert!(list.contains("gemini-3.1-pro-preview"));
-        assert!(list.contains("gemini-3.1-flash-lite"));
+        assert!(list.contains("gemini-3.5-flash-lite"));
         // xAI flagship is sourced from models.json.
         assert!(list.contains("grok-4.5"));
         assert!(list.contains("MiniMax-M3"));
@@ -1109,20 +1115,26 @@ mod tests {
         assert!(cleaned.get("default").is_none());
         assert!(cleaned.get("additionalProperties").is_none());
         // items sub-schema sanitized.
-        assert!(cleaned["properties"]["tags"]["items"]
-            .get("default")
-            .is_none());
+        assert!(
+            cleaned["properties"]["tags"]["items"]
+                .get("default")
+                .is_none()
+        );
         // anyOf union members sanitized.
         let any_of = cleaned["properties"]["choice"]["anyOf"].as_array().unwrap();
         assert!(any_of[0].get("default").is_none());
         assert!(any_of[1].get("const").is_none());
         // Nested object property sanitized at depth.
-        assert!(cleaned["properties"]["nested"]
-            .get("additionalProperties")
-            .is_none());
-        assert!(cleaned["properties"]["nested"]["properties"]["inner"]
-            .get("default")
-            .is_none());
+        assert!(
+            cleaned["properties"]["nested"]
+                .get("additionalProperties")
+                .is_none()
+        );
+        assert!(
+            cleaned["properties"]["nested"]["properties"]["inner"]
+                .get("default")
+                .is_none()
+        );
         // Structural fields preserved.
         assert_eq!(cleaned["properties"]["tags"]["items"]["type"], "string");
         assert_eq!(

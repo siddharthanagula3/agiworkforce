@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
 import {
   ManagedCloudConversationListResponseSchema,
   ManagedCloudConversationResponseSchema,
@@ -267,14 +268,18 @@ export function useConversations(): UseConversationsReturn {
         });
 
         // Convert API messages to store format
-        const messages: Message[] = data.messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          createdAt: m.created_at,
-          model: m.model ?? undefined,
-          metadata: (m.metadata ?? undefined) as Message['metadata'],
-        }));
+        const messages: Message[] = data.messages.map((m) => {
+          const metadata = (m.metadata ?? undefined) as Message['metadata'];
+          return {
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            createdAt: m.created_at,
+            model: m.model ?? undefined,
+            attachments: readPersistedAttachments(metadata?.attachments),
+            metadata,
+          };
+        });
 
         // Atomically set active conversation and messages to avoid race conditions
         setActiveConversationWithMessages(id, messages);

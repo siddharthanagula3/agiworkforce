@@ -40,13 +40,15 @@ const PARSE_ERROR_SENTINEL = {
 } as unknown as GeminiStreamChunk;
 
 /**
- * `hasToolCall` mirrors apps/web/lib/llm-providers/google.ts's legacy
- * override: `const finishReason = functionCallParts.length > 0 ? 'tool_calls'
- * : candidate.finishReason.toLowerCase();`. Gemini has no distinct
+ * `hasToolCall` extends apps/web/lib/llm-providers/google.ts's legacy
+ * override across the whole streamed turn. Gemini has no distinct
  * tool-calling finish reason of its own -- a turn that ends in a
  * `functionCall` still reports the generic `'STOP'` -- so without this
  * override every Gemini tool call maps to `'end_turn'`/`'stop'` instead of
- * `'tool_calls'`. BUG FOUND in this migration (task #34's Google slice,
+ * `'tool_calls'`. The live API may put the complete functionCall in one SSE
+ * chunk and the terminal STOP in a later signature-only chunk, so checking
+ * only the finish-bearing chunk silently ends the loop without executing the
+ * call. BUG FOUND in this migration (task #34's Google slice,
  * caught by stream-transform.google-byte-parity.test.ts's byte diff against
  * the legacy wire): this canonical adapter never had the override, and this
  * file has no existing test that would have caught it. `mapFinishReason`'s
@@ -164,7 +166,7 @@ export async function* translateGeminiStream(
 ): AsyncIterable<StreamChunk> {
   let toolCounter = 0;
   let lastFinish: string | undefined;
-  let lastFinishHadToolCall = false;
+  let turnHadToolCall = false;
   let lastUsage: GeminiStreamChunk['usageMetadata'] | undefined;
   // Mirrors apps/web/lib/llm-providers/google.ts's `groundingEmitted` flag:
   // Gemini can repeat the same groundingChunks on more than one SSE event
@@ -195,6 +197,7 @@ export async function* translateGeminiStream(
     // just the same event set.
     const parts = candidate.content?.parts ?? [];
     const chunkHasToolCall = parts.some((part) => !!part.functionCall);
+    turnHadToolCall ||= chunkHasToolCall;
     for (const part of parts) {
       if (part.thought && part.text) {
         yield {
@@ -254,11 +257,6 @@ export async function* translateGeminiStream(
 
     if (candidate.finishReason) {
       lastFinish = candidate.finishReason;
-      // Sampled alongside lastFinish (not independently across the whole
-      // stream) to match legacy's exact scope: whether THE FINISH-BEARING
-      // CHUNK itself carried a functionCall part, not whether one appeared
-      // anywhere earlier in the turn.
-      lastFinishHadToolCall = chunkHasToolCall;
     }
   }
 
@@ -281,5 +279,5 @@ export async function* translateGeminiStream(
     yield usageChunk;
   }
 
-  yield { type: 'stop', reason: mapFinishReason(lastFinish, lastFinishHadToolCall) };
+  yield { type: 'stop', reason: mapFinishReason(lastFinish, turnHadToolCall) };
 }

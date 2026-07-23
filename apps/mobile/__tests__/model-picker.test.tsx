@@ -226,11 +226,13 @@ describe('ModelPickerSheet', () => {
   });
 
   it('marks the selected auto mode as selected', () => {
-    useModelStore.setState({ selectedModel: 'auto-economy' });
+    useModelStore.setState({ selectedModel: 'auto' });
     const { getByLabelText } = renderPicker();
 
-    const economyCard = getByLabelText('Economy: Lowest-cost eligible route for the task');
-    expect(economyCard.props.accessibilityState.selected).toBe(true);
+    const autoCard = getByLabelText(
+      'Auto: Automatically routes each message to the best model for the task, your plan, and cost',
+    );
+    expect(autoCard.props.accessibilityState.selected).toBe(true);
   });
 
   it('renders on-device model names from the local catalog', () => {
@@ -545,18 +547,14 @@ describe('ModelPickerSheet', () => {
     expect(queryByLabelText('Reasoning effort Minimal')).toBeNull();
   });
 
-  it('hides the reasoning effort control entirely for a non-reasoning model', () => {
-    // gemini-3.1-flash-lite's catalog reasoning block is
-    // { capable: false, control: 'none' } — the control must not render at
-    // all (no disabled placeholder either): the founder rule is that the
-    // toggle is invisible, not just unusable, for a model with no efforts.
+  it('shows the reasoning effort control for Gemini 3.5 Flash-Lite', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('gemini-3.1-flash-lite');
-    const { queryByTestId, queryByText } = renderPicker({ modelScope: 'cloud' });
+    useModelStore.getState().setModel('gemini-3.5-flash-lite');
+    const { getByTestId, getByText } = renderPicker({ modelScope: 'cloud' });
 
-    expect(queryByTestId('model-picker-effort-selector')).toBeNull();
-    expect(queryByText('Reasoning effort')).toBeNull();
+    expect(getByTestId('model-picker-effort-selector')).toBeTruthy();
+    expect(getByText('Effort')).toBeTruthy();
   });
 
   it('clamps the reasoning effort to the new model default when switching to a model that lacks the previous value', () => {
@@ -631,19 +629,27 @@ describe('ModelPickerSheet', () => {
     expect(queryByText('Coming soon')).toBeNull();
   });
 
-  it('selects a local auto mode when tapped', () => {
+  it('selects Auto when tapped in Local mode', () => {
     const { getByLabelText } = renderPicker();
 
-    fireEvent.press(getByLabelText('Economy: Lowest-cost eligible route for the task'));
+    fireEvent.press(
+      getByLabelText(
+        'Auto: Automatically routes each message to the best model for the task, your plan, and cost',
+      ),
+    );
 
-    expect(useModelStore.getState().selectedModel).toBe('auto-economy');
+    expect(useModelStore.getState().selectedModel).toBe('auto');
   });
 
   it('does not expand thinking for auto modes', () => {
-    useModelStore.setState({ selectedModel: 'auto-balanced' });
+    useModelStore.setState({ selectedModel: 'auto' });
     const { getByLabelText, queryByText } = renderPicker();
 
-    fireEvent.press(getByLabelText('Balanced: Best balance of capability, latency, and cost'));
+    fireEvent.press(
+      getByLabelText(
+        'Auto: Automatically routes each message to the best model for the task, your plan, and cost',
+      ),
+    );
 
     expect(queryByText('With thinking')).toBeNull();
   });

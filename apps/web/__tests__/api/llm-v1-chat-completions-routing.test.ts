@@ -336,7 +336,7 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
 
     mockSendRequest.mockResolvedValue({
       content: 'Here is the implementation...',
-      model: 'gemini-3.1-flash-lite',
+      model: 'gemini-3.5-flash-lite',
       promptTokens: 120,
       completionTokens: 80,
       totalTokens: 200,

@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -1446,14 +1446,18 @@ privacy_mode = "local"
         std::env::set_var("AGIWORKFORCE_PROVIDER", "openai");
         config.merge_env_overrides();
 
-        assert!(config
-            .source
-            .env_overrides
-            .contains(&"AGIWORKFORCE_MODEL".to_string()));
-        assert!(config
-            .source
-            .env_overrides
-            .contains(&"AGIWORKFORCE_PROVIDER".to_string()));
+        assert!(
+            config
+                .source
+                .env_overrides
+                .contains(&"AGIWORKFORCE_MODEL".to_string())
+        );
+        assert!(
+            config
+                .source
+                .env_overrides
+                .contains(&"AGIWORKFORCE_PROVIDER".to_string())
+        );
         assert_eq!(config.source.env_overrides.len(), 2);
 
         std::env::remove_var("AGIWORKFORCE_MODEL");
@@ -1680,15 +1684,15 @@ base_url = "http://localhost:11434"
     fn test_set_get_fallback_chain() {
         let mut config = CliConfig::default();
         config
-            .set_value("fallback-chain", "gpt-5.6-sol, gemini-3.1-flash-lite")
+            .set_value("fallback-chain", "gpt-5.6-sol, gemini-3.5-flash-lite")
             .unwrap();
         assert_eq!(
             config.default.fallback_chain,
-            vec!["gpt-5.6-sol", "gemini-3.1-flash-lite"]
+            vec!["gpt-5.6-sol", "gemini-3.5-flash-lite"]
         );
         assert_eq!(
             config.get_value("fallback-chain"),
-            Some("gpt-5.6-sol,gemini-3.1-flash-lite".to_string())
+            Some("gpt-5.6-sol,gemini-3.5-flash-lite".to_string())
         );
     }
 
@@ -1759,14 +1763,14 @@ model = "gpt-5.6-sol"
         let mut config = CliConfig::default();
         config.default.fallback_chain = vec![
             "gpt-5.6-sol".to_string(),
-            "gemini-3.1-flash-lite".to_string(),
+            "gemini-3.5-flash-lite".to_string(),
         ];
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(serialized.contains("fallback_chain"));
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();
         assert_eq!(
             deserialized.default.fallback_chain,
-            vec!["gpt-5.6-sol", "gemini-3.1-flash-lite"]
+            vec!["gpt-5.6-sol", "gemini-3.5-flash-lite"]
         );
     }
 

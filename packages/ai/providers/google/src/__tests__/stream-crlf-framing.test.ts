@@ -27,6 +27,13 @@ const LIVE_CRLF_SSE =
   '"promptTokensDetails": [{"modality": "TEXT","tokenCount": 9}],"thoughtsTokenCount": 81,' +
   '"serviceTier": "standard"},"modelVersion": "gemini-3.5-flash","responseId": "XCZRarmyK9jQz7IP"}\r\n\r\n';
 
+// Gemini may stream a complete functionCall before a later, separate terminal
+// chunk carries finishReason:STOP. The tool turn must remain a tool turn even
+// when the terminal chunk only contains a thought signature.
+const SPLIT_TOOL_CALL_SSE =
+  'data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"execute_code","args":{"code":"print(50)"}}}],"role":"model"},"index":0}]}\r\n\r\n' +
+  'data: {"candidates":[{"content":{"parts":[{"text":"","thoughtSignature":"signed"}],"role":"model"},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":12,"candidatesTokenCount":8}}\r\n\r\n';
+
 function bytesToStream(
   text: string,
   chunkSize = Number.POSITIVE_INFINITY,
@@ -85,5 +92,22 @@ describe('parseGeminiStream CRLF framing (live wire shape)', () => {
       .map((c) => c.delta)
       .join('');
     expect(text).toBe('Hello wire probe.');
+  });
+
+  it('keeps a function call as tool_use when STOP arrives in a later chunk', async () => {
+    const chunks = await collect(bytesToStream(SPLIT_TOOL_CALL_SSE));
+
+    expect(chunks).toEqual(
+      expect.arrayContaining([
+        { type: 'tool-use-start', toolUseId: 'gemini-tool-1', name: 'execute_code' },
+        {
+          type: 'tool-use-delta',
+          toolUseId: 'gemini-tool-1',
+          deltaJson: '{"code":"print(50)"}',
+        },
+        { type: 'tool-use-end', toolUseId: 'gemini-tool-1' },
+      ]),
+    );
+    expect(chunks.at(-1)).toEqual({ type: 'stop', reason: 'tool_use' });
   });
 });

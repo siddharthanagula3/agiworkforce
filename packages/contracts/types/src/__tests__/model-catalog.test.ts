@@ -259,15 +259,15 @@ describe('model catalog helpers', () => {
     expect(isAutoModeModelId('gpt-5.6-terra')).toBe(false);
     expect(isAutoModeModelId(null)).toBe(false);
     expect(detectProviderFromModelId('claude-sonnet-5')).toBe('anthropic');
-    expect(resolveAutoModeModel('auto-economy', 'free')).toBe('gemini-3.1-flash-lite');
+    expect(resolveAutoModeModel('auto-economy', 'free')).toBe('gemini-3.5-flash-lite');
     // Basic/hobby clamp every Auto alias to the economy routing profile.
-    expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe('gemini-3.1-flash-lite');
+    expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe('gemini-3.5-flash-lite');
     expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.6-terra');
     expect(resolveAutoModeModel('auto-premium', 'max')).toBe(
       modelRegistry.policies.auto.slots.flagship_general.modelKey,
     );
-    expect(resolveAutoModeModel('auto-premium', 'free')).toBe('gemini-3.1-flash-lite');
-    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gemini-3.1-flash-lite');
+    expect(resolveAutoModeModel('auto-premium', 'free')).toBe('gemini-3.5-flash-lite');
+    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gemini-3.5-flash-lite');
   });
 
   it('derives variant partners, provider probes, and economy fallbacks from the catalog', () => {
@@ -329,11 +329,11 @@ describe('model catalog helpers', () => {
   });
 
   it('defines tier policy and slot routing from one shared source', () => {
-    expect(getRoutingSlotModel('general_fast')).toBe('gemini-3.1-flash-lite');
+    expect(getRoutingSlotModel('general_fast')).toBe('gemini-3.5-flash-lite');
     expect(getRoutingSlotModel('general_balanced')).toBe('gpt-5.6-terra');
-    expect(getRoutingSlotModel('coding_fast')).toBe('deepseek-v4-flash');
+    expect(getRoutingSlotModel('coding_fast')).toBe('gpt-5.4-mini');
     expect(getModelMetadataById(getRoutingSlotModel('coding_premium'))).not.toBeNull();
-    expect(getRoutingSlotModel('search_fast')).toBe('gemini-3.1-flash-lite');
+    expect(getRoutingSlotModel('search_fast')).toBe('gemini-3.5-flash-lite');
     expect(getRoutingSlotModel('search_premium')).toBe('gemini-3.6-flash');
     expect(getRoutingSlotModel('computer_use')).toBe('claude-sonnet-5');
 
@@ -374,7 +374,7 @@ describe('resolveAutoModeModel — task-aware routing', () => {
   it('keeps economy, balanced, and premium profiles distinct at Max tier', () => {
     const slots = modelRegistry.policies.auto.slots;
     expect(resolveAutoModeModel('auto-economy', 'max', 'coding')).toBe(
-      slots.escalation_coding.modelKey,
+      slots.workhorse_general.modelKey,
     );
     expect(resolveAutoModeModel('auto-balanced', 'max', 'coding')).toBe(
       slots.coding_balanced.modelKey,
@@ -460,9 +460,9 @@ describe('resolveAutoModeModel — task-aware routing', () => {
   });
 
   describe('Free tier task-aware routing', () => {
-    it('coding → workhorse_general (escalation_coding not in free allowedSlots)', () => {
+    it('coding → the allowed economy coding slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'coding');
-      expect(result).toBe('gemini-3.1-flash-lite');
+      expect(result).toBe(modelRegistry.policies.auto.slots.coding_fast.modelKey);
     });
     it('reasoning → economy reasoning slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
@@ -470,14 +470,14 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
     it('multimodal → workhorse_general (Flash-Lite handles vision)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'multimodal');
-      expect(result).toBe('gemini-3.1-flash-lite');
+      expect(result).toBe('gemini-3.5-flash-lite');
     });
   });
 
   describe('Free tier task-aware fallback behavior', () => {
-    it('coding → falls back to workhorse_general (escalation_coding not allowed)', () => {
+    it('coding → uses the allowed economy coding slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'coding');
-      expect(result).toBe('gemini-3.1-flash-lite');
+      expect(result).toBe(modelRegistry.policies.auto.slots.coding_fast.modelKey);
     });
     it('reasoning → uses the allowed economy reasoning slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
@@ -485,7 +485,7 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
     it('image_generation → falls back to workhorse_general (no media on free)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'image_generation');
-      expect(result).toBe('gemini-3.1-flash-lite');
+      expect(result).toBe('gemini-3.5-flash-lite');
     });
   });
 
@@ -648,14 +648,14 @@ describe('R26 provider removal — retired groq/mistral/open_router IDs redirect
   it('groq-llama-3.3-70b (groq provider removed) canonicalizes to the Gemini fallback', () => {
     const meta = getModelMetadataById('groq-llama-3.3-70b');
     expect(meta).not.toBeNull();
-    expect(meta?.id).toBe('gemini-3.1-flash-lite');
+    expect(meta?.id).toBe('gemini-3.5-flash-lite');
     expect(meta?.provider).toBe('google');
   });
 
   it('groq-llama-3.1-8b canonicalizes to the same Gemini fallback', () => {
     const meta = getModelMetadataById('groq-llama-3.1-8b');
     expect(meta).not.toBeNull();
-    expect(meta?.id).toBe('gemini-3.1-flash-lite');
+    expect(meta?.id).toBe('gemini-3.5-flash-lite');
   });
 
   it('mistral-large-3 (mistral provider removed) canonicalizes to the Claude Sonnet 5 fallback', () => {
@@ -683,14 +683,14 @@ describe('R26 provider removal — retired groq/mistral/open_router IDs redirect
     const correct = getModelMetadataById('nvidia/nemotron-3-super-120b-a12b:free');
     const retired = getModelMetadataById('nvidia/llama-3.3-nemotron-super-49b-v1:free');
     expect(correct).not.toBeNull();
-    expect(correct?.id).toBe('gemini-3.1-flash-lite');
+    expect(correct?.id).toBe('gemini-3.5-flash-lite');
     expect(retired).toBeNull();
   });
 
   it('the retired OpenRouter free Gemma-4 slug canonicalizes to the Gemini fallback', () => {
     const meta = getModelMetadataById('google/gemma-4-26b-a4b-it:free');
     expect(meta).not.toBeNull();
-    expect(meta?.id).toBe('gemini-3.1-flash-lite');
+    expect(meta?.id).toBe('gemini-3.5-flash-lite');
   });
 
   it('unknown model ID returns null gracefully (no throw)', () => {

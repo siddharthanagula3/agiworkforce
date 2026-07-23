@@ -17,7 +17,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'glm-5.2',
+      modelKey: 'gemini-3.5-flash-lite',
       requestedProfile: 'economy',
       effectiveProfile: 'economy',
       reason: 'preferred_slot',
@@ -34,7 +34,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.1-flash-lite',
+      modelKey: 'gemini-3.5-flash-lite',
       requestedProfile: 'economy',
       effectiveProfile: 'economy',
     });
@@ -66,7 +66,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.1-flash-lite',
+      modelKey: 'gpt-5.4-mini',
       requestedProfile: 'premium',
       effectiveProfile: 'economy',
     });
@@ -130,7 +130,7 @@ describe('resolveAutoRoute', () => {
       estimatedOutputTokens: 1000,
     });
 
-    expect(result).toMatchObject({ status: 'selected', modelKey: 'gemini-3.1-flash-lite' });
+    expect(result).toMatchObject({ status: 'selected', modelKey: 'gemini-3.5-flash-lite' });
   });
 
   it('affordability: no budget signal leaves routing unchanged (bias is a no-op off web)', () => {
@@ -156,7 +156,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.1-flash-lite',
+      modelKey: 'gpt-5.4-mini',
       requestedProfile: 'premium',
       effectiveProfile: 'economy',
       reason: 'preferred_slot',
@@ -182,7 +182,7 @@ describe('resolveAutoRoute', () => {
           harnessId: 'zhipu/chat-completions',
         },
         {
-          modelKey: 'gemini-3.1-flash-lite',
+          modelKey: 'gemini-3.5-flash-lite',
           provider: 'google',
           harnessId: 'google/generate-content',
         },
@@ -190,7 +190,7 @@ describe('resolveAutoRoute', () => {
     });
   });
 
-  it('emits only cross-provider fallbacks in registry policy order', () => {
+  it('uses the provider-native premium research route without a duplicate fallback', () => {
     const result = resolveAutoRoute({
       selection: 'auto-premium',
       taskType: 'research',
@@ -200,14 +200,8 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'sonar-deep-research',
-      fallbacks: [
-        {
-          modelKey: 'gemini-3.1-flash-lite',
-          provider: 'google',
-          harnessId: 'google/generate-content',
-        },
-      ],
+      modelKey: 'gemini-3.6-flash',
+      fallbacks: [],
     });
   });
 
@@ -400,7 +394,7 @@ describe('resolveAutoRoute', () => {
     });
   });
 
-  it('selects the catalog research route when its web-search harness is implemented', () => {
+  it('selects the catalog native-search route when its web-search harness is implemented', () => {
     const result = resolveAutoRoute({
       selection: 'auto-premium',
       taskType: 'research',
@@ -410,8 +404,8 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'sonar-deep-research',
-      harnessId: 'perplexity/chat-completions',
+      modelKey: 'gemini-3.6-flash',
+      harnessId: 'google/generate-content',
       reason: 'preferred_slot',
     });
   });
@@ -523,8 +517,8 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'sonar-deep-research',
-      harnessId: 'perplexity/chat-completions',
+      modelKey: 'gemini-3.6-flash',
+      harnessId: 'google/generate-content',
     });
   });
 
@@ -539,8 +533,8 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'sonar-deep-research',
-      harnessId: 'perplexity/chat-completions',
+      modelKey: 'gemini-3.6-flash',
+      harnessId: 'google/generate-content',
     });
   });
 
@@ -549,14 +543,14 @@ describe('resolveAutoRoute', () => {
       selection: 'auto-economy',
       taskType: 'coding',
       previousTaskType: 'simple_chat',
-      currentModelKey: 'gemini-3.1-flash-lite',
+      currentModelKey: 'gemini-3.5-flash-lite',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
     });
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.1-flash-lite',
+      modelKey: 'gemini-3.5-flash-lite',
       reason: 'continuity',
     });
   });
@@ -573,7 +567,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'sonar-deep-research',
+      modelKey: 'gemini-3.6-flash',
       reason: 'preferred_slot',
     });
   });

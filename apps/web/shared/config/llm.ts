@@ -193,7 +193,7 @@ export function getAllowedAutoModesForTier(_tier: string | null | undefined): st
 }
 
 export function getBestAutoModeForTier(tier: string | null | undefined): string {
-  // Free users chat on the direct Gemini 3.1 Flash Lite model (not the managed
+  // Free users chat on the direct Gemini 3.5 Flash-Lite model (not the managed
   // Auto preset). Keeping the default + reset on the same id avoids a flip.
   if (normalizeSubscriptionTier(tier) === 'free') return FREE_TRIAL_MODEL;
   return 'auto';

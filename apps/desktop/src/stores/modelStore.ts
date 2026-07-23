@@ -229,7 +229,7 @@ interface ModelState {
 
   /**
    * Cycle the currently selected model to its thinking/reasoning counterpart, or back.
-   * E.g. claude-sonnet-5 ↔ claude-opus-4.8, gemini-3.1-flash-lite ↔ gemini-3.1-pro-preview.
+   * E.g. claude-sonnet-5 ↔ claude-opus-4.8, gemini-3.5-flash-lite ↔ gemini-3.1-pro-preview.
    * Shows a toast with the result.
    */
   cycleModelVariant: () => void;

@@ -52,7 +52,7 @@ fn honors_economy_profile_when_tier_allows_premium() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "glm-5.2");
+    assert_eq!(selected.model_key, "gemini-3.5-flash-lite");
     assert_eq!(selected.requested_profile, Some(RoutingProfile::Economy));
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Economy));
     assert_eq!(selected.reason, RouteReason::PreferredSlot);
@@ -71,7 +71,7 @@ fn single_auto_computes_economy_for_a_trivial_chat_on_a_max_tier() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "gemini-3.1-flash-lite");
+    assert_eq!(selected.model_key, "gemini-3.5-flash-lite");
     assert_eq!(selected.requested_profile, Some(RoutingProfile::Economy));
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Economy));
 }
@@ -107,7 +107,7 @@ fn clamps_premium_to_free_tier_maximum() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "gemini-3.1-flash-lite");
+    assert_eq!(selected.model_key, "gpt-5.4-mini");
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Economy));
 }
 
@@ -215,7 +215,7 @@ fn uses_premium_coding_slot_when_permitted() {
             .iter()
             .map(|route| (route.model_key.as_str(), route.provider.as_str()))
             .collect::<Vec<_>>(),
-        vec![("glm-5.2", "zhipu"), ("gemini-3.1-flash-lite", "google")]
+        vec![("glm-5.2", "zhipu"), ("gemini-3.5-flash-lite", "google")]
     );
 }
 
@@ -232,10 +232,8 @@ fn emits_only_cross_provider_fallbacks_in_registry_policy_order() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "sonar-deep-research");
-    assert_eq!(selected.fallbacks.len(), 1);
-    assert_eq!(selected.fallbacks[0].model_key, "gemini-3.1-flash-lite");
-    assert_eq!(selected.fallbacks[0].provider, "google");
+    assert_eq!(selected.model_key, "gemini-3.6-flash");
+    assert!(selected.fallbacks.is_empty());
 }
 
 #[test]
@@ -320,8 +318,8 @@ fn routes_research_when_a_native_search_harness_is_implemented() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "sonar-deep-research");
-    assert_eq!(selected.harness_id, "perplexity/chat-completions");
+    assert_eq!(selected.model_key, "gemini-3.6-flash");
+    assert_eq!(selected.harness_id, "google/generate-content");
 }
 
 #[test]
@@ -428,8 +426,8 @@ fn web_runtime_profile_admits_its_server_side_search_implementation() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "sonar-deep-research");
-    assert_eq!(selected.harness_id, "perplexity/chat-completions");
+    assert_eq!(selected.model_key, "gemini-3.6-flash");
+    assert_eq!(selected.harness_id, "google/generate-content");
 }
 
 #[test]
@@ -446,8 +444,8 @@ fn mobile_runtime_profile_admits_its_server_side_search_implementation() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "sonar-deep-research");
-    assert_eq!(selected.harness_id, "perplexity/chat-completions");
+    assert_eq!(selected.model_key, "gemini-3.6-flash");
+    assert_eq!(selected.harness_id, "google/generate-content");
 }
 
 #[test]
@@ -458,14 +456,14 @@ fn preserves_cache_route_on_task_change_when_current_model_remains_preferred() {
         "max",
         TrustMode::ManagedCloud,
     );
-    routing_request.current_model_key = Some("gemini-3.1-flash-lite");
+    routing_request.current_model_key = Some("gemini-3.5-flash-lite");
     routing_request.previous_task_type = Some(RoutingTaskType::SimpleChat);
 
     let decision = resolve_auto_route(&routing_request).expect("generated registry should load");
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "gemini-3.1-flash-lite");
+    assert_eq!(selected.model_key, "gemini-3.5-flash-lite");
     assert_eq!(selected.reason, RouteReason::Continuity);
 }
 
@@ -484,6 +482,6 @@ fn reroutes_on_task_change_when_current_model_is_not_preferred() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "sonar-deep-research");
+    assert_eq!(selected.model_key, "gemini-3.6-flash");
     assert_eq!(selected.reason, RouteReason::PreferredSlot);
 }
