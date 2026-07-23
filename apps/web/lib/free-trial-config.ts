@@ -1,4 +1,8 @@
-import { getAllowedModelsForTier, getDefaultModelFor } from '@agiworkforce/types';
+import {
+  getAllowedModelsForTier,
+  getDefaultModelFor,
+  getModelMetadataById,
+} from '@agiworkforce/types';
 
 // Client-safe free-plan model policy. Usage ceilings intentionally do not live in
 // this module: it is imported by browser components, while the free usage limit is
@@ -12,10 +16,11 @@ import { getAllowedModelsForTier, getDefaultModelFor } from '@agiworkforce/types
 export const FREE_TRIAL_MODEL = getDefaultModelFor('free', 'chat');
 
 /**
- * The models free/demo users may select — the full economy/Hobby tier set straight
- * from the catalog (SSOT: `tierAllowedModels.economy`), so the free trial is a real
- * Hobby experience rather than a hand-maintained subset. Per-model capability gating
- * in the composer + server ensures a prompt is never wasted on an action the selected
- * model can't perform (e.g. images to a no-vision model).
+ * The models free/demo users may select. Basic and Free share the Economy roster,
+ * while each model's catalog `tierPolicy.minTier` is the authoritative boundary.
+ * Keeping that filter here prevents paid Economy models from leaking into Free UI/API
+ * surfaces without duplicating a hand-maintained model list.
  */
-export const FREE_TRIAL_MODELS: readonly string[] = getAllowedModelsForTier('economy');
+export const FREE_TRIAL_MODELS: readonly string[] = getAllowedModelsForTier('economy').filter(
+  (modelId) => getModelMetadataById(modelId)?.tierPolicy?.minTier === 'free',
+);

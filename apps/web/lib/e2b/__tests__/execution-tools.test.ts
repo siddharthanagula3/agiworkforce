@@ -153,15 +153,15 @@ describe('resolveCodeExecutionTools — native-always / fail-closed', () => {
 });
 
 describe('providerRoutesToE2B — §8 routing table', () => {
-  // Free-native tier: Anthropic + Google always use their own sandboxes (free compute).
+  // Anthropic remains provider-native because its adapter preserves file ids.
   it.each(['anthropic', 'Anthropic', 'ANTHROPIC'])(
     'anthropic (%s) → false (free-native tier)',
     (p) => {
       expect(providerRoutesToE2B(p)).toBe(false);
     },
   );
-  it.each(['google', 'Google', 'GOOGLE'])('google (%s) → false (free-native tier)', (p) => {
-    expect(providerRoutesToE2B(p)).toBe(false);
+  it.each(['google', 'Google', 'GOOGLE'])('google (%s) → true (durable E2B artifacts)', (p) => {
+    expect(providerRoutesToE2B(p)).toBe(true);
   });
 
   // E2B-credit tier: OpenAI + all others route to E2B.

@@ -73,6 +73,11 @@ import {
   type GeneratedFileWire,
 } from '@/lib/e2b/generated-files';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
+import {
+  collectGeneratedFileRefs,
+  persistGeneratedFiles,
+  type GeneratedFileRef,
+} from '@/lib/server/container-files';
 import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
 import {
   isWebSearchTool,
@@ -249,6 +254,7 @@ export interface ToolLoopProviderStepResult {
   pendingToolCalls: PendingToolCall[];
   textContent: string;
   publicTextTail: string;
+  generatedFileRefs: GeneratedFileRef[];
   thinkingBlocks: ThinkingBlock[];
   canonicalText: string;
   usage: ObservedProviderUsage;
@@ -887,6 +893,7 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
   pendingToolCalls: PendingToolCall[];
   textContent: string;
   publicTextTail: string;
+  generatedFileRefs: GeneratedFileRef[];
 }> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -895,6 +902,7 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
   let buffer = '';
   let finishReason: string | null = null;
   let textContent = '';
+  const generatedFileRefs = new Map<string, GeneratedFileRef>();
 
   // Accumulate streamed tool call fragments by index.
   // OpenAI streaming: tool_calls[i].function.name comes first, then
@@ -926,6 +934,7 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
 
       try {
         const event = JSON.parse(jsonStr);
+        collectGeneratedFileRefs(event, generatedFileRefs);
         let publicTextDelta: string | undefined;
 
         // Accumulate text content.
@@ -1019,6 +1028,7 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
     pendingToolCalls,
     textContent,
     publicTextTail: publicTextProjector.flush(),
+    generatedFileRefs: [...generatedFileRefs.values()],
   };
 }
 
@@ -1352,6 +1362,7 @@ export async function* runToolLoop(
   // tools needs two independently-emitted cumulative lists, not one merged
   // list with an ambiguous tag.
   const searchedSources: FetchedSource[] = [];
+  const providerGeneratedFileRefs = new Map<string, GeneratedFileRef>();
 
   // Conversation-scoped E2B executor: resolved (created, or resumed from a paused
   // session) at most ONCE per loop invocation and reused across every execution-tool
@@ -1395,12 +1406,27 @@ export async function* runToolLoop(
    * inline note is emitted alongside today's log warn — never silence.
    */
   async function harvestGeneratedFilesEvents(): Promise<SseLine[]> {
-    if (!executionToolRan || !e2bExecutor || !options.userId) return [];
+    if (!options.userId) return [];
     const lines: SseLine[] = [];
     const files: GeneratedFileWire[] = [];
     let failedCount = 0;
 
-    if (e2bBaseline) {
+    if (providerGeneratedFileRefs.size > 0) {
+      try {
+        const persisted = await persistGeneratedFiles({
+          userId: options.userId,
+          refs: [...providerGeneratedFileRefs.values()],
+          model: responseModel,
+        });
+        files.push(...persisted.files.map((file) => file.wire));
+        failedCount += persisted.failedCount;
+      } catch (err) {
+        logger.warn({ err }, '[tool-loop] provider generated-file persist failed');
+        failedCount += providerGeneratedFileRefs.size;
+      }
+    }
+
+    if (executionToolRan && e2bExecutor && e2bBaseline) {
       try {
         const harvest = await harvestGeneratedFiles({
           executor: e2bExecutor,
@@ -2010,6 +2036,9 @@ export async function* runToolLoop(
             })
           : await executeProviderStep();
         mergeObservedUsage(observedUsage, providerStep.usage);
+        for (const ref of providerStep.generatedFileRefs ?? []) {
+          if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
+        }
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);

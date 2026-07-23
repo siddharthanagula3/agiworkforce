@@ -12,6 +12,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
+import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 
 const TERMINAL_STATES = new Set<AgentTaskState>([
   'ready_for_review',
@@ -32,16 +33,16 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   provider: string;
   model: string;
   last_event_sequence: number | string;
-  cancellation_requested_at: string | null;
-  completed_at: string | null;
-  created_at: string;
-  updated_at: string;
+  cancellation_requested_at: string | Date | null;
+  completed_at: string | Date | null;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 interface CloudAgentEventRow extends Record<string, unknown> {
   sequence: number | string;
   envelope: unknown;
-  emitted_at: string;
+  emitted_at: string | Date;
 }
 
 const CheckpointThinkingBlockSchema = z.object({
@@ -82,10 +83,10 @@ interface CloudAgentApprovalCheckpointRow extends Record<string, unknown> {
   pending_tool_calls: unknown;
   state: string;
   lease_token: string | null;
-  lease_expires_at: string | null;
-  resolved_at: string | null;
-  created_at: string;
-  updated_at: string;
+  lease_expires_at: string | Date | null;
+  resolved_at: string | Date | null;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 export type CloudAgentApprovalCheckpointState = z.infer<typeof CheckpointStateSchema>;
@@ -178,10 +179,10 @@ function mapRun(row: CloudAgentRunRow): CloudAgentRun {
     provider: row.provider,
     model: row.model,
     lastEventSequence: Number(row.last_event_sequence),
-    cancellationRequestedAt: row.cancellation_requested_at,
-    completedAt: row.completed_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    cancellationRequestedAt: toIsoTimestamp(row.cancellation_requested_at),
+    completedAt: toIsoTimestamp(row.completed_at),
+    createdAt: toIsoTimestamp(row.created_at),
+    updatedAt: toIsoTimestamp(row.updated_at),
   });
 }
 
@@ -207,10 +208,10 @@ function mapApprovalCheckpoint(row: CloudAgentApprovalCheckpointRow): CloudAgent
     pendingToolCalls: z.array(PendingToolCallSchema).min(1).max(32).parse(row.pending_tool_calls),
     state: CheckpointStateSchema.parse(row.state),
     leaseToken: z.string().uuid().nullable().parse(row.lease_token),
-    leaseExpiresAt: z.string().datetime().nullable().parse(row.lease_expires_at),
-    resolvedAt: z.string().datetime().nullable().parse(row.resolved_at),
-    createdAt: z.string().datetime().parse(row.created_at),
-    updatedAt: z.string().datetime().parse(row.updated_at),
+    leaseExpiresAt: z.string().datetime().nullable().parse(toIsoTimestamp(row.lease_expires_at)),
+    resolvedAt: z.string().datetime().nullable().parse(toIsoTimestamp(row.resolved_at)),
+    createdAt: z.string().datetime().parse(toIsoTimestamp(row.created_at)),
+    updatedAt: z.string().datetime().parse(toIsoTimestamp(row.updated_at)),
   };
 }
 
@@ -464,7 +465,13 @@ export async function listCloudAgentRuns(
   const lastRow = pageRows.at(-1);
   return {
     runs: pageRows.map(mapRun),
-    next: rows.length > limit && lastRow ? { updatedAt: lastRow.updated_at, id: lastRow.id } : null,
+    next:
+      rows.length > limit && lastRow
+        ? {
+            updatedAt: z.string().datetime().parse(toIsoTimestamp(lastRow.updated_at)),
+            id: lastRow.id,
+          }
+        : null,
   };
 }
 

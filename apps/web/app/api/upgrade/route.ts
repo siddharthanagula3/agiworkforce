@@ -14,6 +14,7 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
+import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 
 const TIER_ORDER: Record<string, number> = {
   free: 0,
@@ -89,7 +90,19 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
 
   const stripeSubId = sub.stripe_subscription_id;
-  if (!stripeSubId) throw createError.internal('Subscription has no Stripe subscription ID');
+  if (!isStripeSubscriptionId(stripeSubId)) {
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'Your current plan is not attached to a live Stripe subscription. Continue through secure checkout.',
+          type: 'invalid_request_error',
+          code: 'checkout_required',
+        },
+      },
+      { status: 409 },
+    );
+  }
 
   let stripeItem: Stripe.SubscriptionItem | null = null;
   let subscriptionCurrency = 'usd';
@@ -100,6 +113,19 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     stripeItem = stripeSub.items.data[0] ?? null;
     subscriptionCurrency = stripeSub.currency;
   } catch (err) {
+    if (err instanceof Stripe.errors.StripeInvalidRequestError && err.code === 'resource_missing') {
+      return NextResponse.json(
+        {
+          error: {
+            message:
+              'Your previous Stripe subscription no longer exists. Continue through secure checkout.',
+            type: 'invalid_request_error',
+            code: 'checkout_required',
+          },
+        },
+        { status: 409 },
+      );
+    }
     logger.error({ err, stripeSubId }, 'Failed to retrieve Stripe subscription for item ID');
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }

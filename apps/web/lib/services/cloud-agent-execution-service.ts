@@ -3,6 +3,7 @@ import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
+import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 
 const OperationKindSchema = z.enum(['provider', 'tool']);
 const RetrySafetySchema = z.enum(['safe', 'unsafe']);
@@ -34,13 +35,13 @@ interface CloudAgentExecutionOperationRow extends Record<string, unknown> {
   status: string;
   attempt: number | string;
   lease_token: string | null;
-  lease_expires_at: string | null;
+  lease_expires_at: string | Date | null;
   result: unknown;
   usage: unknown;
   error: unknown;
-  completed_at: string | null;
-  created_at: string;
-  updated_at: string;
+  completed_at: string | Date | null;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 export interface CloudAgentExecutionOperation {
@@ -101,13 +102,13 @@ function mapOperation(row: CloudAgentExecutionOperationRow): CloudAgentExecution
     status: OperationStatusSchema.parse(row.status),
     attempt: z.coerce.number().int().positive().parse(row.attempt),
     leaseToken: z.string().uuid().nullable().parse(row.lease_token),
-    leaseExpiresAt: z.string().datetime().nullable().parse(row.lease_expires_at),
+    leaseExpiresAt: z.string().datetime().nullable().parse(toIsoTimestamp(row.lease_expires_at)),
     result: row.result === null ? null : JsonObjectSchema.parse(row.result),
     usage: row.usage === null ? null : JsonObjectSchema.parse(row.usage),
     error: row.error === null ? null : JsonObjectSchema.parse(row.error),
-    completedAt: z.string().datetime().nullable().parse(row.completed_at),
-    createdAt: z.string().datetime().parse(row.created_at),
-    updatedAt: z.string().datetime().parse(row.updated_at),
+    completedAt: z.string().datetime().nullable().parse(toIsoTimestamp(row.completed_at)),
+    createdAt: z.string().datetime().parse(toIsoTimestamp(row.created_at)),
+    updatedAt: z.string().datetime().parse(toIsoTimestamp(row.updated_at)),
   };
 }
 
