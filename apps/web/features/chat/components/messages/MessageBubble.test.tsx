@@ -232,6 +232,40 @@ describe('MessageBubble', () => {
       expect(screen.getByText('Thinking...')).toBeInTheDocument();
     });
 
+    it('shows canonical AGI Work activity instead of the generic thinking fallback', () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        isStreaming: true,
+        content: '',
+        metadata: {
+          agentActivity: {
+            schemaVersion: 1,
+            sessionId: 'conversation-1',
+            turnId: 'assistant-1',
+            lastSequence: -1,
+            status: 'running',
+            startedAtMs: 1_000,
+            updatedAtMs: 1_000,
+            entries: [
+              {
+                kind: 'progress',
+                id: 'progress:starting',
+                progressId: 'starting',
+                summary: 'Starting AGI Work',
+                status: 'running',
+                startedAtMs: 1_000,
+              },
+            ],
+          },
+        },
+      });
+
+      render(<MessageBubble message={msg} />);
+
+      expect(screen.getAllByText('Starting AGI Work').length).toBeGreaterThan(0);
+      expect(screen.queryByText('Thinking...')).toBeNull();
+    });
+
     it('hides action buttons when streaming', () => {
       const msg = makeMessage({ isStreaming: true, content: 'partial' });
       render(<MessageBubble message={msg} />);

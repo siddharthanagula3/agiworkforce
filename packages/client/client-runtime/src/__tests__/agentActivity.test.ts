@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protocol';
-import { applyAgentActivityEvent, finishAgentActivityLocally } from '../agentActivity';
+import {
+  applyAgentActivityEvent,
+  finishAgentActivityLocally,
+  startAgentActivityLocally,
+} from '../agentActivity';
 
 function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
   return {
@@ -14,6 +18,54 @@ function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
 }
 
 describe('portable agent activity projection', () => {
+  it('creates a local starting action that canonical provider activity replaces', () => {
+    const starting = startAgentActivityLocally({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      summary: 'Starting AGI Work',
+      startedAtMs: 900,
+    });
+    expect(starting).toMatchObject({
+      status: 'running',
+      lastSequence: -1,
+      entries: [expect.objectContaining({ summary: 'Starting AGI Work', status: 'running' })],
+    });
+
+    const canonical = applyAgentActivityEvent(
+      starting,
+      envelope(0, {
+        type: 'progress-update',
+        progressId: 'planning',
+        summary: 'Planning the workspace task',
+        status: 'running',
+      }),
+    );
+    expect(canonical.entries).toEqual([
+      expect.objectContaining({ summary: 'Planning the workspace task', status: 'running' }),
+    ]);
+    expect(JSON.stringify(canonical)).not.toContain('Starting AGI Work');
+  });
+
+  it('can complete a local starting action when a provider returns without activity events', () => {
+    const starting = startAgentActivityLocally({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      summary: 'Starting AGI Work',
+      startedAtMs: 900,
+    });
+    const completed = finishAgentActivityLocally(starting, {
+      status: 'completed',
+      completedAtMs: 1_200,
+    });
+
+    expect(completed).toMatchObject({
+      status: 'completed',
+      stopReason: 'end-turn',
+      completedAtMs: 1_200,
+      entries: [expect.objectContaining({ status: 'completed', completedAtMs: 1_200 })],
+    });
+  });
+
   it('projects canonical task states without inventing a surface-local enum', () => {
     let state = applyAgentActivityEvent(
       undefined,

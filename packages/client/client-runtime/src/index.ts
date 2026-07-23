@@ -30,7 +30,11 @@ export { routeToCloud } from './http';
 
 // Canonical Cloud agent-event projection. Portable across Web, Desktop, and
 // React Native; rendered by each surface using its native UI primitives.
-export { applyAgentActivityEvent, finishAgentActivityLocally } from './agentActivity';
+export {
+  applyAgentActivityEvent,
+  finishAgentActivityLocally,
+  startAgentActivityLocally,
+} from './agentActivity';
 export type {
   AgentActivityApproval,
   AgentActivityArtifactEntry,
