@@ -9,8 +9,12 @@
  *
  * Behavior:
  * - If `NEXT_PUBLIC_SANDBOX_ORIGIN` is set, this module's helpers point at
- *   that origin. Components load `<iframe src="${sandbox}/" sandbox="allow-scripts">`
- *   and ship the artifact via `postMessage`.
+ *   that origin. Components load
+ *   `<iframe src="${sandbox}/" sandbox="allow-scripts allow-same-origin">`
+ *   and ship the artifact via `postMessage`. Preserving the dedicated
+ *   renderer's origin lets the parent authenticate its messages. It does not
+ *   restore access to the parent because the two documents remain
+ *   cross-origin.
  * - If unset, `getSandboxOrigin()` returns `null`. Components fall back to
  *   `<iframe sandbox="allow-scripts" srcDoc=...>` · same-origin but without
  *   `allow-same-origin`, which still closes the dual-flag bypass.
