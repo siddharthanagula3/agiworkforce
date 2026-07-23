@@ -681,8 +681,8 @@
         },
         "agiWorkforce.inlineCompletions.enabled": {
           "type": "boolean",
-          "default": true,
-          "description": "Enable ghost-text inline completions (requires API key)"
+          "default": false,
+          "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key."
         },
         "agiWorkforce.inlineCompletions.debounceMs": {
           "type": "number",
@@ -737,7 +737,7 @@
         },
         "agiWorkforce.desktopBridge.enabled": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Connect to AGI Workforce desktop app for extended agent capabilities"
         },
         "agiWorkforce.desktopBridge.port": {
