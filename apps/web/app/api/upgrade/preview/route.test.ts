@@ -145,10 +145,13 @@ describe('POST /api/upgrade/preview', () => {
     expect(stripeMocks.createInvoicePreview).toHaveBeenCalledWith(
       expect.objectContaining({
         subscription_details: expect.objectContaining({
-          proration_date: expect.any(Number),
+          billing_cycle_anchor: 'now',
         }),
       }),
     );
+    expect(
+      stripeMocks.createInvoicePreview.mock.calls[0]?.[0]?.subscription_details,
+    ).not.toHaveProperty('proration_date');
   });
 
   it('returns the localized full price when no prior Stripe charge can be credited', async () => {
