@@ -41,6 +41,12 @@ import { useAppModeStore, type AppMode } from './appModeStore';
 import { useSettingsStore, waitForSettingsHydration } from './settingsStore';
 import { useUIStore } from './ui';
 import { storageFallback } from '../lib/storageFallback';
+import {
+  ollamaCheckStatus,
+  ollamaDeleteModel,
+  ollamaListModels,
+  ollamaPullModel,
+} from '../api/ollama';
 
 // ---------------------------------------------------------------------------
 // Managed cloud rows are projected from the shared tier + runtime contract.
@@ -585,7 +591,8 @@ export const useModelStore = create<ModelState>()(
         // Ollama-specific actions
         checkOllamaStatus: async () => {
           try {
-            const available = await invoke<boolean>('ollama_check_status');
+            const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
+            const available = await ollamaCheckStatus(baseUrl);
             set(
               { ollamaAvailable: available, ollamaError: null },
               undefined,
@@ -611,7 +618,8 @@ export const useModelStore = create<ModelState>()(
           );
           try {
             // First check if Ollama is available
-            const available = await invoke<boolean>('ollama_check_status');
+            const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
+            const available = await ollamaCheckStatus(baseUrl);
             if (!available) {
               set(
                 {
@@ -627,7 +635,7 @@ export const useModelStore = create<ModelState>()(
               return [];
             }
 
-            const models = await invoke<OllamaModel[]>('ollama_list_models');
+            const models = await ollamaListModels(baseUrl);
             set(
               {
                 ollamaModels: models,
@@ -657,7 +665,8 @@ export const useModelStore = create<ModelState>()(
         pullOllamaModel: async (modelName: string) => {
           set({ ollamaLoading: true, ollamaError: null }, undefined, 'model/pullOllamaModel/start');
           try {
-            await invoke('ollama_pull_model', { modelName });
+            const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
+            await ollamaPullModel(modelName, baseUrl);
             // Refresh the model list after pulling
             await get().fetchOllamaModels();
           } catch (error) {
@@ -678,7 +687,8 @@ export const useModelStore = create<ModelState>()(
             'model/deleteOllamaModel/start',
           );
           try {
-            await invoke('ollama_delete_model', { modelName });
+            const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl;
+            await ollamaDeleteModel(modelName, baseUrl);
             // Refresh the model list after deletion
             await get().fetchOllamaModels();
           } catch (error) {

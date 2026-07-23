@@ -103,7 +103,7 @@ describe('TauriRuntime', () => {
           listenHandlers.get('chat:stream-end')?.({
             payload: {
               conversation_id: 42,
-              message_id: 'assistant-1',
+              message_id: null,
             },
           });
         }, 0);
@@ -347,7 +347,7 @@ describe('TauriRuntime', () => {
           listenHandlers.get('chat:artifact')?.({
             payload: {
               conversation_id: 42,
-              message_id: 'assistant-1',
+              message_id: null,
               artifact: {
                 id: 'artifact-abc',
                 type: 'markdown',
@@ -394,6 +394,157 @@ describe('TauriRuntime', () => {
         content: '# Hello Artifact',
       },
     });
+  });
+
+  it('projects native Local thinking and iteration events into the shared activity stream', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('agent:thinking')?.({
+            payload: {
+              thinking: true,
+              message: 'Executing agent plan...',
+            },
+          });
+          listenHandlers.get('chat:agent-progress')?.({
+            payload: {
+              conversation_id: 42,
+              iteration: 2,
+              max_iterations: 8,
+              status: 'executing_tools',
+              tool_count: 1,
+            },
+          });
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 42, message_id: 'assistant-1' },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+    const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
+    runtime.onStream((event) => events.push(event));
+
+    await runtime.sendMessage('frontend-conversation-id', 'Use local tools');
+
+    expect(events.filter((event) => event.type === 'agent_event')).toEqual([
+      expect.objectContaining({
+        type: 'agent_event',
+        envelope: expect.objectContaining({
+          sequence: 0,
+          event: {
+            type: 'progress-update',
+            progressId: 'local-thinking',
+            summary: 'Executing agent plan...',
+            status: 'running',
+          },
+        }),
+      }),
+      expect.objectContaining({
+        type: 'agent_event',
+        envelope: expect.objectContaining({
+          sequence: 1,
+          event: {
+            type: 'progress-update',
+            progressId: 'local-agent-iteration',
+            summary: 'Agent iteration 2/8 — 1 tool',
+            detail: 'Running local tools',
+            status: 'running',
+          },
+        }),
+      }),
+    ]);
+  });
+
+  it('forwards native reasoning content into the shared thinking stream without duplicating completion text', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('thinking:event')?.({
+            payload: {
+              event_type: 'start',
+              content: '',
+              message_id: null,
+              tokens: null,
+              timestamp: 1_000,
+            },
+          });
+          listenHandlers.get('thinking:event')?.({
+            payload: {
+              event_type: 'delta',
+              content: 'Analyze the request.',
+              message_id: null,
+              tokens: null,
+              timestamp: 1_400,
+            },
+          });
+          listenHandlers.get('thinking:event')?.({
+            payload: {
+              event_type: 'complete',
+              content: 'Analyze the request. Choose a concise answer.',
+              message_id: null,
+              tokens: 12,
+              timestamp: 2_500,
+            },
+          });
+          listenHandlers.get('chat:stream-chunk')?.({
+            payload: {
+              conversation_id: 42,
+              message_id: 'assistant-1',
+              delta: 'Hello!',
+              content: 'Hello!',
+            },
+          });
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 42, message_id: 'assistant-1' },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+    const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
+    runtime.onStream((event) => events.push(event));
+
+    await runtime.sendMessage('frontend-conversation-id', 'Say hello');
+
+    expect(events.filter((event) => event.type === 'thinking')).toEqual([
+      {
+        type: 'thinking',
+        content: 'Analyze the request.',
+        completed: false,
+        durationMs: 400,
+      },
+      {
+        type: 'thinking',
+        content: ' Choose a concise answer.',
+        completed: true,
+        durationMs: 1_500,
+      },
+    ]);
   });
 
   it('durably links streamed artifacts to the persisted assistant message', async () => {

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { ChatBadge } from './ui/ChatBadge';
+import { MarkdownContent } from './markdown/MarkdownContent';
 import { buildCompactSummary } from '../lib/compactToolSummary';
 import type { ThinkingBlock as ThinkingBlockType, ThinkingStep } from '../lib/types';
 
@@ -185,6 +186,13 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
   // Auto-compact: more than threshold steps AND not streaming
   const autoCompact = block.steps.length > COMPACT_THRESHOLD && !isStreamingActive;
   const useCompact = compactProp !== undefined ? compactProp && !isStreamingActive : autoCompact;
+  const reasoningStep = block.steps.find((step) => step.type === 'thinking');
+  const isReasoningOnly =
+    Boolean(reasoningStep) &&
+    block.steps.every(
+      (step) => step.type === 'thinking' || step.type === 'done' || step.type === 'complete',
+    );
+  const summaryIncludesDuration = block.summary?.startsWith('Thought for') ?? false;
 
   // ── Compact mode: single summary line ──────────────────────────────────────
   if (useCompact && !compactExpanded) {
@@ -217,7 +225,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
 
   // ── Full view (expanded or streaming) ──────────────────────────────────────
   return (
-    <div className="my-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] overflow-hidden">
+    <div className="my-3">
       {/* Header */}
       <button
         type="button"
@@ -230,15 +238,22 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
           }
         }}
         className={cn(
-          'w-full flex items-center justify-between gap-2 px-3 py-2',
+          'inline-flex max-w-full items-center gap-2 rounded-[var(--chat-radius-sm)] px-1 py-1',
           'text-left text-[13px] font-medium text-[var(--chat-thinking-text)]',
-          'bg-[var(--chat-surface-elevated)] hover:bg-[var(--chat-surface-hover)] transition-colors',
+          'hover:text-[var(--chat-text-primary)] transition-colors',
         )}
         aria-expanded={useCompact ? compactExpanded : expanded}
       >
+        {useCompact && compactExpanded ? (
+          <ChevronDown size={14} className="shrink-0 text-[var(--chat-text-muted)]" />
+        ) : expanded ? (
+          <ChevronDown size={14} className="shrink-0 text-[var(--chat-text-muted)]" />
+        ) : (
+          <ChevronRight size={14} className="shrink-0 text-[var(--chat-text-muted)]" />
+        )}
         <span className="truncate">{block.summary}</span>
         <div className="flex items-center gap-2 shrink-0">
-          {block.durationMs !== undefined && (
+          {block.durationMs !== undefined && !summaryIncludesDuration && (
             <span className="text-[11px] font-normal text-[var(--chat-text-muted)]">
               {formatDuration(block.durationMs)}
             </span>
@@ -249,21 +264,20 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
               className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--chat-accent-secondary)] animate-pulse"
             />
           )}
-          {/* When entering from compact, show a collapse-to-pill cue */}
-          {useCompact && compactExpanded ? (
-            <ChevronDown size={13} className="text-[var(--chat-text-muted)]" />
-          ) : expanded ? (
-            <ChevronDown size={13} className="text-[var(--chat-text-muted)]" />
-          ) : (
-            <ChevronRight size={13} className="text-[var(--chat-text-muted)]" />
-          )}
         </div>
       </button>
 
       {/* Timeline — shown if: (a) normal expand is open, OR (b) user expanded from compact pill */}
-      {(useCompact ? compactExpanded : expanded) && (
-        <Timeline steps={block.steps} isRunning={isRunning} />
-      )}
+      {(useCompact ? compactExpanded : expanded) &&
+        (isReasoningOnly && reasoningStep ? (
+          <div className="ml-2 mt-2 border-l border-[var(--chat-thinking-line)] py-1 pl-5 text-[var(--chat-thinking-text)]">
+            <MarkdownContent content={reasoningStep.content} isStreaming={isRunning} />
+          </div>
+        ) : (
+          <div className="mt-1 overflow-hidden rounded-[var(--chat-radius-md)] border border-[var(--chat-border)]">
+            <Timeline steps={block.steps} isRunning={isRunning} />
+          </div>
+        ))}
     </div>
   );
 }

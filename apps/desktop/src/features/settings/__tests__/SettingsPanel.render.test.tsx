@@ -1,9 +1,10 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '../../../stores/auth';
 import { useAppModeStore } from '../../../stores/appModeStore';
+import { useSettingsStore } from '../../../stores/settingsStore';
 import { SettingsPanel } from '../SettingsPanel';
 
 vi.mock('@agiworkforce/desktop-command-client', () => ({
@@ -102,6 +103,30 @@ describe('SettingsPanel render stability', () => {
           ollamaRunning: true,
         };
       }
+      if (command === 'ollama_check_status') {
+        return true;
+      }
+      if (command === 'ollama_list_models') {
+        return [
+          {
+            name: 'ministral-3:14b',
+            size: 9_000_000_000,
+            modified_at: '2026-07-23T00:00:00Z',
+            digest: 'test-digest',
+            details: {
+              parameter_size: '14B',
+              quantization_level: 'Q4_K_M',
+              family: 'ministral',
+              families: ['ministral'],
+              parent_model: '',
+              format: 'gguf',
+            },
+          },
+        ];
+      }
+      if (command === 'ollama_pull_model') {
+        return undefined;
+      }
       return undefined;
     });
 
@@ -118,6 +143,12 @@ describe('SettingsPanel render stability', () => {
       hasOnboarded: true,
       hasSelectedMode: true,
     });
+    useSettingsStore.setState((state) => ({
+      llmConfig: {
+        ...state.llmConfig,
+        ollamaUrl: 'http://localhost:11434',
+      },
+    }));
   });
 
   afterEach(() => {
@@ -148,6 +179,71 @@ describe('SettingsPanel render stability', () => {
     await waitFor(() => {
       expect(screen.getByText('ministral-3:14b')).toBeInTheDocument();
     });
+  });
+
+  it('installs a local model through the configured Ollama runtime', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="models-keys" />);
+
+    const modelInput = await screen.findByRole('textbox', { name: 'Model to install' });
+    fireEvent.change(modelInput, { target: { value: 'smollm2:135m' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Install model' }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('ollama_pull_model', {
+        modelName: 'smollm2:135m',
+        baseUrl: 'http://localhost:11434',
+      });
+    });
+  });
+
+  it('lets users recover from a malformed saved Ollama URL without reopening Settings', async () => {
+    useSettingsStore.setState((state) => ({
+      llmConfig: {
+        ...state.llmConfig,
+        ollamaUrl: 'h',
+      },
+    }));
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === 'ollama_check_status') {
+        return (
+          (args as Record<string, unknown> | undefined)?.['baseUrl'] === 'http://localhost:11434/'
+        );
+      }
+      if (command === 'ollama_list_models') {
+        return [
+          {
+            name: 'smollm2:135m',
+            size: 270_000_000,
+            modified_at: '2026-07-23T00:00:00Z',
+            digest: 'test-digest',
+            details: {},
+          },
+        ];
+      }
+      return undefined;
+    });
+
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="models-keys" />);
+
+    expect(await screen.findByText(/Ollama not detected/i)).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Model to install' })).not.toBeInTheDocument();
+    const retryButton = await screen.findByRole('button', { name: 'Re-check Ollama status' });
+
+    fireEvent.change(screen.getByDisplayValue('h'), {
+      target: { value: 'http://localhost:11434' },
+    });
+    await waitFor(() => {
+      expect(useSettingsStore.getState().llmConfig.ollamaUrl).toBe('http://localhost:11434/');
+      expect(retryButton).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Re-check Ollama status' }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('ollama_check_status', {
+        baseUrl: 'http://localhost:11434/',
+      });
+    });
+    expect(await screen.findByRole('textbox', { name: 'Model to install' })).toBeInTheDocument();
   });
 
   it('labels the profile and response-style tab as Personalization', async () => {

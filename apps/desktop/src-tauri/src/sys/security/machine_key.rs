@@ -15,6 +15,8 @@
 //! - Uses PBKDF2-HMAC-SHA256 with 600,000 iterations (OWASP recommendation)
 //! - Salt is derived from machine_id to ensure consistency across restarts
 //! - Different key purposes get different derived keys via key stretching
+//! - Each purpose is derived once per process and cached in memory; changing
+//!   the installation identity invalidates the cache
 //!
 //! # Password-Based Derivation (SECSYS-001)
 //! For enhanced security, use `derive_key_with_password()` which combines:
@@ -31,6 +33,7 @@ use hmac::{Hmac, Mac};
 use once_cell::sync::Lazy;
 use pbkdf2::pbkdf2_hmac_array;
 use sha2::Sha256;
+use std::collections::HashMap;
 use std::sync::RwLock;
 
 const PBKDF2_ITERATIONS: u32 = 600_000;
@@ -90,7 +93,12 @@ static MACHINE_KEY_MANAGER: Lazy<MachineKeyManager> = Lazy::new(MachineKeyManage
 /// Machine key manager that derives encryption keys from machine identifiers
 pub struct MachineKeyManager {
     machine_id: String,
-    install_id: RwLock<Option<String>>,
+    state: RwLock<MachineKeyState>,
+}
+
+struct MachineKeyState {
+    install_id: Option<String>,
+    derived_keys: HashMap<KeyPurpose, [u8; KEY_SIZE]>,
 }
 
 impl MachineKeyManager {
@@ -99,7 +107,10 @@ impl MachineKeyManager {
         let machine_id = Self::get_machine_id();
         Self {
             machine_id,
-            install_id: RwLock::new(None),
+            state: RwLock::new(MachineKeyState {
+                install_id: None,
+                derived_keys: HashMap::new(),
+            }),
         }
     }
 
@@ -146,33 +157,58 @@ impl MachineKeyManager {
     /// Set the install ID (should be called during app initialization)
     /// This ID is stored in the database and used for additional entropy
     pub fn set_install_id(&self, id: String) {
-        if let Ok(mut install_id) = self.install_id.safe_write() {
-            *install_id = Some(id);
+        if let Ok(mut state) = self.state.safe_write() {
+            if state.install_id.as_ref() != Some(&id) {
+                state.install_id = Some(id);
+                state.derived_keys.clear();
+            }
         }
     }
 
     /// Get or generate the install ID
     pub fn get_install_id(&self) -> String {
-        let install_id = self
-            .install_id
+        self.state
             .safe_read()
             .ok()
-            .and_then(|guard| guard.clone());
-        install_id.unwrap_or_else(|| {
-            // If not set, generate a deterministic one from machine_id
-            use sha2::{Digest, Sha256};
-            let mut hasher = Sha256::new();
-            hasher.update(self.machine_id.as_bytes());
-            hasher.update(b"install_id_fallback");
-            hex::encode(hasher.finalize())
-        })
+            .and_then(|state| state.install_id.clone())
+            .unwrap_or_else(|| self.fallback_install_id())
     }
 
     /// Derive an encryption key for a specific purpose
     pub fn derive_key(&self, purpose: KeyPurpose) -> Vec<u8> {
-        let install_id = self.get_install_id();
+        if let Ok(mut state) = self.state.safe_write() {
+            if let Some(key) = state.derived_keys.get(&purpose) {
+                return key.to_vec();
+            }
 
-        // Create a unique salt for this purpose
+            // PBKDF2 is intentionally expensive. Hold the write lock while it
+            // runs so concurrent startup services cannot duplicate the same
+            // 600,000-round derivation before the cache is populated.
+            let install_id = state
+                .install_id
+                .clone()
+                .unwrap_or_else(|| self.fallback_install_id());
+            let key = self.derive_key_for_install_id(&install_id, purpose);
+            state.derived_keys.insert(purpose, key);
+            return key.to_vec();
+        }
+
+        // A poisoned cache lock must not make encrypted data unavailable.
+        // Derive without caching as a fail-closed compatibility fallback.
+        self.derive_key_for_install_id(&self.get_install_id(), purpose)
+            .to_vec()
+    }
+
+    fn fallback_install_id(&self) -> String {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        hasher.update(self.machine_id.as_bytes());
+        hasher.update(b"install_id_fallback");
+        hex::encode(hasher.finalize())
+    }
+
+    fn derive_key_for_install_id(&self, install_id: &str, purpose: KeyPurpose) -> [u8; KEY_SIZE] {
         let salt = format!(
             "{}:{}:{}:{}",
             self.machine_id,
@@ -181,14 +217,11 @@ impl MachineKeyManager {
             purpose.as_str()
         );
 
-        // Derive key using PBKDF2
-        let key: [u8; KEY_SIZE] = pbkdf2_hmac_array::<Sha256, KEY_SIZE>(
+        pbkdf2_hmac_array::<Sha256, KEY_SIZE>(
             self.machine_id.as_bytes(),
             salt.as_bytes(),
             PBKDF2_ITERATIONS,
-        );
-
-        key.to_vec()
+        )
     }
 
     /// Get a base64-encoded key for a specific purpose
@@ -321,10 +354,28 @@ mod tests {
         let id1 = manager.get_install_id();
         assert!(!id1.is_empty());
 
-        // Setting install ID should change it
+        // Populate the per-purpose cache, then prove changing installation
+        // identity invalidates it before any subsequent encrypted open.
+        let _ = manager.derive_key(KeyPurpose::DatabaseEncryption);
+        assert_eq!(
+            manager
+                .state
+                .safe_read()
+                .expect("machine key state")
+                .derived_keys
+                .len(),
+            1
+        );
+
         manager.set_install_id("test_install_123".to_string());
         let id2 = manager.get_install_id();
         assert_eq!(id2, "test_install_123");
+        assert!(manager
+            .state
+            .safe_read()
+            .expect("machine key state")
+            .derived_keys
+            .is_empty());
     }
 
     #[test]

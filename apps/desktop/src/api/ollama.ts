@@ -57,7 +57,7 @@ export interface OllamaModel {
 // ============================================================================
 
 const OLLAMA_TIMEOUT_MS = 10000;
-const OLLAMA_PULL_TIMEOUT_MS = 60000; // Longer timeout for model pulls
+const OLLAMA_PULL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 // ============================================================================
 // Helper Functions
@@ -115,9 +115,9 @@ export function formatModelSize(bytes: number): string {
  * }
  * ```
  */
-export async function ollamaCheckStatus(): Promise<boolean> {
+export async function ollamaCheckStatus(baseUrl?: string): Promise<boolean> {
   try {
-    return await invokeWithTimeout<boolean>('ollama_check_status');
+    return await invokeWithTimeout<boolean>('ollama_check_status', { baseUrl });
   } catch (error) {
     // Connection errors mean Ollama isn't running
     console.debug('[Ollama] Status check failed:', error);
@@ -139,9 +139,9 @@ export async function ollamaCheckStatus(): Promise<boolean> {
  * });
  * ```
  */
-export async function ollamaListModels(): Promise<OllamaModel[]> {
+export async function ollamaListModels(baseUrl?: string): Promise<OllamaModel[]> {
   try {
-    return await invokeWithTimeout<OllamaModel[]>('ollama_list_models');
+    return await invokeWithTimeout<OllamaModel[]>('ollama_list_models', { baseUrl });
   } catch (error) {
     throw new Error(`Failed to list Ollama models: ${error}`);
   }
@@ -160,7 +160,10 @@ export async function ollamaListModels(): Promise<OllamaModel[]> {
  * console.log(`Parameters: ${info.details.parameter_size}`);
  * ```
  */
-export async function ollamaGetModelInfo(modelName: string): Promise<OllamaModel> {
+export async function ollamaGetModelInfo(
+  modelName: string,
+  baseUrl?: string,
+): Promise<OllamaModel> {
   if (!modelName || modelName.trim().length === 0) {
     throw new Error('Model name cannot be empty');
   }
@@ -168,6 +171,7 @@ export async function ollamaGetModelInfo(modelName: string): Promise<OllamaModel
   try {
     return await invokeWithTimeout<OllamaModel>('ollama_get_model_info', {
       modelName,
+      baseUrl,
     });
   } catch (error) {
     throw new Error(`Failed to get model info for '${modelName}': ${error}`);
@@ -176,7 +180,7 @@ export async function ollamaGetModelInfo(modelName: string): Promise<OllamaModel
 
 /**
  * Pull (download) a model from Ollama.
- * Note: This initiates the download - the actual download happens in the background.
+ * Resolves after Ollama finishes the download.
  *
  * @param modelName - The name of the model to pull (e.g., "llama3.2", "mistral:7b")
  * @throws Error if the model name is invalid or the request fails
@@ -187,13 +191,17 @@ export async function ollamaGetModelInfo(modelName: string): Promise<OllamaModel
  * console.log('Model download initiated');
  * ```
  */
-export async function ollamaPullModel(modelName: string): Promise<void> {
+export async function ollamaPullModel(modelName: string, baseUrl?: string): Promise<void> {
   if (!modelName || modelName.trim().length === 0) {
     throw new Error('Model name cannot be empty');
   }
 
   try {
-    await invokeWithTimeout<void>('ollama_pull_model', { modelName }, OLLAMA_PULL_TIMEOUT_MS);
+    await invokeWithTimeout<void>(
+      'ollama_pull_model',
+      { modelName, baseUrl },
+      OLLAMA_PULL_TIMEOUT_MS,
+    );
   } catch (error) {
     throw new Error(`Failed to pull model '${modelName}': ${error}`);
   }
@@ -211,13 +219,13 @@ export async function ollamaPullModel(modelName: string): Promise<void> {
  * console.log('Model deleted successfully');
  * ```
  */
-export async function ollamaDeleteModel(modelName: string): Promise<void> {
+export async function ollamaDeleteModel(modelName: string, baseUrl?: string): Promise<void> {
   if (!modelName || modelName.trim().length === 0) {
     throw new Error('Model name cannot be empty');
   }
 
   try {
-    await invokeWithTimeout<void>('ollama_delete_model', { modelName });
+    await invokeWithTimeout<void>('ollama_delete_model', { modelName, baseUrl });
   } catch (error) {
     throw new Error(`Failed to delete model '${modelName}': ${error}`);
   }
@@ -242,48 +250,48 @@ export class OllamaClient {
   /**
    * Check if Ollama is running
    */
-  static async checkStatus(): Promise<boolean> {
-    return ollamaCheckStatus();
+  static async checkStatus(baseUrl?: string): Promise<boolean> {
+    return ollamaCheckStatus(baseUrl);
   }
 
   /**
    * List all installed models
    */
-  static async listModels(): Promise<OllamaModel[]> {
-    return ollamaListModels();
+  static async listModels(baseUrl?: string): Promise<OllamaModel[]> {
+    return ollamaListModels(baseUrl);
   }
 
   /**
    * Get info about a specific model
    */
-  static async getModelInfo(modelName: string): Promise<OllamaModel> {
-    return ollamaGetModelInfo(modelName);
+  static async getModelInfo(modelName: string, baseUrl?: string): Promise<OllamaModel> {
+    return ollamaGetModelInfo(modelName, baseUrl);
   }
 
   /**
    * Pull/download a model
    */
-  static async pullModel(modelName: string): Promise<void> {
-    return ollamaPullModel(modelName);
+  static async pullModel(modelName: string, baseUrl?: string): Promise<void> {
+    return ollamaPullModel(modelName, baseUrl);
   }
 
   /**
    * Delete an installed model
    */
-  static async deleteModel(modelName: string): Promise<void> {
-    return ollamaDeleteModel(modelName);
+  static async deleteModel(modelName: string, baseUrl?: string): Promise<void> {
+    return ollamaDeleteModel(modelName, baseUrl);
   }
 
   /**
    * Check if Ollama is available and has at least one model installed
    */
-  static async isReadyForUse(): Promise<{
+  static async isReadyForUse(baseUrl?: string): Promise<{
     available: boolean;
     modelCount: number;
     error?: string;
   }> {
     try {
-      const isRunning = await ollamaCheckStatus();
+      const isRunning = await ollamaCheckStatus(baseUrl);
       if (!isRunning) {
         return {
           available: false,
@@ -292,7 +300,7 @@ export class OllamaClient {
         };
       }
 
-      const models = await ollamaListModels();
+      const models = await ollamaListModels(baseUrl);
       return {
         available: true,
         modelCount: models.length,

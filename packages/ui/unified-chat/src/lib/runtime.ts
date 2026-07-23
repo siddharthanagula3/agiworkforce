@@ -232,7 +232,15 @@ export interface SendMessageParams {
  */
 export type StreamChunk =
   | { type: 'text'; content: string }
-  | { type: 'thinking'; content: string }
+  | {
+      type: 'thinking';
+      content: string;
+      /** Elapsed provider reasoning time when the runtime can measure it. */
+      durationMs?: number;
+      /** True when this chunk settles the provider reasoning trace. */
+      completed?: boolean;
+    }
+  | { type: 'agent_event'; data: AgentEventEnvelope }
   | { type: 'tool_call'; data: ToolCallData }
   | { type: 'tool_result'; data: ToolResultData }
   | { type: 'artifact'; data: Artifact }
@@ -292,7 +300,12 @@ export interface TauriAttachmentPayload {
 
 export type StreamEvent =
   | { type: 'content'; content: string }
-  | { type: 'thinking'; content: string }
+  | {
+      type: 'thinking';
+      content: string;
+      durationMs?: number;
+      completed?: boolean;
+    }
   | { type: 'agent_run'; runId: string; runPath: string }
   | {
       /**

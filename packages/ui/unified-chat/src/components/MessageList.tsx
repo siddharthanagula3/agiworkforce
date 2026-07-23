@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useChatStore } from '../stores/chatStore';
-import { MessageBubble } from './MessageBubble';
+import { MessageBubble, StreamingThinkingStatus } from './MessageBubble';
 import { ProvenanceFooter } from './ProvenanceFooter';
 import {
   isMessageContinuable,
@@ -148,6 +148,14 @@ export function MessageList({
   // nothing is currently streaming, and the host wired a handler. Continuing an
   // earlier turn would fork history, so it is strictly the tail message.
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : undefined;
+  const hasStreamingAssistant = messages.some(
+    (message) => message.role === 'assistant' && message.isStreaming,
+  );
+  // A host bridge may persist only durable/non-empty messages. Keep the
+  // lifecycle indicator at the shared list boundary as a fallback so a real
+  // in-flight turn never looks idle while its empty assistant placeholder is
+  // absent from the rendered snapshot.
+  const showDetachedThinkingStatus = isStreaming && !hasStreamingAssistant;
   const showContinue =
     !isStreaming && !!onContinueGeneration && !!lastMessage && isMessageContinuable(lastMessage);
 
@@ -190,6 +198,13 @@ export function MessageList({
             </div>
           </div>
         ))}
+        {showDetachedThinkingStatus ? (
+          <div className="px-4 py-3" data-message-row="assistant-status">
+            <div className="mx-auto w-full max-w-3xl">
+              <StreamingThinkingStatus />
+            </div>
+          </div>
+        ) : null}
         {showContinue && lastMessage ? (
           <div className="px-4 pb-3">
             <div className="mx-auto flex w-full max-w-3xl justify-start">

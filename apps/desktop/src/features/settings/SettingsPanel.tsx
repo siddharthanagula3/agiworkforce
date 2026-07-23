@@ -1,6 +1,7 @@
 import { isTauri, isCloudWeb, isDesktopUiDevLocal } from '@/lib/tauri-mock';
-import { notifications, models as modelsApi } from '@agiworkforce/desktop-command-client';
+import { notifications } from '@agiworkforce/desktop-command-client';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
+import { ollamaCheckStatus, ollamaListModels, ollamaPullModel } from '@/api/ollama';
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
@@ -24,7 +25,6 @@ import {
   type PersonalizationPreferences,
 } from '../../stores/settingsStore';
 import { LEGACY_TAB_MAP, type SettingsTab } from '../../stores/settingsDialogStore';
-import { useModelStore } from '../../stores/modelStore';
 import type { NotificationSettings } from '../../hooks/useNotifications';
 import { Button } from '@/components/ui/Button';
 import { SectionErrorBoundary } from '@/components/ui/SectionErrorBoundary';
@@ -167,11 +167,12 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const loading = useSettingsStore((state) => state.loading);
   const error = useSettingsStore((state) => state.error);
 
-  const providerStatuses = useModelStore(useShallow((state) => state.providerStatuses));
-  const checkProviderStatus = useModelStore((state) => state.checkProviderStatus);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [selectedOllamaModel, setSelectedOllamaModel] = useState<string>('');
   const [checkingOllama, setCheckingOllama] = useState(false);
+  const [ollamaAvailable, setOllamaAvailable] = useState(false);
+  const [installingOllamaModel, setInstallingOllamaModel] = useState(false);
+  const [ollamaInstallError, setOllamaInstallError] = useState<string | null>(null);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(
     null,
   );
@@ -198,9 +199,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     combo: defaultGlobalHotkeyCombo,
   };
 
-  const ollamaStatus = providerStatuses.ollama;
-  const isOllamaAvailable =
-    Boolean(ollamaStatus?.available && ollamaStatus?.ollamaRunning) || ollamaModels.length > 0;
+  const isOllamaAvailable = ollamaAvailable || ollamaModels.length > 0;
   const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
   const isBusy = loading || isSaving || notificationLoading;
   const normalizedNavQuery = navQuery.trim().toLowerCase();
@@ -314,10 +313,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const refreshOllamaState = useCallback(async () => {
     setCheckingOllama(true);
     try {
-      await checkProviderStatus('ollama');
-      const rawModels = isDesktopUiDevLocal
-        ? []
-        : await modelsApi.llmGetOllamaModels().catch(() => []);
+      const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl || 'http://localhost:11434';
+      const available = isDesktopUiDevLocal ? false : await ollamaCheckStatus(baseUrl);
+      setOllamaAvailable(available);
+      const rawModels =
+        available && !isDesktopUiDevLocal ? await ollamaListModels(baseUrl).catch(() => []) : [];
       const models = normalizeOllamaModelList(rawModels);
       setOllamaModels(models);
       setSelectedOllamaModel((currentModel) => {
@@ -328,12 +328,41 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       });
     } catch (err) {
       console.error('Failed to refresh Ollama settings:', err);
+      setOllamaAvailable(false);
       setOllamaModels([]);
       setSelectedOllamaModel('');
     } finally {
       setCheckingOllama(false);
     }
-  }, [checkProviderStatus]);
+  }, []);
+
+  const handleInstallOllamaModel = useCallback(
+    async (modelName: string) => {
+      const normalizedModelName = modelName.trim();
+      if (!normalizedModelName || installingOllamaModel) return;
+
+      setInstallingOllamaModel(true);
+      setOllamaInstallError(null);
+      try {
+        const baseUrl = useSettingsStore.getState().llmConfig.ollamaUrl || 'http://localhost:11434';
+        await ollamaPullModel(normalizedModelName, baseUrl);
+        await refreshOllamaState();
+        setSelectedOllamaModel(normalizedModelName);
+        if (ollamaEnabled) {
+          setDefaultModel('ollama', normalizedModelName);
+        }
+        toast.success(`${normalizedModelName} is ready to use`);
+      } catch (err) {
+        const message = getSimpleErrorMessage(err);
+        setOllamaInstallError(message);
+        toast.error(`Could not install ${normalizedModelName}`);
+        throw err;
+      } finally {
+        setInstallingOllamaModel(false);
+      }
+    },
+    [installingOllamaModel, ollamaEnabled, refreshOllamaState, setDefaultModel],
+  );
 
   const buildCurrentSnapshot = useCallback((notifs: NotificationSettings | null) => {
     const state = useSettingsStore.getState();
@@ -633,10 +662,14 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             checkingOllama={checkingOllama}
             isOllamaAvailable={Boolean(isOllamaAvailable)}
             ollamaEnabled={ollamaEnabled}
+            installingOllamaModel={installingOllamaModel}
+            ollamaInstallError={ollamaInstallError}
             onProviderModeChange={handleProviderModeChange}
             onOllamaUrlChange={handleOllamaUrlChange}
             onOllamaEnabledChange={handleOllamaEnabledChange}
             onOllamaModelChange={handleOllamaModelChange}
+            onRefreshOllamaState={refreshOllamaState}
+            onInstallOllamaModel={handleInstallOllamaModel}
             onAgentModeChange={handleAgentModeChange}
             onAutoApproveToolsChange={handleAutoApproveToolsChange}
             onCompactModeChange={handleCompactModeChange}
