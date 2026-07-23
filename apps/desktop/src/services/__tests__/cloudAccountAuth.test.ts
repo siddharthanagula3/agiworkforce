@@ -1,5 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const authorizeDesktopDeviceMock = vi.hoisted(() => vi.fn());
+const invokeMock = vi.hoisted(() => vi.fn());
+vi.mock('../desktopDeviceAuthorization', () => ({
+  authorizeDesktopDevice: authorizeDesktopDeviceMock,
+}));
+vi.mock('../../lib/runtimeEnvironment', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/runtimeEnvironment')>()),
+  isTauri: true,
+  supportsLocalAppMode: true,
+  isCloudWeb: false,
+}));
+vi.mock('../../lib/tauri-mock', () => ({
+  invoke: invokeMock,
+}));
+vi.mock('../../lib/egressGuard', () => ({
+  guardedFetch: (...args: Parameters<typeof fetch>) => fetch(...args),
+}));
+
 import { cloudAccountAuth } from '../cloudAccountAuth';
 
 function jwtWithClaims(claims: Record<string, unknown>): string {
@@ -17,6 +35,14 @@ function jwtWithClaims(claims: Record<string, unknown>): string {
 describe('cloudAccountAuth', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
+    authorizeDesktopDeviceMock.mockReset();
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_restore_access_token') {
+        throw new Error('No saved Cloud session');
+      }
+      return undefined;
+    });
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -52,6 +78,46 @@ describe('cloudAccountAuth', () => {
     await cloudAccountAuth.signOut();
   });
 
+  it('restores and validates a machine-encrypted Cloud session on startup', async () => {
+    const accessToken = jwtWithClaims({
+      sub: 'user_123',
+      email: 'user@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_restore_access_token') return accessToken;
+      return undefined;
+    });
+
+    await cloudAccountAuth.checkSession();
+
+    expect(invokeMock).toHaveBeenCalledWith('account_restore_access_token');
+    expect(cloudAccountAuth.getSession()?.access_token).toBe(accessToken);
+    expect(cloudAccountAuth.getPlanTier()).toBe('pro');
+  });
+
+  it('fails closed when a restored Cloud token is expired or revoked', async () => {
+    const accessToken = jwtWithClaims({
+      sub: 'user_123',
+      email: 'user@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_restore_access_token') return accessToken;
+      return undefined;
+    });
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+    } as Response);
+
+    await cloudAccountAuth.checkSession();
+
+    expect(cloudAccountAuth.isAuthenticated()).toBe(false);
+    expect(invokeMock).toHaveBeenCalledWith('account_clear_tokens');
+    expect(cloudAccountAuth.getState().error).toContain('expired');
+  });
+
   it('hydrates a Clerk-backed session from a bearer token and /api/me', async () => {
     const accessToken = jwtWithClaims({
       sub: 'user_123',
@@ -77,5 +143,26 @@ describe('cloudAccountAuth', () => {
 
     expect(result.error?.code).toBe('invalid_token');
     expect(cloudAccountAuth.isAuthenticated()).toBe(false);
+  });
+
+  it('uses browser-approved device authorization for Desktop sign-in', async () => {
+    const accessToken = jwtWithClaims({
+      sub: 'user_123',
+      email: 'user@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    authorizeDesktopDeviceMock.mockResolvedValue({
+      accessToken,
+      expiresAt: Date.now() + 3_600_000,
+    });
+
+    const result = await cloudAccountAuth.signIn({
+      email: 'user@example.com',
+      password: 'not-sent-to-desktop',
+    });
+
+    expect(result.error).toBeNull();
+    expect(authorizeDesktopDeviceMock).toHaveBeenCalledOnce();
+    expect(cloudAccountAuth.getSession()?.access_token).toBe(accessToken);
   });
 });

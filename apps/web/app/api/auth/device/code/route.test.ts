@@ -26,12 +26,16 @@ describe('POST /api/auth/device/code', () => {
     const response = await POST(
       new NextRequest('https://agiworkforce.com/api/auth/device/code', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          origin: 'https://tauri.localhost',
+        },
         body: '{}',
       }),
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://tauri.localhost');
     const body = (await response.json()) as {
       user_code: string;
       verification_uri_complete: string;

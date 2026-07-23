@@ -58,10 +58,10 @@ describe('DCL-4: desktop managed cloud is open (public alpha)', () => {
     }
   });
 
-  it('refuses Cloud when signed out and prompts sign-in (the mechanism, not a gate)', () => {
+  it('enters the Cloud workspace when signed out so the shell can render device sign-in', () => {
     useAppModeStore.getState().setMode('cloud');
-    expect(useAppModeStore.getState().mode).toBe('local');
-    expect(toastError).toHaveBeenCalledWith('Sign in to use AGI Cloud.');
+    expect(useAppModeStore.getState().mode).toBe('cloud');
+    expect(toastError).not.toHaveBeenCalled();
     for (const call of [...toastError.mock.calls, ...toastInfo.mock.calls]) {
       expect(String(call[0])).not.toMatch(BANNED);
     }

@@ -36,10 +36,12 @@ describe('app mode onboarding boundary', () => {
     expect(useAppModeStore.getState().mode).toBe('local');
   });
 
-  it('does not activate Cloud Managed without a cloud session', () => {
+  it('opens the Cloud sign-in workspace without claiming an authenticated session', () => {
     useAppModeStore.getState().setMode('cloud');
 
-    expect(useAppModeStore.getState().mode).toBe('local');
+    expect(useAppModeStore.getState().mode).toBe('cloud');
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
   it('drops the legacy persisted plan tier during hydration', async () => {

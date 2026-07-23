@@ -2,20 +2,24 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, type HTMLMotionProps } from 'framer-motion';
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
-  Cpu,
+  ExternalLink,
   Globe,
   KeyRound,
   Layers,
   Loader2,
   Lock,
   RotateCcw,
+  ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { AuthForm } from './AuthForm';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { Button } from '@/components/ui/Button';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
+import { useAuthStore } from '../../stores/auth';
+import { useAppModeStore } from '../../stores/appModeStore';
+import { AgiMark } from '@agiworkforce/ui';
 
 interface AuthPageProps {
   onAuthSuccess?: () => void;
@@ -64,6 +68,111 @@ function useMotionVariants(): { fadeUp: MotionVariant; scaleIn: MotionVariant } 
       transition: { type: 'spring', delay: 0.2 },
     },
   };
+}
+
+function DeviceSignInCard({ onSuccess }: { onSuccess?: () => void }) {
+  const signIn = useAuthStore((state) => state.signIn);
+  const setMode = useAppModeStore((state) => state.setMode);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const beginSignIn = async () => {
+    if (isConnecting) return;
+    setIsConnecting(true);
+    setError(null);
+    try {
+      // Credentials are intentionally empty: primary authentication happens
+      // in the user's browser, and Desktop receives only a revocable device
+      // credential after explicit approval.
+      const result = await signIn('', '');
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      onSuccess?.();
+    } catch (signInError) {
+      setError(getSimpleErrorMessage(signInError));
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      className="w-full max-w-md rounded-2xl border border-border bg-card p-7 shadow-xl shadow-black/5"
+    >
+      <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background">
+        <AgiMark size={24} ariaLabel="AGI" />
+      </div>
+
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        Continue to AGI Cloud
+      </h1>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+        Sign in securely in your browser, approve this Mac, and return here automatically.
+      </p>
+
+      <div className="my-6 rounded-xl border border-border bg-muted/35 p-4">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium text-foreground">Browser-approved device session</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Your password never enters the Desktop app. Access is short-lived, revocable, and
+              stored in the system credential vault.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {error ? (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-destructive/25 bg-destructive/8 px-3.5 py-3 text-sm text-destructive"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <Button
+        type="button"
+        className="h-11 w-full"
+        disabled={isConnecting}
+        aria-busy={isConnecting}
+        onClick={() => void beginSignIn()}
+      >
+        {isConnecting ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Waiting for browser approval…
+          </>
+        ) : (
+          <>
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            Continue in browser
+          </>
+        )}
+      </Button>
+
+      {isConnecting ? (
+        <p className="mt-3 text-center text-xs text-muted-foreground" role="status">
+          Keep this window open while you approve the code in your browser.
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => setMode('local')}
+        className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-md py-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        Use Local Mode
+      </button>
+    </motion.div>
+  );
 }
 
 export function AuthPage({ onAuthSuccess }: AuthPageProps) {
@@ -302,7 +411,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
             className="flex h-9 w-9 items-center justify-center rounded-xl bg-foreground text-background"
             aria-hidden="true"
           >
-            <Cpu className="h-4.5 w-4.5" />
+            <AgiMark size={20} mono />
           </div>
           <span className="text-lg font-semibold tracking-tight text-foreground">AGI</span>
         </motion.div>
@@ -372,13 +481,13 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
         <div className="absolute left-6 top-6 lg:hidden" aria-hidden="true">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-background">
-              <Cpu className="h-4 w-4" />
+              <AgiMark size={18} mono />
             </div>
             <span className="font-semibold text-foreground">AGI</span>
           </div>
         </div>
 
-        <AuthForm onSuccess={onAuthSuccess} className="w-full max-w-md" />
+        <DeviceSignInCard onSuccess={onAuthSuccess} />
       </main>
     </div>
   );

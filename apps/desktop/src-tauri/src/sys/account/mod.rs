@@ -1,5 +1,6 @@
 use crate::sys::api::{ApiRequest, ApiResponse, AuthType, HttpMethod};
-use crate::sys::commands::ApiState;
+use crate::sys::commands::{security::SecretManagerState, ApiState};
+use crate::sys::security::SecretManager;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::State;
 
@@ -352,6 +353,8 @@ use std::sync::RwLock;
 static ACCESS_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static REFRESH_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static API_BASE_URL_OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
+const CLOUD_ACCESS_TOKEN_SECRET_KEY: &str = "cloud_account_access_token";
+const CLOUD_REFRESH_TOKEN_SECRET_KEY: &str = "cloud_account_refresh_token";
 
 /// Get the API base URL for desktop -> backend calls.
 ///
@@ -370,7 +373,7 @@ pub fn get_api_base_url() -> String {
     }
 
     let raw =
-        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://www.agiworkforce.com".to_string());
+        std::env::var("AGI_API_URL").unwrap_or_else(|_| "https://agiworkforce.com".to_string());
     raw.trim_end_matches('/').to_string()
 }
 
@@ -502,13 +505,26 @@ fn validate_token_format(token: &str, label: &str) -> Result<(), String> {
 /// Store access token from frontend (called when the app auth state changes).
 #[tauri::command]
 #[allow(non_snake_case)]
-pub fn account_store_access_token(accessToken: String) -> Result<(), String> {
+pub fn account_store_access_token(
+    accessToken: String,
+    secret_state: State<'_, SecretManagerState>,
+) -> Result<(), String> {
     validate_token_format(&accessToken, "Access token")?;
+    store_cloud_access_token(secret_state.manager(), &accessToken)?;
     let mut token = ACCESS_TOKEN
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     *token = Some(accessToken);
     Ok(())
+}
+
+fn store_cloud_access_token(
+    secret_manager: &SecretManager,
+    access_token: &str,
+) -> Result<(), String> {
+    secret_manager
+        .set_secret(CLOUD_ACCESS_TOKEN_SECRET_KEY, access_token)
+        .map_err(|_| "Failed to securely store the Cloud access token".to_string())
 }
 
 /// Validate that a refresh token is non-empty and within size bounds.
@@ -530,8 +546,15 @@ fn validate_refresh_token_format(token: &str) -> Result<(), String> {
 /// Store refresh token from frontend (called when the app auth state changes).
 #[tauri::command]
 #[allow(non_snake_case)]
-pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
+pub fn account_store_refresh_token(
+    refreshToken: String,
+    secret_state: State<'_, SecretManagerState>,
+) -> Result<(), String> {
     validate_refresh_token_format(&refreshToken)?;
+    secret_state
+        .manager()
+        .set_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY, &refreshToken)
+        .map_err(|_| "Failed to securely store the Cloud refresh token".to_string())?;
     let mut token = REFRESH_TOKEN
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -541,7 +564,8 @@ pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
 
 /// Clear stored tokens (called on logout)
 #[tauri::command]
-pub fn account_clear_tokens() -> Result<(), String> {
+pub fn account_clear_tokens(secret_state: State<'_, SecretManagerState>) -> Result<(), String> {
+    clear_cloud_tokens(secret_state.manager())?;
     {
         let mut token = ACCESS_TOKEN
             .write()
@@ -555,6 +579,47 @@ pub fn account_clear_tokens() -> Result<(), String> {
         *token = None;
     }
     Ok(())
+}
+
+fn clear_cloud_tokens(secret_manager: &SecretManager) -> Result<(), String> {
+    secret_manager
+        .delete_secret(CLOUD_ACCESS_TOKEN_SECRET_KEY)
+        .map_err(|_| "Failed to clear the stored Cloud access token".to_string())?;
+    secret_manager
+        .delete_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY)
+        .map_err(|_| "Failed to clear the stored Cloud refresh token".to_string())
+}
+
+/// Restore the encrypted Cloud access token after a Desktop process restart.
+///
+/// Returning `None` is the normal signed-out state. The token is validated
+/// structurally before it is copied back into Rust memory; the frontend then
+/// validates it against `/api/me` before exposing the Cloud workspace.
+#[tauri::command]
+pub fn account_restore_access_token(
+    secret_state: State<'_, SecretManagerState>,
+) -> Result<Option<String>, String> {
+    restore_cloud_access_token(secret_state.manager())
+}
+
+fn restore_cloud_access_token(secret_manager: &SecretManager) -> Result<Option<String>, String> {
+    let exists = secret_manager
+        .has_secret(CLOUD_ACCESS_TOKEN_SECRET_KEY)
+        .map_err(|_| "Failed to inspect the stored Cloud session".to_string())?;
+    if !exists {
+        return Ok(None);
+    }
+
+    let access_token = secret_manager
+        .get_secret(CLOUD_ACCESS_TOKEN_SECRET_KEY)
+        .map_err(|_| "Failed to restore the stored Cloud session".to_string())?;
+    validate_token_format(&access_token, "Stored access token")?;
+
+    let mut token = ACCESS_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *token = Some(access_token.clone());
+    Ok(Some(access_token))
 }
 
 // Helpers to get tokens from in-memory storage
@@ -836,7 +901,44 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{validate_api_base_url, CreditBalanceResponse};
+    use super::{
+        clear_cloud_tokens, restore_cloud_access_token, store_cloud_access_token,
+        validate_api_base_url, CreditBalanceResponse,
+    };
+    use crate::sys::security::SecretManager;
+    use rusqlite::Connection;
+    use std::sync::{Arc, Mutex};
+
+    fn secret_manager() -> SecretManager {
+        let connection = Connection::open_in_memory().expect("open in-memory database");
+        connection
+            .execute(
+                "CREATE TABLE settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    encrypted INTEGER NOT NULL DEFAULT 0
+                )",
+                [],
+            )
+            .expect("create settings table");
+        SecretManager::new(Arc::new(Mutex::new(connection)))
+    }
+
+    #[test]
+    fn cloud_access_token_survives_memory_boundary_in_encrypted_storage() {
+        let manager = secret_manager();
+        let token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1c2VyXzEyMyJ9.signature";
+
+        assert_eq!(restore_cloud_access_token(&manager).unwrap(), None);
+        store_cloud_access_token(&manager, token).unwrap();
+        assert_eq!(
+            restore_cloud_access_token(&manager).unwrap().as_deref(),
+            Some(token)
+        );
+
+        clear_cloud_tokens(&manager).unwrap();
+        assert_eq!(restore_cloud_access_token(&manager).unwrap(), None);
+    }
 
     // Regression guard for the SSRF allowlist that BYOK-RUST-EGRESS-01 relies on
     // as the trust boundary for the only non-dormant Rust egress path. The

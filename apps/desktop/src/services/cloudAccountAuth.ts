@@ -13,6 +13,7 @@ import { invoke } from '../lib/tauri-mock';
 // auth-store init (checkSession → isLocalDevBrowser), and pulling `isTauri`
 // through the cyclic `tauri-mock` barrel reads it before initialization.
 import { isTauri } from '../lib/runtimeEnvironment';
+import { authorizeDesktopDevice } from './desktopDeviceAuthorization';
 // NOTE: egressGuard is required LAZILY at its call site (fetchAccountSnapshot)
 // to break the load-time cycle egressGuard → appModeStore → auth →
 // cloudAccountAuth → egressGuard. A static import here re-introduces it.
@@ -270,6 +271,7 @@ class CloudAccountAuthService {
     error: null,
     subscriptionFetchStatus: 'idle',
   };
+  private deviceAuthorizationController: AbortController | null = null;
 
   static getInstance(): CloudAccountAuthService {
     if (!CloudAccountAuthService.instance) {
@@ -285,28 +287,110 @@ class CloudAccountAuthService {
       return;
     }
 
+    if (isTauri && !this.currentState.session) {
+      this.updateState({ isLoading: true, error: null });
+      try {
+        const accessToken = await invoke<string | null>('account_restore_access_token');
+        if (accessToken) {
+          await this.setSession({ access_token: accessToken });
+          return;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn('[Auth] Failed to restore the encrypted Cloud session:', message);
+        this.updateState({
+          isLoading: false,
+          error: 'Could not restore the saved Cloud session. Please connect again.',
+        });
+        return;
+      }
+    }
+
     this.updateState({ isLoading: false, error: null });
   }
 
-  async signUp({ email }: SignUpData): Promise<AuthResponse> {
-    await openWebAccount(`/sign-up?email=${encodeURIComponent(email)}&surface=desktop`);
+  private async authorizeCloudAccount(): Promise<AuthResponse> {
+    this.deviceAuthorizationController?.abort();
+    const controller = new AbortController();
+    this.deviceAuthorizationController = controller;
+    this.updateState({ isLoading: true, error: null });
+
+    try {
+      const { guardedFetch } = await import('../lib/egressGuard');
+      const credential = await authorizeDesktopDevice({
+        origin: WEB_APP_URL,
+        signal: controller.signal,
+        post: async (url, payload, headers) => {
+          const response = await guardedFetch(url, {
+            method: 'POST',
+            credentials: 'omit',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              ...headers,
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+          return { status: response.status, body: await response.text() };
+        },
+        openExternal: async (url) => {
+          if (isTauri) {
+            const { open } = await import('@tauri-apps/plugin-shell');
+            await open(url);
+            return;
+          }
+          const opened = window.open(url, '_blank', 'noopener,noreferrer');
+          if (!opened) {
+            throw new Error('Could not open AGI Cloud sign-in in your browser.');
+          }
+        },
+      });
+
+      if (controller.signal.aborted) {
+        throw new AuthError('AGI Cloud sign-in was cancelled.', 499, 'authorization_cancelled');
+      }
+      return await this.finishDeviceAuthorization(credential.accessToken);
+    } catch (error) {
+      const authError =
+        error instanceof AuthError
+          ? error
+          : new AuthError(
+              error instanceof Error ? error.message : String(error),
+              400,
+              'device_authorization_failed',
+            );
+      this.updateState({ isLoading: false, error: authError.message });
+      return { data: { user: null, session: null }, error: authError };
+    } finally {
+      if (this.deviceAuthorizationController === controller) {
+        this.deviceAuthorizationController = null;
+      }
+    }
+  }
+
+  private async finishDeviceAuthorization(accessToken: string): Promise<AuthResponse> {
+    const result = await this.setSession({ access_token: accessToken });
+    if (result.error) {
+      return { data: { user: null, session: null }, error: result.error };
+    }
     return {
-      data: { user: null, session: null },
-      error: new AuthError('Continue sign-up in AGI web, then approve this desktop device.', 202),
+      data: { user: this.currentState.user, session: this.currentState.session },
+      error: null,
     };
   }
 
-  async signIn({ email }: SignInData): Promise<AuthResponse> {
-    await openWebAccount(`/sign-in?email=${encodeURIComponent(email)}&surface=desktop`);
-    return {
-      data: { user: null, session: null },
-      error: new AuthError('Continue sign-in in AGI web, then approve this desktop device.', 202),
-    };
+  async signUp(_data: SignUpData): Promise<AuthResponse> {
+    return this.authorizeCloudAccount();
   }
 
-  async signInWithMagicLink(email: string): Promise<{ error: AuthError | null }> {
-    await openWebAccount(`/sign-in?email=${encodeURIComponent(email)}&surface=desktop`);
-    return { error: null };
+  async signIn(_data: SignInData): Promise<AuthResponse> {
+    return this.authorizeCloudAccount();
+  }
+
+  async signInWithMagicLink(_email: string): Promise<{ error: AuthError | null }> {
+    const response = await this.authorizeCloudAccount();
+    return { error: response.error };
   }
 
   async verifyOtp(_email: string, _token: string): Promise<AuthResponse> {
@@ -317,11 +401,10 @@ class CloudAccountAuthService {
   }
 
   async signInWithOAuth(provider: AuthProvider): Promise<OAuthResponse> {
-    const url = `/sign-in?provider=${encodeURIComponent(provider)}&surface=desktop`;
-    await openWebAccount(url);
+    const response = await this.authorizeCloudAccount();
     return {
-      data: { provider, url: `${WEB_APP_URL}${url}` },
-      error: null,
+      data: { provider, url: response.error ? null : `${WEB_APP_URL}/auth/device` },
+      error: response.error,
     };
   }
 
@@ -336,6 +419,8 @@ class CloudAccountAuthService {
   }
 
   async signOut(): Promise<void> {
+    this.deviceAuthorizationController?.abort();
+    this.deviceAuthorizationController = null;
     this.updateState({ isLoading: true });
     try {
       if (isTauri) {
@@ -418,6 +503,16 @@ class CloudAccountAuthService {
     }
 
     const session = buildSession(tokens.access_token, tokens.refresh_token);
+    if (session.expires_at && session.expires_at <= Math.floor(Date.now() / 1000)) {
+      const error = new AuthError(
+        'Your AGI Cloud session has expired. Please connect again.',
+        401,
+        'session_expired',
+      );
+      await this.clearInvalidSession(error.message);
+      return { error };
+    }
+
     this.updateState({
       user: session.user,
       session,
@@ -440,7 +535,16 @@ class CloudAccountAuthService {
       }
     }
 
-    await this.refreshUserData();
+    const accountValidated = await this.refreshUserData();
+    if (!accountValidated) {
+      const error = new AuthError(
+        'Your AGI Cloud session has expired or was revoked. Please connect again.',
+        401,
+        'session_invalid',
+      );
+      await this.clearInvalidSession(error.message);
+      return { error };
+    }
     return { error: null };
   }
 
@@ -470,10 +574,10 @@ class CloudAccountAuthService {
     };
   }
 
-  async refreshUserData(): Promise<void> {
+  async refreshUserData(): Promise<boolean> {
     const session = this.currentState.session;
     const user = this.currentState.user;
-    if (!session || !user) return;
+    if (!session || !user) return false;
 
     const cachedProfile = getCachedData<Profile>('profile', user.id);
     const cachedSubscription = getCachedData<Subscription>('subscription', user.id);
@@ -499,10 +603,31 @@ class CloudAccountAuthService {
         subscriptionFetchStatus: snapshot.subscription ? 'succeeded' : 'failed',
         error: null,
       });
+      return true;
     } catch (error) {
       console.warn('[Auth] Failed to refresh Clerk/Neon account data:', error);
       this.updateState({ subscriptionFetchStatus: 'failed' });
+      return false;
     }
+  }
+
+  private async clearInvalidSession(message: string): Promise<void> {
+    if (isTauri) {
+      await invoke('account_clear_tokens').catch((error) => {
+        console.warn('[Auth] Failed to clear an invalid Cloud session:', error);
+      });
+    }
+    clearAuthCache();
+    this.updateState({
+      user: null,
+      session: null,
+      profile: null,
+      subscription: null,
+      featureFlags: {},
+      isLoading: false,
+      error: message,
+      subscriptionFetchStatus: 'idle',
+    });
   }
 
   private async fetchAccountSnapshot(accessToken: string): Promise<AccountSnapshot> {

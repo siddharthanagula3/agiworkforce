@@ -147,3 +147,13 @@ export type {
   OfflineSyncQueueAdapter,
   SyncManagerState,
 } from './offline-sync';
+
+// Browser-approved, revocable device authorization shared by Desktop, CLI-like
+// developer surfaces, and editor extensions. Transport remains injected so the
+// universal package never assumes browser fetch or Node http.
+export { pollDeviceAuthorization, requestDeviceAuthorization } from './deviceAuthorization';
+export type {
+  DeviceAuthorizationPollResult,
+  DeviceAuthorizationPost,
+  DeviceAuthorizationRequest,
+} from './deviceAuthorization';

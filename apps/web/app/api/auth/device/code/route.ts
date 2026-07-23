@@ -3,7 +3,7 @@ import 'server-only';
 import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { handleCorsPreflightRequest, withCorsAndSecurityHeaders } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -79,7 +79,12 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
   );
 }
 
-export const POST = withErrorHandler(handleDeviceCodeStart);
+const postDeviceCodeStart = withErrorHandler(handleDeviceCodeStart);
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const response = await postDeviceCodeStart(request);
+  return withCorsAndSecurityHeaders(response as NextResponse, request);
+}
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

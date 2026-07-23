@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { handleCorsPreflightRequest, withCorsAndSecurityHeaders } from '@/lib/cors';
 import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
@@ -124,7 +124,12 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
   );
 }
 
-export const POST = withErrorHandler(handleDeviceCodePoll);
+const postDeviceCodePoll = withErrorHandler(handleDeviceCodePoll);
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const response = await postDeviceCodePoll(request);
+  return withCorsAndSecurityHeaders(response as NextResponse, request);
+}
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
