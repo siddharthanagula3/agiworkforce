@@ -3,34 +3,48 @@
  */
 
 import { command } from '@agiworkforce/client-runtime';
+import type { Recording } from './automation';
+import { recordingToCommandPayload } from './automation';
 
 // ---- Types ----
 
 export interface SkillMatchResult {
-  name: string;
-  score: number;
+  skillName: string;
+  relevanceScore: number;
   description: string;
+  matchReason: string;
 }
 export interface SkillInfo {
   name: string;
   description: string;
-  category: string;
-  isBuiltIn: boolean;
-  tags: string[];
+  sourceType: 'bundled' | 'managed' | 'workspace' | 'unknown';
+  requiresBins: string[];
+  requiresEnv: string[];
+  supportedOs: string[];
+  allowedTools: string[];
+  contextMode: 'main' | 'fork';
 }
 export interface RequirementCheckResultResponse {
-  met: boolean;
-  missing: string[];
+  satisfied: boolean;
+  missingBins: string[];
+  missingEnv: string[];
+  osSupported: boolean;
 }
 export interface SkillInvocationResult {
-  output: string;
-  success: boolean;
-  duration: number;
+  skillName: string;
+  instructions: string;
+  allowedTools: string[];
+  contextMode: 'main' | 'fork';
 }
 export interface SlashCommand {
-  name: string;
+  command: string;
+  skillName: string;
   description: string;
-  usage: string;
+}
+export interface RecordedSkillResult {
+  skill: SkillInfo;
+  actionCount: number;
+  path: string;
 }
 
 // ---- Commands ----
@@ -72,4 +86,15 @@ export async function skillGetSlashCommands(): Promise<SlashCommand[]> {
 }
 export async function skillReload(): Promise<void> {
   return command<void>('skill_reload');
+}
+export async function skillCreateFromRecording(
+  recording: Recording,
+  name: string,
+  description: string,
+): Promise<RecordedSkillResult> {
+  return command<RecordedSkillResult>('skill_create_from_recording', {
+    recording: recordingToCommandPayload(recording),
+    name,
+    description,
+  });
 }

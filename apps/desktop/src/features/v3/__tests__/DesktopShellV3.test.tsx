@@ -229,6 +229,20 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(unifiedChatMock.chatInterfaceProps[0]?.['emptyStateSlot']).toBeTruthy();
   });
 
+  it('routes the live shared composer into the native skill recorder', () => {
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+    const onRecordSkill = unifiedChatMock.chatInterfaceProps[0]?.['onRecordSkill'];
+    expect(onRecordSkill).toBeTypeOf('function');
+
+    act(() => {
+      (onRecordSkill as () => void)();
+    });
+
+    expect(screen.getByRole('heading', { name: 'Record a skill' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close skill recorder' }));
+    expect(screen.getByTestId('chat-interface')).toBeInTheDocument();
+  });
+
   it('requires an explicit review before adding authenticated Chrome context to the composer', async () => {
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
 

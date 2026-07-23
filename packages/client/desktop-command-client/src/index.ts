@@ -13,6 +13,13 @@
 // imports the diagnostics shape without round-tripping through the
 // `browserExtension` namespace).
 export type { ExtensionStatusDiagnostics } from './browserExtension';
+export type {
+  AutomationPermissions,
+  RecordedAction,
+  RecordedActionType,
+  Recording,
+  RecordingSession,
+} from './automation';
 
 // ---- Wave 1: Settings, Auth, LLM, Window ----
 export * as settings from './settings';

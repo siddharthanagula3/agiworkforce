@@ -76,14 +76,114 @@ export interface OverlayRegionPayload {
   height: number;
 }
 export interface RecordingSession {
+  sessionId: string;
+  startTime: number;
+  isRecording: boolean;
+}
+export type RecordedActionType =
+  | 'click'
+  | 'right_click'
+  | 'double_click'
+  | 'type'
+  | 'hotkey'
+  | 'wait'
+  | 'screenshot'
+  | 'drag'
+  | 'scroll';
+export interface RecordedAction {
   id: string;
-  startedAt: string;
-  actions: unknown[];
+  actionType: RecordedActionType;
+  timestampMs: number;
+  target?: {
+    x: number;
+    y: number;
+    elementId?: string;
+    elementName?: string;
+    elementType?: string;
+  };
+  value?: string;
+  metadata?: Record<string, unknown>;
 }
 export interface Recording {
   id: string;
-  actions: unknown[];
-  duration: number;
+  name: string;
+  description?: string;
+  actions: RecordedAction[];
+  durationMs: number;
+  createdAt: number;
+}
+export interface RecordingCommandPayload {
+  id: string;
+  name: string;
+  description?: string;
+  actions: Array<{
+    id: string;
+    action_type: RecordedActionType;
+    timestamp_ms: number;
+    target?: {
+      x: number;
+      y: number;
+      element_id?: string;
+      element_name?: string;
+      element_type?: string;
+    };
+    value?: string;
+    metadata?: Record<string, unknown>;
+  }>;
+  duration_ms: number;
+  created_at: number;
+}
+
+export function recordingToCommandPayload(recording: Recording): RecordingCommandPayload {
+  return {
+    id: recording.id,
+    name: recording.name,
+    description: recording.description,
+    actions: recording.actions.map((action) => ({
+      id: action.id,
+      action_type: action.actionType,
+      timestamp_ms: action.timestampMs,
+      target: action.target
+        ? {
+            x: action.target.x,
+            y: action.target.y,
+            element_id: action.target.elementId,
+            element_name: action.target.elementName,
+            element_type: action.target.elementType,
+          }
+        : undefined,
+      value: action.value,
+      metadata: action.metadata,
+    })),
+    duration_ms: recording.durationMs,
+    created_at: recording.createdAt,
+  };
+}
+
+function recordingFromCommandPayload(recording: RecordingCommandPayload): Recording {
+  return {
+    id: recording.id,
+    name: recording.name,
+    description: recording.description,
+    actions: recording.actions.map((action) => ({
+      id: action.id,
+      actionType: action.action_type,
+      timestampMs: action.timestamp_ms,
+      target: action.target
+        ? {
+            x: action.target.x,
+            y: action.target.y,
+            elementId: action.target.element_id,
+            elementName: action.target.element_name,
+            elementType: action.target.element_type,
+          }
+        : undefined,
+      value: action.value,
+      metadata: action.metadata,
+    })),
+    durationMs: recording.duration_ms,
+    createdAt: recording.created_at,
+  };
 }
 export interface DetailedElementInfo {
   id: string;
@@ -113,10 +213,6 @@ export interface ExecutionResult {
   steps: number;
   duration: number;
   error?: string;
-}
-export interface RecordedAction {
-  type: string;
-  [key: string]: unknown;
 }
 export interface ScreenCapture {
   id: string;
@@ -254,10 +350,20 @@ export async function overlayReplayRecent(limit?: number): Promise<void> {
 // ---- Enhanced Automation (Recording, Inspection, Scripts) ----
 
 export async function automationRecordStart(): Promise<RecordingSession> {
-  return command<RecordingSession>('automation_record_start');
+  const session = await command<{
+    session_id: string;
+    start_time: number;
+    is_recording: boolean;
+  }>('automation_record_start');
+  return {
+    sessionId: session.session_id,
+    startTime: session.start_time,
+    isRecording: session.is_recording,
+  };
 }
 export async function automationRecordStop(): Promise<Recording> {
-  return command<Recording>('automation_record_stop');
+  const recording = await command<RecordingCommandPayload>('automation_record_stop');
+  return recordingFromCommandPayload(recording);
 }
 export async function automationRecordActionClick(
   x: number,
@@ -283,7 +389,18 @@ export async function automationRecordIsRecording(): Promise<boolean> {
   return command<boolean>('automation_record_is_recording');
 }
 export async function automationRecordGetSession(): Promise<RecordingSession | null> {
-  return command<RecordingSession | null>('automation_record_get_session');
+  const session = await command<{
+    session_id: string;
+    start_time: number;
+    is_recording: boolean;
+  } | null>('automation_record_get_session');
+  return session
+    ? {
+        sessionId: session.session_id,
+        startTime: session.start_time,
+        isRecording: session.is_recording,
+      }
+    : null;
 }
 export async function automationInspectElementAtPoint(
   x: number,
@@ -546,7 +663,16 @@ export interface AutomationPermissions {
 }
 
 export async function checkAutomationPermissions(): Promise<AutomationPermissions> {
-  return command<AutomationPermissions>('check_automation_permissions');
+  const permissions = await command<{
+    accessibility: boolean;
+    screen_recording: boolean;
+    input_monitoring: boolean;
+  }>('check_automation_permissions');
+  return {
+    accessibility: permissions.accessibility,
+    screenRecording: permissions.screen_recording,
+    inputMonitoring: permissions.input_monitoring,
+  };
 }
 
 export async function requestAutomationPermission(kind: string): Promise<void> {
