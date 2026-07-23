@@ -29,12 +29,16 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const MIN_POLL_INTERVAL_MS = 3_000;
 const MAX_POLL_INTERVAL_MS = 10_000;
 const MAX_AUTH_WINDOW_MS = 15 * 60 * 1000;
+const BROWSER_OPEN_CONFIRM_TIMEOUT_MS = 2_500;
 
 export type DeviceAuthPost = (
   url: string,
   payload: unknown,
   headers?: Readonly<Record<string, string>>,
 ) => Promise<{ status: number; body: string }>;
+
+export type DeviceAuthOpenExternal = (url: string) => PromiseLike<boolean>;
+export type DeviceAuthBrowserOpenResult = 'opened' | 'rejected' | 'unconfirmed';
 
 export interface DeviceAuthorizationRequest {
   deviceCode: string;
@@ -218,6 +222,32 @@ export async function revokeDeviceAuthorization(
   }
 }
 
+/**
+ * VS Code-compatible hosts do not always settle `env.openExternal`, even after
+ * dispatching the browser request. Bound the confirmation wait so device-code
+ * polling can still start and the user can complete approval.
+ */
+export function tryOpenDeviceAuthorizationUrl(
+  url: string,
+  openExternal: DeviceAuthOpenExternal = (target) =>
+    vscode.env.openExternal(vscode.Uri.parse(target)),
+  timeoutMs = BROWSER_OPEN_CONFIRM_TIMEOUT_MS,
+): Promise<DeviceAuthBrowserOpenResult> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result: DeviceAuthBrowserOpenResult): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(result);
+    };
+    const timeout = setTimeout(() => finish('unconfirmed'), timeoutMs);
+    void Promise.resolve(openExternal(url))
+      .then((opened) => finish(opened ? 'opened' : 'rejected'))
+      .catch(() => finish('rejected'));
+  });
+}
+
 export async function signInToAgiCloud(secrets: vscode.SecretStorage): Promise<boolean> {
   const origin = getCloudWebOrigin();
   let authorization: DeviceAuthorizationRequest;
@@ -230,12 +260,24 @@ export async function signInToAgiCloud(secrets: vscode.SecretStorage): Promise<b
     return false;
   }
 
-  const opened = await vscode.env.openExternal(vscode.Uri.parse(authorization.verificationUrl));
-  if (!opened) {
+  const browserOpenResult = await tryOpenDeviceAuthorizationUrl(authorization.verificationUrl);
+  if (browserOpenResult === 'rejected') {
     vscode.window.showErrorMessage(
       `Open ${authorization.verificationUrl} and enter ${authorization.userCode}.`,
     );
     return false;
+  }
+  if (browserOpenResult === 'unconfirmed') {
+    void vscode.window
+      .showWarningMessage(
+        'VS Code could not confirm that the AGI sign-in page opened. Device approval is still waiting.',
+        'Copy sign-in link',
+      )
+      .then(async (action) => {
+        if (action !== 'Copy sign-in link') return;
+        await vscode.env.clipboard.writeText(authorization.verificationUrl);
+        vscode.window.showInformationMessage('AGI sign-in link copied.');
+      });
   }
 
   return vscode.window.withProgress<boolean>(
