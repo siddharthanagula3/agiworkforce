@@ -1175,7 +1175,7 @@
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
-        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "supportedEfforts": ["low", "medium", "high"],
         "defaultEffort": "medium",
         "canDisableThinking": true,
         "request": {

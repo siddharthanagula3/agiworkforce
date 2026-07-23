@@ -26,6 +26,7 @@ import {
   CAPABILITY_LABEL,
   EFFORT_LABEL,
   getModelReasoning,
+  getModelEffortOptions,
   modelsById,
   type ProviderId,
   type CapabilityTier,
@@ -426,7 +427,15 @@ const PROVIDER_ORDER = [
   'managed_cloud',
 ];
 
-const REQUEST_EFFORTS = new Set<Effort>(['low', 'medium', 'high', 'xhigh', 'max']);
+const REQUEST_EFFORTS = new Set<Effort>([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]);
 
 function defaultEffortFor(reasoning: ModelReasoning): Effort {
   const candidate = reasoning.defaultEffort;
@@ -722,7 +731,10 @@ export function ModelSelector({
                       const isThinkingEnabled = isSelected && effort != null;
                       const reasoning = getModelReasoning(m.id);
                       const showThinkingToggle =
-                        isSelected && canToggleReasoning(reasoning) && Boolean(onEffortChange);
+                        isSelected &&
+                        canToggleReasoning(reasoning) &&
+                        getModelEffortOptions(m.id).length > 0 &&
+                        Boolean(onEffortChange);
                       const reasoningIsMandatory = requiresReasoning(reasoning);
 
                       return (

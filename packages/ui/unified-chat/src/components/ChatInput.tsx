@@ -26,11 +26,10 @@ import { isWebSearchAvailable } from '@agiworkforce/search';
 import type { WritingStyle } from '../lib/writingStyle';
 import {
   ALLOWED_ATTACHMENT_ACCEPT,
-  PROVIDER_DISPLAY,
   getModelMetadataById,
+  resolveModelEffort,
   validateAttachmentFile,
   type CloudWorkMode,
-  type ProviderId,
 } from '@agiworkforce/types';
 
 /** Composer work mode — mirrors web ChatComposerNew's ComposerWorkMode. */
@@ -492,11 +491,7 @@ export function ChatInput({
     if (conversationId) {
       const agentState = resolveAgentControl(conversationId, projectId ?? null);
       agentMode = agentState.mode;
-      // Only pass effort when the model's provider supports it
-      const providerKey = modelProviderId as ProviderId;
-      if (PROVIDER_DISPLAY[providerKey]?.supportsEffort) {
-        effort = agentState.effort;
-      }
+      effort = resolveModelEffort(selectedModelId, agentState.effort);
     }
 
     const attachments = attachedFiles.length > 0 ? attachedFiles : undefined;
@@ -526,7 +521,7 @@ export function ChatInput({
     conversationId,
     projectId,
     resolveAgentControl,
-    modelProviderId,
+    selectedModelId,
     attachedFiles,
     clearDraftContent,
     researchEnabled,
@@ -751,7 +746,7 @@ export function ChatInput({
                 <AgentControl
                   conversationId={conversationId}
                   projectId={projectId ?? null}
-                  modelProviderId={modelProviderId}
+                  modelId={selectedModelId}
                   className="min-w-0 max-w-full flex-wrap justify-start gap-1"
                 />
               )}

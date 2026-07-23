@@ -499,7 +499,7 @@ describe('ModelPickerSheet', () => {
     expect(queryByLabelText('Reasoning effort High')).toBeNull();
   });
 
-  it('sets a per-conversation effort override without changing the model or closing the sheet', () => {
+  it('sets a per-conversation effort override through one discrete slider', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     // The reasoning-effort selector only renders for a reasoning-capable model
@@ -508,12 +508,12 @@ describe('ModelPickerSheet', () => {
     useModelStore.getState().setModel('claude-opus-4.8');
     const { getByLabelText } = renderPicker({ modelScope: 'cloud', conversationId: 'conv-1' });
 
-    expect(getByLabelText('Reasoning effort Medium').props.accessibilityState.selected).toBe(true);
+    const slider = getByLabelText('Reasoning effort');
+    expect(slider.props.accessibilityValue).toEqual({ min: 0, max: 4, now: 1, text: 'Medium' });
 
-    fireEvent.press(getByLabelText('Reasoning effort High'));
+    fireEvent(slider, 'valueChange', 2);
 
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('high');
-    expect(getByLabelText('Reasoning effort High').props.accessibilityState.selected).toBe(true);
     // Effort and model choice are independent: no selection change, no close.
     expect(useModelStore.getState().selectedModel).toBe('claude-opus-4.8');
     expect(mockSheetRef.current.close).not.toHaveBeenCalled();
@@ -526,7 +526,7 @@ describe('ModelPickerSheet', () => {
     useModelStore.getState().setModel('claude-opus-4.8');
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
-    fireEvent.press(getByLabelText('Reasoning effort Low'));
+    fireEvent(getByLabelText('Reasoning effort'), 'valueChange', 0);
 
     expect(useAgentControlStore.getState().byProject.__default__?.effort).toBe('low');
     expect(useAgentControlStore.getState().byConversation).toEqual({});
@@ -536,25 +536,41 @@ describe('ModelPickerSheet', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     useModelStore.getState().setModel('gpt-5.6-sol');
-    const { getByLabelText, queryByLabelText } = renderPicker({ modelScope: 'cloud' });
+    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
-    expect(getByLabelText('Reasoning effort None')).toBeTruthy();
-    expect(getByLabelText('Reasoning effort Low')).toBeTruthy();
-    expect(getByLabelText('Reasoning effort Medium')).toBeTruthy();
-    expect(getByLabelText('Reasoning effort High')).toBeTruthy();
-    expect(getByLabelText('Reasoning effort xHigh')).toBeTruthy();
-    expect(getByLabelText('Reasoning effort Max')).toBeTruthy();
-    expect(queryByLabelText('Reasoning effort Minimal')).toBeNull();
+    expect(getByLabelText('Reasoning effort').props.accessibilityValue).toEqual({
+      min: 0,
+      max: 5,
+      now: 2,
+      text: 'Medium',
+    });
   });
 
-  it('shows the reasoning effort control for Gemini 3.5 Flash-Lite', () => {
+  it('shows the exact reasoning effort control for Gemini 3.5 Flash-Lite', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     useModelStore.getState().setModel('gemini-3.5-flash-lite');
-    const { getByTestId, getByText } = renderPicker({ modelScope: 'cloud' });
+    const { getByTestId, getByText, getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     expect(getByTestId('model-picker-effort-selector')).toBeTruthy();
     expect(getByText('Effort')).toBeTruthy();
+    expect(getByLabelText('Reasoning effort').props.accessibilityValue).toEqual({
+      min: 0,
+      max: 3,
+      now: 2,
+      text: 'Medium',
+    });
+  });
+
+  it('shows no effort selector for Claude Haiku 4.5', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    useModelStore.getState().setModel('claude-haiku-4.5');
+    const { queryByTestId, getByLabelText } = renderPicker({ modelScope: 'cloud' });
+
+    expect(queryByTestId('model-picker-effort-selector')).toBeNull();
+    fireEvent.press(getByLabelText('Claude 4.5 Haiku, selected'));
+    expect(getByLabelText('Thinking mode for Claude 4.5 Haiku')).toBeTruthy();
   });
 
   it('clamps the reasoning effort to the new model default when switching to a model that lacks the previous value', () => {
@@ -566,7 +582,7 @@ describe('ModelPickerSheet', () => {
       conversationId: 'conv-1',
     });
 
-    fireEvent.press(getByLabelText('Reasoning effort Max'));
+    fireEvent(getByLabelText('Reasoning effort'), 'valueChange', 4);
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('max');
 
     // Gemini 3.5 Flash's supportedEfforts has no 'max' — selecting it must clamp
@@ -575,7 +591,7 @@ describe('ModelPickerSheet', () => {
     fireEvent.press(getByTestId('model-row-gemini-3.6-flash'));
 
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('medium');
-    expect(getByLabelText('Reasoning effort Medium').props.accessibilityState.selected).toBe(true);
+    expect(getByLabelText('Reasoning effort').props.accessibilityValue.text).toBe('Medium');
   });
 
   it('expands the thinking toggle when re-tapping the already-selected cloud model', () => {

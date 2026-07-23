@@ -446,8 +446,8 @@ pub enum OutputFormat {
 
 /// Effort level controlling how deeply the model reasons about a request.
 ///
-/// Supported by Anthropic Claude Opus 4.6+ and maps to the `effort`
-/// parameter in the Messages API.  For OpenAI models this is mapped
+/// Supported by current Anthropic effort-capable models and maps to
+/// `output_config.effort` in the Messages API. For OpenAI models this is mapped
 /// to `reasoning.effort`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

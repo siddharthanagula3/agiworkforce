@@ -1,12 +1,13 @@
 /**
  * AgentControl — composer footer chip row.
  *
- * Renders three pill chips:
- *   [Mode ▼]  [Effort: Medium ▼]  [Temp]
+ * Renders compact composer controls:
+ *   [Mode ▼]  [Reasoning ▼]  [Temp]
  *
  * - Mode chip: Ask / Auto / Plan / Bypass, with descriptions in a Radix Popover.
- * - Effort chip: Low / Medium / High / xHigh / Max. Hidden when the active model's provider
- *   does not support effort (supportsEffort === false in PROVIDER_DISPLAY).
+ * - Reasoning control: one discrete slider backed by the selected model's exact
+ *   catalog-supported values. Hidden
+ *   when that model has no provider effort request path (for example Haiku 4.5).
  * - Temp chip: single-tap boolean toggle. When ON, the conversation does not persist.
  *
  * A small orange dot appears on a chip when source === 'conversation-override',
@@ -16,23 +17,23 @@
  *   <AgentControl
  *     conversationId={conversationId}
  *     projectId={projectId}
- *     modelProviderId={currentModel.providerId}
+ *     modelId={currentModel.id}
  *   />
  */
 
 import * as Popover from '@radix-ui/react-popover';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
-import { ConfirmDialog } from '@agiworkforce/ui';
+import { Check, ChevronDown, Sparkles } from 'lucide-react';
+import { ConfirmDialog, Slider } from '@agiworkforce/ui';
 import {
   AGENT_MODE_LABEL,
   AGENT_MODE_DESCRIPTION,
   EFFORT_LABEL,
-  PROVIDER_DISPLAY,
+  getModelEffortOptions,
+  resolveModelEffort,
   type AgentMode,
   type Effort,
-  type ProviderId,
 } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 import { useAgentControlStore } from '../stores/agentControlStore';
@@ -46,11 +47,8 @@ export interface AgentControlProps {
   conversationId: string;
   /** The project this conversation belongs to. Used to read project-level defaults. */
   projectId: string | null;
-  /**
-   * The LLM provider ID for the currently selected model.
-   * Used to decide whether the Effort chip is visible.
-   */
-  modelProviderId: string;
+  /** The selected model ID used to resolve its exact effort contract. */
+  modelId: string;
   className?: string;
 }
 
@@ -59,16 +57,6 @@ export interface AgentControlProps {
 // ---------------------------------------------------------------------------
 
 const AGENT_MODES: AgentMode[] = ['ask', 'auto', 'plan', 'bypass'];
-const EFFORT_LEVELS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-
-const EFFORT_DESCRIPTION: Readonly<Record<Effort, string>> = {
-  low: 'Minimal reasoning budget — fastest, cheapest',
-  medium: 'Default reasoning budget',
-  high: 'Extended reasoning — better for complex tasks',
-  xhigh: 'Extra-high reasoning — for long-horizon tasks',
-  max: 'Maximum reasoning — highest quality, most tokens',
-};
-
 // ---------------------------------------------------------------------------
 // Override indicator dot
 // ---------------------------------------------------------------------------
@@ -244,29 +232,30 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Effort Chip
+// Reasoning Slider
 // ---------------------------------------------------------------------------
 
 interface EffortChipProps {
   conversationId: string;
   projectId: string | null;
+  modelId: string;
+  effortOptions: readonly Effort[];
 }
 
-function EffortChip({ conversationId, projectId }: EffortChipProps) {
+function EffortChip({ conversationId, projectId, modelId, effortOptions }: EffortChipProps) {
   const state = useAgentControlStore((s) => s.resolve(conversationId, projectId));
   const setEffort = useAgentControlStore((s) => s.setEffort);
   const isOverride = state.source === 'conversation-override';
+  const effectiveEffort = resolveModelEffort(modelId, state.effort) ?? effortOptions[0]!;
+  const selectedIndex = Math.max(effortOptions.indexOf(effectiveEffort), 0);
 
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label={`Effort: ${EFFORT_LABEL[state.effort]}`}
-          className={chipClass()}
-        >
+        <button type="button" aria-label="Reasoning effort" className={chipClass()}>
           <OverrideDot show={isOverride} />
-          <span className="max-w-[8rem] truncate">Effort: {EFFORT_LABEL[state.effort]}</span>
+          <Sparkles aria-hidden="true" size={11} className="shrink-0" />
+          <span className="max-w-[8rem] truncate">Reasoning</span>
           <ChevronDown aria-hidden="true" size={10} className="opacity-60 shrink-0" />
         </button>
       </Popover.Trigger>
@@ -288,47 +277,21 @@ function EffortChip({ conversationId, projectId }: EffortChipProps) {
               Reasoning Effort
             </span>
           </div>
-          <div className="p-1">
-            {EFFORT_LEVELS.map((level) => {
-              const isSelected = level === state.effort;
-              return (
-                <Popover.Close asChild key={level}>
-                  <button
-                    type="button"
-                    onClick={() => setEffort(conversationId, level)}
-                    className={cn(
-                      'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left',
-                      'transition-colors duration-100',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-                      isSelected
-                        ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
-                        : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
-                    )}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="text-sm font-medium">{EFFORT_LABEL[level]}</span>
-                      <p
-                        className={cn(
-                          'mt-0.5 text-[10px]',
-                          isSelected
-                            ? 'text-[var(--chat-accent-primary)]/70'
-                            : 'text-[var(--chat-text-muted)]',
-                        )}
-                      >
-                        {EFFORT_DESCRIPTION[level]}
-                      </p>
-                    </div>
-                    {isSelected && (
-                      <Check
-                        aria-hidden="true"
-                        size={13}
-                        className="mt-0.5 shrink-0 text-[var(--chat-accent-primary)]"
-                      />
-                    )}
-                  </button>
-                </Popover.Close>
-              );
-            })}
+          <div className="p-3">
+            <div className="rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-hover)] px-3 py-3">
+              <Slider
+                min={0}
+                max={effortOptions.length - 1}
+                step={1}
+                value={[selectedIndex]}
+                onValueChange={(value) => {
+                  const effort = effortOptions[value[0] ?? -1];
+                  if (effort) setEffort(conversationId, effort);
+                }}
+                thumbAriaLabel="Reasoning effort"
+                valueLabel={EFFORT_LABEL[effectiveEffort]}
+              />
+            </div>
           </div>
         </Popover.Content>
       </Popover.Portal>
@@ -340,15 +303,8 @@ function EffortChip({ conversationId, projectId }: EffortChipProps) {
 // AgentControl — public composite component
 // ---------------------------------------------------------------------------
 
-export function AgentControl({
-  conversationId,
-  projectId,
-  modelProviderId,
-  className,
-}: AgentControlProps) {
-  // Determine effort visibility from PROVIDER_DISPLAY
-  const providerKey = modelProviderId as ProviderId;
-  const supportsEffort = PROVIDER_DISPLAY[providerKey]?.supportsEffort ?? false;
+export function AgentControl({ conversationId, projectId, modelId, className }: AgentControlProps) {
+  const effortOptions = getModelEffortOptions(modelId);
 
   return (
     <div
@@ -357,7 +313,14 @@ export function AgentControl({
       aria-label="Agent controls"
     >
       <ModeChip conversationId={conversationId} projectId={projectId} />
-      {supportsEffort && <EffortChip conversationId={conversationId} projectId={projectId} />}
+      {effortOptions.length > 0 && (
+        <EffortChip
+          conversationId={conversationId}
+          projectId={projectId}
+          modelId={modelId}
+          effortOptions={effortOptions}
+        />
+      )}
     </div>
   );
 }
