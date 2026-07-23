@@ -26,6 +26,7 @@ export const ManagedCloudProjectSchema = z.object({
   allowedSurfaces: z.array(SourceSurfaceSchema),
   defaultModelId: z.string().nullable().optional(),
   knowledgeFileCount: z.number().int().nonnegative().nullable().optional(),
+  conversationCount: z.number().int().nonnegative().nullable().optional(),
   memberCount: z.number().int().nonnegative().nullable().optional(),
   lastUsedAt: z.string().nullable().optional(),
   iconEmoji: z.string().nullable().optional(),

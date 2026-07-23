@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
+import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
@@ -314,6 +315,9 @@ export function useConversations(): UseConversationsReturn {
       },
     ): Promise<boolean> => {
       try {
+        const previousProjectId =
+          useChatStore.getState().conversations.find((conversation) => conversation.id === id)
+            ?.projectId ?? null;
         const headers = await addCsrfHeaders(await getAuthHeaders());
         const response = await fetch(managedCloudConversationPath(id), {
           method: 'PUT',
@@ -336,6 +340,11 @@ export function useConversations(): UseConversationsReturn {
           isArchived: data.conversation.archived ?? false,
           updatedAt: data.conversation.updated_at,
         });
+        if (Object.prototype.hasOwnProperty.call(updates, 'projectId')) {
+          useChatProjectStore
+            .getState()
+            .reassignConversation(id, previousProjectId, data.conversation.project_id ?? null);
+        }
         return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to update conversation', id);

@@ -34,6 +34,7 @@ function toWebProject(project: ManagedCloudProject): Project {
     allowedSurfaces: project.allowedSurfaces,
     defaultModelId: project.defaultModelId,
     knowledgeFileCount: project.knowledgeFileCount,
+    conversationCount: project.conversationCount,
     memberCount: project.memberCount,
     lastUsedAt: project.lastUsedAt,
     importedFrom: project.importedFrom,

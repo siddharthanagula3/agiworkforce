@@ -80,6 +80,42 @@ describe('loadProjectContext', () => {
     // No second query for files when the project itself is not visible.
     expect(query).toHaveBeenCalledTimes(1);
   });
+
+  it('still loads sibling chats when the knowledge-file schema is not ready', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 'proj-1',
+          name: 'Investor Demo Recall',
+          description: null,
+          instructions: null,
+        },
+      ])
+      .mockRejectedValueOnce(
+        Object.assign(new Error('column "deleted_at" does not exist'), { code: '42703' }),
+      )
+      .mockResolvedValueOnce([
+        {
+          title: 'Launch checklist',
+          preview: 'The launch checklist owner is Maya Chen and the checkpoint number is 7319.',
+        },
+      ]);
+
+    const context = await loadProjectContext(
+      { query },
+      { projectId: 'proj-1', userId: 'user-1', currentConversationId: 'conv-current' },
+    );
+
+    expect(context?.knowledgeFiles).toEqual([]);
+    expect(context?.siblingChats).toEqual([
+      {
+        title: 'Launch checklist',
+        preview: 'The launch checklist owner is Maya Chen and the checkpoint number is 7319.',
+      },
+    ]);
+    expect(query).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe('formatProjectSystemPrompt', () => {

@@ -35,6 +35,16 @@ function response(body: unknown, status = 200): Response {
 }
 
 describe('createManagedCloudProjectsClient', () => {
+  it('preserves the server-provided conversation count', async () => {
+    const client = createManagedCloudProjectsClient({
+      fetchImpl: vi.fn(async () => response({ projects: [{ ...project, conversationCount: 2 }] })),
+    });
+
+    const projects = await client.listProjects();
+
+    expect(projects[0]?.conversationCount).toBe(2);
+  });
+
   it('runtime-validates CRUD responses and uses canonical encoded paths', async () => {
     const fetchImpl = vi
       .fn()

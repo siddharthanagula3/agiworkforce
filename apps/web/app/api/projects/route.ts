@@ -43,9 +43,15 @@ async function handleGetProjects(request: NextRequest) {
   try {
     data = await db.query<Record<string, unknown>>(
       // Hide soft-deleted projects (deleted_at tombstones from cross-device sync, 0041).
-      `select * from user_projects
-       where user_id = $1 and deleted_at is null
-       order by updated_at desc
+      `select p.*,
+              (select count(*)::int
+                 from web_conversations c
+                where c.project_id = p.id::text
+                  and c.user_id = $1
+                  and c.deleted_at is null) as conversation_count
+         from user_projects p
+        where p.user_id = $1 and p.deleted_at is null
+       order by p.updated_at desc
        limit $2 offset $3`,
       [userId, limit, offset],
     );
