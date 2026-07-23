@@ -153,11 +153,13 @@ describe('resolveCodeExecutionTools — native-always / fail-closed', () => {
 });
 
 describe('providerRoutesToE2B — §8 routing table', () => {
-  // Anthropic remains provider-native because its adapter preserves file ids.
+  // AGI owns one cross-provider sandbox contract. Provider-native execution
+  // remains the flag-off fallback, but the managed cut-over routes every
+  // provider through E2B so files and tool events behave identically.
   it.each(['anthropic', 'Anthropic', 'ANTHROPIC'])(
-    'anthropic (%s) → false (free-native tier)',
+    'anthropic (%s) → true (durable E2B artifacts)',
     (p) => {
-      expect(providerRoutesToE2B(p)).toBe(false);
+      expect(providerRoutesToE2B(p)).toBe(true);
     },
   );
   it.each(['google', 'Google', 'GOOGLE'])('google (%s) → true (durable E2B artifacts)', (p) => {

@@ -84,19 +84,15 @@ export function e2bExecutionToolDefs(): Array<{
  * Whether the given provider routes to E2B (platform-executed sandbox) under the §8
  * cost-optimized cut-over plan, when `e2bCutoverEnabled()` is on.
  *
- * - Anthropic remains provider-native because its normalized stream preserves Files API
- *   references that AGI persists into durable downloadable artifacts.
- * - Google routes to E2B until the Gemini adapter can preserve native code-execution
- *   files. This keeps file creation, preview, and download honest and cross-client.
- * - E2B-CREDIT tier (OpenAI + everyone else — DeepSeek, Kimi, GLM, MiniMax, etc.):
- *   routed to E2B (avoids OpenAI's per-session interpreter fees; provides a sandbox for
- *   providers that have no native code execution at all).
+ * Every provider routes through the same E2B execution and file contract. This keeps
+ * tool activity, generated-file harvesting, preview, download, and conversation reload
+ * behavior identical across Claude, Gemini, OpenAI, and providers without a native
+ * sandbox. Provider-native execution remains available only as the flag-off fallback.
  *
  * Called only when `e2bCutoverEnabled()` is true. Has no side-effects.
  */
 export function providerRoutesToE2B(provider: string): boolean {
-  const p = provider.toLowerCase();
-  return p !== 'anthropic';
+  return provider.trim().length > 0;
 }
 
 /**

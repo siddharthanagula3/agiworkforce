@@ -329,6 +329,13 @@ export function applyWorkMode(chatRequest: ChatCompletionRequest): void {
   chatRequest.web_search = true;
   chatRequest.web_fetch = true;
   chatRequest.code_execution = true;
+  chatRequest.messages.unshift({
+    role: 'system',
+    content:
+      'AGI Work mode is active. Always call an appropriate available tool before ' +
+      'responding. Complete requested actions and file creation with the tools; do not ' +
+      'merely describe the work or claim that tools are unavailable.',
+  });
 }
 
 export type WorkModeEntitlementError = {
@@ -481,6 +488,10 @@ function modelSupportsEffort(provider: string, model: string): boolean {
  * tools, so require one tool call on the first provider step when that mode is
  * enabled. Native provider sandboxes keep their existing provider-specific
  * behavior, and an API caller's explicit tool_choice always wins.
+ * Anthropic stays on `auto`: official Claude model compatibility lists Haiku
+ * 4.5 as supporting only `auto` and `none`, so forcing `required` would turn a
+ * valid E2B request into a provider 400. AGI Work's server-owned prompt gives
+ * Claude the corresponding strong tool-use instruction instead.
  */
 export function resolveInitialManagedCodeToolChoice(input: {
   requestedToolChoice: ChatCompletionRequest['tool_choice'];
@@ -496,6 +507,7 @@ export function resolveInitialManagedCodeToolChoice(input: {
     input.stream === true &&
     input.e2bEnabled &&
     input.toolsCapable &&
+    input.provider.toLowerCase() !== 'anthropic' &&
     providerRoutesToE2B(input.provider)
   ) {
     return 'required';
@@ -2056,11 +2068,10 @@ export async function processRequest(
   if (chatRequest.code_execution) {
     // Code-execution router: tiered by provider when AGI_E2B_EXECUTION=1; native-always otherwise.
     //
-    // E2B CUT-OVER (flag ON, streaming):
-    //   - Anthropic + Google: free-native tier — they run code in their own sandboxes at no
-    //     E2B credit cost, so we keep their provider-native tools.
-    //   - OpenAI + everyone else: E2B-credit tier — routes to the platform-executed E2B sandbox
-    //     (avoids OpenAI per-session fees; provides a sandbox for providers with no native exec).
+    // E2B CUT-OVER (flag ON, streaming): every tools-capable provider uses the
+    // same platform sandbox so execution events and durable files behave the
+    // same on Web, Desktop, and Mobile. Provider-native tools remain the
+    // operator-controlled flag-off fallback.
     //
     // Model-agnostic: the E2B sandbox is platform-executed — it only needs the model to emit
     // tool calls, exactly like the url_fetch tool above — so it is gated on the `tools`

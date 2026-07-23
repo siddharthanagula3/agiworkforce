@@ -177,7 +177,7 @@ describe('managed code tool choice', () => {
     ).toBe('auto');
   });
 
-  it('does not force native-provider or disabled E2B execution', () => {
+  it('does not force unsupported Anthropic tool choice or disabled E2B execution', () => {
     const base = {
       requestedToolChoice: undefined,
       codeExecution: true,

@@ -50,6 +50,22 @@ describe('withStreamIdleWatchdog', () => {
     expect((err as StreamIdleTimeoutError).idleMs).toBe(50);
   });
 
+  it('does not wait for a stalled source to finish after timing out', async () => {
+    const startedAt = Date.now();
+    const wd = withStreamIdleWatchdog(hangAfter([], [], 1_000), {
+      idleMs: 25,
+      warningMs: null,
+    });
+
+    await expect(async () => {
+      for await (const _c of wd) {
+        // consume
+      }
+    }).rejects.toBeInstanceOf(StreamIdleTimeoutError);
+
+    expect(Date.now() - startedAt).toBeLessThan(250);
+  });
+
   it('resets the timer on every chunk', async () => {
     // 3 chunks, each spaced 30ms; idleMs=50ms → must complete.
     const wd = withStreamIdleWatchdog(timedSource([30, 30, 30], ['a', 'b', 'c']), {

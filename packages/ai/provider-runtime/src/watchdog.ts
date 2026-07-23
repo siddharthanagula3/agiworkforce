@@ -151,13 +151,16 @@ export function withStreamIdleWatchdog<T>(
           }
         }
       } finally {
-        // Best-effort cleanup of underlying iterator. Anthropic's
-        // `cleanupStream` calls `stream.controller.abort()` on early
-        // exit; we mirror that contract by calling iterator.return()
-        // when present.
+        // Best-effort cleanup of the underlying iterator. Do not await
+        // `return()`: async generators serialize it behind an already-pending
+        // `next()`, so awaiting cleanup after an idle timeout would wait for
+        // the very stalled read the watchdog is meant to bound. That turned a
+        // 90-second provider timeout into the hosting platform's 300-second
+        // request timeout. Attach a rejection handler so eventual cleanup is
+        // still attempted without delaying the timeout error.
         if (typeof iterator.return === 'function') {
           try {
-            await iterator.return();
+            void iterator.return().catch(() => undefined);
           } catch {
             /* swallow — cleanup must not mask the original error */
           }
