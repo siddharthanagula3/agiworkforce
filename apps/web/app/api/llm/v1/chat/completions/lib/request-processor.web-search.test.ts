@@ -50,6 +50,10 @@ describe('applyWorkMode', () => {
       code_execution: true,
       stream: true,
     });
+    expect(request.messages[0]).toMatchObject({
+      role: 'system',
+      content: expect.stringMatching(/always call an appropriate available tool/i),
+    });
   });
 
   it('does not change ordinary chat requests', () => {
