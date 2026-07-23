@@ -465,6 +465,34 @@ function modelSupportsEffort(provider: string, model: string): boolean {
 }
 
 /**
+ * An explicit "Run code" request is a product instruction, not merely a hint
+ * that the model may ignore. Platform-executed E2B tools are ordinary function
+ * tools, so require one tool call on the first provider step when that mode is
+ * enabled. Native provider sandboxes keep their existing provider-specific
+ * behavior, and an API caller's explicit tool_choice always wins.
+ */
+export function resolveInitialManagedCodeToolChoice(input: {
+  requestedToolChoice: ChatCompletionRequest['tool_choice'];
+  codeExecution: boolean | undefined;
+  stream: boolean | undefined;
+  provider: string;
+  e2bEnabled: boolean;
+  toolsCapable: boolean;
+}): ChatCompletionRequest['tool_choice'] {
+  if (input.requestedToolChoice !== undefined) return input.requestedToolChoice;
+  if (
+    input.codeExecution === true &&
+    input.stream === true &&
+    input.e2bEnabled &&
+    input.toolsCapable &&
+    providerRoutesToE2B(input.provider)
+  ) {
+    return 'required';
+  }
+  return undefined;
+}
+
+/**
  * Resolve the user-facing effort selection against the selected model's
  * canonical capability metadata. OpenAI effort ladders vary by model, so a
  * global provider map would silently discard newly introduced levels (or send
@@ -2056,7 +2084,14 @@ export async function processRequest(
     max_tokens: maxTokens,
     stream: chatRequest.stream,
     tools: resolvedTools as unknown[] | undefined,
-    tool_choice: chatRequest.tool_choice,
+    tool_choice: resolveInitialManagedCodeToolChoice({
+      requestedToolChoice: chatRequest.tool_choice,
+      codeExecution: chatRequest.code_execution,
+      stream: chatRequest.stream,
+      provider: providerLower,
+      e2bEnabled: e2bCutoverEnabled(),
+      toolsCapable: resolvedModelCaps?.tools ?? true,
+    }),
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,

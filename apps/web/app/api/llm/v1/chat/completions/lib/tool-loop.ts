@@ -1925,7 +1925,22 @@ export async function* runToolLoop(
       // Build the request for this step. Free turns re-fit at every provider
       // boundary so earlier model/tool work cannot spend the same allowance
       // again on a later step.
-      const stepRequest = { ...llmRequest, messages };
+      const stepRequest = {
+        ...llmRequest,
+        messages,
+        // `required` is derived for the FIRST step of an explicit managed-code
+        // request so a model cannot silently ignore the user's Run code mode.
+        // Once a tool has run, restore auto selection so the model can either
+        // call another sandbox tool (for example write_file) or finish instead
+        // of being forced into an endless tool loop. Explicit API tool_choice
+        // values remain unchanged on every step.
+        ...(step > 1 &&
+        processed.chatRequest.code_execution === true &&
+        processed.chatRequest.tool_choice === undefined &&
+        llmRequest.tool_choice === 'required'
+          ? { tool_choice: 'auto' as const }
+          : {}),
+      };
       if (processed.freeTrial) {
         const fitted = applyFreeTrialProviderBudget({
           reservation: processed.freeTrial,
