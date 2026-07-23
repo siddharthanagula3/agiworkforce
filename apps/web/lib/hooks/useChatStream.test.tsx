@@ -413,6 +413,44 @@ describe('useChatStream', () => {
   });
 
   describe('durable Managed Cloud runs', () => {
+    it('shows an AGI Work action state before the provider emits its first event', async () => {
+      let resolveResponse: ((response: Response) => void) | undefined;
+      vi.mocked(fetch).mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveResponse = resolve;
+          }),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      let send: Promise<boolean> | undefined;
+      act(() => {
+        send = result.current.sendMessage('start the workspace task', {
+          conversationId: TEMP_CONVERSATION.id,
+          workMode: 'agiwork',
+        });
+      });
+
+      await vi.waitFor(() => {
+        const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+        expect(assistant?.metadata?.agentActivity).toMatchObject({
+          status: 'running',
+          entries: [
+            expect.objectContaining({
+              kind: 'progress',
+              summary: 'Starting AGI Work',
+              status: 'running',
+            }),
+          ],
+        });
+      });
+
+      resolveResponse?.(
+        new Response('data: [DONE]\n\n', { status: 200, headers: managedRunHeaders() }),
+      );
+      await send;
+    });
+
     it('keeps the validated run handle and replay cursor on the assistant message', async () => {
       const base = {
         schemaVersion: 3,

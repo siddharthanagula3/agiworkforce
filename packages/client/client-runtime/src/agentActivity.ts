@@ -132,10 +132,48 @@ export interface AgentActivityState {
 }
 
 export interface FinishAgentActivityLocallyOptions {
-  status: Extract<AgentActivityRunStatus, 'failed' | 'cancelled'>;
+  status: Extract<AgentActivityRunStatus, 'completed' | 'failed' | 'cancelled'>;
   completedAtMs: number;
   /** Safe, user-visible transport failure summary. Never pass provider scratchpad text. */
   error?: string;
+}
+
+export interface StartAgentActivityLocallyOptions {
+  sessionId: string;
+  turnId: string;
+  summary: string;
+  startedAtMs: number;
+}
+
+const LOCAL_START_PROGRESS_ID = 'progress:local-starting';
+
+/**
+ * Give a work-mode turn an honest action state before the provider emits its
+ * first canonical envelope. The first server-owned event replaces this local
+ * placeholder, so it can never become a duplicate durable step.
+ */
+export function startAgentActivityLocally(
+  options: StartAgentActivityLocallyOptions,
+): AgentActivityState {
+  return {
+    schemaVersion: 1,
+    sessionId: options.sessionId,
+    turnId: options.turnId,
+    lastSequence: -1,
+    status: 'running',
+    startedAtMs: options.startedAtMs,
+    updatedAtMs: options.startedAtMs,
+    entries: [
+      {
+        kind: 'progress',
+        id: LOCAL_START_PROGRESS_ID,
+        progressId: 'local-starting',
+        summary: options.summary,
+        status: 'running',
+        startedAtMs: options.startedAtMs,
+      },
+    ],
+  };
 }
 
 function createState(envelope: AgentEventEnvelope): AgentActivityState {
@@ -191,7 +229,11 @@ export function applyAgentActivityEvent(
     current !== undefined &&
     current.sessionId === envelope.sessionId &&
     current.turnId === envelope.turnId;
-  const previous = sameTurn && current ? current : createState(envelope);
+  const hasLocalStart =
+    sameTurn &&
+    current?.lastSequence === -1 &&
+    current.entries.some((entry) => entry.id === LOCAL_START_PROGRESS_ID);
+  const previous = sameTurn && current && !hasLocalStart ? current : createState(envelope);
 
   if (sameTurn && envelope.sequence <= previous.lastSequence) return previous;
 
@@ -570,7 +612,12 @@ export function finishAgentActivityLocally(
   return {
     ...current,
     status: options.status,
-    stopReason: options.status === 'failed' ? 'error' : 'cancelled',
+    stopReason:
+      options.status === 'completed'
+        ? 'end-turn'
+        : options.status === 'failed'
+          ? 'error'
+          : 'cancelled',
     updatedAtMs: options.completedAtMs,
     completedAtMs: options.completedAtMs,
     entries,

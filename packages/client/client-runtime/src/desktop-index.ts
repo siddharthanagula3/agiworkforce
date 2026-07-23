@@ -16,7 +16,11 @@ export { routeToCloud } from './http';
 // Canonical Cloud agent-run projection. Desktop aliases the package root to
 // this browser-safe entrypoint, so keep the portable reducer available here
 // as well as from index.ts. It has no Tauri or Node dependency.
-export { applyAgentActivityEvent, finishAgentActivityLocally } from './agentActivity';
+export {
+  applyAgentActivityEvent,
+  finishAgentActivityLocally,
+  startAgentActivityLocally,
+} from './agentActivity';
 export type {
   AgentActivityApproval,
   AgentActivityArtifactEntry,

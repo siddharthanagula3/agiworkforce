@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
+  startAgentActivityLocally,
   QueueFullError,
   type AgentActivityState,
   type MessageQueue,
@@ -611,6 +612,20 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               awaitingApproval = (msg.toolCalls ?? []).some(
                 (tc) => tc.status === 'awaiting_approval',
               );
+              const currentActivity = msg.metadata?.['agentActivity'] as
+                | AgentActivityState
+                | undefined;
+              const completedActivity =
+                currentActivity &&
+                !awaitingApproval &&
+                currentActivity.status !== 'completed' &&
+                currentActivity.status !== 'failed' &&
+                currentActivity.status !== 'cancelled'
+                  ? finishAgentActivityLocally(currentActivity, {
+                      status: 'completed',
+                      completedAtMs: Date.now(),
+                    })
+                  : currentActivity;
               const doneUpdates: Partial<ChatMessage> = { isStreaming: false };
               // Record the turn's finish_reason (cloud/WebRuntime supplies it;
               // local/native runtimes omit it) so the Continue-Generation
@@ -623,6 +638,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               // stale marker from a prior failed attempt.
               doneUpdates.metadata = {
                 ...msg.metadata,
+                ...(completedActivity ? { agentActivity: completedActivity } : {}),
                 finishReason: event.finishReason,
                 streamError: event.streamError,
               };
@@ -930,7 +946,9 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         );
       const research = Boolean(runtime.supportsResearch && researchEnabled);
 
-      // Reset assistant message ref for new response
+      // Reset assistant message ref for new response. AGI Work owns a visible
+      // action state immediately, before the provider emits its first event;
+      // ordinary chat keeps the lightweight pre-token placeholder.
       assistantMessageIdRef.current = null;
       cloudAgentRunRef.current = null;
 
@@ -940,6 +958,30 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         role: m.role,
         content: m.content,
       }));
+
+      if (workMode === 'agiwork') {
+        const assistantMessageId = crypto.randomUUID();
+        const startedAtMs = Date.now();
+        assistantMessageIdRef.current = assistantMessageId;
+        addMsg(
+          {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(startedAtMs).toISOString(),
+            isStreaming: true,
+            metadata: {
+              agentActivity: startAgentActivityLocally({
+                sessionId: convId,
+                turnId: assistantMessageId,
+                summary: 'Starting AGI Work',
+                startedAtMs,
+              }),
+            },
+          },
+          convId,
+        );
+      }
 
       void runtime
         .sendMessage(convId, content, {
