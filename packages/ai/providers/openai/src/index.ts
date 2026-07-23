@@ -58,9 +58,12 @@ import { OPENAI_MODEL_CATALOG } from './catalog';
 import { translateChatRequest } from './translate';
 import { translateOpenAIStream } from './stream';
 import { translateChatRequestToResponses } from './translate-responses';
-import { translateOpenAIResponsesStream } from './stream-responses';
+import {
+  translateOpenAIResponsesStream,
+  type OpenAIResponsesStreamDiagnostics,
+} from './stream-responses';
 import type { OpenAIChatCompletionChunk } from './types';
-import type { ResponsesStreamEvent } from './responses-types';
+import type { ResponsesCreateParams, ResponsesStreamEvent } from './responses-types';
 
 export {
   buildOpenAIContainerGeneratedFileBundles,
@@ -110,6 +113,78 @@ export interface OpenAIAdapterConfig extends ProviderAdapterConfig {
    * (Hobby/Pro tier) can flip this on for a server-side conversation cache.
    */
   responsesStore?: boolean;
+  /**
+   * Content-free structural telemetry for the Responses path. This callback
+   * never receives prompts, response text, tool names/arguments, URLs, or files.
+   */
+  onResponsesDiagnostics?: (diagnostics: OpenAIResponsesDiagnostics) => void;
+}
+
+export interface OpenAIResponsesRequestDiagnostics {
+  model: string;
+  inputItemTypes: Record<string, number>;
+  inputContentTypes: Record<string, number>;
+  toolTypes: Record<string, number>;
+  toolChoice?: string;
+  maxOutputTokens?: number;
+  reasoningEffort?: string;
+  reasoningSummary?: string;
+  store?: boolean;
+  serviceTier?: string;
+}
+
+export interface OpenAIResponsesDiagnostics {
+  requestId?: string;
+  request: OpenAIResponsesRequestDiagnostics;
+  stream: OpenAIResponsesStreamDiagnostics;
+}
+
+function incrementDiagnosticCount(counts: Record<string, number>, key: string): void {
+  counts[key] = (counts[key] ?? 0) + 1;
+}
+
+export function summarizeOpenAIResponsesRequest(
+  params: ResponsesCreateParams,
+): OpenAIResponsesRequestDiagnostics {
+  const inputItemTypes: Record<string, number> = {};
+  const inputContentTypes: Record<string, number> = {};
+  if (typeof params.input === 'string') {
+    incrementDiagnosticCount(inputItemTypes, 'string');
+  } else {
+    for (const item of params.input) {
+      incrementDiagnosticCount(inputItemTypes, item.type ?? 'message');
+      if ('content' in item && Array.isArray(item.content)) {
+        for (const content of item.content) {
+          incrementDiagnosticCount(inputContentTypes, content.type);
+        }
+      }
+    }
+  }
+  const toolTypes: Record<string, number> = {};
+  for (const tool of params.tools ?? []) {
+    incrementDiagnosticCount(toolTypes, tool.type);
+  }
+  const toolChoice =
+    typeof params.tool_choice === 'string'
+      ? params.tool_choice
+      : params.tool_choice?.type === 'function'
+        ? 'function'
+        : undefined;
+
+  return {
+    model: params.model,
+    inputItemTypes,
+    inputContentTypes,
+    toolTypes,
+    ...(toolChoice ? { toolChoice } : {}),
+    ...(params.max_output_tokens !== undefined
+      ? { maxOutputTokens: params.max_output_tokens }
+      : {}),
+    ...(params.reasoning?.effort ? { reasoningEffort: params.reasoning.effort } : {}),
+    ...(params.reasoning?.summary ? { reasoningSummary: params.reasoning.summary } : {}),
+    ...(params.store !== undefined ? { store: params.store } : {}),
+    ...(params.service_tier ? { serviceTier: params.service_tier } : {}),
+  };
 }
 
 function findCatalogModel(id: string): ModelInfo | undefined {
@@ -219,14 +294,29 @@ export function createOpenAIAdapter(config: OpenAIAdapterConfig = {}): ProviderA
             ...(config.responsesStore !== undefined ? { store: config.responsesStore } : {}),
             ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
           });
+          const requestDiagnostics = summarizeOpenAIResponsesRequest(responsesParams);
           // SDK type churns; cast at the boundary.
-          const sdkStream = await sdk.responses.create(
+          const responsePromise = sdk.responses.create(
             responsesParams as unknown as Parameters<typeof sdk.responses.create>[0],
             { signal },
           );
+          const { data: sdkStream, request_id: requestId } = await responsePromise.withResponse();
           const watched = withStreamIdleWatchdog(
             translateOpenAIResponsesStream(
               sdkStream as unknown as AsyncIterable<ResponsesStreamEvent>,
+              {
+                onDiagnostics(stream) {
+                  try {
+                    config.onResponsesDiagnostics?.({
+                      ...(requestId ? { requestId } : {}),
+                      request: requestDiagnostics,
+                      stream,
+                    });
+                  } catch {
+                    // Diagnostics must never change provider behavior.
+                  }
+                },
+              },
             ),
           );
           for await (const chunk of watched) {
