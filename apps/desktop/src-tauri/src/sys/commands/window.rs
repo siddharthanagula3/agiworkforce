@@ -64,6 +64,11 @@ pub fn window_set_visibility(app: AppHandle, visible: bool) -> Result<(), String
 }
 
 #[tauri::command]
+pub fn window_quit_application(app: AppHandle) {
+    app.exit(0);
+}
+
+#[tauri::command]
 pub fn window_dock(
     app: AppHandle,
     state: State<AppState>,

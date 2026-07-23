@@ -91,6 +91,48 @@ pub fn open_encrypted_connection(path: &str, key: &[u8]) -> Result<Connection, S
     Ok(conn)
 }
 
+/// Open an encrypted database, migrating a legacy plaintext file only when the
+/// keyed open proves that migration is actually necessary.
+///
+/// Older startup code called [`migrate_to_encrypted`] before every open. For an
+/// already-encrypted SQLCipher database that performs a deliberately failing
+/// plaintext schema read on every launch. AGI owns several long-lived
+/// connections, so repeating that probe made the Desktop window wait many
+/// seconds before its webview could render.
+///
+/// The keyed open is both the normal production path and the cheapest reliable
+/// format check:
+///
+/// 1. encrypted/new database -> return immediately;
+/// 2. legacy plaintext database -> keyed verification fails, migrate once,
+///    then reopen with the key;
+/// 3. corrupt/wrong-key database -> migration and the final keyed open fail
+///    closed with both causes preserved.
+pub fn open_or_migrate_encrypted_connection(path: &str, key: &[u8]) -> Result<Connection, String> {
+    match open_encrypted_connection(path, key) {
+        Ok(conn) => Ok(conn),
+        Err(open_error) => {
+            if key.is_empty() || !std::path::Path::new(path).exists() {
+                return Err(open_error);
+            }
+
+            migrate_to_encrypted(path, key).map_err(|migration_error| {
+                format!(
+                    "Encrypted database open failed: {}. Legacy migration also failed: {}",
+                    open_error, migration_error
+                )
+            })?;
+
+            open_encrypted_connection(path, key).map_err(|retry_error| {
+                format!(
+                    "Database migration completed but keyed reopen failed: {}",
+                    retry_error
+                )
+            })
+        }
+    }
+}
+
 /// Attempt to migrate an unencrypted database to an encrypted one.
 ///
 /// This function checks whether the database at `db_path` is currently
@@ -203,12 +245,10 @@ pub fn migrate_to_encrypted(db_path: &str, key: &[u8]) -> Result<(), String> {
 /// `lib.rs`:
 ///
 /// 1. Derives the per-machine `DatabaseEncryption` key.
-/// 2. If a file already exists at `path`, transparently migrates a legacy
-///    plaintext database to SQLCipher (no-op if already encrypted). A migration
-///    error is logged but does not abort the open — the subsequent
-///    `open_encrypted_connection` will surface a hard error if the database is
-///    genuinely unreadable with the key.
-/// 3. Opens the connection with the encryption key applied.
+/// 2. Opens the connection with the encryption key applied.
+/// 3. Only if that keyed open fails for an existing file, attempts the legacy
+///    plaintext-to-SQLCipher migration and retries the keyed open. Migration
+///    and retry failures are returned together so callers fail closed.
 ///
 /// The key is derived on each call; callers that open connections on hot paths
 /// should hold a long-lived connection rather than reopening per operation.
@@ -228,20 +268,7 @@ pub fn open_keyed_connection(path: impl AsRef<std::path::Path>) -> Result<Connec
 
     let key = derive_key(KeyPurpose::DatabaseEncryption);
 
-    // Transparently migrate any pre-existing plaintext database in place. This
-    // is a one-time upgrade for databases created before encryption landed.
-    if path_ref.exists() {
-        if let Err(e) = migrate_to_encrypted(&path_str, &key) {
-            tracing::warn!(
-                "Auxiliary database encryption migration skipped or failed for '{}': {}. \
-                 Attempting to open as-is.",
-                path_str,
-                e
-            );
-        }
-    }
-
-    open_encrypted_connection(&path_str, &key)
+    open_or_migrate_encrypted_connection(&path_str, &key)
 }
 
 #[cfg(test)]
@@ -310,5 +337,56 @@ mod tests {
         }
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn open_or_migrate_preserves_legacy_plaintext_data_and_reopens_fast_path() {
+        let tmp = std::env::temp_dir().join(format!(
+            "agi_enc_migration_test_{}_{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let path = tmp.to_string_lossy().to_string();
+        let key = [0x2Au8; 32];
+        let _ = std::fs::remove_file(&path);
+
+        {
+            let plain = Connection::open(&path).expect("create legacy plaintext database");
+            plain
+                .execute_batch(
+                    "CREATE TABLE legacy (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+                     INSERT INTO legacy (id, value) VALUES (1, 'preserved');",
+                )
+                .expect("seed legacy plaintext database");
+        }
+
+        {
+            let migrated = open_or_migrate_encrypted_connection(&path, &key)
+                .expect("open or migrate legacy database");
+            let value: String = migrated
+                .query_row("SELECT value FROM legacy WHERE id = 1;", [], |row| {
+                    row.get(0)
+                })
+                .expect("read preserved legacy row");
+            assert_eq!(value, "preserved");
+        }
+
+        {
+            let reopened = open_or_migrate_encrypted_connection(&path, &key)
+                .expect("reopen already-keyed database without a plaintext probe");
+            let value: String = reopened
+                .query_row("SELECT value FROM legacy WHERE id = 1;", [], |row| {
+                    row.get(0)
+                })
+                .expect("read row through keyed fast path");
+            assert_eq!(value, "preserved");
+        }
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}.unencrypted.bak", path));
+        let _ = std::fs::remove_file(format!("{}.encrypting", path));
     }
 }

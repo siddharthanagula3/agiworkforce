@@ -413,7 +413,7 @@ Rules:
     // If Ollama is configured, try installed local models first. The router's default Ollama
     // model may not be installed on a given machine (e.g. it defaults to llama4-maverick).
     if has_ollama {
-        if let Ok(mut models) = ollama_list_models().await {
+        if let Ok(mut models) = ollama_list_models(None).await {
             models.sort_by_key(|m| m.size);
 
             let insert_at = usize::from(has_managed_cloud) + usize::from(has_zhipu);

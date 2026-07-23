@@ -196,16 +196,25 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
     }
 
     try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      const window = getCurrentWindow();
-      await window.close();
+      await invoke('window_quit_application');
     } catch (error) {
-      console.error('Failed to close window', error);
+      console.error('Failed to quit application', error);
     }
   }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const isPlatformCloseShortcut =
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === 'w';
+      if (isPlatformCloseShortcut) {
+        event.preventDefault();
+        void close();
+        return;
+      }
+
       if (!event.ctrlKey || !event.altKey) {
         return;
       }
@@ -224,7 +233,7 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dock]);
+  }, [close, dock]);
 
   const actions: WindowActions = useMemo(
     () => ({

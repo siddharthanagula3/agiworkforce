@@ -86,20 +86,46 @@ struct OllamaApiModelDetails {
 
 use crate::core::llm::OLLAMA_DEFAULT_BASE_URL;
 
+fn resolve_ollama_base_url(base_url: Option<String>) -> Result<String, String> {
+    let candidate = base_url
+        .as_deref()
+        .unwrap_or(OLLAMA_DEFAULT_BASE_URL)
+        .trim()
+        .trim_end_matches('/');
+    let parsed =
+        url::Url::parse(candidate).map_err(|_| "Ollama URL must be a valid URL".to_string())?;
+
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("Ollama URL must use http or https".to_string());
+    }
+    if parsed.host_str().is_none() {
+        return Err("Ollama URL must include a host".to_string());
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("Ollama URL must not contain credentials".to_string());
+    }
+    if parsed.query().is_some() || parsed.fragment().is_some() {
+        return Err("Ollama URL must not contain a query or fragment".to_string());
+    }
+
+    Ok(candidate.to_string())
+}
+
 /// Check if Ollama server is running and accessible
 ///
 /// # Returns
 /// - `Ok(true)` if Ollama is running and responding
 /// - `Ok(false)` if Ollama is not running or not accessible
 #[tauri::command]
-pub async fn ollama_check_status() -> Result<bool, String> {
+pub async fn ollama_check_status(base_url: Option<String>) -> Result<bool, String> {
+    let base_url = resolve_ollama_base_url(base_url)?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     match client
-        .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
+        .get(format!("{}/api/tags", base_url))
         .timeout(Duration::from_secs(3))
         .send()
         .await
@@ -115,14 +141,15 @@ pub async fn ollama_check_status() -> Result<bool, String> {
 /// - `Ok(Vec<OllamaModel>)` with the list of installed models
 /// - `Err` if Ollama is not running or the request fails
 #[tauri::command]
-pub async fn ollama_list_models() -> Result<Vec<OllamaModel>, String> {
+pub async fn ollama_list_models(base_url: Option<String>) -> Result<Vec<OllamaModel>, String> {
+    let base_url = resolve_ollama_base_url(base_url)?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let response = client
-        .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
+        .get(format!("{}/api/tags", base_url))
         .timeout(Duration::from_secs(10))
         .send()
         .await
@@ -182,8 +209,11 @@ pub async fn ollama_list_models() -> Result<Vec<OllamaModel>, String> {
 /// - `Ok(OllamaModel)` with the model details
 /// - `Err` if the model is not found or Ollama is not running
 #[tauri::command]
-pub async fn ollama_get_model_info(model_name: String) -> Result<OllamaModel, String> {
-    let models = ollama_list_models().await?;
+pub async fn ollama_get_model_info(
+    model_name: String,
+    base_url: Option<String>,
+) -> Result<OllamaModel, String> {
+    let models = ollama_list_models(base_url).await?;
 
     models
         .into_iter()
@@ -191,20 +221,20 @@ pub async fn ollama_get_model_info(model_name: String) -> Result<OllamaModel, St
         .ok_or_else(|| format!("Model '{}' not found in Ollama", model_name))
 }
 
-/// Pull a model from Ollama (starts the download)
-/// Note: This only initiates the pull - the actual download happens in the background
+/// Pull a model from Ollama and wait for the download to complete.
 ///
 /// # Arguments
 /// * `model_name` - The name of the model to pull (e.g., "llama3.2", "mistral:7b")
 ///
 /// # Returns
-/// - `Ok(())` if the pull request was initiated
+/// - `Ok(())` when the model is ready
 /// - `Err` if the request fails
 #[tauri::command]
-pub async fn ollama_pull_model(model_name: String) -> Result<(), String> {
+pub async fn ollama_pull_model(model_name: String, base_url: Option<String>) -> Result<(), String> {
     if model_name.trim().is_empty() {
         return Err("Model name cannot be empty".to_string());
     }
+    let base_url = resolve_ollama_base_url(base_url)?;
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(86400))
@@ -212,7 +242,7 @@ pub async fn ollama_pull_model(model_name: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let response = client
-        .post(format!("{}/api/pull", OLLAMA_DEFAULT_BASE_URL))
+        .post(format!("{}/api/pull", base_url))
         .json(&serde_json::json!({
             "name": model_name,
             "stream": false
@@ -239,10 +269,14 @@ pub async fn ollama_pull_model(model_name: String) -> Result<(), String> {
 /// - `Ok(())` if the model was deleted
 /// - `Err` if the deletion fails
 #[tauri::command]
-pub async fn ollama_delete_model(model_name: String) -> Result<(), String> {
+pub async fn ollama_delete_model(
+    model_name: String,
+    base_url: Option<String>,
+) -> Result<(), String> {
     if model_name.trim().is_empty() {
         return Err("Model name cannot be empty".to_string());
     }
+    let base_url = resolve_ollama_base_url(base_url)?;
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
@@ -250,7 +284,7 @@ pub async fn ollama_delete_model(model_name: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let response = client
-        .delete(format!("{}/api/delete", OLLAMA_DEFAULT_BASE_URL))
+        .delete(format!("{}/api/delete", base_url))
         .json(&serde_json::json!({
             "name": model_name
         }))
@@ -273,10 +307,26 @@ mod tests {
 
     #[tokio::test]
     async fn test_ollama_check_status_when_not_running() {
-        // This test will pass when Ollama is not running
-        // It should return Ok(false), not an error
-        let result = ollama_check_status().await;
+        // A running local Ollama returns true; an absent one returns false.
+        // Either way the command must not turn connection refusal into an error.
+        let result = ollama_check_status(None).await;
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn resolves_configured_ollama_url_without_trailing_slash() {
+        let url = resolve_ollama_base_url(Some("http://192.168.1.20:11434/".to_string())).unwrap();
+        assert_eq!(url, "http://192.168.1.20:11434");
+    }
+
+    #[test]
+    fn rejects_ollama_urls_with_embedded_credentials() {
+        let result =
+            resolve_ollama_base_url(Some("http://user:secret@localhost:11434".to_string()));
+        assert_eq!(
+            result.unwrap_err(),
+            "Ollama URL must not contain credentials"
+        );
     }
 
     #[test]

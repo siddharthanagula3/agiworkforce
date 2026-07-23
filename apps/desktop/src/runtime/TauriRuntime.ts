@@ -26,7 +26,13 @@ import type {
   TauriAttachmentPayload,
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
-import type { ChatExecutionMode } from '@agiworkforce/types';
+import {
+  getToolDisplayLabel,
+  type AgentEventEnvelope,
+  type AgentEventToolCategory,
+  type ChatExecutionMode,
+} from '@agiworkforce/types';
+import type { AgentEvent, JsonValue } from '@agiworkforce/types/protocol';
 import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 import { useUnifiedAuthStore } from '../stores/auth';
@@ -73,6 +79,28 @@ interface ToolEventPayload {
   output?: string;
   error?: string;
   duration_ms?: number;
+}
+
+interface AgentThinkingPayload {
+  thinking: boolean;
+  message?: string;
+  phase?: string;
+}
+
+interface ThinkingEventPayload {
+  event_type: 'start' | 'delta' | 'complete';
+  content: string;
+  message_id?: string | null;
+  tokens?: number | null;
+  timestamp: number;
+}
+
+interface AgentProgressPayload {
+  conversation_id: string | number;
+  iteration: number;
+  max_iterations: number;
+  status: string;
+  tool_count?: number;
 }
 
 // Raw payload for the `chat:artifact` event, emitted by
@@ -194,6 +222,43 @@ function isRawConversationArtifact(value: unknown): value is RawConversationArti
     Number.isInteger(candidate['current_version']) &&
     candidate['current_version'] >= 0
   );
+}
+
+function inferAgentToolCategory(name: string): AgentEventToolCategory {
+  const normalized = name.toLowerCase();
+  if (normalized.includes('browser') || normalized.includes('computer')) return 'computer-use';
+  if (normalized.includes('web_search') || normalized.includes('search_web')) return 'web-search';
+  if (normalized.includes('web_fetch') || normalized.includes('fetch_url')) return 'web-fetch';
+  if (normalized.includes('read') || normalized.includes('write') || normalized.includes('file')) {
+    return 'filesystem';
+  }
+  if (
+    normalized.includes('shell') ||
+    normalized.includes('bash') ||
+    normalized.includes('terminal')
+  ) {
+    return 'shell';
+  }
+  if (normalized.includes('code') || normalized.includes('python')) return 'code-execution';
+  if (normalized.includes('artifact')) return 'artifact';
+  if (normalized.includes('memory')) return 'memory';
+  if (normalized.includes('skill')) return 'skill';
+  if (normalized.startsWith('mcp__')) return 'mcp';
+  if (normalized.includes('connector')) return 'connector';
+  return 'other';
+}
+
+function toAgentJsonValue(value: unknown): JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (Array.isArray(value)) return value.map(toAgentJsonValue);
+  if (typeof value !== 'object') return null;
+
+  const result: { [key: string]: JsonValue } = {};
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (nestedValue !== undefined) result[key] = toAgentJsonValue(nestedValue);
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -463,8 +528,16 @@ export class TauriRuntime implements ChatRuntime {
       if (this._streamCallbacks.size > 0) {
         let event: import('@agiworkforce/unified-chat').StreamEvent | null = null;
         if (chunk.type === 'text') event = { type: 'content', content: chunk.content };
-        else if (chunk.type === 'thinking') event = { type: 'thinking', content: chunk.content };
-        else if (chunk.type === 'tool_call') {
+        else if (chunk.type === 'thinking') {
+          event = {
+            type: 'thinking',
+            content: chunk.content,
+            durationMs: chunk.durationMs,
+            completed: chunk.completed,
+          };
+        } else if (chunk.type === 'agent_event') {
+          event = { type: 'agent_event', envelope: chunk.data };
+        } else if (chunk.type === 'tool_call') {
           event = {
             type: 'tool_call',
             toolCall: {
@@ -571,6 +644,9 @@ export class TauriRuntime implements ChatRuntime {
     const streamedArtifactIds = new Set<string>();
     let done = false;
     let streamEndHandled = false;
+    let agentEventSequence = 0;
+    let thinkingStartedAtMs = Date.now();
+    let streamedThinkingContent = '';
     let stopWatchdog: ReturnType<typeof setTimeout> | undefined;
 
     const push = (chunk: StreamChunk | null) => {
@@ -620,6 +696,93 @@ export class TauriRuntime implements ChatRuntime {
       const unlisten = await listen<T>(event, ({ payload }) => handler(payload));
       unlisteners.push(unlisten);
     };
+
+    const pushAgentEvent = (event: AgentEvent) => {
+      const envelope: AgentEventEnvelope = {
+        // The Rust-owned canonical agent-event schema is currently v3.
+        schemaVersion: 3,
+        sessionId: String(backendConversationId),
+        turnId: frontendMessageId,
+        sequence: agentEventSequence++,
+        emittedAtMs: Date.now(),
+        event,
+      };
+      push({ type: 'agent_event', data: envelope });
+    };
+
+    // Native Local lifecycle updates are adapted into the same canonical,
+    // renderer-neutral activity envelope used by managed Cloud. This keeps the
+    // shared ChatInterface responsible for presentation while Tauri owns only
+    // transport translation.
+    await registerListener<AgentThinkingPayload>('agent:thinking', (payload) => {
+      if (!payload.thinking) return;
+      thinkingStartedAtMs = Date.now();
+      pushAgentEvent({
+        type: 'progress-update',
+        progressId: 'local-thinking',
+        summary: payload.message?.trim() || payload.phase?.trim() || 'Thinking…',
+        status: 'running',
+      });
+    });
+
+    // Provider reasoning is a separate, typed native event. Keep the native
+    // transport details here and expose only the surface-neutral shared
+    // `thinking` chunk to ChatInterface. Completion payloads contain the full
+    // trace, so emit only the unseen suffix after any deltas.
+    await registerListener<ThinkingEventPayload>('thinking:event', (payload) => {
+      if (payload.message_id && payload.message_id !== frontendMessageId) return;
+
+      if (payload.event_type === 'start') {
+        thinkingStartedAtMs = payload.timestamp;
+        streamedThinkingContent = '';
+        return;
+      }
+
+      const durationMs = Math.max(0, payload.timestamp - thinkingStartedAtMs);
+      if (payload.event_type === 'delta') {
+        streamedThinkingContent += payload.content;
+        push({
+          type: 'thinking',
+          content: payload.content,
+          durationMs,
+          completed: false,
+        });
+        return;
+      }
+
+      const unseenContent = payload.content.startsWith(streamedThinkingContent)
+        ? payload.content.slice(streamedThinkingContent.length)
+        : streamedThinkingContent.endsWith(payload.content)
+          ? ''
+          : payload.content;
+      streamedThinkingContent =
+        payload.content.length >= streamedThinkingContent.length
+          ? payload.content
+          : streamedThinkingContent;
+      push({
+        type: 'thinking',
+        content: unseenContent,
+        durationMs,
+        completed: true,
+      });
+    });
+
+    await registerListener<AgentProgressPayload>('chat:agent-progress', (payload) => {
+      if (String(payload.conversation_id) !== String(backendConversationId)) return;
+      const toolCount = payload.tool_count ?? 0;
+      const limitReached = payload.status === 'limit_reached';
+      pushAgentEvent({
+        type: 'progress-update',
+        progressId: 'local-agent-iteration',
+        summary: limitReached
+          ? `Agent reached iteration limit (${payload.max_iterations})`
+          : `Agent iteration ${payload.iteration}/${payload.max_iterations}${
+              toolCount > 0 ? ` — ${toolCount} ${toolCount === 1 ? 'tool' : 'tools'}` : ''
+            }`,
+        ...(limitReached ? {} : { detail: 'Running local tools' }),
+        status: limitReached ? 'failed' : 'running',
+      });
+    });
 
     // chat:stream-chunk — incremental text delta
     await registerListener<StreamChunkPayload>('chat:stream-chunk', (payload) => {
@@ -697,21 +860,40 @@ export class TauriRuntime implements ChatRuntime {
     // tool:event — tool call lifecycle events
     await registerListener<ToolEventPayload>('tool:event', (payload) => {
       if (payload.type === 'started') {
+        const name = payload.name ?? '';
+        const display = getToolDisplayLabel(name);
+        pushAgentEvent({
+          type: 'tool-execution-start',
+          toolCallId: payload.id,
+          name,
+          category: inferAgentToolCategory(name),
+          summary: display.activeForm,
+          input: toAgentJsonValue(payload.args ?? {}),
+        });
         push({
           type: 'tool_call',
           data: {
             id: payload.id,
-            name: payload.name ?? '',
+            name,
             status: 'running',
             input: payload.args ?? {},
           },
         });
       } else if (payload.type === 'completed') {
+        const name = payload.name ?? '';
+        pushAgentEvent({
+          type: 'tool-execution-end',
+          toolCallId: payload.id,
+          name,
+          output: toAgentJsonValue(payload.error ?? payload.output ?? null),
+          isError: Boolean(payload.error),
+          ...(payload.duration_ms !== undefined ? { elapsedMs: payload.duration_ms } : {}),
+        });
         push({
           type: 'tool_result',
           data: {
             id: payload.id,
-            name: payload.name ?? '',
+            name,
             status: payload.error ? 'failed' : 'completed',
             output: payload.output,
             error: payload.error,

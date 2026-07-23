@@ -48,6 +48,12 @@ fn cap_tools_for_prompt_injection(tools: &[ToolDefinition]) -> &[ToolDefinition]
 struct OllamaMessage {
     role: String,
     content: String,
+    /// Extended reasoning returned by Ollama reasoning models. This is
+    /// intentionally kept separate from `content` so the renderer can present
+    /// it in the shared collapsible thinking block instead of leaking it into
+    /// the final answer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    thinking: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -354,6 +360,7 @@ impl OllamaProvider {
                 OllamaMessage {
                     role: m.role.clone(),
                     content: m.content.clone(),
+                    thinking: None,
                     tool_calls,
                     tool_call_id: m.tool_call_id.clone(),
                 }
@@ -471,7 +478,13 @@ impl LLMProvider for OllamaProvider {
         // Extract tool calls from the Ollama response.
         // Two paths: (1) prompt-injected tool calls parsed from the plain-text
         // response, (2) native tool calls returned by the Ollama API.
-        let mut response_content = ollama_response.message.content;
+        let OllamaMessage {
+            content: mut response_content,
+            thinking,
+            tool_calls,
+            ..
+        } = ollama_response.message;
+        let reasoning_content = thinking.filter(|value| !value.trim().is_empty());
 
         let response_tool_calls = if let Some(tool_nonce) = prompt_injected_tool_nonce.as_deref() {
             // Parse tool calls the model attempted via text output
@@ -493,7 +506,7 @@ impl LLMProvider for OllamaProvider {
             }
         } else {
             // Native tool calls from the Ollama API
-            ollama_response.message.tool_calls.as_ref().map(|calls| {
+            tool_calls.as_ref().map(|calls| {
                 calls
                     .iter()
                     .filter_map(|tc| {
@@ -542,6 +555,7 @@ impl LLMProvider for OllamaProvider {
             model: ollama_response.model,
             tool_calls: response_tool_calls,
             finish_reason,
+            reasoning_content,
             ..LLMResponse::default()
         })
     }
@@ -862,6 +876,28 @@ mod tests {
         assert_eq!(request.model, "tinyllama");
         assert_eq!(request.max_tokens, Some(10));
         assert!(!request.stream);
+    }
+
+    #[test]
+    fn test_ollama_response_preserves_separate_thinking_content() {
+        let response: OllamaResponse = serde_json::from_value(serde_json::json!({
+            "model": "qwen3.5:latest",
+            "message": {
+                "role": "assistant",
+                "thinking": "I should compare the relevant facts first.",
+                "content": "The answer is 42."
+            },
+            "done": true,
+            "eval_count": 12,
+            "prompt_eval_count": 8
+        }))
+        .expect("Ollama response should deserialize");
+
+        assert_eq!(
+            response.message.thinking.as_deref(),
+            Some("I should compare the relevant facts first.")
+        );
+        assert_eq!(response.message.content, "The answer is 42.");
     }
 
     /// A malformed `base_url` (e.g. a partial string with no scheme) must make
