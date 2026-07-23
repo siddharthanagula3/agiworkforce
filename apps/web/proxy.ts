@@ -27,6 +27,15 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
   // needed in that case ('self' already covers it).
   const sandboxOrigin = process.env['NEXT_PUBLIC_SANDBOX_ORIGIN']?.trim().replace(/\/+$/, '');
   const sandboxFrameSrc = sandboxOrigin ? ` ${sandboxOrigin}` : '';
+  // Direct browser uploads use short-lived presigned PUT URLs on the account's
+  // R2 S3-compatible endpoint. Keep this exact-origin: validating Cloudflare's
+  // 32-hex account-id shape prevents an env typo from widening connect-src to
+  // an attacker-controlled host.
+  const r2AccountId = process.env['CLOUDFLARE_R2_ACCOUNT_ID']?.trim();
+  const r2UploadOrigin =
+    r2AccountId && /^[a-f0-9]{32}$/iu.test(r2AccountId)
+      ? ` https://${r2AccountId}.r2.cloudflarestorage.com`
+      : '';
   const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
   return `
     default-src 'self';
@@ -34,7 +43,7 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
     img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
+    connect-src 'self'${r2UploadOrigin} https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
     frame-ancestors ${frameAncestors};
