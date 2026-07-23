@@ -17,8 +17,7 @@ function parseClerkOrigin(value: string): ClerkOriginResult {
   }
 
   const localDevelopmentOrigin =
-    url.protocol === 'http:' &&
-    (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
   if (url.protocol !== 'https:' && !localDevelopmentOrigin) {
     return {
       error: 'CLERK_SYNC_HOST must use HTTPS (HTTP is allowed only for localhost development).',
@@ -129,7 +128,14 @@ export async function getFreshClerkToken(): Promise<string | null> {
 
 export async function openClerkSignIn(): Promise<void> {
   const clerk = await getForegroundClient();
-  clerk.openSignIn({});
+  clerk.openSignIn({
+    appearance: {
+      elements: {
+        dividerRow: { display: 'none' },
+        socialButtonsRoot: { display: 'none' },
+      },
+    },
+  });
 }
 
 export async function signOutClerk(): Promise<void> {
