@@ -2379,8 +2379,25 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
     typeof error === 'object' &&
     error !== null &&
     (error as { name?: unknown }).name === 'AbortError';
+  const currentMessage = useChatStore
+    .getState()
+    .messages.find((message) => message.id === assistantMessageId);
+  const currentActivity = currentMessage?.metadata?.agentActivity;
   if (isAbort) {
-    updateMessage(assistantMessageId, { isStreaming: false });
+    updateMessage(assistantMessageId, {
+      isStreaming: false,
+      ...(currentActivity
+        ? {
+            metadata: {
+              ...currentMessage?.metadata,
+              agentActivity: finishAgentActivityLocally(currentActivity, {
+                status: 'cancelled',
+                completedAtMs: Date.now(),
+              }),
+            },
+          }
+        : {}),
+    });
     stopStreaming(conversationId);
     setLoading(false, conversationId);
     return;
@@ -2427,6 +2444,18 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
     isStreaming: false,
     content: errorContent,
     error: true,
+    ...(currentActivity
+      ? {
+          metadata: {
+            ...currentMessage?.metadata,
+            agentActivity: finishAgentActivityLocally(currentActivity, {
+              status: 'failed',
+              completedAtMs: Date.now(),
+              error: errorMessage,
+            }),
+          },
+        }
+      : {}),
   });
   setError(errorMessage);
 

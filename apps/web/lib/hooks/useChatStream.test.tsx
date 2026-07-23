@@ -1467,6 +1467,27 @@ describe('useChatStream', () => {
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
+  it('marks the AGI Work action state failed when the provider request returns an error', async () => {
+    mockLlmErrorResponse({ error: { message: 'Upstream timed out' } }, 504);
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('create the file', {
+        conversationId: TEMP_CONVERSATION.id,
+        workMode: 'agiwork',
+      });
+    });
+
+    const assistant = useChatStore
+      .getState()
+      .messages.find((message) => message.role === 'assistant');
+    expect(assistant?.metadata?.agentActivity).toMatchObject({
+      status: 'failed',
+      stopReason: 'error',
+      entries: expect.arrayContaining([expect.objectContaining({ status: 'failed' })]),
+    });
+  });
+
   it('binds a Managed Cloud send to the durable assistant turn id', async () => {
     mockSseStream([{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }]);
     const { result } = renderHook(() => useChatStream());
