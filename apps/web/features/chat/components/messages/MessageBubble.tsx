@@ -919,7 +919,10 @@ const MessageBubbleComponent = function MessageBubble({
               !isUser && message.metadata?.comparisonOptions && 'hidden',
             )}
           >
-            {message.isStreaming && !cleanedContent.trim() && !streamingBlock ? (
+            {message.isStreaming &&
+            !cleanedContent.trim() &&
+            !streamingBlock &&
+            !canonicalActivity ? (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                 <span className="text-sm">Thinking...</span>

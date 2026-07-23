@@ -564,7 +564,7 @@ export function MessageBubble({
         ))}
 
       <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] break-words">
-        {isStreaming && !message.content.trim() ? (
+        {isStreaming && !message.content.trim() && !canonicalActivity ? (
           /* Pre-first-token placeholder (web parity): a pulsing dot + "Thinking…"
              instead of a bare blinking caret on an empty bubble. */
           <div className="flex items-center gap-2 text-[var(--chat-text-muted)]">

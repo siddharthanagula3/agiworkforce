@@ -580,6 +580,16 @@ describe('useChat — registry-backed Auto routing', () => {
       'Build and verify this',
       expect.objectContaining({ agentMode: 'auto', workMode: 'agiwork' }),
     );
+    expect(lastAssistantMessage()?.metadata?.['agentActivity']).toMatchObject({
+      status: 'running',
+      entries: [
+        expect.objectContaining({
+          kind: 'progress',
+          summary: 'Starting AGI Work',
+          status: 'running',
+        }),
+      ],
+    });
   });
 
   it('does not forward a stale Research request through an unsupported runtime', async () => {

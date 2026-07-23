@@ -44,6 +44,7 @@ import {
 import {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
+  startAgentActivityLocally,
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -561,10 +562,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   // turn already accumulated so the terminal persist (which REPLACES the
   // metadata jsonb wholesale) does not drop earlier search results, code
   // output, generated files, or research state.
-  const seedMetadata =
-    ctx.seedContent !== undefined
-      ? useChatStore.getState().messages.find((m) => m.id === ctx.assistantMessageId)?.metadata
-      : undefined;
+  const liveMessageMetadata = useChatStore
+    .getState()
+    .messages.find((message) => message.id === ctx.assistantMessageId)?.metadata;
+  const seedMetadata = ctx.seedContent !== undefined ? liveMessageMetadata : undefined;
   let currentSearchResults: MessageMetadata['searchResults'] = seedMetadata?.searchResults;
   let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'] =
     seedMetadata?.codeExecutionResult;
@@ -572,7 +573,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     ? { ...seedMetadata.research }
     : undefined;
   let currentGeneratedFiles: MessageMetadata['generatedFiles'] = seedMetadata?.generatedFiles;
-  let currentAgentActivity: AgentActivityState | undefined = seedMetadata?.agentActivity;
+  let currentAgentActivity: AgentActivityState | undefined = liveMessageMetadata?.agentActivity;
   let currentCloudAgentRun: ManagedCloudAgentRunReference | undefined = runHandle
     ? {
         ...runHandle,
@@ -612,6 +613,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       .getState()
       .messages.find((m) => m.id === assistantMessageId)?.metadata;
     updateMessage(assistantMessageId, { metadata: { ...current, ...patch } });
+  };
+
+  const completeLocalStartingActivity = () => {
+    if (!currentAgentActivity || currentAgentActivity.lastSequence !== -1) return;
+    currentAgentActivity = finishAgentActivityLocally(currentAgentActivity, {
+      status: 'completed',
+      completedAtMs: Date.now(),
+    });
+    patchMessageMeta({ agentActivity: currentAgentActivity });
   };
 
   if (currentCloudAgentRun) {
@@ -1068,6 +1078,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     setSearching(assistantMessageId, false);
     setExecutingCode(assistantMessageId, false);
     if (finishReason) patchMessageMeta({ finishReason });
+    completeLocalStartingActivity();
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
@@ -1108,6 +1119,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             // (hasStreamError) renders immediately, not only after reload.
             patchMessageMeta({ streamError: streamErrorInfo });
           }
+          completeLocalStartingActivity();
           persistAssistant(fullAssistantContent);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
@@ -1460,6 +1472,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (streamErrorInfo) {
       patchMessageMeta({ streamError: streamErrorInfo });
     }
+    completeLocalStartingActivity();
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
@@ -1681,13 +1694,26 @@ export function useChatStream(): UseChatStreamReturn {
       }
 
       const assistantMessageId = crypto.randomUUID();
+      const assistantStartedAtMs = Date.now();
       const assistantMessage: Message = {
         id: assistantMessageId,
         role: 'assistant',
         content: '',
-        createdAt: new Date().toISOString(),
+        createdAt: new Date(assistantStartedAtMs).toISOString(),
         model,
         isStreaming: true,
+        ...(options.workMode === 'agiwork'
+          ? {
+              metadata: {
+                agentActivity: startAgentActivityLocally({
+                  sessionId: conversationId,
+                  turnId: assistantMessageId,
+                  summary: 'Starting AGI Work',
+                  startedAtMs: assistantStartedAtMs,
+                }),
+              },
+            }
+          : {}),
       };
       addMessage(assistantMessage);
       startStreaming(assistantMessageId, conversationId);
