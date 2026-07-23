@@ -1627,6 +1627,7 @@ export function useChatStream(): UseChatStreamReturn {
         thinkingEnabled: options.thinkingEnabled,
         codeExecutionEnabled: options.codeExecution,
         officeCreationEnabled: options.officeCreation,
+        workMode: options.workMode,
         styleMode: options.styleMode,
         hasSkillInstruction: Boolean(options.skillName),
       });
