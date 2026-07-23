@@ -136,6 +136,52 @@ let refreshModelPickerUI: () => void = () => {
 };
 let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
+type ManagedCloudChatState = 'loading' | 'ready' | 'signed_out' | 'unavailable';
+type ManagedCloudGateAction = 'none' | 'sign_in' | 'open_web' | 'upgrade' | 'retry';
+let managedCloudChatState: ManagedCloudChatState = 'loading';
+let managedCloudGateMessage = 'Checking your AGI Cloud account…';
+let managedCloudGateAction: ManagedCloudGateAction = 'none';
+let managedCloudGateActionLabel = '';
+
+function setManagedCloudChatState(
+  state: ManagedCloudChatState,
+  options: {
+    message?: string;
+    action?: ManagedCloudGateAction;
+    actionLabel?: string;
+  } = {},
+): void {
+  managedCloudChatState = state;
+  managedCloudGateMessage =
+    options.message ??
+    (state === 'signed_out'
+      ? 'Sign in to use AGI Cloud chat.'
+      : state === 'unavailable'
+        ? 'AGI Cloud chat is unavailable.'
+        : managedCloudGateMessage);
+  managedCloudGateAction = options.action ?? 'none';
+  managedCloudGateActionLabel = options.actionLabel ?? '';
+
+  const gate = document.getElementById('sp-cloud-gate');
+  const message = document.getElementById('sp-cloud-gate-message');
+  const action = document.getElementById('sp-cloud-gate-action') as HTMLButtonElement | null;
+  const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+
+  gate?.classList.toggle('visible', state !== 'ready');
+  if (message) message.textContent = managedCloudGateMessage;
+  if (action) {
+    action.hidden = managedCloudGateAction === 'none';
+    action.textContent = managedCloudGateActionLabel;
+    action.dataset['action'] = managedCloudGateAction;
+  }
+  if (input) {
+    input.disabled = state !== 'ready';
+    if (state === 'ready') input.placeholder = 'Ask anything... (/ for commands)';
+    else if (state === 'signed_out') input.placeholder = 'Sign in to chat';
+    else if (state === 'unavailable') input.placeholder = 'AGI Cloud access required';
+  }
+  updateSendButton();
+}
 
 /**
  * Side-panel UI message shape.
@@ -626,19 +672,21 @@ function injectStyles(): void {
     }
     #sp-empty.hidden { display: none; }
     #sp-empty-icon {
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       margin-bottom: 8px;
       opacity: 0.7;
     }
     #sp-empty-headline {
+      display: none;
       font-size: 16px;
       font-weight: 600;
       color: var(--agi-ext-text);
       letter-spacing: -0.015em;
     }
     #sp-empty-subtext {
+      display: none;
       font-size: 12px;
       color: var(--agi-ext-text-muted);
       line-height: 1.55;
@@ -647,7 +695,9 @@ function injectStyles(): void {
 
     /* ── Inline prompt chips under the composer (design-spec §8.2) ── */
     #sp-prompt-chips {
-      display: flex;
+      /* Slash commands remain available from the composer. Keep the empty
+         surface visually quiet, matching the chat-first reference panels. */
+      display: none;
       flex-wrap: nowrap;
       gap: 6px;
       overflow: hidden;
@@ -1026,7 +1076,10 @@ function injectStyles(): void {
 
     /* ── Context / voice toolbar ── */
     #sp-toolbar {
-      display: flex;
+      /* Founder decision 2026-06-14: keep the primary surface pure chat.
+         Capture, grouping, shortcuts, and tools remain available in the
+         settings drawer instead of competing with the composer. */
+      display: none;
       gap: 6px;
       padding: 6px 10px 0;
       flex-shrink: 0;
@@ -1255,6 +1308,47 @@ function injectStyles(): void {
       border-top: 1px solid var(--agi-ext-border);
       flex-shrink: 0;
     }
+    #sp-cloud-gate {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 6px;
+      padding: 9px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 10px;
+      background: var(--agi-ext-surface);
+    }
+    #sp-cloud-gate.visible { display: flex; }
+    #sp-cloud-gate-copy {
+      flex: 1;
+      min-width: 0;
+    }
+    #sp-cloud-gate-title {
+      color: var(--agi-ext-text);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    #sp-cloud-gate-message {
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      line-height: 1.4;
+      margin-top: 2px;
+    }
+    #sp-cloud-gate-action {
+      flex-shrink: 0;
+      border: 0;
+      border-radius: 7px;
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      cursor: pointer;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 6px 9px;
+    }
+    #sp-cloud-gate-action:hover { opacity: 0.88; }
+    #sp-cloud-gate-action:disabled { cursor: wait; opacity: 0.6; }
     /* outer composer shell */
     #sp-composer-shell {
       background: var(--agi-ext-surface);
@@ -1294,7 +1388,7 @@ function injectStyles(): void {
       min-height: 28px;
       overflow-y: auto;
     }
-    #sp-input::placeholder { color: var(--agi-ext-border-strong); }
+    #sp-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.78; }
     #sp-send-btn {
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
@@ -1458,11 +1552,15 @@ function injectStyles(): void {
     .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
 
     /* ── Autonomy toggle (BLOCKER-01) ── */
+    .sp-action-mode-wrapper {
+      position: relative;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
     #sp-action-mode-toggle {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      margin-left: auto;
       background: var(--agi-ext-overlay);
       border: 1px solid var(--agi-ext-border);
       border-radius: 12px;
@@ -1476,6 +1574,11 @@ function injectStyles(): void {
       flex-shrink: 0;
       user-select: none;
     }
+    #sp-action-mode-toggle .sp-chevron {
+      font-size: 8px;
+      transition: transform 0.15s;
+    }
+    #sp-action-mode-toggle[aria-expanded="true"] .sp-chevron { transform: rotate(180deg); }
     #sp-action-mode-toggle:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
     #sp-action-mode-toggle[data-mode="act"] {
       color: var(--agi-ext-accent);
@@ -1483,6 +1586,57 @@ function injectStyles(): void {
       background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
     }
     #sp-action-mode-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    #sp-action-mode-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 7px);
+      width: min(260px, calc(100vw - 28px));
+      padding: 5px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 10px;
+      background: var(--agi-ext-surface);
+      box-shadow: var(--agi-ext-shadow-panel);
+      z-index: 220;
+    }
+    #sp-action-mode-menu.open { display: block; }
+    .sp-action-mode-option {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 8px;
+      width: 100%;
+      padding: 8px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--agi-ext-text);
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+    }
+    .sp-action-mode-option:hover { background: var(--agi-ext-hover); }
+    .sp-action-mode-option-check {
+      color: var(--agi-ext-accent);
+      font-size: 12px;
+      line-height: 16px;
+      text-align: center;
+    }
+    .sp-action-mode-option-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .sp-action-mode-option-title {
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .sp-action-mode-option-desc {
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      line-height: 1.35;
+    }
 
     /* W5-06: quick mode toggle */
     #sp-quick-mode-toggle {
@@ -1594,7 +1748,10 @@ function injectStyles(): void {
 
     /* ── Auth bar ── */
     #sp-auth-bar {
-      display: flex;
+      /* Native Desktop pairing is optional for Managed Cloud chat and lives
+         in the settings drawer. A red top-level "Offline" strip made the
+         healthy public chat surface look unavailable. */
+      display: none;
       align-items: center;
       gap: 6px;
       padding: 6px 10px;
@@ -3566,7 +3723,7 @@ function updateSendButton(): void {
     clearChildren(btn);
     btn.appendChild(renderIcon(Square, 14));
   } else {
-    btn.disabled = false;
+    btn.disabled = managedCloudChatState !== 'ready';
     btn.setAttribute('data-mode', 'send');
     btn.title = 'Send';
     btn.setAttribute('aria-label', 'Send message');
@@ -3749,10 +3906,12 @@ function setBlockedState(blocked: boolean): void {
     if (promptChips && _ctx.messages.length === 0) promptChips.classList.remove('hidden');
   }
   if (inputEl) {
-    inputEl.disabled = !availability.chat;
-    inputEl.placeholder = availability.pageContext
-      ? 'Ask anything... (/ for commands)'
-      : 'Ask anything (page context unavailable)';
+    inputEl.disabled = !availability.chat || managedCloudChatState !== 'ready';
+    if (managedCloudChatState === 'ready') {
+      inputEl.placeholder = availability.pageContext
+        ? 'Ask anything... (/ for commands)'
+        : 'Ask anything (page context unavailable)';
+    }
   }
   updateContextButton();
   if (contextBtn) {
@@ -5657,6 +5816,13 @@ function buildUI(): void {
       quotaWrap.style.display = 'none';
       quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
       refreshModelPickerUI();
+      setManagedCloudChatState('signed_out', {
+        message: isClerkExtensionAuthConfigured()
+          ? 'Sign in to start chatting in Chrome.'
+          : 'Open AGI to finish account setup.',
+        action: isClerkExtensionAuthConfigured() ? 'sign_in' : 'open_web',
+        actionLabel: isClerkExtensionAuthConfigured() ? 'Sign in' : 'Open AGI',
+      });
       return;
     }
 
@@ -5679,12 +5845,22 @@ function buildUI(): void {
         signinDescription.textContent = 'Your session expired. Sign in again to continue.';
         signinPrompt.style.display = '';
         signedInView.style.display = 'none';
+        setManagedCloudChatState('signed_out', {
+          message: 'Your session expired. Sign in again to continue.',
+          action: 'sign_in',
+          actionLabel: 'Sign in',
+        });
         return;
       }
 
       signinPrompt.style.display = 'none';
       signedInView.style.display = '';
       userTierEl.textContent = 'Account unavailable';
+      setManagedCloudChatState('unavailable', {
+        message: 'We could not verify your AGI Cloud account.',
+        action: 'retry',
+        actionLabel: 'Retry',
+      });
       return;
     }
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
@@ -5709,6 +5885,8 @@ function buildUI(): void {
       quotaBadgeEl.classList.add('visible', 'has-prompts');
       quotaBadgeEl.classList.remove('exhausted');
       quotaBadgeEl.textContent = access.subscriptionTier.trim().toUpperCase();
+      setManagedCloudChatState('ready');
+      refreshPageHostname();
       return;
     }
 
@@ -5719,6 +5897,11 @@ function buildUI(): void {
     quotaBadgeEl.classList.remove('has-prompts');
     quotaBadgeEl.classList.add('exhausted');
     quotaBadgeEl.textContent = 'Upgrade';
+    setManagedCloudChatState('unavailable', {
+      message: 'Chrome access requires a paid plan.',
+      action: 'upgrade',
+      actionLabel: 'View plans',
+    });
   };
 
   // Sign-out handler
@@ -6743,6 +6926,48 @@ function buildUI(): void {
   document.body.appendChild(toolbar);
 
   const inputArea = el('div', { id: 'sp-input-area' });
+  const cloudGate = el('div', {
+    id: 'sp-cloud-gate',
+    role: 'region',
+    'aria-label': 'AGI Cloud access',
+  });
+  const cloudGateCopy = el('div', { id: 'sp-cloud-gate-copy' });
+  cloudGateCopy.appendChild(el('div', { id: 'sp-cloud-gate-title' }, 'AGI Cloud'));
+  cloudGateCopy.appendChild(
+    el('div', { id: 'sp-cloud-gate-message', 'aria-live': 'polite' }, managedCloudGateMessage),
+  );
+  const cloudGateAction = el('button', {
+    id: 'sp-cloud-gate-action',
+    type: 'button',
+    hidden: '',
+  }) as HTMLButtonElement;
+  cloudGateAction.addEventListener('click', async () => {
+    const action = cloudGateAction.dataset['action'] as ManagedCloudGateAction | undefined;
+    if (!action || action === 'none') return;
+    cloudGateAction.disabled = true;
+    try {
+      if (action === 'sign_in') {
+        await openClerkSignIn();
+      } else if (action === 'open_web') {
+        await chrome.tabs.create({ url: 'https://agiworkforce.com' });
+      } else if (action === 'upgrade') {
+        await chrome.tabs.create({ url: 'https://agiworkforce.com/pricing' });
+      } else if (action === 'retry') {
+        await refreshCloudAccountUI();
+      }
+    } catch (error) {
+      setManagedCloudChatState('unavailable', {
+        message: error instanceof Error ? error.message : 'Unable to open AGI Cloud.',
+        action: 'retry',
+        actionLabel: 'Retry',
+      });
+    } finally {
+      cloudGateAction.disabled = false;
+    }
+  });
+  cloudGate.appendChild(cloudGateCopy);
+  cloudGate.appendChild(cloudGateAction);
+
   const composerShell = el('div', { id: 'sp-composer-shell' });
   const inputRow = el('div', { id: 'sp-input-row' });
 
@@ -6938,22 +7163,81 @@ function buildUI(): void {
   });
   composerBar.appendChild(contextBtn);
 
-  // BLOCKER-01: autonomy toggle — persists to agi_action_mode in chrome.storage.local
+  // BLOCKER-01: explicit ask/act menu — persists to agi_action_mode in
+  // chrome.storage.local. The menu keeps the safety choice discoverable and
+  // prevents an accidental click from silently changing the autonomy mode.
+  type ActionMode = 'ask' | 'act';
+  const actionModeWrapper = el('div', { class: 'sp-action-mode-wrapper' });
   const actionModeToggle = el('button', {
     id: 'sp-action-mode-toggle',
-    title: 'Toggle automation permission mode',
+    type: 'button',
+    title: 'Choose automation permission mode',
     'data-mode': 'ask',
+    'aria-haspopup': 'menu',
+    'aria-expanded': 'false',
   });
-  actionModeToggle.textContent = 'Ask before acting';
-  chrome.storage.local.get({ agi_action_mode: 'ask' }, (items) => {
-    const stored = items['agi_action_mode'];
-    const mode = stored === 'ask' || stored === 'act' ? stored : 'ask';
-    actionModeToggle.setAttribute('data-mode', mode);
-    actionModeToggle.textContent = mode === 'act' ? 'Act without asking' : 'Ask before acting';
+  const actionModeLabel = el('span', {}, 'Ask before acting');
+  const actionModeChevron = el('span', { class: 'sp-chevron', 'aria-hidden': 'true' }, '▾');
+  actionModeToggle.appendChild(actionModeLabel);
+  actionModeToggle.appendChild(actionModeChevron);
+
+  const actionModeMenu = el('div', {
+    id: 'sp-action-mode-menu',
+    role: 'menu',
+    'aria-label': 'Automation permission mode',
   });
-  actionModeToggle.addEventListener('click', () => {
-    const current = actionModeToggle.getAttribute('data-mode') as 'ask' | 'act';
-    const next = current === 'ask' ? 'act' : 'ask';
+  function buildActionModeOption(
+    mode: ActionMode,
+    title: string,
+    description: string,
+  ): HTMLButtonElement {
+    const option = el('button', {
+      class: 'sp-action-mode-option',
+      type: 'button',
+      role: 'menuitemradio',
+      'data-mode': mode,
+      'aria-checked': 'false',
+    }) as HTMLButtonElement;
+    option.appendChild(el('span', { class: 'sp-action-mode-option-check' }));
+    const copy = el('span', { class: 'sp-action-mode-option-copy' });
+    copy.appendChild(el('span', { class: 'sp-action-mode-option-title' }, title));
+    copy.appendChild(el('span', { class: 'sp-action-mode-option-desc' }, description));
+    option.appendChild(copy);
+    return option;
+  }
+  const askModeOption = buildActionModeOption(
+    'ask',
+    'Ask before acting',
+    'Confirm browser actions before they run',
+  );
+  const actModeOption = buildActionModeOption(
+    'act',
+    'Act without asking',
+    'Run approved-site actions without confirmation',
+  );
+  actionModeMenu.appendChild(askModeOption);
+  actionModeMenu.appendChild(actModeOption);
+
+  function renderActionMode(mode: ActionMode): void {
+    actionModeToggle.dataset['mode'] = mode;
+    actionModeLabel.textContent = mode === 'act' ? 'Act without asking' : 'Ask before acting';
+    for (const option of [askModeOption, actModeOption]) {
+      const selected = option.dataset['mode'] === mode;
+      option.setAttribute('aria-checked', String(selected));
+      const check = option.querySelector('.sp-action-mode-option-check');
+      if (check) check.textContent = selected ? '✓' : '';
+    }
+  }
+
+  function closeActionModeMenu(): void {
+    actionModeMenu.classList.remove('open');
+    actionModeToggle.setAttribute('aria-expanded', 'false');
+  }
+
+  async function selectActionMode(next: ActionMode): Promise<void> {
+    const current = actionModeToggle.dataset['mode'] === 'act' ? 'act' : 'ask';
+    closeActionModeMenu();
+    if (next === current) return;
     if (
       next === 'act' &&
       !window.confirm(
@@ -6962,24 +7246,46 @@ function buildUI(): void {
     ) {
       return;
     }
-    actionModeToggle.setAttribute('data-mode', next);
-    actionModeToggle.textContent = next === 'act' ? 'Act without asking' : 'Ask before acting';
-    chrome.runtime
-      .sendMessage({ type: 'SET_ACTION_MODE', mode: next })
-      .then((response: { success?: boolean } | undefined) => {
-        if (response?.success === true) return;
-        actionModeToggle.setAttribute('data-mode', current);
-        actionModeToggle.textContent =
-          current === 'act' ? 'Act without asking' : 'Ask before acting';
-      })
-      .catch((err: unknown) => {
-        actionModeToggle.setAttribute('data-mode', current);
-        actionModeToggle.textContent =
-          current === 'act' ? 'Act without asking' : 'Ask before acting';
-        console.warn('[SidePanel] Failed to set action mode:', err);
-      });
+    renderActionMode(next);
+    try {
+      const response = (await chrome.runtime.sendMessage({
+        type: 'SET_ACTION_MODE',
+        mode: next,
+      })) as { success?: boolean } | undefined;
+      if (response?.success !== true) renderActionMode(current);
+    } catch (err) {
+      renderActionMode(current);
+      console.warn('[SidePanel] Failed to set action mode:', err);
+    }
+  }
+
+  askModeOption.addEventListener('click', (event) => {
+    event.stopPropagation();
+    void selectActionMode('ask');
   });
-  composerBar.appendChild(actionModeToggle);
+  actModeOption.addEventListener('click', (event) => {
+    event.stopPropagation();
+    void selectActionMode('act');
+  });
+  actionModeToggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const open = actionModeMenu.classList.toggle('open');
+    actionModeToggle.setAttribute('aria-expanded', String(open));
+    if (open) {
+      actionModeMenu.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    }
+  });
+  document.addEventListener('click', (event: MouseEvent) => {
+    if (!actionModeWrapper.contains(event.target as Node)) closeActionModeMenu();
+  });
+  chrome.storage.local.get({ agi_action_mode: 'ask' }, (items) => {
+    const stored = items['agi_action_mode'];
+    renderActionMode(stored === 'act' ? 'act' : 'ask');
+  });
+
+  actionModeWrapper.appendChild(actionModeMenu);
+  actionModeWrapper.appendChild(actionModeToggle);
+  composerBar.appendChild(actionModeWrapper);
 
   // W5-06: per-turn Auto Economy override for lower-latency replies.
   const quickModeToggle = el('button', {
@@ -7050,11 +7356,17 @@ function buildUI(): void {
   bridgeNotice.appendChild(bridgeNoticeText);
   bridgeNotice.appendChild(bridgeNoticeReconnect);
 
+  inputArea.appendChild(cloudGate);
   inputArea.appendChild(bridgeNotice);
   inputArea.appendChild(attachmentBar);
   inputArea.appendChild(composerShell);
   inputArea.appendChild(promptChipsRow);
   document.body.appendChild(inputArea);
+  setManagedCloudChatState(managedCloudChatState, {
+    message: managedCloudGateMessage,
+    action: managedCloudGateAction,
+    actionLabel: managedCloudGateActionLabel,
+  });
 
   // First-run onboarding carousel overlay — built hidden; revealed after the
   // async agi_onboarding_completed storage check in the boot Promise.all.

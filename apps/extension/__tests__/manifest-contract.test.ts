@@ -18,4 +18,16 @@ describe('Chrome manifest trust contract', () => {
     expect(String(manifest['description'])).toContain('Managed Cloud');
     expect(String(manifest['description'])).not.toMatch(/for AGI Desktop/i);
   });
+
+  it('allows Clerk runtime styles without weakening the extension script policy', () => {
+    const contentSecurityPolicy = manifest['content_security_policy'] as
+      | { extension_pages?: unknown }
+      | undefined;
+    const extensionPages = String(contentSecurityPolicy?.extension_pages ?? '');
+
+    expect(extensionPages).toContain("style-src 'self' 'unsafe-inline'");
+    expect(extensionPages).toContain("script-src 'self'");
+    expect(extensionPages).not.toMatch(/script-src[^;]*'unsafe-inline'/);
+    expect(extensionPages).not.toMatch(/script-src[^;]*'unsafe-eval'/);
+  });
 });
