@@ -4,6 +4,7 @@ import { join } from 'path';
 
 const WEB_ROOT = join(__dirname, '..');
 const readWebFile = (p: string) => readFileSync(join(WEB_ROOT, p), 'utf8');
+const REPO_ROOT = join(WEB_ROOT, '..', '..');
 
 /**
  * WEB-13 hardening guard: the production security-header set must not silently
@@ -53,5 +54,23 @@ describe('WEB-13 · production security headers', () => {
     expect(config).toContain("source: '/api/files/:id'");
     expect(config).toContain("key: 'preview', value: 'pdf'");
     expect(config).toContain("value: 'SAMEORIGIN'");
+  });
+});
+
+describe('WEB-13 · cross-origin artifact sandbox headers', () => {
+  const sandboxConfig = readFileSync(
+    join(REPO_ROOT, 'infrastructure', 'sandbox', 'vercel.json'),
+    'utf8',
+  );
+
+  it('opts the child frame into the parent cross-origin embedder policy', () => {
+    expect(sandboxConfig).toContain('Cross-Origin-Embedder-Policy');
+    expect(sandboxConfig).toContain('credentialless');
+  });
+
+  it('keeps the sandbox cross-origin and unable to make network connections', () => {
+    expect(sandboxConfig).toContain('Cross-Origin-Resource-Policy');
+    expect(sandboxConfig).toContain('cross-origin');
+    expect(sandboxConfig).toContain("connect-src 'none'");
   });
 });

@@ -44,7 +44,8 @@ boundary is enforced by the browser, not by app logic.
 ### One-time setup (ops)
 
 1. Create a new Vercel project: `vercel link --project agiworkforce-sandbox`
-   from `apps/sandbox/`. Set the root directory to `apps/sandbox`.
+   from `infrastructure/sandbox/`. Set the root directory to
+   `infrastructure/sandbox`.
 2. Add the production domain in the Vercel dashboard:
    `sandbox.agiworkforce.com`.
 3. Add the DNS record at the registrar (or wherever
@@ -70,7 +71,7 @@ boundary is enforced by the browser, not by app logic.
 ### Recurring deploys
 
 ```
-vercel deploy --prod --cwd apps/sandbox
+vercel deploy --prod --cwd infrastructure/sandbox
 ```
 
 This pushes whatever is in `apps/sandbox/`. There is no build step.
@@ -82,7 +83,7 @@ The parent embeds:
 ```html
 <iframe
   src="https://sandbox.agiworkforce.com/"
-  sandbox="allow-scripts"
+  sandbox="allow-scripts allow-same-origin"
   title="Artifact preview"
 ></iframe>
 ```
@@ -111,7 +112,7 @@ window.parent.postMessage({ type: 'render-complete', kind: 'html' }, parentOrigi
 
 `kind` is one of `html` · `react` · `svg` · `mermaid` · `markdown` ·
 `text` · `code`. Payload fields vary per kind — see
-`apps/sandbox/index.html` (`dispatchRender`).
+`infrastructure/sandbox/index.html` (`dispatchRender`).
 
 ## Security envelope
 
@@ -124,6 +125,9 @@ The sandbox enforces:
 - `frame-src 'none'` — no nested iframes
 - `frame-ancestors` locks embedding to known agiworkforce origins (set in
   `vercel.json` because `frame-ancestors` cannot be set by `<meta>`)
+- `Cross-Origin-Embedder-Policy: credentialless` opts the child frame into
+  the parent application's compatible embedder policy; without it, browsers
+  must block the cross-origin navigation before the postMessage handshake
 - Cross-origin to the parent → no access to parent cookies, localStorage,
   or same-origin endpoints
 
