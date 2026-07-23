@@ -144,6 +144,23 @@ try {
       );
     }
 
+    const composerMetrics = await page.evaluate(() => {
+      const shell = document.getElementById('sp-composer-shell');
+      const history = document.getElementById('sp-history-btn');
+      return {
+        shellHeight: shell?.getBoundingClientRect().height ?? 0,
+        historyVisible:
+          !!history &&
+          getComputedStyle(history).display !== 'none' &&
+          getComputedStyle(history).visibility !== 'hidden',
+      };
+    });
+    if (composerMetrics.shellHeight < 100 || !composerMetrics.historyVisible) {
+      fail(
+        `chat surface: expected a full composer and visible history, got ${JSON.stringify(composerMetrics)}`,
+      );
+    }
+
     // Managed authenticated chat needs a live gateway and account, which this
     // offline harness intentionally does not provide. Re-enable the textarea
     // only to verify its local interaction behavior after the signed-out state
@@ -157,14 +174,34 @@ try {
     if (typed !== 'hello from the smoke')
       fail(`composer: input did not accept text (got "${typed}")`);
 
-    await page.click('#sp-menu-btn');
+    await page.click('#sp-history-btn');
     await page.waitForTimeout(300);
+    const historyDrawer = await page.evaluate(() => ({
+      drawerOpen: document.getElementById('sp-drawer')?.classList.contains('open') === true,
+      historyOpen: !document.getElementById('sp-drawer-history-list')?.hasAttribute('hidden'),
+      title: document.getElementById('sp-drawer-title')?.textContent,
+      unfinishedActions: [
+        document.getElementById('sp-drawer-console-btn'),
+        document.getElementById('sp-drawer-open-desktop-btn'),
+      ].filter(Boolean).length,
+    }));
+    if (
+      !historyDrawer.drawerOpen ||
+      !historyDrawer.historyOpen ||
+      historyDrawer.title !== 'AGI in Chrome' ||
+      historyDrawer.unfinishedActions !== 0
+    ) {
+      fail(`history drawer: unexpected public surface ${JSON.stringify(historyDrawer)}`);
+    }
+    await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
+    await page.waitForTimeout(200);
+
+    await page.click('#sp-menu-btn');
     const drawerOpen = await page.evaluate(
       () => document.getElementById('sp-drawer')?.classList.contains('open') === true,
     );
     if (!drawerOpen) fail('drawer: menu button did not open the navigation drawer');
     await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
-    await page.waitForTimeout(200);
 
     await page.click('#sp-model-selector-btn');
     await page.waitForTimeout(300);
@@ -173,6 +210,12 @@ try {
       return !!d && (d.classList.contains('open') || getComputedStyle(d).display !== 'none');
     });
     if (!modelOpen) fail('model picker: selector button did not open the model dropdown');
+    const signedOutModelLabel = await page
+      .locator('#sp-model-dropdown .provider-count-badge')
+      .textContent();
+    if (signedOutModelLabel !== 'Sign in for models') {
+      fail(`model picker: expected an honest signed-out label, got "${signedOutModelLabel}"`);
+    }
     await page.click('#sp-model-selector-btn');
 
     await page.click('#sp-action-mode-toggle');

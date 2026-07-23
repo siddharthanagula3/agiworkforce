@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="AGI">
+  <rect x="1" y="1" width="22" height="22" rx="5" fill="#181714" stroke="#35322c" stroke-width="0.5"/>
+  <g fill="none" stroke="#f4f1e8" stroke-width="1.7" stroke-linecap="round">
+    <line x1="14.3" y1="8.016" x2="16.5" y2="4.206"/>
+    <line x1="15.984" y1="9.7" x2="19.794" y2="7.5"/>
+    <line x1="16.6" y1="12" x2="21" y2="12"/>
+    <line x1="15.984" y1="14.3" x2="19.794" y2="16.5"/>
+    <line x1="14.3" y1="15.984" x2="16.5" y2="19.794"/>
+    <line x1="12" y1="16.6" x2="12" y2="21"/>
+    <line x1="9.7" y1="15.984" x2="7.5" y2="19.794"/>
+    <line x1="8.016" y1="14.3" x2="4.206" y2="16.5"/>
+    <line x1="7.4" y1="12" x2="3" y2="12"/>
+    <line x1="8.016" y1="9.7" x2="4.206" y2="7.5"/>
+    <line x1="9.7" y1="8.016" x2="7.5" y2="4.206"/>
+  </g>
+  <line x1="12" y1="7.4" x2="12" y2="3" stroke="#d89a3d" stroke-width="1.7" stroke-linecap="round"/>
+</svg>
