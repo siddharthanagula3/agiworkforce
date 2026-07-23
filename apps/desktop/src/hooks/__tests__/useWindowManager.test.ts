@@ -406,6 +406,55 @@ describe('useWindowManager - Fullscreen Functionality', () => {
     });
   });
 
+  describe('Close behavior', () => {
+    it('quits the application instead of closing or hiding only the WebView', async () => {
+      const { result } = renderHook(() => useWindowManager());
+
+      await waitFor(() => {
+        expect(result.current.actions).toBeDefined();
+      });
+
+      vi.mocked(invoke).mockClear();
+
+      await act(async () => {
+        await result.current.actions.close();
+      });
+
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_quit_application');
+      expect(mockWindowInstance.close).not.toHaveBeenCalled();
+    });
+
+    it('intercepts the platform close shortcut before WebKit destroys only the WebView', async () => {
+      let capturedKeydownHandler: ((event: KeyboardEvent) => void) | null = null;
+      vi.mocked(window.addEventListener).mockImplementation(
+        (type: string, handler: EventListenerOrEventListenerObject) => {
+          if (type === 'keydown') {
+            capturedKeydownHandler = handler as (event: KeyboardEvent) => void;
+          }
+        },
+      );
+      renderHook(() => useWindowManager());
+      vi.mocked(invoke).mockClear();
+
+      const event = new KeyboardEvent('keydown', {
+        key: 'w',
+        code: 'KeyW',
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+
+      await act(async () => {
+        capturedKeydownHandler?.(event);
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      await waitFor(() => {
+        expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_quit_application');
+      });
+    });
+  });
+
   describe('Keyboard Shortcuts', () => {
     it('should handle Ctrl+Alt+Arrow keyboard shortcuts for docking', async () => {
       // Capture the keydown handler registered via the mocked window.addEventListener

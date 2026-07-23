@@ -24,6 +24,7 @@ import {
   DESKTOP_CLOUD_TAGLINE,
   DESKTOP_CLOUD_TAGLINE_SHORT,
 } from '../../constants/cloudAvailability';
+import v3English from '../../i18n/locales/en/v3.json';
 
 // Nothing user-facing may frame cloud as gated: no coming-soon, invite, waitlist,
 // or private-beta language anywhere in the availability copy or the mode toasts.
@@ -46,6 +47,7 @@ describe('DCL-4: desktop managed cloud is open (public alpha)', () => {
   it('availability copy is honest — no coming-soon / invite / waitlist framing', () => {
     expect(DESKTOP_CLOUD_TAGLINE).not.toMatch(BANNED);
     expect(DESKTOP_CLOUD_TAGLINE_SHORT).not.toMatch(BANNED);
+    expect(v3English.sidebar.mode.cloudUnavailable).not.toMatch(BANNED);
   });
 
   it('a signed-in account of ANY tier (including free) can enter Cloud mode', () => {

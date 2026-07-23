@@ -209,6 +209,19 @@ pub fn run() {
     }
 
     builder
+        // macOS normally keeps the application process alive after its last
+        // window closes. Handle the main-window close at the Builder boundary
+        // so it cannot be bypassed by feature-local listeners or temporary
+        // window-state suppression. Auxiliary windows still close normally.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if !crate::ui::window::should_quit_on_window_close(window.label()) {
+                    return;
+                }
+                api.prevent_close();
+                window.app_handle().exit(0);
+            }
+        })
         .setup(|app| {
 
             let app_data_dir = match app.path().app_data_dir() {
@@ -279,25 +292,10 @@ pub fn run() {
 
             let db_path_str = db_path.to_string_lossy().to_string();
 
-            // Attempt to migrate an existing unencrypted database to SQLCipher.
-            // This is a one-time operation for users upgrading from plain SQLite.
-            if db_path.exists() {
-                if let Err(e) = crate::data::db::encryption::migrate_to_encrypted(
-                    &db_path_str,
-                    &db_encryption_key,
-                ) {
-                    tracing::warn!(
-                        "Database encryption migration skipped or failed: {}. \
-                         Will attempt to open the database as-is.",
-                        e
-                    );
-                }
-            }
-
             // Open the database with encryption. Fail hard if encryption
             // cannot be established — silently falling back to plaintext
             // would violate the security contract and risk data exposure.
-            let conn = crate::data::db::encryption::open_encrypted_connection(
+            let conn = crate::data::db::encryption::open_or_migrate_encrypted_connection(
                 &db_path_str,
                 &db_encryption_key,
             )
@@ -1255,6 +1253,7 @@ pub fn run() {
             crate::sys::commands::window_set_pinned,
             crate::sys::commands::window_set_always_on_top,
             crate::sys::commands::window_set_visibility,
+            crate::sys::commands::window_quit_application,
             crate::sys::commands::window_dock,
             crate::sys::commands::window_toggle_maximize,
             crate::sys::commands::window_set_fullscreen,

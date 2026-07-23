@@ -508,6 +508,10 @@ pub fn is_floating_window_visible(app: &tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+pub(crate) fn should_quit_on_window_close(window_label: &str) -> bool {
+    window_label == "main"
+}
+
 fn register_event_handlers(window: &WebviewWindow, app_state: &AppState) -> Result<()> {
     let window_handle = window.clone();
     let app_state_handle = app_state.clone();
@@ -533,15 +537,20 @@ fn register_event_handlers(window: &WebviewWindow, app_state: &AppState) -> Resu
                     warn!("Failed to handle resize event: {err:?}");
                 }
             }
-            WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                if let Err(err) = hide_window(&window_handle) {
-                    warn!("Failed to hide window on close request: {err:?}");
-                }
-            }
             _ => {}
         }
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_quit_on_window_close;
+
+    #[test]
+    fn only_closing_the_main_window_quits_the_application() {
+        assert!(should_quit_on_window_close("main"));
+        assert!(!should_quit_on_window_close("floating"));
+    }
 }

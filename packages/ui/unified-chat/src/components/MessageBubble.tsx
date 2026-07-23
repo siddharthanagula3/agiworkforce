@@ -42,6 +42,22 @@ interface MessageBubbleProps {
   onResendApproval?: (messageId: string) => void;
 }
 
+export function StreamingThinkingStatus() {
+  return (
+    <div
+      role="status"
+      aria-label="Assistant is thinking"
+      className="flex items-center gap-2 text-[var(--chat-text-muted)]"
+    >
+      <span
+        aria-hidden
+        className="inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--chat-accent-primary)]"
+      />
+      <span className="text-sm">Thinking…</span>
+    </div>
+  );
+}
+
 /**
  * Validate a markdown link URL against an allowlist of safe schemes.
  *
@@ -567,13 +583,7 @@ export function MessageBubble({
         {isStreaming && !message.content.trim() && !canonicalActivity ? (
           /* Pre-first-token placeholder (web parity): a pulsing dot + "Thinking…"
              instead of a bare blinking caret on an empty bubble. */
-          <div className="flex items-center gap-2 text-[var(--chat-text-muted)]">
-            <span
-              aria-hidden
-              className="inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--chat-accent-primary)]"
-            />
-            <span className="text-sm">Thinking…</span>
-          </div>
+          <StreamingThinkingStatus />
         ) : (
           <>
             {renderContent(message.content)}

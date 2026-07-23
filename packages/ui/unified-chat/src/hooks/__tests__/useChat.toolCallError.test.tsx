@@ -125,6 +125,38 @@ describe('useChat — addMsg forwards the real fields on message creation', () =
     } as never);
   });
 
+  it('keeps provider reasoning in the shared collapsible thinking block', () => {
+    const { runtime, emit } = makeFakeRuntime();
+    renderHook(() => useChat(runtime));
+
+    emit({
+      type: 'thinking',
+      content: 'Analyze the request and choose a concise response.',
+      completed: true,
+      durationMs: 27_300,
+    });
+    emit({ type: 'content', content: 'Hello!' });
+    emit({ type: 'done' });
+
+    const message = lastAssistantMessage();
+    expect(message?.thinking).toBe('Analyze the request and choose a concise response.');
+    expect(message?.thinkingBlock).toMatchObject({
+      summary: 'Thought for 27.3 seconds',
+      collapsed: true,
+      durationMs: 27_300,
+      steps: [
+        {
+          type: 'thinking',
+          content: 'Analyze the request and choose a concise response.',
+        },
+        {
+          type: 'done',
+          content: 'Done',
+        },
+      ],
+    });
+  });
+
   it('renders the tool card from the FIRST event of a turn, with no content event first', () => {
     const { runtime, emit } = makeFakeRuntime();
     renderHook(() => useChat(runtime));
@@ -249,6 +281,29 @@ describe('useChat — writing style request contract', () => {
           'Use a formal, professional tone with precise language and complete sentences.',
       }),
     );
+  });
+
+  it('creates a visible streaming assistant placeholder before a normal Local runtime emits', async () => {
+    const sendMessage = vi.fn(() => new Promise<void>(() => {}));
+    const runtime: ChatRuntime = {
+      sendMessage,
+      stopGeneration: vi.fn(),
+      createConversation: vi.fn(async () => 'conv-style'),
+      deleteConversation: vi.fn(async () => {}),
+      renameConversation: vi.fn(async () => {}),
+      getPlatform: () => 'desktop',
+    };
+    const { result } = renderHook(() => useChat(runtime, { surfaceId: 'desktop-local-status' }));
+
+    act(() => result.current.sendMessage('Explain this locally'));
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+    expect(lastAssistantMessage()).toMatchObject({
+      role: 'assistant',
+      content: '',
+      isStreaming: true,
+    });
+    expect(lastAssistantMessage()?.metadata?.['agentActivity']).toBeUndefined();
   });
 });
 

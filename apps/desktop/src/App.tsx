@@ -2,13 +2,11 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useTranslation } from 'react-i18next';
 import type { ChatHostBridge } from '@agiworkforce/unified-chat';
 import {
-  CapabilityProvider,
   createChatModelInfo,
   parseDiscoveredChatModels,
   useChatSettingsStore,
 } from '@agiworkforce/unified-chat';
 import { useUnifiedAuthStore } from './stores/auth';
-import { useFolderSelection } from './hooks/useFolderSelection';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
@@ -79,7 +77,6 @@ import { useSettingsDialogStore } from './stores/settingsStore';
 import { useSettingsStore, waitForSettingsHydration } from './stores/settingsStore';
 import { useVoiceInputStore } from './stores/settingsStore';
 import { applyTheme, getThemeById } from './themes/index';
-import { FeatureFlagName, useFeatureFlag } from './services/featureFlags';
 
 const VisualizationLayer = lazy(() =>
   import('./features/overlay/VisualizationLayer').then((m) => ({
@@ -89,11 +86,6 @@ const VisualizationLayer = lazy(() =>
 const FloatingChat = lazy(() =>
   import('./features/floating-chat').then((m) => ({
     default: m.FloatingChat,
-  })),
-);
-const ChatInterface = lazy(() =>
-  import('@agiworkforce/unified-chat').then((m) => ({
-    default: m.ChatInterface,
   })),
 );
 const DesktopShellV3 = lazy(() =>
@@ -1186,9 +1178,6 @@ const DesktopShell = () => {
 
   const openSettings = useCallback(() => openSettingsDialog(), [openSettingsDialog]);
 
-  const isV3DesktopChatEnabled = useFeatureFlag(FeatureFlagName.DESKTOP_CHAT_V3);
-  const { selectFolder, currentFolderLabel } = useFolderSelection();
-
   const handleDismissTimeoutWarning = useCallback(() => {
     setIsTimeoutWarningOpen(false);
     setTimeoutWarning(null);
@@ -1485,60 +1474,29 @@ const DesktopShell = () => {
                 </div>
               )}
             >
-              {isV3DesktopChatEnabled ? (
-                <DesktopShellV3
-                  runtime={chatRuntime}
-                  className="h-full w-full"
-                  hostBridge={chatHostBridge}
-                  onModelSelectorClick={() => openSettingsDialog('models-keys')}
-                  onVoiceClick={() => {
-                    const event = new CustomEvent('toggle-voice-input');
-                    window.dispatchEvent(event);
-                  }}
-                  onOpenSearch={() => useSearchModal.getState().open()}
-                  onNavigateView={(view) => {
-                    if (view === 'connectors') {
-                      openSettingsDialog('connectors');
-                    } else if (view === 'skills') {
-                      openSettingsDialog('skills');
-                    } else if (view === 'projects') {
-                      openSettingsDialog('account');
-                    } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
-                      setPlansModalOpen(true);
-                    }
-                  }}
-                  onBuyTopUp={() => openSettingsDialog('billing')}
-                />
-              ) : (
-                <CapabilityProvider platform="desktop">
-                  <ChatInterface
-                    runtime={chatRuntime}
-                    className="h-full w-full"
-                    manageTheme={false}
-                    enableShortcuts={true}
-                    hostBridge={chatHostBridge}
-                    onModelSelectorClick={() => openSettingsDialog('models-keys')}
-                    onVoiceClick={() => {
-                      // Toggle voice input overlay
-                      const event = new CustomEvent('toggle-voice-input');
-                      window.dispatchEvent(event);
-                    }}
-                    onSelectFolder={selectFolder}
-                    currentFolderLabel={currentFolderLabel}
-                    onNavigateView={(view) => {
-                      if (view === 'connectors') {
-                        openSettingsDialog('connectors');
-                      } else if (view === 'skills') {
-                        openSettingsDialog('skills');
-                      } else if (view === 'projects') {
-                        openSettingsDialog('account');
-                      } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
-                        setPlansModalOpen(true);
-                      }
-                    }}
-                  />
-                </CapabilityProvider>
-              )}
+              <DesktopShellV3
+                runtime={chatRuntime}
+                className="h-full w-full"
+                hostBridge={chatHostBridge}
+                onModelSelectorClick={() => openSettingsDialog('models-keys')}
+                onVoiceClick={() => {
+                  const event = new CustomEvent('toggle-voice-input');
+                  window.dispatchEvent(event);
+                }}
+                onOpenSearch={() => useSearchModal.getState().open()}
+                onNavigateView={(view) => {
+                  if (view === 'connectors') {
+                    openSettingsDialog('connectors');
+                  } else if (view === 'skills') {
+                    openSettingsDialog('skills');
+                  } else if (view === 'projects') {
+                    openSettingsDialog('account');
+                  } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
+                    setPlansModalOpen(true);
+                  }
+                }}
+                onBuyTopUp={() => openSettingsDialog('billing')}
+              />
             </ErrorBoundary>
           </div>
         </main>

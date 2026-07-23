@@ -483,8 +483,13 @@ fn fetch_gmail_account(
 fn list_gmail_accounts(
     conn: &Connection,
 ) -> Result<Vec<(String, GmailAccountInfo, chrono::DateTime<Utc>)>> {
-    let key = get_gmail_encryption_key();
+    list_gmail_accounts_with_key_provider(conn, get_gmail_encryption_key)
+}
 
+fn list_gmail_accounts_with_key_provider(
+    conn: &Connection,
+    mut key_provider: impl FnMut() -> Vec<u8>,
+) -> Result<Vec<(String, GmailAccountInfo, chrono::DateTime<Utc>)>> {
     let mut stmt = conn
         .prepare(
             "SELECT id, email, display_name, picture_url, client_id, client_secret_encrypted,
@@ -494,8 +499,10 @@ fn list_gmail_accounts(
         )
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
+    let mut key = None;
     let accounts = stmt
         .query_map([], |row| {
+            let key = key.get_or_insert_with(&mut key_provider);
             let id: String = row.get(0)?;
             let email: Option<String> = row.get(1)?;
             let display_name: Option<String> = row.get(2)?;
@@ -518,7 +525,7 @@ fn list_gmail_accounts(
                         ))),
                     )
                 })?;
-            let client_secret = decrypt_secret(&key, &encrypted_secret).map_err(|e| {
+            let client_secret = decrypt_secret(key, &encrypted_secret).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     5,
                     rusqlite::types::Type::Text,
@@ -541,7 +548,7 @@ fn list_gmail_accounts(
                         ))),
                     )
                 })?;
-            let token_json = decrypt_secret(&key, &encrypted_token).map_err(|e| {
+            let token_json = decrypt_secret(key, &encrypted_token).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
                     7,
                     rusqlite::types::Type::Text,
@@ -723,6 +730,18 @@ mod tests {
 
         let accounts = list_gmail_accounts(&conn).unwrap();
         assert_eq!(accounts.len(), 3);
+    }
+
+    #[test]
+    fn empty_account_restore_does_not_derive_the_email_credential_key() {
+        let conn = create_test_db();
+
+        let accounts = list_gmail_accounts_with_key_provider(&conn, || {
+            panic!("empty Gmail restore must not derive an unused credential key")
+        })
+        .unwrap();
+
+        assert!(accounts.is_empty());
     }
 
     #[test]

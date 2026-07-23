@@ -51,6 +51,13 @@ function isAgentTaskState(value: unknown): value is AgentTaskState {
   return typeof value === 'string' && AGENT_TASK_STATES.has(value as AgentTaskState);
 }
 
+function formatThoughtSummary(durationMs?: number): string {
+  if (durationMs === undefined) return 'Thought process';
+  const seconds = Math.max(0, durationMs) / 1_000;
+  const formatted = seconds.toFixed(1).replace(/\.0$/, '');
+  return `Thought for ${formatted} ${formatted === '1' ? 'second' : 'seconds'}`;
+}
+
 function getRoutingContext(
   platform: ReturnType<NonNullable<ChatRuntime['getPlatform']>> | undefined,
   executionMode: ChatExecutionMode,
@@ -250,6 +257,16 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'thinking': {
+          const completed = event.completed === true;
+          const completionStep = completed
+            ? [
+                {
+                  id: crypto.randomUUID(),
+                  type: 'done' as const,
+                  content: 'Done',
+                },
+              ]
+            : [];
           // Store thinking text in the assistant message
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
@@ -270,8 +287,11 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                       type: 'thinking',
                       content: event.content,
                     },
+                    ...completionStep,
                   ],
-                  summary: 'Thinking...',
+                  summary: completed ? formatThoughtSummary(event.durationMs) : 'Thinking…',
+                  collapsed: completed,
+                  durationMs: event.durationMs,
                 },
               },
               convId,
@@ -292,6 +312,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                       type: 'thinking' as const,
                       content: existingThinking + event.content,
                     },
+                    ...existingBlock.steps.filter((s) => s.type === 'done'),
                   ]
                 : [
                     {
@@ -300,12 +321,17 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                       content: existingThinking + event.content,
                     },
                   ];
+              if (completed && !updatedSteps.some((step) => step.type === 'done')) {
+                updatedSteps.push(...completionStep);
+              }
               store.updateMessage(convId, assistantMessageIdRef.current, {
                 thinking: existingThinking + event.content,
                 thinkingBlock: {
                   id: existingBlock?.id ?? crypto.randomUUID(),
                   steps: updatedSteps,
-                  summary: 'Thinking...',
+                  summary: completed ? formatThoughtSummary(event.durationMs) : 'Thinking…',
+                  collapsed: completed,
+                  durationMs: event.durationMs,
                 },
               });
             }
@@ -656,7 +682,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                         content: 'Done',
                       },
                     ],
-                    summary: 'Thought process',
+                    summary:
+                      msg.thinkingBlock.summary === 'Thinking…' ||
+                      msg.thinkingBlock.summary === 'Thinking...'
+                        ? formatThoughtSummary(msg.thinkingBlock.durationMs)
+                        : msg.thinkingBlock.summary,
+                    collapsed: true,
                   };
                 }
               }
@@ -946,9 +977,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         );
       const research = Boolean(runtime.supportsResearch && researchEnabled);
 
-      // Reset assistant message ref for new response. AGI Work owns a visible
-      // action state immediately, before the provider emits its first event;
-      // ordinary chat keeps the lightweight pre-token placeholder.
+      // Reset assistant message ref for new response, then create the shared
+      // pre-token row immediately. Without this row, a Local model that takes
+      // several seconds before its first delta leaves the transcript visually
+      // unchanged even though the native runtime is working. AGI Work enriches
+      // the same row with the canonical activity timeline; ordinary chat keeps
+      // the lightweight "Thinking…" placeholder rendered by MessageBubble.
       assistantMessageIdRef.current = null;
       cloudAgentRunRef.current = null;
 
@@ -959,29 +993,31 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         content: m.content,
       }));
 
-      if (workMode === 'agiwork') {
-        const assistantMessageId = crypto.randomUUID();
-        const startedAtMs = Date.now();
-        assistantMessageIdRef.current = assistantMessageId;
-        addMsg(
-          {
-            id: assistantMessageId,
-            role: 'assistant',
-            content: '',
-            timestamp: new Date(startedAtMs).toISOString(),
-            isStreaming: true,
-            metadata: {
-              agentActivity: startAgentActivityLocally({
-                sessionId: convId,
-                turnId: assistantMessageId,
-                summary: 'Starting AGI Work',
-                startedAtMs,
-              }),
-            },
-          },
-          convId,
-        );
-      }
+      const assistantMessageId = crypto.randomUUID();
+      const startedAtMs = Date.now();
+      assistantMessageIdRef.current = assistantMessageId;
+      addMsg(
+        {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(startedAtMs).toISOString(),
+          isStreaming: true,
+          ...(workMode === 'agiwork'
+            ? {
+                metadata: {
+                  agentActivity: startAgentActivityLocally({
+                    sessionId: convId,
+                    turnId: assistantMessageId,
+                    summary: 'Starting AGI Work',
+                    startedAtMs,
+                  }),
+                },
+              }
+            : {}),
+        },
+        convId,
+      );
 
       void runtime
         .sendMessage(convId, content, {

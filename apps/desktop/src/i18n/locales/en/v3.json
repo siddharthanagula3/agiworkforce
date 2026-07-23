@@ -59,7 +59,7 @@
       "aria": "Switch between Local and Cloud",
       "switchTo": "Switch to {{mode}}",
       "soon": "Soon",
-      "cloudUnavailable": "AGI Cloud is available on Web & Mobile — desktop support is coming soon."
+      "cloudUnavailable": "AGI Cloud is available on Desktop — sign in to use managed models and synced chats."
     },
     "groups": {
       "lastHour": "Last hour",

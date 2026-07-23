@@ -14,7 +14,16 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
         Some("CmdOrCtrl+N"),
     )?;
     let sep_file = PredefinedMenuItem::separator(app)?;
-    let close = PredefinedMenuItem::close_window(app, Some("Close Window"))?;
+    // Use an application-owned action instead of the platform's predefined
+    // Close Window item. On macOS the predefined action tears down the webview
+    // while keeping the process/window host alive, which leaves a black window.
+    let close = MenuItem::with_id(
+        app,
+        "menu_quit_application",
+        "Close Window",
+        true,
+        Some("CmdOrCtrl+W"),
+    )?;
     let file_menu =
         Submenu::with_items(app, "File", true, &[&new_conversation, &sep_file, &close])?;
 
@@ -149,8 +158,17 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
     Ok(())
 }
 
+fn should_quit_application_for_menu_id(id: &str) -> bool {
+    id == "menu_quit_application"
+}
+
 fn handle_window_menu_event(app: &AppHandle, event: MenuEvent) {
     let id = event.id.0.as_ref();
+    if should_quit_application_for_menu_id(id) {
+        app.exit(0);
+        return;
+    }
+
     match id {
         "menu_new_conversation" => {
             let _ = app.emit("shortcut_action", "new_composer");
@@ -160,7 +178,7 @@ fn handle_window_menu_event(app: &AppHandle, event: MenuEvent) {
         }
         "menu_reload" => {
             if let Some(win) = app.get_webview_window("main") {
-                let _ = win.eval("window.location.reload()");
+                let _ = win.reload();
             }
         }
         "menu_zoom_in" => {
@@ -182,5 +200,20 @@ fn handle_window_menu_event(app: &AppHandle, event: MenuEvent) {
             let _ = app.emit("menu_action", "restart_to_update");
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_quit_application_for_menu_id;
+
+    #[test]
+    fn close_window_menu_action_quits_the_application() {
+        assert!(should_quit_application_for_menu_id(
+            "menu_quit_application"
+        ));
+        assert!(!should_quit_application_for_menu_id(
+            "menu_new_conversation"
+        ));
     }
 }

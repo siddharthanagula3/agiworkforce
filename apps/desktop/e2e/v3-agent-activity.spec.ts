@@ -139,7 +139,11 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
 
   const activityToggle = assistant.getByRole('button', { name: /show agent activity/i });
   await expect(activityToggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(activityToggle).toContainText(/Done in 5s.*1 tool/);
+  // The completed row keeps Claude's semantic “what happened” summary. Its
+  // check icon and live-region announcement carry completion state without
+  // replacing the useful action label with an elapsed-time pill.
+  await expect(activityToggle).toContainText('Searching official sources');
+  await expect(activityToggle).not.toContainText(/Done in|1 tool/);
   await expect(assistant.getByText('Official AGI documentation')).toHaveCount(0);
 
   await activityToggle.click();
@@ -147,7 +151,9 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
   const expandedActivityToggle = assistant.getByRole('button', { name: /hide agent activity/i });
   await expect(expandedActivityToggle).toHaveAttribute('aria-expanded', 'true');
   await expect(assistant.getByText('Planning the research pass')).toBeVisible();
-  await expect(assistant.getByText('Searching official sources')).toBeVisible();
+  await expect(
+    assistant.getByRole('button', { name: 'Searching official sources', exact: true }),
+  ).toBeVisible();
   await expect(assistant.getByText('Official AGI documentation')).toBeVisible();
   await expect(assistant.getByText('example.com')).toBeVisible();
   await expect(assistant.getByText('Done', { exact: true })).toBeVisible();
