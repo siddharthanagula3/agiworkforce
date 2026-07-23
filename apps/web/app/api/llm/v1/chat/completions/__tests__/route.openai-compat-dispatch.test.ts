@@ -387,8 +387,8 @@ describe('Managed Web conversation ownership', () => {
   });
 });
 
-describe('Managed Web durable AGI Work dispatch', () => {
-  it('starts a durable workflow even when the request has no configured tools', async () => {
+describe('Managed Web AGI Work dispatch', () => {
+  it('starts the request-scoped tool loop without waiting on the broken workflow callback', async () => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
@@ -423,33 +423,16 @@ describe('Managed Web durable AGI Work dispatch', () => {
       createdAt: '2026-07-18T00:00:00.000Z',
       updatedAt: '2026-07-18T00:00:00.000Z',
     });
-    workflowRouteMocks.start.mockResolvedValue({
-      workflowRunId: 'workflow-durable-1',
-      readable: new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-          controller.close();
-        },
-      }),
-    });
-
     const response = await POST(makeAgiWorkRequest('minimax-m3'));
 
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('workflow');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
     expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe('run-durable-1');
-    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('workflow-durable-1');
-    await expect(response.text()).resolves.toBe('data: [DONE]\n\n');
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
     expect(workflowRouteMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
       customConnectorLimit: undefined,
     });
-    expect(workflowRouteMocks.start).toHaveBeenCalledWith(
-      expect.objectContaining({
-        runId: 'run-durable-1',
-        userId: 'user-1',
-        mcpTools: [],
-      }),
-    );
+    expect(workflowRouteMocks.start).not.toHaveBeenCalled();
   });
 });
 

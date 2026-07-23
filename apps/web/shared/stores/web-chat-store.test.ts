@@ -88,3 +88,28 @@ describe('chatStore — per-conversation streaming scope', () => {
     expect(selectIsActiveConversationStreaming(useChatStore.getState())).toBe(false);
   });
 });
+
+describe('chatStore — per-conversation error scope', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  it('ignores a late error from a conversation after the user switches chats', () => {
+    const { setActiveConversationWithMessages, setError } = useChatStore.getState();
+
+    setActiveConversationWithMessages('conv-a', []);
+    setError('Request failed: 504', 'conv-a');
+    expect(useChatStore.getState().error).toBe('Request failed: 504');
+
+    setActiveConversationWithMessages('conv-b', []);
+    expect(useChatStore.getState().error).toBeNull();
+
+    // Conversation A's request settles after B is already visible. Its error
+    // belongs in A's failed assistant turn, never in B's top banner.
+    setError('Request failed: 504', 'conv-a');
+    expect(useChatStore.getState().error).toBeNull();
+
+    setError('B failed', 'conv-b');
+    expect(useChatStore.getState().error).toBe('B failed');
+  });
+});
