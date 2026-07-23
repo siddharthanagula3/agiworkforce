@@ -166,7 +166,11 @@ export function SandboxedIframe({
         key={refreshKey}
         src={`${sandboxOrigin}/`}
         title={title}
-        sandbox="allow-scripts"
+        // The document is hosted on a dedicated cross-origin renderer. Keeping
+        // its origin is required so the parent can authenticate postMessage
+        // events against NEXT_PUBLIC_SANDBOX_ORIGIN. This combination remains
+        // forbidden for the same-origin srcDoc fallback below.
+        sandbox="allow-scripts allow-same-origin"
         className={className}
         style={style}
         onLoad={onLoad}

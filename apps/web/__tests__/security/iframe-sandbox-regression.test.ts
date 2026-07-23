@@ -4,11 +4,11 @@ import { join } from 'path';
 
 /**
  * WEB-13 (audit 2026-05-19): regression test. Fails CI if any TSX/TS file
- * under `apps/web/` reintroduces `sandbox="allow-scripts allow-same-origin"`.
- * That combination defeats the iframe sandbox per the W3C spec — scripts
- * inside the iframe run with the parent's cookies and same-origin fetch
- * credentials. The fix is either the cross-origin sandbox subdomain
- * (NEXT_PUBLIC_SANDBOX_ORIGIN) or `sandbox="allow-scripts"` alone.
+ * under `apps/web/` reintroduces `sandbox="allow-scripts allow-same-origin"`
+ * outside the one dedicated cross-origin renderer. That combination defeats
+ * the iframe boundary when the framed document shares the parent's origin.
+ * The artifact renderer is hosted on sandbox.agiworkforce.com and must retain
+ * its distinct origin so postMessage events can be authenticated.
  *
  * This test runs as a pure file-system grep so it executes in CI without
  * spinning up a real browser.
@@ -60,9 +60,16 @@ function walk(dir: string): string[] {
 }
 
 describe('iframe-sandbox regression (WEB-13)', () => {
-  it('no source file contains `allow-scripts allow-same-origin` together', () => {
+  it('only the dedicated cross-origin renderer combines allow-scripts and allow-same-origin', () => {
     const files = walk(WEB_ROOT);
     const offenders: { file: string; line: number; content: string }[] = [];
+    const dedicatedRenderer = join(
+      WEB_ROOT,
+      'features',
+      'chat',
+      'components',
+      'SandboxedIframe.tsx',
+    );
 
     for (const file of files) {
       let text: string;
@@ -90,7 +97,14 @@ describe('iframe-sandbox regression (WEB-13)', () => {
           /sandbox\s*=\s*'[^']*\ballow-scripts\b[^']*\ballow-same-origin\b[^']*'/.test(line) ||
           /sandbox\s*=\s*'[^']*\ballow-same-origin\b[^']*\ballow-scripts\b[^']*'/.test(line)
         ) {
-          offenders.push({ file, line: i + 1, content: line.trim() });
+          const iframeBlock = lines.slice(Math.max(0, i - 8), i + 2).join('\n');
+          const isDedicatedCrossOriginRenderer =
+            file === dedicatedRenderer &&
+            iframeBlock.includes('src={`${sandboxOrigin}/`}') &&
+            !iframeBlock.includes('srcDoc=');
+          if (!isDedicatedCrossOriginRenderer) {
+            offenders.push({ file, line: i + 1, content: line.trim() });
+          }
         }
       }
     }
@@ -98,9 +112,8 @@ describe('iframe-sandbox regression (WEB-13)', () => {
     if (offenders.length > 0) {
       const msg = offenders.map((o) => `  ${o.file}:${o.line}: ${o.content}`).join('\n');
       throw new Error(
-        `WEB-13 regression — iframe sandbox combines allow-scripts + allow-same-origin:\n${msg}\n\n` +
-          `This combination defeats the iframe sandbox per the W3C spec. Either ` +
-          `use the cross-origin sandbox subdomain (infrastructure/sandbox) or sandbox="allow-scripts" alone.`,
+        `WEB-13 regression — iframe sandbox combines allow-scripts + allow-same-origin outside the dedicated cross-origin renderer:\n${msg}\n\n` +
+          `Use SandboxedIframe with infrastructure/sandbox, or keep allow-same-origin absent.`,
       );
     }
 
