@@ -51,6 +51,8 @@ fn export_typescript_bindings() {
         .expect("export developer-session thread list params graph");
     agiworkforce_protocol::developer_session::ThreadListResponse::export_all_to(dir)
         .expect("export developer-session thread graph");
+    agiworkforce_protocol::developer_session::LocalModelListResponse::export_all_to(dir)
+        .expect("export developer-session local model graph");
     agiworkforce_protocol::developer_session::ThreadReadResponse::export_all_to(dir)
         .expect("export developer-session thread history graph");
     agiworkforce_protocol::developer_session::ThreadIdParams::export_all_to(dir)

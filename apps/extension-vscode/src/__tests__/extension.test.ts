@@ -189,15 +189,13 @@ describe('model selection', () => {
     expect(providers.size).toBeGreaterThanOrEqual(6);
   });
 
-  it('includes auto-routing options', () => {
+  it('exposes one shared self-routing Auto option', () => {
     const autoModels = MODELS.filter((m) => m.startsWith('auto'));
-    expect(autoModels).toEqual(
-      expect.arrayContaining(['auto-balanced', 'auto-economy', 'auto-premium']),
-    );
+    expect(autoModels).toEqual(['auto']);
   });
 
   it('marks current model as picked', () => {
-    const currentModel = MANUAL_MODELS[0] ?? 'auto-balanced';
+    const currentModel = MANUAL_MODELS[0] ?? 'auto';
     const items = MODELS.map((m) => ({
       label: m,
       picked: m === currentModel,

@@ -75,10 +75,10 @@ describe('chat participant approval lifecycle', () => {
     } as ContextPanelProvider);
   });
 
-  it('sends an Auto profile and classified task on every participant turn', async () => {
+  it('sends the shared self-routing Auto model on every participant turn', async () => {
     await vscode.workspace
       .getConfiguration('agiWorkforce')
-      .update('model', 'auto-balanced', vscode.ConfigurationTarget.Global);
+      .update('model', 'auto', vscode.ConfigurationTarget.Global);
     const listeners = new Set<(event: LocalRuntimeEvent) => void>();
     const runtime = {
       startThread: vi.fn().mockResolvedValue({ id: 'thread-1' }),
@@ -111,9 +111,11 @@ describe('chat participant approval lifecycle', () => {
     await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
     expect(runtime.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'auto-economy',
-        routingTaskType: 'research',
+        model: 'auto',
       }),
+    );
+    expect(runtime.startTurn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ routingTaskType: expect.anything() }),
     );
     for (const listener of listeners) {
       listener({

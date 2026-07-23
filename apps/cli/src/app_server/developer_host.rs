@@ -4,12 +4,13 @@ use agiworkforce_protocol::agent_events::{
     AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
 };
 use agiworkforce_protocol::developer_session::{
-    AppServerCapabilities, AppServerClientInfo, AppServerNotification, ApprovalResponseParams,
-    DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingTaskType,
-    DeveloperSessionSource, ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse,
-    ThreadReadResponse, ThreadStartParams, ThreadStatus, ThreadSummary, TurnInterruptParams,
-    TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary, agent_event_notification,
-    task_state_notification,
+    agent_event_notification, task_state_notification, AppServerCapabilities, AppServerClientInfo,
+    AppServerNotification, ApprovalResponseParams, DeveloperAgentMode, DeveloperMessage,
+    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionSource,
+    LocalModelListResponse, LocalModelProvider, LocalModelSummary, ThreadForkParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
+    ThreadStatus, ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams,
+    TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -183,6 +184,7 @@ impl CliDeveloperSessionHost {
             mcp: self.load_integrations,
             checkpoints: false,
             worktrees: false,
+            models: true,
         }
     }
 
@@ -727,6 +729,25 @@ fn registry_task_type(
 
 #[async_trait]
 impl DeveloperSessionHost for CliDeveloperSessionHost {
+    async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+        let probes = crate::local_models::discover_all(&self.config).await;
+        let models = crate::local_models::discovered_models(&probes)
+            .into_iter()
+            .filter_map(|model| {
+                let provider = match model.provider.as_str() {
+                    "ollama" => LocalModelProvider::Ollama,
+                    "lmstudio" => LocalModelProvider::Lmstudio,
+                    _ => return None,
+                };
+                Some(LocalModelSummary {
+                    id: model.id,
+                    provider,
+                })
+            })
+            .collect();
+        Ok(LocalModelListResponse { models })
+    }
+
     async fn start_thread(
         &self,
         params: ThreadStartParams,
@@ -737,6 +758,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .model
             .clone()
             .unwrap_or_else(|| self.config.default.model.clone());
+        let requested_provider = params.provider.map(LocalModelProvider::as_str);
         let resolved_model = self.resolve_thread_model(&requested_model)?;
         let model = resolved_model.provider_model_id.clone();
         let title = clean_title(params.title);
@@ -747,7 +769,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             &model,
             &self.config.default.model,
             &self.config.default.provider,
-            None,
+            requested_provider,
         );
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
@@ -2045,6 +2067,7 @@ mod tests {
             .start_thread(
                 ThreadStartParams {
                     model: None,
+                    provider: None,
                     cwd: Some(workspace.display().to_string()),
                     title: Some("Interrupted turn".to_string()),
                 },
@@ -2139,6 +2162,7 @@ mod tests {
             .start_thread(
                 ThreadStartParams {
                     model: None,
+                    provider: None,
                     cwd: Some(workspace.display().to_string()),
                     title: Some("Concurrent turn ownership".to_string()),
                 },
@@ -2275,6 +2299,7 @@ mod tests {
             .start_thread(
                 ThreadStartParams {
                     model: None,
+                    provider: None,
                     cwd: Some(workspace.display().to_string()),
                     title: Some("Transactional turn setup".to_string()),
                 },

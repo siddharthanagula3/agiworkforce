@@ -18,7 +18,7 @@ use crate::task_state::{AgentTaskState, AgentTaskStateChanged};
 use crate::user_input::UserInput;
 
 /// Current wire version for the shared CLI/VS Code developer-session protocol.
-pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 5;
+pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 6;
 
 pub mod method {
     pub const INITIALIZE: &str = "initialize";
@@ -29,6 +29,7 @@ pub mod method {
     pub const THREAD_RESUME: &str = "thread/resume";
     pub const THREAD_FORK: &str = "thread/fork";
     pub const THREAD_ARCHIVE: &str = "thread/archive";
+    pub const MODEL_LIST: &str = "model/list";
     pub const TURN_START: &str = "turn/start";
     pub const TURN_STEER: &str = "turn/steer";
     pub const TURN_INTERRUPT: &str = "turn/interrupt";
@@ -224,6 +225,7 @@ pub struct AppServerCapabilities {
     pub mcp: bool,
     pub checkpoints: bool,
     pub worktrees: bool,
+    pub models: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -270,6 +272,9 @@ pub struct ThreadStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub provider: Option<LocalModelProvider>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub cwd: Option<String>,
@@ -326,6 +331,43 @@ pub struct ThreadListResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub next_cursor: Option<String>,
+}
+
+/// One model discovered from a local-only runtime owned by the CLI.
+///
+/// The developer client receives only the provider and model identifier needed
+/// for presentation and selection. Base URLs and probe diagnostics stay inside
+/// the trusted CLI boundary.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct LocalModelSummary {
+    pub id: String,
+    pub provider: LocalModelProvider,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum LocalModelProvider {
+    Ollama,
+    Lmstudio,
+}
+
+impl LocalModelProvider {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ollama => "ollama",
+            Self::Lmstudio => "lmstudio",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct LocalModelListResponse {
+    pub models: Vec<LocalModelSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -492,7 +534,7 @@ mod tests {
 
     #[test]
     fn developer_session_v5_wraps_canonical_agent_events() {
-        assert_eq!(DEVELOPER_SESSION_PROTOCOL_VERSION, 5);
+        assert_eq!(DEVELOPER_SESSION_PROTOCOL_VERSION, 6);
 
         let notification = agent_event_notification(
             "thread-1",

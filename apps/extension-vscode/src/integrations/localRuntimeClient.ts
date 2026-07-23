@@ -6,6 +6,7 @@ import type {
   AppServerNotification,
   ApprovalResponseParams,
   InitializeResponse,
+  LocalModelListResponse,
   ThreadListParams,
   ThreadListResponse,
   ThreadReadResponse,
@@ -20,7 +21,7 @@ import type {
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const SHUTDOWN_GRACE_MS = 1_000;
-const MINIMUM_SUPPORTED_PROTOCOL_VERSION = 5;
+const MINIMUM_SUPPORTED_PROTOCOL_VERSION = 6;
 const AGENT_EVENT_SCHEMA_VERSION = 3;
 
 const errorSchema = z.object({
@@ -30,12 +31,14 @@ const errorSchema = z.object({
 });
 
 const responseSchema = z.object({
+  jsonrpc: z.literal('2.0').optional(),
   id: z.union([z.string(), z.number(), z.null()]),
   result: z.unknown().optional(),
   error: errorSchema.optional(),
 });
 
 const notificationSchema = z.object({
+  jsonrpc: z.literal('2.0').optional(),
   method: z.string().min(1),
   params: z.unknown().optional(),
 });
@@ -49,12 +52,24 @@ const capabilitiesSchema = z.object({
   mcp: z.boolean(),
   checkpoints: z.boolean(),
   worktrees: z.boolean(),
+  models: z.boolean(),
 });
 
 const initializeResponseSchema = z.object({
   serverInfo: z.object({ name: z.string(), title: z.string(), version: z.string() }),
   protocolVersion: z.number().int().positive(),
   capabilities: capabilitiesSchema,
+});
+
+const legacyInitializeResponseSchema = z.object({
+  serverInfo: z.object({
+    name: z.string(),
+    version: z.string(),
+  }),
+  capabilities: z.object({
+    streaming: z.boolean(),
+    tools: z.boolean(),
+  }),
 });
 
 const threadSummarySchema = z.object({
@@ -76,6 +91,14 @@ const threadListResponseSchema = z.object({
 const threadReadResponseSchema = z.object({
   thread: threadSummarySchema,
   messages: z.array(z.object({ role: z.string(), text: z.string() })),
+});
+const localModelListResponseSchema = z.object({
+  models: z.array(
+    z.object({
+      id: z.string().min(1),
+      provider: z.enum(['ollama', 'lmstudio']),
+    }),
+  ),
 });
 const turnSummarySchema = z.object({
   id: z.string().min(1),
@@ -337,7 +360,7 @@ class JsonlConnection {
     });
 
     try {
-      await this.writeLine(JSON.stringify({ id, method, params }));
+      await this.writeLine(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
     } catch (error) {
       const pending = this.pending.get(key);
       if (pending !== undefined) {
@@ -391,7 +414,20 @@ class JsonlConnection {
     }
 
     const response = responseSchema.safeParse(parsed);
-    if (response.success && response.data.id !== null) {
+    if (response.success && response.data.id === null) {
+      const protocolError = response.data.error;
+      this.close(
+        protocolError === undefined
+          ? new Error('AGI local runtime emitted a response without a request id')
+          : new LocalRuntimeProtocolError(
+              protocolError.message,
+              protocolError.code,
+              protocolError.data,
+            ),
+      );
+      return;
+    }
+    if (response.success) {
       const pending = this.pending.get(String(response.data.id));
       if (pending === undefined) return;
       clearTimeout(pending.timer);
@@ -477,6 +513,13 @@ export class LocalRuntimeClient {
     ) as ThreadListResponse;
   }
 
+  async listLocalModels(): Promise<LocalModelListResponse> {
+    const connection = await this.readyConnection();
+    return localModelListResponseSchema.parse(
+      await connection.request('model/list', {}),
+    ) as LocalModelListResponse;
+  }
+
   async resumeThread(threadId: string): Promise<ThreadSummary> {
     const connection = await this.readyConnection();
     const result = await connection.request('thread/resume', { threadId });
@@ -554,15 +597,23 @@ export class LocalRuntimeClient {
 
   private async initializeOnce(): Promise<InitializeResponse> {
     const connection = this.ensureProcess();
-    const result = initializeResponseSchema.parse(
-      await connection.request('initialize', {
-        clientInfo: {
-          name: 'agi_vscode',
-          title: 'AGI for VS Code',
-          version: this.options.clientVersion,
-        },
-      }),
-    ) as InitializeResponse;
+    const rawResult = await connection.request('initialize', {
+      clientInfo: {
+        name: 'agi_vscode',
+        title: 'AGI for VS Code',
+        version: this.options.clientVersion,
+      },
+    });
+    const parsedResult = initializeResponseSchema.safeParse(rawResult);
+    if (!parsedResult.success) {
+      if (legacyInitializeResponseSchema.safeParse(rawResult).success) {
+        throw new Error(
+          'Installed AGI CLI does not support developer-session protocol 6. Update the AGI CLI or set agiWorkforce.cliPath to a current binary.',
+        );
+      }
+      throw new Error('Installed AGI CLI returned an invalid developer-session handshake');
+    }
+    const result = parsedResult.data as InitializeResponse;
     if (result.protocolVersion < MINIMUM_SUPPORTED_PROTOCOL_VERSION) {
       throw new Error(
         `Installed AGI CLI uses developer-session protocol ${result.protocolVersion}; version ${MINIMUM_SUPPORTED_PROTOCOL_VERSION} or newer is required`,
@@ -572,7 +623,8 @@ export class LocalRuntimeClient {
       !result.capabilities.threads ||
       !result.capabilities.turns ||
       !result.capabilities.streaming ||
-      !result.capabilities.approvals
+      !result.capabilities.approvals ||
+      !result.capabilities.models
     ) {
       throw new Error('Installed AGI CLI does not support the required developer-session protocol');
     }
