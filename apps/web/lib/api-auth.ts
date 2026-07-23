@@ -6,6 +6,10 @@ import { logger } from '@/lib/logger';
 import { auth } from '@clerk/nextjs/server';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  isDeveloperTokenRevoked,
+  verifyDeveloperTokenSignature,
+} from '@/lib/server/developer-token';
 
 export interface AuthResult {
   userId: string;
@@ -86,6 +90,25 @@ function getClerkAuthorizedParties(): string[] {
 }
 
 async function verifyBearerToken(token: string): Promise<AuthResult | null> {
+  const developerToken = verifyDeveloperTokenSignature(token);
+  if (developerToken) {
+    try {
+      if (await isDeveloperTokenRevoked(developerToken)) return null;
+    } catch (error) {
+      logger.error(
+        { error, userId: developerToken.userId },
+        'Developer token revocation lookup failed; denying request',
+      );
+      throw createError.serviceUnavailable(
+        'Unable to verify device session. Please try again shortly.',
+      );
+    }
+    return {
+      userId: developerToken.userId,
+      ...(developerToken.email ? { email: developerToken.email } : {}),
+    };
+  }
+
   try {
     const { verifyToken } = await import('@clerk/backend');
     const secretKey = process.env['CLERK_SECRET_KEY'];
@@ -113,9 +136,9 @@ async function verifyBearerToken(token: string): Promise<AuthResult | null> {
 /**
  * AGI API key (`sk_live_…` / `sk_test_…`, issued via Settings > API Keys),
  * verified through ApiKeyService — Argon2id, O(1) key_prefix lookup,
- * DoS-hardened parse-time rejection. Not a Clerk JWT, so it's checked by
+ * DoS-hardened parse-time rejection. Not a JWT, so it's checked by
  * prefix and dispatched here BEFORE verifyBearerToken runs, keeping the
- * Clerk bearer path (verifyBearerToken) untouched for every other token.
+ * JWT bearer path (verifyBearerToken) untouched for every other token.
  */
 async function verifyApiKey(token: string): Promise<AuthResult | null> {
   try {
@@ -153,7 +176,7 @@ export async function getClerkAuthUser(request: NextRequest): Promise<AuthResult
 
     // Path 2a: AGI API key — distinguished by prefix, verified via ApiKeyService.
     // Fail-closed: an sk_live_/sk_test_-shaped token that doesn't verify is
-    // rejected outright, never falls through to the Clerk JWT path below.
+    // rejected outright, never falls through to a JWT path below.
     if (token.startsWith('sk_live_') || token.startsWith('sk_test_')) {
       const result = await verifyApiKey(token);
       if (result) {
@@ -163,7 +186,7 @@ export async function getClerkAuthUser(request: NextRequest): Promise<AuthResult
       throw createError.unauthorized();
     }
 
-    // Path 2b: Clerk session JWT (unchanged for every non-API-key token)
+    // Path 2b: Clerk session JWT or first-party developer device token.
     const result = await verifyBearerToken(token);
     if (result) {
       await assertAccountActive(result.userId);

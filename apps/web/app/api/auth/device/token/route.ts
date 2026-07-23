@@ -1,7 +1,6 @@
 import 'server-only';
 
 import crypto from 'node:crypto';
-import jwt from 'jsonwebtoken';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -11,6 +10,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { issueDeveloperToken } from '@/lib/server/developer-token';
 
 // RFC 8628 device-code POLL. Mirrors services/api-gateway deviceAuth.ts `/token`.
 // The CLI polls this until the user approves at /auth/device. Status codes are
@@ -25,8 +25,6 @@ import { getNeonDb } from '@/lib/server/neon-db';
 // grant managed-cloud inference/billing, which stay behind their own gates.
 
 export const runtime = 'nodejs';
-
-const ACCESS_TOKEN_EXPIRES_SECONDS = 604800; // 7 days (matches gateway)
 
 const TokenPollSchema = z.object({ device_code: z.string().uuid() });
 
@@ -88,27 +86,17 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     return NextResponse.json({ error: 'authorization_pending' }, { status: 403, ...noStore });
   }
 
-  const secret = process.env['JWT_SECRET'];
-  if (!secret) {
-    logger.error({}, 'Device token: JWT_SECRET is not configured');
+  let accessToken: string;
+  let expiresIn: number;
+  try {
+    ({ accessToken, expiresIn } = issueDeveloperToken({
+      userId: record.user_id,
+      ...(record.user_email ? { email: record.user_email } : {}),
+    }));
+  } catch (error) {
+    logger.error({ error }, 'Device token: signing is not configured');
     throw createError.internal('Token signing is not configured');
   }
-
-  // Reuse the gateway's exact token contract (services/api-gateway/.../deviceAuth.ts):
-  // same claims + JWT_SECRET, so a token minted here is accepted by the gateway.
-  // `surface: 'developer'` marks this as a device-authorization (CLI/IDE)
-  // credential; the gateway's managed plan gate reads it as the TRUSTED
-  // developer-surface class so managed developer access requires Pro or higher.
-  const accessToken = jwt.sign(
-    { userId: record.user_id, email: record.user_email ?? '', surface: 'developer' },
-    secret,
-    {
-      expiresIn: ACCESS_TOKEN_EXPIRES_SECONDS,
-      issuer: 'agiworkforce-api-gateway',
-      audience: 'agiworkforce',
-      jwtid: crypto.randomUUID(),
-    },
-  );
 
   // Single-use: mark consumed so a leaked device_code cannot be replayed.
   const consumed = await db.query<{ status: string }>(
@@ -131,7 +119,7 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     .slice(0, 12);
   logger.info({ deviceRef, userId: record.user_id }, 'Device token issued');
   return NextResponse.json(
-    { access_token: accessToken, token_type: 'Bearer', expires_in: ACCESS_TOKEN_EXPIRES_SECONDS },
+    { access_token: accessToken, token_type: 'Bearer', expires_in: expiresIn },
     noStore,
   );
 }
