@@ -154,6 +154,8 @@ export const config = {
     /*
      * Run on all routes except:
      * - static files and Next.js internals
+     * - .well-known/workflow/* — Workflow SDK flow/step callbacks carry
+     *   internal binary payloads and must bypass Clerk/CSP request rewriting.
      * - api/stripe-webhook — must read raw request body bytes for HMAC
      *   signature verification via stripe.webhooks.constructEvent. Even
      *   though Next.js proxy doesn't normally consume the body,
@@ -165,7 +167,7 @@ export const config = {
      * - api/llm/v1/audio/transcriptions — multipart/form-data; same
      *   class of risk if proxy ever needs to inspect.
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/stripe-webhook|api/llm/v1/audio|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|\\.well-known/workflow/|api/stripe-webhook|api/llm/v1/audio|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     '/(api|trpc)(.*)',
     '/__clerk/(.*)',
   ],
