@@ -161,7 +161,7 @@ type PendingByokHandoff = {
   candidates: WebHandoffContextCandidate[];
 };
 
-function toChatMessage(m: Message, conversationId: string): ChatMessage {
+export function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
   // MessageBubble renders `thinkingContent` as a ThinkingBlock above the
   // message AND (separately) a "Thinking process" collapsible from
@@ -193,6 +193,7 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
     content: m.content,
     createdAt: m.createdAt,
     isStreaming: m.isStreaming,
+    attachments: m.attachments,
     metadata,
   };
 }
