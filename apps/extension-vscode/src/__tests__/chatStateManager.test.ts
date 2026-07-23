@@ -12,11 +12,20 @@ import {
 } from '../features/trees/contextPanelProvider';
 
 function makeHarness(
-  options: { approvalFailure?: Error; startTurn?: Promise<{ id: string }> } = {},
+  options: {
+    approvalFailure?: Error;
+    startTurn?: Promise<{ id: string }>;
+    localModels?: Array<{ id: string; provider: 'ollama' | 'lmstudio' }>;
+    localModelError?: Error;
+  } = {},
 ) {
   const listeners = new Set<(event: LocalRuntimeEvent) => void>();
   const runtime = {
     startThread: vi.fn().mockResolvedValue({ id: 'thread-1' }),
+    listLocalModels:
+      options.localModelError === undefined
+        ? vi.fn().mockResolvedValue({ models: options.localModels ?? [] })
+        : vi.fn().mockRejectedValue(options.localModelError),
     startTurn: vi.fn(() => options.startTurn ?? Promise.resolve({ id: 'turn-1' })),
     interruptTurn: vi.fn().mockResolvedValue(undefined),
     respondToApproval:
@@ -76,6 +85,127 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('does not mislabel unresolved Auto routing as AGI Cloud', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({ type: 'ready' });
+
+    expect(harness.posted).toContainEqual({
+      type: 'providerBadge',
+      payload: { providerLabel: '', brandColor: 'transparent' },
+    });
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({
+        type: 'providerBadge',
+        payload: expect.objectContaining({ providerLabel: 'AGI Cloud' }),
+      }),
+    );
+  });
+
+  it('shows CLI-discovered local models in the inline picker', async () => {
+    const harness = makeHarness({
+      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+    });
+
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+
+    expect(harness.posted).toContainEqual({
+      type: 'modelPickerData',
+      payload: expect.objectContaining({
+        groups: expect.arrayContaining([
+          {
+            label: 'Local',
+            models: [
+              {
+                id: 'gemma4:e4b',
+                label: 'gemma4:e4b',
+                description: 'Ollama · On device',
+              },
+            ],
+          },
+        ]),
+      }),
+    });
+  });
+
+  it('shows an honest setup state when the local CLI runtime is unavailable', async () => {
+    const harness = makeHarness({ localModelError: new Error('spawn agi ENOENT') });
+
+    await harness.manager.handleMessage({ type: 'ready' });
+
+    expect(harness.posted).toContainEqual({
+      type: 'runtimeStatus',
+      payload: {
+        status: 'unavailable',
+        message: 'Install or update the AGI CLI, then configure its path in Settings.',
+      },
+    });
+  });
+
+  it('passes the trusted discovered provider with a selected local model', async () => {
+    const harness = makeHarness({
+      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+    });
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+    await harness.manager.handleMessage({
+      type: 'selectModel',
+      payload: { modelId: 'gemma4:e4b' },
+    });
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Say hello' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startThread).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemma4:e4b', provider: 'ollama' }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'hello',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('preserves a selected local model when the webview native select has no dynamic option', async () => {
+    const harness = makeHarness({
+      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+    });
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+    await harness.manager.handleMessage({
+      type: 'selectModel',
+      payload: { modelId: 'gemma4:e4b' },
+    });
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Say hello', model: '' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startThread).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemma4:e4b', provider: 'ollama' }),
+    );
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemma4:e4b' }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'hello',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
   it('forwards the effective agent controls and selected workspace context', async () => {
     const harness = makeHarness();
     await harness.manager.handleMessage({ type: 'setMode', payload: { mode: 'plan' } });
@@ -105,22 +235,24 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
-  it('sends the Auto profile and per-turn task to the Rust session owner', async () => {
+  it('sends the shared self-routing Auto model to the Rust session owner', async () => {
     const harness = makeHarness();
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
       payload: {
         text: 'Search the web for the latest Rust release and cite sources',
-        model: 'auto-balanced',
+        model: 'auto',
       },
     });
 
     await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
     expect(harness.runtime.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'auto-balanced',
-        routingTaskType: 'research',
+        model: 'auto',
       }),
+    );
+    expect(harness.runtime.startTurn).not.toHaveBeenCalledWith(
+      expect.objectContaining({ routingTaskType: expect.anything() }),
     );
     harness.emit({
       type: 'turn_completed',

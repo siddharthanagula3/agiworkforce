@@ -63,6 +63,7 @@ fn thread_start_request_matches_the_stable_jsonl_shape() {
         "thread/start",
         ThreadStartParams {
             model: Some("registry/model-key".to_string()),
+            provider: None,
             cwd: Some("/workspace/project".to_string()),
             title: None,
         },

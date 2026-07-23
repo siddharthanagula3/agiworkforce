@@ -75,9 +75,9 @@ describe('buildGroupedQuickPickItems — tier gating', () => {
     expect(cloudRow?.description).not.toContain(MODEL_LOCKED_HINT);
   });
 
-  it('gates the auto-* routing modes too — they resolve to managed-cloud models', () => {
+  it('gates the shared self-routing Auto option too', () => {
     const items = buildGroupedQuickPickItems('local');
-    const auto = items.find((i) => i.modelId === 'auto-balanced');
+    const auto = items.find((i) => i.modelId === 'auto');
 
     expect(auto).toBeDefined();
     expect(auto?.description).toContain(MODEL_LOCKED_HINT);

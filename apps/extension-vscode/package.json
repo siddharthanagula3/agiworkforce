@@ -638,7 +638,7 @@
         },
         "agiWorkforce.model": {
           "type": "string",
-          "default": "auto-economy",
+          "default": "auto",
           "description": "Default LLM model. Run 'AGI Workforce: Select Model' (cmd+shift+m) to pick from currently available providers."
         },
         "agiWorkforce.cliPath": {

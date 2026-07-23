@@ -4,10 +4,11 @@ use agiworkforce_app_server::{
 use agiworkforce_protocol::developer_session::{
     method, AcknowledgedResponse, AppServerCapabilities, AppServerClientInfo,
     AppServerNotification, AppServerRequest, ApprovalResponseParams, DeveloperSessionSource,
-    InitializeParams, InitializeResponse, ThreadForkParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ThreadStatus,
-    ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus,
-    TurnSteerParams, TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION,
+    InitializeParams, InitializeResponse, LocalModelListResponse, LocalModelProvider,
+    LocalModelSummary, ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse,
+    ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary,
+    TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus, TurnSteerParams,
+    TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION,
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -87,6 +88,15 @@ impl DeveloperSessionHost for FakeHost {
         Ok(ThreadListResponse {
             threads: vec![thread("thread-1")],
             next_cursor: None,
+        })
+    }
+
+    async fn list_local_models(&self) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+        Ok(LocalModelListResponse {
+            models: vec![LocalModelSummary {
+                id: "gemma4:e4b".to_string(),
+                provider: LocalModelProvider::Ollama,
+            }],
         })
     }
 
@@ -192,6 +202,7 @@ fn capabilities() -> AppServerCapabilities {
         mcp: true,
         checkpoints: false,
         worktrees: false,
+        models: true,
     }
 }
 
@@ -231,6 +242,7 @@ async fn routes_thread_turn_and_control_methods_to_one_host() {
             method::THREAD_START,
             ThreadStartParams {
                 model: None,
+                provider: None,
                 cwd: Some("/workspace".to_string()),
                 title: None,
             },
