@@ -10,6 +10,7 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { ArtifactPreview } from './ArtifactPreview';
 import { StreamingArtifactView } from './StreamingArtifactView';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
+import { toast } from 'sonner';
 
 // ============================================================================
 // Artifact Tab
@@ -186,7 +187,14 @@ export function ArtifactsPanel() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => void downloadAllArtifacts(artifacts)}
+                onClick={() => {
+                  toast.promise(downloadAllArtifacts(artifacts), {
+                    loading: 'Preparing artifact download…',
+                    success: 'Artifact download ready',
+                    error: (error) =>
+                      error instanceof Error ? error.message : 'Could not download artifacts',
+                  });
+                }}
                 className="h-7 px-2 text-xs"
                 title="Download all artifacts as zip"
               >

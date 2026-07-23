@@ -76,7 +76,7 @@ describe('model-tier-gate 403 handling', () => {
       text: async () =>
         JSON.stringify({
           error: {
-            message: 'Model gemini-3.1-flash-lite requires PRO subscription or higher.',
+            message: 'Model gemini-3.5-flash-lite requires PRO subscription or higher.',
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: 'pro',
@@ -87,7 +87,7 @@ describe('model-tier-gate 403 handling', () => {
     const callbacks = makeCallbacks();
     await streamChat(
       {
-        model: 'gemini-3.1-flash-lite',
+        model: 'gemini-3.5-flash-lite',
         messages: [{ role: 'user', content: 'hi' }],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000011',
@@ -100,7 +100,7 @@ describe('model-tier-gate 403 handling', () => {
     expect(err).toBeInstanceOf(ApiPaywallError);
     expect(err.feature).toBe('model_access');
     expect(err.requiredTier).toBe('pro');
-    expect(err.reason).toBe('Model gemini-3.1-flash-lite requires PRO subscription or higher.');
+    expect(err.reason).toBe('Model gemini-3.5-flash-lite requires PRO subscription or higher.');
   });
 
   it('falls back to a generic Error for a 403 without the model_not_available code', async () => {
@@ -116,7 +116,7 @@ describe('model-tier-gate 403 handling', () => {
     const callbacks = makeCallbacks();
     await streamChat(
       {
-        model: 'gemini-3.1-flash-lite',
+        model: 'gemini-3.5-flash-lite',
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000012',
@@ -145,7 +145,7 @@ describe('model-tier-gate 403 handling', () => {
     const callbacks = makeCallbacks();
     await streamChat(
       {
-        model: 'gemini-3.1-flash-lite',
+        model: 'gemini-3.5-flash-lite',
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000013',

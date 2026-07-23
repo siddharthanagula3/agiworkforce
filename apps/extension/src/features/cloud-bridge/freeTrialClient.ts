@@ -5,7 +5,7 @@
  * managedChatHandler's paid-plan gate run before this transport is called.
  * This module:
  *   - Routes to POST https://agiworkforce.com/api/llm/v1/chat/completions
- *   - Economy model: read from models.json taskRouting.chat (gemini-3.1-flash-lite)
+ *   - Economy model: read from models.json taskRouting.chat (gemini-3.5-flash-lite)
  *   - Streams SSE response back via an async generator
  *   - Auth: fresh Clerk Native API token; a local-storage override exists only
  *     in development builds

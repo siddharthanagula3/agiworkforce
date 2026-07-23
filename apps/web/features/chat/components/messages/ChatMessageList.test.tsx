@@ -73,14 +73,24 @@ vi.mock('./MessageBubble', () => ({
     isReadingAloud,
     isReadAloudSupported,
   }: {
-    message: { id: string; role: string; content: string; isStreaming?: boolean };
+    message: {
+      id: string;
+      role: string;
+      content: string;
+      isStreaming?: boolean;
+      attachments?: Array<{ name: string }>;
+    };
     onRegenerate?: () => void;
     onDelete?: () => void;
     onReadAloud?: (messageId: string, content: string) => void;
     isReadingAloud?: boolean;
     isReadAloudSupported?: boolean;
   }) => (
-    <div data-testid={`bubble-${message.id}`} data-role={message.role}>
+    <div
+      data-testid={`bubble-${message.id}`}
+      data-role={message.role}
+      data-attachments={message.attachments?.map((attachment) => attachment.name).join(',')}
+    >
       <span>{message.isStreaming && !message.content ? 'Thinking...' : message.content}</span>
       {onRegenerate && (
         <button onClick={onRegenerate} aria-label="regenerate">
@@ -122,6 +132,7 @@ function makeMessage(
     content: overrides.content,
     createdAt: '2026-01-01T12:00:00.000Z',
     isStreaming: overrides.isStreaming ?? false,
+    attachments: overrides.attachments,
     metadata: overrides.metadata,
   };
 }
@@ -211,6 +222,31 @@ describe('ChatMessageList rendering', () => {
     render(<ChatMessageList messages={messages} />);
     expect(screen.getByText('Hello')).toBeInTheDocument();
     expect(screen.getByText('Hi there')).toBeInTheDocument();
+  });
+
+  it('forwards persisted attachments to the transcript bubble after reload', () => {
+    const withAttachment = makeMessage({
+      id: 'm-attachment',
+      role: 'user',
+      content: 'Read this',
+      attachments: [
+        {
+          id: 'asset-1',
+          name: 'report.pdf',
+          type: 'file',
+          size: 1024,
+          url: '/api/files/asset-1',
+          mimeType: 'application/pdf',
+        } as ChatMessage['attachments'] extends Array<infer T> ? T : never,
+      ],
+    });
+
+    render(<ChatMessageList messages={[withAttachment]} />);
+
+    expect(screen.getByTestId('bubble-m-attachment')).toHaveAttribute(
+      'data-attachments',
+      'report.pdf',
+    );
   });
 
   it('renders empty state without error when messages is empty', () => {

@@ -163,7 +163,7 @@ describe('streamFromProvider — 429 paywall detection', () => {
   });
 
   it('does NOT yield a paywall chunk when 429 body JSON has wrong kind', async () => {
-    const body = JSON.stringify({ kind: 'downgrade', modelOverride: 'gemini-3.1-flash-lite' });
+    const body = JSON.stringify({ kind: 'downgrade', modelOverride: 'gemini-3.5-flash-lite' });
     const chunks = await collectChunks(makeFetchReturning(429, body));
 
     expect(chunks[0]).toMatchObject({ type: 'error' });

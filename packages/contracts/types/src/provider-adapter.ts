@@ -98,6 +98,18 @@ export interface ImageBlock {
   source: { type: 'base64'; mediaType: string; data: string } | { type: 'url'; url: string };
 }
 
+/**
+ * User-provided document/file input. The web boundary hydrates owner-scoped
+ * storage references into this base64 form only after authorization, so raw
+ * file bytes never need to be persisted in a chat message or trusted from a
+ * browser request.
+ */
+export interface FileBlock {
+  type: 'file';
+  filename: string;
+  source: { type: 'base64'; mediaType: string; data: string };
+}
+
 export interface ToolUseBlock {
   type: 'tool_use';
   id: string;
@@ -119,7 +131,13 @@ export interface ThinkingBlock {
   signature?: string;
 }
 
-export type ContentBlock = TextBlock | ImageBlock | ToolUseBlock | ToolResultBlock | ThinkingBlock;
+export type ContentBlock =
+  | TextBlock
+  | ImageBlock
+  | FileBlock
+  | ToolUseBlock
+  | ToolResultBlock
+  | ThinkingBlock;
 
 /** A message at the provider boundary. Richer than UI-layer ChatMessage. */
 export interface ProviderMessage {

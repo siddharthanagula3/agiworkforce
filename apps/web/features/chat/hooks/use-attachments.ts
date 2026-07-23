@@ -7,27 +7,23 @@
  * - State: attachments (File[]) and previews ({file, url, type}[])
  * - addFiles / removeFile / clearAll actions
  * - Preview URLs via URL.createObjectURL
- * - Validation: max 20 files, max 25 MiB per file (canonical, see
- *   `@agiworkforce/types`'s MAX_ATTACHMENT_BYTES), allowed MIME types
+ * - Validation: max 10 files, max 12 MiB per file, cross-provider-safe MIME types
  * - Auto-cleanup of object URLs on unmount
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import {
+  CHAT_ATTACHMENT_MIME_TYPES,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_COUNT,
+  chatAttachmentAcceptAttribute,
+  isSupportedChatAttachment,
+} from '@/lib/chat-attachment-policy';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MAX_FILE_COUNT = 20;
-/**
- * Per-file size cap. Sourced from `@agiworkforce/types` so Web matches the
- * canonical limit that Mobile + Desktop + unified-chat already enforce.
- *
- * Previously hardcoded to 30 MB here · files between 25 MiB (canonical)
- * and 30 MB (web) passed local validation but consistently failed at the
- * Anthropic/OpenAI provider gateways, surfacing as opaque 413s late in
- * the request flow. 2026-05-22 ultrathink audit.
- */
-const MAX_FILE_SIZE_BYTES = MAX_ATTACHMENT_BYTES;
+const MAX_FILE_COUNT = MAX_CHAT_ATTACHMENT_COUNT;
+const MAX_FILE_SIZE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
 
 /**
  * MIME allowlist for `addFiles`. Exported (with the helpers below) so the
@@ -43,53 +39,13 @@ const MAX_FILE_SIZE_BYTES = MAX_ATTACHMENT_BYTES;
  * would offer docs the handler then rejects). This broader allowlist exists for
  * that future document path + other consumers.
  */
-export const ALLOWED_MIME_TYPES = new Set([
-  // Images
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/webp',
-  'image/svg+xml',
-  // Documents
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-  'application/json',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  // Code
-  'text/javascript',
-  'text/typescript',
-  'text/html',
-  'text/css',
-  'application/xml',
-]);
+export const ALLOWED_MIME_TYPES = new Set<string>(CHAT_ATTACHMENT_MIME_TYPES);
 
 /**
  * Extension fallback used when the browser can't determine a MIME type
  * (common for code files on some platforms). Kept in sync with the regex
  * in `isAllowedType` below so `getAcceptAttribute()` reflects reality.
  */
-const ALLOWED_EXTENSIONS_FALLBACK = [
-  '.ts',
-  '.tsx',
-  '.js',
-  '.jsx',
-  '.py',
-  '.rs',
-  '.go',
-  '.rb',
-  '.sh',
-  '.yml',
-  '.yaml',
-  '.toml',
-];
-
 /**
  * Builds an `<input type="file" accept="...">` value from the canonical
  * allowlist above. Consuming components should call this instead of
@@ -99,7 +55,7 @@ const ALLOWED_EXTENSIONS_FALLBACK = [
  * picker only offers images).
  */
 export function getAcceptAttribute(): string {
-  return [...ALLOWED_MIME_TYPES, ...ALLOWED_EXTENSIONS_FALLBACK].join(',');
+  return chatAttachmentAcceptAttribute();
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -155,13 +111,7 @@ function formatFileSize(bytes: number): string {
  * check that silently drops valid non-image documents.
  */
 export function isAllowedType(file: File): boolean {
-  if (ALLOWED_MIME_TYPES.has(file.type)) return true;
-  // Fallback: allow if the browser couldn't determine the MIME but the file
-  // has a text-like extension (.ts, .tsx, .py, .rs, .go, etc.)
-  if (!file.type && /\.(ts|tsx|js|jsx|py|rs|go|rb|sh|yml|yaml|toml)$/i.test(file.name)) {
-    return true;
-  }
-  return false;
+  return isSupportedChatAttachment(file.name, file.type);
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────

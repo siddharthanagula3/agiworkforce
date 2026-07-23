@@ -55,6 +55,16 @@ type AnthropicContentBlock =
       type: 'image';
       source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string };
     }
+  | {
+      type: 'document';
+      title: string;
+      source: { type: 'base64'; media_type: 'application/pdf'; data: string };
+    }
+  | {
+      type: 'document';
+      title: string;
+      source: { type: 'text'; media_type: 'text/plain'; data: string };
+    }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | {
       type: 'tool_result';
@@ -107,6 +117,32 @@ function translateContentBlock(block: ContentBlock): AnthropicContentBlock {
         type: 'image',
         source: { type: 'url', url: block.source.url },
       };
+    case 'file':
+      if (block.source.mediaType === 'application/pdf') {
+        return {
+          type: 'document',
+          title: block.filename,
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: block.source.data,
+          },
+        };
+      }
+      if (block.source.mediaType.startsWith('text/')) {
+        return {
+          type: 'document',
+          title: block.filename,
+          source: {
+            type: 'text',
+            media_type: 'text/plain',
+            data: Buffer.from(block.source.data, 'base64').toString('utf8'),
+          },
+        };
+      }
+      throw new TypeError(
+        `Anthropic document input does not support ${block.source.mediaType}; use PDF or text`,
+      );
     case 'tool_use':
       return { type: 'tool_use', id: block.id, name: block.name, input: block.input };
     case 'tool_result': {

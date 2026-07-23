@@ -915,9 +915,9 @@ describe('estimateTokens — provider multipliers', () => {
     );
   });
 
-  it('uses Gemini tokenizer for gemini-3.1-flash-lite', () => {
+  it('uses Gemini tokenizer for gemini-3.5-flash-lite', () => {
     // 40 chars / 4.0 = 10 tokens.
-    expect(estimateTokens('a'.repeat(40), 'gemini-3.1-flash-lite')).toBe(10);
+    expect(estimateTokens('a'.repeat(40), 'gemini-3.5-flash-lite')).toBe(10);
   });
 
   it('uses DeepSeek tokenizer for deepseek-v4-flash', () => {
@@ -949,7 +949,7 @@ describe('estimateTokens — provider multipliers', () => {
 
   it('Gemini is the lightest tokenizer per char', () => {
     const txt = 'a'.repeat(1000);
-    const gemini = estimateTokens(txt, 'gemini-3.1-flash-lite');
+    const gemini = estimateTokens(txt, 'gemini-3.5-flash-lite');
     const gpt = estimateTokens(txt, 'gpt-5.6-sol');
     const claude = estimateTokens(txt, 'claude-sonnet-4.6');
     expect(gemini).toBeLessThanOrEqual(gpt);

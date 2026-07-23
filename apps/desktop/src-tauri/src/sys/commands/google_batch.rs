@@ -61,8 +61,8 @@ fn get_timestamp() -> String {
 /// input/output prices only, so cache price is zero until the catalog has an
 /// explicit Google cache field.
 fn get_model_pricing(model: &str) -> (f64, f64, f64) {
-    use crate::core::llm::models_config::get_pricing;
     use crate::core::llm::Provider;
+    use crate::core::llm::models_config::get_pricing;
 
     let pricing = get_pricing(&Provider::Google, model);
     match pricing {
@@ -491,10 +491,10 @@ mod tests {
 
     #[test]
     fn pricing_is_sourced_from_catalog_for_current_gemini_models() {
-        // gemini-3.1-flash-lite is in models.json at $0.25/$1.50 per 1M.
-        let (input, output, cache) = get_model_pricing("gemini-3.1-flash-lite");
-        assert_eq!(input, 0.25);
-        assert_eq!(output, 1.5);
+        // gemini-3.5-flash-lite is in models.json at $0.30/$2.50 per 1M.
+        let (input, output, cache) = get_model_pricing("gemini-3.5-flash-lite");
+        assert_eq!(input, 0.3);
+        assert_eq!(output, 2.5);
         assert_eq!(cache, 0.0);
     }
 

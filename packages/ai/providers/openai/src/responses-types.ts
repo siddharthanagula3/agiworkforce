@@ -26,7 +26,17 @@ export interface ResponsesInputImageContent {
   detail?: 'auto' | 'low' | 'high';
 }
 
-export type ResponsesInputContent = ResponsesInputTextContent | ResponsesInputImageContent;
+export interface ResponsesInputFileContent {
+  type: 'input_file';
+  filename: string;
+  /** A base64 data URL. Owner-scoped storage is hydrated before translation. */
+  file_data: string;
+}
+
+export type ResponsesInputContent =
+  | ResponsesInputTextContent
+  | ResponsesInputImageContent
+  | ResponsesInputFileContent;
 
 export interface ResponsesInputMessage {
   type?: 'message';

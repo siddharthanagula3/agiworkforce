@@ -116,7 +116,7 @@ function wireContentToText(content: OpenAIWireMessage['content']): string {
   return '';
 }
 
-/** Multimodal wire parts (image_url) -> canonical blocks; text parts pass through. */
+/** Multimodal wire parts -> canonical blocks; text parts pass through. */
 function wireContentToBlocks(content: Array<Record<string, unknown>>): ContentBlock[] {
   const blocks: ContentBlock[] = [];
   for (const part of content) {
@@ -137,6 +137,30 @@ function wireContentToBlocks(content: Array<Record<string, unknown>>): ContentBl
           });
         } else {
           blocks.push({ type: 'image', source: { type: 'url', url } });
+        }
+      }
+      continue;
+    }
+    if (type === 'file') {
+      const file = part['file'] as Record<string, unknown> | undefined;
+      const filename = file?.['filename'];
+      const fileData = file?.['file_data'];
+      const declaredMime = file?.['mime_type'];
+      if (typeof filename === 'string' && typeof fileData === 'string') {
+        const dataUrlMatch = /^data:([^;]+);base64,([\s\S]*)$/.exec(fileData);
+        if (dataUrlMatch?.[1] && dataUrlMatch[2] !== undefined) {
+          blocks.push({
+            type: 'file',
+            filename,
+            source: {
+              type: 'base64',
+              mediaType:
+                typeof declaredMime === 'string' && declaredMime.length > 0
+                  ? declaredMime
+                  : dataUrlMatch[1],
+              data: dataUrlMatch[2],
+            },
+          });
         }
       }
       continue;

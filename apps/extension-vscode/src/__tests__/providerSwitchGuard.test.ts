@@ -34,7 +34,7 @@ describe('extractProvider', () => {
 
   it('identifies Google models by gemini- prefix', () => {
     expect(extractProvider('gemini-3.1-pro-preview')).toBe('google');
-    expect(extractProvider('gemini-3.1-flash-lite')).toBe('google');
+    expect(extractProvider('gemini-3.5-flash-lite')).toBe('google');
   });
 
   it('identifies xAI models by grok- prefix', () => {

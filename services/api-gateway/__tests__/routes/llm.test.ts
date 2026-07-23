@@ -57,18 +57,16 @@ describe('llm route — catalog-driven Basic allow-list', () => {
     expect(new Set(BASIC_ALLOWED_MODELS)).toEqual(expected);
   });
 
-  it('contains the Basic workhorse + escalation + reasoning slot models', () => {
+  it('contains the Basic workhorse + coding + reasoning slot models', () => {
     // Canonical economy routing slots.
-    // workhorse_general, escalation_coding, reasoning_premium all back
+    // workhorse_general, coding_fast, reasoning_economy all back
     // models that must be reachable from a Basic request.
     const workhorse = getRoutingSlotModel('workhorse_general');
-    const escalation = getRoutingSlotModel('escalation_coding');
-    const reasoning = getRoutingSlotModel('reasoning_premium');
+    const coding = getRoutingSlotModel('coding_fast');
+    const reasoning = getRoutingSlotModel('reasoning_economy');
 
     expect(BASIC_ALLOWED_MODELS.has(workhorse)).toBe(true);
-    // escalation_coding (GLM-5.1) lives under tierAllowedModels.economy.
-    expect(BASIC_ALLOWED_MODELS.has(escalation)).toBe(true);
-    // reasoning_premium (DeepSeek V4 Flash) lives under economy.
+    expect(BASIC_ALLOWED_MODELS.has(coding)).toBe(true);
     expect(BASIC_ALLOWED_MODELS.has(reasoning)).toBe(true);
   });
 
@@ -105,7 +103,7 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
   });
 
   it('resolves google from gemini-* models via the catalog', () => {
-    expect(resolveProvider('gemini-3.1-flash-lite')).toBe('google');
+    expect(resolveProvider('gemini-3.5-flash-lite')).toBe('google');
   });
 
   it('throws 400 for catalog-unknown models (defense against typos)', () => {
@@ -118,7 +116,7 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
     // and Perplexity now resolve instead of failing closed. Local-device
     // providers (lmstudio, and ollama unless the server deploys one)
     // remain outside the managed proxy; catalog-unknown models still 400.
-    expect(resolveProvider('grok-4.3')).toBe('xai');
+    expect(resolveProvider('grok-4.5')).toBe('xai');
     expect(resolveProvider('deepseek-v4-flash')).toBe('deepseek');
     expect(resolveProvider('sonar')).toBe('perplexity');
   });
@@ -169,9 +167,7 @@ describe('llm route — every Basic provider has a representative model', () => 
       if (provider) providersInBasic.add(provider);
     }
 
-    expect([...providersInBasic].sort()).toEqual(
-      ['deepseek', 'google', 'openai', 'perplexity', 'qwen', 'zhipu'].sort(),
-    );
+    expect([...providersInBasic].sort()).toEqual(['anthropic', 'google', 'openai']);
   });
 });
 

@@ -58,6 +58,8 @@ import {
 } from '@shared/utils/html-sanitizer';
 import { SandboxedIframe } from '../SandboxedIframe';
 import type { ArtifactRenderPayload, ArtifactKind } from '@/lib/artifact-sandbox';
+import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
+import { toast } from 'sonner';
 
 export interface ArtifactVersion {
   id: string;
@@ -545,18 +547,15 @@ export function ArtifactPreview({
 
   const handleDownloadGeneratedFile = async () => {
     if (!generatedFileSummary.primaryUri) return;
-
-    if (generatedFileSummary.primaryUri.startsWith('http')) {
-      const a = document.createElement('a');
-      a.href = generatedFileSummary.primaryUri;
-      a.download = generatedFileSummary.fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      return;
+    try {
+      await downloadGeneratedFile(
+        generatedFileSummary.primaryUri,
+        generatedFileSummary.fileName,
+        generatedFileSummary.mimeType,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not download this file');
     }
-
-    await navigator.clipboard.writeText(generatedFileSummary.primaryUri);
   };
 
   const handleShareGeneratedFile = async () => {

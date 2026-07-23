@@ -21,6 +21,7 @@ import { buildSandboxSrcDoc } from '@shared/utils/html-sanitizer';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import type { ArtifactData } from './ArtifactPreview';
+import { toast } from 'sonner';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -315,7 +316,14 @@ export function InlineArtifactCards({ artifacts, onOpen, className }: InlineArti
       {artifacts.length > 1 && (
         <button
           type="button"
-          onClick={() => void downloadAllArtifacts(artifacts)}
+          onClick={() => {
+            toast.promise(downloadAllArtifacts(artifacts), {
+              loading: 'Preparing artifact download…',
+              success: 'Artifact download ready',
+              error: (error) =>
+                error instanceof Error ? error.message : 'Could not download artifacts',
+            });
+          }}
           className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border/50 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <FolderDown className="h-3.5 w-3.5" aria-hidden="true" />

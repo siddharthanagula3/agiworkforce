@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -12,6 +11,8 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { getPresignedUploadUrl, isObjectStorageConfigured } from '@/lib/server/object-storage';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { secureFilenameSegment } from '@/lib/secure-random';
+import { randomUUID } from 'node:crypto';
+import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 
 /**
  * Presigned-upload API · client code never imports the R2/S3 SDK or holds
@@ -23,13 +24,12 @@ import { secureFilenameSegment } from '@/lib/secure-random';
  * request bodies at ~4.5MB, well under the knowledge-file size cap, so the
  * browser must PUT directly to R2.
  *
- * Only 'avatar' and 'knowledge-file' are wired to a caller today. A chat
- * attachment upload flow can add an 'attachment' kind here when that UI ships
- * (no consumer currently reads/writes chat attachments in the web app).
+ * Chat attachments use the same direct-to-R2 boundary, then call the
+ * owner-scoped completion route to verify bytes and register media metadata.
  */
 
 const PresignRequestSchema = z.object({
-  kind: z.enum(['avatar', 'knowledge-file']),
+  kind: z.enum(['avatar', 'knowledge-file', 'chat-attachment']),
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(255),
   byteCount: z.number().int().positive(),
@@ -70,6 +70,16 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   if (!validation.ok) {
     throw createError.validation(validation.message);
   }
+  if (kind === 'chat-attachment') {
+    if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
+      throw createError.validation('Chat attachments are limited to 12 MiB.');
+    }
+    if (!isSupportedChatAttachment(fileName, mimeType)) {
+      throw createError.validation(
+        'Chat supports images, PDFs, and text/code files. Convert Office files to PDF first.',
+      );
+    }
+  }
 
   const ext = extOf(fileName);
   const suffix = `${Date.now()}_${secureFilenameSegment(13)}.${ext}`;
@@ -77,7 +87,7 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   let key: string;
   if (kind === 'avatar') {
     key = `avatars/${userId}/${suffix}`;
-  } else {
+  } else if (kind === 'knowledge-file') {
     if (!projectId) {
       throw createError.validation('projectId is required for knowledge-file uploads');
     }
@@ -90,6 +100,8 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
       throw createError.notFound('Project not found');
     }
     key = `knowledge-files/projects/${projectId}/${suffix}`;
+  } else {
+    key = `chat-attachments/${userId}/${suffix}`;
   }
 
   const { uploadUrl, publicUrl } = await getPresignedUploadUrl({
@@ -100,6 +112,7 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({
     attachmentId: randomUUID(),
+    storageKey: key,
     uploadUrl,
     uploadMethod: 'PUT' as const,
     uploadHeaders: { 'Content-Type': mimeType },

@@ -47,6 +47,7 @@ import {
 import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
+import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import type { KeyboardShortcut } from '../hooks/use-keyboard-shortcuts';
 import {
@@ -867,29 +868,8 @@ export default function WebChatPage() {
           router.replace(`/chat/${freshConvId}`);
         }
 
-        // Read image files as base64 data URLs so the LLM can process them
-        const resolvedAttachments = options.attachments
-          ? await Promise.all(
-              options.attachments.map(async (f) => {
-                let base64Content: string | undefined;
-                if (f.type.startsWith('image/')) {
-                  base64Content = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(f);
-                    reader.onload = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                  });
-                }
-                return {
-                  id: crypto.randomUUID(),
-                  type: f.type.startsWith('image/') ? ('image' as const) : ('file' as const),
-                  name: f.name,
-                  size: f.size,
-                  mimeType: f.type,
-                  content: base64Content,
-                };
-              }),
-            )
+        const resolvedAttachments = options.attachments?.length
+          ? await uploadChatAttachments(options.attachments)
           : undefined;
 
         const doSend = () =>
@@ -925,6 +905,11 @@ export default function WebChatPage() {
         } else {
           await doSend();
         }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Could not attach the selected files.';
+        setChatError(message);
+        toast.error(message);
       } finally {
         // Release the guard once the send has fully settled (or bailed). By now
         // `bareChatSessionId`/`urlConversationId` reflect the real conversation,
@@ -940,6 +925,7 @@ export default function WebChatPage() {
       activeModelId,
       activeProjectId,
       router,
+      setChatError,
     ],
   );
 
@@ -1236,11 +1222,6 @@ export default function WebChatPage() {
         return false;
       }
 
-      if (attachments?.some((file) => !file.type.startsWith('image/'))) {
-        handleOpenUpgradeDialog();
-        return false;
-      }
-
       void sendContent(content, { attachments, meta: resolvedMeta });
     },
     [
@@ -1249,7 +1230,6 @@ export default function WebChatPage() {
       displayedMessages,
       activeModelId,
       handleGenerateImage,
-      handleOpenUpgradeDialog,
       sendContent,
     ],
   );

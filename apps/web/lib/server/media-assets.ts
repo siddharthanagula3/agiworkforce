@@ -316,6 +316,40 @@ export async function getMediaAssetById(id: string): Promise<MediaAssetForServin
   }
 }
 
+/** Idempotency lookup for the direct-upload completion transaction. */
+export async function getMediaAssetByStoragePathname(
+  userId: string,
+  storagePathname: string,
+): Promise<MediaAssetForServing | null> {
+  const db = getNeonDb();
+  try {
+    const rows = await db.query<Record<string, unknown>>(
+      `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+              metadata, deleted_at
+         from public.media_assets
+        where user_id = $1 and storage_pathname = $2 and deleted_at is null
+        limit 1`,
+      [userId, storagePathname],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id: String(row['id']),
+      userId: String(row['user_id']),
+      kind: String(row['kind']),
+      mimeType: String(row['mime_type']),
+      byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
+      storageUrl: String(row['storage_url']),
+      storagePathname: (row['storage_pathname'] as string | null) ?? null,
+      metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
+      deletedAt: null,
+    };
+  } catch (error) {
+    if (isSchemaNotReady(error)) return null;
+    throw error;
+  }
+}
+
 /** Soft-delete one of the user's assets. Returns true when a row was updated. */
 export async function softDeleteMediaAsset(userId: string, id: string): Promise<boolean> {
   const db = getNeonDb();

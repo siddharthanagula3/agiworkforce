@@ -15,7 +15,7 @@
  * This ensures the classifier understands modern terminology, tools, and user expectations.
  *
  * Recommended classifier models (in order of preference):
- * 1. gemini-3.1-flash-lite - extremely fast, recent, strong structured output
+ * 1. gemini-3.5-flash-lite - extremely fast, recent, strong structured output
  * 2. gpt-5.6-luna - reliable tool-aware OpenAI classifier
  * 3. claude-sonnet-5 - high-accuracy fallback for ambiguous tasks
  *

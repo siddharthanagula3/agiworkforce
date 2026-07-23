@@ -93,6 +93,37 @@ describe('openAIWireRequestToChatRequest', () => {
     ]);
   });
 
+  it('converts hydrated wire files into canonical file blocks', () => {
+    const req = openAIWireRequestToChatRequest({
+      model: 'm',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Summarize this' },
+            {
+              type: 'file',
+              file: {
+                filename: 'brief.pdf',
+                mime_type: 'application/pdf',
+                file_data: 'data:application/pdf;base64,JVBERg==',
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(req.messages[0]?.content).toEqual([
+      { type: 'text', text: 'Summarize this' },
+      {
+        type: 'file',
+        filename: 'brief.pdf',
+        source: { type: 'base64', mediaType: 'application/pdf', data: 'JVBERg==' },
+      },
+    ]);
+  });
+
   it('keeps unparseable tool arguments as __raw instead of throwing', () => {
     const req = openAIWireRequestToChatRequest({
       model: 'm',
