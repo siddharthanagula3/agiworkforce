@@ -4,9 +4,9 @@
  * GET  /api/projects/[id]/knowledge-files · list active files for a project
  * POST /api/projects/[id]/knowledge-files · record an uploaded file
  *
- * Pre-migration safety: catches PG error 42P01 (undefined_table).
- *   GET  → 200 { files: [] }
- *   POST → 503 { error: 'knowledge_files_unavailable', message: '...' }
+ * Missing schema fails closed with 503. Returning a fabricated empty list
+ * would make clients claim a project has no sources when the capability is
+ * actually unavailable.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,22 +23,22 @@ import {
   extractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError,
 } from '@/lib/server/project-knowledge-extraction';
-import {
-  SYNCED_APP_SURFACES,
-  DEVELOPER_SESSION_SURFACES,
-  validateAttachmentMeta,
-  type SourceSurface,
-} from '@agiworkforce/types';
-
-const ALL_SURFACES: readonly SourceSurface[] = [
-  ...SYNCED_APP_SURFACES,
-  ...DEVELOPER_SESSION_SURFACES,
-];
+import { validateAttachmentMeta } from '@agiworkforce/types';
+import { ManagedCloudProjectKnowledgeRegisterRequestSchema } from '@agiworkforce/cloud-contracts';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+function projectKnowledgeResponse(row: Record<string, unknown>, projectId: string) {
+  const file = mapKnowledgeFileRow(row);
+  return {
+    ...file,
+    storageUri: `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}`,
+  };
+}
 
 function isSchemaNotReady(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -56,7 +56,10 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
 
   // Verify project ownership before listing files
   const [project] = await db.query<{ id: string }>(
-    `select id from user_projects where id = $1 and user_id = $2 limit 1`,
+    `select id
+       from user_projects
+      where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
+      limit 1`,
     [projectId, userId],
   );
 
@@ -74,52 +77,51 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
     );
   } catch (error) {
     if (isSchemaNotReady(error)) {
-      return NextResponse.json({ files: [] });
+      return NextResponse.json(
+        {
+          error: 'knowledge_files_unavailable',
+          message: 'Project sources are temporarily unavailable.',
+        },
+        { status: 503 },
+      );
     }
     logger.error({ error, projectId }, 'Failed to fetch knowledge files');
     throw createError.internal('Failed to fetch knowledge files');
   }
 
   return NextResponse.json({
-    files: data.map((row) => mapKnowledgeFileRow(row)),
+    files: data.map((row) => projectKnowledgeResponse(row, projectId)),
   });
 }
 
 async function handleCreateKnowledgeFile(request: NextRequest, context: RouteContext) {
+  const { userId } = await getClerkAuthUser(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
   const { id: projectId } = await context.params;
 
-  let body: {
-    fileName?: string;
-    mimeType?: string;
-    byteCount?: number;
-    checksumSha256?: string;
-    sourceSurface?: string;
-    storageUri?: string;
-    summary?: string;
-  };
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     throw createError.validation('Invalid request body');
   }
-
-  if (!body.fileName || typeof body.fileName !== 'string' || body.fileName.trim().length === 0) {
-    throw createError.validation('fileName is required');
+  const parsedBody = ManagedCloudProjectKnowledgeRegisterRequestSchema.safeParse(rawBody);
+  if (!parsedBody.success) {
+    const issue = parsedBody.error.issues[0];
+    throw createError.validation(
+      issue
+        ? `${issue.path.join('.') || 'request'}: ${issue.message}`
+        : 'Invalid project source metadata',
+    );
   }
-  if (!body.mimeType || typeof body.mimeType !== 'string' || body.mimeType.trim().length === 0) {
-    throw createError.validation('mimeType is required');
-  }
-  if (typeof body.byteCount !== 'number' || body.byteCount <= 0) {
-    throw createError.validation('byteCount must be a positive number');
-  }
+  const body = parsedBody.data;
   const attachmentValidation = validateAttachmentMeta(
     body.fileName.trim(),
     body.mimeType.trim(),
@@ -128,27 +130,12 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   if (!attachmentValidation.ok) {
     throw createError.validation(attachmentValidation.message);
   }
-  if (
-    !body.checksumSha256 ||
-    typeof body.checksumSha256 !== 'string' ||
-    !/^[a-f0-9]{64}$/i.test(body.checksumSha256.trim())
-  ) {
-    throw createError.validation('checksumSha256 must be a SHA-256 hex digest');
-  }
-  if (!body.sourceSurface || !(ALL_SURFACES as readonly string[]).includes(body.sourceSurface)) {
-    throw createError.validation(`sourceSurface must be one of: ${ALL_SURFACES.join(', ')}`);
-  }
-  if (
-    !body.storageUri ||
-    typeof body.storageUri !== 'string' ||
-    body.storageUri.trim().length === 0
-  ) {
-    throw createError.validation('storageUri is required');
-  }
-
   // Verify project ownership
   const [project] = await db.query<{ id: string }>(
-    `select id from user_projects where id = $1 and user_id = $2 limit 1`,
+    `select id
+       from user_projects
+      where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
+      limit 1`,
     [projectId, userId],
   );
 
@@ -220,7 +207,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
         body.mimeType.trim(),
         body.byteCount,
         body.checksumSha256.trim(),
-        body.summary?.trim() ?? null,
+        null,
         body.sourceSurface,
         userId,
         body.storageUri.trim(),
@@ -243,8 +230,12 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     throw createError.internal('Failed to create knowledge file');
   }
 
-  return NextResponse.json({ file: mapKnowledgeFileRow(data) }, { status: 201 });
+  return NextResponse.json({ file: projectKnowledgeResponse(data, projectId) }, { status: 201 });
 }
 
-export const GET = withErrorHandler(handleListKnowledgeFiles);
-export const POST = withErrorHandler(handleCreateKnowledgeFile);
+export const GET = withCorsRoute(withErrorHandler(handleListKnowledgeFiles));
+export const POST = withCorsRoute(withErrorHandler(handleCreateKnowledgeFile));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

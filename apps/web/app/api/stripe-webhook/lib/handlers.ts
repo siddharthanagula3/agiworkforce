@@ -46,33 +46,16 @@ export async function dispatchStripeEvent(
       const stripeCustomerId = session.customer as string | null;
       logger.warn({ sessionId: session.id }, 'Async payment failed');
 
-      try {
-        if (stripeSubId) {
-          await db
-            .execute(
-              "update subscriptions set status = 'past_due' where stripe_subscription_id = $1",
-              [stripeSubId],
-            )
-            .catch((updateError: unknown) => {
-              logger.error(
-                { error: updateError, stripeSubId },
-                'Failed to update subscription for async payment failed',
-              );
-            });
-        } else if (stripeCustomerId) {
-          await db
-            .execute("update subscriptions set status = 'past_due' where stripe_customer_id = $1", [
-              stripeCustomerId,
-            ])
-            .catch((updateError: unknown) => {
-              logger.error(
-                { error: updateError, stripeCustomerId },
-                'Failed to update subscription by customer ID for async payment failed',
-              );
-            });
-        }
-      } catch (error) {
-        logger.error({ error }, 'Error updating subscription for async payment failed');
+      if (stripeSubId) {
+        await db.execute(
+          "update subscriptions set status = 'past_due' where stripe_subscription_id = $1",
+          [stripeSubId],
+        );
+      } else if (stripeCustomerId) {
+        await db.execute(
+          "update subscriptions set status = 'past_due' where stripe_customer_id = $1",
+          [stripeCustomerId],
+        );
       }
       break;
     }
@@ -100,39 +83,28 @@ export async function dispatchStripeEvent(
       const stripeSubId = subscription.id;
       logger.info({ stripeSubId }, 'Subscription deleted');
 
-      try {
-        const canceledAt = subscription.canceled_at
-          ? new Date(subscription.canceled_at * 1000).toISOString()
-          : new Date().toISOString();
+      const canceledAt = subscription.canceled_at
+        ? new Date(subscription.canceled_at * 1000).toISOString()
+        : new Date().toISOString();
 
-        await db
-          .execute(
-            // Reset plan_tier to 'free' as well · a deleted subscription must
-            // revoke entitlement. Entitlement reads gate on `status` (see
-            // lib/entitlement.ts) so this is belt-and-suspenders, but keeping the
-            // stored tier honest avoids a paid label on a canceled row.
-            //
-            // Cancellation policy (founder, 2026-07): cancellations run to the end
-            // of the paid billing period with NO mid-period cutoff and NO prorated
-            // adjustment. Stripe fires `customer.subscription.deleted` at period
-            // end (portal is configured to cancel at period end), so downgrading
-            // here does not cut the user off early. We deliberately do NOT claw
-            // back remaining credits on cancellation — the user keeps what they
-            // paid for (including any separately-purchased top-up balance) through
-            // the period. Credit clawback stays ONLY for refunds and disputes
-            // (money genuinely returned), handled in their own events below.
-            "update subscriptions set status = 'canceled', plan_tier = 'free', canceled_at = $1 where stripe_subscription_id = $2",
-            [canceledAt, stripeSubId],
-          )
-          .catch((updateError: unknown) => {
-            logger.error(
-              { error: updateError, stripeSubId },
-              'Failed to update subscription for deleted event',
-            );
-          });
-      } catch (error) {
-        logger.error({ error }, 'Error updating subscription for deleted event');
-      }
+      await db.execute(
+        // Reset plan_tier to 'free' as well · a deleted subscription must
+        // revoke entitlement. Entitlement reads gate on `status` (see
+        // lib/entitlement.ts) so this is belt-and-suspenders, but keeping the
+        // stored tier honest avoids a paid label on a canceled row.
+        //
+        // Cancellation policy (founder, 2026-07): cancellations run to the end
+        // of the paid billing period with NO mid-period cutoff and NO prorated
+        // adjustment. Stripe fires `customer.subscription.deleted` at period
+        // end (portal is configured to cancel at period end), so downgrading
+        // here does not cut the user off early. We deliberately do NOT claw
+        // back remaining credits on cancellation — the user keeps what they
+        // paid for (including any separately-purchased top-up balance) through
+        // the period. Credit clawback stays ONLY for refunds and disputes
+        // (money genuinely returned), handled in their own events below.
+        "update subscriptions set status = 'canceled', plan_tier = 'free', canceled_at = $1 where stripe_subscription_id = $2",
+        [canceledAt, stripeSubId],
+      );
       break;
     }
     case 'invoice.payment_failed': {
@@ -142,47 +114,23 @@ export async function dispatchStripeEvent(
       logger.warn({ invoiceId: invoice.id, stripeSubId }, 'Payment failed for invoice');
 
       if (stripeSubId) {
-        try {
-          const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubId);
-          const actualStatus = stripeSubscription.status;
+        const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubId);
+        const actualStatus = stripeSubscription.status;
 
-          logger.info(
-            { stripeSubId, actualStatus },
-            'Retrieved actual subscription status from Stripe after payment failure',
-          );
+        logger.info(
+          { stripeSubId, actualStatus },
+          'Retrieved actual subscription status from Stripe after payment failure',
+        );
 
-          await db
-            .execute('update subscriptions set status = $1 where stripe_subscription_id = $2', [
-              actualStatus,
-              stripeSubId,
-            ])
-            .catch((updateError: unknown) => {
-              logger.error(
-                { error: updateError, stripeSubId, actualStatus },
-                'Failed to update subscription for payment failed',
-              );
-            });
-        } catch (error) {
-          logger.error(
-            { error, stripeSubId },
-            'Error fetching/updating subscription for payment failed',
-          );
-        }
+        await db.execute('update subscriptions set status = $1 where stripe_subscription_id = $2', [
+          actualStatus,
+          stripeSubId,
+        ]);
       } else if (stripeCustomerId) {
-        try {
-          await db
-            .execute("update subscriptions set status = 'past_due' where stripe_customer_id = $1", [
-              stripeCustomerId,
-            ])
-            .catch((updateError: unknown) => {
-              logger.error(
-                { error: updateError, stripeCustomerId },
-                'Failed to update subscription by customer ID for payment failed',
-              );
-            });
-        } catch (error) {
-          logger.error({ error }, 'Error updating subscription for payment failed');
-        }
+        await db.execute(
+          "update subscriptions set status = 'past_due' where stripe_customer_id = $1",
+          [stripeCustomerId],
+        );
       }
       break;
     }
@@ -204,47 +152,26 @@ export async function dispatchStripeEvent(
       );
 
       if (stripeCustomerId && refundedAmount > 0) {
-        try {
-          const profiles = await db
-            .query<{
-              id: string;
-            }>('select id from profiles where stripe_customer_id = $1 limit 1', [stripeCustomerId])
-            .catch((profileError: unknown) => {
-              logger.error(
-                { error: profileError, stripeCustomerId },
-                'Failed to find user for refund',
-              );
-              return [] as { id: string }[];
-            });
+        const profiles = await db.query<{
+          id: string;
+        }>('select id from profiles where stripe_customer_id = $1 limit 1', [stripeCustomerId]);
 
-          const profile = profiles[0];
-          if (profile?.id) {
-            await db
-              .execute('select handle_refund($1, $2, $3)', [
-                profile.id,
-                refundedAmount,
-                `Refund for charge ${charge.id}`,
-              ])
-              .then(() => {
-                logger.info(
-                  { userId: profile.id, refundedAmount, chargeId: charge.id },
-                  'Credits revoked for refund successfully',
-                );
-              })
-              .catch((refundError: unknown) => {
-                logger.error(
-                  { error: refundError, userId: profile.id, refundedAmount },
-                  'Failed to revoke credits for refund',
-                );
-              });
-          } else {
-            logger.warn(
-              { stripeCustomerId, chargeId: charge.id },
-              'No user found for refunded charge - credits not revoked',
-            );
-          }
-        } catch (error) {
-          logger.error({ error, chargeId: charge.id }, 'Error processing charge refund');
+        const profile = profiles[0];
+        if (profile?.id) {
+          await db.execute('select handle_refund($1, $2, $3)', [
+            profile.id,
+            refundedAmount,
+            `Refund for charge ${charge.id}`,
+          ]);
+          logger.info(
+            { userId: profile.id, refundedAmount, chargeId: charge.id },
+            'Credits revoked for refund successfully',
+          );
+        } else {
+          logger.warn(
+            { stripeCustomerId, chargeId: charge.id },
+            'No user found for refunded charge - credits not revoked',
+          );
         }
       }
       break;
@@ -260,79 +187,64 @@ export async function dispatchStripeEvent(
         'CRITICAL: Charge dispute created - requires immediate attention',
       );
 
-      try {
-        const charge = await stripe.charges.retrieve(chargeId);
-        const stripeCustomerId = charge.customer as string | null;
+      const charge = await stripe.charges.retrieve(chargeId);
+      const stripeCustomerId = charge.customer as string | null;
 
-        if (stripeCustomerId) {
-          const profiles = await db
-            .query<{
-              id: string;
-              email: string | null;
-            }>('select id, email from profiles where stripe_customer_id = $1 limit 1', [
-              stripeCustomerId,
-            ])
-            .catch(() => [] as { id: string; email: string | null }[]);
+      if (stripeCustomerId) {
+        const profiles = await db.query<{
+          id: string;
+          email: string | null;
+        }>('select id, email from profiles where stripe_customer_id = $1 limit 1', [
+          stripeCustomerId,
+        ]);
 
-          const profile = profiles[0];
-          if (profile?.id) {
-            await db
-              .execute(
-                "update subscriptions set status = 'past_due', cancel_at_period_end = true where stripe_customer_id = $1",
-                [stripeCustomerId],
-              )
-              .catch((updateError: unknown) => {
-                logger.error(
-                  { error: updateError, stripeCustomerId },
-                  'Failed to update subscription for dispute',
-                );
-              });
+        const profile = profiles[0];
+        if (profile?.id) {
+          await db.execute(
+            "update subscriptions set status = 'past_due', cancel_at_period_end = true where stripe_customer_id = $1",
+            [stripeCustomerId],
+          );
 
-            try {
-              const balance = await CreditService.getBalance(profile.id);
-              if (balance && balance.credits_remaining_cents > 0) {
-                await CreditService.deductCredits(
-                  profile.id,
-                  balance.credits_remaining_cents,
-                  `Credits revoked due to charge dispute ${dispute.id}`,
-                  { type: 'dispute', disputeId: dispute.id, reason },
-                );
-                logger.info(
-                  {
-                    userId: profile.id,
-                    revokedCents: balance.credits_remaining_cents,
-                    disputeId: dispute.id,
-                  },
-                  'Credits revoked due to dispute',
-                );
-              }
-            } catch (creditError) {
-              logger.error(
-                { error: creditError, userId: profile.id, disputeId: dispute.id },
-                'Failed to revoke credits for dispute',
-              );
+          const balance = await CreditService.getBalance(db, profile.id);
+          if (balance && balance.credits_remaining_cents > 0) {
+            const deduction = await CreditService.deductCredits(
+              db,
+              profile.id,
+              balance.credits_remaining_cents,
+              `Credits revoked due to charge dispute ${dispute.id}`,
+              { type: 'dispute', disputeId: dispute.id, reason },
+              `stripe-dispute:${dispute.id}`,
+            );
+            if (!deduction.success) {
+              throw new Error(deduction.error || 'Failed to revoke credits for dispute');
             }
-
-            logger.warn(
+            logger.info(
               {
                 userId: profile.id,
-                email: profile.email,
+                revokedCents: balance.credits_remaining_cents,
                 disputeId: dispute.id,
-                chargeId,
-                amount,
-                reason,
               },
-              'ALERT: User subscription flagged due to dispute',
-            );
-          } else {
-            logger.error(
-              { stripeCustomerId, disputeId: dispute.id },
-              'Could not find user for disputed charge',
+              'Credits revoked due to dispute',
             );
           }
+
+          logger.warn(
+            {
+              userId: profile.id,
+              email: profile.email,
+              disputeId: dispute.id,
+              chargeId,
+              amount,
+              reason,
+            },
+            'ALERT: User subscription flagged due to dispute',
+          );
+        } else {
+          logger.error(
+            { stripeCustomerId, disputeId: dispute.id },
+            'Could not find user for disputed charge',
+          );
         }
-      } catch (error) {
-        logger.error({ error, disputeId: dispute.id }, 'Error processing charge dispute');
       }
       break;
     }

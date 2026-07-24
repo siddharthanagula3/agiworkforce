@@ -25,6 +25,7 @@ import {
   type ChatConversationRow,
   type ChatMessageRow,
 } from '@/lib/server/neon-chat';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -32,7 +33,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
+  const userId = await requireCurrentUserId(request);
   const { id } = await context.params;
 
   // Parse and clamp pagination parameters
@@ -96,6 +97,8 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 }
 
 async function handleUpdateConversation(request: NextRequest, context: RouteContext) {
+  const userId = await requireCurrentUserId(request);
+
   // AUDIT-008-006: CSRF protection for state-changing PUT endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -103,7 +106,6 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
   const { id } = await context.params;
 
   let rawBody: unknown;
@@ -144,7 +146,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       [ownedProject] = await getNeonChatDb().query<{ id: string }>(
         `select id
            from user_projects
-          where id = $1 and user_id = $2 and is_archived = false
+          where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
           limit 1`,
         [targetProjectId, userId],
       );
@@ -195,6 +197,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
 }
 
 async function handleDeleteConversation(request: NextRequest, context: RouteContext) {
+  const userId = await requireCurrentUserId(request);
+
   // AUDIT-008-006: CSRF protection for state-changing DELETE endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -202,7 +206,6 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
   const { id } = await context.params;
 
   try {
@@ -231,6 +234,10 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   return NextResponse.json({ success: true });
 }
 
-export const GET = withErrorHandler(handleGetConversation);
-export const PUT = withErrorHandler(handleUpdateConversation);
-export const DELETE = withErrorHandler(handleDeleteConversation);
+export const GET = withCorsRoute(withErrorHandler(handleGetConversation));
+export const PUT = withCorsRoute(withErrorHandler(handleUpdateConversation));
+export const DELETE = withCorsRoute(withErrorHandler(handleDeleteConversation));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

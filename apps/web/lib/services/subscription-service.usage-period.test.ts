@@ -55,6 +55,7 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-07-18T12:00:00.000Z'),
       new Date('2026-08-18T12:00:00.000Z'),
       1_000,
+      undefined,
     );
   });
 
@@ -73,6 +74,7 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-07-18T12:00:00.000Z'),
       new Date('2026-08-18T12:00:00.000Z'),
       1_000,
+      undefined,
     );
   });
 
@@ -92,6 +94,7 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-07-18T12:00:00.000Z'),
       new Date('2026-08-18T12:00:00.000Z'),
       4_000,
+      undefined,
     );
   });
 });

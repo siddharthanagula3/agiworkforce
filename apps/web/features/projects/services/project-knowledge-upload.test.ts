@@ -21,7 +21,7 @@ const REGISTERED_FILE = {
   addedAt: '2026-07-18T12:00:00.000Z',
   retentionExpiresAt: null,
   deletedAt: null,
-  storageUri: 'https://files.example.test/knowledge-files/projects/project-1/notes.txt',
+  storageUri: '/api/projects/project-1/knowledge-files/file-1',
 };
 
 describe('uploadProjectKnowledgeFile', () => {
@@ -37,8 +37,9 @@ describe('uploadProjectKnowledgeFile', () => {
         new Response(
           JSON.stringify({
             uploadUrl: 'https://upload.example.test/signed',
+            uploadMethod: 'PUT',
             uploadHeaders: { 'Content-Type': 'text/plain' },
-            publicUrl: REGISTERED_FILE.storageUri,
+            storageKey: 'knowledge-files/projects/project-1/notes.txt',
           }),
           { status: 200 },
         ),
@@ -58,19 +59,20 @@ describe('uploadProjectKnowledgeFile', () => {
     });
 
     expect(result).toEqual(REGISTERED_FILE);
-    expect(progress.mock.calls.map(([value]) => value)).toEqual([0, 80, 100]);
+    expect(progress.mock.calls.map(([value]) => value)).toEqual([0, 100]);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       '/api/uploads/presign',
       expect.objectContaining({
         method: 'POST',
+        credentials: 'include',
         headers: expect.objectContaining({ 'x-csrf-token': 'csrf-token' }),
         body: JSON.stringify({
           kind: 'knowledge-file',
+          projectId: 'project-1',
           fileName: 'notes.txt',
           mimeType: 'text/plain',
           byteCount: 5,
-          projectId: 'project-1',
         }),
       }),
     );
@@ -84,7 +86,9 @@ describe('uploadProjectKnowledgeFile', () => {
       '/api/projects/project-1/knowledge-files',
       expect.objectContaining({
         method: 'POST',
-        body: expect.stringContaining(REGISTERED_FILE.checksumSha256),
+        body: expect.stringContaining(
+          '"storageUri":"knowledge-files/projects/project-1/notes.txt"',
+        ),
       }),
     );
   });
@@ -109,7 +113,9 @@ describe('uploadProjectKnowledgeFile', () => {
           new Response(
             JSON.stringify({
               uploadUrl: 'https://upload.example.test/signed',
-              publicUrl: REGISTERED_FILE.storageUri,
+              uploadMethod: 'PUT',
+              uploadHeaders: { 'Content-Type': 'text/plain' },
+              storageKey: 'knowledge-files/projects/project-1/notes.txt',
             }),
             { status: 200 },
           ),
@@ -125,6 +131,6 @@ describe('uploadProjectKnowledgeFile', () => {
         projectId: 'project-1',
         file: new File(['hello'], 'notes.txt', { type: 'text/plain' }),
       }),
-    ).rejects.toThrow('invalid file metadata');
+    ).rejects.toThrow(/registration response contract violation/i);
   });
 });

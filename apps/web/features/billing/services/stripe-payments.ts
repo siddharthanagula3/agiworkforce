@@ -72,6 +72,7 @@ export async function openBillingPortal(): Promise<void> {
     headers: await addCsrfHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${authToken}`,
+      'Idempotency-Key': `agi.checkout.web.${crypto.randomUUID()}`,
     }),
     body: JSON.stringify({}),
   });

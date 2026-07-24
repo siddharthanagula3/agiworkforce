@@ -94,9 +94,17 @@ function canPersistNotificationSettings(): boolean {
 
 const SELF_SAVING_TABS = new Set<CanonicalTab>(['capabilities', 'connectors', 'plugins']);
 const WEB_HIDDEN_TABS = new Set<CanonicalTab>(['models-keys', 'voice']);
+const LOCAL_HIDDEN_TABS = new Set<CanonicalTab>(['account', 'billing', 'usage']);
 const visibleNav = isCloudWeb
   ? SETTINGS_NAV.filter((t) => !WEB_HIDDEN_TABS.has(t.key))
-  : SETTINGS_NAV;
+  : SETTINGS_NAV.filter((t) => !LOCAL_HIDDEN_TABS.has(t.key));
+
+function resolveVisibleTab(tab: SettingsTab): CanonicalTab {
+  const resolved = resolveTab(tab);
+  if (isCloudWeb && WEB_HIDDEN_TABS.has(resolved)) return 'general';
+  if (!isCloudWeb && LOCAL_HIDDEN_TABS.has(resolved)) return 'general';
+  return resolved;
+}
 
 function stableSerialize(value: unknown): string {
   const sortRecursively = (input: unknown): unknown => {
@@ -411,10 +419,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   }, [open, buildCurrentSnapshot, loadNotificationSettings, loadSettings, refreshOllamaState]);
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [activeTab, setActiveTab] = useState<CanonicalTab>(() => {
-    const resolved = resolveTab(initialTab);
-    return isCloudWeb && WEB_HIDDEN_TABS.has(resolved) ? 'general' : resolved;
-  });
+  const [activeTab, setActiveTab] = useState<CanonicalTab>(() => resolveVisibleTab(initialTab));
 
   const openGovernanceWorkspace = useCallback(() => {
     onOpenChange(false);
@@ -425,8 +430,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
   useEffect(() => {
     if (open) {
-      const resolved = resolveTab(initialTab);
-      setActiveTab(isCloudWeb && WEB_HIDDEN_TABS.has(resolved) ? 'general' : resolved);
+      setActiveTab(resolveVisibleTab(initialTab));
     }
   }, [open, initialTab]);
 
@@ -643,7 +647,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           />
         );
       case 'account':
-        return <AccountTab />;
+        return <AccountTab scope="local" />;
       case 'billing':
         return <BillingTab />;
       case 'usage':
@@ -714,7 +718,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   return (
     <SectionErrorBoundary sectionName="Settings Panel">
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="w-[min(1040px,calc(100vw-48px))] max-w-none overflow-hidden border-border/70 bg-background p-0 shadow-2xl sm:rounded-xl">
+        <DialogContent
+          disableAnimation
+          className="w-[min(1040px,calc(100vw-48px))] max-w-none overflow-hidden border-border/70 bg-background p-0 shadow-2xl sm:rounded-xl"
+        >
           <div className="flex h-[min(760px,calc(100vh-80px))] min-h-[520px]">
             <nav
               className="w-64 shrink-0 overflow-y-auto border-r border-border bg-muted/70 px-3 py-4"

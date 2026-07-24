@@ -7,9 +7,9 @@ import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 
@@ -105,8 +105,11 @@ function getValidatedOrigin(request: Request): string {
 }
 
 async function handlePortal(request: NextRequest) {
-  // CSRF protection for state-changing endpoint
-  const csrfError = await requireCsrfToken(request);
+  const { userId, email: userEmail } = await getClerkAuthUser(request);
+
+  // CSRF protection for state-changing endpoint after authenticating the
+  // Desktop bearer/cookie principal.
+  const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) {
     return csrfError as NextResponse;
   }
@@ -121,27 +124,39 @@ async function handlePortal(request: NextRequest) {
     throw createError.serviceUnavailable('Stripe is not configured. Please set STRIPE_SECRET_KEY.');
   }
 
-  const { userId, email: userEmail } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
   type SubRow = Pick<SubscriptionRow, 'stripe_customer_id' | 'stripe_subscription_id' | 'status'>;
-  const subRows = await db
-    .query<SubRow>(
+  let subRows: SubRow[];
+  try {
+    subRows = await db.query<SubRow>(
       'select stripe_customer_id, stripe_subscription_id, status from subscriptions where user_id = $1 limit 1',
       [userId],
-    )
-    .catch(() => [] as SubRow[]);
+    );
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to verify subscription before opening billing portal');
+    throw createError.serviceUnavailable(
+      'Billing details could not be verified. No billing session was opened; please retry.',
+    );
+  }
   const subscription = subRows[0] ?? null;
 
   // Self-healing: If no local subscription, try to find in Stripe by customer_id (BEST PRACTICE)
   if (!subscription) {
     try {
       // First, check if we have customer_id stored in profiles
-      const profileRows = await db
-        .query<
-          Pick<ProfileRow, 'stripe_customer_id'>
-        >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
-        .catch(() => [] as Pick<ProfileRow, 'stripe_customer_id'>[]);
+      let profileRows: Array<Pick<ProfileRow, 'stripe_customer_id'>>;
+      try {
+        profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
+          'select stripe_customer_id from profiles where id = $1 limit 1',
+          [userId],
+        );
+      } catch (error) {
+        logger.error({ error, userId }, 'Failed to verify billing customer before portal lookup');
+        throw createError.serviceUnavailable(
+          'Billing customer details could not be verified. No billing session was opened; please retry.',
+        );
+      }
       const profileData = profileRows[0] ?? null;
 
       let customerId: string | null = profileData?.stripe_customer_id || null;
@@ -232,12 +247,20 @@ async function handlePortal(request: NextRequest) {
         }
 
         // CRITICAL: Store customer_id for future lookups
-        await db
-          .execute('update profiles set stripe_customer_id = $1 where id = $2', [
+        try {
+          await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
             customerId,
             userId,
-          ])
-          .catch(() => undefined);
+          ]);
+        } catch (error) {
+          logger.error(
+            { error, userId, customerId },
+            'Failed to persist recovered Stripe customer before opening portal',
+          );
+          throw createError.serviceUnavailable(
+            'The recovered billing account could not be linked safely. No billing session was opened; please retry.',
+          );
+        }
 
         logger.info(
           { userId: userId, customerId, email: userEmail },
@@ -268,10 +291,9 @@ async function handlePortal(request: NextRequest) {
 
       return NextResponse.json({ url: session.url }, { status: 200 });
     } catch (err) {
-      // If catching our own throw or stripe error, rethrow or log
-      if (err instanceof Error && err.message.includes('No subscription')) {
-        throw err;
-      }
+      // Preserve deliberate auth/validation/availability responses from the
+      // recovery path; only collapse unknown Stripe lookup failures.
+      if (isAppError(err)) throw err;
       logger.error({ error: err, userId: userId }, 'Self-healing portal lookup failed');
       throw createError.notFound('No subscription found.');
     }
@@ -389,7 +411,7 @@ async function handlePortal(request: NextRequest) {
   }
 }
 
-export const POST = withErrorHandler(handlePortal);
+export const POST = withCorsRoute(withErrorHandler(handlePortal));
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

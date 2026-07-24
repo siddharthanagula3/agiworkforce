@@ -30,12 +30,13 @@ describe('QuickQuery', () => {
     });
   });
 
-  it('shows only the Economy Auto profile for Basic users', async () => {
+  it('shows the single canonical Auto router for Basic users', async () => {
     renderQuickQuery({ open: true, onClose: vi.fn(), onSubmit: vi.fn() });
 
-    fireEvent.click(screen.getByRole('button', { name: /^economy$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^auto$/i }));
 
-    expect(screen.getAllByText('Economy').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Auto').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Economy')).not.toBeInTheDocument();
     expect(screen.queryByText('Balanced')).not.toBeInTheDocument();
     expect(screen.queryByText('Best')).not.toBeInTheDocument();
   });
@@ -50,11 +51,11 @@ describe('QuickQuery', () => {
     fireEvent.click(screen.getByRole('button', { name: /send/i }));
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith('hello from hobby', 'auto-economy');
+      expect(onSubmit).toHaveBeenCalledWith('hello from hobby', 'auto');
     });
   });
 
-  it('shows the Balanced Auto profile for Pro users', async () => {
+  it('keeps the same familiar Auto router for Pro users', async () => {
     useAccountStore.setState({
       plan: 'pro',
       account: {
@@ -65,10 +66,11 @@ describe('QuickQuery', () => {
 
     renderQuickQuery({ open: true, onClose: vi.fn(), onSubmit: vi.fn() });
 
-    fireEvent.click(screen.getByRole('button', { name: /^balanced$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^auto$/i }));
 
-    expect(screen.getAllByText('Economy').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Balanced').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Auto').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Economy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Balanced')).not.toBeInTheDocument();
     expect(screen.queryByText('Best')).not.toBeInTheDocument();
   });
 });

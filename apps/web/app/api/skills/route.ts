@@ -20,6 +20,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
   getManagedSkillCatalog,
   SkillCatalogUnavailableError,
@@ -49,4 +50,8 @@ async function handleListSkills(request: NextRequest) {
   });
 }
 
-export const GET = withErrorHandler(handleListSkills);
+export const GET = withCorsRoute(withErrorHandler(handleListSkills));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

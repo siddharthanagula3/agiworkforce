@@ -19,6 +19,7 @@ vi.mock('../lib/tauri-mock', () => ({
 vi.mock('../services/cloudAccountAuth', () => ({
   cloudAccountAuth: {
     getSession: () => ({ access_token: 'test-token' }),
+    getValidSession: vi.fn(async () => ({ access_token: 'test-token' })),
     onAuthStateChange: vi.fn(() => () => {}),
   },
 }));

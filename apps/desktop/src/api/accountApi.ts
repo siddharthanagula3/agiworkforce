@@ -1,11 +1,5 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
-import {
-  CreditBalanceResponse,
-  DeductCreditsResponse,
-  DeviceLinkResponse,
-  TokenResponse,
-  UserProfile,
-} from '../types/account';
+import type { UserProfile } from '../types/account';
 import { isTauri } from '../lib/tauri-mock';
 
 // Default timeout for API requests (30 seconds)
@@ -43,21 +37,6 @@ const getInvoke = async () => {
 };
 
 export const accountApi = {
-  deviceLinkInitiate: async (): Promise<DeviceLinkResponse> => {
-    const invoke = await getInvoke();
-    return withTimeout(invoke('device_link_initiate'), 'device_link_initiate');
-  },
-
-  deviceLinkPoll: async (deviceCode: string): Promise<TokenResponse> => {
-    const invoke = await getInvoke();
-    // Longer timeout for polling (60s) since user needs time to authorize
-    return withTimeout(
-      invoke('device_link_poll', { deviceId: deviceCode }),
-      'device_link_poll',
-      60_000,
-    );
-  },
-
   fetchUserProfile: async (accessToken: string): Promise<UserProfile> => {
     if (!isTauri) {
       // In web mode, return an empty profile. Subscription data is owned by the web API.
@@ -69,58 +48,5 @@ export const accountApi = {
     }
     const invoke = await getInvoke();
     return withTimeout(invoke('fetch_user_profile', { accessToken }), 'fetch_user_profile');
-  },
-
-  oauthRefresh: async (refreshToken: string): Promise<TokenResponse> => {
-    const invoke = await getInvoke();
-    return withTimeout(invoke('oauth_refresh', { refreshToken }), 'oauth_refresh');
-  },
-
-  /** Fetch current credit balance from the API Gateway */
-  fetchCreditBalance: async (): Promise<CreditBalanceResponse> => {
-    if (!isTauri) {
-      // In web mode, return empty credits
-      return {
-        object: 'credit_balance',
-        subscription: {
-          plan_tier: 'free',
-          status: 'active',
-          current_period_end: null,
-        },
-        credits: {
-          usage_percentage: 0,
-          reset_at: null,
-          seconds_until_reset: 0,
-          has_usage_remaining: false,
-        },
-      };
-    }
-    const invoke = await getInvoke();
-    return withTimeout(invoke('fetch_credit_balance'), 'fetch_credit_balance');
-  },
-
-  /** Report LLM usage to deduct credits */
-  reportLlmUsage: async (
-    amountCents: number,
-    model: string,
-    provider: string,
-    inputTokens?: number,
-    outputTokens?: number,
-  ): Promise<DeductCreditsResponse> => {
-    if (!isTauri) {
-      // In web mode, skip reporting
-      return { success: false, error: 'Not available in web mode' };
-    }
-    const invoke = await getInvoke();
-    return withTimeout(
-      invoke('report_llm_usage', {
-        amountCents,
-        model,
-        provider,
-        inputTokens,
-        outputTokens,
-      }),
-      'report_llm_usage',
-    );
   },
 };

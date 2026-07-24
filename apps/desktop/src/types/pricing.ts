@@ -1,22 +1,10 @@
+import type { BillingPlanTier } from '@agiworkforce/types';
+
 /**
- * Canonical 6-tier taxonomy (kebab-case strings matching cloud subscription
- * tiers and the Rust `PlanTier` enum's `serde(rename)` values).
- *
- * Legacy aliases `'free'` and `'pay_per_result'` are retained so older rows /
- * pricing-plan rows persisted under the previous schema continue to type-check.
- * New code should use the canonical values: `'local-only' | 'byok' | 'basic' |
- * 'pro' | 'max' | 'enterprise'`.
+ * Billing tiers come from the shared catalog. `pay_per_result` remains only as
+ * a compatibility value for historical native pricing rows.
  */
-export type PricingModel =
-  | 'local-only'
-  | 'byok'
-  | 'basic'
-  | 'pro'
-  | 'max'
-  | 'enterprise'
-  // Legacy aliases (backward-compat)
-  | 'free'
-  | 'pay_per_result';
+export type PricingModel = BillingPlanTier | 'pay_per_result';
 
 export interface PricingPlan {
   id: string;

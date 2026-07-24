@@ -168,7 +168,11 @@ export { SettingsModal } from './components/SettingsModal';
 export { SettingsShell, DEFAULT_SETTINGS_SECTIONS } from './components/SettingsShell';
 export type { SettingsSection, SettingsShellProps } from './components/SettingsShell';
 export { MemoryEditor } from './components/MemoryEditor';
-export type { MemoryEditorProps } from './components/MemoryEditor';
+export type {
+  MemoryEditorDataAdapter,
+  MemoryEditorProps,
+  MemoryEditorSyncStatus,
+} from './components/MemoryEditor';
 export { ProjectCard } from './components/ProjectCard';
 export type { ProjectCardProps } from './components/ProjectCard';
 export { ProjectGallery } from './components/ProjectGallery';

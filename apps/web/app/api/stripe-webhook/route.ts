@@ -59,11 +59,23 @@ export async function POST(request: NextRequest) {
     return idempotencyResult.error;
   }
   if (!idempotencyResult.shouldProcess) {
+    if (idempotencyResult.state === 'processing') {
+      return NextResponse.json(
+        { error: 'Event processing is still in progress' },
+        { status: 503, headers: { 'Retry-After': '10' } },
+      );
+    }
     return NextResponse.json({ received: true, message: 'Event already processed' });
   }
 
   try {
-    await dispatchStripeEvent(db, stripe, event);
+    // Financial state changes and the durable succeeded marker share one
+    // transaction. If either fails, Neon rolls back both so a Stripe retry
+    // cannot double-apply credits or permanently acknowledge partial state.
+    await db.transaction(async (tx) => {
+      await dispatchStripeEvent(tx, stripe, event);
+      await markEventSucceeded(tx, event.id);
+    });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     logger.error(
@@ -87,8 +99,6 @@ export async function POST(request: NextRequest) {
       status: 500,
     });
   }
-
-  await markEventSucceeded(db, event.id);
 
   logger.info({ eventType: event.type, eventId: event.id }, 'Webhook processed successfully');
   return NextResponse.json({ received: true, eventType: event.type }, { status: 200 });

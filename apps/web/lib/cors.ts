@@ -108,7 +108,7 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
 export function getCorsHeaders(request: NextRequest): Record<string, string> {
   const origin = request.headers.get('origin');
   const headers: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers':
       'Content-Type, Authorization, X-Request-ID, x-csrf-token, X-Requested-With, Idempotency-Key, X-AGI-Surface, X-Client',
     'Access-Control-Expose-Headers':
@@ -179,19 +179,40 @@ export function handleCorsPreflightRequest(
 /**
  * Add CORS and security headers to a response
  */
-export function withCorsAndSecurityHeaders(
-  response: NextResponse,
+export function withCorsAndSecurityHeaders<TResponse extends Response>(
+  response: TResponse,
   request: NextRequest,
-): NextResponse {
+): TResponse {
   const corsHeaders = getCorsHeaders(request);
   const securityHeaders = getSecurityHeaders();
 
-  // Add all headers to the response
-  for (const [key, value] of Object.entries({ ...corsHeaders, ...securityHeaders })) {
+  for (const [key, value] of Object.entries(corsHeaders)) {
     response.headers.set(key, value);
+  }
+  // Route-specific security policies may be stricter or intentionally more
+  // precise than the API defaults (for example, authenticated same-origin PDF
+  // previews use SAMEORIGIN while every other API response remains DENY).
+  for (const [key, value] of Object.entries(securityHeaders)) {
+    if (!response.headers.has(key)) {
+      response.headers.set(key, value);
+    }
   }
 
   return response;
+}
+
+/**
+ * Wrap a route handler so every outcome — success, rate-limit response, CSRF
+ * rejection, and `withErrorHandler` failure response — carries the same CORS
+ * and security headers. Cross-surface API routes should compose this OUTSIDE
+ * `withErrorHandler`; adding headers only to happy-path `NextResponse.json`
+ * calls leaves Desktop/Mobile unable to read actionable error responses.
+ */
+export function withCorsRoute<TArgs extends unknown[]>(
+  handler: (request: NextRequest, ...args: TArgs) => Promise<Response>,
+): (request: NextRequest, ...args: TArgs) => Promise<Response> {
+  return async (request: NextRequest, ...args: TArgs): Promise<Response> =>
+    withCorsAndSecurityHeaders(await handler(request, ...args), request);
 }
 
 /**

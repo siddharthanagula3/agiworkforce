@@ -1,0 +1,134 @@
+import { cloudFetch, CLOUD_API_BASE_URL, getAuthHeaders } from './cloudApi';
+import {
+  assertManagedCloudBoundary,
+  captureManagedCloudBoundary,
+  type ManagedCloudBoundary,
+} from '../services/managedCloudBoundary';
+
+export interface CloudMemoryFact {
+  id: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function parseMemoryFact(value: unknown): CloudMemoryFact | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row['id'] !== 'string' ||
+    typeof row['content'] !== 'string' ||
+    typeof row['createdAt'] !== 'string' ||
+    typeof row['updatedAt'] !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    id: row['id'],
+    text: row['content'],
+    createdAt: row['createdAt'],
+    updatedAt: row['updatedAt'],
+  };
+}
+
+function errorMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const error = (payload as Record<string, unknown>)['error'];
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && !Array.isArray(error)) {
+    const message = (error as Record<string, unknown>)['message'];
+    return typeof message === 'string' ? message : null;
+  }
+  const message = (payload as Record<string, unknown>)['message'];
+  return typeof message === 'string' ? message : null;
+}
+
+async function request(
+  path: string,
+  init: RequestInit,
+  boundary: ManagedCloudBoundary,
+): Promise<Response> {
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}${path}`, {
+    ...init,
+    credentials: 'include',
+    headers: {
+      ...(await getAuthHeaders()),
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    const message = errorMessage(payload);
+    throw new Error(message ?? `Cloud memory request failed: HTTP ${response.status}`);
+  }
+  assertManagedCloudBoundary(boundary);
+  return response;
+}
+
+export async function listCloudMemories(): Promise<CloudMemoryFact[]> {
+  const boundary = captureManagedCloudBoundary('Cloud memory');
+  const result: CloudMemoryFact[] = [];
+  let offset = 0;
+  do {
+    const response = await request(
+      `/api/memory?limit=100&offset=${offset}`,
+      { method: 'GET' },
+      boundary,
+    );
+    const payload: unknown = await response.json();
+    const rows =
+      payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)['memories']
+        : null;
+    if (!Array.isArray(rows)) throw new Error('Cloud memory returned an invalid list.');
+    const page = rows.map(parseMemoryFact).filter((fact): fact is CloudMemoryFact => fact !== null);
+    if (page.length !== rows.length) throw new Error('Cloud memory returned an invalid entry.');
+    result.push(...page);
+    if (rows.length < 100) break;
+    offset += rows.length;
+  } while (offset <= 10_000);
+  return result;
+}
+
+export async function createCloudMemory(text: string): Promise<CloudMemoryFact> {
+  const boundary = captureManagedCloudBoundary('Cloud memory creation');
+  const response = await request(
+    '/api/memory',
+    {
+      method: 'POST',
+      body: JSON.stringify({ content: text, source: 'desktop' }),
+    },
+    boundary,
+  );
+  const payload: unknown = await response.json();
+  const fact =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? parseMemoryFact((payload as Record<string, unknown>)['memory'])
+      : null;
+  if (!fact) throw new Error('Cloud memory returned an invalid created entry.');
+  return fact;
+}
+
+export async function updateCloudMemory(id: string, text: string): Promise<CloudMemoryFact> {
+  const boundary = captureManagedCloudBoundary('Cloud memory update');
+  const response = await request(
+    `/api/memory/${encodeURIComponent(id)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ content: text }),
+    },
+    boundary,
+  );
+  const payload: unknown = await response.json();
+  const fact =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? parseMemoryFact((payload as Record<string, unknown>)['memory'])
+      : null;
+  if (!fact) throw new Error('Cloud memory returned an invalid updated entry.');
+  return fact;
+}
+
+export async function deleteCloudMemory(id: string): Promise<void> {
+  const boundary = captureManagedCloudBoundary('Cloud memory deletion');
+  await request(`/api/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }, boundary);
+}

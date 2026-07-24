@@ -85,9 +85,6 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const ipRateLimitResponse = await withRateLimit(request, 'llm-completion-ip');
   if (ipRateLimitResponse) return { ok: false, response: ipRateLimitResponse };
 
-  const csrfError = await requireCsrfToken(request);
-  if (csrfError) return { ok: false, response: csrfError };
-
   // This route is the LLM chat-completions API · only Bearer-token clients
   // (desktop, mobile, CLI, third-party API consumers) are valid callers; the
   // web UI uses a separate session-cookie path. Reject browser-style cookie
@@ -129,6 +126,12 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
       ),
     };
   }
+
+  // Authenticate the caller before CSRF evaluation. Native Bearer clients do
+  // not carry a browser CSRF cookie, while browser-cookie callers still fail
+  // the authorization-header check above.
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return { ok: false, response: csrfError };
 
   const userRateLimitResponse = await withRateLimit(request, 'llm-completion', `user:${userId}`);
   if (userRateLimitResponse) return { ok: false, response: userRateLimitResponse };

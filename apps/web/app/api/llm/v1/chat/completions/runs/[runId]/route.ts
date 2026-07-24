@@ -6,7 +6,12 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getCorsHeaders, getSecurityHeaders, handleCorsPreflightRequest } from '@/lib/cors';
+import {
+  getCorsHeaders,
+  getSecurityHeaders,
+  handleCorsPreflightRequest,
+  withCorsRoute,
+} from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   CloudAgentRunNotFoundError,
@@ -85,8 +90,8 @@ async function handleCancel(request: NextRequest, context: RouteContext) {
   }
 }
 
-export const GET = withErrorHandler(handleGet);
-export const POST = withErrorHandler(handleCancel);
+export const GET = withCorsRoute(withErrorHandler(handleGet));
+export const POST = withCorsRoute(withErrorHandler(handleCancel));
 
 export function OPTIONS(request: NextRequest) {
   return (

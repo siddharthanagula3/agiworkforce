@@ -1,20 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { motion, type HTMLMotionProps } from 'framer-motion';
 import {
-  AlertTriangle,
   ArrowLeft,
-  CheckCircle2,
   Globe,
   KeyRound,
   Layers,
   Loader2,
   LogIn,
   Lock,
-  RotateCcw,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { Button } from '@/components/ui/Button';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { useAuthStore } from '../../stores/auth';
@@ -24,8 +20,6 @@ import { AgiMark } from '@agiworkforce/ui';
 interface AuthPageProps {
   onAuthSuccess?: () => void;
 }
-
-type PageState = 'auth' | 'verifying' | 'verified' | 'error';
 
 const trustPoints = [
   {
@@ -49,23 +43,18 @@ const trustPoints = [
 type MotionVariant = Partial<Pick<HTMLMotionProps<'div'>, 'initial' | 'animate' | 'transition'>>;
 
 /** Framer Motion variants — collapse to no-op when reduced-motion is preferred */
-function useMotionVariants(): { fadeUp: MotionVariant; scaleIn: MotionVariant } {
+function useMotionVariants(): { fadeUp: MotionVariant } {
   const reduced =
     typeof window !== 'undefined'
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
       : false;
   if (reduced) {
-    return { fadeUp: {}, scaleIn: {} };
+    return { fadeUp: {} };
   }
   return {
     fadeUp: {
       initial: { opacity: 0, y: 20 },
       animate: { opacity: 1, y: 0 },
-    },
-    scaleIn: {
-      initial: { scale: 0 },
-      animate: { scale: 1 },
-      transition: { type: 'spring', delay: 0.2 },
     },
   };
 }
@@ -98,12 +87,7 @@ function DeviceSignInCard({ onSuccess }: { onSuccess?: () => void }) {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="w-full max-w-md rounded-2xl border border-border bg-card p-7 shadow-xl shadow-black/5"
-    >
+    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 shadow-xl shadow-black/5">
       <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background">
         <AgiMark size={24} ariaLabel="AGI" />
       </div>
@@ -172,224 +156,12 @@ function DeviceSignInCard({ onSuccess }: { onSuccess?: () => void }) {
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         Use Local Mode
       </button>
-    </motion.div>
+    </div>
   );
 }
 
 export function AuthPage({ onAuthSuccess }: AuthPageProps) {
-  const [pageState, setPageState] = useState<PageState>('auth');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const timeoutIdsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const { fadeUp, scaleIn } = useMotionVariants();
-
-  useEffect(() => {
-    const scheduleTimeout = (fn: () => void, ms: number) => {
-      const id = setTimeout(fn, ms);
-      timeoutIdsRef.current.push(id);
-      return id;
-    };
-
-    const processAuthParams = (params: Record<string, string>) => {
-      const type = params['type'];
-      const accessToken = params['access_token'];
-      const refreshToken = params['refresh_token'];
-      const errorDescription = params['error_description'];
-      const errorCode = params['error'];
-      const code = params['code'];
-
-      if (errorDescription || errorCode) {
-        const message = errorDescription
-          ? decodeURIComponent(errorDescription.replace(/\+/g, ' '))
-          : errorCode;
-        setErrorMessage(message || 'OAuth sign-in failed.');
-        setPageState('error');
-        return;
-      }
-
-      if (accessToken && refreshToken) {
-        cloudAccountAuth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-      }
-
-      if (code && !accessToken) {
-        setPageState('verifying');
-        cloudAccountAuth.exchangeCodeForSession(code).then((response) => {
-          if (response.error) {
-            setErrorMessage(getSimpleErrorMessage(response.error));
-            setPageState('error');
-            return;
-          }
-
-          setPageState('verified');
-          window.history.replaceState(null, '', window.location.pathname);
-          scheduleTimeout(() => {
-            onAuthSuccess?.();
-          }, 500);
-        });
-        return;
-      }
-
-      if (
-        (type === 'signup' || type === 'magiclink' || type === 'invite' || type === 'recovery') &&
-        accessToken
-      ) {
-        setPageState('verifying');
-
-        scheduleTimeout(() => {
-          const isAuth = cloudAccountAuth.isAuthenticated();
-          if (isAuth) {
-            setPageState('verified');
-            window.history.replaceState(null, '', window.location.pathname);
-
-            scheduleTimeout(() => {
-              onAuthSuccess?.();
-            }, 2000);
-          } else {
-            cloudAccountAuth.checkSession().then(() => {
-              if (cloudAccountAuth.isAuthenticated()) {
-                setPageState('verified');
-                onAuthSuccess?.();
-              } else {
-                setPageState('auth');
-              }
-            });
-          }
-        }, 1000);
-        return;
-      }
-
-      if (accessToken) {
-        setPageState('verifying');
-        scheduleTimeout(() => {
-          if (cloudAccountAuth.isAuthenticated()) {
-            setPageState('verified');
-            onAuthSuccess?.();
-          } else {
-            cloudAccountAuth.checkSession().then(() => {
-              if (cloudAccountAuth.isAuthenticated()) {
-                setPageState('verified');
-                onAuthSuccess?.();
-              } else {
-                setPageState('auth');
-              }
-            });
-          }
-        }, 1000);
-      }
-    };
-
-    const hash = window.location.hash;
-    if (hash) {
-      const params = new URLSearchParams(hash.substring(1));
-      processAuthParams(Object.fromEntries(params.entries()));
-    }
-
-    const handleDeepLink = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      if (customEvent.detail) {
-        console.debug('[AuthPage] Received deep link event', customEvent.detail);
-        processAuthParams(customEvent.detail);
-      }
-    };
-
-    window.addEventListener('agi-deep-link', handleDeepLink);
-
-    return () => {
-      window.removeEventListener('agi-deep-link', handleDeepLink);
-      timeoutIdsRef.current.forEach(clearTimeout);
-      timeoutIdsRef.current = [];
-    };
-  }, [onAuthSuccess]);
-
-  /* ------------------------------------------------------------------ */
-  /* Deep-link state screens                                              */
-  /* ------------------------------------------------------------------ */
-
-  if (pageState === 'verifying') {
-    return (
-      <div className="flex h-full min-h-full items-center justify-center bg-background p-8">
-        <motion.div
-          {...fadeUp}
-          transition={{ duration: 0.3 }}
-          className="flex flex-col items-center gap-5 text-center"
-          role="status"
-          aria-live="polite"
-          aria-label="Verifying your account"
-        >
-          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card shadow-sm">
-            <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="text-base font-medium text-foreground">Verifying your account</p>
-            <p className="mt-1 text-sm text-muted-foreground">This will only take a moment.</p>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (pageState === 'verified') {
-    return (
-      <div className="flex h-full min-h-full items-center justify-center bg-background p-8">
-        <motion.div
-          {...fadeUp}
-          transition={{ duration: 0.3 }}
-          className="flex flex-col items-center gap-5 text-center"
-          role="status"
-          aria-live="polite"
-          aria-label="Account verified"
-        >
-          <motion.div
-            {...scaleIn}
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 shadow-sm"
-          >
-            <CheckCircle2 className="h-8 w-8 text-white" aria-hidden="true" />
-          </motion.div>
-          <div>
-            <p className="text-base font-medium text-foreground">Account verified</p>
-            <p className="mt-1 text-sm text-muted-foreground">Signing you in to AGI now&hellip;</p>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground" aria-hidden="true">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            <span>Redirecting</span>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (pageState === 'error') {
-    return (
-      <div className="flex h-full min-h-full items-center justify-center bg-background p-8">
-        <motion.div
-          {...fadeUp}
-          transition={{ duration: 0.3 }}
-          className="w-full max-w-sm"
-          role="alert"
-        >
-          <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-lg">
-            <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10">
-              <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden="true" />
-            </div>
-            <h1 className="mb-2 text-xl font-semibold text-foreground">Authentication failed</h1>
-            <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
-              {errorMessage || 'An error occurred during sign-in. Please try again.'}
-            </p>
-            <Button
-              onClick={() => {
-                setPageState('auth');
-                setErrorMessage(null);
-                window.history.replaceState(null, '', window.location.pathname);
-              }}
-              className="w-full"
-            >
-              <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              Try again
-            </Button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
+  const { fadeUp } = useMotionVariants();
 
   /* ------------------------------------------------------------------ */
   /* Main auth layout: split left aside + right form                     */

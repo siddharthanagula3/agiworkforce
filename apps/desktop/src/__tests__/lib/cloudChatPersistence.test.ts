@@ -60,8 +60,8 @@ import {
   getDesktopCloudChatPersistenceClient,
   isManagedCloudPersistenceActive,
 } from '../../lib/cloudChatPersistence';
-import { guardedFetch } from '../../lib/egressGuard';
 import { WEB_APP_URL } from '../../api/config';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { useAppModeStore } from '../../stores/appModeStore';
 import { useAuthStore } from '../../stores/auth';
 
@@ -71,6 +71,9 @@ beforeEach(() => {
   toastError.mockClear();
   useAppModeStore.setState({ mode: 'local' });
   useAuthStore.setState({ accessToken: 'desktop-clerk-token', isAuthenticated: true });
+  vi.spyOn(cloudAccountAuth, 'getValidSession').mockResolvedValue({
+    access_token: 'desktop-clerk-token',
+  } as never);
 });
 
 describe('DCL-2 managed-cloud construction', () => {
@@ -80,7 +83,7 @@ describe('DCL-2 managed-cloud construction', () => {
     useAppModeStore.setState({ mode: 'cloud' });
   });
 
-  it('constructs the shared client with the absolute origin, guardedFetch, and the token getter', async () => {
+  it('constructs the shared client with the absolute origin, authenticated transport, and token getter', async () => {
     expect(isManagedCloudPersistenceActive()).toBe(true);
 
     getDesktopCloudChatPersistenceClient();
@@ -91,10 +94,12 @@ describe('DCL-2 managed-cloud construction', () => {
     // Absolute cloud origin — never a web-relative path on desktop.
     expect(config.baseUrl).toBe(WEB_APP_URL);
     expect(config.baseUrl).toMatch(/^https:\/\//);
-    // The egress seam is guardedFetch itself (same module instance).
-    expect(config.fetchImpl).toBe(guardedFetch);
-    // Desktop has no CSRF: no header decoration.
-    expect(config.decorateMutationHeaders).toBeUndefined();
+    // The transport wraps guardedFetch so it can invalidate a rejected Cloud
+    // session centrally and consistently add credential policy.
+    expect(config.fetchImpl).toEqual(expect.any(Function));
+    // Mutation headers are decorated through the same validated Desktop
+    // session path as every other Cloud request.
+    expect(config.decorateMutationHeaders).toEqual(expect.any(Function));
     // The auth token getter returns the desktop Clerk session token.
     await expect(config.getAuthToken()).resolves.toBe('desktop-clerk-token');
   });

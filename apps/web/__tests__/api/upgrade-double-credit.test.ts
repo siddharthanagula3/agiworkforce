@@ -119,6 +119,7 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
     pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
       priceId: 'price_max_monthly',
       currency: 'usd',
+      amountMinor: 10_000,
     });
     previewTokenMocks.verify.mockReturnValue({
       prorationDate: 1_700_000_000,
@@ -157,7 +158,9 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
       }),
       expect.objectContaining({ idempotencyKey: expect.any(String) }),
     );
-    expect(stripeMocks.updateSubscription.mock.calls[0]?.[1]).not.toHaveProperty('proration_date');
+    expect(stripeMocks.updateSubscription.mock.calls[0]?.[1]).toMatchObject({
+      proration_date: 1_700_000_000,
+    });
     expect(stripeMocks.retrieveCustomer).not.toHaveBeenCalled();
     expect(stripeMocks.updateCustomer).not.toHaveBeenCalled();
     expect(dbMocks.execute).not.toHaveBeenCalledWith(
@@ -174,6 +177,7 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
     pricingMocks.getPriceSelectionForCurrency.mockResolvedValueOnce({
       priceId: 'price_max_monthly_inr',
       currency: 'inr',
+      amountMinor: 999_900,
     });
     stripeMocks.retrieveSubscription.mockResolvedValueOnce(stripeSubscription({ currency: 'inr' }));
     stripeMocks.updateSubscription.mockResolvedValueOnce(
@@ -249,6 +253,7 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
         latest_invoice: {
           id: 'in_pending',
           status: 'open',
+          hosted_invoice_url: 'https://invoice.stripe.com/i/acct_test/in_pending',
           confirmation_secret: { type: 'payment_intent', client_secret: 'pi_secret_123' },
         },
       }),
@@ -261,6 +266,7 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
       expect.objectContaining({
         success: false,
         paymentActionRequired: true,
+        paymentUrl: 'https://invoice.stripe.com/i/acct_test/in_pending',
         clientSecret: 'pi_secret_123',
       }),
     );
@@ -277,11 +283,23 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
     expect(stripeMocks.updateCustomer).not.toHaveBeenCalled();
   });
 
+  it('fails closed before Stripe when subscription state cannot be verified', async () => {
+    dbMocks.query.mockReset().mockRejectedValue(new Error('database unavailable'));
+
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(503);
+    expect(stripeMocks.retrieveSubscription).not.toHaveBeenCalled();
+    expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
+  });
+
   it('rejects Team before touching the personal-subscription upgrade path', async () => {
     const response = await POST(makeRequest('team'));
 
     expect(response.status).toBe(400);
-    expect(dbMocks.query).not.toHaveBeenCalled();
+    expect(
+      dbMocks.query.mock.calls.some(([sql]) => String(sql).includes('from subscriptions')),
+    ).toBe(false);
     expect(stripeMocks.retrieveSubscription).not.toHaveBeenCalled();
     expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
   });

@@ -16,7 +16,7 @@ import {
 } from '@agiworkforce/routing';
 import type { ChatHostBridge } from '../lib/hostBridge';
 import type { ChatRuntime, CloudApprovalTurnProjection } from '../lib/runtime';
-import type { ChatMessage } from '../lib/types';
+import type { Attachment, ChatMessage } from '../lib/types';
 import { syncPackageStoreFromHost } from './useHostBridgeSync';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { CLOUD_FALLBACK_MODELS, useModelStore } from '../stores/modelStore';
@@ -142,9 +142,16 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const timestamp = new Date().toISOString();
       const hostBridge = hostBridgeRef.current;
 
-      if (hostBridge?.addMessage) {
+      // Empty assistant rows are a shared rendering concern used to show
+      // Thinking/activity before the first token. Do not mirror them into a
+      // legacy host store: doing so blanks its conversation summary and emits
+      // a host snapshot with no durable assistant content. The runtime owns
+      // assistant persistence; user/system turns still reach the host so
+      // optimistic creation and title generation remain intact.
+      const shouldMirrorToHost = msg.role !== 'assistant' || msg.content.trim().length > 0;
+      if (hostBridge?.addMessage && shouldMirrorToHost) {
         hostBridge.addMessage({ role: msg.role, content: msg.content, id: msgId });
-      } else if (externalAddMessageRef.current) {
+      } else if (!hostBridge && externalAddMessageRef.current) {
         externalAddMessageRef.current({ role: msg.role, content: msg.content, id: msgId });
       }
 
@@ -710,6 +717,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           if (assistantMessageIdRef.current) {
             const failingId = assistantMessageIdRef.current;
             const current = store.messagesByConversation[convId]?.find((m) => m.id === failingId);
+            const failureMessage = event.error || 'Request failed';
             const currentActivity = current?.metadata?.['agentActivity'] as
               | AgentActivityState
               | undefined;
@@ -721,18 +729,21 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             const stillRunning = current?.toolCalls?.some((t) => t.status === 'running');
             store.updateMessage(convId, failingId, {
               isStreaming: false,
-              ...(currentActivity
-                ? {
-                    metadata: {
-                      ...current?.metadata,
+              error: failureMessage,
+              metadata: {
+                ...current?.metadata,
+                finishReason: 'error',
+                streamError: { message: failureMessage },
+                ...(currentActivity
+                  ? {
                       agentActivity: finishAgentActivityLocally(currentActivity, {
                         status: 'failed',
                         completedAtMs: Date.now(),
-                        error: event.error || 'Request failed',
+                        error: failureMessage,
                       }),
-                    },
-                  }
-                : {}),
+                    }
+                  : {}),
+              },
               ...(stillRunning
                 ? {
                     toolCalls: current!.toolCalls!.map((t) =>
@@ -740,7 +751,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                         ? {
                             ...t,
                             status: 'failed' as const,
-                            error: event.error || 'Request failed',
+                            error: failureMessage,
                           }
                         : t,
                     ),
@@ -768,6 +779,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       researchEnabled?: boolean,
       writingStyle?: WritingStyle,
       workMode?: CloudWorkMode,
+      projectId?: string | null,
     ) => {
       if (!runtime || isStreamingRef.current) return;
 
@@ -905,6 +917,16 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         id: crypto.randomUUID(),
         role: 'user',
         content,
+        ...(attachments?.length
+          ? {
+              attachments: attachments.map((file) => ({
+                id: crypto.randomUUID(),
+                name: file.name,
+                type: file.type || 'application/octet-stream',
+                size: file.size,
+              })),
+            }
+          : {}),
       });
 
       // Re-read after addMsg (which may have synced the convId from desktop store)
@@ -991,6 +1013,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const messageHistory = allMessages.map((m) => ({
         role: m.role,
         content: m.content,
+        ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       }));
 
       const assistantMessageId = crypto.randomUUID();
@@ -1027,6 +1050,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           webSearch: webSearchEnabled,
           ...(research ? { research: true } : {}),
           ...(workMode ? { workMode } : {}),
+          ...(projectId !== undefined ? { projectId } : {}),
           thinkingEnabled,
           ...(codeExecution ? { codeExecution: true } : {}),
           messageHistory,
@@ -1036,6 +1060,36 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
+          const failedStore = useChatStore.getState();
+          const failedAssistant = failedStore.messagesByConversation[convId]?.find(
+            (candidate) => candidate.id === assistantMessageId,
+          );
+          if (failedAssistant?.isStreaming) {
+            const currentActivity = failedAssistant.metadata?.['agentActivity'] as
+              | AgentActivityState
+              | undefined;
+            failedStore.updateMessage(convId, assistantMessageId, {
+              isStreaming: false,
+              error: message || 'Failed to send message',
+              metadata: {
+                ...failedAssistant.metadata,
+                finishReason: 'error',
+                streamError: { message: message || 'Failed to send message' },
+                ...(currentActivity
+                  ? {
+                      agentActivity: finishAgentActivityLocally(currentActivity, {
+                        status: 'failed',
+                        completedAtMs: Date.now(),
+                        error: message || 'Failed to send message',
+                      }),
+                    }
+                  : {}),
+              },
+            });
+          }
+          if (assistantMessageIdRef.current === assistantMessageId) {
+            assistantMessageIdRef.current = null;
+          }
           toast.error(message || 'Failed to send message');
         })
         .finally(() => {
@@ -1125,16 +1179,22 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
 
       // Continue with the model that produced the partial answer so voice and
       // capabilities stay coherent; fall back to the current selection.
-      const model = message.model || useModelStore.getState().selectedModelId;
+      const model = message.model || useModelStore.getState().selectedModelId || 'auto';
 
       // Thread: everything up to AND INCLUDING the partial assistant turn, then
       // the ephemeral continue instruction (request-only, never stored). The
       // cloud wire uses messageHistory as the full thread (content arg ignored
       // when history is present), so append the instruction as the last turn.
-      const messageHistory = [
-        ...conversationMessages
-          .slice(0, messageIndex + 1)
-          .map((m) => ({ role: m.role, content: m.content })),
+      const messageHistory: Array<{
+        role: 'user' | 'assistant' | 'system';
+        content: string;
+        attachments?: Attachment[];
+      }> = [
+        ...conversationMessages.slice(0, messageIndex + 1).map((m) => ({
+          role: m.role,
+          content: m.content,
+          ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+        })),
         { role: 'user', content: CONTINUE_GENERATION_INSTRUCTION },
       ];
 
@@ -1156,13 +1216,35 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       });
       store.startStreaming();
 
+      const systemPrompt = getSystemPromptForMode(store.activeMode);
       void runtime
         .sendMessage(convId, CONTINUE_GENERATION_INSTRUCTION, {
           model,
           messageHistory,
+          ...(systemPrompt ? { systemPrompt } : {}),
+          isContinuation: true,
+          continuationMessageId: assistantMessageId,
         })
         .catch((err: unknown) => {
           const errMessage = err instanceof Error ? err.message : String(err);
+          const failedStore = useChatStore.getState();
+          const failedMessage = failedStore.messagesByConversation[convId]?.find(
+            (candidate) => candidate.id === assistantMessageId,
+          );
+          if (failedMessage?.isStreaming) {
+            failedStore.updateMessage(convId, assistantMessageId, {
+              isStreaming: false,
+              error: errMessage || 'Failed to continue generation',
+              metadata: {
+                ...failedMessage.metadata,
+                finishReason: 'error',
+                streamError: { message: errMessage || 'Failed to continue generation' },
+              },
+            });
+          }
+          if (assistantMessageIdRef.current === assistantMessageId) {
+            assistantMessageIdRef.current = null;
+          }
           toast.error(errMessage || 'Failed to continue generation');
         })
         .finally(() => {
@@ -1324,6 +1406,27 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       ...(message.metadata?.['agentActivity']
         ? { agentActivity: message.metadata['agentActivity'] as AgentActivityState }
         : {}),
+      messageProjection: {
+        ...(message.thinking ? { thinking: message.thinking } : {}),
+        ...(message.toolCalls?.length ? { toolCalls: message.toolCalls } : {}),
+        ...(message.webSearchResults?.length ? { webSearchResults: message.webSearchResults } : {}),
+        ...(message.generatedFiles?.length ? { generatedFiles: message.generatedFiles } : {}),
+        ...(message.artifacts?.length ? { artifacts: message.artifacts } : {}),
+        ...(message.metadata?.['codeExecutionResult']
+          ? {
+              codeExecutionResult: message.metadata['codeExecutionResult'] as NonNullable<
+                CloudApprovalTurnProjection['messageProjection']
+              >['codeExecutionResult'],
+            }
+          : {}),
+        ...(message.metadata?.['research']
+          ? {
+              research: message.metadata['research'] as NonNullable<
+                CloudApprovalTurnProjection['messageProjection']
+              >['research'],
+            }
+          : {}),
+      },
     };
   })();
   const isApprovalTurnLive = activeConversationId

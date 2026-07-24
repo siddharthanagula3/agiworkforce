@@ -18,6 +18,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getNeonChatDb, requireCurrentUserId } from '@/lib/server/neon-chat';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
@@ -26,13 +27,14 @@ const PatchMessageSchema = z.object({
 });
 
 async function handlePatchMessage(request: NextRequest, context: RouteContext) {
+  const userId = await requireCurrentUserId(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-message');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
   const { id: conversationId, messageId } = await context.params;
 
   let rawBody: unknown;
@@ -83,13 +85,14 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
 }
 
 async function handleDeleteMessage(request: NextRequest, context: RouteContext) {
+  const userId = await requireCurrentUserId(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-message');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
   const { id: conversationId, messageId } = await context.params;
 
   const db = getNeonChatDb();
@@ -122,5 +125,9 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
   return NextResponse.json({ success: true });
 }
 
-export const PATCH = withErrorHandler(handlePatchMessage);
-export const DELETE = withErrorHandler(handleDeleteMessage);
+export const PATCH = withCorsRoute(withErrorHandler(handlePatchMessage));
+export const DELETE = withCorsRoute(withErrorHandler(handleDeleteMessage));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

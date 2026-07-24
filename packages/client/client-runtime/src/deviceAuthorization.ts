@@ -10,6 +10,8 @@ export type DeviceAuthorizationPost = (
   headers?: Readonly<Record<string, string>>,
 ) => Promise<{ status: number; body: string }>;
 
+export type DeviceAuthorizationSurface = 'cli' | 'desktop' | 'vscode' | 'chrome';
+
 export interface DeviceAuthorizationRequest {
   deviceCode: string;
   userCode: string;
@@ -55,9 +57,10 @@ function requiredPositiveNumber(record: Record<string, unknown>, key: string): n
 export async function requestDeviceAuthorization(
   origin: string,
   post: DeviceAuthorizationPost,
+  surface: DeviceAuthorizationSurface = 'cli',
 ): Promise<DeviceAuthorizationRequest> {
   const trustedOrigin = new URL(origin).origin;
-  const response = await post(`${trustedOrigin}/api/auth/device/code`, {});
+  const response = await post(`${trustedOrigin}/api/auth/device/code`, { surface });
   if (response.status < 200 || response.status >= 300) {
     throw new Error('Could not start AGI Cloud sign-in. Try again.');
   }

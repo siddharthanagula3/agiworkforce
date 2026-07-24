@@ -364,4 +364,30 @@ describe('portable agent activity projection', () => {
     ]);
     expect(failed.lastSequence).toBe(running.lastSequence);
   });
+
+  it('can fail a nominally completed projection when host protocol validation rejects it', () => {
+    const completed = applyAgentActivityEvent(
+      applyAgentActivityEvent(undefined, envelope(0, { type: 'lifecycle', phase: 'started' })),
+      envelope(1, { type: 'stop', reason: 'end-turn' }),
+    );
+
+    const failed = finishAgentActivityLocally(completed, {
+      status: 'failed',
+      completedAtMs: 2_200,
+      error: 'Completed without renderable output',
+      overrideTerminal: true,
+    });
+
+    expect(failed).toMatchObject({
+      status: 'failed',
+      stopReason: 'error',
+      completedAtMs: 2_200,
+    });
+    expect(failed.entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'error',
+        message: 'Completed without renderable output',
+      }),
+    );
+  });
 });

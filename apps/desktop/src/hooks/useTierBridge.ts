@@ -8,40 +8,25 @@
  */
 import { useEffect } from 'react';
 import { useTierStore } from '@agiworkforce/unified-chat';
-import type { UIPlanTier } from '@agiworkforce/types';
+import { normalizeUIPlanTier, type UIPlanTier } from '@agiworkforce/types';
 import { useUnifiedAuthStore, selectPlan } from '../stores/auth';
 import type { PlanTier } from '../lib/cloudAccountTypes';
 
 /**
- * Map the desktop's wider `PlanTier` (which includes `local-only`, `free`,
- * `enterprise`) onto the unified-chat `UIPlanTier`. `enterprise` collapses
- * to `max` for chat-feature gating; the legacy `free` ≡ `byok`.
+ * Map the Desktop account tier onto the canonical shared UI tier. Keeping the
+ * exact managed tier matters: Max 15x, Team, and Enterprise have distinct
+ * catalog capabilities and must not collapse to a lower local-only default.
  */
 function mapPlanTier(plan: PlanTier | null | undefined): UIPlanTier {
-  switch (plan) {
-    case 'local-only':
-      return 'local';
-    case 'byok':
-      return 'byok';
-    case 'free':
-      return 'byok';
-    case 'basic':
-      return 'basic';
-    case 'pro':
-      return 'pro';
-    case 'max':
-    case 'enterprise':
-      return 'max';
-    default:
-      return 'byok';
-  }
+  return normalizeUIPlanTier(plan, 'byok');
 }
 
-export function useTierBridge(): void {
+export function useTierBridge(enabled = true): void {
   const planTier = useUnifiedAuthStore(selectPlan);
   const setTier = useTierStore((state) => state.setTier);
 
   useEffect(() => {
+    if (!enabled) return;
     setTier(mapPlanTier(planTier));
-  }, [planTier, setTier]);
+  }, [enabled, planTier, setTier]);
 }

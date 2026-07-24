@@ -3,7 +3,12 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { ToolApprovalResumeRequestSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
-import { handleCorsPreflightRequest, getSecurityHeaders, getCorsHeaders } from '@/lib/cors';
+import {
+  handleCorsPreflightRequest,
+  getSecurityHeaders,
+  getCorsHeaders,
+  withCorsRoute,
+} from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -295,7 +300,7 @@ async function handleToolApproval(request: NextRequest) {
   return new NextResponse(workflow.readable, { headers: streamHeaders });
 }
 
-export const POST = withErrorHandler(handleToolApproval);
+export const POST = withCorsRoute(withErrorHandler(handleToolApproval));
 
 export function OPTIONS(request: NextRequest) {
   return (

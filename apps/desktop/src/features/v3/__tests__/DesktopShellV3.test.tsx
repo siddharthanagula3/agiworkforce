@@ -439,7 +439,10 @@ describe('DesktopShellV3 duplication ownership', () => {
     const props = unifiedChatMock.chatInterfaceProps[0];
     expect(props?.['onSelectFolder']).toBeUndefined();
     expect(props?.['onClearFolder']).toBeUndefined();
+    expect(props?.['onRecordSkill']).toBeUndefined();
     expect(props?.['currentFolderLabel']).toBeNull();
+    expect(screen.queryByText('Artifacts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Scheduled')).not.toBeInTheDocument();
     // Projects remain selectable in Cloud mode — only the LOCAL folder seam
     // is privacy-gated.
     expect(props?.['projectPicker']).toBeTruthy();

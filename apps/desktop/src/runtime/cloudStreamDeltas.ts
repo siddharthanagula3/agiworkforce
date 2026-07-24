@@ -4,7 +4,7 @@
  * `apps/web/lib/hooks/useChatStream.ts` consumes).
  *
  * `WebRuntime` (the embedded/browser build's cloud runtime) and `CloudRuntime`
- * (the DCL-4 managed-cloud runtime, not yet wired into `App.tsx`) both drive
+ * (the Desktop managed-cloud runtime wired by `desktopChatRuntime.ts`) both drive
  * `sendCloudMessage` against this endpoint and must render an IDENTICAL
  * execution timeline. Before this module, `WebRuntime` implemented delta
  * parsing inline and `CloudRuntime` implemented none of it (see the module
@@ -28,8 +28,10 @@
  */
 import type {
   Artifact,
+  CloudMessageProjection,
   GeneratedFileEntry,
   StreamEvent,
+  ToolCall,
   WebSearchResult,
 } from '@agiworkforce/unified-chat';
 import {
@@ -107,6 +109,77 @@ export interface CloudStreamDeltaSink {
   getToolResult: (toolCallId: string) => { content: string; isError: boolean } | undefined;
   /** Latest portable projection of the validated canonical activity stream. */
   getAgentActivity: () => AgentActivityState | undefined;
+  /** Durable message fields reconstructed from validated stream events. */
+  getMessageProjection: () => CloudStreamMessageProjection;
+}
+
+export type CloudStreamMessageProjection = CloudMessageProjection;
+
+function mergeById<T extends { id: string }>(
+  previous: T[] | undefined,
+  next: T[] | undefined,
+): T[] | undefined {
+  const merged = new Map<string, T>();
+  for (const item of previous ?? []) merged.set(item.id, item);
+  for (const item of next ?? []) merged.set(item.id, item);
+  return merged.size > 0 ? [...merged.values()] : undefined;
+}
+
+/** Merge projections emitted across initial + approval-resume stream rounds. */
+export function mergeCloudStreamMessageProjections(
+  previous: CloudStreamMessageProjection | undefined,
+  next: CloudStreamMessageProjection | undefined,
+): CloudStreamMessageProjection {
+  const toolCalls = mergeById(previous?.toolCalls, next?.toolCalls);
+  const webSearchResults = mergeById(previous?.webSearchResults, next?.webSearchResults);
+  const generatedFiles = mergeById(previous?.generatedFiles, next?.generatedFiles);
+  const artifacts = mergeById(previous?.artifacts, next?.artifacts);
+  return {
+    ...(previous ?? {}),
+    ...(next ?? {}),
+    ...(toolCalls ? { toolCalls } : {}),
+    ...(webSearchResults ? { webSearchResults } : {}),
+    ...(generatedFiles ? { generatedFiles } : {}),
+    ...(artifacts ? { artifacts } : {}),
+  };
+}
+
+/** True only when a completed Cloud turn has something the transcript can show. */
+export function hasRenderableCloudMessageOutput(
+  content: string,
+  projection: CloudStreamMessageProjection,
+): boolean {
+  const codeResult = projection.codeExecutionResult;
+  return (
+    content.trim().length > 0 ||
+    (projection.generatedFiles?.length ?? 0) > 0 ||
+    (projection.artifacts?.length ?? 0) > 0 ||
+    (projection.webSearchResults?.some((search) => search.results.length > 0) ?? false) ||
+    Boolean(
+      codeResult &&
+      (codeResult.stdout.trim() ||
+        codeResult.stderr.trim() ||
+        (codeResult.images?.length ?? 0) > 0),
+    )
+  );
+}
+
+function resolveOwnedGeneratedFileUri(uri: string, apiBaseUrl: string): string | undefined {
+  try {
+    const browserOrigin =
+      typeof globalThis.location?.origin === 'string' ? globalThis.location.origin : undefined;
+    const base = apiBaseUrl || browserOrigin;
+    if (!base) return undefined;
+    const resolved = new URL(resolveGeneratedFileUri(uri, apiBaseUrl), base);
+    if (resolved.origin !== new URL(base).origin || !resolved.pathname.startsWith('/api/files/')) {
+      return undefined;
+    }
+    return apiBaseUrl
+      ? resolved.toString()
+      : `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Extracts `{url,title,snippet,domain}` from one contract `SearchResultSource`. */
@@ -215,6 +288,12 @@ export function createCloudStreamDeltaSink(
   let suspended = false;
   let accumulatedContent = '';
   let agentActivity: AgentActivityState | undefined = initialAgentActivity;
+  let thinking = '';
+  const projectedToolCalls = new Map<string, ToolCall>();
+  const projectedArtifacts = new Map<string, Artifact>();
+  const projectedSearches = new Map<string, WebSearchResult>();
+  const projectedFiles = new Map<string, GeneratedFileEntry>();
+  let codeExecutionResult: CloudStreamMessageProjection['codeExecutionResult'];
   // Deep Research status carries forward across deltas (some fields, e.g.
   // `sources`/`iteration`, are only present on SOME status updates) — mirrors
   // apps/web/lib/hooks/useChatStream.ts's currentResearch merge exactly.
@@ -254,6 +333,8 @@ export function createCloudStreamDeltaSink(
     }
     if (!inThinkingBlock) {
       accumulatedContent += text;
+    } else {
+      thinking += text;
     }
     emit({ type: inThinkingBlock ? 'thinking' : 'content', content: text });
   };
@@ -352,6 +433,12 @@ export function createCloudStreamDeltaSink(
       }
 
       emit({ type: 'tool_call', toolCall: { id: callId, name: nextName, args: parsedArgs } });
+      projectedToolCalls.set(callId, {
+        id: callId,
+        name: nextName,
+        args: parsedArgs,
+        status: 'running',
+      });
     }
 
     // Artifacts.
@@ -364,12 +451,14 @@ export function createCloudStreamDeltaSink(
       artifactPayload?.type &&
       typeof artifactPayload.content === 'string'
     ) {
+      projectedArtifacts.set(artifactPayload.id, artifactPayload);
       emit({ type: 'artifact', artifact: artifactPayload });
     }
 
     // Web search results.
     const search = mapSearchResultsPayload(delta?.['x_search_results']);
     if (search) {
+      projectedSearches.set(search.id, search);
       emit({ type: 'search_results', search });
     }
 
@@ -381,6 +470,7 @@ export function createCloudStreamDeltaSink(
     // spun forever, with the actual stdout/stderr/images never rendered.
     const codeResult = mapCodeExecutionResultPayload(delta?.['x_code_result']);
     if (codeResult) {
+      codeExecutionResult = codeResult;
       emit({ type: 'code_execution_result', result: codeResult });
       // The server NEVER sends a `x_tool_status: {status: 'completed'}` for
       // code_execution — completion is signalled exclusively by this
@@ -391,6 +481,16 @@ export function createCloudStreamDeltaSink(
       emit({
         type: 'tool_result',
         toolCallId: 'status:code_execution',
+        ...(codeResult.returnCode !== 0
+          ? { error: codeResult.stderr || 'Execution failed' }
+          : { result: codeResult.stdout || '' }),
+      });
+      const existing = projectedToolCalls.get('status:code_execution');
+      projectedToolCalls.set('status:code_execution', {
+        id: 'status:code_execution',
+        name: existing?.name ?? 'code_execution',
+        args: existing?.args ?? {},
+        status: codeResult.returnCode !== 0 ? 'failed' : 'completed',
         ...(codeResult.returnCode !== 0
           ? { error: codeResult.stderr || 'Execution failed' }
           : { result: codeResult.stdout || '' }),
@@ -445,6 +545,16 @@ export function createCloudStreamDeltaSink(
     if (toolStatus) {
       const syntheticId = `status:${toolStatus.name}`;
       if (toolStatus.status === 'completed' || toolStatus.status === 'failed') {
+        const existing = projectedToolCalls.get(syntheticId);
+        projectedToolCalls.set(syntheticId, {
+          id: syntheticId,
+          name: existing?.name ?? toolStatus.name,
+          args: existing?.args ?? toolStatus.args ?? {},
+          status: toolStatus.status,
+          ...(toolStatus.status === 'failed'
+            ? { error: toolStatus.status_phrase ?? 'Tool failed' }
+            : { result: toolStatus.status_phrase ?? '' }),
+        });
         emit({
           type: 'tool_result',
           toolCallId: syntheticId,
@@ -453,6 +563,12 @@ export function createCloudStreamDeltaSink(
             : { result: toolStatus.status_phrase ?? '' }),
         });
       } else {
+        projectedToolCalls.set(syntheticId, {
+          id: syntheticId,
+          name: toolStatus.name,
+          args: toolStatus.args ?? {},
+          status: 'running',
+        });
         // 'running' | 'searching' | 'fetching' | 'executing'
         emit({
           type: 'tool_call',
@@ -473,6 +589,13 @@ export function createCloudStreamDeltaSink(
         name: approvalRequest.name,
         args: approvalRequest.args,
       });
+      projectedToolCalls.set(approvalRequest.tool_call_id, {
+        id: approvalRequest.tool_call_id,
+        name: approvalRequest.name,
+        args: approvalRequest.args,
+        status: 'awaiting_approval',
+        requiresApproval: true,
+      });
       emit({
         type: 'tool_approval_request',
         toolCallId: approvalRequest.tool_call_id,
@@ -490,6 +613,15 @@ export function createCloudStreamDeltaSink(
         content: toolResult.content,
         isError: toolResult.is_error,
       });
+      const existing = projectedToolCalls.get(toolResult.tool_call_id);
+      projectedToolCalls.set(toolResult.tool_call_id, {
+        id: toolResult.tool_call_id,
+        name: existing?.name ?? 'tool',
+        args: existing?.args ?? {},
+        status: toolResult.is_error ? 'failed' : 'completed',
+        requiresApproval: false,
+        ...(toolResult.is_error ? { error: toolResult.content } : { result: toolResult.content }),
+      });
       emit({
         type: 'tool_result',
         toolCallId: toolResult.tool_call_id,
@@ -500,18 +632,25 @@ export function createCloudStreamDeltaSink(
     // Managed-cloud sandbox files (emitted once before [DONE]).
     const generatedFiles: GeneratedFileEntry[] = parseGeneratedFilesDelta(
       delta?.['x_generated_files'],
-    ).map((f) => ({
-      id: f.id,
-      fileName: f.file_name,
-      mimeType: f.mime_type,
-      uri: resolveGeneratedFileUri(f.uri, apiBaseUrl),
-      byteCount: f.byte_count,
-      kind: f.kind,
-      ...(f.checksum_sha256 ? { checksumSha256: f.checksum_sha256 } : {}),
-      surface: f.surface,
-      previewable: f.previewable,
-    }));
+    ).flatMap((f): GeneratedFileEntry[] => {
+      const uri = resolveOwnedGeneratedFileUri(f.uri, apiBaseUrl);
+      if (!uri) return [];
+      return [
+        {
+          id: f.id,
+          fileName: f.file_name,
+          mimeType: f.mime_type,
+          uri,
+          byteCount: f.byte_count,
+          kind: f.kind,
+          ...(f.checksum_sha256 ? { checksumSha256: f.checksum_sha256 } : {}),
+          surface: f.surface,
+          previewable: f.previewable,
+        },
+      ];
+    });
     if (generatedFiles.length > 0) {
+      for (const file of generatedFiles) projectedFiles.set(file.id, file);
       emit({ type: 'generated_files', files: generatedFiles });
     }
   };
@@ -526,5 +665,16 @@ export function createCloudStreamDeltaSink(
     getPendingApprovalCalls: () => [...pendingApprovalCalls],
     getToolResult: (toolCallId) => toolResults.get(toolCallId),
     getAgentActivity: () => agentActivity,
+    getMessageProjection: () => ({
+      ...(finishReason ? { finishReason } : {}),
+      ...(streamError ? { streamError } : {}),
+      ...(thinking ? { thinking } : {}),
+      ...(projectedToolCalls.size > 0 ? { toolCalls: [...projectedToolCalls.values()] } : {}),
+      ...(projectedSearches.size > 0 ? { webSearchResults: [...projectedSearches.values()] } : {}),
+      ...(projectedFiles.size > 0 ? { generatedFiles: [...projectedFiles.values()] } : {}),
+      ...(projectedArtifacts.size > 0 ? { artifacts: [...projectedArtifacts.values()] } : {}),
+      ...(codeExecutionResult ? { codeExecutionResult } : {}),
+      ...(researchStatus ? { research: { ...researchStatus } } : {}),
+    }),
   };
 }

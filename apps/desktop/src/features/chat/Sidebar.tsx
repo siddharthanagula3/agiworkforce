@@ -34,6 +34,7 @@ import {
   selectActiveConversationId,
   selectActiveView,
   uuidToDbId,
+  resolveDesktopChatOwnerId,
   type ConversationSummary,
 } from '../../stores/chat/chatStore';
 import { useProjectStore, selectActiveProjects } from '../../stores/projectStore';
@@ -668,7 +669,10 @@ export function Sidebar({
       const cachedMessages = messagesByConversation[id];
       if (!cachedMessages || cachedMessages.length === 0) {
         // Get user ID for the API call
-        const userId = cloudAccountAuth.getUser()?.id;
+        const userId =
+          useAppModeStore.getState().mode === 'cloud'
+            ? cloudAccountAuth.getUser()?.id
+            : resolveDesktopChatOwnerId();
         if (userId) {
           // Load messages from backend asynchronously
           loadConversationMessages(id, userId)
@@ -1409,9 +1413,8 @@ export function Sidebar({
                 type="button"
                 onClick={() => {
                   if (mode === 'local') {
-                    // Desktop managed cloud is not implemented yet; setMode
-                    // surfaces the honest "coming soon" toast and never enters
-                    // Cloud mode (PA-3 / DESK-CLOUD-COPY-01).
+                    // Managed Cloud is a real, account-scoped workspace. The
+                    // Cloud shell prompts for in-app sign-in when needed.
                     setMode('cloud');
                     return;
                   }

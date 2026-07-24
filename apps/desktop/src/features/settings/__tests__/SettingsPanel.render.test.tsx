@@ -155,11 +155,11 @@ describe('SettingsPanel render stability', () => {
     cleanup();
   });
 
-  it('renders the local Account tab without fake account controls', async () => {
+  it('keeps Cloud account controls out of the Local Settings boundary', async () => {
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="account" />);
 
-    expect(await screen.findByText('Cloud account')).toBeInTheDocument();
-    expect(screen.getByText('You are in Local Mode')).toBeInTheDocument();
+    expect(await screen.findByText('Mode')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Account$/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Cloud account settings')).not.toBeInTheDocument();
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
   });
@@ -261,18 +261,18 @@ describe('SettingsPanel render stability', () => {
     expect(screen.getByRole('button', { name: /^Plugins$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Agents$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Memory$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Usage$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Usage$/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Extensions$/i })).toBeInTheDocument();
   });
 
-  it('shows the backend-owned account plan instead of the stale app-mode copy', async () => {
+  it('shows the backend-owned account plan in the mode summary', async () => {
     useAuthStore.setState({ plan: 'max', planDisplayName: 'Max' });
     useAppModeStore.setState({ mode: 'cloud' });
 
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="general" />);
 
-    expect(await screen.findByText('max', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.queryByText('free', { selector: 'span' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Max 5x', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.queryByText('Free', { selector: 'span' })).not.toBeInTheDocument();
   });
 
   it('keeps cloud account deletion out of Local Mode privacy settings', async () => {

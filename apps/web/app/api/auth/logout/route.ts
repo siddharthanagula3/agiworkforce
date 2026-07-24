@@ -7,6 +7,7 @@ import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { revokeDeveloperToken, verifyDeveloperTokenSignature } from '@/lib/server/developer-token';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 export const runtime = 'nodejs';
 
@@ -31,4 +32,8 @@ async function handleDeveloperLogout(request: NextRequest): Promise<NextResponse
   );
 }
 
-export const POST = withErrorHandler(handleDeveloperLogout);
+export const POST = withCorsRoute(withErrorHandler(handleDeveloperLogout));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

@@ -10,11 +10,13 @@ describe('asPlanTier', () => {
     expect(asPlanTier('byok')).toBe('byok');
   });
 
-  it('preserves the legacy tiers', () => {
+  it('preserves every managed cloud tier', () => {
     expect(asPlanTier('free')).toBe('free');
     expect(asPlanTier('basic')).toBe('basic');
     expect(asPlanTier('pro')).toBe('pro');
     expect(asPlanTier('max')).toBe('max');
+    expect(asPlanTier('max_15x')).toBe('max_15x');
+    expect(asPlanTier('team')).toBe('team');
     expect(asPlanTier('enterprise')).toBe('enterprise');
   });
 
@@ -34,7 +36,17 @@ describe('asPlanTier', () => {
 
 describe('PLAN_DISPLAY_NAMES', () => {
   it('has a display name for every PlanTier value', () => {
-    const tiers: PlanTier[] = ['local-only', 'byok', 'free', 'basic', 'pro', 'max', 'enterprise'];
+    const tiers: PlanTier[] = [
+      'local-only',
+      'byok',
+      'free',
+      'basic',
+      'pro',
+      'max',
+      'max_15x',
+      'team',
+      'enterprise',
+    ];
     for (const tier of tiers) {
       expect(PLAN_DISPLAY_NAMES[tier]).toBeTruthy();
     }
@@ -43,5 +55,7 @@ describe('PLAN_DISPLAY_NAMES', () => {
   it('uses the canonical display labels for the new tiers', () => {
     expect(PLAN_DISPLAY_NAMES['local-only']).toBe('Local Mode');
     expect(PLAN_DISPLAY_NAMES.byok).toBe('Local Mode + BYOK');
+    expect(PLAN_DISPLAY_NAMES.max_15x).toBe('Max 15x');
+    expect(PLAN_DISPLAY_NAMES.team).toBe('Team');
   });
 });

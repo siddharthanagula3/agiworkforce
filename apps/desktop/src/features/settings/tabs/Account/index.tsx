@@ -6,13 +6,6 @@ import { DESKTOP_CLOUD_TAGLINE } from '../../../../constants/cloudAvailability';
 const LazyAccountSettings = lazy(() =>
   import('../../AccountSettings').then((m) => ({ default: m.AccountSettings })),
 );
-const LazyUsageDashboard = lazy(() =>
-  import('../../UsageDashboard').then((m) => ({ default: m.UsageDashboard })),
-);
-const LazyTeamAccountSettings = lazy(() =>
-  import('../../TeamAccountSettings').then((m) => ({ default: m.TeamAccountSettings })),
-);
-
 function Fallback({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
@@ -22,14 +15,14 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-export function AccountTab() {
+export function AccountTab({ scope = 'local' }: { scope?: 'local' | 'cloud' }) {
   const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
 
-  if (!hasCloudAccountSession) {
+  if (scope === 'local') {
     return (
       <div className="space-y-6">
         <div>
-          <h3 className="text-lg font-semibold mb-1">Cloud account</h3>
+          <h3 className="text-lg font-semibold mb-1">Local workspace</h3>
           <p className="text-sm text-muted-foreground">
             Local Mode keeps chats and settings on this device. {DESKTOP_CLOUD_TAGLINE}
           </p>
@@ -42,9 +35,9 @@ export function AccountTab() {
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold text-foreground">You are in Local Mode</div>
               <p className="mt-1 text-sm text-muted-foreground">
-                There is no cloud account session, so account, billing, team, and logout controls
-                are hidden. Switch to Cloud mode and sign in to turn on managed models and chats
-                synced across your devices.
+                Account, billing, organization, and managed-usage controls belong to Cloud settings.
+                Switch to Cloud Mode to manage them; Local chats, models, keys, tools, and memory
+                remain on this device.
               </p>
             </div>
           </div>
@@ -53,18 +46,20 @@ export function AccountTab() {
     );
   }
 
+  if (!hasCloudAccountSession) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-5">
+        <p className="text-sm font-medium text-foreground">Cloud account unavailable</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Connect this Desktop to AGI Cloud before managing account data.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <Suspense fallback={<Fallback label="Loading account settings..." />}>
-      <>
-        <LazyAccountSettings />
-        <div className="pt-6 border-t border-border">
-          <LazyUsageDashboard />
-        </div>
-        <div className="pt-6 border-t border-border">
-          <h3 className="text-lg font-semibold mb-4">Team &amp; Devices</h3>
-          <LazyTeamAccountSettings />
-        </div>
-      </>
+      <LazyAccountSettings />
     </Suspense>
   );
 }

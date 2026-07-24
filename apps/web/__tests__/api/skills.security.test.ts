@@ -33,8 +33,11 @@ vi.mock('@/lib/api-auth', () => ({
 import { GET as listSkills } from '@/app/api/skills/route';
 import { GET as getSkillBody } from '@/app/api/skills/[name]/route';
 
-function request(path: string): NextRequest {
-  return new NextRequest(`http://localhost${path}`, { method: 'GET' });
+function request(path: string, origin?: string): NextRequest {
+  return new NextRequest(`http://localhost${path}`, {
+    method: 'GET',
+    ...(origin ? { headers: { origin } } : {}),
+  });
 }
 
 describe('skills API security contract', () => {
@@ -71,13 +74,14 @@ describe('skills API security contract', () => {
   });
 
   it('returns metadata without host file paths or bodies', async () => {
-    const response = await listSkills(request('/api/skills'));
+    const response = await listSkills(request('/api/skills', 'https://tauri.localhost'));
     const body = await response.text();
     const json = JSON.parse(body) as {
       skills: Array<Record<string, unknown>>;
     };
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://tauri.localhost');
     expect(json.skills).toHaveLength(1);
     expect(json.skills[0]).toEqual({
       name: 'design-review',

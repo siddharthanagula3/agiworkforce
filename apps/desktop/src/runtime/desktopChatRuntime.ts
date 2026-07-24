@@ -30,6 +30,43 @@ const defaultFactories: DesktopChatRuntimeFactories = {
   web: () => new WebRuntime(),
 };
 
+let activeDesktopChatRuntime: ChatRuntime | null = null;
+
+/**
+ * Registers the runtime mounted by the Desktop composition root.
+ *
+ * Keeping lifecycle ownership next to runtime selection lets auth teardown
+ * dispose the exact managed runtime before its credential is revoked. The
+ * shared ChatRuntime.dispose contract keeps the same seam reusable by other
+ * hosts without coupling auth code to CloudRuntime internals.
+ */
+export function registerActiveDesktopChatRuntime(runtime: ChatRuntime): () => void {
+  if (activeDesktopChatRuntime && activeDesktopChatRuntime !== runtime) {
+    void activeDesktopChatRuntime.dispose?.();
+  }
+  activeDesktopChatRuntime = runtime;
+
+  return () => {
+    if (activeDesktopChatRuntime !== runtime) return;
+    activeDesktopChatRuntime = null;
+    // React Strict Mode replays effect setup/cleanup with the SAME memoized
+    // runtime. Defer disposal one microtask: a replay re-registers that exact
+    // instance synchronously, while a real replacement/unmount leaves another
+    // instance (or null) active and safely disposes this one.
+    queueMicrotask(() => {
+      if (activeDesktopChatRuntime !== runtime) {
+        void runtime.dispose?.();
+      }
+    });
+  };
+}
+
+export async function disposeActiveDesktopChatRuntime(): Promise<void> {
+  const runtime = activeDesktopChatRuntime;
+  activeDesktopChatRuntime = null;
+  await runtime?.dispose?.();
+}
+
 /**
  * The sole Desktop chat-runtime composition root.
  *

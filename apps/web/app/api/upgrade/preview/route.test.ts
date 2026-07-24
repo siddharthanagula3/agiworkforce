@@ -103,6 +103,7 @@ describe('POST /api/upgrade/preview', () => {
     pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
       priceId: 'price_max_15x_monthly',
       currency: 'usd',
+      amountMinor: 20_000,
     });
     pricingMocks.getLocalizedPricingCatalog.mockResolvedValue({
       country: 'US',
@@ -129,6 +130,7 @@ describe('POST /api/upgrade/preview', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       amountDueNowCents: 10_042,
+      recurringAmountCents: 20_000,
       currency: 'usd',
       previewToken: expect.any(String),
     });
@@ -150,8 +152,8 @@ describe('POST /api/upgrade/preview', () => {
       }),
     );
     expect(
-      stripeMocks.createInvoicePreview.mock.calls[0]?.[0]?.subscription_details,
-    ).not.toHaveProperty('proration_date');
+      stripeMocks.createInvoicePreview.mock.calls[0]?.[0]?.subscription_details?.proration_date,
+    ).toEqual(expect.any(Number));
   });
 
   it('returns the localized full price when no prior Stripe charge can be credited', async () => {
@@ -166,9 +168,59 @@ describe('POST /api/upgrade/preview', () => {
       },
       checkout: {
         amountDueNowCents: 20_000,
+        recurringAmountCents: 20_000,
         currency: 'usd',
       },
     });
     expect(pricingMocks.getLocalizedPricingCatalog).toHaveBeenCalledWith('US');
+  });
+
+  it('sends a genuine free user to localized full-price checkout', async () => {
+    dbMocks.query.mockImplementation(async (sql: string) =>
+      sql.includes('from subscriptions') ? [] : [],
+    );
+
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'checkout_required' },
+      checkout: {
+        amountDueNowCents: 20_000,
+        recurringAmountCents: 20_000,
+        currency: 'usd',
+      },
+    });
+    expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
+    expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when subscription state cannot be verified', async () => {
+    dbMocks.query.mockReset().mockRejectedValue(new Error('database unavailable'));
+
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(503);
+    expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
+    expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the fallback Stripe customer cannot be verified', async () => {
+    dbMocks.query
+      .mockResolvedValueOnce([
+        {
+          status: 'active',
+          plan_tier: 'max',
+          stripe_subscription_id: null,
+          stripe_customer_id: null,
+        },
+      ])
+      .mockRejectedValueOnce(new Error('database unavailable'));
+
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(503);
+    expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
+    expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
   });
 });

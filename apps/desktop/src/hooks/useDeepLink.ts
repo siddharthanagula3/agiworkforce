@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { isTauri } from '../lib/tauri-mock';
-import { cloudAccountAuth } from '../services/cloudAccountAuth';
 
 const ALLOWED_DEEP_LINK_SCHEME = 'agiworkforce:';
 const ALLOWED_MCP_OAUTH_PROVIDERS = new Set([
@@ -15,10 +14,6 @@ const ALLOWED_MCP_OAUTH_PROVIDERS = new Set([
 ]);
 
 export type ParsedDeepLink =
-  | {
-      kind: 'auth-callback';
-      detail: Record<string, string>;
-    }
   | {
       kind: 'mcp-oauth-callback';
       detail: {
@@ -38,9 +33,9 @@ export type ParsedDeepLink =
       };
     };
 
-export function useDeepLink() {
+export function useDeepLink(enabled = true) {
   useEffect(() => {
-    if (!isTauri) return;
+    if (!enabled || !isTauri) return;
 
     let isMounted = true;
     let unlistenFn: (() => void) | null = null;
@@ -75,7 +70,7 @@ export function useDeepLink() {
         unlistenFn = null;
       }
     };
-  }, []);
+  }, [enabled]);
 }
 
 export function normalizeDeepLinkPath(parsed: URL): string {
@@ -93,31 +88,8 @@ export function parseDeepLink(url: string): ParsedDeepLink | null {
     // Extract params from query string
     const queryParams = Object.fromEntries(parsed.searchParams.entries());
 
-    // Extract params from hash fragment for legacy implicit-flow callbacks.
-    // format: #access_token=...&refresh_token=...
-    let hashParams: Record<string, string> = {};
-    if (parsed.hash) {
-      const hashStr = parsed.hash.substring(1); // remove #
-      const hashSearchParams = new URLSearchParams(hashStr);
-      hashParams = Object.fromEntries(hashSearchParams.entries());
-    }
-
-    const allParams = { ...queryParams, ...hashParams };
+    const allParams = queryParams;
     const normalizedPathname = normalizeDeepLinkPath(parsed);
-
-    // Check for cloud auth callback.
-    if (normalizedPathname === '/auth/callback') {
-      if (!allParams['code'] && !allParams['access_token'] && !allParams['refresh_token']) {
-        return null;
-      }
-      return {
-        kind: 'auth-callback',
-        detail: {
-          url,
-          ...allParams,
-        },
-      };
-    }
 
     // Check for MCP OAuth callback URLs
     // Pattern: agiworkforce://oauth/mcp/{provider}?code={code}&state={state}
@@ -170,26 +142,6 @@ export function parseDeepLink(url: string): ParsedDeepLink | null {
 function handleDeepLink(url: string) {
   const parsedLink = parseDeepLink(url);
   if (!parsedLink) {
-    return;
-  }
-
-  if (parsedLink.kind === 'auth-callback') {
-    const code = parsedLink.detail['code'];
-    if (code) {
-      (async () => {
-        try {
-          await cloudAccountAuth.exchangeCodeForSession(code);
-        } catch (error) {
-          console.error('[DeepLink] Auth callback exchange failed:', error);
-        }
-      })();
-    }
-
-    window.dispatchEvent(
-      new CustomEvent('agi-deep-link', {
-        detail: parsedLink.detail,
-      }),
-    );
     return;
   }
 

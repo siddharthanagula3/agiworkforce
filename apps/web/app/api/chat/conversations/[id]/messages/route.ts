@@ -19,10 +19,13 @@ import {
   requireCurrentUserId,
   type ChatMessageRow,
 } from '@/lib/server/neon-chat';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleSendMessage(request: NextRequest, context: RouteContext) {
+  const userId = await requireCurrentUserId(request);
+
   // CSRF protection for state-changing POST endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -30,7 +33,6 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-message');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
   const { id: conversationId } = await context.params;
 
   let rawBody: unknown;
@@ -132,4 +134,8 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   });
 }
 
-export const POST = withErrorHandler(handleSendMessage);
+export const POST = withCorsRoute(withErrorHandler(handleSendMessage));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

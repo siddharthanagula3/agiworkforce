@@ -10,15 +10,13 @@
  *
  * Trust-boundary mapping (see `selectPrivacyMode` in
  * apps/desktop/src/stores/appModeStore.ts):
- *   privacyMode 'managed' (appMode 'cloud' + no BYOK keys) -> our-cloud ALLOWED
- *   privacyMode 'local'   (appMode 'local')               -> our-cloud BLOCKED
- *   privacyMode 'byok'    (appMode 'cloud' + BYOK keys)    -> our-cloud BLOCKED
+ *   privacyMode 'managed' (Cloud workspace) -> our-cloud ALLOWED
+ *   privacyMode 'local'   (Local workspace, including explicit BYOK forks)
+ *                                             -> our-cloud BLOCKED
  *
- * CRITICAL: BYOK runs under appMode `'cloud'` (it is `cloud` + a `'cloud'`
- * providerMode in settingsStore), NOT under appMode `'local'`. So a naive
- * `mode !== 'cloud'` check would WRONGLY permit our-cloud egress in BYOK mode.
- * The guard therefore branches on the canonical 3-tier `selectPrivacyMode` and
- * blocks whenever it is not `'managed'` (i.e. Local OR BYOK).
+ * CRITICAL: BYOK is a reviewed per-conversation fork inside the Local
+ * workspace. The guard branches on canonical `selectPrivacyMode` and blocks
+ * our-cloud egress for the entire Local/BYOK boundary.
  *
  * FAIL-CLOSED: if the mode cannot be read for any reason, we treat the session
  * as Local and block our-cloud egress. Blocking a request is safe; leaking is
@@ -38,7 +36,7 @@
 
 // The private-boundary predicate lives in stores/privacyBoundary so egressGuard,
 // errorTracking, and analytics share ONE implementation (it drifted before — a
-// `=== 'local'` check leaked telemetry in BYOK). privacyBoundary → appModeStore is
+// privacyBoundary → appModeStore is
 // the same import edge egressGuard used directly; the cloudAccountAuth → egressGuard
 // → appModeStore cycle stays broken on the cloudAccountAuth side (lazy require).
 import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
@@ -91,7 +89,8 @@ function extractHost(input: RequestInfo | URL): string | null {
 }
 
 /**
- * Guarded replacement for `fetch`. In Local/BYOK mode, throws BEFORE any
+ * Guarded replacement for `fetch`. In the Local workspace (including BYOK),
+ * throws BEFORE any
  * network call if the target is one of OUR cloud hosts. Otherwise delegates to
  * the global `fetch`. BYOK provider hosts are not on the denylist, so they pass.
  *

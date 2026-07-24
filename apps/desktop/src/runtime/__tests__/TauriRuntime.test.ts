@@ -57,6 +57,7 @@ vi.mock('../../stores/appModeStore', () => ({
 
 vi.mock('../../stores/chat/chatStore', () => ({
   uuidToDbId: uuidToDbIdMock,
+  resolveDesktopChatOwnerId: () => 'user-123',
   useChatStore: {
     getState: () => ({
       linkConversationId: linkConversationIdMock,
@@ -301,6 +302,33 @@ describe('TauriRuntime', () => {
       request: expect.objectContaining({
         conversationId: 77,
         executionMode: 'byok',
+        activeMode: 'local',
+        preferCloudCredits: false,
+      }),
+    });
+  });
+
+  it('fails a stale managed label closed to the Local native boundary', async () => {
+    uuidToDbIdMock.mockReturnValue(77);
+    executionModeByConversationId.set('stale-cloud-conversation', 'cloud_managed');
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 77, message_id: 'assistant-local' },
+          });
+        }, 0);
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+    await runtime.sendMessage('stale-cloud-conversation', 'Stay on this device');
+
+    expect(invokeMock).toHaveBeenCalledWith('chat_send_message', {
+      request: expect.objectContaining({
+        executionMode: 'local_only',
         activeMode: 'local',
         preferCloudCredits: false,
       }),

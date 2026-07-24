@@ -7,14 +7,9 @@ describe('useDeepLink parsing', () => {
     expect(normalizeDeepLinkPath(url)).toBe('/auth/callback');
   });
 
-  it('accepts the auth callback route only for the app scheme', () => {
-    expect(parseDeepLink('agiworkforce://auth/callback?code=abc')).toEqual({
-      kind: 'auth-callback',
-      detail: {
-        url: 'agiworkforce://auth/callback?code=abc',
-        code: 'abc',
-      },
-    });
+  it('rejects legacy account-auth callbacks because Desktop sign-in stays in its owned window', () => {
+    expect(parseDeepLink('agiworkforce://auth/callback?code=abc')).toBeNull();
+    expect(parseDeepLink('https://auth/callback?code=abc')).toBeNull();
   });
 
   it('accepts validated MCP OAuth callbacks', () => {

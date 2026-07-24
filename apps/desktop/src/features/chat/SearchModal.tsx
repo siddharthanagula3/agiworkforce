@@ -17,6 +17,7 @@ import { useReducedMotion } from '@agiworkforce/unified-chat';
 import type { ConversationSummary } from '../../stores/chat/types';
 import type { Project } from '../../stores/projectStore';
 import type { ArtifactSummary } from '../../stores/artifactStore';
+import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ export function SearchModal() {
   const summaries = useArtifactStore((s) => s.summaries);
   const setActiveArtifact = useArtifactStore((s) => s.setActiveArtifact);
   const openArtifactPanel = useArtifactStore((s) => s.openPanel);
+  const privacyMode = useAppModeStore(selectPrivacyMode);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -151,7 +153,7 @@ export function SearchModal() {
         : [];
 
     const artifactResults: SearchResult[] =
-      filter === 'all'
+      filter === 'all' && privacyMode === 'local'
         ? summaries
             .filter((a) => a.status !== 'archived')
             .filter((a) => !q || a.title.toLowerCase().includes(q))
@@ -177,7 +179,7 @@ export function SearchModal() {
     }
 
     return [...chatResults, ...projectResults, ...artifactResults];
-  }, [query, filter, conversations, projects, summaries]);
+  }, [query, filter, conversations, projects, summaries, privacyMode]);
 
   // Group results by type for display
   const groupedResults = useMemo(() => {
@@ -197,15 +199,18 @@ export function SearchModal() {
         case 'chat': {
           const conv = result.payload as ConversationSummary;
           selectConversation(conv.id);
+          window.dispatchEvent(new CustomEvent('desktop:navigate-panel', { detail: 'chat' }));
           break;
         }
         case 'project': {
           const project = result.payload as Project;
           setActiveProject(project.id);
+          window.dispatchEvent(new CustomEvent('desktop:navigate-panel', { detail: 'projects' }));
           break;
         }
         case 'artifact': {
           const artifact = result.payload as ArtifactSummary;
+          if (privacyMode !== 'local') break;
           setActiveArtifact(artifact.id);
           openArtifactPanel();
           break;
@@ -213,7 +218,14 @@ export function SearchModal() {
       }
       close();
     },
-    [selectConversation, setActiveProject, setActiveArtifact, openArtifactPanel, close],
+    [
+      selectConversation,
+      setActiveProject,
+      setActiveArtifact,
+      openArtifactPanel,
+      close,
+      privacyMode,
+    ],
   );
 
   // Keyboard navigation — only register the listener while the modal is open

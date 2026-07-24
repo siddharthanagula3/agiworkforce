@@ -2010,14 +2010,24 @@ export const enforceTaskRoutingTierRestriction = (planTier: string | null): void
   });
 };
 
-if (typeof window !== 'undefined') {
-  useUnifiedAuthStore.subscribe(
-    (state) => state.plan,
-    (plan) => {
-      enforceTaskRoutingTierRestriction(plan ?? 'free');
-    },
-  );
-  enforceTaskRoutingTierRestriction(useUnifiedAuthStore.getState().plan ?? 'free');
+/**
+ * Keep persisted task routing within the authenticated account's effective
+ * tier. This must be installed by the main Desktop window only: auxiliary
+ * webviews have independent auth memory and would otherwise rewrite shared
+ * settings as Free as soon as they import this module.
+ */
+export function initializeTaskRoutingTierRestriction(): () => void {
+  const applyValidatedPlan = (plan: string | null) => {
+    if (plan) {
+      enforceTaskRoutingTierRestriction(plan);
+    }
+  };
+
+  const selectValidatedPlan = (state: ReturnType<typeof useUnifiedAuthStore.getState>) =>
+    state.sessionValidated ? (state.plan ?? 'free') : null;
+
+  applyValidatedPlan(selectValidatedPlan(useUnifiedAuthStore.getState()));
+  return useUnifiedAuthStore.subscribe(selectValidatedPlan, applyValidatedPlan);
 }
 
 /**

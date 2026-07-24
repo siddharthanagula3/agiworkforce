@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -34,7 +35,11 @@ export function getNeonChatDb(): DatabaseAdapter {
   return getNeonDb();
 }
 
-export async function requireCurrentUserId(): Promise<string> {
+export async function requireCurrentUserId(request?: NextRequest): Promise<string> {
+  if (request) {
+    const { getClerkAuthUser } = await import('@/lib/api-auth');
+    return (await getClerkAuthUser(request)).userId;
+  }
   const { userId } = await auth();
   if (!userId) {
     throw createError.unauthorized();

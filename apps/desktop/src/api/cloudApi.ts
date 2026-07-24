@@ -8,20 +8,27 @@
 import { guardedFetch } from '../lib/egressGuard';
 import { isTauri } from '../lib/runtimeEnvironment';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
-import { API_BASE_URL } from './config';
+import { WEB_APP_URL } from './config';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import {
+  parseManagedUsageSummaryResponse,
+  type ManagedUsageSummaryResponse,
+} from '@agiworkforce/types';
+import {
+  createManagedCloudChatClient,
   createManagedCloudAgentRunClient,
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunHandle,
+  type ManagedCloudConversation,
+  type ManagedCloudMessage,
 } from '@agiworkforce/cloud-contracts';
 
 // Desktop uses the full API URL; web uses relative paths (same-origin) to avoid CORS.
 // Exported so runtimes can resolve relative wire uris (e.g. the
 // `x_generated_files` `/api/files/{id}` paths) against the same base.
-export const CLOUD_API_BASE_URL = isTauri ? API_BASE_URL : '';
+export const CLOUD_API_BASE_URL = isTauri ? WEB_APP_URL : '';
 
 // ============================================================================
 // Type Definitions
@@ -45,21 +52,15 @@ export interface CloudConversation {
   model: string;
   created_at: string;
   updated_at: string;
+  project_id?: string | null;
+  pinned?: boolean;
+  starred?: boolean;
+  archived?: boolean;
+  is_temporary?: boolean;
   messages?: CloudMessage[];
 }
 
-export interface CloudUsage {
-  period_start: string;
-  period_end: string;
-  message_count: number;
-  token_count: number;
-  cost_usd: number;
-}
-
-export interface CreateConversationRequest {
-  title: string;
-  model: string;
-}
+export type CloudUsage = ManagedUsageSummaryResponse;
 
 export interface SendMessageRequest {
   conversation_id?: string;
@@ -67,22 +68,13 @@ export interface SendMessageRequest {
   model: string;
 }
 
-interface ListConversationsResponse {
-  conversations: CloudConversation[];
-}
-
-interface CreateConversationResponse {
-  conversation: CloudConversation;
-}
-
-interface GetConversationResponse {
-  conversation: CloudConversation;
-  messages: CloudMessage[];
-}
-
-interface UpdateConversationResponse {
-  conversation: CloudConversation;
-}
+export type CloudChatMessageContent =
+  | string
+  | Array<
+      | { type: 'text'; text: string }
+      | { type: 'file'; file: { asset_id: string } }
+      | { type: 'image_url'; image_url: { url: string } }
+    >;
 
 // ============================================================================
 // Auth Helper
@@ -103,9 +95,13 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 
   // Desktop mode: add Bearer token from Tauri auth service
-  const session = cloudAccountAuth.getSession();
+  const session = await cloudAccountAuth.getValidSession();
   if (session?.access_token) {
     headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+
+  if (isTauri && !session?.access_token) {
+    throw new Error('AGI Cloud requires a connected Desktop session.');
   }
 
   // Web mode: Clerk session cookies are httpOnly and sent automatically.
@@ -131,6 +127,68 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 /**
+ * Executes an authenticated AGI Cloud request and invalidates the Desktop
+ * session when the server rejects its bearer token. A 403 is intentionally
+ * left to the caller because it can represent a valid user lacking permission
+ * for a specific tenant object.
+ */
+export async function cloudFetch(
+  input: Parameters<typeof guardedFetch>[0],
+  init?: Parameters<typeof guardedFetch>[1],
+): Promise<Response> {
+  const response = await guardedFetch(input, init);
+  if (isTauri && response.status === 401) {
+    await cloudAccountAuth.invalidateSession();
+  }
+  return response;
+}
+
+function projectManagedConversation(conversation: ManagedCloudConversation): CloudConversation {
+  return {
+    id: conversation.id,
+    user_id: '',
+    title: conversation.title,
+    model: conversation.model ?? 'auto',
+    created_at: conversation.createdAt,
+    updated_at: conversation.updatedAt,
+    ...(conversation.projectId !== undefined ? { project_id: conversation.projectId } : {}),
+    ...(conversation.pinned !== undefined ? { pinned: conversation.pinned } : {}),
+    ...(conversation.starred !== undefined ? { starred: conversation.starred } : {}),
+    ...(conversation.archived !== undefined ? { archived: conversation.archived } : {}),
+    ...(conversation.isTemporary !== undefined ? { is_temporary: conversation.isTemporary } : {}),
+  };
+}
+
+function projectManagedMessage(message: ManagedCloudMessage): CloudMessage {
+  return {
+    id: message.id,
+    conversation_id: message.conversationId,
+    role: message.role,
+    content: message.content,
+    ...(message.model ? { model: message.model } : {}),
+    ...(message.provider ? { provider: message.provider } : {}),
+    ...(message.metadata ? { metadata: message.metadata } : {}),
+    created_at: message.createdAt,
+  };
+}
+
+export function createCloudChatPersistenceClient() {
+  return createManagedCloudChatClient({
+    baseUrl: CLOUD_API_BASE_URL,
+    getAuthToken: async () => (await cloudAccountAuth.getValidSession())?.access_token ?? null,
+    decorateMutationHeaders: async (headers) => ({
+      ...(await getAuthHeaders()),
+      ...headers,
+    }),
+    fetchImpl: (input, init) =>
+      cloudFetch(input, {
+        ...init,
+        credentials: 'include',
+      }),
+  });
+}
+
+/**
  * Authenticated, trust-boundary-aware client for the durable managed-run
  * journal. All Desktop Cloud follow/cancel traffic uses the same guarded
  * egress path and Clerk/CSRF headers as the completion request itself.
@@ -138,13 +196,13 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 export function createDesktopCloudAgentRunClient(): ManagedCloudAgentRunClient {
   return createManagedCloudAgentRunClient({
     baseUrl: CLOUD_API_BASE_URL,
-    getAuthToken: async () => cloudAccountAuth.getSession()?.access_token ?? null,
+    getAuthToken: async () => (await cloudAccountAuth.getValidSession())?.access_token ?? null,
     decorateMutationHeaders: async (headers) => ({
       ...(await getAuthHeaders()),
       ...headers,
     }),
     fetchImpl: (input, init) =>
-      guardedFetch(input, {
+      cloudFetch(input, {
         ...init,
         credentials: 'include',
       }),
@@ -159,19 +217,17 @@ export function createDesktopCloudAgentRunClient(): ManagedCloudAgentRunClient {
  * Lists all cloud conversations for the current user.
  */
 export async function listCloudConversations(): Promise<CloudConversation[]> {
-  const headers = await getAuthHeaders();
-
-  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat`, {
-    method: 'GET',
-    headers,
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to list conversations: HTTP ${res.status}`);
+  const client = createCloudChatPersistenceClient();
+  const conversations: CloudConversation[] = [];
+  let offset = 0;
+  let hasMore = true;
+  while (hasMore) {
+    const page = await client.listConversations({ limit: 100, offset });
+    conversations.push(...page.conversations.map(projectManagedConversation));
+    hasMore = page.hasMore;
+    offset = page.nextOffset;
   }
-
-  const data = (await res.json()) as ListConversationsResponse;
-  return data.conversations ?? [];
+  return conversations;
 }
 
 /**
@@ -181,43 +237,34 @@ export async function createCloudConversation(
   title: string,
   model: string,
 ): Promise<CloudConversation> {
-  const headers = await getAuthHeaders();
-
-  const body: CreateConversationRequest = { title, model };
-
-  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to create conversation: HTTP ${res.status}`);
-  }
-
-  const data = (await res.json()) as CreateConversationResponse;
-  return data.conversation;
+  return projectManagedConversation(
+    await createCloudChatPersistenceClient().createConversation({ title, model }),
+  );
 }
 
 /**
  * Fetches a single cloud conversation by ID, including its messages.
  */
 export async function getCloudConversation(id: string): Promise<CloudConversation> {
-  const headers = await getAuthHeaders();
-
-  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
-    method: 'GET',
-    headers,
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to get conversation ${id}: HTTP ${res.status}`);
+  const client = createCloudChatPersistenceClient();
+  const messages: CloudMessage[] = [];
+  let offset = 0;
+  let conversation: ManagedCloudConversation | undefined;
+  let hasMore = true;
+  while (hasMore) {
+    const page = await client.getConversation(id, { limit: 100, offset });
+    conversation = page.conversation;
+    messages.push(...page.messages.map(projectManagedMessage));
+    hasMore = page.hasMore;
+    offset += page.messages.length;
+    if (hasMore && page.messages.length === 0) {
+      throw new Error(`Cloud conversation ${id} returned an invalid empty page`);
+    }
   }
-
-  const data = (await res.json()) as GetConversationResponse;
+  if (!conversation) throw new Error(`Cloud conversation ${id} was not found`);
   return {
-    ...data.conversation,
-    messages: data.messages ?? [],
+    ...projectManagedConversation(conversation),
+    messages,
   };
 }
 
@@ -225,36 +272,16 @@ export async function getCloudConversation(id: string): Promise<CloudConversatio
  * Deletes a cloud conversation by ID.
  */
 export async function deleteCloudConversation(id: string): Promise<void> {
-  const headers = await getAuthHeaders();
-
-  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
-    method: 'DELETE',
-    headers,
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to delete conversation ${id}: HTTP ${res.status}`);
-  }
+  await createCloudChatPersistenceClient().deleteConversation(id);
 }
 
 export async function updateCloudConversationTitle(
   id: string,
   title: string,
 ): Promise<CloudConversation> {
-  const headers = await getAuthHeaders();
-
-  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/cloud-chat/${id}`, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({ title }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Failed to update conversation ${id}: HTTP ${res.status}`);
-  }
-
-  const data = (await res.json()) as UpdateConversationResponse;
-  return data.conversation;
+  return projectManagedConversation(
+    await createCloudChatPersistenceClient().updateConversation(id, { title }),
+  );
 }
 
 // ============================================================================
@@ -267,72 +294,58 @@ export async function updateCloudConversationTitle(
 export async function getCloudUsage(): Promise<CloudUsage> {
   const headers = await getAuthHeaders();
 
-  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/v1/usage`, {
+  const res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/usage`, {
     method: 'GET',
     headers,
+    credentials: 'include',
   });
 
   if (!res.ok) {
     throw new Error(`Failed to fetch cloud usage: HTTP ${res.status}`);
   }
 
-  return res.json() as Promise<CloudUsage>;
+  return parseManagedUsageSummaryResponse(await res.json());
 }
 
 // ============================================================================
 // Models (Cloud Mode Model Picker)
 // ============================================================================
 
-/**
- * Cloud model metadata for Cloud Mode model picker.
- * This is a subset of the full ModelMetadata with only essential fields.
- */
+/** Minimal validated projection consumed by the Desktop discovery adapter. */
 export interface CloudModelInfo {
   id: string;
   name: string;
   provider: string;
-  speed: 'very-fast' | 'fast' | 'medium' | 'slow';
-  quality: 'excellent' | 'good' | 'fair';
-  qualityTier: 'fast' | 'balanced' | 'best';
-  contextWindow: number;
-  inputCost: number;
-  outputCost: number;
 }
 
 /**
- * Response format from GET /api/models endpoint.
+ * Public response envelope from GET /api/models. Rich catalog fields remain
+ * owned by @agiworkforce/types; this client validates only discovery identity.
  */
 export interface CloudModelsResponse {
   models: CloudModelInfo[];
-  total: number;
-  providers: string[];
+  version?: string;
+  lastUpdated?: string;
 }
 
 /**
- * Fetches available models for Cloud Mode, optionally filtered by subscription plan tier.
+ * Fetches the canonical public model catalog for the embedded Cloud shell.
+ * Catalog membership is not an entitlement claim; execution remains
+ * server-authorized and the native Desktop picker uses privileged discovery.
  *
- * @param planTier - Optional subscription tier filter ('pro' or 'max'). If not provided,
- *                   returns the full catalog (only available to internal/admin endpoints).
- * @returns Array of available models for the specified plan tier
+ * @returns Valid model identity records from the canonical catalog
  * @throws {Error} If the API call fails
- *
- * @example
- * // Get models available to Pro tier users
- * const models = await getCloudModels('pro');
- *
- * @example
- * // Get models available to Max tier users
- * const models = await getCloudModels('max');
  */
-export async function getCloudModels(planTier?: 'pro' | 'max'): Promise<CloudModelInfo[]> {
-  const url = new URL(`${CLOUD_API_BASE_URL}/api/models`);
-
-  if (planTier) {
-    url.searchParams.set('planTier', planTier);
-  }
+export async function getCloudModels(): Promise<CloudModelInfo[]> {
+  const relativePath = '/api/models';
+  const url = new URL(
+    `${CLOUD_API_BASE_URL}${relativePath}`,
+    CLOUD_API_BASE_URL || globalThis.location?.origin || 'http://localhost',
+  );
 
   try {
-    const res = await guardedFetch(url.toString(), {
+    const requestUrl = CLOUD_API_BASE_URL ? url.toString() : `${url.pathname}${url.search}`;
+    const res = await guardedFetch(requestUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -343,8 +356,22 @@ export async function getCloudModels(planTier?: 'pro' | 'max'): Promise<CloudMod
       throw new Error(`Failed to fetch cloud models: HTTP ${res.status}`);
     }
 
-    const data = (await res.json()) as CloudModelsResponse;
-    return data.models;
+    const payload: unknown = await res.json();
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new Error('model catalog returned an invalid response');
+    }
+    const rawModels = (payload as Record<string, unknown>)['models'];
+    if (!Array.isArray(rawModels)) {
+      throw new Error('model catalog did not include a model list');
+    }
+    return rawModels.flatMap((candidate): CloudModelInfo[] => {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return [];
+      const record = candidate as Record<string, unknown>;
+      const id = typeof record['id'] === 'string' ? record['id'].trim() : '';
+      const name = typeof record['name'] === 'string' ? record['name'].trim() : '';
+      const provider = typeof record['provider'] === 'string' ? record['provider'].trim() : '';
+      return id && name && provider ? [{ id, name, provider }] : [];
+    });
   } catch (err) {
     throw new Error(
       `Failed to fetch cloud models: ${err instanceof Error ? err.message : String(err)}`,
@@ -369,20 +396,28 @@ export async function getCloudModels(planTier?: 'pro' | 'max'): Promise<CloudMod
  * @param signal         - Optional AbortSignal for cancellation
  */
 export async function sendCloudMessage(
-  _conversationId: string,
+  conversationId: string,
   content: string,
   model: string,
   onChunk: (text: string) => void,
-  onDone: () => void,
+  onDone: () => void | Promise<void>,
   onError: (err: Error) => void,
   signal?: AbortSignal,
   onEvent?: (payload: Record<string, unknown>) => void,
   webSearch?: boolean,
-  messageHistory?: Array<{ role: string; content: string }>,
+  messageHistory?: Array<{
+    role: 'user' | 'assistant' | 'system';
+    content: CloudChatMessageContent;
+  }>,
   thinkingEnabled?: boolean,
   codeExecution?: boolean,
   idempotencyKey?: string,
-  requestOptions?: { research?: boolean; workMode?: CloudWorkMode; skillName?: string },
+  requestOptions?: {
+    research?: boolean;
+    workMode?: CloudWorkMode;
+    skillName?: string;
+    effort?: string;
+  },
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void,
 ): Promise<void> {
   let headers: Record<string, string>;
@@ -408,19 +443,22 @@ export async function sendCloudMessage(
   const openAiBody: Record<string, unknown> = {
     model,
     messages: chatMessages,
+    conversation_id: conversationId,
     stream: true,
-    ...(webSearch ? { web_search: true } : {}),
+    ...(webSearch || requestOptions?.research ? { web_search: true, web_fetch: true } : {}),
     ...(thinkingEnabled ? { thinking_mode: true } : {}),
     ...(codeExecution ? { code_execution: true } : {}),
     ...(requestOptions?.research ? { research: true } : {}),
     ...(requestOptions?.workMode ? { work_mode: requestOptions.workMode } : {}),
     ...(requestOptions?.skillName ? { skill_name: requestOptions.skillName } : {}),
+    ...(requestOptions?.effort ? { effort: requestOptions.effort } : {}),
+    use_prompt_cache: true,
   };
 
   let res: Response;
 
   try {
-    res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions`, {
+    res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify(openAiBody),
@@ -460,7 +498,7 @@ export async function sendCloudApprovalResume(
   runId: string,
   toolApprovals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>,
   onChunk: (text: string) => void,
-  onDone: () => void,
+  onDone: () => void | Promise<void>,
   onError: (err: Error) => void,
   signal?: AbortSignal,
   onEvent?: (payload: Record<string, unknown>) => void,
@@ -481,7 +519,7 @@ export async function sendCloudApprovalResume(
 
   let res: Response;
   try {
-    res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions/approve`, {
+    res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions/approve`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ run_id: runId, tool_approvals: toolApprovals }),
@@ -504,12 +542,12 @@ export async function sendCloudApprovalResume(
 async function consumeCloudSseResponse(
   res: Response,
   onChunk: (text: string) => void,
-  onDone: () => void,
+  onDone: () => void | Promise<void>,
   onError: (err: Error) => void,
   onEvent?: (payload: Record<string, unknown>) => void,
 ): Promise<void> {
   if (!res.ok) {
-    onError(new Error(`Send message failed: HTTP ${res.status}`));
+    onError(await readCloudResponseError(res));
     return;
   }
 
@@ -534,9 +572,16 @@ async function consumeCloudSseResponse(
       if (done) {
         // Flush any remaining buffered line
         if (buffer.trim().length > 0) {
-          parseAndDispatchLine(buffer.trim(), onChunk, onError, onEvent, canonicalCursor);
+          const terminalError = parseAndDispatchLine(
+            buffer.trim(),
+            onChunk,
+            onError,
+            onEvent,
+            canonicalCursor,
+          );
+          if (terminalError) return;
         }
-        onDone();
+        await onDone();
         return;
       }
 
@@ -557,12 +602,19 @@ async function consumeCloudSseResponse(
         }
 
         if (trimmed === 'data: [DONE]') {
-          onDone();
+          await onDone();
           return;
         }
 
         if (trimmed.startsWith('data: ')) {
-          parseAndDispatchLine(trimmed, onChunk, onError, onEvent, canonicalCursor);
+          const terminalError = parseAndDispatchLine(
+            trimmed,
+            onChunk,
+            onError,
+            onEvent,
+            canonicalCursor,
+          );
+          if (terminalError) return;
         }
       }
     }
@@ -574,14 +626,48 @@ async function consumeCloudSseResponse(
   }
 }
 
+async function readCloudResponseError(response: Response): Promise<Error> {
+  let serverMessage: string | null = null;
+  try {
+    const payload: unknown = await response.json();
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+      const record = payload as Record<string, unknown>;
+      if (typeof record['message'] === 'string') {
+        serverMessage = record['message'];
+      } else if (typeof record['error'] === 'string') {
+        serverMessage = record['error'];
+      } else if (
+        record['error'] &&
+        typeof record['error'] === 'object' &&
+        !Array.isArray(record['error']) &&
+        typeof (record['error'] as Record<string, unknown>)['message'] === 'string'
+      ) {
+        serverMessage = (record['error'] as Record<string, unknown>)['message'] as string;
+      }
+    }
+  } catch {
+    // Never surface an untrusted HTML/error response body. The status remains
+    // enough to diagnose the request without leaking response content.
+  }
+
+  const message =
+    serverMessage?.trim() ||
+    (response.status === 401 || response.status === 403
+      ? 'Your AGI Cloud session is no longer authorized. Please connect again.'
+      : response.status === 429
+        ? 'AGI Cloud is receiving too many requests. Please wait and retry.'
+        : `AGI Cloud request failed (HTTP ${response.status}).`);
+  return new Error(message);
+}
+
 // ============================================================================
 // Internal Helpers
 // ============================================================================
 
 /**
  * Parses a single `data: {...}` SSE line and dispatches text content via
- * `onChunk`. Gracefully ignores lines that cannot be parsed as JSON or that
- * carry no text field.
+ * `onChunk`. A malformed or explicit error event terminates the stream so an
+ * empty/failed provider response can never fall through to `onDone`.
  */
 function parseAndDispatchLine(
   line: string,
@@ -589,18 +675,18 @@ function parseAndDispatchLine(
   onError: (err: Error) => void,
   onEvent?: (payload: Record<string, unknown>) => void,
   canonicalCursor: { sessionId?: string; turnId?: string; sequence: number } = { sequence: -1 },
-): void {
+): boolean {
   const jsonStr = line.startsWith('data: ') ? line.slice('data: '.length) : line;
 
   if (jsonStr === '[DONE]') {
-    return;
+    return false;
   }
 
   try {
     const parsed: unknown = JSON.parse(jsonStr);
 
     if (!parsed || typeof parsed !== 'object') {
-      return;
+      return false;
     }
 
     const obj = parsed as Record<string, unknown>;
@@ -619,7 +705,7 @@ function parseAndDispatchLine(
       canonicalCursor.turnId === envelope.turnId &&
       envelope.sequence <= canonicalCursor.sequence
     ) {
-      return;
+      return false;
     }
     if (envelope) {
       canonicalCursor.sessionId = envelope.sessionId;
@@ -628,15 +714,22 @@ function parseAndDispatchLine(
     }
     onEvent?.(obj);
 
-    if (typeof obj['error'] === 'string') {
-      onError(new Error(obj['error']));
-      return;
+    const rawError = obj['error'];
+    const streamErrorMessage =
+      typeof rawError === 'string'
+        ? rawError
+        : rawError && typeof rawError === 'object' && !Array.isArray(rawError)
+          ? (rawError as Record<string, unknown>)['message']
+          : undefined;
+    if (typeof streamErrorMessage === 'string' && streamErrorMessage.trim()) {
+      onError(new Error(streamErrorMessage));
+      return true;
     }
 
     // Support both { text: "..." } and OpenAI-style { choices: [{ delta: { content: "..." } }] }
     if (typeof obj['text'] === 'string') {
       onChunk(obj['text']);
-      return;
+      return false;
     }
 
     if (Array.isArray(choices) && choices.length > 0) {
@@ -648,8 +741,11 @@ function parseAndDispatchLine(
         }
       }
     }
+    return false;
   } catch {
-    // Malformed JSON in SSE line — skip silently.
-    console.debug('[CloudAPI] Skipping unparseable SSE line:', line);
+    // Never log the raw line: it can contain model output or tool data. A
+    // malformed data event is a failed stream, not a successful empty reply.
+    onError(new Error('AGI Cloud returned a malformed stream event.'));
+    return true;
   }
 }

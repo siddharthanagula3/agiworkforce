@@ -30,6 +30,7 @@ import {
   normalizeMessageMetadata,
   type ChatMessageRow,
 } from '@/lib/server/neon-chat';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -46,13 +47,14 @@ const BulkSaveSchema = z.object({
 });
 
 async function handleBulkSave(request: NextRequest, context: RouteContext) {
+  const userId = await requireCurrentUserId(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-message');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
   const { id: conversationId } = await context.params;
 
   let rawBody: unknown;
@@ -155,4 +157,8 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
   }
 }
 
-export const POST = withErrorHandler(handleBulkSave);
+export const POST = withCorsRoute(withErrorHandler(handleBulkSave));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

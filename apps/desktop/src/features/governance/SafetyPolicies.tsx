@@ -109,18 +109,20 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
   const [autoApproveAll, setAutoApproveAll] = useState(false);
   const [agentMode, setAgentMode] = useState<AgentMode>('build');
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isUpdatingAutoApprove, setIsUpdatingAutoApprove] = useState(false);
   const [isUpdatingAgentMode, setIsUpdatingAgentMode] = useState(false);
 
   const loadPolicies = useCallback(async () => {
     if (!isTauri) {
-      // Non-Tauri: show mock data
-      setPolicies(KNOWN_TOOLS.map((t) => ({ toolName: t, policy: 'ask', isUpdating: false })));
+      setPolicies([]);
+      setLoadError('Tool policies are available only in the installed AGI Desktop app.');
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
+    setLoadError(null);
     try {
       const [rememberedChoices, autoApprove, mode] = await Promise.all([
         invoke<Record<string, boolean>>('get_remembered_tool_choices'),
@@ -153,7 +155,9 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
 
       setPolicies(toolPolicies);
     } catch (err) {
-      toast.error(`Failed to load policies: ${getSimpleErrorMessage(err)}`);
+      const message = getSimpleErrorMessage(err);
+      setLoadError(message);
+      toast.error(`Failed to load policies: ${message}`);
     } finally {
       setIsLoading(false);
     }
@@ -217,6 +221,37 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
       <div className="flex items-center justify-center py-16 text-gray-500">
         <Loader2 size={18} className="animate-spin mr-2" />
         Loading policies...
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div
+        className={cn(
+          'rounded-xl border border-amber-500/25 bg-amber-500/5 p-5 text-amber-100',
+          className,
+        )}
+        role="alert"
+      >
+        <div className="flex items-start gap-3">
+          <ShieldAlert size={18} className="mt-0.5 shrink-0 text-amber-400" />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold">Tool policies unavailable</h3>
+            <p className="mt-1 text-xs leading-5 text-amber-100/70">{loadError}</p>
+            {isTauri ? (
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => void loadPolicies()}
+                className="mt-3 gap-1.5"
+              >
+                <RefreshCw size={12} />
+                Try again
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </div>
     );
   }

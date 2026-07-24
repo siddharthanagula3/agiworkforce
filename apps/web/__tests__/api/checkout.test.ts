@@ -89,6 +89,7 @@ describe('POST /api/checkout', () => {
     mockGetCheckoutPriceSelection.mockResolvedValue({
       priceId: 'price_pro_monthly',
       currency: 'usd',
+      amountMinor: 2_000,
     });
     mockDbQuery.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) return [];
@@ -171,6 +172,7 @@ describe('POST /api/checkout', () => {
     mockGetCheckoutPriceSelection.mockResolvedValueOnce({
       priceId: 'price_max_15x_monthly',
       currency: 'usd',
+      amountMinor: 20_000,
     });
     const response = await POST(
       new NextRequest('http://localhost/api/checkout', {
@@ -187,6 +189,7 @@ describe('POST /api/checkout', () => {
     mockGetCheckoutPriceSelection.mockResolvedValueOnce({
       priceId: 'price_pro_monthly',
       currency: 'inr',
+      amountMinor: 99_900,
     });
     const response = await POST(
       new NextRequest('http://localhost/api/checkout', {
@@ -257,6 +260,27 @@ describe('POST /api/checkout', () => {
     );
 
     expect(response.status).toBe(409);
+    expect(mockCheckoutCreate).not.toHaveBeenCalled();
+  });
+
+  it('fails closed without creating a Stripe session when subscription lookup fails', async () => {
+    mockDbQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) {
+        throw new Error('database unavailable');
+      }
+      if (sql.includes('account_status')) return [{ account_status: 'active' }];
+      if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_test123' }];
+      return [];
+    });
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ plan: 'pro', billingInterval: 'monthly' }),
+      }),
+    );
+
+    expect(response.status).toBe(503);
     expect(mockCheckoutCreate).not.toHaveBeenCalled();
   });
 });

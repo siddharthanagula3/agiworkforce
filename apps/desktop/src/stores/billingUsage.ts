@@ -4,7 +4,6 @@
  *
  * State is split into per-domain slices under ./billing/:
  *   costSlice.ts         — cost overview / analytics
- *   subscriptionSlice.ts — pricing plans / subscription lifecycle
  *   usageSlice.ts        — Stripe usage tracking (automations, tokens, storage …)
  *   budgetSlice.ts       — token budget enforcement and alerts
  *   analyticsSlice.ts    — performance metrics, ROI, feature flags
@@ -17,9 +16,6 @@ import { useBillingStore } from './auth';
 import { createCostSlice } from './billing/costSlice';
 import type { CostSlice } from './billing/costSlice';
 
-import { createSubscriptionSlice } from './billing/subscriptionSlice';
-import type { SubscriptionSlice } from './billing/subscriptionSlice';
-
 import { createUsageSlice } from './billing/usageSlice';
 import type { UsageSlice } from './billing/usageSlice';
 
@@ -30,7 +26,6 @@ import { createAnalyticsSlice } from './billing/analyticsSlice';
 import type { AnalyticsSlice } from './billing/analyticsSlice';
 
 // ── Re-exports so consumers can import named types from this file ─────────────
-export type { RustPricingPlan, RustSubscriptionInfo } from './billing/subscriptionSlice';
 export type {
   BudgetPeriod,
   TokenBudget,
@@ -39,7 +34,7 @@ export type {
 } from './billing/budgetSlice';
 
 // ── Combined store type ────────────────────────────────────────────────────────
-type BillingUsageStore = CostSlice & SubscriptionSlice & UsageSlice & BudgetSlice & AnalyticsSlice;
+type BillingUsageStore = CostSlice & UsageSlice & BudgetSlice & AnalyticsSlice;
 
 // ── Storage helper ─────────────────────────────────────────────────────────────
 const getStorage = () => (typeof window === 'undefined' ? storageFallback : window.localStorage);
@@ -50,10 +45,6 @@ export const useBillingUsageStore = create<BillingUsageStore>()(
     persist(
       subscribeWithSelector((set, get) => ({
         ...createCostSlice(set as Parameters<typeof createCostSlice>[0], get as () => CostSlice),
-        ...createSubscriptionSlice(
-          set as Parameters<typeof createSubscriptionSlice>[0],
-          get as () => SubscriptionSlice,
-        ),
         ...createUsageSlice(set as Parameters<typeof createUsageSlice>[0], get as () => UsageSlice),
         ...createBudgetSlice(
           set as Parameters<typeof createBudgetSlice>[0],

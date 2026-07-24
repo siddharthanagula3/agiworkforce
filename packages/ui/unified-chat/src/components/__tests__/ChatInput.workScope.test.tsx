@@ -177,4 +177,16 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
     expect(screen.queryByText(/Choose a local folder/)).not.toBeNull();
   });
+
+  it('delegates project creation to the host-owned creation flow', () => {
+    const onCreateProject = vi.fn();
+    renderComposer({ projectPicker: makePicker({ onCreateProject }) });
+
+    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+
+    expect(onCreateProject).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Create project' })).toBeNull();
+  });
 });

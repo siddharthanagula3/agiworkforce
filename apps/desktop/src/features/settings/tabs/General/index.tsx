@@ -18,6 +18,7 @@ import { useSimpleModeStore } from '../../../../stores/ui';
 import { SUPPORTED_LANGUAGES } from '../../../../i18n';
 import { cn } from '@/lib/utils';
 import { DESKTOP_CLOUD_TAGLINE } from '../../../../constants/cloudAvailability';
+import { PLAN_DISPLAY_NAMES } from '../../../../lib/cloudAccountTypes';
 import type { Language, GlobalHotkeyPreferences } from '../../../../stores/settingsStore';
 
 const LazyResourceMonitor = lazy(() =>
@@ -116,8 +117,10 @@ function AppModeSection() {
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400 flex-1">
-            Plan: <span className="font-semibold capitalize">{planTier ?? 'Loading'}</span>{' '}
-            <span className="opacity-70">($20/mo)</span>
+            Plan:{' '}
+            <span className="font-semibold">
+              {planTier ? PLAN_DISPLAY_NAMES[planTier] : 'Loading…'}
+            </span>
           </p>
           <button
             type="button"
@@ -272,6 +275,10 @@ export function GeneralTab({
       {isTauri && (
         <div className="pt-6 border-t border-border">
           <h3 className="text-lg font-semibold mb-4">System Resources</h3>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Device-only CPU, memory, and runtime controls. These do not change your Managed Cloud
+            allowance or cloud sandbox resources.
+          </p>
           <Suspense fallback={<Fallback label="Loading system resource settings..." />}>
             <LazyResourceMonitor showTools={true} />
           </Suspense>
@@ -282,7 +289,8 @@ export function GeneralTab({
         <div className="pt-6 border-t border-border">
           <h3 className="text-lg font-semibold mb-4">Agent Permissions</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            macOS system permissions required for agent mode automation.
+            macOS permissions for actions performed on this device. Managed Cloud tool approvals and
+            sandbox permissions are enforced separately by your account policy.
           </p>
           <Suspense fallback={<Fallback label="Loading automation permissions..." />}>
             <LazyAutomationPermissionsSettings />

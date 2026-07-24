@@ -49,14 +49,17 @@ interface DialogOverlayProps extends React.ComponentPropsWithoutRef<
   typeof DialogPrimitive.Overlay
 > {
   ref?: React.Ref<React.ElementRef<typeof DialogPrimitive.Overlay>>;
+  disableAnimation?: boolean;
 }
 
-function DialogOverlay({ className, ref, ...props }: DialogOverlayProps) {
+function DialogOverlay({ className, ref, disableAnimation = false, ...props }: DialogOverlayProps) {
   return (
     <DialogPrimitive.Overlay
       ref={ref}
       className={cn(
-        'fixed inset-0 z-[var(--z-modal,300)] bg-black/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        'fixed inset-0 z-[var(--z-modal,300)] bg-black/70 backdrop-blur-sm',
+        !disableAnimation &&
+          'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         className,
       )}
       {...props}
@@ -76,6 +79,12 @@ interface DialogContentProps extends React.ComponentPropsWithoutRef<
    * callers keep the close button.
    */
   hideCloseButton?: boolean;
+  /**
+   * Renders the modal immediately without entry/exit keyframes. This is useful
+   * for critical native WebView surfaces where a suspended animation frame can
+   * otherwise leave the dialog at its invisible first keyframe.
+   */
+  disableAnimation?: boolean;
   overlayProps?: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> &
     React.HTMLAttributes<HTMLDivElement> & {
       [key: `data-${string}`]: string | undefined;
@@ -88,16 +97,19 @@ function DialogContent({
   ref,
   closeLabel = 'Close dialog',
   hideCloseButton = false,
+  disableAnimation = false,
   overlayProps,
   ...props
 }: DialogContentProps) {
   return (
     <DialogPortal>
-      <DialogOverlay {...overlayProps} />
+      <DialogOverlay disableAnimation={disableAnimation} {...overlayProps} />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          'fixed left-[50%] top-[50%] z-[var(--z-modal,300)] grid w-[min(96vw,42rem)] max-h-[calc(100vh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-hidden rounded-2xl border border-border/70 bg-background/95 p-6 shadow-[0_32px_120px_-32px_rgba(0,0,0,0.65)] backdrop-blur-xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
+          'fixed left-[50%] top-[50%] z-[var(--z-modal,300)] grid w-[min(96vw,42rem)] max-h-[calc(100vh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-hidden rounded-2xl border border-border/70 bg-background/95 p-6 shadow-[0_32px_120px_-32px_rgba(0,0,0,0.65)] backdrop-blur-xl',
+          !disableAnimation &&
+            'duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
           className,
         )}
         aria-modal="true"

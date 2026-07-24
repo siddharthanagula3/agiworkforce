@@ -13,7 +13,7 @@ import {
   verifyInbound,
 } from '../services/dispatch';
 import { API_BASE_URL } from '../api/config';
-import { guardedFetch } from '../lib/egressGuard';
+import { cloudFetch } from '../api/cloudApi';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 
 const MAX_CONTROL_MESSAGE_BYTES = 64 * 1024;
@@ -417,7 +417,7 @@ export const useConnectionStore = create<MobileCompanionState>()(
           wsUrl: null,
         });
         try {
-          const session = cloudAccountAuth.getSession();
+          const session = await cloudAccountAuth.getValidSession();
           if (!session?.access_token) {
             throw new Error('Sign in to pair a mobile companion.');
           }
@@ -425,7 +425,7 @@ export const useConnectionStore = create<MobileCompanionState>()(
           // Mobile pairing is a managed-cloud (cross-device sync) operation.
           // Route through the egress guard so it fails closed in Local/BYOK mode
           // instead of reaching our signaling/gateway. (Trust-boundary chokepoint.)
-          const response = await guardedFetch(
+          const response = await cloudFetch(
             `${API_BASE_URL.replace(/\/+$/, '')}/api/pair/initiate`,
             {
               method: 'POST',

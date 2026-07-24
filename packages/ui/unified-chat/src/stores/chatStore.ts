@@ -79,6 +79,12 @@ interface ChatState {
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   removeConversation: (id: string) => void;
   setConversations: (convs: Conversation[]) => void;
+  /**
+   * Replace host-owned conversation state and discard cached data that no
+   * longer belongs to the active host boundary. Desktop calls this whenever
+   * Local/Cloud mode or the authenticated Cloud account changes.
+   */
+  replaceHostSnapshot: (convs: Conversation[], activeConversationId: string | null) => void;
   addMessage: (conversationId: string, message: ChatMessage) => void;
   updateMessage: (conversationId: string, messageId: string, updates: Partial<ChatMessage>) => void;
   updateMessageMetadata: (
@@ -154,6 +160,55 @@ export const useChatStore = create<ChatState>()(
         }),
 
       setConversations: (convs) => set({ conversations: convs }),
+
+      replaceHostSnapshot: (convs, activeConversationId) =>
+        set((state) => {
+          const previousConversationIds = new Set(
+            state.conversations.map((conversation) => conversation.id),
+          );
+          const allowedConversationIds = new Set(convs.map((conversation) => conversation.id));
+          const boundaryReplaced =
+            previousConversationIds.size > 0 &&
+            [...previousConversationIds].every(
+              (conversationId) => !allowedConversationIds.has(conversationId),
+            );
+          const activeConversationRemoved =
+            state.activeConversationId !== null &&
+            !allowedConversationIds.has(state.activeConversationId);
+
+          state.conversations = convs;
+          state.activeConversationId =
+            activeConversationId && allowedConversationIds.has(activeConversationId)
+              ? activeConversationId
+              : null;
+
+          for (const conversationId of Object.keys(state.messagesByConversation)) {
+            if (!allowedConversationIds.has(conversationId)) {
+              delete state.messagesByConversation[conversationId];
+            }
+          }
+          for (const draftKey of Object.keys(state.draftsByConversation)) {
+            if (draftKey !== NEW_CONVERSATION_DRAFT_KEY && !allowedConversationIds.has(draftKey)) {
+              delete state.draftsByConversation[draftKey];
+            }
+          }
+
+          state.draftContent =
+            state.draftsByConversation[composerDraftKey(state.activeConversationId)] ?? '';
+          // Host snapshots also fire for ordinary title/sidebar metadata
+          // updates. Those must not cancel the shared live-turn projection:
+          // the runtime pins streaming to its origin conversation even when
+          // the user navigates elsewhere. Reset ephemeral execution/search
+          // state only when the host actually replaced the account/trust
+          // boundary or removed the active conversation.
+          if (boundaryReplaced || activeConversationRemoved) {
+            state.searchQuery = '';
+            state.searchResults = [];
+            state.isStreaming = false;
+            state.streamingContent = '';
+            state.streamingReasoning = '';
+          }
+        }),
 
       addMessage: (conversationId, message) =>
         set((state) => {

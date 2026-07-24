@@ -69,13 +69,17 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockNeonQuery(...args),
-    execute: (...args: unknown[]) => mockNeonExecute(...args),
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
-    withUser: vi.fn(() => ({})),
-    dispose: vi.fn(),
-  })),
+  getNeonDb: vi.fn(() => {
+    const adapter = {
+      query: (...args: unknown[]) => mockNeonQuery(...args),
+      execute: (...args: unknown[]) => mockNeonExecute(...args),
+      transaction: vi.fn(),
+      withUser: vi.fn(() => ({})),
+      dispose: vi.fn(),
+    };
+    adapter.transaction.mockImplementation((fn: (db: typeof adapter) => unknown) => fn(adapter));
+    return adapter;
+  }),
 }));
 
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -341,14 +345,18 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
 
   it('retries without round-10 fields when DB returns 42703 undefined_column', async () => {
     const pgError = { code: '42703', message: 'column does not exist' };
-    // First call (with round-10 fields) rejects with PG error; second (legacy only) succeeds
-    mockNeonQuery.mockRejectedValueOnce(pgError).mockResolvedValueOnce([BASE_DB_ROW]);
+    // First call (with round-10 fields) rejects; the legacy retry succeeds,
+    // then the route reloads the canonical row with its conversation count.
+    mockNeonQuery
+      .mockRejectedValueOnce(pgError)
+      .mockResolvedValueOnce([BASE_DB_ROW])
+      .mockResolvedValueOnce([{ ...BASE_DB_ROW, conversation_count: 0 }]);
 
     const req = makePutRequest('proj-1', { iconEmoji: '🔥', name: 'Updated Name' });
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
 
     expect(res.status).toBe(200);
-    expect(mockNeonQuery).toHaveBeenCalledTimes(2);
+    expect(mockNeonQuery).toHaveBeenCalledTimes(3);
     const firstSql = (mockNeonQuery.mock.calls[0] as [string, unknown[]])[0];
     const secondSql = (mockNeonQuery.mock.calls[1] as [string, unknown[]])[0];
     expect(firstSql).toContain('icon_emoji');
@@ -429,6 +437,31 @@ describe('POST /api/projects · round-10 fields', () => {
     const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('projects'");
     expect(params).toContain(1);
+  });
+
+  it('creates the project and complete conversation membership through one transaction', async () => {
+    mockNeonQuery
+      .mockResolvedValueOnce([{ ...BASE_DB_ROW, id: 'proj-new', name: 'New Project' }])
+      .mockResolvedValueOnce([{ id: 'chat-1' }, { id: 'chat-2' }]);
+
+    const res = await POST(
+      makePostRequest({
+        name: 'New Project',
+        conversationIds: ['chat-1', 'chat-2', 'chat-1'],
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(mockNeonExecute).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('set project_id = null'),
+      ['user-abc', 'proj-new', ['chat-1', 'chat-2']],
+    );
+    expect(mockNeonExecute).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('set project_id = $2'),
+      ['user-abc', 'proj-new', ['chat-1', 'chat-2']],
+    );
   });
 
   it('uses the Pro project limit from the shared billing catalog', async () => {

@@ -35,6 +35,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 const MAX_CONVERSATIONS_PULL = 500;
 const MAX_MESSAGES_PULL = 1000;
@@ -147,6 +148,8 @@ type BatchRow<T> = {
 };
 
 async function handlePush(request: NextRequest) {
+  const { db, userId } = await getUserScopedDb(request);
+
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
@@ -155,8 +158,6 @@ async function handlePush(request: NextRequest) {
 
   // RLS-scoped: writes run as app_rls with request.jwt.claim.sub bound, so the
   // WITH CHECK policies reject any row whose user_id != the authenticated subject.
-  const { db, userId } = await getUserScopedDb(request);
-
   let rawBody: unknown;
   try {
     rawBody = await request.json();
@@ -626,5 +627,9 @@ function bigintGreater(a: string, b: string): boolean {
   return na > nb;
 }
 
-export const GET = withErrorHandler(handlePull);
-export const POST = withErrorHandler(handlePush);
+export const GET = withCorsRoute(withErrorHandler(handlePull));
+export const POST = withCorsRoute(withErrorHandler(handlePush));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

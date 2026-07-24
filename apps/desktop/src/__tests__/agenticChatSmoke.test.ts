@@ -18,6 +18,7 @@ enableMapSet();
 import { useChatStore } from '../stores/chat/chatStore';
 import { useToolStore } from '../stores/chat/toolStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useAppModeStore } from '../stores/appModeStore';
 
 // ---------------------------------------------------------------------------
 // ChatStore smoke tests
@@ -25,6 +26,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 
 describe('ChatStore — conversation lifecycle', () => {
   beforeEach(() => {
+    useAppModeStore.setState({ mode: 'local' });
     useChatStore.getState().clearHistory();
   });
 

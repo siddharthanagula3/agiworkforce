@@ -206,7 +206,7 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
     expect(mockVerifyToken).not.toHaveBeenCalled();
   });
 
-  it('a revoked key is rejected before the gate ever resolves auth (not a CSRF bypass loophole)', async () => {
+  it('a revoked key is rejected as invalid authentication before CSRF evaluation', async () => {
     makeFakeDb();
     const { apiKey, rawKey } = await issueKey('revoke-me-user');
     await ApiKeyService.revokeApiKey(getNeonDb(), apiKey.id, 'revoke-me-user');
@@ -214,18 +214,16 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
     mockAuth.mockResolvedValueOnce({ userId: null });
     const result = await runAuthGate(makeCompletionsRequest(rawKey));
 
-    // CSRF's own verifyKey() call independently rejects the revoked key
-    // (revoked_at IS NULL is part of that query too), so the request never
-    // clears the CSRF gate to reach getClerkAuthUser — 403, not 401. This
-    // is the correct, safe outcome: revocation isn't just an auth-layer
-    // concern, it also revokes standing to bypass CSRF.
+    // Native clients authenticate their Bearer credential before CSRF
+    // evaluation. A revoked credential is therefore an authentication failure,
+    // not a browser-origin failure.
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.response.status).toBe(403);
+      expect(result.response.status).toBe(401);
     }
   });
 
-  it('a garbage sk_-shaped bearer is rejected at CSRF (403), never reaches subscription lookup', async () => {
+  it('a garbage sk_-shaped bearer is rejected as invalid authentication', async () => {
     makeFakeDb();
     mockAuth.mockResolvedValueOnce({ userId: null });
 
@@ -235,7 +233,7 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.response.status).toBe(403);
+      expect(result.response.status).toBe(401);
     }
     expect(mockGetSubscription).not.toHaveBeenCalled();
   });

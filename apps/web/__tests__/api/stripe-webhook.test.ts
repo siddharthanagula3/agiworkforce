@@ -32,7 +32,9 @@ const mockExecute = vi.fn();
 const mockDb = {
   query: mockQuery,
   execute: mockExecute,
-  transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+  transaction: vi.fn((fn: (db: unknown) => unknown) =>
+    fn({ query: mockQuery, execute: mockExecute }),
+  ),
   withUser: vi.fn(() => mockDb),
   dispose: vi.fn(),
 };
@@ -196,7 +198,7 @@ describe('Stripe Webhook Security Tests', () => {
     mockAllocateCredits.mockResolvedValue(undefined);
     mockResetCredits.mockResolvedValue(undefined);
     mockGetBalance.mockResolvedValue({ credits_remaining_cents: 0 });
-    mockDeductCredits.mockResolvedValue(undefined);
+    mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 0 });
   });
 
   afterEach(() => {
@@ -373,6 +375,9 @@ describe('Stripe Webhook Security Tests', () => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: false }]);
         }
+        if (sql.includes('processed_stripe_events')) {
+          return Promise.resolve([{ status: 'succeeded' }]);
+        }
         return Promise.resolve([]);
       });
 
@@ -401,6 +406,67 @@ describe('Stripe Webhook Security Tests', () => {
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.message).toContain('already processed');
+    });
+
+    it('should request a retry while another delivery still owns the processing lock', async () => {
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: false }]);
+        }
+        if (sql.includes('processed_stripe_events')) {
+          return Promise.resolve([{ status: 'processing' }]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const { POST } = await import('@/app/api/stripe-webhook/route');
+      const eventPayload = JSON.stringify({
+        id: 'evt_processing',
+        type: 'customer.subscription.updated',
+        data: { object: { id: 'sub_processing' } },
+      });
+      const { signature } = generateStripeSignature(eventPayload, mockEnv.STRIPE_WEBHOOK_SECRET);
+      const response = await POST(
+        new NextRequest('http://localhost/api/stripe-webhook', {
+          method: 'POST',
+          body: eventPayload,
+          headers: {
+            'content-type': 'application/json',
+            'stripe-signature': signature,
+          },
+        }),
+      );
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get('retry-after')).toBe('10');
+    });
+
+    it('should fail closed when the durable succeeded marker cannot be committed', async () => {
+      mockExecute.mockRejectedValueOnce(new Error('Succeeded marker unavailable'));
+
+      const { POST } = await import('@/app/api/stripe-webhook/route');
+      const eventPayload = JSON.stringify({
+        id: 'evt_mark_failure',
+        type: 'test.unhandled',
+        data: { object: {} },
+      });
+      const { signature } = generateStripeSignature(eventPayload, mockEnv.STRIPE_WEBHOOK_SECRET);
+      const response = await POST(
+        new NextRequest('http://localhost/api/stripe-webhook', {
+          method: 'POST',
+          body: eventPayload,
+          headers: {
+            'content-type': 'application/json',
+            'stripe-signature': signature,
+          },
+        }),
+      );
+
+      expect(response.status).toBe(500);
+      expect(mockExecute).toHaveBeenCalledWith('select mark_stripe_event_failed($1, $2)', [
+        'evt_mark_failure',
+        'Succeeded marker unavailable',
+      ]);
     });
   });
 

@@ -20,7 +20,13 @@ vi.mock('../../stores/appModeStore', () => ({
   selectPrivacyMode: () => h.privacyMode,
 }));
 vi.mock('../../stores/auth', () => ({
-  useUnifiedAuthStore: { getState: () => ({ user: h.userId ? { id: h.userId } : null }) },
+  useUnifiedAuthStore: {
+    getState: () => ({
+      user: h.userId ? { id: h.userId } : null,
+      isAuthenticated: Boolean(h.userId),
+      accessToken: h.userId ? 'desktop-token' : null,
+    }),
+  },
 }));
 
 import { triggerCloudSync } from '../cloudSyncTrigger';

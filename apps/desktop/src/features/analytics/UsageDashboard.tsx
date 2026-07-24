@@ -31,6 +31,7 @@ import {
   queryTopEvents,
 } from '../../services/analyticsQueries';
 import { TimeSeriesData, CategoryData } from '../../types/analytics';
+import { normalizeUIPlanTier, PLAN_LABEL } from '@agiworkforce/types';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -46,21 +47,17 @@ export const UsageDashboard: React.FC = () => {
   const refreshAllMetrics = useBillingUsageStore((state) => state.refreshAllMetrics);
 
   const billingUsageStats = useBillingUsageStore((state) => state.usageStats);
-  const getTokenCost = useBillingUsageStore((state) => state.getTokenCost);
   const subscription = useBillingStore((state) => state.subscription);
   // Use useShallow for object selectors to prevent re-renders from reference changes
   const account = useAccountStore(useShallow((state) => state.account));
   const { credits, plan } = account;
 
-  // Calculate monthly credit usage percentage
-  const planName = subscription?.plan_name?.toLowerCase() || '';
-  let monthlyLimit = 0;
-  if (planName.includes('basic')) monthlyLimit = 1.0;
-  else if (planName.includes('pro')) monthlyLimit = 12.0;
-  else if (planName.includes('max')) monthlyLimit = 150.0;
-
-  const monthlyCost = getTokenCost();
-  const creditPercentage = monthlyLimit > 0 ? Math.min((monthlyCost / monthlyLimit) * 100, 100) : 0;
+  const managedUsagePercentage =
+    typeof credits?.percentage_used === 'number'
+      ? Math.min(Math.max(credits.percentage_used, 0), 100)
+      : credits?.allocated_cents && credits.allocated_cents > 0
+        ? Math.min(getUsagePercentage(credits.used_cents ?? 0, credits.allocated_cents), 100)
+        : null;
 
   const [dauData, setDauData] = useState<TimeSeriesData[]>([]);
   const [featureData, setFeatureData] = useState<CategoryData[]>([]);
@@ -137,16 +134,17 @@ export const UsageDashboard: React.FC = () => {
             <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
               <h3 className="text-sm font-medium text-muted-foreground">Current Plan</h3>
               <p className="text-2xl font-bold mt-2 text-primary capitalize">
-                {subscription.plan_name}
+                {PLAN_LABEL[normalizeUIPlanTier(subscription.plan_name, 'free')]}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Renews:{' '}
-                {new Date((subscription.current_period_end || 0) * 1000).toLocaleDateString()}
-              </p>
+              {subscription.current_period_end > 0 ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Renews: {new Date(subscription.current_period_end * 1000).toLocaleDateString()}
+                </p>
+              ) : null}
             </div>
           )}
 
-          {(plan === 'basic' || plan === 'pro' || plan === 'max') && credits && (
+          {plan && credits && (
             <>
               {/* Daily Credits Card */}
               {credits.daily_limit_cents !== undefined && credits.daily_limit_cents > 0 && (
@@ -223,38 +221,32 @@ export const UsageDashboard: React.FC = () => {
 
           <div className="bg-card p-4 rounded-lg shadow-xs border border-border">
             <h3 className="text-sm font-medium text-muted-foreground">Monthly Usage</h3>
-            {!billingUsageStats ? (
-              // Per-model usage metering is server-side; the desktop client has
-              // no honest source for it, so show an explicit unavailable state
-              // rather than a misleading 0%.
+            {managedUsagePercentage === null ? (
               <>
                 <p className="text-2xl font-bold mt-2 text-muted-foreground">—</p>
-                <p className="text-xs text-muted-foreground mt-1">Metered server-side</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Managed usage is available in Cloud settings
+                </p>
               </>
-            ) : monthlyLimit > 0 ? (
+            ) : (
               <>
                 <p className="text-2xl font-bold mt-2 text-amber-500">
-                  {creditPercentage.toFixed(1)}%
+                  {managedUsagePercentage.toFixed(1)}%
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">Monthly credits used</p>
+                <p className="text-xs text-muted-foreground mt-1">Current billing period used</p>
                 <div className="mt-2 h-2 w-full rounded-full bg-secondary overflow-hidden">
                   <div
                     className={cn(
                       'h-full transition-all',
-                      creditPercentage > 90
+                      managedUsagePercentage > 90
                         ? 'bg-red-500'
-                        : creditPercentage > 75
+                        : managedUsagePercentage > 75
                           ? 'bg-yellow-500'
                           : 'bg-amber-500',
                     )}
-                    style={{ width: `${Math.min(creditPercentage, 100)}%` }}
+                    style={{ width: `${managedUsagePercentage}%` }}
                   />
                 </div>
-              </>
-            ) : (
-              <>
-                <p className="text-2xl font-bold mt-2 text-amber-500">—</p>
-                <p className="text-xs text-muted-foreground mt-1">No monthly limit</p>
               </>
             )}
           </div>
@@ -288,26 +280,26 @@ export const UsageDashboard: React.FC = () => {
           <MetricCard
             title="Daily Active Users"
             value={analyticsUsageStats?.dau || 0}
-            trend="+12%"
-            trendUp={true}
+            trend=""
+            trendUp={false}
           />
           <MetricCard
             title="Monthly Active Users"
             value={analyticsUsageStats?.mau || 0}
-            trend="+8%"
-            trendUp={true}
+            trend=""
+            trendUp={false}
           />
           <MetricCard
             title="Total Automations"
             value={appMetrics?.automationsCount || 0}
-            trend="+25"
-            trendUp={true}
+            trend=""
+            trendUp={false}
           />
           <MetricCard
             title="Goals Completed"
             value={appMetrics?.goalsCount || 0}
-            trend="+18"
-            trendUp={true}
+            trend=""
+            trendUp={false}
           />
         </div>
 

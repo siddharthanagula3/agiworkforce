@@ -41,6 +41,8 @@ export interface SubscriptionInfo {
 interface CreditAllocationOptions {
   /** Compatibility-only audit context; allocation always comes from planTier. */
   stripePriceId?: string | null;
+  /** Keep webhook entitlement and allowance mutations in one transaction. */
+  db?: DatabaseAdapter;
 }
 
 export class SubscriptionService {
@@ -112,7 +114,7 @@ export class SubscriptionService {
     planTier: string,
     periodStart: Date,
     periodEnd: Date,
-    _options: CreditAllocationOptions = {},
+    options: CreditAllocationOptions = {},
   ): Promise<string> {
     const creditsCents = getPlanUsageBudgetCents(planTier, 'monthly');
 
@@ -133,6 +135,7 @@ export class SubscriptionService {
         usagePeriod.periodStart,
         usagePeriod.periodEnd,
         creditsCents,
+        options.db,
       );
 
       logger.info(
@@ -163,7 +166,7 @@ export class SubscriptionService {
     planTier: string,
     periodStart: Date,
     periodEnd: Date,
-    _options: CreditAllocationOptions = {},
+    options: CreditAllocationOptions = {},
   ): Promise<string> {
     const creditsCents = getPlanUsageBudgetCents(planTier, 'monthly');
 
@@ -184,6 +187,7 @@ export class SubscriptionService {
         usagePeriod.periodStart,
         usagePeriod.periodEnd,
         creditsCents,
+        options.db,
       );
 
       logger.info(
@@ -216,6 +220,7 @@ export class SubscriptionService {
     nextPlanTier: string,
     periodStart: Date,
     periodEnd: Date,
+    db?: DatabaseAdapter,
   ): Promise<string> {
     const previousBudgetCents = getPlanUsageBudgetCents(previousPlanTier, 'monthly');
     const nextBudgetCents = getPlanUsageBudgetCents(nextPlanTier, 'monthly');
@@ -234,6 +239,7 @@ export class SubscriptionService {
       usagePeriod.periodStart,
       usagePeriod.periodEnd,
       nextBudgetCents - previousBudgetCents,
+      db,
     );
   }
 

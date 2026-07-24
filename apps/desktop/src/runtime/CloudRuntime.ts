@@ -8,17 +8,13 @@
  *   - Conversation CRUD + message persistence: the shared
  *     `getDesktopCloudChatPersistenceClient()` (DCL-1/DCL-2), which hits the
  *     real `/api/chat/conversations*` Neon-backed routes via `guardedFetch`
- *     on the absolute cloud origin. Throws if desktop is not in managed-cloud
- *     mode (Local/BYOK, or the PA-3 coming-soon gate) — see that module's
- *     trust-boundary doc comment.
+ *     on the absolute cloud origin. Throws unless Desktop is in an authenticated
+ *     managed-cloud session — see that module's trust-boundary doc comment.
  *   - Streaming: `sendCloudMessage` (`apps/desktop/src/api/cloudApi.ts`),
  *     which already targets the real live streaming endpoint
  *     (`POST /api/llm/v1/chat/completions`, `stream: true`) — this is the
- *     SAME endpoint `apps/web/lib/hooks/useChatStream.ts` calls, confirmed by
- *     direct comparison, so streaming was already correctly aligned (only
- *     `cloudApi.ts`'s separate `/api/cloud-chat` conversation-CRUD functions
- *     are the legacy, non-shared-backend path — this runtime does NOT use
- *     those; conversation CRUD always goes through the DCL-1/DCL-2 client).
+ *     SAME endpoint `apps/web/lib/hooks/useChatStream.ts` calls. Conversation
+ *     CRUD also uses the canonical shared managed-cloud chat client.
  *   - Message durability mirrors `useChatStream.ts`'s `saveMessageToDb()`
  *     call pattern: the user message is persisted before streaming starts,
  *     and the assistant message is persisted once the stream completes.
@@ -55,10 +51,13 @@ import {
   type CloudAgentRunSnapshotPage,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
-  CloudToolApprovalProjectionSchema,
   type CloudToolApprovalProjection,
   type ManagedCloudConversation,
   type ManagedCloudMessage,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_COUNT,
+  chatAttachmentAcceptAttribute,
+  isSupportedChatAttachment,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
@@ -69,13 +68,31 @@ import {
   CLOUD_API_BASE_URL,
 } from '../api/cloudApi';
 import { getDesktopCloudChatPersistenceClient } from '../lib/cloudChatPersistence';
-import { getProviderDefaultModel, normalizeModelId } from '../constants/llm';
-import { getDefaultModelFor } from '@agiworkforce/types';
-import { createCloudStreamDeltaSink } from './cloudStreamDeltas';
-import { CloudToolApprovalRegistry, mapPersistedCloudApprovalToolCalls } from './cloudToolApproval';
+import { normalizeModelId } from '../constants/llm';
+import {
+  createCloudStreamDeltaSink,
+  hasRenderableCloudMessageOutput,
+  type CloudStreamMessageProjection,
+} from './cloudStreamDeltas';
+import { CloudToolApprovalRegistry, toPersistedCloudApprovalProjection } from './cloudToolApproval';
 import { finishAgentActivityLocally, type AgentActivityState } from '@agiworkforce/client-runtime';
-
-const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
+import {
+  assertCloudConversationBoundary,
+  captureCloudConversationBoundary,
+  deleteCloudConversation,
+  ensureCloudConversation,
+  markCloudConversationReady,
+  updateCloudConversation,
+  waitForCloudConversationReady,
+  type CloudConversationBoundary,
+} from '../services/cloudChat';
+import { uploadDesktopCloudAttachments } from '../services/desktopCloudAttachments';
+import type { CloudChatMessageContent } from '../api/cloudApi';
+import {
+  EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+  mapPersistedCloudMessage,
+  persistedAttachmentMetadata,
+} from './persistedCloudMessage';
 
 interface ActiveCloudTurn {
   assistantMessageId: string;
@@ -88,6 +105,23 @@ interface ActiveCloudTurn {
   unacknowledgedPublicText: string;
   /** Canonical public text received before its matching SSE content chunk. */
   canonicalPublicTextAwaitingChunk: string;
+  /** Existing partial assistant text when Continue Generation appends in place. */
+  persistedContentPrefix: string;
+}
+
+function durableAssistantContent(turn: ActiveCloudTurn): string {
+  return `${turn.persistedContentPrefix}${turn.sink.getAccumulatedContent()}`;
+}
+
+function failedMessageProjection(
+  projection: CloudStreamMessageProjection,
+  message: string,
+): CloudStreamMessageProjection {
+  return {
+    ...projection,
+    finishReason: 'error',
+    streamError: { message },
+  };
 }
 
 function stopReasonToFinishReason(reason: AgentEventEnvelope['event']): string | undefined {
@@ -109,54 +143,27 @@ function mapConversation(cloud: ManagedCloudConversation): Conversation {
     createdAt: cloud.createdAt,
     updatedAt: cloud.updatedAt,
     model: cloud.model,
-    archived: false,
-    pinned: false,
+    archived: cloud.archived,
+    pinned: cloud.pinned,
+    ...(cloud.projectId ? { projectId: cloud.projectId } : {}),
   };
 }
 
 /** The persistence client passes messages through un-normalized (surface-specific). */
 function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessage {
-  const approvalToolCalls = mapPersistedCloudApprovalToolCalls(raw.metadata);
-  return {
-    id: raw.id,
-    conversationId,
-    role: raw.role,
-    content: raw.content,
-    createdAt: raw.createdAt,
-    model: raw.model,
-    ...(raw.provider ? { provider: raw.provider } : {}),
-    ...(raw.metadata ? { metadata: raw.metadata } : {}),
-    ...(approvalToolCalls ? { toolCalls: approvalToolCalls } : {}),
-  };
-}
-
-function stringifyApprovalArgs(args: Record<string, unknown>): string | undefined {
-  if (Object.keys(args).length === 0) return undefined;
-  try {
-    const serialized = JSON.stringify(args);
-    return serialized.length <= 100_000 ? serialized : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function toPersistedApprovalProjection(
-  projection: CloudApprovalTurnProjection | undefined,
-): CloudToolApprovalProjection | undefined {
-  if (!projection) return undefined;
-  return CloudToolApprovalProjectionSchema.parse({
-    schemaVersion: 1,
-    runId: projection.runId,
-    calls: projection.calls.map((call) => {
-      const input = stringifyApprovalArgs(call.args);
-      return {
-        toolCallId: call.toolCallId,
-        name: call.name,
-        ...(input ? { input } : {}),
-        ...(call.decision ? { approvalDecision: call.decision } : {}),
-      };
-    }),
-  });
+  return mapPersistedCloudMessage(
+    {
+      id: raw.id,
+      conversationId,
+      role: raw.role,
+      content: raw.content,
+      createdAt: raw.createdAt,
+      ...(raw.model ? { model: raw.model } : {}),
+      ...(raw.provider ? { provider: raw.provider } : {}),
+      ...(raw.metadata ? { metadata: raw.metadata } : {}),
+    },
+    CLOUD_API_BASE_URL,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -164,10 +171,13 @@ function toPersistedApprovalProjection(
 // ---------------------------------------------------------------------------
 
 export class CloudRuntime implements ChatRuntime {
+  private _disposed = false;
+  private _boundary: CloudConversationBoundary | null = null;
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
   private readonly _activeTurns = new Map<string, ActiveCloudTurn>();
   private readonly _approvals = new CloudToolApprovalRegistry();
+  private readonly _attachmentAssetIds = new Map<string, string>();
 
   /** The cloud SSE wire forwards `code_execution` — see `SendMessageOptions.codeExecution`. */
   readonly supportsCodeExecution = true;
@@ -178,19 +188,92 @@ export class CloudRuntime implements ChatRuntime {
   /** Managed search uses the Cloud route's native-or-generic capability gate. */
   readonly supportsManagedWebSearch = true;
 
+  /** Managed Cloud enforces approvals server-side; local Ask/Auto controls do not apply. */
+  readonly supportsAgentControl = false;
+
+  readonly attachmentPolicy = {
+    accept: chatAttachmentAcceptAttribute(),
+    maxFiles: MAX_CHAT_ATTACHMENT_COUNT,
+    maxTotalBytes: MAX_CHAT_ATTACHMENT_BYTES,
+    validate: (file: File) =>
+      isSupportedChatAttachment(file.name, file.type)
+        ? null
+        : `${file.name} is not supported. Attach an image, PDF, or text/code file instead.`,
+  };
+
   /**
    * Cloud SSE path supports Continue Generation (same wire as `WebRuntime`).
    */
   readonly supportsContinueGeneration = true;
 
   private emit(event: StreamEvent): void {
+    if (this._disposed) return;
     for (const cb of this._streamCallbacks) {
       cb(event);
     }
   }
 
+  private requireBoundary(): CloudConversationBoundary {
+    if (this._disposed) {
+      throw new Error('This Cloud session is no longer active.');
+    }
+    if (!this._boundary) {
+      this._boundary = captureCloudConversationBoundary();
+    } else {
+      assertCloudConversationBoundary(this._boundary);
+    }
+    return this._boundary;
+  }
+
+  private assertBoundary(boundary = this._boundary): void {
+    if (this._disposed) {
+      throw new Error('This Cloud session is no longer active.');
+    }
+    if (!boundary) {
+      throw new Error('This Cloud runtime has no authenticated account boundary.');
+    }
+    assertCloudConversationBoundary(boundary);
+  }
+
+  /**
+   * Ends every request owned by this authenticated runtime without persisting
+   * a synthetic failure into the account that is being signed out. Server-run
+   * cancellation is best-effort and bounded so logout cannot hang on network
+   * loss.
+   */
+  async dispose(): Promise<void> {
+    if (this._disposed) return;
+    this._disposed = true;
+
+    const runIds = new Set<string>();
+    for (const turn of this._activeTurns.values()) {
+      turn.settled = true;
+      if (turn.runReference) runIds.add(turn.runReference.runId);
+    }
+    this._activeTurns.clear();
+
+    for (const controller of this._abortControllers.values()) {
+      controller.abort();
+    }
+    this._abortControllers.clear();
+    this._streamCallbacks.clear();
+
+    if (runIds.size === 0) return;
+
+    const cancelController = new AbortController();
+    const timeoutId = setTimeout(() => cancelController.abort(), 3_000);
+    try {
+      const client = createDesktopCloudAgentRunClient();
+      await Promise.allSettled(
+        [...runIds].map((runId) => client.cancelRun(runId, { signal: cancelController.signal })),
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   /** Persists a completed assistant turn, surfacing a save failure as a follow-up 'error' event without hiding 'done'. */
-  private persistAssistantTurn(
+  private async persistAssistantTurn(
     conversationId: string,
     assistantMessageId: string,
     content: string,
@@ -198,29 +281,38 @@ export class CloudRuntime implements ChatRuntime {
     agentActivity?: AgentActivityState,
     cloudAgentRun?: ManagedCloudAgentRunReference,
     cloudApproval?: CloudToolApprovalProjection | null,
-  ): void {
-    if (!content && !agentActivity && !cloudAgentRun && cloudApproval === undefined) return;
+    messageProjection?: CloudStreamMessageProjection,
+  ): Promise<void> {
+    const boundary = this.requireBoundary();
+    if (
+      !content &&
+      !agentActivity &&
+      !cloudAgentRun &&
+      cloudApproval === undefined &&
+      (!messageProjection || Object.keys(messageProjection).length === 0)
+    ) {
+      return;
+    }
     const metadata = {
       ...(agentActivity ? { agentActivity } : {}),
       ...(cloudAgentRun ? { cloudAgentRun } : {}),
       ...(cloudApproval !== undefined ? { cloudApproval } : {}),
+      ...(messageProjection ?? {}),
     };
-    void getDesktopCloudChatPersistenceClient()
-      .saveMessage(conversationId, {
+    try {
+      await getDesktopCloudChatPersistenceClient().saveMessage(conversationId, {
         id: assistantMessageId,
         role: 'assistant',
         content: content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
         model,
         ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
-      })
-      .catch((err: unknown) => {
-        this.emit({
-          type: 'error',
-          error: `Reply persisted locally but failed to save to cloud: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        });
       });
+      this.assertBoundary(boundary);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.emit({ type: 'error', error: `Could not save the Cloud reply: ${message}` });
+      throw err;
+    }
   }
 
   private updateRunReference(
@@ -328,13 +420,95 @@ export class CloudRuntime implements ChatRuntime {
     if (turn.settled) return;
     turn.settled = true;
     this._activeTurns.delete(conversationId);
-    this.persistAssistantTurn(
+    const content = durableAssistantContent(turn);
+    const projection = turn.sink.getMessageProjection();
+    this._approvals.recordTurnOutcome(
+      conversationId,
+      turn.runReference,
+      turn.model,
+      turn.sink,
+      turn.assistantMessageId,
+    );
+    if (turn.sink.isSuspended()) {
+      await this.persistAssistantTurn(
+        conversationId,
+        turn.assistantMessageId,
+        content,
+        turn.model,
+        turn.sink.getAgentActivity(),
+        turn.runReference,
+        toPersistedCloudApprovalProjection(this._approvals.getTurnProjection(conversationId)),
+        projection,
+      );
+      this.emit({
+        type: 'done',
+        ...(replayFinishReason ? { finishReason: replayFinishReason } : {}),
+      });
+      return;
+    }
+    if (followed.run.state === 'failed') {
+      const activity = turn.sink.getAgentActivity();
+      const failureMessage = 'The managed Cloud task failed.';
+      await this.persistAssistantTurn(
+        conversationId,
+        turn.assistantMessageId,
+        content,
+        turn.model,
+        activity
+          ? finishAgentActivityLocally(activity, {
+              status: 'failed',
+              completedAtMs: Date.now(),
+              error: failureMessage,
+              overrideTerminal: true,
+            })
+          : undefined,
+        turn.runReference,
+        undefined,
+        failedMessageProjection(projection, failureMessage),
+      );
+      this.emit({ type: 'error', error: `${failureMessage} Please retry.` });
+      return;
+    }
+    if (
+      followed.run.state !== 'cancelled' &&
+      followed.run.state !== 'paused' &&
+      followed.run.state !== 'archived' &&
+      !hasRenderableCloudMessageOutput(content, projection) &&
+      !turn.sink.getStreamError()
+    ) {
+      const failureMessage = 'AGI Cloud completed without returning a response.';
+      const activity = turn.sink.getAgentActivity();
+      await this.persistAssistantTurn(
+        conversationId,
+        turn.assistantMessageId,
+        content,
+        turn.model,
+        activity
+          ? finishAgentActivityLocally(activity, {
+              status: 'failed',
+              completedAtMs: Date.now(),
+              error: failureMessage,
+            })
+          : undefined,
+        turn.runReference,
+        undefined,
+        failedMessageProjection(projection, failureMessage),
+      );
+      this.emit({
+        type: 'error',
+        error: `${failureMessage} Please retry.`,
+      });
+      return;
+    }
+    await this.persistAssistantTurn(
       conversationId,
       turn.assistantMessageId,
-      turn.sink.getAccumulatedContent(),
+      content,
       turn.model,
       turn.sink.getAgentActivity(),
       turn.runReference,
+      undefined,
+      projection,
     );
     this.emit({
       type: 'done',
@@ -352,23 +526,57 @@ export class CloudRuntime implements ChatRuntime {
     content: string,
     options?: SendMessageOptions,
   ): Promise<void> {
-    const model =
-      normalizeModelId(options?.model ?? '') ??
-      getProviderDefaultModel('anthropic') ??
-      getDefaultModelFor(null, 'chat');
+    const boundary = this.requireBoundary();
+    const model = normalizeModelId(options?.model ?? '') ?? 'auto';
     const client = getDesktopCloudChatPersistenceClient();
+    const isContinuation = options?.isContinuation === true;
+    const messageHistory = options?.messageHistory ?? [];
 
-    // Persist the user turn before streaming starts (mirrors
-    // useChatStream.ts's saveMessageToDb call for the user message).
+    // The host creates optimistically with this exact UUID. Joining the
+    // coordinator here guarantees the server row exists before the first
+    // message is written, even when the user sends immediately.
+    await ensureCloudConversation(conversationId, 'New chat', model, options?.projectId);
+    this.assertBoundary(boundary);
+    await updateCloudConversation(conversationId, {
+      model,
+      ...(options?.projectId !== undefined ? { projectId: options.projectId } : {}),
+    });
+    this.assertBoundary(boundary);
+
+    const uploadedAttachments =
+      !isContinuation && options?.attachments?.length
+        ? await uploadDesktopCloudAttachments(options.attachments)
+        : [];
+    this.assertBoundary(boundary);
+    const currentHistoryAttachments = messageHistory[messageHistory.length - 1]?.attachments ?? [];
+    for (const [index, attachment] of currentHistoryAttachments.entries()) {
+      const uploaded = uploadedAttachments[index];
+      if (uploaded) this._attachmentAssetIds.set(attachment.id, uploaded.id);
+    }
+
+    // Persist ordinary user turns before streaming. Continue Generation's
+    // instruction is request-only and must never appear in conversation
+    // history as a user message.
     const userMessageId = uuidv7();
-    try {
-      await client.saveMessage(conversationId, { id: userMessageId, role: 'user', content, model });
-    } catch (err) {
-      this.emit({
-        type: 'error',
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return;
+    if (!isContinuation) {
+      try {
+        await client.saveMessage(conversationId, {
+          id: userMessageId,
+          role: 'user',
+          content: content.trim() || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+          model,
+          ...(uploadedAttachments.length
+            ? { metadata: { attachments: persistedAttachmentMetadata(uploadedAttachments) } }
+            : {}),
+        });
+        this.assertBoundary(boundary);
+      } catch (err) {
+        this.emit({
+          type: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
     }
 
     const controller = new AbortController();
@@ -378,7 +586,13 @@ export class CloudRuntime implements ChatRuntime {
     }
 
     const sink = createCloudStreamDeltaSink((event) => this.emit(event), CLOUD_API_BASE_URL);
-    const assistantMessageId = uuidv7();
+    const assistantMessageId = options?.continuationMessageId ?? uuidv7();
+    const continuationPrefix =
+      isContinuation &&
+      messageHistory.length >= 2 &&
+      messageHistory[messageHistory.length - 2]?.role === 'assistant'
+        ? (messageHistory[messageHistory.length - 2]?.content ?? '')
+        : '';
     const activeTurn: ActiveCloudTurn = {
       assistantMessageId,
       model,
@@ -386,7 +600,36 @@ export class CloudRuntime implements ChatRuntime {
       settled: false,
       unacknowledgedPublicText: '',
       canonicalPublicTextAwaitingChunk: '',
+      persistedContentPrefix: continuationPrefix,
     };
+    const historySource =
+      messageHistory.length > 0
+        ? messageHistory
+        : [{ role: 'user' as const, content, attachments: [] }];
+    const requestHistory = historySource.map((message, index, history) => {
+      const isCurrentUserTurn =
+        !isContinuation && index === history.length - 1 && message.role === 'user';
+      const attachments = isCurrentUserTurn
+        ? uploadedAttachments.map((attachment) => ({
+            id: attachment.id,
+            name: attachment.name,
+            type: attachment.type,
+          }))
+        : (message.attachments ?? []);
+      if (attachments.length === 0) {
+        return { role: message.role, content: message.content };
+      }
+      const parts: Exclude<CloudChatMessageContent, string> = [];
+      if (message.content.trim()) parts.push({ type: 'text', text: message.content });
+      for (const attachment of attachments) {
+        const assetId = this._attachmentAssetIds.get(attachment.id) ?? attachment.id;
+        parts.push({ type: 'file', file: { asset_id: assetId } });
+      }
+      return { role: message.role, content: parts };
+    });
+    if (options?.systemPrompt) {
+      requestHistory.unshift({ role: 'system', content: options.systemPrompt });
+    }
     this._activeTurns.set(conversationId, activeTurn);
     try {
       await sendCloudMessage(
@@ -395,7 +638,7 @@ export class CloudRuntime implements ChatRuntime {
         model,
         (text) => this.onLiveChunk(activeTurn, text),
         // onDone
-        () => {
+        async () => {
           if (activeTurn.settled || activeTurn.replayPromise) return;
           activeTurn.settled = true;
           this._activeTurns.delete(conversationId);
@@ -407,37 +650,66 @@ export class CloudRuntime implements ChatRuntime {
             sink,
             assistantMessageId,
           );
-          const approvalProjection = toPersistedApprovalProjection(
+          const approvalProjection = toPersistedCloudApprovalProjection(
             this._approvals.getTurnProjection(conversationId),
           );
           if (sink.isSuspended()) {
             // Persist the durable run reference at the approval boundary so a
             // fresh app instance can restore the small client projection. The
             // server checkpoint remains authoritative for transcript/policy.
-            this.persistAssistantTurn(
+            await this.persistAssistantTurn(
               conversationId,
               assistantMessageId,
-              sink.getAccumulatedContent(),
+              durableAssistantContent(activeTurn),
               model,
               sink.getAgentActivity(),
               activeTurn.runReference,
               approvalProjection,
+              sink.getMessageProjection(),
             );
           } else {
-            // Persist the completed assistant turn (mirrors
-            // useChatStream.ts's saveMessageToDb call for the completed
-            // assistant message). Fire without blocking `onDone`'s emit — a
-            // persistence failure here must not hide a successful stream
-            // from the UI, but is surfaced via a follow-up 'error' event so
-            // the caller can retry the save.
-            this.persistAssistantTurn(
+            const projection = sink.getMessageProjection();
+            const hasRenderableOutput = hasRenderableCloudMessageOutput(
+              durableAssistantContent(activeTurn),
+              projection,
+            );
+            if (!hasRenderableOutput && !sink.getStreamError()) {
+              const failureMessage = 'AGI Cloud completed without returning a response.';
+              const activity = sink.getAgentActivity();
+              await this.persistAssistantTurn(
+                conversationId,
+                assistantMessageId,
+                durableAssistantContent(activeTurn),
+                model,
+                activity
+                  ? finishAgentActivityLocally(activity, {
+                      status: 'failed',
+                      completedAtMs: Date.now(),
+                      error: failureMessage,
+                      overrideTerminal: true,
+                    })
+                  : undefined,
+                activeTurn.runReference,
+                undefined,
+                failedMessageProjection(projection, failureMessage),
+              );
+              this.emit({
+                type: 'error',
+                error: `${failureMessage} Please retry.`,
+              });
+              return;
+            }
+            // Make the reply durable before the UI receives `done`, so an
+            // immediate navigation or reload cannot lose the completed turn.
+            await this.persistAssistantTurn(
               conversationId,
               assistantMessageId,
-              sink.getAccumulatedContent(),
+              durableAssistantContent(activeTurn),
               model,
               sink.getAgentActivity(),
               activeTurn.runReference,
               activeTurn.runReference ? null : undefined,
+              projection,
             );
           }
           const finishReason = sink.getFinishReason();
@@ -460,10 +732,10 @@ export class CloudRuntime implements ChatRuntime {
                 const message =
                   replayError instanceof Error ? replayError.message : String(replayError);
                 const activity = sink.getAgentActivity();
-                this.persistAssistantTurn(
+                void this.persistAssistantTurn(
                   conversationId,
                   assistantMessageId,
-                  sink.getAccumulatedContent(),
+                  durableAssistantContent(activeTurn),
                   model,
                   activity
                     ? finishAgentActivityLocally(activity, {
@@ -473,7 +745,18 @@ export class CloudRuntime implements ChatRuntime {
                       })
                     : undefined,
                   activeTurn.runReference,
-                );
+                  undefined,
+                  failedMessageProjection(sink.getMessageProjection(), message),
+                ).catch((persistenceError: unknown) => {
+                  this.emit({
+                    type: 'error',
+                    error: `The Cloud task failed and its failure state could not be saved: ${
+                      persistenceError instanceof Error
+                        ? persistenceError.message
+                        : String(persistenceError)
+                    }`,
+                  });
+                });
                 this.emit({ type: 'error', error: message });
               },
             );
@@ -482,10 +765,10 @@ export class CloudRuntime implements ChatRuntime {
           activeTurn.settled = true;
           this._activeTurns.delete(conversationId);
           const activity = sink.getAgentActivity();
-          this.persistAssistantTurn(
+          void this.persistAssistantTurn(
             conversationId,
             assistantMessageId,
-            sink.getAccumulatedContent(),
+            durableAssistantContent(activeTurn),
             model,
             activity
               ? finishAgentActivityLocally(activity, {
@@ -495,13 +778,24 @@ export class CloudRuntime implements ChatRuntime {
                 })
               : undefined,
             activeTurn.runReference,
-          );
+            undefined,
+            failedMessageProjection(sink.getMessageProjection(), err.message),
+          ).catch((persistenceError: unknown) => {
+            this.emit({
+              type: 'error',
+              error: `The Cloud task failed and its failure state could not be saved: ${
+                persistenceError instanceof Error
+                  ? persistenceError.message
+                  : String(persistenceError)
+              }`,
+            });
+          });
           this.emit({ type: 'error', error: err.message });
         },
         controller.signal,
         (payload) => this.onLiveEvent(activeTurn, payload),
         options?.webSearch,
-        options?.messageHistory,
+        requestHistory,
         options?.thinkingEnabled,
         options?.codeExecution,
         createManagedChatIdempotencyKey({
@@ -509,11 +803,12 @@ export class CloudRuntime implements ChatRuntime {
           purpose: 'send',
           operationId: userMessageId,
         }),
-        options?.research || options?.workMode || options?.skillName
+        options?.research || options?.workMode || options?.skillName || options?.effort
           ? {
               ...(options.research ? { research: true } : {}),
               ...(options.workMode ? { workMode: options.workMode } : {}),
               ...(options.skillName ? { skillName: options.skillName } : {}),
+              ...(options.effort ? { effort: options.effort } : {}),
             }
           : undefined,
         (handle: ManagedCloudAgentRunHandle | null) => {
@@ -536,10 +831,10 @@ export class CloudRuntime implements ChatRuntime {
           activeTurn.settled = true;
           this._activeTurns.delete(conversationId);
           const activity = sink.getAgentActivity();
-          this.persistAssistantTurn(
+          await this.persistAssistantTurn(
             conversationId,
             assistantMessageId,
-            sink.getAccumulatedContent(),
+            durableAssistantContent(activeTurn),
             model,
             activity
               ? finishAgentActivityLocally(activity, {
@@ -549,6 +844,8 @@ export class CloudRuntime implements ChatRuntime {
                 })
               : undefined,
             activeTurn.runReference,
+            undefined,
+            failedMessageProjection(sink.getMessageProjection(), message),
           );
           this.emit({ type: 'error', error: message });
         }
@@ -567,6 +864,7 @@ export class CloudRuntime implements ChatRuntime {
     toolCallId: string,
     decision: 'approved' | 'rejected',
   ): Promise<void> {
+    const boundary = this.requireBoundary();
     const controller = new AbortController();
     this._abortControllers.set(conversationId, controller);
     try {
@@ -579,33 +877,62 @@ export class CloudRuntime implements ChatRuntime {
         (err) => this.emit({ type: 'error', error: err.message }),
         controller.signal,
       );
+      this.assertBoundary(boundary);
       if (!outcome) {
         const projection = this._approvals.getTurnProjection(conversationId);
         if (projection?.assistantMessageId) {
-          this.persistAssistantTurn(
+          await this.persistAssistantTurn(
             conversationId,
             projection.assistantMessageId,
             projection.assistantContent,
             projection.model,
             projection.agentActivity,
             projection.runReference,
-            toPersistedApprovalProjection(projection),
+            toPersistedCloudApprovalProjection(projection),
+            projection.messageProjection,
           );
         }
       } else if (outcome.assistantMessageId) {
         // Update the SAME assistant message after a partial decision, a
         // repeated approval suspension, or the terminal continuation.
-        this.persistAssistantTurn(
+        const emptyTerminal =
+          !outcome.suspended &&
+          !hasRenderableCloudMessageOutput(outcome.content, outcome.messageProjection) &&
+          !outcome.streamError;
+        const failureMessage = 'AGI Cloud completed without returning a response.';
+        await this.persistAssistantTurn(
           conversationId,
           outcome.assistantMessageId,
           outcome.content,
           outcome.model,
-          outcome.agentActivity,
+          emptyTerminal && outcome.agentActivity
+            ? finishAgentActivityLocally(outcome.agentActivity, {
+                status: 'failed',
+                completedAtMs: Date.now(),
+                error: failureMessage,
+                overrideTerminal: true,
+              })
+            : outcome.agentActivity,
           outcome.runReference,
           outcome.pendingProjection
-            ? toPersistedApprovalProjection(outcome.pendingProjection)
+            ? toPersistedCloudApprovalProjection(outcome.pendingProjection)
             : null,
+          emptyTerminal
+            ? failedMessageProjection(outcome.messageProjection, failureMessage)
+            : outcome.messageProjection,
         );
+        if (emptyTerminal) {
+          this.emit({
+            type: 'error',
+            error: `${failureMessage} Please retry.`,
+          });
+          return;
+        }
+        this.emit({
+          type: 'done',
+          ...(outcome.finishReason ? { finishReason: outcome.finishReason } : {}),
+          ...(outcome.streamError ? { streamError: outcome.streamError } : {}),
+        });
       }
     } finally {
       this._abortControllers.delete(conversationId);
@@ -643,10 +970,10 @@ export class CloudRuntime implements ChatRuntime {
           });
       }
       const activity = activeTurn.sink.getAgentActivity();
-      this.persistAssistantTurn(
+      void this.persistAssistantTurn(
         conversationId,
         activeTurn.assistantMessageId,
-        activeTurn.sink.getAccumulatedContent(),
+        durableAssistantContent(activeTurn),
         activeTurn.model,
         activity
           ? finishAgentActivityLocally(activity, {
@@ -655,7 +982,19 @@ export class CloudRuntime implements ChatRuntime {
             })
           : undefined,
         activeTurn.runReference,
-      );
+        undefined,
+        {
+          ...activeTurn.sink.getMessageProjection(),
+          finishReason: 'stopped',
+        },
+      ).catch((persistenceError: unknown) => {
+        this.emit({
+          type: 'error',
+          error: `The Cloud task stopped, but its stopped state could not be saved: ${
+            persistenceError instanceof Error ? persistenceError.message : String(persistenceError)
+          }`,
+        });
+      });
     }
   }
 
@@ -664,6 +1003,7 @@ export class CloudRuntime implements ChatRuntime {
   // -------------------------------------------------------------------------
 
   onStream(callback: StreamCallback): () => void {
+    if (this._disposed) return () => undefined;
     this._streamCallbacks.add(callback);
     return () => this._streamCallbacks.delete(callback);
   }
@@ -673,13 +1013,11 @@ export class CloudRuntime implements ChatRuntime {
   // -------------------------------------------------------------------------
 
   async createConversation(title?: string): Promise<Conversation> {
-    const client = getDesktopCloudChatPersistenceClient();
+    const boundary = this.requireBoundary();
     // Client-supplied UUIDv7 so desktop knows the cloud id before the
     // round-trip completes (needed for the DCL-4 continuity proof).
-    const cloud = await client.createConversation({
-      id: uuidv7(),
-      title: title ?? 'New Conversation',
-    });
+    const cloud = await ensureCloudConversation(uuidv7(), title ?? 'New Conversation');
+    this.assertBoundary(boundary);
     if (import.meta.env.DEV) {
       // W5 stage-2 session labeling — additive, dev/test-only (see
       // ./sessionLabeling.ts module doc). Does not change what gets persisted
@@ -696,23 +1034,73 @@ export class CloudRuntime implements ChatRuntime {
       });
       desktopExecutionProfileFor('cloud_managed');
     }
-    return mapConversation(cloud);
+    return {
+      id: cloud.id,
+      title: cloud.title ?? 'New Conversation',
+      createdAt: cloud.created_at,
+      updatedAt: cloud.updated_at,
+      ...(cloud.model ? { model: cloud.model } : {}),
+      ...(cloud.project_id ? { projectId: cloud.project_id } : {}),
+      pinned: cloud.pinned,
+      archived: cloud.archived,
+    };
   }
 
   async deleteConversation(conversationId: string): Promise<void> {
-    await getDesktopCloudChatPersistenceClient().deleteConversation(conversationId);
+    const boundary = this.requireBoundary();
+    await deleteCloudConversation(conversationId);
+    this.assertBoundary(boundary);
   }
 
   async renameConversation(conversationId: string, title: string): Promise<void> {
-    await getDesktopCloudChatPersistenceClient().updateConversation(conversationId, { title });
+    const boundary = this.requireBoundary();
+    await updateCloudConversation(conversationId, { title });
+    this.assertBoundary(boundary);
+  }
+
+  async archiveConversation(
+    conversationId: string,
+    _userId?: string,
+    archived = true,
+  ): Promise<void> {
+    const boundary = this.requireBoundary();
+    await updateCloudConversation(conversationId, {
+      archived,
+      ...(archived ? { pinned: false } : {}),
+    });
+    this.assertBoundary(boundary);
   }
 
   // -------------------------------------------------------------------------
   // Conversation listing
   // -------------------------------------------------------------------------
 
+  private async loadAllCloudConversations(): Promise<ManagedCloudConversation[]> {
+    const boundary = this.requireBoundary();
+    const client = getDesktopCloudChatPersistenceClient();
+    const conversations: ManagedCloudConversation[] = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const page = await client.listConversations({ limit: 100, offset });
+      assertCloudConversationBoundary(boundary);
+      conversations.push(...page.conversations);
+      for (const conversation of page.conversations) {
+        markCloudConversationReady(conversation.id, boundary);
+      }
+      hasMore = page.hasMore;
+      offset = page.nextOffset;
+      if (hasMore && page.conversations.length === 0) {
+        throw new Error('AGI Cloud returned an invalid empty conversation page.');
+      }
+    }
+
+    return conversations;
+  }
+
   async listConversations(): Promise<{ id: string; title: string; updatedAt: string }[]> {
-    const { conversations } = await getDesktopCloudChatPersistenceClient().listConversations();
+    const conversations = await this.loadAllCloudConversations();
     return conversations.map((c) => ({
       id: c.id,
       title: c.title,
@@ -721,7 +1109,7 @@ export class CloudRuntime implements ChatRuntime {
   }
 
   async loadConversations(): Promise<Conversation[]> {
-    const { conversations } = await getDesktopCloudChatPersistenceClient().listConversations();
+    const conversations = await this.loadAllCloudConversations();
     return conversations.map(mapConversation);
   }
 
@@ -730,8 +1118,25 @@ export class CloudRuntime implements ChatRuntime {
   // -------------------------------------------------------------------------
 
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
-    const { messages } =
-      await getDesktopCloudChatPersistenceClient().getConversation(conversationId);
+    const boundary = this.requireBoundary();
+    await waitForCloudConversationReady(conversationId, boundary);
+    const client = getDesktopCloudChatPersistenceClient();
+    const messages: ManagedCloudMessage[] = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const page = await client.getConversation(conversationId, { limit: 100, offset });
+      assertCloudConversationBoundary(boundary);
+      markCloudConversationReady(page.conversation.id, boundary);
+      messages.push(...page.messages);
+      hasMore = page.hasMore;
+      offset += page.messages.length;
+      if (hasMore && page.messages.length === 0) {
+        throw new Error(`AGI Cloud conversation ${conversationId} returned an invalid empty page.`);
+      }
+    }
+
     return messages.map((m) => mapMessage(conversationId, m));
   }
 

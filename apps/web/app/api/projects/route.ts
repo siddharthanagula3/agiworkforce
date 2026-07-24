@@ -23,6 +23,11 @@ import {
 } from '@/lib/services/free-plan-entitlements';
 import { ManagedCloudProjectCreateRequestSchema } from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import {
+  ProjectConversationMembershipError,
+  replaceProjectConversationMembership,
+} from '@/lib/services/project-membership-service';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -66,6 +71,8 @@ async function handleGetProjects(request: NextRequest) {
 }
 
 async function handleCreateProject(request: NextRequest) {
+  const { userId } = await getClerkAuthUser(request);
+
   // CSRF protection for state-changing POST endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;
@@ -73,7 +80,6 @@ async function handleCreateProject(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
   let rawBody: unknown;
@@ -153,43 +159,52 @@ async function handleCreateProject(request: NextRequest) {
     };
   }
 
+  const insertProjectWithMembership = (includeRound10: boolean) =>
+    db.transaction(async (tx) => {
+      const { sql, params } = buildInsertSql(includeRound10);
+      const [inserted] = await tx.query<Record<string, unknown>>(sql, params);
+      if (!inserted || typeof inserted['id'] !== 'string') throw new Error('No row returned');
+      await replaceProjectConversationMembership(tx, {
+        userId,
+        projectId: inserted['id'],
+        conversationIds: body.conversationIds ?? [],
+      });
+      return inserted;
+    });
+
   let rowData: Record<string, unknown>;
   try {
-    const { sql, params } = buildInsertSql(hasRound10);
-    const [inserted] = await db.query<Record<string, unknown>>(sql, params);
-    if (!inserted) throw new Error('No row returned');
-    rowData = inserted;
-  } catch (firstError) {
-    if (isUserResourceLimitError(firstError)) {
+    try {
+      rowData = await insertProjectWithMembership(hasRound10);
+    } catch (error) {
+      if (
+        hasRound10 &&
+        error &&
+        typeof error === 'object' &&
+        (error as { code?: string }).code === PG_UNDEFINED_COLUMN
+      ) {
+        rowData = await insertProjectWithMembership(false);
+      } else {
+        throw error;
+      }
+    }
+  } catch (error) {
+    if (isUserResourceLimitError(error)) {
       throw createError.validation(getProjectLimitErrorMessage(planTier));
     }
-    if (
-      hasRound10 &&
-      firstError &&
-      typeof firstError === 'object' &&
-      (firstError as { code?: string }).code === PG_UNDEFINED_COLUMN
-    ) {
-      // Migration not yet applied · retry with only legacy fields
-      try {
-        const { sql, params } = buildInsertSql(false);
-        const [inserted] = await db.query<Record<string, unknown>>(sql, params);
-        if (!inserted) throw new Error('No row returned');
-        rowData = inserted;
-      } catch (retryError) {
-        if (isUserResourceLimitError(retryError)) {
-          throw createError.validation(getProjectLimitErrorMessage(planTier));
-        }
-        logger.error({ error: retryError, userId }, 'Failed to create project');
-        throw createError.internal('Failed to create project');
-      }
-    } else {
-      logger.error({ error: firstError, userId }, 'Failed to create project');
-      throw createError.internal('Failed to create project');
+    if (error instanceof ProjectConversationMembershipError) {
+      throw createError.validation(error.message);
     }
+    logger.error({ error, userId }, 'Failed to create project');
+    throw createError.internal('Failed to create project');
   }
 
   return NextResponse.json({ project: mapProjectRow(rowData) }, { status: 201 });
 }
 
-export const GET = withErrorHandler(handleGetProjects);
-export const POST = withErrorHandler(handleCreateProject);
+export const GET = withCorsRoute(withErrorHandler(handleGetProjects));
+export const POST = withCorsRoute(withErrorHandler(handleCreateProject));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -31,6 +32,7 @@ import type { V3Mode } from './DesktopShellV3';
 import { UpdatePill } from '../updates';
 import { AccountMenu } from './AccountMenu';
 import { AgiMark } from '@agiworkforce/ui';
+import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 
 // ─── recents grouping ────────────────────────────────────────────────────────
 
@@ -99,8 +101,13 @@ type NavItem = {
   beta?: boolean;
 };
 
-function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
+function navItemsForMode(
+  mode: V3Mode,
+  privacyMode: 'local' | 'byok' | 'managed',
+  t: TFunction,
+): NavItem[] {
   void mode;
+  if (privacyMode === 'managed') return [];
   // Projects moved to its own ChatGPT-style folder section below; the rest
   // stay as flat nav entries.
   return [
@@ -128,11 +135,15 @@ function projectAccent(project: Project, index: number): string {
 
 // ─── collapsed rail items ─────────────────────────────────────────────────────
 
-function railItems(t: TFunction): { id: string; icon: React.ElementType; title: string }[] {
-  return [
-    { id: 'projects', icon: FolderOpen, title: t('sidebar.nav.projects') },
-    { id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') },
-  ];
+function railItems(
+  privacyMode: 'local' | 'byok' | 'managed',
+  t: TFunction,
+): { id: string; icon: React.ElementType; title: string }[] {
+  const items = [{ id: 'projects', icon: FolderOpen, title: t('sidebar.nav.projects') }];
+  if (privacyMode !== 'managed') {
+    items.push({ id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') });
+  }
+  return items;
 }
 
 // ─── avatar initials helper ───────────────────────────────────────────────────
@@ -153,6 +164,7 @@ export interface SidebarProps {
   /** Start a new chat; pass a projectId to scope the new chat to a project. */
   onNewChat?: (projectId?: string) => void;
   onOpenSearch?: () => void;
+  onCreateProject?: () => void;
   onNavigateView?: (view: string) => void;
   onJumpConversation?: (id: string) => void;
   onOpenAccountMenu?: () => void;
@@ -163,6 +175,7 @@ export function Sidebar({
   mode,
   onNewChat,
   onOpenSearch,
+  onCreateProject,
   onNavigateView,
   onJumpConversation,
   onOpenAccountMenu,
@@ -184,18 +197,18 @@ export function Sidebar({
   const archiveConversation = useChatStore((s: ChatState) => s.archiveConversation);
   const projects = useProjectStore((s) => s.projects);
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
-  const loadProjects = useProjectStore((s) => s.loadProjects);
-  const createProject = useProjectStore((s) => s.createProject);
   const updateProject = useProjectStore((s) => s.updateProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);
   const archiveProject = useProjectStore((s) => s.archiveProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
+  const moveConversationToProject = useProjectStore((s) => s.moveConversationToProject);
   const user = useUnifiedAuthStore(selectUser);
   const planDisplayName = useUnifiedAuthStore(selectPlanDisplayName);
   const hasCloudAccountSession = useUnifiedAuthStore(selectHasCloudAccountSession);
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
   const isSignedIn = hasCloudAccountSession;
   const showAccountMenu = accountMenuOpen && isSignedIn;
+  const privacyMode = useAppModeStore(selectPrivacyMode);
 
   const groups = useMemo(() => groupConversations(conversations, t), [conversations, t]);
   const displayGroups = useMemo(() => {
@@ -215,8 +228,8 @@ export function Sidebar({
 
   const totalItems = useMemo(() => groups.reduce((n, g) => n + g.items.length, 0), [groups]);
 
-  const navItems = useMemo(() => navItemsForMode(mode, t), [mode, t]);
-  const RAIL_ITEMS = useMemo(() => railItems(t), [t]);
+  const navItems = useMemo(() => navItemsForMode(mode, privacyMode, t), [mode, privacyMode, t]);
+  const RAIL_ITEMS = useMemo(() => railItems(privacyMode, t), [privacyMode, t]);
 
   const handleNavClick = useCallback(
     (id: string) => {
@@ -231,27 +244,18 @@ export function Sidebar({
     [onNavigateView],
   );
 
-  useEffect(() => {
-    void loadProjects();
-  }, [loadProjects]);
-
   const visibleProjects = useMemo(
     () => projects.filter((p) => !p.isArchived).slice(0, 6),
     [projects],
   );
+  const moveTargetProjects = useMemo(
+    () => projects.filter((project) => !project.isArchived),
+    [projects],
+  );
 
   const handleCreateProject = useCallback(() => {
-    void createProject({
-      name: t('agiWork.projects.untitled'),
-      description: '',
-      customInstructions: '',
-      files: [],
-      conversationIds: [],
-      isArchived: false,
-    }).catch(() => {
-      /* errors are surfaced by the projects panel */
-    });
-  }, [createProject, t]);
+    onCreateProject?.();
+  }, [onCreateProject]);
 
   const handleOpenProject = useCallback(
     (id: string) => {
@@ -271,21 +275,27 @@ export function Sidebar({
 
   const handleRenameProject = useCallback(
     (id: string, name: string) => {
-      void updateProject(id, { name });
+      void updateProject(id, { name }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
     },
     [updateProject],
   );
 
   const handleDeleteProject = useCallback(
     (id: string) => {
-      void deleteProject(id);
+      void deleteProject(id).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
     },
     [deleteProject],
   );
 
   const handleArchiveProject = useCallback(
     (id: string) => {
-      void archiveProject(id);
+      void archiveProject(id).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
     },
     [archiveProject],
   );
@@ -297,6 +307,22 @@ export function Sidebar({
     }
     openSettings('account');
   }, [isSignedIn, onOpenAccountMenu, openSettings]);
+
+  const handleMoveConversation = useCallback(
+    (conversationId: string, projectId: string | null) => {
+      void moveConversationToProject(conversationId, projectId)
+        .then(() => {
+          const projectName = projectId
+            ? projects.find((project) => project.id === projectId)?.name
+            : null;
+          toast.success(projectName ? `Moved to ${projectName}` : 'Removed from project');
+        })
+        .catch((error) => {
+          toast.error(error instanceof Error ? error.message : String(error));
+        });
+    },
+    [moveConversationToProject, projects],
+  );
 
   const newLabel = t('sidebar.newChat');
 
@@ -594,6 +620,11 @@ export function Sidebar({
                   onDelete={deleteConversation}
                   onTogglePin={togglePinnedConversation}
                   onArchive={archiveConversation}
+                  projects={moveTargetProjects.map((project) => ({
+                    id: project.id,
+                    name: project.name,
+                  }))}
+                  onMoveToProject={handleMoveConversation}
                 />
               ))}
             </div>
