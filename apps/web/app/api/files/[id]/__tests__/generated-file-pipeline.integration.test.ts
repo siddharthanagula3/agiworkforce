@@ -24,8 +24,10 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/cors', () => ({
+  handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
+  withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {

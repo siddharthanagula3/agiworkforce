@@ -31,6 +31,7 @@ import {
   VIDEO_MODEL_ID,
   VIDEO_PROVIDER_ID,
 } from '@/features/media/model-options';
+import { canUseBillingPlanCapability } from '@agiworkforce/types';
 
 const imageSizes: { id: ImageSizeId; label: string; ratio: string }[] = [
   { id: 'large', label: 'Square', ratio: '1:1' },
@@ -56,8 +57,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [tab, setTab] = useState<'image' | 'video'>('image');
   const [imagePrompt, setImagePrompt] = useState('');
   const [imageNegative, setImageNegative] = useState('');
-  const [imageProvider, setImageProvider] =
-    useState<ImageProviderId>(DEFAULT_IMAGE_PROVIDER_ID);
+  const [imageProvider, setImageProvider] = useState<ImageProviderId>(DEFAULT_IMAGE_PROVIDER_ID);
   const [imageSize, setImageSize] = useState<ImageSizeId>('large');
   const [imageQuality, setImageQuality] = useState<ImageQualityId>('premium');
   const [imageStyle, setImageStyle] = useState('photorealistic');
@@ -84,10 +84,10 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const subscription = useBillingStore((state) => state.subscription);
   const plan = subscription?.plan_name?.toLowerCase() ?? 'free';
   const mediaLabAllowed = useMemo(
-    () => ['pro', 'max', 'enterprise'].some((flag) => plan.includes(flag)),
+    () => canUseBillingPlanCapability(plan, 'image_generation'),
     [plan],
   );
-  const videoAllowed = mediaLabAllowed;
+  const videoAllowed = useMemo(() => canUseBillingPlanCapability(plan, 'video_generation'), [plan]);
 
   const latestImages = imageJobs.filter((job) => job.status === 'completed' && job.images.length);
   const latestVideos = videoJobs.filter((job) => job.status !== 'failed');

@@ -18,7 +18,9 @@ describe('shared device authorization client', () => {
 
     const result = await requestDeviceAuthorization('https://agiworkforce.com/path', post);
 
-    expect(post).toHaveBeenCalledWith('https://agiworkforce.com/api/auth/device/code', {});
+    expect(post).toHaveBeenCalledWith('https://agiworkforce.com/api/auth/device/code', {
+      surface: 'cli',
+    });
     expect(result).toEqual({
       deviceCode: '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
       userCode: 'ABCD-2345',

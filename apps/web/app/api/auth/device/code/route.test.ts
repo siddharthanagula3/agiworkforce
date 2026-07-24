@@ -41,7 +41,7 @@ describe('POST /api/auth/device/code', () => {
       verification_uri_complete: string;
     };
     expect(body.verification_uri_complete).toBe(
-      `https://agiworkforce.com/auth/device?user_code=${encodeURIComponent(body.user_code)}`,
+      `https://agiworkforce.com/auth/device?user_code=${encodeURIComponent(body.user_code)}&surface=cli`,
     );
     expect(body.verification_uri_complete).not.toContain('?code=');
   });

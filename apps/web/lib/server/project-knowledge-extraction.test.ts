@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storageMocks = vi.hoisted(() => ({
   getObject: vi.fn(),
-  objectKeyFromPublicUrl: vi.fn(),
+  objectKeyFromStorageUri: vi.fn(),
 }));
 const pdfMocks = vi.hoisted(() => ({ getDocument: vi.fn() }));
 
@@ -18,7 +18,7 @@ function checksum(data: Buffer): string {
 
 describe('extractProjectKnowledgeFile', () => {
   beforeEach(() => {
-    storageMocks.objectKeyFromPublicUrl.mockReturnValue(
+    storageMocks.objectKeyFromStorageUri.mockReturnValue(
       'knowledge-files/projects/project-1/object.txt',
     );
   });
@@ -44,7 +44,7 @@ describe('extractProjectKnowledgeFile', () => {
   });
 
   it('rejects a URL that is not a configured project object without fetching it', async () => {
-    storageMocks.objectKeyFromPublicUrl.mockReturnValue(null);
+    storageMocks.objectKeyFromStorageUri.mockReturnValue(null);
 
     await expect(
       extractProjectKnowledgeFile({
@@ -112,7 +112,7 @@ describe('extractProjectKnowledgeFile', () => {
 
   it('extracts bounded page text from a real PDF-shaped object', async () => {
     const data = Buffer.from('%PDF-1.7\nfixture');
-    storageMocks.objectKeyFromPublicUrl.mockReturnValue(
+    storageMocks.objectKeyFromStorageUri.mockReturnValue(
       'knowledge-files/projects/project-1/object.pdf',
     );
     storageMocks.getObject.mockResolvedValue({ data, contentType: 'application/pdf' });

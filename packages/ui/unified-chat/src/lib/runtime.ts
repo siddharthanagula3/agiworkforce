@@ -1,12 +1,43 @@
 import type {
+  Attachment,
   Artifact,
   ChatMessage,
   Conversation,
   GeneratedFileEntry,
+  ToolCall,
   WebSearchResult,
 } from './types';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
+
+/** Durable transcript fields accumulated across a managed Cloud stream. */
+export interface CloudMessageProjection {
+  /** Durable terminal marker used by Continue Generation after reload. */
+  finishReason?: string;
+  /** Durable provider-stream failure marker used by the retry notice after reload. */
+  streamError?: { message: string; code?: string; retryable?: boolean };
+  thinking?: string;
+  toolCalls?: ToolCall[];
+  webSearchResults?: WebSearchResult[];
+  generatedFiles?: GeneratedFileEntry[];
+  artifacts?: Artifact[];
+  codeExecutionResult?: {
+    stdout: string;
+    stderr: string;
+    returnCode: number;
+    images?: Array<{ mediaType: string; data: string }>;
+  };
+  research?: {
+    phase: 'planning' | 'searching' | 'synthesizing' | 'complete' | 'error';
+    label?: string;
+    iteration?: number;
+    maxIterations?: number;
+    searches?: number;
+    sources?: number;
+    elapsedMs?: number;
+    error?: string;
+  };
+}
 
 export interface CloudApprovalTurnProjection {
   assistantMessageId: string;
@@ -27,6 +58,8 @@ export interface CloudApprovalTurnProjection {
     decision?: 'approved' | 'rejected';
   }>;
   agentActivity?: AgentActivityState;
+  /** Rich fields already persisted on the suspended assistant message. */
+  messageProjection?: CloudMessageProjection;
 }
 import type { CloudWorkMode } from '@agiworkforce/types';
 
@@ -76,8 +109,21 @@ export interface ChatRuntime {
   /** Subscribe to streaming events. Returns an unsubscribe function. */
   onStream?(callback: StreamCallback): () => void;
 
+  /**
+   * Release runtime-owned requests, subscriptions, and other resources.
+   *
+   * Hosts call this before replacing a runtime or tearing down its trust
+   * boundary (for example, when an authenticated Cloud session signs out).
+   * Implementations must be idempotent and must not emit new UI events after
+   * disposal.
+   */
+  dispose?(): void | Promise<void>;
+
   /** Upload a file attachment, returning a FileRef. */
   uploadFile?(file: File): Promise<FileRef>;
+
+  /** Optional stricter attachment policy for the active trust boundary. */
+  attachmentPolicy?: ChatAttachmentPolicy;
 
   /** Returns the current platform identifier. */
   getPlatform?(): 'desktop' | 'web' | 'mobile';
@@ -121,6 +167,14 @@ export interface ChatRuntime {
    * preserved without consulting Cloud state.
    */
   supportsManagedWebSearch?: boolean;
+
+  /**
+   * True when `SendMessageOptions.agentMode` reaches an enforcement boundary
+   * that honors Ask/Auto/Plan/Bypass. Managed Cloud owns approval policy on the
+   * server and must leave this false so the composer never advertises a local
+   * permission control that the request schema intentionally ignores.
+   */
+  supportsAgentControl?: boolean;
 
   /**
    * Resolve one pending tool-approval request from an `x_tool_approval_request`
@@ -174,6 +228,14 @@ export interface ChatRuntime {
   getArtifactVersions?(current: Artifact): Promise<Artifact[]>;
 }
 
+export interface ChatAttachmentPolicy {
+  accept: string;
+  maxFiles: number;
+  maxTotalBytes: number;
+  /** Return a user-facing rejection reason, or null when accepted. */
+  validate(file: File): string | null;
+}
+
 export interface SendMessageOptions {
   model?: string;
   provider?: string;
@@ -186,11 +248,28 @@ export interface SendMessageOptions {
   workMode?: CloudWorkMode;
   /** Exact Managed Cloud catalog name; clients never resolve or send the skill body. */
   skillName?: string;
+  /**
+   * Owned managed-project scope selected by the composer. Cloud runtimes must
+   * persist this relationship before generation; Local runtimes may use it
+   * only as local project context.
+   */
+  projectId?: string | null;
   codeExecution?: boolean;
   signal?: AbortSignal;
   systemPrompt?: string;
   /** Full conversation message history for multi-turn context. */
-  messageHistory?: Array<{ role: string; content: string }>;
+  messageHistory?: Array<{
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    attachments?: Attachment[];
+  }>;
+  /**
+   * True only for Continue Generation. The runtime must not persist the
+   * request-only continuation instruction as a new user message.
+   */
+  isContinuation?: boolean;
+  /** Existing assistant row that Continue Generation appends to. */
+  continuationMessageId?: string;
   /**
    * Agent operating mode forwarded to the backend.
    * Maps to apps/desktop/src-tauri/src/tools.rs plan_mode gate.

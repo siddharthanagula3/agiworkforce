@@ -97,6 +97,18 @@ describe('useChat durable tool approval projection', () => {
             decision: 'approved',
           },
         ],
+        messageProjection: {
+          toolCalls: [
+            {
+              id: 'call_1',
+              name: 'read_file',
+              args: { path: '/README.md' },
+              status: 'awaiting_approval',
+              requiresApproval: true,
+              approvalDecision: 'approved',
+            },
+          ],
+        },
       }),
     );
   });

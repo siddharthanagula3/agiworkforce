@@ -143,9 +143,12 @@ export function cleanupAllStoresOnLogout(): void {
     const modelStore = useModelStore.getState();
     modelStore.reset();
 
-    // Project store - we don't reset since projects are local
-    // but clear active project selection
+    // Project state can belong to either the local device or the signed-in
+    // Cloud account. Clear the in-memory/persisted projection on logout; Local
+    // projects are canonical in the native database and hydrate again when the
+    // user returns to Local mode.
     useProjectStore.setState({
+      projects: [],
       activeProjectId: null,
       isLoading: false,
       error: null,
@@ -192,6 +195,7 @@ export function clearPersistedUserData(): void {
   const keysToRemove = [
     'unified-chat-storage',
     'chat-storage',
+    'agi-web-chat',
     'unified-auth-storage',
     'agiworkforce-agent-tasks',
     'billing-usage-store',

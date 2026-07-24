@@ -18,6 +18,7 @@ function suspendedSink(
     getAccumulatedContent: () => 'Before approval.',
     getPendingApprovalCalls: () => calls,
     getAgentActivity: () => undefined,
+    getMessageProjection: () => ({}),
   };
 }
 
@@ -27,6 +28,7 @@ function completedSink() {
     getAccumulatedContent: () => 'done',
     getPendingApprovalCalls: () => [],
     getAgentActivity: () => undefined,
+    getMessageProjection: () => ({}),
   };
 }
 

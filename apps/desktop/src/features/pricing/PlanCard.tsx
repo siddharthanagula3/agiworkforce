@@ -20,11 +20,8 @@ interface TierContent {
   ctaVariant: 'primary' | 'current';
 }
 
-// Partial: only the tiers actually shown as desktop plan cards need static content here
-// (PlansModal's VISIBLE_TIERS filters by isPlanSelectableOnSurface(..., 'desktop')). The
-// UIPlanTier union also carries tiers that never render a desktop card (e.g. free,
-// enterprise, team, max_15x); PlanCard null-guards a missing entry rather than requiring
-// invented copy for tiers that aren't shown.
+// Partial: only the tiers actually shown as desktop plan cards need static
+// content here. Enterprise and Team stay sales/admin-led.
 const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   local: {
     price: 'Free forever',
@@ -35,6 +32,17 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
       'Unlimited local conversations',
     ],
     ctaLabel: 'Current plan',
+    ctaVariant: 'current',
+  },
+  free: {
+    price: '$0 / mo',
+    bullets: [
+      'Managed Cloud starter usage',
+      'Cross-device chat sync',
+      'One Cloud project',
+      'Upgrade only when you need more capacity',
+    ],
+    ctaLabel: 'Included',
     ctaVariant: 'current',
   },
   byok: {
@@ -54,7 +62,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     price: `$${getPlanPriceUsd('basic', 'monthly')} / mo`,
     bullets: [
       'Managed cloud entry tier',
-      'Access to flagship models',
+      'Speed-optimized managed models',
       'Cross-device sync (desktop + mobile + web)',
       'Priority bug reports',
     ],
@@ -66,9 +74,9 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     priceNote: `$${getPlanPriceUsd('pro', 'yearly')} / yr on annual billing`,
     bullets: [
       'Higher token quota',
+      'AGI Work and developer surfaces',
+      'Image generation',
       'Advanced agent features',
-      'Priority support',
-      'Early access to new providers',
     ],
     ctaLabel: 'Upgrade to Pro',
     ctaVariant: 'primary',
@@ -76,12 +84,23 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   max: {
     price: `$${getPlanPriceUsd('max', 'monthly')} / mo`,
     bullets: [
-      'Unlimited managed tokens',
+      '5x managed usage capacity',
       'Every flagship model included',
-      'Enterprise-grade audit logging',
-      'Dedicated Slack channel',
+      'Advanced agents and research',
+      'Priority support',
     ],
     ctaLabel: 'Upgrade to Max',
+    ctaVariant: 'primary',
+  },
+  max_15x: {
+    price: `$${getPlanPriceUsd('max_15x', 'monthly')} / mo`,
+    bullets: [
+      '15x managed usage capacity',
+      'Highest individual usage limits',
+      'Every flagship model included',
+      'Video generation access',
+    ],
+    ctaLabel: 'Upgrade to Max 15x',
     ctaVariant: 'primary',
   },
 };
@@ -94,6 +113,8 @@ export interface PlanCardProps {
   tier: UIPlanTier;
   /** Whether this is the user's currently active plan. */
   isCurrentPlan: boolean;
+  /** A paid tier below the active tier is changed through Stripe Billing. */
+  isLowerPaidTier?: boolean;
   /** Called when the user clicks the CTA. */
   onCtaClick: (tier: UIPlanTier) => void;
 }
@@ -102,7 +123,12 @@ export interface PlanCardProps {
 // PlanCard
 // ---------------------------------------------------------------------------
 
-export function PlanCard({ tier, isCurrentPlan, onCtaClick }: PlanCardProps) {
+export function PlanCard({
+  tier,
+  isCurrentPlan,
+  isLowerPaidTier = false,
+  onCtaClick,
+}: PlanCardProps) {
   const content = TIER_CONTENT[tier];
   // Tiers without desktop card content are filtered out of VISIBLE_TIERS upstream; guard
   // anyway so an unexpected tier renders nothing instead of crashing on content.price.
@@ -163,7 +189,16 @@ export function PlanCard({ tier, isCurrentPlan, onCtaClick }: PlanCardProps) {
       <PlanCardCta
         tier={tier}
         variant={isCurrentPlan ? 'current' : content.ctaVariant}
-        label={isCurrentPlan ? 'Current plan' : content.ctaLabel}
+        label={
+          isCurrentPlan
+            ? 'Current plan'
+            : isLowerPaidTier
+              ? 'Manage plan'
+              : isFree
+                ? 'Included'
+                : content.ctaLabel
+        }
+        isLowerPaidTier={isLowerPaidTier}
         onCtaClick={onCtaClick}
       />
     </div>
@@ -178,10 +213,11 @@ interface PlanCardCtaProps {
   tier: UIPlanTier;
   variant: TierContent['ctaVariant'];
   label: string;
+  isLowerPaidTier: boolean;
   onCtaClick: (tier: UIPlanTier) => void;
 }
 
-function PlanCardCta({ tier, variant, label, onCtaClick }: PlanCardCtaProps) {
+function PlanCardCta({ tier, variant, label, isLowerPaidTier, onCtaClick }: PlanCardCtaProps) {
   const base =
     'flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -193,14 +229,18 @@ function PlanCardCta({ tier, variant, label, onCtaClick }: PlanCardCtaProps) {
     );
   }
 
-  // primary (Upgrade to Pro / Max) — opens the web pricing page in the browser
   return (
     <button
       type="button"
       onClick={() => onCtaClick(tier)}
-      className={cn(base, 'bg-blue-600 text-white hover:bg-blue-700')}
+      className={cn(
+        base,
+        isLowerPaidTier
+          ? 'border border-border bg-card text-foreground hover:bg-muted'
+          : 'bg-blue-600 text-white hover:bg-blue-700',
+      )}
     >
-      <Zap size={12} aria-hidden="true" />
+      {!isLowerPaidTier ? <Zap size={12} aria-hidden="true" /> : null}
       {label}
     </button>
   );

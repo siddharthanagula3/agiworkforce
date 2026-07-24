@@ -105,10 +105,10 @@ describe('modelStore', () => {
       const store = useModelStore.getState();
       await store.selectModel('invalid-model', 'openai');
 
-      // The model tier guard blocks unknown models and falls back to auto-economy
+      // The model tier guard blocks unknown models and falls back to canonical Auto.
       // This is the expected behavior — the store handles it gracefully without throwing
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('auto-economy');
+      expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
     });
 
@@ -122,13 +122,13 @@ describe('modelStore', () => {
       await store.selectModel('gpt-5.6-sol', 'openai');
 
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('auto-economy');
+      expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
     });
   });
 
   describe('tier restrictions', () => {
-    it('should allow current pro additions on pro, max, and enterprise tiers', async () => {
+    it('should allow Pro additions on Team and every higher individual tier', async () => {
       const { getAllowedModelsForTier, isModelAllowedForTier } = await import('../constants/llm');
       const basicModels = new Set(getAllowedModelsForTier('basic'));
       const proModel = getAllowedModelsForTier('pro').find((modelId) => !basicModels.has(modelId));
@@ -136,8 +136,22 @@ describe('modelStore', () => {
 
       expect(isModelAllowedForTier(proModel!, 'free')).toBe(false);
       expect(isModelAllowedForTier(proModel!, 'pro')).toBe(true);
+      expect(isModelAllowedForTier(proModel!, 'team')).toBe(true);
       expect(isModelAllowedForTier(proModel!, 'max')).toBe(true);
+      expect(isModelAllowedForTier(proModel!, 'max_15x')).toBe(true);
       expect(isModelAllowedForTier(proModel!, 'enterprise')).toBe(true);
+    });
+
+    it('keeps Team on Pro model access while Max 15x inherits the flagship roster', async () => {
+      const { getAllowedModelsForTier, isModelAllowedForTier } = await import('../constants/llm');
+      const proModels = new Set(getAllowedModelsForTier('pro'));
+      const flagshipModel = getAllowedModelsForTier('max').find(
+        (modelId) => !proModels.has(modelId),
+      );
+      expect(flagshipModel).toBeDefined();
+
+      expect(isModelAllowedForTier(flagshipModel!, 'team')).toBe(false);
+      expect(isModelAllowedForTier(flagshipModel!, 'max_15x')).toBe(true);
     });
 
     it('should deny unknown phantom model ids on every managed-cloud tier', async () => {
@@ -163,7 +177,7 @@ describe('modelStore', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('auto-economy');
+      expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
     });
   });
@@ -352,7 +366,7 @@ describe('modelStore', () => {
       store.reset();
 
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('auto-economy');
+      expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
       expect(state.favorites).toEqual([]);
       expect(state.recentModels).toEqual([]);
@@ -703,6 +717,8 @@ describe('mediaGenerationStore', () => {
 describe('unifiedChatStore - Extended Tests', () => {
   beforeEach(async () => {
     const { useUnifiedChatStore } = await import('../stores/unifiedChatStore');
+    const { useAppModeStore } = await import('../stores/appModeStore');
+    useAppModeStore.setState({ mode: 'local' });
     useUnifiedChatStore.setState({
       conversations: [],
       activeConversationId: null,

@@ -8,6 +8,7 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { toast } from 'sonner';
 import { invoke } from '../../lib/tauri-mock';
 import { getModelContextWindow } from '../../constants/llm';
 import { safeGetJSON, safeSetJSON, storageFallback } from '../../utils/localStorage';
@@ -18,8 +19,9 @@ import { useModelStore } from '../modelStore';
 import { registerChatStoreStateReader } from './chatStoreRef';
 import {
   getCloudConversations,
-  createCloudConversation,
   deleteCloudConversation,
+  ensureCloudConversation,
+  updateCloudConversation,
   updateCloudConversationTitle,
   getCloudMessages,
 } from '../../services/cloudChat';
@@ -67,6 +69,25 @@ export type {
 
 function isCloudMode(): boolean {
   return useAppModeStore.getState().mode === 'cloud';
+}
+
+let conversationLoadGeneration = 0;
+let messageLoadGeneration = 0;
+
+function isCurrentCloudAccount(userId: string): boolean {
+  const auth = useUnifiedAuthStore.getState();
+  return isCloudMode() && auth.isAuthenticated && !!auth.accessToken && auth.user?.id === userId;
+}
+
+export const LOCAL_DESKTOP_USER_ID = 'local-desktop-user';
+
+/**
+ * Resolve the owner used by the native Local/BYOK conversation database.
+ * Managed Cloud never uses this fallback; its shared client requires the
+ * authenticated tenant identity at the network boundary.
+ */
+export function resolveDesktopChatOwnerId(): string {
+  return useUnifiedAuthStore.getState().user?.id ?? LOCAL_DESKTOP_USER_ID;
 }
 
 function defaultConversationExecutionMode(): ChatExecutionMode {
@@ -289,7 +310,7 @@ export interface ChatMessageState {
     limit?: number,
     conversationId?: number,
   ) => Promise<ConversationSearchResult[]>;
-  getRecentConversations: (limit?: number) => Promise<ConversationSearchResult[]>;
+  getRecentConversations: (limit?: number) => Promise<RecentConversationSearchResult[]>;
   exportConversationFromBackend: (
     conversationDbId: number,
     format?: string,
@@ -332,6 +353,14 @@ export interface ConversationSearchResult {
   lastUpdated: string;
   snippet?: string;
   score?: number;
+}
+
+export interface RecentConversationSearchResult {
+  conversationId: string | number;
+  title: string;
+  messageCount: number;
+  lastUpdated: string;
+  snippet?: string;
 }
 
 export interface BackendConversationStats {
@@ -419,48 +448,35 @@ export const useChatMessageStore = create<ChatMessageState>()(
                 state.conversations.unshift(convo);
 
                 if (isCloudMode()) {
-                  createCloudConversation(title)
-                    .then((cloudConvo) => {
-                      set(
-                        (s) => {
-                          const idx = s.conversations.findIndex((c) => c.id === id);
-                          if (idx !== -1) s.conversations[idx]!.id = cloudConvo.id;
-                          if (s.messagesByConversation[id]) {
-                            s.messagesByConversation[cloudConvo.id] = s.messagesByConversation[id]!;
-                            delete s.messagesByConversation[id];
-                          }
-                          if (s.activeConversationId === id) s.activeConversationId = cloudConvo.id;
-                        },
-                        undefined,
-                        'chat/createConversation/cloud/remap',
-                      );
-                    })
-                    .catch((error) => {
-                      console.error('[ChatStore] Failed to create cloud conversation:', error);
-                      set(
-                        (s) => {
-                          // DESKTOP-CLOUDROLLBACK-01: only discard the optimistic
-                          // conversation if it holds NO user data. If the user already
-                          // sent a message into it, deleting it here SILENTLY LOSES that
-                          // message. Preserve it locally instead (it keeps the same
-                          // local-id/cloud-mode state it already had during the optimistic
-                          // window); the message send's own failure is surfaced by the
-                          // normal message-error path, so the user is not left with a
-                          // vanished message and no feedback.
-                          const hasUserData = (s.messagesByConversation[id]?.length ?? 0) > 0;
-                          if (hasUserData) return;
-                          s.conversations = s.conversations.filter((c) => c.id !== id);
-                          delete s.messagesByConversation[id];
-                          if (s.activeConversationId === id) {
-                            const next = s.conversations[0];
-                            s.activeConversationId = next ? next.id : null;
-                            s.messages = next ? (s.messagesByConversation[next.id] ?? []) : [];
-                          }
-                        },
-                        undefined,
-                        'chat/createConversation/cloud/rollback',
-                      );
-                    });
+                  // The managed API accepts the client UUID. Keeping one id
+                  // removes the create/send race and avoids remapping UI state
+                  // while the user is already typing.
+                  ensureCloudConversation(id, title).catch((error) => {
+                    console.error('[ChatStore] Failed to create cloud conversation:', error);
+                    set(
+                      (s) => {
+                        // DESKTOP-CLOUDROLLBACK-01: only discard the optimistic
+                        // conversation if it holds NO user data. If the user already
+                        // sent a message into it, deleting it here SILENTLY LOSES that
+                        // message. Preserve it locally instead (it keeps the same
+                        // cloud id it already had during the optimistic window);
+                        // the message send's own failure is surfaced by the
+                        // normal message-error path, so the user is not left with a
+                        // vanished message and no feedback.
+                        const hasUserData = (s.messagesByConversation[id]?.length ?? 0) > 0;
+                        if (hasUserData) return;
+                        s.conversations = s.conversations.filter((c) => c.id !== id);
+                        delete s.messagesByConversation[id];
+                        if (s.activeConversationId === id) {
+                          const next = s.conversations[0];
+                          s.activeConversationId = next ? next.id : null;
+                          s.messages = next ? (s.messagesByConversation[next.id] ?? []) : [];
+                        }
+                      },
+                      undefined,
+                      'chat/createConversation/cloud/rollback',
+                    );
+                  });
                 }
 
                 if (state.conversations.length > 500) {
@@ -573,6 +589,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
             ),
 
           loadConversations: async (userId: string) => {
+            const generation = ++conversationLoadGeneration;
             if (!userId) {
               console.warn('[ChatStore] loadConversations called without userId');
               return;
@@ -580,10 +597,16 @@ export const useChatMessageStore = create<ChatMessageState>()(
             if (isCloudMode()) {
               try {
                 const cloudConversations = await getCloudConversations();
+                if (generation !== conversationLoadGeneration || !isCurrentCloudAccount(userId)) {
+                  return;
+                }
                 const converted: ConversationSummary[] = cloudConversations.map((c) => ({
                   id: c.id,
                   title: c.title ?? 'Untitled',
-                  pinned: false,
+                  pinned: c.pinned,
+                  archived: c.archived,
+                  projectId: c.project_id ?? undefined,
+                  modelOverride: c.model ?? undefined,
                   lastMessage: '',
                   updatedAt: new Date(c.updated_at),
                   createdAt: new Date(c.created_at),
@@ -601,14 +624,18 @@ export const useChatMessageStore = create<ChatMessageState>()(
                 );
               } catch (error) {
                 console.error('[ChatStore] Failed to load cloud conversations:', error);
+                throw error instanceof Error
+                  ? error
+                  : new Error('Could not load your Managed Cloud conversations.');
               }
               return;
             }
             try {
               const backendConversations = await invoke<BackendConversation[]>(
                 'chat_get_conversations',
-                { userId },
+                { userId, appMode: 'local' },
               );
+              if (generation !== conversationLoadGeneration || isCloudMode()) return;
               const converted = backendConversations.map(convertBackendConversation);
               set(
                 (state) => {
@@ -628,10 +655,18 @@ export const useChatMessageStore = create<ChatMessageState>()(
           },
 
           loadConversationMessages: async (id: string, userId: string) => {
+            const generation = ++messageLoadGeneration;
             if (isCloudMode()) {
               useChatExecutionStore.setState({ isLoadingMessages: true });
               try {
                 const cloudMessages = await getCloudMessages(id);
+                if (generation !== messageLoadGeneration) {
+                  return;
+                }
+                if (!isCurrentCloudAccount(userId)) {
+                  useChatExecutionStore.setState({ isLoadingMessages: false });
+                  return;
+                }
                 const enhancedMessages: EnhancedMessage[] = cloudMessages.map((m) => ({
                   id: m.id,
                   role: m.role as 'user' | 'assistant' | 'system',
@@ -642,6 +677,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                     provider: m.provider ?? undefined,
                     tokenCount: m.token_count ?? undefined,
                     cost: m.cost ?? undefined,
+                    ...(m.metadata ?? {}),
                   },
                 }));
                 set(
@@ -656,6 +692,9 @@ export const useChatMessageStore = create<ChatMessageState>()(
               } catch (error) {
                 console.error('[ChatStore] Failed to load cloud messages:', error);
                 useChatExecutionStore.setState({ isLoadingMessages: false });
+                throw error instanceof Error
+                  ? error
+                  : new Error('Could not load this Managed Cloud conversation.');
               }
               return;
             }
@@ -671,6 +710,11 @@ export const useChatMessageStore = create<ChatMessageState>()(
                 conversationId: dbId,
                 userId,
               });
+              if (generation !== messageLoadGeneration) return;
+              if (isCloudMode()) {
+                useChatExecutionStore.setState({ isLoadingMessages: false });
+                return;
+              }
               const enhancedMessages = backendMessages.map(convertBackendMessage);
               set(
                 (s) => {
@@ -700,6 +744,9 @@ export const useChatMessageStore = create<ChatMessageState>()(
 
           renameConversation: (id: string, title: string) => {
             const trimmed = title.trim();
+            const previousTitle = get().conversations.find(
+              (conversation) => conversation.id === id,
+            )?.title;
             set(
               (state) => {
                 const convo = state.conversations.find((c) => c.id === id);
@@ -719,13 +766,27 @@ export const useChatMessageStore = create<ChatMessageState>()(
             if (isCloudMode()) {
               updateCloudConversationTitle(id, trimmed).catch((error) => {
                 console.error('[ChatStore] Failed to rename cloud conversation:', error);
+                set(
+                  (state) => {
+                    const conversation = state.conversations.find(
+                      (candidate) => candidate.id === id,
+                    );
+                    if (conversation?.title === trimmed && previousTitle) {
+                      conversation.title = previousTitle;
+                    }
+                  },
+                  undefined,
+                  'chat/renameConversation/cloud/rollback',
+                );
+                toast.error(
+                  error instanceof Error ? error.message : 'Could not rename this Cloud chat.',
+                );
               });
               return;
             }
             const dbId = uuidToDbId(id);
             if (dbId === undefined) return;
-            const userId = useUnifiedAuthStore.getState().user?.id ?? '';
-            if (!userId) return;
+            const userId = resolveDesktopChatOwnerId();
             void invoke('chat_update_conversation_title', {
               conversationId: dbId,
               userId,
@@ -756,66 +817,105 @@ export const useChatMessageStore = create<ChatMessageState>()(
           },
 
           deleteConversation: (id: string) => {
-            set(
-              (state) => {
-                const msgs = state.messagesByConversation[id];
-                if (msgs) {
-                  for (const msg of msgs) {
-                    const timeline = useChatExecutionStore.getState().toolTimelineByMessage;
-                    if (timeline[msg.id]) {
-                      const next = { ...timeline };
-                      delete next[msg.id];
-                      useChatExecutionStore.setState({ toolTimelineByMessage: next });
-                    }
-                    const thinking = useChatExecutionStore.getState().thinkingByMessage;
-                    if (thinking[msg.id]) {
-                      const next = { ...thinking };
-                      delete next[msg.id];
-                      useChatExecutionStore.setState({ thinkingByMessage: next });
+            const removeFromState = () => {
+              set(
+                (state) => {
+                  const msgs = state.messagesByConversation[id];
+                  if (msgs) {
+                    for (const msg of msgs) {
+                      const timeline = useChatExecutionStore.getState().toolTimelineByMessage;
+                      if (timeline[msg.id]) {
+                        const next = { ...timeline };
+                        delete next[msg.id];
+                        useChatExecutionStore.setState({ toolTimelineByMessage: next });
+                      }
+                      const thinking = useChatExecutionStore.getState().thinkingByMessage;
+                      if (thinking[msg.id]) {
+                        const next = { ...thinking };
+                        delete next[msg.id];
+                        useChatExecutionStore.setState({ thinkingByMessage: next });
+                      }
                     }
                   }
-                }
-                state.conversations = state.conversations.filter((c) => c.id !== id);
-                delete state.messagesByConversation[id];
-                if (state.activeConversationId === id) {
-                  const next = state.conversations[0];
-                  state.activeConversationId = next ? next.id : null;
-                  state.messages = next ? (state.messagesByConversation[next.id] ?? []) : [];
-                }
-              },
-              undefined,
-              'chat/deleteConversation',
-            );
+                  state.conversations = state.conversations.filter((c) => c.id !== id);
+                  delete state.messagesByConversation[id];
+                  if (state.activeConversationId === id) {
+                    const next = state.conversations[0];
+                    state.activeConversationId = next ? next.id : null;
+                    state.messages = next ? (state.messagesByConversation[next.id] ?? []) : [];
+                  }
+                },
+                undefined,
+                'chat/deleteConversation',
+              );
+            };
             if (isCloudMode()) {
-              deleteCloudConversation(id).catch((error) => {
-                console.error('[ChatStore] Failed to delete cloud conversation:', error);
-              });
+              void deleteCloudConversation(id)
+                .then(removeFromState)
+                .catch((error) => {
+                  console.error('[ChatStore] Failed to delete cloud conversation:', error);
+                  toast.error(
+                    error instanceof Error ? error.message : 'Could not delete this Cloud chat.',
+                  );
+                });
               return;
             }
+            removeFromState();
             const dbId = uuidToDbId(id);
             if (dbId !== undefined) {
-              const userId = useUnifiedAuthStore.getState().user?.id ?? '';
-              if (!userId) return;
+              const userId = resolveDesktopChatOwnerId();
               void invoke('chat_delete_conversation', { id: dbId, userId }).catch((error) => {
                 console.error('[ChatStore] Failed to delete conversation from backend:', error);
               });
             }
           },
 
-          togglePinnedConversation: (id: string) =>
+          togglePinnedConversation: (id: string) => {
+            let pinned: boolean | undefined;
+            let previousPinned: boolean | undefined;
             set(
               (state) => {
                 const convo = state.conversations.find((c) => c.id === id);
                 if (convo) {
+                  previousPinned = convo.pinned;
                   convo.pinned = !convo.pinned;
+                  pinned = convo.pinned;
                   convo.updatedAt = new Date();
                 }
               },
               undefined,
               'chat/togglePinnedConversation',
-            ),
+            );
+            if (isCloudMode() && pinned !== undefined) {
+              void updateCloudConversation(id, { pinned }).catch((error) => {
+                console.error('[ChatStore] Failed to pin cloud conversation:', error);
+                set(
+                  (state) => {
+                    const conversation = state.conversations.find(
+                      (candidate) => candidate.id === id,
+                    );
+                    if (
+                      conversation &&
+                      conversation.pinned === pinned &&
+                      previousPinned !== undefined
+                    ) {
+                      conversation.pinned = previousPinned;
+                    }
+                  },
+                  undefined,
+                  'chat/togglePinnedConversation/cloud/rollback',
+                );
+                toast.error(
+                  error instanceof Error ? error.message : 'Could not update this Cloud chat.',
+                );
+              });
+            }
+          },
 
           archiveConversation: (id: string) => {
+            const previous = get().conversations.find((conversation) => conversation.id === id);
+            const previousArchived = previous?.archived;
+            const previousPinned = previous?.pinned;
             set(
               (state) => {
                 const convo = state.conversations.find((c) => c.id === id);
@@ -835,14 +935,31 @@ export const useChatMessageStore = create<ChatMessageState>()(
             );
             // DESKTOP-CHAT-CONVO-ACTIONS-PERSIST-01: local-only mutation above
             // does not survive `loadConversations()` without this backend call.
-            // Cloud mode has no `cloud_archive_conversation` seam yet (tracked
-            // separately, see DCL-3 in sys/commands/chat/cloud.rs) — archive
-            // stays local-state-only in cloud mode until that seam exists.
-            if (isCloudMode()) return;
+            if (isCloudMode()) {
+              void updateCloudConversation(id, { archived: true, pinned: false }).catch((error) => {
+                console.error('[ChatStore] Failed to archive cloud conversation:', error);
+                set(
+                  (state) => {
+                    const conversation = state.conversations.find(
+                      (candidate) => candidate.id === id,
+                    );
+                    if (conversation?.archived === true) {
+                      conversation.archived = previousArchived;
+                      conversation.pinned = previousPinned ?? false;
+                    }
+                  },
+                  undefined,
+                  'chat/archiveConversation/cloud/rollback',
+                );
+                toast.error(
+                  error instanceof Error ? error.message : 'Could not archive this Cloud chat.',
+                );
+              });
+              return;
+            }
             const dbId = uuidToDbId(id);
             if (dbId === undefined) return;
-            const userId = useUnifiedAuthStore.getState().user?.id ?? '';
-            if (!userId) return;
+            const userId = resolveDesktopChatOwnerId();
             void invoke('chat_archive_conversation', {
               conversationId: dbId,
               userId,
@@ -853,6 +970,9 @@ export const useChatMessageStore = create<ChatMessageState>()(
           },
 
           restoreConversation: (id: string) => {
+            const previousArchived = get().conversations.find(
+              (conversation) => conversation.id === id,
+            )?.archived;
             set(
               (state) => {
                 const convo = state.conversations.find((c) => c.id === id);
@@ -864,11 +984,30 @@ export const useChatMessageStore = create<ChatMessageState>()(
               undefined,
               'chat/restoreConversation',
             );
-            if (isCloudMode()) return;
+            if (isCloudMode()) {
+              void updateCloudConversation(id, { archived: false }).catch((error) => {
+                console.error('[ChatStore] Failed to restore cloud conversation:', error);
+                set(
+                  (state) => {
+                    const conversation = state.conversations.find(
+                      (candidate) => candidate.id === id,
+                    );
+                    if (conversation?.archived === false) {
+                      conversation.archived = previousArchived;
+                    }
+                  },
+                  undefined,
+                  'chat/restoreConversation/cloud/rollback',
+                );
+                toast.error(
+                  error instanceof Error ? error.message : 'Could not restore this Cloud chat.',
+                );
+              });
+              return;
+            }
             const dbId = uuidToDbId(id);
             if (dbId === undefined) return;
-            const userId = useUnifiedAuthStore.getState().user?.id ?? '';
-            if (!userId) return;
+            const userId = resolveDesktopChatOwnerId();
             void invoke('chat_archive_conversation', {
               conversationId: dbId,
               userId,
@@ -883,7 +1022,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
           getConversationsByProject: (projectId: string) =>
             get().conversations.filter((c) => c.projectId === projectId),
 
-          setConversationProject: (conversationId: string, projectId: string | null) =>
+          setConversationProject: (conversationId: string, projectId: string | null) => {
             set(
               (state) => {
                 const convo = state.conversations.find((c) => c.id === conversationId);
@@ -894,9 +1033,13 @@ export const useChatMessageStore = create<ChatMessageState>()(
               },
               undefined,
               'chat/setConversationProject',
-            ),
+            );
+          },
 
-          setConversationModel: (conversationId: string, model: string | null) =>
+          setConversationModel: (conversationId: string, model: string | null) => {
+            const previousModel = get().conversations.find(
+              (conversation) => conversation.id === conversationId,
+            )?.modelOverride;
             set(
               (state) => {
                 const convo = state.conversations.find((c) => c.id === conversationId);
@@ -907,7 +1050,28 @@ export const useChatMessageStore = create<ChatMessageState>()(
               },
               undefined,
               'chat/setConversationModel',
-            ),
+            );
+            if (isCloudMode() && model) {
+              void updateCloudConversation(conversationId, { model }).catch((error) => {
+                console.error('[ChatStore] Failed to update cloud conversation model:', error);
+                set(
+                  (state) => {
+                    const conversation = state.conversations.find(
+                      (candidate) => candidate.id === conversationId,
+                    );
+                    if (conversation?.modelOverride === model) {
+                      conversation.modelOverride = previousModel;
+                    }
+                  },
+                  undefined,
+                  'chat/setConversationModel/cloud/rollback',
+                );
+                toast.error(
+                  error instanceof Error ? error.message : 'Could not update the Cloud model.',
+                );
+              });
+            }
+          },
 
           exportConversationToMarkdown: (id?: string) => {
             const state = get();
@@ -946,6 +1110,16 @@ export const useChatMessageStore = create<ChatMessageState>()(
 
           addMessage: (message) => {
             const assignedId = message.id ?? crypto.randomUUID();
+            const stateBeforeInsert = get();
+            const activeConversationBeforeInsert = stateBeforeInsert.conversations.find(
+              (conversation) => conversation.id === stateBeforeInsert.activeConversationId,
+            );
+            const shouldPersistGeneratedCloudTitle =
+              isCloudMode() &&
+              message.role === 'user' &&
+              Boolean(message.content) &&
+              (!stateBeforeInsert.activeConversationId ||
+                activeConversationBeforeInsert?.title === 'New chat');
             set(
               (state) => {
                 if (!state.activeConversationId) {
@@ -988,13 +1162,28 @@ export const useChatMessageStore = create<ChatMessageState>()(
                     convo.title === 'New chat' &&
                     newMessage.role === 'user' &&
                     newMessage.content
-                  )
+                  ) {
                     convo.title = generateTitleFromMessage(newMessage.content);
+                  }
                 }
               },
               undefined,
               'chat/addMessage',
             );
+            if (shouldPersistGeneratedCloudTitle) {
+              const updatedState = get();
+              const generatedCloudConversation = updatedState.conversations.find(
+                (conversation) => conversation.id === updatedState.activeConversationId,
+              );
+              if (generatedCloudConversation && generatedCloudConversation.title !== 'New chat') {
+                void updateCloudConversationTitle(
+                  generatedCloudConversation.id,
+                  generatedCloudConversation.title,
+                ).catch((error) => {
+                  console.error('[ChatStore] Failed to persist generated cloud title:', error);
+                });
+              }
+            }
             return assignedId;
           },
 
@@ -1465,8 +1654,25 @@ export const useChatMessageStore = create<ChatMessageState>()(
           },
 
           getRecentConversations: async (limit?: number) => {
+            if (isCloudMode()) {
+              const maxResults = Math.max(0, limit ?? 10);
+              const state = get();
+              return state.conversations
+                .filter((conversation) => !conversation.archived)
+                .slice()
+                .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
+                .slice(0, maxResults)
+                .map((conversation) => ({
+                  conversationId: conversation.id,
+                  title: conversation.title,
+                  messageCount: state.messagesByConversation[conversation.id]?.length ?? 0,
+                  lastUpdated: conversation.updatedAt.toISOString(),
+                  ...(conversation.lastMessage ? { snippet: conversation.lastMessage } : {}),
+                }));
+            }
+
             try {
-              return await invoke<ConversationSearchResult[]>('get_recent_conversations', {
+              return await invoke<RecentConversationSearchResult[]>('get_recent_conversations', {
                 limit: limit ?? null,
               });
             } catch (error) {
@@ -2025,27 +2231,11 @@ export function teardownChatStoreModelStoreSubscription(): void {
   teardownChatViewModelSubscription();
 }
 
-let _unsubscribeAppModeReload: () => void = () => {};
-
 if (typeof window !== 'undefined' && !IS_TEST_ENVIRONMENT) {
-  _unsubscribeAppModeReload();
-  _unsubscribeAppModeReload = useAppModeStore.subscribe(
-    (state) => state.mode,
-    (mode, prevMode) => {
-      if (mode !== prevMode) {
-        const user = useUnifiedAuthStore.getState().user;
-        if (user?.id) {
-          useChatMessageStore.setState({
-            conversations: [],
-            messages: [],
-            activeConversationId: null,
-            messagesByConversation: {},
-          });
-          void useChatMessageStore.getState().loadConversations(user.id);
-        }
-      }
-    },
-  );
+  // App.tsx owns mode-boundary reset and hydration because it can coordinate
+  // auth readiness, settings persistence, chats, projects, and Cloud sync as
+  // one transition. A module-level mode listener here used to race that owner
+  // and issue duplicate conversation loads.
   void initializeChatStoreModelStoreSubscription();
   initializeChatViewModelSubscription();
 }

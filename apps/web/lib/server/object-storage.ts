@@ -113,6 +113,22 @@ export function objectKeyFromPublicUrl(value: string): string | null {
   }
 }
 
+/**
+ * Resolve a stored object locator. New private-resource paths may store the
+ * validated key directly; legacy rows may still contain the configured public
+ * URL.
+ */
+export function objectKeyFromStorageUri(value: string): string | null {
+  if (
+    /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value) &&
+    !value.includes('//') &&
+    !value.split('/').some((segment) => segment === '.' || segment === '..')
+  ) {
+    return value;
+  }
+  return objectKeyFromPublicUrl(value);
+}
+
 /** Upload bytes directly to R2 from server-side code (no client body-size constraint). */
 export async function putObject(params: {
   key: string;

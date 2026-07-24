@@ -7,16 +7,13 @@ import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
  * MemoryEditor — list / add / edit / delete cross-conversation memory facts
  * the assistant should remember about the user. Round-2 audit P0 #8.
  *
- * Surface-agnostic: consumes `useMemoryStore` for persistence, so the
- * component can drop into the Settings shell (web / extensions) or be
- * rendered standalone in a Capabilities → Memory route on mobile.
+ * Surface-agnostic: uses the shared local memory store by default and accepts
+ * a host-owned adapter when a surface has a different trust boundary (for
+ * example, Desktop Managed Cloud account memory).
  *
- * Facts are always available instantly from local storage. On mount, in
- * runtimes where account-scoped sync is possible (Web / Chrome extension —
- * see `memoryStore.ts` for the Desktop/Mobile trust-boundary guard), the
- * editor pulls the latest facts from `/api/memory` so memory now follows the
- * signed-in account across devices instead of staying trapped in one
- * browser's local storage.
+ * The default store remains local-first. An external adapter owns both data
+ * and mutations; this component never mirrors cloud facts into device-local
+ * storage.
  */
 
 const MAX_FACT_CHARS = 280;
@@ -30,6 +27,23 @@ export interface MemoryEditorProps {
   hideClearAll?: boolean;
   /** Optional className for the outer container. */
   className?: string;
+  /**
+   * Optional host-owned persistence boundary. Desktop Cloud supplies an
+   * authenticated account adapter; omitting it keeps the local shared store.
+   */
+  adapter?: MemoryEditorDataAdapter;
+}
+
+export type MemoryEditorSyncStatus = 'unavailable' | 'idle' | 'syncing' | 'synced' | 'error';
+
+export interface MemoryEditorDataAdapter {
+  facts: MemoryFact[];
+  syncStatus: MemoryEditorSyncStatus;
+  hydrateFromServer: () => Promise<void>;
+  add: (text: string, sourceConversationId?: string) => Promise<unknown> | unknown;
+  update: (id: string, text: string) => Promise<unknown> | unknown;
+  remove: (id: string) => Promise<unknown> | unknown;
+  clear: () => Promise<unknown> | unknown;
 }
 
 export function MemoryEditor({
@@ -37,25 +51,46 @@ export function MemoryEditor({
   description = 'Things the assistant should remember about you across conversations.',
   hideClearAll = false,
   className,
+  adapter,
 }: MemoryEditorProps) {
-  const facts = useMemoryStore((s) => s.facts);
-  const add = useMemoryStore((s) => s.add);
-  const update = useMemoryStore((s) => s.update);
-  const remove = useMemoryStore((s) => s.remove);
-  const clear = useMemoryStore((s) => s.clear);
-  const syncStatus = useMemoryStore((s) => s.syncStatus);
-  const hydrateFromServer = useMemoryStore((s) => s.hydrateFromServer);
+  const localFacts = useMemoryStore((s) => s.facts);
+  const localAdd = useMemoryStore((s) => s.add);
+  const localUpdate = useMemoryStore((s) => s.update);
+  const localRemove = useMemoryStore((s) => s.remove);
+  const localClear = useMemoryStore((s) => s.clear);
+  const localSyncStatus = useMemoryStore((s) => s.syncStatus);
+  const localHydrateFromServer = useMemoryStore((s) => s.hydrateFromServer);
+  const facts = adapter?.facts ?? localFacts;
+  const add = adapter?.add ?? localAdd;
+  const update = adapter?.update ?? localUpdate;
+  const remove = adapter?.remove ?? localRemove;
+  const clear = adapter?.clear ?? localClear;
+  const syncStatus = adapter?.syncStatus ?? localSyncStatus;
+  const hydrateFromServer = adapter?.hydrateFromServer ?? localHydrateFromServer;
 
   const [draft, setDraft] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [mutating, setMutating] = useState(false);
 
   // Pull the account-scoped copy on mount so facts saved from another
   // device show up here too. No-op where sync isn't available (Desktop
   // Tauri webview, Mobile) — see memoryStore.ts's `canSyncToServer` guard.
   useEffect(() => {
-    void hydrateFromServer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+    void hydrateFromServer().catch(() => undefined);
+  }, [hydrateFromServer]);
+
+  const runMutation = useCallback(async (action: () => Promise<unknown> | unknown) => {
+    setMutating(true);
+    setMutationError(null);
+    try {
+      await action();
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : 'Could not update memory.');
+    } finally {
+      setMutating(false);
+    }
   }, []);
 
   const onSubmit = useCallback(
@@ -63,10 +98,12 @@ export function MemoryEditor({
       event.preventDefault();
       const next = draft.trim();
       if (!next) return;
-      add(next);
-      setDraft('');
+      void runMutation(async () => {
+        await add(next);
+        setDraft('');
+      });
     },
-    [draft, add],
+    [draft, add, runMutation],
   );
 
   const onBeginEdit = useCallback((fact: MemoryFact) => {
@@ -77,16 +114,18 @@ export function MemoryEditor({
   const onSaveEdit = useCallback(
     (id: string) => {
       const next = editDraft.trim();
-      if (!next) {
-        // Empty value deletes the fact — matches Claude's confirm-then-erase pattern.
-        remove(id);
-      } else {
-        update(id, next);
-      }
-      setEditingId(null);
-      setEditDraft('');
+      void runMutation(async () => {
+        if (!next) {
+          // Empty value deletes the fact — matches Claude's confirm-then-erase pattern.
+          await remove(id);
+        } else {
+          await update(id, next);
+        }
+        setEditingId(null);
+        setEditDraft('');
+      });
     },
-    [editDraft, remove, update],
+    [editDraft, remove, update, runMutation],
   );
 
   const onCancelEdit = useCallback(() => {
@@ -104,8 +143,8 @@ export function MemoryEditor({
           )
         : true;
     if (!ok) return;
-    clear();
-  }, [facts.length, clear]);
+    void runMutation(() => clear());
+  }, [facts.length, clear, runMutation]);
 
   return (
     <div className={cn('flex h-full flex-col gap-4 p-6', className)}>
@@ -115,7 +154,9 @@ export function MemoryEditor({
           {description ? (
             <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{description}</p>
           ) : null}
-          <p className="text-xs text-[var(--chat-text-muted)]">{syncStatusLabel(syncStatus)}</p>
+          <p className="text-xs text-[var(--chat-text-muted)]">
+            {syncStatusLabel(syncStatus, Boolean(adapter))}
+          </p>
         </div>
       ) : null}
 
@@ -135,7 +176,7 @@ export function MemoryEditor({
           />
           <button
             type="submit"
-            disabled={draft.trim().length === 0}
+            disabled={draft.trim().length === 0 || mutating}
             className={cn(
               'shrink-0 rounded-md px-3 py-2 text-sm font-medium transition-colors',
               draft.trim().length === 0
@@ -150,6 +191,11 @@ export function MemoryEditor({
           {draft.length} / {MAX_FACT_CHARS}
         </div>
       </form>
+      {mutationError ? (
+        <p role="alert" className="text-xs text-[var(--chat-destructive)]">
+          {mutationError}
+        </p>
+      ) : null}
 
       {/* Existing facts */}
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
@@ -158,8 +204,9 @@ export function MemoryEditor({
             className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-[var(--chat-text-muted)]"
             style={{ borderColor: 'var(--chat-border)' }}
           >
-            No memory facts yet. Add one above and it will be available to every conversation on
-            this device.
+            {adapter
+              ? 'No cloud memory facts yet. Add one above and it will be available to your Managed Cloud conversations.'
+              : 'No local memory facts yet. Add one above and it will be available to conversations on this device.'}
           </p>
         ) : (
           <ul aria-label="Memory facts" className="flex flex-col gap-2">
@@ -189,7 +236,8 @@ export function MemoryEditor({
                         </button>
                         <button
                           type="button"
-                          onClick={() => onSaveEdit(fact.id)}
+                          onClick={() => void onSaveEdit(fact.id)}
+                          disabled={mutating}
                           className="rounded bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-white hover:opacity-90"
                         >
                           Save
@@ -215,7 +263,8 @@ export function MemoryEditor({
                         </span>
                         <button
                           type="button"
-                          onClick={() => remove(fact.id)}
+                          onClick={() => void runMutation(() => remove(fact.id))}
+                          disabled={mutating}
                           className="rounded p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive)]"
                           aria-label={`Delete memory fact`}
                         >
@@ -240,6 +289,7 @@ export function MemoryEditor({
           <button
             type="button"
             onClick={onClearAll}
+            disabled={mutating}
             className="rounded px-2 py-1 text-xs font-medium text-[var(--chat-destructive)] hover:bg-[var(--chat-surface-hover)]"
           >
             Forget everything
@@ -250,7 +300,23 @@ export function MemoryEditor({
   );
 }
 
-function syncStatusLabel(status: ReturnType<typeof useMemoryStore.getState>['syncStatus']): string {
+function syncStatusLabel(status: MemoryEditorSyncStatus, isAccountScoped: boolean): string {
+  if (isAccountScoped) {
+    switch (status) {
+      case 'syncing':
+        return 'Loading memory from your Managed Cloud account…';
+      case 'synced':
+        return 'Saved to your Managed Cloud account — available on every signed-in device.';
+      case 'error':
+        return 'Couldn’t reach your Managed Cloud memory. Device-local memory was not used.';
+      case 'unavailable':
+        return 'Managed Cloud memory is unavailable.';
+      case 'idle':
+      default:
+        return 'Managed Cloud account memory is separate from Local Mode memory.';
+    }
+  }
+
   switch (status) {
     case 'syncing':
       return 'Syncing with your account…';

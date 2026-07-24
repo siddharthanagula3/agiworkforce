@@ -6,9 +6,10 @@
  * DELETE /api/connectors - Remove a connector connection
  *
  * Connection semantics (honest model — see lib/user-connector-tools.ts):
- * - `user_connectors` rows are an enablement gate with runtime effect ONLY for
- *   local connectors and operator-mapped remote MCP connectors. POST 501s
- *   anything else so the UI can never show a fake "connected" state.
+ * - `user_connectors` rows are an enablement gate with runtime effect for
+ *   operator-mapped remote MCP connectors. Device-local connectors are owned
+ *   by the native Local-mode boundary and are never advertised by this Cloud
+ *   API. POST 501s anything else so the UI cannot show a fake connected state.
  * - The github built-in is backed by GitHub App installations, not
  *   user_connectors: GET reports it from `github_installations`, POST directs
  *   callers to the install flow, DELETE unlinks the user's installations.
@@ -25,6 +26,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
   getOperatorMappedConnectorIds,
   getUserGithubInstallations,
@@ -101,12 +103,13 @@ const LOCAL_CONNECTOR_IDS = new Set([
 // ─── GET: list connected services ──────────────────────────────────────────────
 
 /**
- * Connector ids that can actually be connected in this deployment: local
- * connectors always, operator-mapped remote MCP connectors, and github when
- * the App install flow is configured.
+ * Connector ids that can actually be used by managed-cloud chat in this
+ * deployment: operator-mapped remote MCP connectors, and github when the App
+ * install flow is configured. Device-local connectors deliberately stay out
+ * of this Cloud API.
  */
 function getAvailableConnectorIds(): string[] {
-  const available = new Set<string>(LOCAL_CONNECTOR_IDS);
+  const available = new Set<string>();
   for (const id of getOperatorMappedConnectorIds()) available.add(id);
   if (isGitHubAppConfigured() && getGitHubAppInstallUrl()) available.add(GITHUB_CONNECTOR_ID);
   return [...available];
@@ -148,20 +151,23 @@ async function handleGetConnectors(request: NextRequest) {
     name?: string;
   };
 
-  const connectors: ConnectorEntry[] = rows.map((c) => ({
-    id: c.id,
-    connectorId: c.connector_id,
-    authType: c.auth_type,
-    connectedAt: c.connected_at,
-    updatedAt: c.updated_at,
-    source: 'user',
-  }));
+  const operatorMappedIds = getOperatorMappedConnectorIds();
+  const connectors: ConnectorEntry[] = rows
+    .filter((c) => operatorMappedIds.has(c.connector_id))
+    .map((c) => ({
+      id: c.id,
+      connectorId: c.connector_id,
+      authType: c.auth_type,
+      connectedAt: c.connected_at,
+      updatedAt: c.updated_at,
+      source: 'user',
+    }));
 
   // The github built-in is backed by GitHub App installations, not
   // user_connectors (POST 501s github), so derive its connected state from the
   // real signal — otherwise the directory shows "not connected" while github
   // tools actively work in chat.
-  const installations = await getUserGithubInstallations(userId).catch(() => []);
+  const installations = await getUserGithubInstallations(userId);
   if (installations.length > 0 && !connectors.some((c) => c.connectorId === GITHUB_CONNECTOR_ID)) {
     connectors.push({
       id: `github-app-${installations[0]!.installationId}`,
@@ -177,7 +183,7 @@ async function handleGetConnectors(request: NextRequest) {
   // have no static catalog entry (unlike the allowlisted ids above), so each
   // one is surfaced with its own display name and a `custom-<row id>` id —
   // the same namespacing the chat tool loop uses (lib/user-connector-tools.ts).
-  const customConnectors = await getUserCustomConnectorSummaries(userId).catch(() => []);
+  const customConnectors = await getUserCustomConnectorSummaries(userId);
   for (const c of customConnectors) {
     connectors.push({
       id: c.id,
@@ -200,14 +206,14 @@ async function handleGetConnectors(request: NextRequest) {
 // ─── POST: save new connection ─────────────────────────────────────────────────
 
 async function handleCreateConnector(request: NextRequest) {
+  const { userId } = await getClerkAuthUser(request);
+
   // CSRF protection for state-changing POST endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const { userId } = await getClerkAuthUser(request);
 
   let body: { connectorId?: string; authType?: string };
   try {
@@ -225,11 +231,21 @@ async function handleCreateConnector(request: NextRequest) {
     throw createError.validation('Invalid connector ID');
   }
 
-  // Local connectors are classified by id and always stored as auth_type
-  // 'local' — the directory's static data labels them 'pat', which used to
-  // shunt them into the 501 branch and make Connect a silent no-op.
+  // Device-local connectors belong to Desktop Local mode. A cloud API row
+  // cannot make the managed runtime reach a user's filesystem, terminal,
+  // browser, screen, or Ollama instance, so never persist one here.
   const isLocal = LOCAL_CONNECTOR_IDS.has(body.connectorId);
-  const authType = isLocal ? 'local' : (body.authType ?? 'oauth');
+  if (isLocal) {
+    return NextResponse.json(
+      {
+        error: 'This connector is device-local. Connect it from Desktop Local settings instead.',
+        connectorId: body.connectorId,
+      },
+      { status: 501 },
+    );
+  }
+
+  const authType = body.authType ?? 'oauth';
   if (!['local', 'oauth', 'api_key', 'connection_string', 'pat'].includes(authType)) {
     throw createError.validation('Invalid auth type');
   }
@@ -250,7 +266,7 @@ async function handleCreateConnector(request: NextRequest) {
   // endpoint + credentials live server-side and lib/user-connector-tools gates
   // tool-offering on exactly this user_connectors row.
   const isOperatorMapped = operatorMappedIds.has(body.connectorId);
-  if (!isLocal && !isOperatorMapped) {
+  if (!isOperatorMapped) {
     return NextResponse.json(
       {
         error:
@@ -316,14 +332,14 @@ async function handleCreateConnector(request: NextRequest) {
 // ─── DELETE: remove connection ─────────────────────────────────────────────────
 
 async function handleDeleteConnector(request: NextRequest) {
+  const { userId } = await getClerkAuthUser(request);
+
   // CSRF protection for state-changing DELETE endpoint
   const csrfError2 = await requireCsrfToken(request);
   if (csrfError2) return csrfError2 as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const { userId } = await getClerkAuthUser(request);
 
   const url = new URL(request.url);
   const connectorId = url.searchParams.get('connectorId');
@@ -368,6 +384,10 @@ async function handleDeleteConnector(request: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
-export const GET = withErrorHandler(handleGetConnectors);
-export const POST = withErrorHandler(handleCreateConnector);
-export const DELETE = withErrorHandler(handleDeleteConnector);
+export const GET = withCorsRoute(withErrorHandler(handleGetConnectors));
+export const POST = withCorsRoute(withErrorHandler(handleCreateConnector));
+export const DELETE = withCorsRoute(withErrorHandler(handleDeleteConnector));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

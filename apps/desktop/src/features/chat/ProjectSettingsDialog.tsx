@@ -33,6 +33,7 @@ import {
   Brain,
   Database,
   ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -43,11 +44,14 @@ import {
   type ProjectFile,
   type KnowledgeBaseFile,
 } from '../../stores/projectStore';
-import type { ProjectAccentColor, PrivacyMode } from '@agiworkforce/types';
+import { type ProjectAccentColor, type PrivacyMode } from '@agiworkforce/types';
 import { useChatStore, type ConversationSummary } from '../../stores/chat/chatStore';
+import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { MemoryManager } from '@/features/memory/MemoryManager';
+import type { ManagedCloudProjectKnowledgeFile } from '@agiworkforce/cloud-contracts';
+import { desktopCloudProjectKnowledge } from '../../services/desktopCloudProjectKnowledge';
 
 // Supported knowledge base file extensions
 const SUPPORTED_KB_EXTENSIONS = [
@@ -61,6 +65,14 @@ const SUPPORTED_KB_EXTENSIONS = [
   '.ts',
   '.rs',
 ] as const;
+const CLOUD_KNOWLEDGE_ACCEPT =
+  'application/pdf,text/plain,text/markdown,text/csv,application/json,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.rs';
+
+function formatFileSize(byteCount: number): string {
+  if (byteCount < 1024) return `${byteCount} B`;
+  if (byteCount < 1024 * 1024) return `${(byteCount / 1024).toFixed(1)} KB`;
+  return `${(byteCount / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 // Project color options - defined as const tuple for type safety
 const PROJECT_COLORS = [
@@ -140,14 +152,25 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
   const [knowledgeBaseFiles, setKnowledgeBaseFiles] = useState<KnowledgeBaseFile[]>([]);
+  const [cloudKnowledgeFiles, setCloudKnowledgeFiles] = useState<
+    ManagedCloudProjectKnowledgeFile[]
+  >([]);
+  const [cloudKnowledgeError, setCloudKnowledgeError] = useState<string | null>(null);
+  const [cloudKnowledgeRetry, setCloudKnowledgeRetry] = useState(0);
+  const [isLoadingCloudKnowledge, setIsLoadingCloudKnowledge] = useState(false);
+  const [removingCloudKnowledgeIds, setRemovingCloudKnowledgeIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [isUploadingKb, setIsUploadingKb] = useState(false);
   const [showCreateOptions, setShowCreateOptions] = useState(false);
   const kbDropZoneRef = useRef<HTMLDivElement>(null);
+  const cloudKnowledgeInputRef = useRef<HTMLInputElement>(null);
 
   // Store actions
   const createProject = useProjectStore((state) => state.createProject);
   const updateProject = useProjectStore((state) => state.updateProject);
   const conversations = useChatStore((state) => state.conversations);
+  const isManagedCloud = useAppModeStore(selectPrivacyMode) === 'managed';
 
   // Reset form when dialog opens/closes or project identity changes (projectId only to avoid loop from new object refs)
   const projectId = project?.id ?? null;
@@ -161,7 +184,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setIcon(project.icon || DEFAULT_ICON);
         setIconEmoji(project.iconEmoji ?? '');
         setAccentColor(project.accentColor ?? null);
-        setDefaultPrivacyMode(project.defaultPrivacyMode ?? 'local');
+        setDefaultPrivacyMode(
+          isManagedCloud ? 'managed' : project.defaultPrivacyMode === 'byok' ? 'byok' : 'local',
+        );
         setFiles(project.files);
         setConversationIds(project.conversationIds);
         setKnowledgeBaseFiles(project.knowledgeBaseFiles ?? []);
@@ -183,7 +208,36 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
       setActiveTab('general');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, projectId]);
+  }, [open, mode, projectId, isManagedCloud]);
+
+  useEffect(() => {
+    if (!open || !isManagedCloud || mode !== 'edit' || !projectId) {
+      setCloudKnowledgeFiles([]);
+      setCloudKnowledgeError(null);
+      setIsLoadingCloudKnowledge(false);
+      setRemovingCloudKnowledgeIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    setCloudKnowledgeError(null);
+    setIsLoadingCloudKnowledge(true);
+    void desktopCloudProjectKnowledge
+      .list(projectId)
+      .then((cloudFiles) => {
+        if (!cancelled) setCloudKnowledgeFiles(cloudFiles);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCloudKnowledgeError(error instanceof Error ? error.message : String(error));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingCloudKnowledge(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudKnowledgeRetry, isManagedCloud, mode, open, projectId]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -201,12 +255,20 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           icon,
           iconEmoji: iconEmoji.trim() || null,
           accentColor,
-          defaultPrivacyMode,
-          files,
+          defaultPrivacyMode: isManagedCloud ? 'managed' : defaultPrivacyMode,
+          files: isManagedCloud ? [] : files,
           conversationIds,
           isArchived: false,
-          knowledgeBaseFiles,
+          knowledgeBaseFiles: isManagedCloud ? [] : knowledgeBaseFiles,
         });
+        if (isManagedCloud) {
+          const selected = new Set(conversationIds);
+          for (const conversation of conversations) {
+            if (selected.has(conversation.id)) {
+              useChatStore.getState().setConversationProject(conversation.id, createdProject.id);
+            }
+          }
+        }
         onCreated?.(createdProject);
       } else if (project) {
         await updateProject(project.id, {
@@ -217,16 +279,29 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           icon,
           iconEmoji: iconEmoji.trim() || null,
           accentColor,
-          defaultPrivacyMode,
-          files,
-          conversationIds,
-          knowledgeBaseFiles,
+          defaultPrivacyMode: isManagedCloud ? 'managed' : defaultPrivacyMode,
+          ...(!isManagedCloud
+            ? { files, conversationIds, knowledgeBaseFiles }
+            : { conversationIds }),
         });
+        if (isManagedCloud) {
+          const nextIds = new Set(conversationIds);
+          for (const conversation of conversations) {
+            if (conversation.projectId === project.id || nextIds.has(conversation.id)) {
+              useChatStore
+                .getState()
+                .setConversationProject(
+                  conversation.id,
+                  nextIds.has(conversation.id) ? project.id : null,
+                );
+            }
+          }
+        }
       }
       onOpenChange(false);
     } catch (error) {
       console.error('[ProjectSettingsDialog] Failed to save project:', error);
-      toast.error('Failed to save project settings');
+      toast.error(error instanceof Error ? error.message : 'Failed to save project settings');
     } finally {
       setIsSaving(false);
     }
@@ -354,6 +429,62 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
     setKnowledgeBaseFiles((prev) => prev.filter((f) => f.id !== fileId));
   }, []);
 
+  const handleCloudKnowledgeFiles = useCallback(
+    async (selectedFiles: File[]) => {
+      if (!projectId || selectedFiles.length === 0) return;
+      setIsUploadingKb(true);
+      setCloudKnowledgeError(null);
+      try {
+        for (const file of selectedFiles) {
+          const uploaded = await desktopCloudProjectKnowledge.upload(projectId, file);
+          setCloudKnowledgeFiles((previous) => [
+            uploaded,
+            ...previous.filter((candidate) => candidate.id !== uploaded.id),
+          ]);
+        }
+        toast.success(
+          selectedFiles.length === 1
+            ? 'Project source uploaded'
+            : `${selectedFiles.length} project sources uploaded`,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setCloudKnowledgeError(message);
+        toast.error(message);
+      } finally {
+        setIsUploadingKb(false);
+        if (cloudKnowledgeInputRef.current) cloudKnowledgeInputRef.current.value = '';
+      }
+    },
+    [projectId],
+  );
+
+  const handleRemoveCloudKnowledge = useCallback(
+    async (fileId: string) => {
+      if (!projectId) return;
+      if (removingCloudKnowledgeIds.has(fileId)) return;
+      setCloudKnowledgeError(null);
+      setRemovingCloudKnowledgeIds((current) => new Set(current).add(fileId));
+      try {
+        await desktopCloudProjectKnowledge.remove(projectId, fileId);
+        setCloudKnowledgeFiles((previous) =>
+          previous.filter((candidate) => candidate.id !== fileId),
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setCloudKnowledgeError(message);
+        toast.error(message);
+      } finally {
+        setRemovingCloudKnowledgeIds((current) => {
+          const next = new Set(current);
+          next.delete(fileId);
+          return next;
+        });
+      }
+    },
+    [projectId, removingCloudKnowledgeIds],
+  );
+
   if (mode === 'create') {
     const projectPresets: Array<{
       label: string;
@@ -411,11 +542,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         value: 'byok',
         label: 'BYOK',
         description: 'Uses your provider key when the conversation needs cloud models.',
-      },
-      {
-        value: 'managed',
-        label: 'Cloud',
-        description: 'Uses AGI managed compute when your account has access.',
       },
     ];
 
@@ -488,53 +614,63 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 />
               </div>
 
-              <div className="rounded-xl border border-border bg-muted/20">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateOptions((value) => !value)}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-foreground"
-                  aria-expanded={showCreateOptions}
-                >
-                  More options
-                  <ChevronDown
-                    className={cn(
-                      'h-4 w-4 text-muted-foreground transition-transform',
-                      showCreateOptions && 'rotate-180',
-                    )}
-                  />
-                </button>
+              {isManagedCloud ? (
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
+                  <p className="text-sm font-medium text-foreground">Cloud project</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Chats, instructions, and uploaded sources sync through your AGI account. Device
+                    folders and Local memory remain on this computer.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-border bg-muted/20">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateOptions((value) => !value)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-foreground"
+                    aria-expanded={showCreateOptions}
+                  >
+                    More options
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 text-muted-foreground transition-transform',
+                        showCreateOptions && 'rotate-180',
+                      )}
+                    />
+                  </button>
 
-                {showCreateOptions && (
-                  <div className="border-t border-border px-4 pb-4 pt-3">
-                    <Label className="text-sm font-medium text-foreground">Default compute</Label>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      {privacyOptions.map((option) => {
-                        const selected = defaultPrivacyMode === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setDefaultPrivacyMode(option.value)}
-                            className={cn(
-                              'rounded-xl border px-3 py-3 text-left transition-colors',
-                              selected
-                                ? 'border-foreground/30 bg-foreground/[0.06]'
-                                : 'border-border bg-background hover:bg-muted/50',
-                            )}
-                          >
-                            <span className="block text-sm font-medium text-foreground">
-                              {option.label}
-                            </span>
-                            <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                              {option.description}
-                            </span>
-                          </button>
-                        );
-                      })}
+                  {showCreateOptions && (
+                    <div className="border-t border-border px-4 pb-4 pt-3">
+                      <Label className="text-sm font-medium text-foreground">Default compute</Label>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {privacyOptions.map((option) => {
+                          const selected = defaultPrivacyMode === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setDefaultPrivacyMode(option.value)}
+                              className={cn(
+                                'rounded-xl border px-3 py-3 text-left transition-colors',
+                                selected
+                                  ? 'border-foreground/30 bg-foreground/[0.06]'
+                                  : 'border-border bg-background hover:bg-muted/50',
+                              )}
+                            >
+                              <span className="block text-sm font-medium text-foreground">
+                                {option.label}
+                              </span>
+                              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                                {option.description}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -593,16 +729,20 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             </TabsTrigger>
             <TabsTrigger value="knowledge" className="shrink-0 data-[state=active]:bg-accent">
               <Database className="w-4 h-4 mr-2" />
-              Knowledge
+              {isManagedCloud ? 'Sources' : 'Knowledge'}
             </TabsTrigger>
-            <TabsTrigger value="files" className="shrink-0 data-[state=active]:bg-accent">
-              <File className="w-4 h-4 mr-2" />
-              Files
-            </TabsTrigger>
-            <TabsTrigger value="memory" className="shrink-0 data-[state=active]:bg-accent">
-              <Brain className="w-4 h-4 mr-2" />
-              Memory
-            </TabsTrigger>
+            {!isManagedCloud && (
+              <>
+                <TabsTrigger value="files" className="shrink-0 data-[state=active]:bg-accent">
+                  <File className="w-4 h-4 mr-2" />
+                  Files
+                </TabsTrigger>
+                <TabsTrigger value="memory" className="shrink-0 data-[state=active]:bg-accent">
+                  <Brain className="w-4 h-4 mr-2" />
+                  Memory
+                </TabsTrigger>
+              </>
+            )}
             <TabsTrigger value="conversations" className="shrink-0 data-[state=active]:bg-accent">
               <MessageSquare className="w-4 h-4 mr-2" />
               Conversations
@@ -755,53 +895,55 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
 
               <div className="space-y-2">
                 <Label className="text-foreground">Default Privacy Mode</Label>
-                <p className="text-xs text-muted-foreground">
-                  Privacy mode for new conversations in this project.
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="privacy-mode"
-                      value="local"
-                      checked={defaultPrivacyMode === 'local'}
-                      onChange={() => setDefaultPrivacyMode('local')}
-                      className="accent-blue-500"
-                    />
-                    <span className="text-sm text-foreground">Local</span>
-                    <span className="text-xs text-muted-foreground ml-1">
-                      Runs on-device. No data leaves your machine.
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="privacy-mode"
-                      value="byok"
-                      checked={defaultPrivacyMode === 'byok'}
-                      onChange={() => setDefaultPrivacyMode('byok')}
-                      className="accent-blue-500"
-                    />
-                    <span className="text-sm text-foreground">BYOK</span>
-                    <span className="text-xs text-muted-foreground ml-1">
-                      Your API key, provider servers.
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="privacy-mode"
-                      value="managed"
-                      checked={defaultPrivacyMode === 'managed'}
-                      onChange={() => setDefaultPrivacyMode('managed')}
-                      className="accent-blue-500"
-                    />
-                    <span className="text-sm text-foreground">Cloud Managed</span>
-                    <span className="text-xs text-muted-foreground ml-1">
-                      AGI cloud with subscription controls.
-                    </span>
-                  </label>
-                </div>
+                {isManagedCloud ? (
+                  <div className="rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2">
+                    <p className="text-sm font-medium text-foreground">Cloud Managed</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      This project belongs to your Cloud workspace. Moving it into Local or BYOK
+                      requires an explicit redacted handoff; it cannot be changed here silently.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Privacy mode for new conversations in this project.
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="privacy-mode"
+                          value="local"
+                          checked={defaultPrivacyMode === 'local'}
+                          onChange={() => setDefaultPrivacyMode('local')}
+                          className="accent-blue-500"
+                        />
+                        <span className="text-sm text-foreground">Local</span>
+                        <span className="text-xs text-muted-foreground ml-1">
+                          Runs on-device. No data leaves your machine.
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="privacy-mode"
+                          value="byok"
+                          checked={defaultPrivacyMode === 'byok'}
+                          onChange={() => setDefaultPrivacyMode('byok')}
+                          className="accent-blue-500"
+                        />
+                        <span className="text-sm text-foreground">BYOK</span>
+                        <span className="text-xs text-muted-foreground ml-1">
+                          Your API key, provider servers.
+                        </span>
+                      </label>
+                    </div>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Cloud projects are created from Cloud mode so Local data is never uploaded
+                      without an explicit handoff.
+                    </p>
+                  </>
+                )}
               </div>
             </TabsContent>
 
@@ -831,160 +973,296 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             </TabsContent>
 
             {/* Files Tab */}
-            <TabsContent value="files" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-foreground">Project Files & Knowledge</Label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddFile}
-                  className="border-border text-foreground hover:bg-accent"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Add Files
-                </Button>
-              </div>
+            {!isManagedCloud && (
+              <TabsContent value="files" className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-foreground">Project Files & Knowledge</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddFile}
+                    className="border-border text-foreground hover:bg-accent"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Add Files
+                  </Button>
+                </div>
 
-              <ScrollArea className="h-[220px] border border-border rounded-lg p-2">
-                {files.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <File className="w-12 h-12 mb-2 opacity-50" />
-                    <p className="text-sm">No files added yet</p>
-                    <p className="text-xs">Add files to provide context for your conversations</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {files.map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex items-center justify-between p-2 bg-muted rounded-md group"
-                      >
-                        <div className="flex items-center gap-2">
-                          <File className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm text-foreground">{file.name}</span>
-                          <span className="text-xs text-muted-foreground">{file.path}</span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveFile(file.id)}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400"
+                <ScrollArea className="h-[220px] border border-border rounded-lg p-2">
+                  {files.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                      <File className="w-12 h-12 mb-2 opacity-50" />
+                      <p className="text-sm">No files added yet</p>
+                      <p className="text-xs">Add files to provide context for your conversations</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {files.map((file) => (
+                        <div
+                          key={file.id}
+                          className="flex items-center justify-between p-2 bg-muted rounded-md group"
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </TabsContent>
+                          <div className="flex items-center gap-2">
+                            <File className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-foreground">{file.name}</span>
+                            <span className="text-xs text-muted-foreground">{file.path}</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveFile(file.id)}
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </TabsContent>
+            )}
 
             {/* Knowledge Base Tab */}
             <TabsContent value="knowledge" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-foreground">Knowledge Base</Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Upload files to give the AI persistent context about this project. Supported:
-                    .txt .md .pdf .csv .json .py .js .ts .rs
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddKbFiles}
-                  disabled={isUploadingKb}
-                  className="border-border text-foreground hover:bg-accent"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  {isUploadingKb ? 'Reading...' : 'Browse Files'}
-                </Button>
-              </div>
-
-              {/* Drag-and-drop zone */}
-              <div
-                ref={kbDropZoneRef}
-                onDrop={handleKbDrop}
-                onDragOver={handleKbDragOver}
-                className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-muted-foreground transition-colors cursor-pointer"
-                onClick={handleAddKbFiles}
-              >
-                <Database className="w-8 h-8 opacity-40" />
-                <p className="text-sm">Drag & drop files here, or click to browse</p>
-                <p className="text-xs opacity-60">Files are read and stored as project context</p>
-              </div>
-
-              {/* Knowledge base file list */}
-              <ScrollArea className="h-[160px] border border-border rounded-lg p-2">
-                {knowledgeBaseFiles.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <Database className="w-10 h-10 mb-2 opacity-30" />
-                    <p className="text-sm">No knowledge base files yet</p>
+              {isManagedCloud ? (
+                <>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <Label className="text-foreground">Cloud project sources</Label>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        Searchable text and PDF sources are uploaded to your Cloud workspace and
+                        retrieved only through this project&apos;s authenticated account boundary.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isUploadingKb}
+                      onClick={() => cloudKnowledgeInputRef.current?.click()}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {isUploadingKb ? 'Uploading…' : 'Add sources'}
+                    </Button>
+                    <input
+                      ref={cloudKnowledgeInputRef}
+                      type="file"
+                      multiple
+                      accept={CLOUD_KNOWLEDGE_ACCEPT}
+                      className="hidden"
+                      onChange={(event) =>
+                        void handleCloudKnowledgeFiles(Array.from(event.target.files ?? []))
+                      }
+                    />
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    {knowledgeBaseFiles.map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex items-center justify-between p-2 bg-muted rounded-md group"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <File className="w-4 h-4 text-green-400 shrink-0" />
-                          <div className="min-w-0">
-                            <span className="text-sm text-foreground truncate block">
-                              {file.name}
-                            </span>
-                            {file.content && (
-                              <span className="text-xs text-muted-foreground">
-                                {file.content.length.toLocaleString()} chars
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveKbFile(file.id)}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 shrink-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => cloudKnowledgeInputRef.current?.click()}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        cloudKnowledgeInputRef.current?.click();
+                      }
+                    }}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      void handleCloudKnowledgeFiles(Array.from(event.dataTransfer.files));
+                    }}
+                    className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-5 py-6 text-center text-muted-foreground transition-colors hover:border-muted-foreground"
+                  >
+                    <Database className="h-8 w-8 opacity-40" />
+                    <p className="text-sm">Drop files here or choose from this device</p>
+                    <p className="text-xs opacity-70">Text-based files and searchable PDFs</p>
+                  </div>
+
+                  {cloudKnowledgeError && (
+                    <div
+                      role="alert"
+                      className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300"
+                    >
+                      {cloudKnowledgeError}
+                    </div>
+                  )}
+
+                  <ScrollArea className="h-[220px] rounded-lg border border-border p-2">
+                    {isLoadingCloudKnowledge ? (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                        <p className="text-sm">Loading Cloud sources…</p>
                       </div>
-                    ))}
+                    ) : cloudKnowledgeError ? (
+                      <div className="flex h-full flex-col items-center justify-center px-6 text-center text-muted-foreground">
+                        <p className="text-sm">Cloud sources are unavailable</p>
+                        <button
+                          type="button"
+                          onClick={() => setCloudKnowledgeRetry((attempt) => attempt + 1)}
+                          className="mt-3 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                        >
+                          Try again
+                        </button>
+                      </div>
+                    ) : cloudKnowledgeFiles.length === 0 ? (
+                      <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+                        <File className="mb-2 h-10 w-10 opacity-30" />
+                        <p className="text-sm">No Cloud sources yet</p>
+                        <p className="text-xs">Add a file to make it available across devices.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {cloudKnowledgeFiles.map((file) => (
+                          <div
+                            key={file.id}
+                            className="group flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <File className="h-4 w-4 shrink-0 text-blue-400" />
+                              <div className="min-w-0">
+                                <span className="block truncate text-sm text-foreground">
+                                  {file.fileName}
+                                </span>
+                                <span className="block text-xs text-muted-foreground">
+                                  {formatFileSize(file.byteCount)} · stored
+                                </span>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`Remove ${file.fileName}`}
+                              disabled={removingCloudKnowledgeIds.has(file.id)}
+                              onClick={() => void handleRemoveCloudKnowledge(file.id)}
+                              className="shrink-0 text-muted-foreground hover:text-red-400"
+                            >
+                              {removingCloudKnowledgeIds.has(file.id) ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-foreground">Knowledge Base</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Upload files to give the AI persistent context about this project.
+                        Supported: .txt .md .pdf .csv .json .py .js .ts .rs
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddKbFiles}
+                      disabled={isUploadingKb}
+                      className="border-border text-foreground hover:bg-accent"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {isUploadingKb ? 'Reading...' : 'Browse Files'}
+                    </Button>
                   </div>
-                )}
-              </ScrollArea>
 
-              <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                <p className="text-xs text-blue-300">
-                  Knowledge base files are read once and stored locally. AGI searches this content
-                  and references the most relevant parts when answering questions in this project.
-                </p>
-              </div>
+                  {/* Drag-and-drop zone */}
+                  <div
+                    ref={kbDropZoneRef}
+                    onDrop={handleKbDrop}
+                    onDragOver={handleKbDragOver}
+                    className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-muted-foreground transition-colors cursor-pointer"
+                    onClick={handleAddKbFiles}
+                  >
+                    <Database className="w-8 h-8 opacity-40" />
+                    <p className="text-sm">Drag & drop files here, or click to browse</p>
+                    <p className="text-xs opacity-60">
+                      Files are read and stored as project context
+                    </p>
+                  </div>
+
+                  {/* Knowledge base file list */}
+                  <ScrollArea className="h-[160px] border border-border rounded-lg p-2">
+                    {knowledgeBaseFiles.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <Database className="w-10 h-10 mb-2 opacity-30" />
+                        <p className="text-sm">No knowledge base files yet</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {knowledgeBaseFiles.map((file) => (
+                          <div
+                            key={file.id}
+                            className="flex items-center justify-between p-2 bg-muted rounded-md group"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <File className="w-4 h-4 text-green-400 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="text-sm text-foreground truncate block">
+                                  {file.name}
+                                </span>
+                                {file.content && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {file.content.length.toLocaleString()} chars
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveKbFile(file.id)}
+                              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+
+                  <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                    <p className="text-xs text-blue-300">
+                      Knowledge base files are read once and stored locally. AGI searches this
+                      content and references the most relevant parts when answering questions in
+                      this project.
+                    </p>
+                  </div>
+                </>
+              )}
             </TabsContent>
 
             {/* Memory Tab */}
-            <TabsContent value="memory" className="space-y-4">
-              <div className="space-y-4">
-                {/* Memory Manager */}
-                <div className="border border-border rounded-lg overflow-hidden">
-                  <MemoryManager
-                    showCreateButton={true}
-                    showImportExport={false}
-                    maxHeight="350px"
-                  />
-                </div>
+            {!isManagedCloud && (
+              <TabsContent value="memory" className="space-y-4">
+                <div className="space-y-4">
+                  {/* Memory Manager */}
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <MemoryManager
+                      showCreateButton={true}
+                      showImportExport={false}
+                      maxHeight="350px"
+                    />
+                  </div>
 
-                {/* Info Box */}
-                <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                  <p className="text-xs text-blue-300">
-                    Memories help AGI remember important details about your project across sessions.
-                    Architectural decisions, coding preferences, and project context are stored as
-                    memories for continuity.
-                  </p>
+                  {/* Info Box */}
+                  <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                    <p className="text-xs text-blue-300">
+                      Memories help AGI remember important details about your project across
+                      sessions. Architectural decisions, coding preferences, and project context are
+                      stored as memories for continuity.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
+            )}
 
             {/* Conversations Tab */}
             <TabsContent value="conversations" className="space-y-4">

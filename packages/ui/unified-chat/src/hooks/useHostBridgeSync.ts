@@ -8,11 +8,10 @@ export function syncPackageStoreFromHost(hostBridge: ChatHostBridge | null | und
   const snapshot = hostBridge.getSnapshot();
   const store = useChatStore.getState();
 
-  store.setConversations(snapshot.conversations.map(normalizeHostConversation));
-
-  if (store.activeConversationId !== snapshot.activeConversationId) {
-    store.setActiveConversation(snapshot.activeConversationId);
-  }
+  store.replaceHostSnapshot(
+    snapshot.conversations.map(normalizeHostConversation),
+    snapshot.activeConversationId,
+  );
 }
 
 export function useHostBridgeSync(hostBridge: ChatHostBridge | null | undefined): void {

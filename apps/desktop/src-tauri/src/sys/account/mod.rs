@@ -98,6 +98,80 @@ pub struct DevicePollResponse {
     pub user: Option<UserProfile>,
 }
 
+/// Minimal response returned to the Desktop device-authorization client.
+///
+/// Device authorization intentionally runs through the native HTTP client:
+/// the Tauri webview is a different origin from agiworkforce.com, while the
+/// native boundary can enforce the exact two allowed routes without weakening
+/// the web application's CORS policy.
+#[derive(Debug, Clone, Serialize)]
+pub struct DeviceAuthorizationHttpResponse {
+    pub status: u16,
+    pub body: String,
+}
+
+async fn execute_device_authorization_request(
+    path: &str,
+    body: String,
+    state: State<'_, ApiState>,
+) -> Result<DeviceAuthorizationHttpResponse, String> {
+    let api_base = get_api_base_url();
+    validate_api_base_url(&api_base)?;
+
+    let api_request = ApiRequest {
+        method: HttpMethod::Post,
+        url: format!("{}{}", api_base, path),
+        body: Some(body),
+        headers: std::collections::HashMap::from([
+            ("Content-Type".to_string(), "application/json".to_string()),
+            ("X-Requested-With".to_string(), "XMLHttpRequest".to_string()),
+        ]),
+        timeout_ms: Some(30_000),
+        ..Default::default()
+    };
+
+    let response = state
+        .get_client()?
+        .execute(api_request)
+        .await
+        .map_err(|e| format!("AGI Cloud device authorization request failed: {}", e))?;
+
+    Ok(DeviceAuthorizationHttpResponse {
+        status: response.status,
+        body: response.body,
+    })
+}
+
+/// Start the OAuth-style device authorization flow for this Desktop app.
+#[tauri::command]
+pub async fn account_start_device_authorization(
+    state: State<'_, ApiState>,
+) -> Result<DeviceAuthorizationHttpResponse, String> {
+    execute_device_authorization_request(
+        "/api/auth/device/code",
+        serde_json::json!({ "surface": "desktop" }).to_string(),
+        state,
+    )
+    .await
+}
+
+/// Poll the exact device authorization created by
+/// `account_start_device_authorization`.
+#[tauri::command]
+#[allow(non_snake_case)]
+pub async fn account_poll_device_authorization(
+    deviceCode: String,
+    state: State<'_, ApiState>,
+) -> Result<DeviceAuthorizationHttpResponse, String> {
+    let device_code = deviceCode.trim();
+    if device_code.is_empty() || device_code.len() > 128 {
+        return Err("Invalid AGI Cloud device authorization code.".to_string());
+    }
+
+    let body = serde_json::json!({ "device_code": device_code }).to_string();
+    execute_device_authorization_request("/api/auth/device/token", body, state).await
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreditBalance {
     #[serde(skip_serializing_if = "Option::is_none")]

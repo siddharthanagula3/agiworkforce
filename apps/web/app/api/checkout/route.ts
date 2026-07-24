@@ -11,8 +11,9 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { CheckoutRequestSchema } from '@/lib/validations/checkout';
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
@@ -41,8 +42,11 @@ const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== 'off';
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
-  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
-  const csrfError = await requireCsrfToken(request);
+  const { userId } = await getClerkAuthUser(request);
+
+  // Authenticate the bearer/cookie principal before the CSRF helper treats a
+  // Desktop bearer request as exempt from cookie-origin CSRF validation.
+  const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) {
     return csrfError as NextResponse;
   }
@@ -65,11 +69,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'checkout');
   if (rateLimitResponse) {
     return rateLimitResponse;
-  }
-
-  const { userId } = await (await import('@clerk/nextjs/server')).auth();
-  if (!userId) {
-    throw createError.unauthorized('Please sign in to continue');
   }
 
   // Fetch the user's email from Clerk so Stripe customers are created with a
@@ -110,6 +109,10 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
 
   const { plan, billingInterval } = validationResult.data;
+  const requestIdempotencyKey = request.headers.get('idempotency-key')?.trim() || null;
+  if (requestIdempotencyKey && !/^[A-Za-z0-9._:-]{8,128}$/.test(requestIdempotencyKey)) {
+    throw createError.validation('Idempotency-Key must be 8-128 URL-safe characters.');
+  }
   const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
   const priceSelection = await getCheckoutPriceSelection(plan, billingInterval, country);
   if (!priceSelection) {
@@ -129,12 +132,18 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     SubscriptionRow,
     'status' | 'plan_tier' | 'stripe_customer_id' | 'stripe_subscription_id'
   >;
-  const subRows = await db
-    .query<SubRow>(
+  let subRows: SubRow[];
+  try {
+    subRows = await db.query<SubRow>(
       'select status, plan_tier, stripe_customer_id, stripe_subscription_id from subscriptions where user_id = $1 limit 1',
       [user.id],
-    )
-    .catch(() => [] as SubRow[]);
+    );
+  } catch (error) {
+    logger.error({ error, userId: user.id }, 'Failed to verify existing subscription');
+    throw createError.serviceUnavailable(
+      'Billing details could not be verified. No checkout was created; please retry.',
+    );
+  }
   const existingSubscription = subRows[0] ?? null;
 
   const activeStatuses = new Set(['active', 'trialing', 'past_due']);
@@ -166,11 +175,18 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
 
   // First, check if we have a customer ID stored in profiles
-  const profileRows = await db
-    .query<
-      Pick<ProfileRow, 'stripe_customer_id'>
-    >('select stripe_customer_id from profiles where id = $1 limit 1', [user.id])
-    .catch(() => [] as Pick<ProfileRow, 'stripe_customer_id'>[]);
+  let profileRows: Array<Pick<ProfileRow, 'stripe_customer_id'>>;
+  try {
+    profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
+      'select stripe_customer_id from profiles where id = $1 limit 1',
+      [user.id],
+    );
+  } catch (error) {
+    logger.error({ error, userId: user.id }, 'Failed to verify Stripe customer');
+    throw createError.serviceUnavailable(
+      'Billing customer details could not be verified. No checkout was created; please retry.',
+    );
+  }
   const profile = profileRows[0] ?? null;
 
   if (isStripeCustomerId(profile?.stripe_customer_id)) {
@@ -188,21 +204,32 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   } else {
     // No customer ID stored - create a new Stripe customer
     try {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        metadata: {
-          user_id: user.id,
+      const customer = await stripe.customers.create(
+        {
+          email: user.email,
+          metadata: {
+            user_id: user.id,
+          },
         },
-      });
+        { idempotencyKey: `checkout-customer:${user.id}` },
+      );
       stripeCustomerId = customer.id;
 
       // Store the customer ID in the profile for future use
-      await db
-        .execute('update profiles set stripe_customer_id = $1 where id = $2', [
+      try {
+        await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
           stripeCustomerId,
           user.id,
-        ])
-        .catch(() => undefined);
+        ]);
+      } catch (error) {
+        // The current checkout still uses this exact customer and the webhook
+        // repairs the profile link. Keep the failure visible in operations;
+        // customer creation itself is idempotent for safe immediate retries.
+        logger.error(
+          { error, userId: user.id, stripeCustomerId },
+          'Created Stripe customer but could not persist the profile link',
+        );
+      }
 
       logger.info(
         { userId: user.id, customerId: stripeCustomerId },
@@ -230,7 +257,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   // Create Stripe Checkout Session
   try {
-    const checkoutSession = await stripe.checkout.sessions.create({
+    const checkoutSessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
       locale: 'auto', // Auto-detect browser locale to prevent i18n module errors
       currency,
@@ -258,7 +285,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         metadata: checkoutMetadata,
       },
       allow_promotion_codes: true,
-    });
+    };
+    const checkoutSession = requestIdempotencyKey
+      ? await stripe.checkout.sessions.create(checkoutSessionParams, {
+          idempotencyKey: `checkout:${user.id}:${requestIdempotencyKey}`,
+        })
+      : await stripe.checkout.sessions.create(checkoutSessionParams);
 
     if (!checkoutSession.url) {
       throw createError.internal('Failed to generate checkout URL');
@@ -288,7 +320,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-export const POST = withErrorHandler(handleCheckout);
+export const POST = withCorsRoute(withErrorHandler(handleCheckout));
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

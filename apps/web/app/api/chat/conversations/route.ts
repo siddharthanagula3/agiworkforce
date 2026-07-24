@@ -19,6 +19,7 @@ import {
 } from '@/lib/server/neon-chat';
 import { assertSessionInvariants } from '@agiworkforce/types';
 import { buildCloudChatSessionLabel } from '@/lib/services/chat-session-label-service';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -33,7 +34,7 @@ async function handleGetConversations(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
+  const userId = await requireCurrentUserId(request);
 
   // Optional title search. Sanitize to prevent oversized ILIKE patterns.
   const url = new URL(request.url);
@@ -96,13 +97,13 @@ async function handleGetConversations(request: NextRequest) {
 }
 
 async function handleCreateConversation(request: NextRequest) {
+  const userId = await requireCurrentUserId(request);
+
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const userId = await requireCurrentUserId();
 
   // AUDIT-008-003: Validate input with Zod schema
   let rawBody: unknown = {};
@@ -125,7 +126,7 @@ async function handleCreateConversation(request: NextRequest) {
       [ownedProject] = await db.query<{ id: string }>(
         `select id
            from user_projects
-          where id = $1 and user_id = $2 and is_archived = false
+          where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
           limit 1`,
         [body.projectId, userId],
       );
@@ -191,5 +192,9 @@ async function handleCreateConversation(request: NextRequest) {
   }
 }
 
-export const GET = withErrorHandler(handleGetConversations);
-export const POST = withErrorHandler(handleCreateConversation);
+export const GET = withCorsRoute(withErrorHandler(handleGetConversations));
+export const POST = withCorsRoute(withErrorHandler(handleCreateConversation));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

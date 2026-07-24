@@ -24,7 +24,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { useAccountStore } from '../../stores/auth';
-import { type ConversationSearchResult, useChatStore } from '../../stores/chat/chatStore';
+import { type RecentConversationSearchResult, useChatStore } from '../../stores/chat/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import {
   PROVIDER_LABELS,
@@ -37,18 +37,18 @@ import { ScreenCaptureButton } from '@/features/screen-capture/ScreenCaptureButt
 import type { CaptureResult } from '../../types/capture';
 
 interface RecentConversationItem {
-  conversationId: number;
+  conversationId: string | number;
   title: string;
   messageCount: number;
   lastUpdated: string;
 }
 
 function normalizeRecentConversation(
-  value: ConversationSearchResult | Record<string, unknown>,
+  value: RecentConversationSearchResult | Record<string, unknown>,
 ): RecentConversationItem | null {
   const source = value as Record<string, unknown>;
   const conversationId =
-    typeof source['conversationId'] === 'number'
+    typeof source['conversationId'] === 'number' || typeof source['conversationId'] === 'string'
       ? source['conversationId']
       : typeof source['conversation_id'] === 'number'
         ? source['conversation_id']
@@ -115,7 +115,7 @@ interface QuickQueryProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (query: string, model: string) => void;
-  onOpenConversation?: (conversationDbId: number) => void;
+  onOpenConversation?: (conversationId: string | number) => void;
   onStartNewChat?: () => void;
   onRequestVoice?: (draft: string) => void;
   onRequestCapture?: (captureResult: CaptureResult, draft: string) => void;
@@ -147,7 +147,7 @@ export function QuickQuery({
   const account = useAccountStore((state) => state.account);
   const getRecentConversations = useChatStore((state) => state.getRecentConversations);
   const canOpenRecentChats = typeof onOpenConversation === 'function';
-  const planTier = account.plan ?? 'basic';
+  const planTier = account.plan ?? 'free';
   const allowedAutoModes = getAllowedAutoModesForTier(planTier);
   const defaultModel = getBestAutoModeForTier(planTier);
 
@@ -259,8 +259,8 @@ export function QuickQuery({
   );
 
   const handleOpenConversation = useCallback(
-    (conversationDbId: number) => {
-      onOpenConversation?.(conversationDbId);
+    (conversationId: string | number) => {
+      onOpenConversation?.(conversationId);
       onClose();
     },
     [onClose, onOpenConversation],

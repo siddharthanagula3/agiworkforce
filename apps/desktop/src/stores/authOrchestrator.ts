@@ -3,17 +3,8 @@
  *
  * Centralizes all auth state handling to prevent race conditions.
  *
- * TODO(audit 2026-05-20, §12 — DEFERRED): this module duplicates large parts
- * of `stores/auth.ts` (subscription cache, listener fan-out, plan-tier
- * resolution). The audit flagged the 391-LOC `auth.ts` vs ~400-LOC
- * `authOrchestrator.ts` divergence as a real semantic-drift risk: both
- * subscribe to `cloudAccountAuth.onAuthStateChange()`, both maintain their own
- * caches, and the two listener chains can race on subscription refresh.
- *
- * Merging them is intentionally NOT in scope for this audit sweep because
- * it needs a unified session-management design (see also the desktop /
- * web / mobile / CLI auth-semantic-drift roadmap entry). Track the merge
- * under a follow-up task; do not paper over the duplication piecemeal.
+ * This is the only CloudAccountAuth listener. `stores/auth.ts` owns the Zustand
+ * state and actions but no longer installs a competing auth listener.
  *
  * PROBLEM SOLVED:
  * Previously, App.tsx called initializeAuthStore(), initializeAccountStore(),
@@ -38,8 +29,9 @@ import {
 import { useBillingUsageStore } from './billingUsage';
 import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/cloudAccountTypes';
 import { accountApi } from '../api/accountApi';
-import { API_BASE_URL } from '../api/client';
+import { WEB_APP_URL } from '../api/config';
 import { isTauri, invoke } from '../lib/tauri-mock';
+import { effectivePlanTier } from '@agiworkforce/types';
 
 // Singleton guard - ensures only one orchestrator instance exists
 let orchestratorInitialized = false;
@@ -207,10 +199,6 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     // STEP 1: Update user info in unified store
     // ═══════════════════════════════════════════════════════════════
     if (authState.user) {
-      // Scope the subscription cache to this user so account switches
-      // never read another user's cached tier.
-      cachedUserHash = await hashUserId(authState.user.id);
-
       unifiedAuthStore.setUser({
         id: authState.user.id,
         email: authState.user.email || '',
@@ -220,12 +208,30 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
         avatar:
           authState.profile?.avatar_url || (authState.user.user_metadata?.['avatar_url'] as string),
       });
+      // Project the already-validated device credential before any hashing,
+      // subscription, or credits I/O. The shell uses accessToken as the Cloud
+      // admission signal; delaying it until STEP 5 could briefly return a
+      // successfully authorized user to the sign-in screen while credits were
+      // still loading.
+      unifiedAuthStore.setAccount({
+        id: authState.user.id,
+        email: authState.user.email || null,
+        accessToken: authState.session?.access_token || null,
+        refreshToken: authState.session?.refresh_token || null,
+      });
+
+      // Scope the subscription cache to this user so account switches
+      // never read another user's cached tier.
+      cachedUserHash = await hashUserId(authState.user.id);
     } else {
       // clearAuth() sets sessionValidated: true, unblocking the boot skeleton.
       // Do NOT call reset() after this — reset() uses getDefaultState() which
       // sets sessionValidated: false, undoing the clearAuth() call and leaving
       // local-only users stuck on the loading skeleton forever.
       unifiedAuthStore.clearAuth();
+      if (authState.error) {
+        unifiedAuthStore.setError(authState.error);
+      }
       clearCachedSubscription();
       cachedUserHash = null;
       return;
@@ -242,15 +248,17 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
 
     if (authState.subscription?.plan_tier) {
       // Fresh data from backend
-      planTier = asPlanTier(authState.subscription.plan_tier);
-      subscriptionStatus = (authState.subscription.status as SubscriptionStatus) || 'active';
+      subscriptionStatus = (authState.subscription.status as SubscriptionStatus) || 'none';
+      planTier = asPlanTier(
+        effectivePlanTier(authState.subscription.plan_tier, subscriptionStatus),
+      );
       setCachedSubscription(userId, planTier, subscriptionStatus);
     } else if (authState.subscriptionFetchStatus === 'failed') {
       // Fetch failed - try cache
       const cached = getCachedSubscription(userId);
       if (cached) {
-        planTier = cached.planTier;
         subscriptionStatus = cached.subscriptionStatus;
+        planTier = asPlanTier(effectivePlanTier(cached.planTier, subscriptionStatus));
       } else {
         // CRITICAL: Don't default to 'free' - keep as null
         planTier = null;
@@ -323,7 +331,11 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
         customer_id: authState.user.id,
         stripe_subscription_id: sub.stripe_subscription_id || '',
         stripe_price_id: sub.stripe_price_id || '',
-        plan_name: planTier || 'free',
+        // Preserve the purchased tier on the billing record so canceled or
+        // unpaid subscriptions can still be described accurately in billing
+        // UI. `unifiedAuthStore.plan` remains the status-gated effective tier
+        // used for every capability check.
+        plan_name: asPlanTier(sub.plan_tier),
         billing_interval: 'monthly',
         status: sub.status || 'none',
         current_period_start: sub.current_period_start
@@ -389,7 +401,7 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
     if (isTauri && authState.session) {
       try {
         // Sync API base URL
-        await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
+        await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });
 
         // Sync tokens
         await invoke('account_store_access_token', {

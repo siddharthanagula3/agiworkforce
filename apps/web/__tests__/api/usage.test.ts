@@ -30,6 +30,7 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
+  withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
 // Mock env utility

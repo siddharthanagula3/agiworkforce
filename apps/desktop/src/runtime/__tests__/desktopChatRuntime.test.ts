@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatRuntime } from '@agiworkforce/unified-chat';
 import { CloudRuntime } from '../CloudRuntime';
-import { createDesktopChatRuntime } from '../desktopChatRuntime';
+import {
+  createDesktopChatRuntime,
+  disposeActiveDesktopChatRuntime,
+  registerActiveDesktopChatRuntime,
+} from '../desktopChatRuntime';
 import { TauriRuntime } from '../TauriRuntime';
 import { WebRuntime } from '../WebRuntime';
 
@@ -34,6 +38,35 @@ function runtimeFactories() {
 }
 
 describe('desktop chat runtime composition root', () => {
+  it('does not dispose the same runtime during a Strict Mode effect replay', async () => {
+    await disposeActiveDesktopChatRuntime();
+    const runtime = runtimeStub('desktop');
+    runtime.dispose = vi.fn(async () => undefined);
+
+    const cleanup = registerActiveDesktopChatRuntime(runtime);
+    cleanup();
+    registerActiveDesktopChatRuntime(runtime);
+    await Promise.resolve();
+
+    expect(runtime.dispose).not.toHaveBeenCalled();
+    await disposeActiveDesktopChatRuntime();
+  });
+
+  it('disposes the mounted runtime before replacing or clearing it', async () => {
+    await disposeActiveDesktopChatRuntime();
+    const first = runtimeStub('desktop');
+    const second = runtimeStub('desktop');
+    first.dispose = vi.fn(async () => undefined);
+    second.dispose = vi.fn(async () => undefined);
+
+    registerActiveDesktopChatRuntime(first);
+    registerActiveDesktopChatRuntime(second);
+    expect(first.dispose).toHaveBeenCalledOnce();
+
+    await disposeActiveDesktopChatRuntime();
+    expect(second.dispose).toHaveBeenCalledOnce();
+  });
+
   it('maps the production factories to the concrete runtime implementations', () => {
     const local = createDesktopChatRuntime({ isTauriHost: true, appMode: 'local' });
     const cloud = createDesktopChatRuntime({ isTauriHost: true, appMode: 'cloud' });

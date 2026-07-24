@@ -1,4 +1,4 @@
-import { getPlanPriceUsd, getPlanPriceInr } from '@agiworkforce/types';
+import { getPlanPriceUsd, getPlanPriceInr, type BillingPlanTier } from '@agiworkforce/types';
 
 // 2026-07-02: 'hobby' (target $5/mo) and 'pro_plus' were removed from the
 // shared catalog (packages/contracts/types/src/billing-catalog.ts, commit 343457c8d,
@@ -30,10 +30,9 @@ export const STRIPE_PRICE_IDS = {
 } as const;
 
 /**
- * Canonical tier IDs per platform spec:
- *   local-only / byok / free / basic / pro / max / enterprise
+ * Canonical tier IDs come from the shared billing catalog.
  */
-export type PlanId = 'local-only' | 'byok' | 'free' | 'basic' | 'pro' | 'max' | 'enterprise';
+export type PlanId = BillingPlanTier;
 
 export interface PricingPlan {
   id: PlanId;
@@ -108,9 +107,28 @@ export const PRICING_PLANS: PricingPlan[] = [
     },
   },
   {
+    id: 'free',
+    name: 'Free',
+    description: 'Managed Cloud starter usage with cross-device chat sync.',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    stripePriceId: {
+      monthly: null,
+      yearly: null,
+    },
+    features: ['Managed Cloud starter usage', 'Cross-device chat sync', 'One Cloud project'],
+    limits: {
+      automations: 10,
+      apiCalls: 100,
+      storage: 1024,
+      teamMembers: 1,
+      tokenCredits: 0,
+    },
+  },
+  {
     id: 'basic',
     name: 'Basic',
-    description: 'Managed cloud, entry tier — $2/mo of API credits included.',
+    description: 'Managed Cloud entry tier with increased monthly usage.',
     monthlyPrice: getPlanPriceUsd('basic', 'monthly'),
     yearlyPrice: 0,
     monthlyPriceInr: getPlanPriceInr('basic'),
@@ -169,8 +187,8 @@ export const PRICING_PLANS: PricingPlan[] = [
   },
   {
     id: 'max',
-    name: 'Max',
-    description: 'Managed cloud, maximum capability — deep reasoning, agentic coding, and video.',
+    name: 'Max 5x',
+    description: 'Managed Cloud flagship models with 5x Pro usage capacity.',
     monthlyPrice: getPlanPriceUsd('max', 'monthly'),
     yearlyPrice: getPlanPriceUsd('max', 'yearly'),
     stripePriceId: {
@@ -181,7 +199,6 @@ export const PRICING_PLANS: PricingPlan[] = [
       'All Pro features',
       'Deep reasoning & thinking models',
       'Advanced agentic coding models',
-      'Video generation & analysis',
       'Priority support',
     ],
     limits: {
@@ -190,6 +207,55 @@ export const PRICING_PLANS: PricingPlan[] = [
       storage: 51200,
       teamMembers: 1,
       tokenCredits: 0, // inert — server-authoritative (see basic plan note)
+    },
+  },
+  {
+    id: 'max_15x',
+    name: 'Max 15x',
+    description: 'The highest individual managed usage tier, including video generation.',
+    monthlyPrice: getPlanPriceUsd('max_15x', 'monthly'),
+    yearlyPrice: getPlanPriceUsd('max_15x', 'yearly'),
+    stripePriceId: {
+      // Checkout is server-owned; Desktop never embeds Stripe price ids for this tier.
+      monthly: null,
+      yearly: null,
+    },
+    features: [
+      'All Max 5x features',
+      '15x Pro usage capacity',
+      'Video generation access',
+      'Priority support',
+    ],
+    limits: {
+      automations: null,
+      apiCalls: null,
+      storage: 51200,
+      teamMembers: 1,
+      tokenCredits: 0,
+    },
+  },
+  {
+    id: 'team',
+    name: 'Team',
+    description: 'Pro-level capabilities with shared team administration.',
+    monthlyPrice: getPlanPriceUsd('team', 'monthly'),
+    yearlyPrice: getPlanPriceUsd('team', 'yearly'),
+    stripePriceId: {
+      // Team provisioning is sales-assisted until organization-linked seats are complete.
+      monthly: null,
+      yearly: null,
+    },
+    features: [
+      'Pro capabilities per seat',
+      'Team administration',
+      'Shared Cloud workspace controls',
+    ],
+    limits: {
+      automations: null,
+      apiCalls: 10000,
+      storage: 10240,
+      teamMembers: 25,
+      tokenCredits: 0,
     },
   },
   {

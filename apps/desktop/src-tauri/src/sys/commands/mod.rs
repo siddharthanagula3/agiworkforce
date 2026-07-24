@@ -94,7 +94,6 @@ pub mod settings;
 pub mod settings_v2;
 pub mod shortcuts;
 pub mod skills;
-pub mod subscription;
 pub mod task_persistence;
 pub mod teams;
 pub mod templates;
@@ -219,7 +218,6 @@ pub use settings::*;
 pub use settings_v2::*;
 pub use shortcuts::*;
 pub use skills::*;
-pub use subscription::*;
 pub use swarm::*; // Added in Phase 26
 pub use system_permissions::*;
 pub use task_persistence::*;

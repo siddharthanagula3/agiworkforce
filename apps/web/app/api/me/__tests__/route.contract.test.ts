@@ -141,15 +141,16 @@ describe('GET /api/me — shared cloud contract', () => {
     }
   });
 
-  it('response survives subscription service failures (degraded free shape)', async () => {
+  it('fails closed when subscription entitlement cannot be verified', async () => {
     mockGetSubscription.mockRejectedValue(new Error('subscription backend down'));
     mockNeonQuery.mockRejectedValue(new Error('db down'));
 
     const res = await GET(makeGetRequest());
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
 
     const body = await res.json();
-    expect(MeResponseSchema.safeParse(body).success).toBe(true);
+    expect(MeResponseSchema.safeParse(body).success).toBe(false);
+    expect(body).not.toHaveProperty('plan');
   });
 });
 

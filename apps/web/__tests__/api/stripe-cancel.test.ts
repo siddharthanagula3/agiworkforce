@@ -48,7 +48,9 @@ const mockExecute = vi.fn();
 const mockDb = {
   query: mockQuery,
   execute: mockExecute,
-  transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+  transaction: vi.fn((fn: (db: unknown) => unknown) =>
+    fn({ query: mockQuery, execute: mockExecute }),
+  ),
   withUser: vi.fn(() => mockDb),
   dispose: vi.fn(),
 };
@@ -566,8 +568,8 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       const response = await POST(request);
 
-      // Should still process (error is logged)
-      expect(response.status).toBe(200);
+      // Entitlement revocation failed, so the webhook must request a retry.
+      expect(response.status).toBe(500);
       expect(mockLoggerError).toHaveBeenCalled();
     });
 
@@ -624,6 +626,9 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: false }]);
+        }
+        if (sql.includes('processed_stripe_events')) {
+          return Promise.resolve([{ status: 'succeeded' }]);
         }
         return Promise.resolve([]);
       });

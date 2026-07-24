@@ -48,6 +48,7 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
+  withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
 // One env key per provider, all faked -- adapter-factory.ts's buildCompatAdapter

@@ -20,11 +20,18 @@ import type {
   ToolCall,
 } from '@agiworkforce/unified-chat';
 import {
+  CloudToolApprovalProjectionSchema,
   readPersistedCloudToolApproval,
+  type CloudToolApprovalProjection,
   type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import { sendCloudApprovalResume } from '../api/cloudApi';
-import { createCloudStreamDeltaSink, type CloudStreamDeltaSink } from './cloudStreamDeltas';
+import {
+  createCloudStreamDeltaSink,
+  mergeCloudStreamMessageProjections,
+  type CloudStreamDeltaSink,
+  type CloudStreamMessageProjection,
+} from './cloudStreamDeltas';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
@@ -48,6 +55,8 @@ interface PendingApprovalTurn {
   resolving: boolean;
   /** Canonical activity accumulated before the approval suspension. */
   agentActivity?: AgentActivityState;
+  /** Rich transcript fields accumulated across every stream round. */
+  messageProjection: CloudStreamMessageProjection;
 }
 
 export interface ResolveApprovalOutcome {
@@ -61,6 +70,9 @@ export interface ResolveApprovalOutcome {
   runReference?: ManagedCloudAgentRunReference;
   pendingProjection?: CloudApprovalTurnProjection;
   agentActivity?: AgentActivityState;
+  finishReason?: string;
+  streamError?: NonNullable<CloudStreamMessageProjection['streamError']>;
+  messageProjection: CloudStreamMessageProjection;
 }
 
 function parseApprovalArgs(input: string | undefined): Record<string, unknown> {
@@ -73,6 +85,40 @@ function parseApprovalArgs(input: string | undefined): Record<string, unknown> {
   } catch {
     return { value: input };
   }
+}
+
+function stringifyApprovalArgs(args: Record<string, unknown>): string | undefined {
+  if (Object.keys(args).length === 0) return undefined;
+  try {
+    const serialized = JSON.stringify(args);
+    return serialized.length <= 100_000 ? serialized : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Convert the runtime's approval-card projection into the validated durable
+ * Cloud metadata contract. Both Desktop Cloud runtimes use this exact mapper
+ * so suspend/resume survives reload regardless of host shell.
+ */
+export function toPersistedCloudApprovalProjection(
+  projection: CloudApprovalTurnProjection | undefined,
+): CloudToolApprovalProjection | undefined {
+  if (!projection) return undefined;
+  return CloudToolApprovalProjectionSchema.parse({
+    schemaVersion: 1,
+    runId: projection.runId,
+    calls: projection.calls.map((call) => {
+      const input = stringifyApprovalArgs(call.args);
+      return {
+        toolCallId: call.toolCallId,
+        name: call.name,
+        ...(input ? { input } : {}),
+        ...(call.decision ? { approvalDecision: call.decision } : {}),
+      };
+    }),
+  });
 }
 
 /** Rebuild shared Desktop approval cards from validated cloud metadata. */
@@ -102,6 +148,7 @@ function toProjection(turn: PendingApprovalTurn): CloudApprovalTurnProjection | 
       return { ...call, ...(decision ? { decision } : {}) };
     }),
     ...(turn.agentActivity ? { agentActivity: turn.agentActivity } : {}),
+    messageProjection: turn.messageProjection,
   };
 }
 
@@ -113,7 +160,11 @@ function toProjection(turn: PendingApprovalTurn): CloudApprovalTurnProjection | 
  */
 type SinkOutcome = Pick<
   CloudStreamDeltaSink,
-  'isSuspended' | 'getAccumulatedContent' | 'getPendingApprovalCalls' | 'getAgentActivity'
+  | 'isSuspended'
+  | 'getAccumulatedContent'
+  | 'getPendingApprovalCalls'
+  | 'getAgentActivity'
+  | 'getMessageProjection'
 >;
 
 export class CloudToolApprovalRegistry {
@@ -138,6 +189,7 @@ export class CloudToolApprovalRegistry {
         ),
         assistantContent: projection.assistantContent,
         resolving: false,
+        messageProjection: projection.messageProjection ?? {},
         ...(projection.agentActivity ? { agentActivity: projection.agentActivity } : {}),
       });
     }
@@ -168,6 +220,7 @@ export class CloudToolApprovalRegistry {
         decisions: new Map(),
         assistantContent: sink.getAccumulatedContent(),
         resolving: false,
+        messageProjection: sink.getMessageProjection(),
         ...(sink.getAgentActivity() ? { agentActivity: sink.getAgentActivity() } : {}),
       });
     } else {
@@ -225,6 +278,10 @@ export class CloudToolApprovalRegistry {
         () => {
           const fullContent = turn.assistantContent + sink.getAccumulatedContent();
           const nextActivity = sink.getAgentActivity();
+          const messageProjection = mergeCloudStreamMessageProjections(
+            turn.messageProjection,
+            sink.getMessageProjection(),
+          );
           const nextRunReference = turn.runReference
             ? {
                 ...turn.runReference,
@@ -251,6 +308,7 @@ export class CloudToolApprovalRegistry {
               decisions: new Map(),
               assistantContent: fullContent,
               resolving: false,
+              messageProjection,
               ...(nextActivity ? { agentActivity: nextActivity } : {}),
             };
             this.turns.set(conversationId, nextTurn);
@@ -258,10 +316,6 @@ export class CloudToolApprovalRegistry {
           } else {
             this.turns.delete(conversationId);
           }
-          emit({
-            type: 'done',
-            ...(sink.getFinishReason() ? { finishReason: sink.getFinishReason() } : {}),
-          });
           resolvePromise({
             suspended: sink.isSuspended(),
             content: fullContent,
@@ -271,6 +325,9 @@ export class CloudToolApprovalRegistry {
             ...(nextRunReference ? { runReference: nextRunReference } : {}),
             ...(pendingProjection ? { pendingProjection } : {}),
             ...(nextActivity ? { agentActivity: nextActivity } : {}),
+            ...(sink.getFinishReason() ? { finishReason: sink.getFinishReason() } : {}),
+            ...(sink.getStreamError() ? { streamError: sink.getStreamError() } : {}),
+            messageProjection,
           });
         },
         (err) => {

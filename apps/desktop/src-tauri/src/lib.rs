@@ -1625,6 +1625,8 @@ pub fn run() {
             crate::sys::account::account_store_refresh_token,
             crate::sys::account::account_clear_tokens,
             crate::sys::account::account_restore_access_token,
+            crate::sys::account::account_start_device_authorization,
+            crate::sys::account::account_poll_device_authorization,
             crate::sys::account::account_list_devices,
             crate::sys::account::account_disconnect_device,
 
@@ -2101,21 +2103,6 @@ pub fn run() {
             crate::sys::commands::export_user_data,
             crate::sys::commands::get_user_preference,
             crate::sys::commands::set_user_preference,
-
-            crate::sys::billing::billing_initialize,
-            crate::sys::billing::stripe_create_customer,
-            crate::sys::billing::stripe_get_customer_by_email,
-            crate::sys::billing::stripe_create_subscription,
-            crate::sys::billing::stripe_get_subscription,
-            crate::sys::billing::stripe_update_subscription,
-            crate::sys::billing::stripe_cancel_subscription,
-            crate::sys::billing::stripe_get_invoices,
-            crate::sys::billing::stripe_get_usage,
-            crate::sys::billing::stripe_track_usage,
-            crate::sys::billing::stripe_create_portal_session,
-            crate::sys::billing::stripe_get_active_subscription,
-            crate::sys::billing::stripe_process_webhook,
-            crate::sys::commands::cancel_subscription,
 
             // Projects
             crate::sys::commands::project_create,
@@ -2613,13 +2600,11 @@ pub fn run() {
             crate::sys::commands::get_best_practices,
             crate::sys::commands::project_memory::get_coding_styles,
             crate::sys::commands::get_creator_workflows,
-            crate::sys::commands::get_current_plan,
             crate::sys::commands::get_first_run_session,
             crate::sys::commands::get_first_run_statistics,
             crate::sys::commands::get_inline_completion,
             crate::sys::commands::get_knowledge_by_category,
             crate::sys::commands::get_metrics_history,
-            crate::sys::commands::get_pricing_plans,
             crate::sys::commands::get_process_success_rates,
             crate::sys::commands::get_process_templates,
             crate::sys::commands::project_memory::get_project_context,
@@ -2753,7 +2738,6 @@ pub fn run() {
             crate::sys::commands::start_first_run_experience,
             crate::sys::commands::start_tutorial,
             crate::sys::commands::submit_tutorial_feedback,
-            crate::sys::commands::subscribe_to_plan,
             crate::sys::commands::sync_conversations_to_cloud,
             crate::sys::commands::task_create,
             crate::sys::commands::task_get_resumable,
@@ -2767,7 +2751,6 @@ pub fn run() {
             crate::sys::commands::update_first_run_step,
             crate::sys::commands::project_memory::update_memory_importance,
             crate::sys::commands::update_session_activity,
-            crate::sys::commands::upgrade_plan,
             crate::sys::commands::vision_answer_question,
             crate::sys::commands::vision_describe_ui_elements,
             crate::sys::commands::vision_locate_element,
@@ -2858,8 +2841,6 @@ pub fn run() {
             // ============================================================
             // Stripe payment method commands
             // ============================================================
-            crate::sys::billing::stripe_attach_payment_method,
-            crate::sys::billing::stripe_set_default_payment_method,
 
             // ============================================================
             // FIX-023 (Sprint 5): commands previously defined with
@@ -2884,10 +2865,6 @@ pub fn run() {
             crate::core::codebase::search_symbols,
 
             // Billing — payment methods + invoice email + setup intent
-            crate::sys::billing::send_invoice_email,
-            crate::sys::billing::stripe_create_setup_intent,
-            crate::sys::billing::stripe_delete_payment_method,
-            crate::sys::billing::stripe_get_payment_methods,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

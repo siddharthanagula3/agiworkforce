@@ -13,8 +13,8 @@ import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/a
 const LazyMasterPasswordSettings = lazy(() =>
   import('../../MasterPasswordSettings').then((m) => ({ default: m.MasterPasswordSettings })),
 );
-const LazyPrivacyDataSection = lazy(() =>
-  import('../../Privacy/DataSection').then((m) => ({ default: m.DataSection })),
+const LazyCloudDataSection = lazy(() =>
+  import('../../Privacy/CloudDataSection').then((m) => ({ default: m.CloudDataSection })),
 );
 const LazyCacheManagement = lazy(() =>
   import('../../CacheManagement').then((m) => ({ default: m.CacheManagement })),
@@ -345,10 +345,100 @@ function DataPrivacySection() {
 
 interface PrivacyTabProps {
   onOpenGovernanceWorkspace: () => void;
+  scope?: 'local' | 'cloud';
 }
 
-export function PrivacyTab({ onOpenGovernanceWorkspace }: PrivacyTabProps) {
+function AnalyticsPrivacySection() {
+  return (
+    <div className="pt-6 border-t border-border">
+      <h3 className="text-lg font-semibold mb-4">App analytics</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        This device-wide preference applies to both Local and Cloud mode.
+      </p>
+      <Suspense fallback={<Fallback label="Loading analytics settings..." />}>
+        <LazyAnalyticsSettings />
+      </Suspense>
+    </div>
+  );
+}
+
+function GovernancePrivacySection({
+  onOpenGovernanceWorkspace,
+  scope,
+}: {
+  onOpenGovernanceWorkspace: () => void;
+  scope: 'local' | 'cloud';
+}) {
+  if (scope === 'cloud') {
+    return (
+      <div className="pt-6 border-t border-border">
+        <h3 className="text-lg font-semibold mb-1">Managed approvals &amp; governance</h3>
+        <p className="text-sm text-muted-foreground">
+          Cloud tool policy is enforced by the managed service and approval requests appear in the
+          conversation transcript. Local remembered approvals, device tool history, and the Local
+          governance workspace do not change Cloud policy.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-6 border-t border-border">
+      <h3 className="text-lg font-semibold mb-1">Governance &amp; Compliance</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Governance lives in a dedicated workspace for approvals, audit events, and execution
+        history.
+      </p>
+      <div className="rounded-lg border border-border bg-card/60 p-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h4 className="text-sm font-medium">Open governance workspace</h4>
+            <p className="text-sm text-muted-foreground mt-1">
+              Review pending approvals, audit integrity, and tool history without duplicating those
+              views inside Settings.
+            </p>
+          </div>
+          <Button variant="outline" onClick={onOpenGovernanceWorkspace}>
+            Open Workspace
+          </Button>
+        </div>
+      </div>
+      <div className="pt-6">
+        <Suspense fallback={<Fallback label="Loading governance policies..." />}>
+          <LazySafetyPolicies />
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+
+export function PrivacyTab({ onOpenGovernanceWorkspace, scope = 'local' }: PrivacyTabProps) {
   const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
+
+  if (scope === 'cloud') {
+    return (
+      <>
+        <div>
+          <h3 className="text-lg font-semibold mb-1">Cloud data &amp; privacy</h3>
+          <p className="text-sm text-muted-foreground">
+            These controls apply to synced chats, projects, files, and account data stored in AGI
+            Cloud. Local chats, provider keys, allowed folders, and the local database remain
+            device-only and are managed in Local settings.
+          </p>
+        </div>
+        <div className="pt-6 border-t border-border">
+          <Suspense fallback={<Fallback label="Loading cloud account data controls..." />}>
+            <LazyCloudDataSection />
+          </Suspense>
+        </div>
+        <AnalyticsPrivacySection />
+        <GovernancePrivacySection
+          scope="cloud"
+          onOpenGovernanceWorkspace={onOpenGovernanceWorkspace}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -367,7 +457,7 @@ export function PrivacyTab({ onOpenGovernanceWorkspace }: PrivacyTabProps) {
       {hasCloudAccountSession && (
         <div className="pt-6 border-t border-border">
           <Suspense fallback={<Fallback label="Loading cloud account data controls..." />}>
-            <LazyPrivacyDataSection />
+            <LazyCloudDataSection />
           </Suspense>
         </div>
       )}
@@ -381,38 +471,11 @@ export function PrivacyTab({ onOpenGovernanceWorkspace }: PrivacyTabProps) {
           <LazyAllowedDirectoriesSettings />
         </Suspense>
       </div>
-      <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Analytics</h3>
-        <Suspense fallback={<Fallback label="Loading analytics settings..." />}>
-          <LazyAnalyticsSettings />
-        </Suspense>
-      </div>
-      <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-1">Governance &amp; Compliance</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Governance now lives in a dedicated workspace. Keep policy controls here and open the
-          right panel for approvals, audit events, and execution history.
-        </p>
-        <div className="rounded-lg border border-border bg-card/60 p-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h4 className="text-sm font-medium">Open governance workspace</h4>
-              <p className="text-sm text-muted-foreground mt-1">
-                Review pending approvals, audit integrity, and tool history without duplicating
-                those views inside Settings.
-              </p>
-            </div>
-            <Button variant="outline" onClick={onOpenGovernanceWorkspace}>
-              Open Workspace
-            </Button>
-          </div>
-        </div>
-        <div className="pt-6">
-          <Suspense fallback={<Fallback label="Loading governance policies..." />}>
-            <LazySafetyPolicies />
-          </Suspense>
-        </div>
-      </div>
+      <AnalyticsPrivacySection />
+      <GovernancePrivacySection
+        scope="local"
+        onOpenGovernanceWorkspace={onOpenGovernanceWorkspace}
+      />
     </>
   );
 }

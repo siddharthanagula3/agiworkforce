@@ -55,7 +55,7 @@ export async function authorizeDesktopDevice({
 }: DesktopDeviceAuthorizationOptions): Promise<DesktopDeviceCredential> {
   if (signal?.aborted) throw abortError();
 
-  const authorization = await requestDeviceAuthorization(origin, post);
+  const authorization = await requestDeviceAuthorization(origin, post, 'desktop');
   await openAuthorization(authorization.verificationUrl);
 
   const maxPolls = Math.max(1, Math.ceil(authorization.expiresInMs / authorization.pollIntervalMs));

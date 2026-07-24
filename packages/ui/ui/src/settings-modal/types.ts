@@ -106,6 +106,11 @@ export interface CustomConnectorInput {
 export interface SettingsDataAdapter {
   /** Connector catalog (static list to display) */
   connectors?: SettingsConnector[];
+  /** True while the surface is loading its authoritative connector catalog. */
+  connectorsLoading?: boolean;
+  /** Visible catalog-level failure. Per-connector mutation failures remain row-scoped. */
+  connectorsError?: string | null;
+  retryConnectors?: () => Promise<void> | void;
   /** Currently connected connector IDs + timestamps */
   connectedConnectors?: ConnectedConnector[];
   connectConnector?: (id: string) => Promise<void> | void;
@@ -116,9 +121,16 @@ export interface SettingsDataAdapter {
    * form surfaces the message) rather than faking success.
    */
   addCustomConnector?: (input: CustomConnectorInput) => Promise<void> | void;
+  /**
+   * Surface-owned navigation for docs/catalog links. Native shells provide
+   * this so a relative anchor never replaces the application webview.
+   */
+  openHref?: (href: string) => Promise<void> | void;
 
   skills?: SettingsSkill[];
   skillsLoading?: boolean;
+  skillsError?: string | null;
+  retrySkills?: () => Promise<void> | void;
 
   plugins?: SettingsPlugin[];
   pluginsLoading?: boolean;

@@ -21,23 +21,8 @@
  * event. There is no mid-period cutoff and no prorated adjustment.
  */
 
-/** Statuses that grant the subscription's paid entitlement. */
-export const ENTITLED_SUBSCRIPTION_STATUSES: readonly string[] = ['active', 'trialing'];
-
-/** True when the subscription status grants paid entitlement. */
-export function isEntitledStatus(status: string | null | undefined): boolean {
-  return !!status && ENTITLED_SUBSCRIPTION_STATUSES.includes(status);
-}
-
-/**
- * The tier a user is actually entitled to right now: their `plan_tier` when the
- * subscription status is entitled, otherwise `'free'`. Use this — not the raw
- * `plan_tier` — wherever a paid capability is unlocked. For honest billing
- * *display* (showing "Pro — canceled"), keep the raw `plan_tier` + `status`.
- */
-export function effectivePlanTier(
-  planTier: string | null | undefined,
-  status: string | null | undefined,
-): string {
-  return isEntitledStatus(status) ? planTier || 'free' : 'free';
-}
+export {
+  ENTITLED_SUBSCRIPTION_STATUSES,
+  effectivePlanTier,
+  isEntitledSubscriptionStatus as isEntitledStatus,
+} from '@agiworkforce/types';

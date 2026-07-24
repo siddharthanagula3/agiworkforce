@@ -14,7 +14,12 @@
  * is exactly the regression signal we want.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { checkSubscriptionGate, canUseAPIKeys, getUpgradeMessage } from '../subscriptionGate';
+import {
+  checkAutoModeAccess,
+  checkSubscriptionGate,
+  canUseAPIKeys,
+  getUpgradeMessage,
+} from '../subscriptionGate';
 import {
   cloudAccountAuth,
   type AuthState,
@@ -195,7 +200,7 @@ describe('subscriptionGate', () => {
       expect(result.currentStatus).toBe('past_due');
     });
 
-    it('should allow access when subscription is past_due but within grace period', () => {
+    it('should fail closed when subscription is past_due even within the former grace period', () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 6);
 
@@ -227,7 +232,8 @@ describe('subscriptionGate', () => {
 
       const result = checkSubscriptionGate();
 
-      expect(result.hasAccess).toBe(true);
+      expect(result.hasAccess).toBe(false);
+      expect(result.reason).toContain('past_due');
       expect(result.currentTier).toBe('basic');
       expect(result.currentStatus).toBe('past_due');
     });
@@ -481,6 +487,40 @@ describe('subscriptionGate', () => {
 
       expect(canUseAPIKeys()).toBe(true);
     });
+  });
+
+  describe('checkAutoModeAccess', () => {
+    it.each(['max_15x', 'team'] as const)(
+      'keeps Auto Mode available for the canonical %s tier',
+      (planTier) => {
+        vi.mocked(cloudAccountAuth.getState).mockReturnValue(
+          makeAuthState({
+            user: makeUser(),
+            session: makeSession(),
+            subscription: {
+              id: 'sub-1',
+              user_id: 'user-1',
+              plan_tier: planTier,
+              status: 'active',
+              stripe_customer_id: 'cus-1',
+              stripe_subscription_id: 'sub-1',
+              stripe_price_id: 'price-1',
+              current_period_start: new Date().toISOString(),
+              current_period_end: new Date().toISOString(),
+              cancel_at_period_end: false,
+              canceled_at: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          }),
+        );
+
+        expect(checkAutoModeAccess()).toMatchObject({
+          hasAccess: true,
+          currentTier: planTier,
+        });
+      },
+    );
   });
 
   describe('getUpgradeMessage', () => {

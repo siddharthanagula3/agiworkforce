@@ -22,6 +22,9 @@ describe('cloudApi', () => {
     vi.spyOn(cloudAccountAuth, 'getSession').mockReturnValue({
       access_token: 'token',
     } as never);
+    vi.spyOn(cloudAccountAuth, 'getValidSession').mockResolvedValue({
+      access_token: 'token',
+    } as never);
   });
 
   afterEach(() => {
@@ -40,10 +43,17 @@ describe('cloudApi', () => {
               user_id: 'user_1',
               title: 'Test',
               model: 'claude',
+              project_id: null,
+              pinned: false,
+              starred: false,
+              archived: false,
+              is_temporary: false,
               created_at: '2026-03-20T00:00:00.000Z',
               updated_at: '2026-03-20T00:00:00.000Z',
             },
           ],
+          hasMore: false,
+          nextOffset: 1,
         }),
       ),
     );
@@ -64,6 +74,11 @@ describe('cloudApi', () => {
             user_id: 'user_1',
             title: 'Test',
             model: 'claude',
+            project_id: null,
+            pinned: false,
+            starred: false,
+            archived: false,
+            is_temporary: false,
             created_at: '2026-03-20T00:00:00.000Z',
             updated_at: '2026-03-20T00:00:00.000Z',
           },
@@ -86,6 +101,11 @@ describe('cloudApi', () => {
             user_id: 'user_1',
             title: 'Test',
             model: 'claude',
+            project_id: null,
+            pinned: false,
+            starred: false,
+            archived: false,
+            is_temporary: false,
             created_at: '2026-03-20T00:00:00.000Z',
             updated_at: '2026-03-20T00:00:00.000Z',
           },
@@ -95,9 +115,16 @@ describe('cloudApi', () => {
               conversation_id: 'conv_1',
               role: 'user',
               content: 'Hello',
+              model: null,
+              provider: null,
+              input_tokens: 0,
+              output_tokens: 0,
+              metadata: {},
               created_at: '2026-03-20T00:00:00.000Z',
             },
           ],
+          total: 1,
+          hasMore: false,
         }),
       ),
     );
@@ -178,7 +205,9 @@ describe('cloudApi', () => {
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           messages: [{ role: 'user', content: 'Ping' }],
+          conversation_id: 'conv_1',
           stream: true,
+          use_prompt_cache: true,
         }),
       }),
     );
@@ -231,6 +260,78 @@ describe('cloudApi', () => {
 
     expect(chunks).toEqual(['Durable answer.']);
     expect(onEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a malformed data event as terminal instead of reporting success', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('data: {not-json}\n\n'));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream, { status: 200 })));
+
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    await sendCloudMessage(
+      'conv_malformed',
+      'Continue',
+      'gpt-5.6-sol',
+      vi.fn(),
+      onDone,
+      onError,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000077',
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'AGI Cloud returned a malformed stream event.' }),
+    );
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('treats a structured Cloud error event as terminal instead of reporting success', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode('data: {"error":{"message":"Provider stream failed"}}\n\n'),
+        );
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream, { status: 200 })));
+
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    await sendCloudMessage(
+      'conv_error',
+      'Continue',
+      'gpt-5.6-sol',
+      vi.fn(),
+      onDone,
+      onError,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000078',
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Provider stream failed' }),
+    );
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('includes managed runtime options without resolving skill content on Desktop', async () => {

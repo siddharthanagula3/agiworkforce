@@ -90,6 +90,9 @@ export * from './user';
 // Billing plan pricing and included-usage budget helpers
 export * from './billing-catalog';
 
+// Shared subscription-status entitlement policy
+export * from './subscription-entitlement';
+
 // Percentage-only public managed-usage status shared by cloud clients.
 export * from './managed-usage-balance';
 

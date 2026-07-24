@@ -7,6 +7,7 @@ import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getMediaAssetById } from '@/lib/server/media-assets';
 import { getObject, isObjectStorageConfigured } from '@/lib/server/object-storage';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 /**
  * GET /api/files/[id] — authenticated, owner-scoped, same-origin byte serving
@@ -118,4 +119,8 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
   });
 }
 
-export const GET = withErrorHandler(handleGetFile);
+export const GET = withCorsRoute(withErrorHandler(handleGetFile));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

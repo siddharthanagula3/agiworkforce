@@ -5,8 +5,8 @@ import { selectPrivacyMode, useAppModeStore } from './appModeStore';
  *
  * Returns `true` when the desktop is in a PRIVATE boundary (Local OR BYOK) and therefore
  * must NOT send chats, files, telemetry, or account data to OUR cloud. Only `'managed'`
- * (AGI-managed cloud) is non-private. BYOK runs under appMode `'cloud'` but is a private
- * boundary, so a `=== 'local'` check would wrongly permit our-cloud egress in BYOK.
+ * (AGI-managed cloud) is non-private. BYOK is a per-conversation execution mode
+ * inside the Local workspace, so it inherits this private boundary.
  *
  * FAIL-CLOSED: if the privacy mode cannot be read, treat the session as private (block /
  * suppress). Blocking is safe; leaking is not.

@@ -52,6 +52,7 @@ vi.mock('@/lib/rate-limit', () => ({
 
 vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
+  withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
 import { GET } from '../route';

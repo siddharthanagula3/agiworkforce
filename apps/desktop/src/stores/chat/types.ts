@@ -256,6 +256,7 @@ export interface ConversationSummary {
   pinned: boolean;
   archived?: boolean;
   lastMessage?: string;
+  createdAt?: Date;
   updatedAt: Date;
   /** Per-conversation custom instructions */
   customInstructions?: string;

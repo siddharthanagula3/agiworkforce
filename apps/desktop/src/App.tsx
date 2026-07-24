@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
 import { guardedFetch } from './lib/egressGuard';
-import { getAuthHeaders, CLOUD_API_BASE_URL } from './api/cloudApi';
+import { cloudFetch, getAuthHeaders, getCloudModels, CLOUD_API_BASE_URL } from './api/cloudApi';
 import { initializeAgentTaskEventListeners } from './stores/agentTaskStore';
 import {
   cleanupAgentWorkflowEventListeners,
@@ -28,8 +28,12 @@ import {
   initializeRuntimeActivityEventListeners,
 } from './hooks/useAgenticEvents';
 
-import { useChatStore as useDesktopChatStore } from './stores/chat/chatStore';
+import {
+  resolveDesktopChatOwnerId,
+  useChatStore as useDesktopChatStore,
+} from './stores/chat/chatStore';
 import { createDesktopChatRuntimeWithLabeling } from './runtime/sessionLabeling';
+import { registerActiveDesktopChatRuntime } from './runtime/desktopChatRuntime';
 import type { CommandOption } from './features/chat/CommandPalette';
 import { useSearchModal } from './hooks/useSearchModal';
 import { useThemeContext } from './providers/ThemeProvider';
@@ -41,7 +45,6 @@ import {
   initializeAgentStatusListener,
   initializeToolEventListener,
   useUnifiedChatStore,
-  uuidToDbId,
 } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
 import { useTierBridge } from './hooks/useTierBridge';
@@ -73,9 +76,14 @@ import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
 import useErrorStore from './stores/ui';
 import { useAppModeStore, selectPrivacyMode } from './stores/appModeStore';
-import { useSettingsDialogStore } from './stores/settingsStore';
-import { useSettingsStore, waitForSettingsHydration } from './stores/settingsStore';
-import { useVoiceInputStore } from './stores/settingsStore';
+import {
+  initializeTaskRoutingTierRestriction,
+  useSettingsDialogStore,
+  useSettingsStore,
+  useVoiceInputStore,
+  waitForSettingsHydration,
+} from './stores/settingsStore';
+import { useProjectStore } from './stores/projectStore';
 import { applyTheme, getThemeById } from './themes/index';
 
 const VisualizationLayer = lazy(() =>
@@ -168,7 +176,8 @@ const ErrorToastContainer = lazy(() =>
 );
 import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
-import { initCloudSyncScheduler } from './lib/cloudSyncTrigger';
+import { initCloudSyncScheduler, triggerCloudSync } from './lib/cloudSyncTrigger';
+import { resetCloudConversationCoordinator } from './services/cloudChat';
 import { initManagedCloudSettingsSync } from './services/managedCloudSettingsSync';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
@@ -192,6 +201,25 @@ const LoadingFallback = () => (
   </div>
 );
 
+type DesktopWindowMode = 'default' | 'overlay' | 'floating';
+
+function resolveDesktopWindowMode(): DesktopWindowMode {
+  if (typeof window === 'undefined') return 'default';
+
+  try {
+    const pathname = window.location.pathname;
+    if (pathname === '/floating') return 'floating';
+    if (pathname === '/overlay') return 'overlay';
+
+    const mode = new URLSearchParams(window.location.search).get('mode');
+    if (mode === 'overlay') return 'overlay';
+    if (mode === 'floating') return 'floating';
+  } catch {
+    // Invalid location state falls back to the main Desktop shell.
+  }
+  return 'default';
+}
+
 const DesktopShell = () => {
   const { state, actions } = useWindowManager();
   useVoiceHotkey();
@@ -202,6 +230,10 @@ const DesktopShell = () => {
   const openSettingsDialog = useSettingsDialogStore((s) => s.openSettings);
   const closeSettingsDialog = useSettingsDialogStore((s) => s.closeSettings);
   const [quickQueryOpen, setQuickQueryOpen] = useState(false);
+  const [externalSendRequest, setExternalSendRequest] = useState<{
+    id: string;
+    content: string;
+  } | null>(null);
   const [plansModalOpen, setPlansModalOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
@@ -238,9 +270,124 @@ const DesktopShell = () => {
   const isAuthLoading = useAuthStore((state) => state.isLoading);
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const authenticatedUserId = useAuthStore((state) => state.user?.id ?? null);
   const appMode = useAppModeStore((s) => s.mode);
   const isCloudMode = useAppModeStore((s) => s.mode === 'cloud');
   const hasCloudSession = isAuthenticated && !!accessToken;
+  const conversationBoundaryRef = useRef<string | null>(null);
+  const [conversationBoundaryReady, setConversationBoundaryReady] = useState(false);
+  const [conversationBoundaryError, setConversationBoundaryError] = useState<string | null>(null);
+  const [conversationBoundaryRetry, setConversationBoundaryRetry] = useState(0);
+  const expectedConversationBoundaryKey = `${appMode}:${
+    appMode === 'cloud'
+      ? `${authenticatedUserId ?? 'signed-out'}:${hasCloudSession ? 'connected' : 'disconnected'}`
+      : 'device'
+  }`;
+
+  // Project the canonical Local/Cloud product boundary into the legacy native
+  // storage flag, then hydrate the matching conversation set. This closes the
+  // startup gap where the mode was persisted as Cloud but the Rust sync gate
+  // still read its default "local" value and the sidebar was never loaded.
+  useEffect(() => {
+    let cancelled = false;
+    let hydrationSucceeded = false;
+    const boundaryKey = expectedConversationBoundaryKey;
+    setConversationBoundaryReady(false);
+    setConversationBoundaryError(null);
+
+    const hydrateBoundary = async () => {
+      await waitForSettingsHydration();
+      if (cancelled) return;
+
+      const desiredStorageMode = appMode === 'cloud' ? 'cloud' : 'local';
+      const settings = useSettingsStore.getState();
+      if (settings.chatPreferences.chatStorageMode !== desiredStorageMode) {
+        useSettingsStore.setState((state) => ({
+          chatPreferences: {
+            ...state.chatPreferences,
+            chatStorageMode: desiredStorageMode,
+          },
+        }));
+        await useSettingsStore.getState().saveSettings();
+        if (cancelled) return;
+      }
+
+      if (conversationBoundaryRef.current !== boundaryKey) {
+        resetCloudConversationCoordinator();
+        useDesktopChatStore.setState({
+          conversations: [],
+          messages: [],
+          activeConversationId: null,
+          messagesByConversation: {},
+          isLoadingMessages: false,
+        });
+        useProjectStore.setState({
+          projects: [],
+          activeProjectId: null,
+          isLoading: false,
+          error: null,
+        });
+        conversationBoundaryRef.current = boundaryKey;
+      }
+
+      if (appMode === 'cloud') {
+        if (!hasCloudSession || !authenticatedUserId) return;
+        await Promise.all([
+          useDesktopChatStore.getState().loadConversations(authenticatedUserId),
+          useProjectStore.getState().loadProjects({ throwOnError: true }),
+        ]);
+        const cloudConversations = useDesktopChatStore.getState().conversations;
+        useProjectStore.setState((state) => ({
+          projects: state.projects.map((project) => {
+            const conversationIds = cloudConversations
+              .filter((conversation) => conversation.projectId === project.id)
+              .map((conversation) => conversation.id);
+            return {
+              ...project,
+              conversationIds,
+              conversationCount: Math.max(project.conversationCount ?? 0, conversationIds.length),
+            };
+          }),
+        }));
+        if (!cancelled) triggerCloudSync();
+        return;
+      }
+
+      await Promise.all([
+        useDesktopChatStore.getState().loadConversations(resolveDesktopChatOwnerId()),
+        useProjectStore.getState().loadProjects({ throwOnError: true }),
+      ]);
+    };
+
+    void hydrateBoundary()
+      .then(() => {
+        hydrationSucceeded = true;
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          console.error('[App] Failed to hydrate the active chat boundary:', error);
+          setConversationBoundaryError(
+            error instanceof Error
+              ? error.message
+              : 'Could not load conversations for the selected mode.',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setConversationBoundaryReady(hydrationSucceeded);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    appMode,
+    authenticatedUserId,
+    expectedConversationBoundaryKey,
+    hasCloudSession,
+    conversationBoundaryRetry,
+  ]);
 
   // Hard 8 s boot timeout: if sessionValidated is still false (for example,
   // cloud auth warm-up stalls), move to a recoverable state.
@@ -526,7 +673,9 @@ const DesktopShell = () => {
             'Managed cloud credential sync',
             async () => {
               // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
-              await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
+              await invoke('account_store_api_base_url', {
+                apiBaseUrl: CLOUD_API_BASE_URL || API_BASE_URL,
+              });
 
               // Forward cloud credentials only in Managed Cloud mode. Local and
               // BYOK chat must not wait on or hydrate managed auth.
@@ -598,17 +747,57 @@ const DesktopShell = () => {
 
   // Initialize providers + load mode-appropriate models into the chat package's model store.
   useEffect(() => {
+    let cancelled = false;
+
     async function initModels() {
       const currentMode = appMode;
       try {
-        // Enable ManagedCloud provider only for managed-cloud tier (subscription-based models).
-        // BYOK users supply their own keys — managed cloud must never be enabled for them.
-        if (selectPrivacyMode(useAppModeStore.getState()) === 'managed') {
-          await invoke<boolean>('llm_ensure_managed_cloud').catch(() => false);
+        const { useChatModelStore } = await import('@agiworkforce/unified-chat');
+        if (cancelled) return;
+
+        if (currentMode === 'cloud' && !hasCloudSession) {
+          const modelStore = useChatModelStore.getState();
+          modelStore.setModels([]);
+          modelStore.selectModel('');
+          return;
         }
 
-        const { useChatModelStore } = await import('@agiworkforce/unified-chat');
+        if (currentMode === 'cloud') {
+          const discoveredModels = await getCloudModels();
+          if (cancelled) return;
+          if (discoveredModels.length === 0) {
+            throw new Error('The managed model catalog is empty.');
+          }
+
+          const modelStore = useChatModelStore.getState();
+          modelStore.setModels(
+            discoveredModels.map((model) =>
+              createChatModelInfo({
+                id: model.id,
+                name: model.name,
+                provider: model.provider,
+                isLocal: false,
+                isByok: false,
+              }),
+            ),
+          );
+          const updatedModelStore = useChatModelStore.getState();
+          if (
+            !updatedModelStore.models.some(
+              (model) => model.id === updatedModelStore.selectedModelId,
+            )
+          ) {
+            updatedModelStore.selectModel(
+              updatedModelStore.models.some((model) => model.id === 'auto')
+                ? 'auto'
+                : (updatedModelStore.models[0]?.id ?? ''),
+            );
+          }
+          return;
+        }
+
         const rawRustModels = await invoke<unknown>('llm_get_available_models');
+        if (cancelled) return;
         let rustModels = parseDiscoveredChatModels(rawRustModels);
         if (currentMode === 'local') {
           // Defensive direct-fetch fallback: `llm_get_available_models` only appends a
@@ -630,6 +819,7 @@ const DesktopShell = () => {
             }
             try {
               const rawDirectModels = await invoke<unknown>(command);
+              if (cancelled) return;
               const directModels = parseDiscoveredChatModels(rawDirectModels);
               rustModels = [
                 ...rustModels,
@@ -662,7 +852,6 @@ const DesktopShell = () => {
 
           return isManagedProvider || model.id.startsWith('auto');
         });
-
         const chatModels = visibleModels.map((model) => {
           const provider = model.provider.toLowerCase();
           const isLocal = ['ollama', 'local', 'lmstudio', 'llamacpp', 'vllm'].includes(provider);
@@ -681,6 +870,7 @@ const DesktopShell = () => {
             isByok,
           });
         });
+        if (cancelled) return;
         useChatModelStore.getState().setModels(chatModels);
         // Mode-safe selection: keep the active model consistent with the mode's
         // available set. In Local mode an auto-routing / cloud model must never
@@ -701,45 +891,11 @@ const DesktopShell = () => {
           }
         }
       } catch {
-        // A non-Tauri cloud build can read the public catalog endpoint, but the
-        // payload is untrusted and catalog membership alone does not prove
-        // capabilities or lifecycle. Validate its shape, then hydrate every
-        // canonical field through the registry-backed mapper.
-        try {
-          if (!isTauri) {
-            const response = await guardedFetch(`${API_BASE_URL}/api/models`);
-            if (response.ok) {
-              const data: unknown = await response.json();
-              const discoveredModels = parseDiscoveredChatModels(
-                data && typeof data === 'object' && !Array.isArray(data)
-                  ? (data as Record<string, unknown>)['models']
-                  : undefined,
-              );
-              if (discoveredModels.length > 0) {
-                const { useChatModelStore } = await import('@agiworkforce/unified-chat');
-                useChatModelStore.getState().setModels(
-                  discoveredModels.map((model) =>
-                    createChatModelInfo({
-                      id: model.id,
-                      name: model.name,
-                      provider: model.provider,
-                      isLocal: false,
-                      isByok: false,
-                    }),
-                  ),
-                );
-                toast.info('Loaded models from cloud API.');
-                return;
-              }
-            }
-          }
-        } catch {
-          // Continue to the explicit unavailable state below.
-        }
-
+        if (cancelled) return;
         // Reachability is unknown. Never turn static catalog membership into a
         // fake Local/BYOK/Managed availability claim.
         const { useChatModelStore } = await import('@agiworkforce/unified-chat');
+        if (cancelled) return;
         const modelStore = useChatModelStore.getState();
         modelStore.setModels([]);
         modelStore.selectModel('');
@@ -751,7 +907,10 @@ const DesktopShell = () => {
       }
     }
     void initModels();
-  }, [appMode]);
+    return () => {
+      cancelled = true;
+    };
+  }, [appMode, hasCloudSession]);
 
   // Sync desktop auth user profile → chat package's settingsStore
   useEffect(() => {
@@ -841,7 +1000,7 @@ const DesktopShell = () => {
       } else if (detail.type === 'keyboard-shortcuts') {
         useSettingsDialogStore.getState().openShortcuts();
       } else if (detail.type === 'logout') {
-        cloudAccountAuth.signOut();
+        void useAuthStore.getState().signOut();
       } else if (detail.type === 'open-plans-modal') {
         setPlansModalOpen(true);
       }
@@ -988,9 +1147,13 @@ const DesktopShell = () => {
   );
 
   const handleQuickQueryOpenConversation = useCallback(
-    async (conversationDbId: number) => {
+    async (conversationId: string | number) => {
       await routeToChatSurface();
-      useUnifiedChatStore.getState().selectConversation(dbIdToUuid(conversationDbId));
+      useUnifiedChatStore
+        .getState()
+        .selectConversation(
+          typeof conversationId === 'number' ? dbIdToUuid(conversationId) : conversationId,
+        );
       setQuickQueryOpen(false);
     },
     [routeToChatSurface],
@@ -1086,22 +1249,9 @@ const DesktopShell = () => {
             await selectModel(model, 'managed_cloud');
           }
 
-          if (isTauri) {
-            const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
-            const conversationDbId = activeConversationId ? uuidToDbId(activeConversationId) : null;
-            await invoke('chat_add_pending_message', {
-              request: {
-                content: query,
-                conversationId: conversationDbId,
-              },
-            });
-            return;
-          }
-
-          useDesktopChatStore.getState().addPendingMessage({
+          setExternalSendRequest({
             id: crypto.randomUUID(),
             content: query,
-            timestamp: new Date().toISOString(),
           });
         } catch (error) {
           console.error('[QuickQuery] Failed to submit message:', error);
@@ -1188,6 +1338,7 @@ const DesktopShell = () => {
     () => createDesktopChatRuntimeWithLabeling({ isTauriHost: isTauri, appMode: runtimeAppMode }),
     [runtimeAppMode],
   );
+  useEffect(() => registerActiveDesktopChatRuntime(chatRuntime), [chatRuntime]);
 
   // Keep the shared chat package's "is code execution actually available"
   // signal in sync with this deployment's E2B cut-over flag
@@ -1221,7 +1372,7 @@ const DesktopShell = () => {
           conversations: state.conversations.map((conversation) => ({
             id: conversation.id,
             title: conversation.title,
-            createdAt: conversation.updatedAt,
+            createdAt: conversation.createdAt ?? conversation.updatedAt,
             updatedAt: conversation.updatedAt,
             pinned: conversation.pinned,
             archived: conversation.archived,
@@ -1272,7 +1423,9 @@ const DesktopShell = () => {
           const auth = await getAuthHeaders();
           if (auth['Authorization']) headers['Authorization'] = auth['Authorization'];
         }
-        const res = await guardedFetch(uri, { headers, credentials: 'include' });
+        const res = isOurCloudUri
+          ? await cloudFetch(uri, { headers, credentials: 'include' })
+          : await guardedFetch(uri, { headers, credentials: 'include' });
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
@@ -1351,7 +1504,52 @@ const DesktopShell = () => {
     ];
   }, [actions, openSettings, startNewChat, state.maximized, theme, toggleTheme, isMac]);
 
-  if (isCloudMode && (isAuthLoading || !sessionValidated)) {
+  if (
+    conversationBoundaryError &&
+    conversationBoundaryRef.current === expectedConversationBoundaryKey
+  ) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background px-6">
+        <div
+          role="alert"
+          className="w-full max-w-md rounded-2xl border border-[var(--chat-destructive)]/30 bg-[var(--chat-surface-elevated)] p-6 text-center shadow-sm"
+        >
+          <AlertTriangle className="mx-auto h-8 w-8 text-[var(--chat-destructive)]" />
+          <h1 className="mt-4 text-lg font-semibold text-[var(--chat-text-primary)]">
+            Could not open {isCloudMode ? 'Cloud Mode' : 'Local Mode'}
+          </h1>
+          <p className="mt-2 text-sm text-[var(--chat-text-secondary)]">
+            {conversationBoundaryError}
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => setConversationBoundaryRetry((attempt) => attempt + 1)}
+              className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-4 py-2 text-sm font-medium text-[var(--chat-accent-primary-contrast)] hover:opacity-90"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Try again
+            </button>
+            {isCloudMode ? (
+              <button
+                type="button"
+                onClick={() => useAppModeStore.getState().setMode('local')}
+                className="rounded-lg border border-[var(--chat-border)] px-4 py-2 text-sm font-medium text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]"
+              >
+                Use Local Mode
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    !conversationBoundaryReady ||
+    conversationBoundaryRef.current !== expectedConversationBoundaryKey ||
+    (isCloudMode && (isAuthLoading || !sessionValidated))
+  ) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         {/* Skeleton layout — shown while the cloud session is being validated */}
@@ -1424,16 +1622,21 @@ const DesktopShell = () => {
             <div className="border-b border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] px-4 py-2 flex items-center justify-between text-sm text-[var(--chat-warning-fg)]">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
-                <span>Using cached account data. Subscription status may be outdated.</span>
+                <span>
+                  Cloud account details could not be refreshed. Some plan information may be
+                  unavailable.
+                </span>
               </div>
               <button
                 type="button"
                 onClick={() => {
                   setSubscriptionFetchFailed(false);
-                  void useAccountStore
-                    .getState()
-                    .syncWithBackend?.()
-                    ?.catch(() => {
+                  void cloudAccountAuth
+                    .refreshUserData()
+                    .then((refreshed) => {
+                      if (!refreshed) setSubscriptionFetchFailed(true);
+                    })
+                    .catch(() => {
                       setSubscriptionFetchFailed(true);
                     });
                 }}
@@ -1477,8 +1680,11 @@ const DesktopShell = () => {
               <DesktopShellV3
                 runtime={chatRuntime}
                 className="h-full w-full"
+                externalSendRequest={externalSendRequest}
                 hostBridge={chatHostBridge}
-                onModelSelectorClick={() => openSettingsDialog('models-keys')}
+                onModelSelectorClick={() =>
+                  openSettingsDialog(isCloudMode ? 'capabilities' : 'models-keys')
+                }
                 onVoiceClick={() => {
                   const event = new CustomEvent('toggle-voice-input');
                   window.dispatchEvent(event);
@@ -1579,7 +1785,8 @@ const DesktopShell = () => {
 
 const App = () => {
   const { i18n } = useTranslation();
-  const [isWebAuthReady, setIsWebAuthReady] = useState(isTauri);
+  const windowMode = resolveDesktopWindowMode();
+  const [isAuthBootstrapReady, setIsAuthBootstrapReady] = useState(windowMode !== 'default');
 
   // Set document direction for RTL language support (Arabic)
   useEffect(() => {
@@ -1588,11 +1795,20 @@ const App = () => {
   }, [i18n.language]);
 
   useEffect(() => {
+    // Cloud account bootstrap belongs to the main Desktop shell. Overlay and
+    // floating webviews have independent JS auth services and intentionally do
+    // not restore the native credential; installing an orchestrator there would
+    // immediately publish a false signed-out state into shared persistence.
+    if (windowMode !== 'default') return;
+
     // Single consolidated auth orchestrator - replaces individual store initializers
     // This prevents race conditions from multiple auth listeners firing simultaneously
     const unsubscribeOrchestrator = initializeAuthOrchestrator();
+    const unsubscribeTierRestriction = initializeTaskRoutingTierRestriction();
 
-    // Force sync account data after store hydration is complete
+    // After auth-store hydration, synthesize only the device-owned Local
+    // account when there is no Cloud session. The auth orchestrator already
+    // owns Cloud profile, subscription, credits, and token synchronization.
     let cancelled = false;
     void (async () => {
       try {
@@ -1602,10 +1818,8 @@ const App = () => {
         await waitForHydration();
         if (cancelled) return;
 
-        if (cloudAccountAuth.isAuthenticated()) {
-          console.debug('[App] Store hydrated, forcing account sync with backend...');
-          await useAccountStore.getState().syncWithBackend();
-        } else if (
+        if (
+          !cloudAccountAuth.isAuthenticated() &&
           isTauri &&
           selectPrivacyMode(useAppModeStore.getState()) === 'local' &&
           !useAuthStore.getState().accessToken
@@ -1652,58 +1866,36 @@ const App = () => {
 
     return () => {
       cancelled = true;
+      unsubscribeTierRestriction();
       unsubscribeOrchestrator();
     };
-  }, []);
+  }, [windowMode]);
 
   useEffect(() => {
-    if (isTauri) {
-      return;
-    }
+    if (windowMode !== 'default') return;
 
     let cancelled = false;
 
     void initializeWebAuth()
       .then(() => {
         if (!cancelled) {
-          setIsWebAuthReady(true);
+          setIsAuthBootstrapReady(true);
         }
       })
       .catch((error) => {
         if (!cancelled) {
-          console.error('[App] Web auth initialization failed:', error);
-          setIsWebAuthReady(true);
+          console.error('[App] Auth initialization failed:', error);
+          setIsAuthBootstrapReady(true);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [windowMode]);
 
-  useDeepLink();
-  useTierBridge();
-
-  const windowMode = (() => {
-    if (typeof window === 'undefined') return 'default';
-
-    try {
-      // Check URL path first (for Tauri windows)
-      const pathname = window.location.pathname;
-      if (pathname === '/floating') return 'floating';
-      if (pathname === '/overlay') return 'overlay';
-
-      // Fallback to query params
-      const params = new URLSearchParams(window.location.search);
-      const mode = params.get('mode');
-
-      if (mode === 'overlay') return 'overlay';
-      if (mode === 'floating') return 'floating';
-      return 'default';
-    } catch {
-      return 'default';
-    }
-  })();
+  useDeepLink(windowMode === 'default');
+  useTierBridge(windowMode === 'default');
 
   const renderContent = () => {
     switch (windowMode) {
@@ -1735,7 +1927,7 @@ const App = () => {
     };
   }, [windowMode]);
 
-  if (!isWebAuthReady) {
+  if (!isAuthBootstrapReady) {
     return <LoadingFallback />;
   }
 

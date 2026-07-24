@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-/// Canonical 6-tier taxonomy (matches cloud subscription tier strings):
-/// `local-only`, `byok`, `basic`, `pro`, `max`, `enterprise`.  `Free` is
-/// retained as a backward-compat alias for legacy rows.  Any other string
-/// would deserialize-fail before the variants below were added.
+/// Canonical billing taxonomy (matches
+/// `packages/contracts/types/src/billing-catalog.ts`).
 ///
 /// `basic` replaced `hobby` on 2026-07-02 (see `packages/contracts/types/src/design-system/user-identity.ts`);
 /// `pro_plus` was removed the same day with no successor.
@@ -19,6 +17,10 @@ pub enum PlanTier {
     Pro,
     #[serde(rename = "max")]
     Max,
+    #[serde(rename = "max_15x", alias = "max-15x", alias = "max15x")]
+    Max15x,
+    #[serde(rename = "team")]
+    Team,
     #[serde(rename = "enterprise")]
     Enterprise,
     /// Legacy alias retained for backward compatibility with older rows.

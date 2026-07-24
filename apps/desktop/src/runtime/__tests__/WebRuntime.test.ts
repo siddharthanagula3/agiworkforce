@@ -12,15 +12,26 @@ import type { StreamEvent } from '@agiworkforce/unified-chat';
 
 const sendCloudMessage = vi.fn();
 const getCloudConversation = vi.fn();
+const updateConversation = vi.fn().mockResolvedValue(undefined);
+const saveMessage = vi.fn().mockResolvedValue({ id: 'message-1' });
 
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
+  cloudFetch: vi.fn(),
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
   listCloudConversations: vi.fn(),
   createCloudConversation: vi.fn(),
   getCloudConversation: (...args: unknown[]) => getCloudConversation(...args),
   deleteCloudConversation: vi.fn(),
   updateCloudConversationTitle: vi.fn(),
+  createCloudChatPersistenceClient: () => ({
+    updateConversation,
+    saveMessage,
+  }),
+}));
+
+vi.mock('../../services/cloudChat', () => ({
+  ensureCloudConversation: vi.fn().mockResolvedValue({ id: 'conv_1' }),
 }));
 
 import { WebRuntime, mapGeneratedFilesPayload } from '../WebRuntime';
@@ -76,12 +87,11 @@ describe('mapGeneratedFilesPayload', () => {
     expect(entries[0]?.previewable).toBe(true);
   });
 
-  it('passes absolute uris through unchanged and drops malformed entries', () => {
+  it('drops unowned absolute uris and malformed entries', () => {
     const entries = mapGeneratedFilesPayload({
       files: [{ ...wireFile, uri: 'https://media.example/x.pdf' }, { id: 'broken' }],
     });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.uri).toBe('https://media.example/x.pdf');
+    expect(entries).toEqual([]);
   });
 
   it('returns [] for absent/malformed payloads', () => {
@@ -94,6 +104,8 @@ describe('mapGeneratedFilesPayload', () => {
 describe('WebRuntime x_generated_files stream handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    updateConversation.mockResolvedValue(undefined);
+    saveMessage.mockResolvedValue({ id: 'message-1' });
   });
 
   it('forwards Research, Cloud work mode, and a server-owned skill selection', async () => {

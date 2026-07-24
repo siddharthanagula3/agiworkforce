@@ -103,6 +103,7 @@ describe('subscription webhook usage rollover', () => {
       'max',
       new Date(nextPeriodStart * 1000),
       new Date((nextPeriodStart + 30 * 24 * 60 * 60) * 1000),
+      db,
     );
     expect(serviceMocks.reset).not.toHaveBeenCalled();
     expect(serviceMocks.allocate).not.toHaveBeenCalled();
@@ -172,6 +173,7 @@ describe('subscription webhook usage rollover', () => {
       'max',
       new Date(periodStart * 1000),
       new Date((periodStart + 30 * 24 * 60 * 60) * 1000),
+      db,
     );
     expect(serviceMocks.allocate).not.toHaveBeenCalled();
     expect(serviceMocks.reset).not.toHaveBeenCalled();

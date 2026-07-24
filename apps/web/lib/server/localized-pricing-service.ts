@@ -30,6 +30,7 @@ export interface LocalizedPricingCatalog {
 export interface CheckoutPriceSelection {
   priceId: string;
   currency: string;
+  amountMinor: number;
 }
 
 const PLAN_INTERVALS: Readonly<Record<ConfiguredCheckoutPlan, readonly BillingInterval[]>> = {
@@ -143,5 +144,5 @@ export async function getPriceSelectionForCurrency(
   const configuredAmount = stripeAmountForCurrency(stripePrice, localized.currency);
   if (configuredAmount === null || configuredAmount !== localized.amountMinor) return null;
 
-  return { priceId, currency: localized.currency };
+  return { priceId, currency: localized.currency, amountMinor: localized.amountMinor };
 }

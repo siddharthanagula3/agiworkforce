@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../api/client';
+import { cloudFetch } from '../api/cloudApi';
 import { voiceCheckLocalWhisper, voiceConfigure, voiceGetSettings } from '../api/voice';
-import { guardedFetch } from '../lib/egressGuard';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { getRoutingSlotModel } from '@agiworkforce/types';
 
@@ -633,7 +633,7 @@ export function useVoiceTranscription(
         }
 
         try {
-          const session = cloudAccountAuth.getSession();
+          const session = await cloudAccountAuth.getValidSession();
           const accessToken = session?.access_token;
           if (!accessToken) {
             throw new Error('Authentication required for Whisper Cloud transcription');
@@ -654,7 +654,7 @@ export function useVoiceTranscription(
           }
 
           const response = await withTimeout(
-            guardedFetch(`${API_BASE_URL}/api/voice/transcribe`, {
+            cloudFetch(`${API_BASE_URL}/api/voice/transcribe`, {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${accessToken}`,

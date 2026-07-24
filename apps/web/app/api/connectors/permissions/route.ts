@@ -8,6 +8,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 /**
  * Connector per-tool permission persistence (server-owned, cross-device).
@@ -75,13 +76,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 }
 
 async function handleUpsert(request: NextRequest): Promise<NextResponse> {
+  const { userId } = await getClerkAuthUser(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
   const parsed = UpsertSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     throw createError.validation('connectorId, toolName and a valid level are required');
@@ -102,5 +104,9 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ success: true });
 }
 
-export const GET = withErrorHandler(handleGet);
-export const PUT = withErrorHandler(handleUpsert);
+export const GET = withCorsRoute(withErrorHandler(handleGet));
+export const PUT = withCorsRoute(withErrorHandler(handleUpsert));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

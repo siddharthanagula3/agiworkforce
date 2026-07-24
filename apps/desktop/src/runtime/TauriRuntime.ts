@@ -4,9 +4,9 @@
  * Implements the ChatRuntime interface from @agiworkforce/unified-chat, bridging
  * the shared chat package to the Tauri/Rust backend via invoke() IPC.
  *
- * In Tauri desktop mode: uses invoke() + Tauri event listeners for streaming.
- * In cloud-web mode: delegates to cloudApi for CRUD and cloudChatStream for
- * streaming (via the tauri-mock shim's built-in cloud fallback).
+ * This runtime is exclusively the Local/BYOK Desktop transport. Managed Cloud
+ * is owned by CloudRuntime at the composition root; TauriRuntime never
+ * re-derives that boundary from mutable UI mode state.
  *
  * Streaming pattern:
  *   - invoke('chat_send_message') triggers the Rust backend to start streaming
@@ -35,12 +35,14 @@ import {
 import type { AgentEvent, JsonValue } from '@agiworkforce/types/protocol';
 import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
-import { useUnifiedAuthStore } from '../stores/auth';
-import { useAppModeStore, selectPrivacyMode } from '../stores/appModeStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { personalizationToPrompt } from '../features/chat/personalizationToPrompt';
 import { triggerCloudSyncAfterTurn } from '../lib/cloudSyncTrigger';
-import { useChatStore as useDesktopChatStore, uuidToDbId } from '../stores/chat/chatStore';
+import {
+  resolveDesktopChatOwnerId,
+  useChatStore as useDesktopChatStore,
+  uuidToDbId,
+} from '../stores/chat/chatStore';
 
 // ---------------------------------------------------------------------------
 // Raw Tauri event payload shapes (snake_case from Rust serde serialisation)
@@ -307,8 +309,6 @@ interface RawFileUploadResult {
   size?: number;
 }
 
-const LOCAL_DESKTOP_USER_ID = 'local-desktop-user';
-
 // ---------------------------------------------------------------------------
 // Mapping helpers
 // ---------------------------------------------------------------------------
@@ -431,17 +431,18 @@ export class TauriRuntime implements ChatRuntime {
   // ---------------------------------------------------------------------------
 
   private getCurrentUserId(): string {
-    const authenticatedUserId = useUnifiedAuthStore.getState().user?.id;
-    if (authenticatedUserId) return authenticatedUserId;
-    return selectPrivacyMode(useAppModeStore.getState()) === 'local' ? LOCAL_DESKTOP_USER_ID : '';
+    return resolveDesktopChatOwnerId();
   }
 
   private getConversationExecutionMode(conversationId: string): ChatExecutionMode {
     const conversation = useDesktopChatStore
       .getState()
       .conversations.find((candidate) => candidate.id === conversationId);
-    if (conversation?.executionMode) return conversation.executionMode;
-    return useAppModeStore.getState().mode === 'cloud' ? 'cloud_managed' : 'local_only';
+    // BYOK is the only non-local execution mode this runtime may honor. A
+    // stale/legacy cloud_managed label must fail closed to local execution;
+    // managed turns are accepted only by CloudRuntime.
+    if (conversation?.executionMode === 'byok') return 'byok';
+    return 'local_only';
   }
 
   private async ensureBackendConversation(
@@ -967,7 +968,6 @@ export class TauriRuntime implements ChatRuntime {
 
     // Kick off the Rust-side stream after listeners are ready.
     try {
-      const activeMode = executionMode === 'cloud_managed' ? 'cloud' : 'local';
       await invoke('chat_send_message', {
         request: {
           content,
@@ -978,16 +978,16 @@ export class TauriRuntime implements ChatRuntime {
           attachments: attachments ?? [],
           stream: true,
           frontendMessageId,
-          // activeMode is the authoritative trust-boundary signal.  The backend
-          // MUST honor this: "local" => no ManagedCloud, "cloud" => cloud only.
-          activeMode,
+          // TauriRuntime owns only Local and BYOK. Managed Cloud has a separate
+          // CloudRuntime and may never be selected through this native IPC path.
+          activeMode: 'local',
           executionMode,
           // Cloud credits (AGI Managed Cloud) are ONLY for managed mode. BYOK is a
           // private path that goes DIRECT to the user's provider — it must never be
           // billed/routed through AGI managed cloud. activeMode is binary
           // ('local'|'cloud') and lumps byok+managed together, so derive the 3-way
           // PrivacyMode here (mirrors the canonical logic in features/chat/index.tsx).
-          preferCloudCredits: executionMode === 'cloud_managed',
+          preferCloudCredits: false,
           // Composer controls — the Rust ChatSendMessageRequest already accepts
           // these camelCase aliases; they were previously dropped client-side.
           thinkingMode: thinkingEnabled,
@@ -1047,8 +1047,7 @@ export class TauriRuntime implements ChatRuntime {
 
   async createConversation(title?: string, projectId?: string): Promise<Conversation> {
     const userId = this.getCurrentUserId();
-    const executionMode: ChatExecutionMode =
-      useAppModeStore.getState().mode === 'cloud' ? 'cloud_managed' : 'local_only';
+    const executionMode: ChatExecutionMode = 'local_only';
     const raw = await invoke<RawConversation>('chat_create_conversation', {
       request: {
         title: title ?? 'New Conversation',
@@ -1061,12 +1060,12 @@ export class TauriRuntime implements ChatRuntime {
   }
 
   async loadConversations(): Promise<Conversation[]> {
-    // Pass the active mode so the backend applies strict mode-scoped filtering:
-    // Local conversations never appear in Cloud mode and vice-versa.
-    const appMode = useAppModeStore.getState().mode;
+    // This runtime is admitted only for the Local workspace. Managed Cloud
+    // conversation loading is owned by CloudRuntime and never reaches native
+    // SQLite.
     const raw = await invoke<RawConversation[]>('chat_get_conversations', {
       userId: this.getCurrentUserId(),
-      appMode,
+      appMode: 'local',
     });
     return Array.isArray(raw) ? raw.map(mapConversation) : [];
   }

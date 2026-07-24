@@ -12,7 +12,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { effectivePlanTier } from '@/lib/entitlement';
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
   canAccessManualModelSelection,
   SYNCED_APP_SURFACES,
@@ -77,31 +77,31 @@ async function handleGetMe(request: NextRequest) {
 
     const db = getNeonDb();
 
-    const [subscription, routing_preferences] = await Promise.all([
-      SubscriptionService.getSubscription(userId).catch((subscriptionError: unknown) => {
-        logger.warn({ userId, error: subscriptionError }, 'Error fetching subscription');
-        return null;
-      }),
-      (async (): Promise<{ us_only?: boolean; geo_overlay?: string }> => {
+    const [subscription, profile] = await Promise.all([
+      SubscriptionService.getSubscription(userId),
+      (async (): Promise<ProfileRow | null> => {
         try {
           const [profileRow] = await db.query<ProfileRow>(
-            'select routing_preferences from profiles where id = $1 limit 1',
+            `select id, email, display_name, avatar_url, routing_preferences
+             from profiles
+             where id = $1
+             limit 1`,
             [userId],
           );
-          const raw = profileRow?.routing_preferences;
-          if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-            return raw as { us_only?: boolean; geo_overlay?: string };
-          }
-          return {};
+          return profileRow ?? null;
         } catch (prefsError) {
-          logger.warn(
-            { userId, error: prefsError },
-            'Failed to fetch routing_preferences · defaulting to {}',
-          );
-          return {};
+          logger.warn({ userId, error: prefsError }, 'Failed to fetch profile');
+          return null;
         }
       })(),
     ]);
+    const rawRoutingPreferences = profile?.routing_preferences;
+    const routing_preferences =
+      rawRoutingPreferences &&
+      typeof rawRoutingPreferences === 'object' &&
+      !Array.isArray(rawRoutingPreferences)
+        ? (rawRoutingPreferences as { us_only?: boolean; geo_overlay?: string })
+        : {};
 
     // Entitlement is a function of subscription STATUS, not raw plan_tier: a
     // canceled/unpaid row can still carry a paid plan_tier (the tier is re-derived
@@ -167,8 +167,8 @@ async function handleGetMe(request: NextRequest) {
     const responseBody: MeResponse = {
       id: userId,
       email: resolvedEmail ?? null,
-      name: clerkName || resolvedEmail?.split('@')[0] || 'User',
-      avatar_url: null,
+      name: profile?.display_name?.trim() || clerkName || resolvedEmail?.split('@')[0] || 'User',
+      avatar_url: profile?.avatar_url ?? null,
       created_at: null,
       updated_at: Date.now() / 1000,
       plan,
@@ -199,10 +199,10 @@ async function handlePatchMe(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const csrfError = await requireCsrfToken(request);
-  if (csrfError) return csrfError as NextResponse;
-
   const { userId } = await getClerkAuthUser(request);
+
+  const csrfError = await requireCsrfToken(request, userId);
+  if (csrfError) return csrfError as NextResponse;
 
   const body = await request.json().catch(() => ({}));
   const parsed = PatchMeSchema.safeParse(body);
@@ -261,8 +261,8 @@ async function handlePatchMe(request: NextRequest) {
   });
 }
 
-export const GET = withErrorHandler(handleGetMe);
-export const PATCH = withErrorHandler(handlePatchMe);
+export const GET = withCorsRoute(withErrorHandler(handleGetMe));
+export const PATCH = withCorsRoute(withErrorHandler(handlePatchMe));
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

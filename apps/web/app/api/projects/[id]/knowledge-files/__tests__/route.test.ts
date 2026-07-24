@@ -1,7 +1,7 @@
 /**
  * Tests for GET and POST /api/projects/[id]/knowledge-files.
  *
- * Covers: GET returns mapped files, GET handles table-not-found (empty),
+ * Covers: GET returns mapped files, GET handles table-not-found (unavailable),
  * POST validates required fields (400), POST handles table-not-found (503),
  * POST accepts valid input (201).
  */
@@ -69,7 +69,7 @@ const KB_FILE_ROW = {
   added_at: '2026-05-22T10:00:00Z',
   retention_expires_at: null,
   deleted_at: null,
-  storage_uri: 'storage/files/spec.pdf',
+  storage_uri: 'knowledge-files/projects/proj-1/spec.pdf',
 };
 const CHECKSUM = 'a'.repeat(64);
 
@@ -117,9 +117,10 @@ describe('GET /api/projects/[id]/knowledge-files', () => {
     expect(file['mimeType']).toBe('application/pdf');
     expect(file['byteCount']).toBe(1024);
     expect(file['sourceSurface']).toBe('web');
+    expect(file['storageUri']).toBe('/api/projects/proj-1/knowledge-files/file-1');
   });
 
-  it('returns empty array when table does not exist (42P01)', async () => {
+  it('returns 503 when the knowledge schema is unavailable (42P01)', async () => {
     // Project ownership check succeeds
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
     // Files query throws PG 42P01
@@ -128,9 +129,9 @@ describe('GET /api/projects/[id]/knowledge-files', () => {
 
     const res = await GET(makeGetRequest('proj-1'), routeContext('proj-1'));
 
-    expect(res.status).toBe(200);
-    const json = (await res.json()) as { files: unknown[] };
-    expect(json.files).toEqual([]);
+    expect(res.status).toBe(503);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe('knowledge_files_unavailable');
   });
 });
 
@@ -159,7 +160,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         byteCount: 1024,
         checksumSha256: 'abc123',
         sourceSurface: 'web',
-        storageUri: 'storage/files/spec.pdf',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
       }),
       routeContext('proj-1'),
     );
@@ -182,7 +183,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         byteCount: 1024,
         checksumSha256: CHECKSUM,
         sourceSurface: 'web',
-        storageUri: 'storage/files/spec.pdf',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
       }),
       routeContext('proj-1'),
     );
@@ -211,7 +212,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         byteCount: 1024,
         checksumSha256: CHECKSUM,
         sourceSurface: 'web',
-        storageUri: 'storage/files/spec.pdf',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
         summary: 'A spec doc',
       }),
       routeContext('proj-1'),
@@ -221,10 +222,10 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     const json = (await res.json()) as { file: Record<string, unknown> };
     expect(json.file['id']).toBe('file-1');
     expect(json.file['fileName']).toBe('spec.pdf');
-    expect(json.file['storageUri']).toBe('storage/files/spec.pdf');
+    expect(json.file['storageUri']).toBe('/api/projects/proj-1/knowledge-files/file-1');
     expect(mockExtractProjectKnowledgeFile).toHaveBeenCalledWith({
       projectId: 'proj-1',
-      storageUri: 'storage/files/spec.pdf',
+      storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
       fileName: 'spec.pdf',
       mimeType: 'application/pdf',
       byteCount: 1024,
@@ -246,7 +247,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         byteCount: 1024,
         checksumSha256: CHECKSUM,
         sourceSurface: 'web',
-        storageUri: 'storage/files/spec.pdf',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
       }),
       routeContext('proj-1'),
     );
@@ -273,7 +274,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         byteCount: 1024,
         checksumSha256: CHECKSUM,
         sourceSurface: 'web',
-        storageUri: 'storage/files/spec.pdf',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
       }),
       routeContext('proj-1'),
     );
@@ -293,7 +294,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         byteCount: 1024,
         checksumSha256: CHECKSUM,
         sourceSurface: 'fax-machine',
-        storageUri: 'storage/files/spec.pdf',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
       }),
       routeContext('proj-1'),
     );

@@ -18,6 +18,11 @@ import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zus
 import { invoke, isTauri } from '../lib/tauri-mock';
 import { storageFallback } from '../lib/storageFallback';
 import type { ProjectAccentColor, PrivacyMode } from '@agiworkforce/types';
+import { useAppModeStore } from './appModeStore';
+import { desktopCloudProjects } from '../services/desktopCloudProjects';
+import { updateCloudConversation } from '../services/cloudChat';
+import { useChatStore } from './chat/chatStore';
+import { useAuthStore } from './auth';
 
 export interface ProjectFile {
   id: string;
@@ -47,6 +52,8 @@ export interface Project {
   customInstructions: string;
   files: ProjectFile[];
   conversationIds: string[];
+  /** Canonical server count when exact conversation ids have not hydrated yet. */
+  conversationCount?: number | null;
   color?: string;
   icon?: string;
   isArchived: boolean;
@@ -106,7 +113,7 @@ interface ProjectState {
   recentFolders: string[];
 
   // Actions - CRUD
-  loadProjects: () => Promise<void>;
+  loadProjects: (options?: { throwOnError?: boolean }) => Promise<void>;
   createProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Project>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
@@ -129,6 +136,7 @@ interface ProjectState {
   removeKnowledgeBaseFile: (projectId: string, fileId: string) => Promise<void>;
 
   // Conversation linking
+  moveConversationToProject: (conversationId: string, projectId: string | null) => Promise<void>;
   linkConversation: (projectId: string, conversationId: string) => Promise<void>;
   unlinkConversation: (projectId: string, conversationId: string) => Promise<void>;
   getProjectForConversation: (conversationId: string) => Project | null;
@@ -166,6 +174,36 @@ const PROJECT_STORE_VERSION = 1;
 
 // Maximum number of recent folders to keep
 const MAX_RECENT_FOLDERS = 10;
+let managedProjectsLoad: { boundaryKey: string; promise: Promise<Project[]> } | null = null;
+let projectLoadGeneration = 0;
+
+function isManagedCloudMode(): boolean {
+  return useAppModeStore.getState().mode === 'cloud';
+}
+
+function managedProjectBoundaryKey(): string | null {
+  if (!isManagedCloudMode()) return null;
+  const auth = useAuthStore.getState();
+  if (!auth.isAuthenticated || !auth.accessToken || !auth.user?.id) return null;
+  return `cloud:${auth.user.id}`;
+}
+
+function mergeManagedConversationMembership(projects: Project[], current: Project[]): Project[] {
+  const conversations = useChatStore.getState().conversations;
+  return projects.map((project) => {
+    const hydratedIds = conversations
+      .filter((conversation) => conversation.projectId === project.id)
+      .map((conversation) => conversation.id);
+    const previous = current.find((candidate) => candidate.id === project.id);
+    const conversationIds =
+      hydratedIds.length > 0 ? hydratedIds : (previous?.conversationIds ?? []);
+    return {
+      ...project,
+      conversationIds,
+      conversationCount: Math.max(project.conversationCount ?? 0, conversationIds.length),
+    };
+  });
+}
 
 /**
  * Formats a folder path for display (e.g., ~/Projects/my-app)
@@ -204,20 +242,57 @@ export const useProjectStore = create<ProjectState>()(
         recentFolders: [],
 
         // Load projects from backend
-        loadProjects: async () => {
+        loadProjects: async (options) => {
+          const generation = ++projectLoadGeneration;
+          const boundaryAtStart = managedProjectBoundaryKey();
           set({ isLoading: true, error: null });
           try {
+            if (isManagedCloudMode()) {
+              const boundaryKey = managedProjectBoundaryKey();
+              if (!boundaryKey) {
+                throw new Error('Managed Cloud projects require an authenticated Cloud session.');
+              }
+              if (!managedProjectsLoad || managedProjectsLoad.boundaryKey !== boundaryKey) {
+                const promise = desktopCloudProjects.listProjects().finally(() => {
+                  if (managedProjectsLoad?.promise === promise) managedProjectsLoad = null;
+                });
+                managedProjectsLoad = { boundaryKey, promise };
+              }
+              const projects = await managedProjectsLoad.promise;
+              if (
+                generation !== projectLoadGeneration ||
+                managedProjectBoundaryKey() !== boundaryKey
+              ) {
+                return;
+              }
+              set((state) => ({
+                projects: mergeManagedConversationMembership(projects, state.projects),
+                isLoading: false,
+              }));
+              return;
+            }
             if (isTauri) {
               const projects = await invoke<Project[]>('project_list');
+              if (generation !== projectLoadGeneration || isManagedCloudMode()) return;
               set({ projects, isLoading: false });
             } else {
               // In web mode, projects are loaded from persisted state
               set({ isLoading: false });
             }
           } catch (error) {
+            if (generation !== projectLoadGeneration) return;
+            if (
+              boundaryAtStart !== managedProjectBoundaryKey() ||
+              (boundaryAtStart === null && isManagedCloudMode())
+            ) {
+              return;
+            }
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error('[ProjectStore] Failed to load projects:', errorMessage);
             set({ error: errorMessage, isLoading: false });
+            if (options?.throwOnError) {
+              throw error instanceof Error ? error : new Error(errorMessage);
+            }
           }
         },
 
@@ -225,6 +300,14 @@ export const useProjectStore = create<ProjectState>()(
         createProject: async (projectData) => {
           set({ isLoading: true, error: null });
           try {
+            if (isManagedCloudMode()) {
+              const createdProject = await desktopCloudProjects.createProject(projectData);
+              set((state) => ({
+                projects: [...state.projects, createdProject],
+                isLoading: false,
+              }));
+              return createdProject;
+            }
             const now = new Date().toISOString();
             const newProject: Project = {
               ...projectData,
@@ -265,6 +348,23 @@ export const useProjectStore = create<ProjectState>()(
             const updatedAt = new Date().toISOString();
             const projectUpdates = { ...updates, updatedAt };
 
+            if (isManagedCloudMode()) {
+              const updatedProject = await desktopCloudProjects.updateProject(id, updates);
+              set((state) => ({
+                projects: state.projects.map((project) =>
+                  project.id === id
+                    ? {
+                        ...updatedProject,
+                        conversationIds: updates.conversationIds ?? project.conversationIds,
+                        conversationCount:
+                          updates.conversationIds?.length ?? project.conversationCount,
+                      }
+                    : project,
+                ),
+                isLoading: false,
+              }));
+              return;
+            }
             if (isTauri) {
               await invoke('project_update', { id, updates: projectUpdates });
             }
@@ -285,7 +385,16 @@ export const useProjectStore = create<ProjectState>()(
         deleteProject: async (id) => {
           set({ isLoading: true, error: null });
           try {
-            if (isTauri) {
+            if (isManagedCloudMode()) {
+              const linkedConversationIds =
+                get()
+                  .projects.find((project) => project.id === id)
+                  ?.conversationIds.slice() ?? [];
+              await desktopCloudProjects.deleteProject(id);
+              for (const conversationId of linkedConversationIds) {
+                useChatStore.getState().setConversationProject(conversationId, null);
+              }
+            } else if (isTauri) {
               await invoke('project_delete', { id });
             }
 
@@ -304,7 +413,23 @@ export const useProjectStore = create<ProjectState>()(
 
         // Archive a project
         archiveProject: async (id) => {
+          const linkedConversationIds =
+            get()
+              .projects.find((project) => project.id === id)
+              ?.conversationIds.slice() ?? [];
           await get().updateProject(id, { isArchived: true });
+          if (isManagedCloudMode()) {
+            for (const conversationId of linkedConversationIds) {
+              useChatStore.getState().setConversationProject(conversationId, null);
+            }
+            set((state) => ({
+              projects: state.projects.map((project) =>
+                project.id === id
+                  ? { ...project, conversationIds: [], conversationCount: 0 }
+                  : project,
+              ),
+            }));
+          }
         },
 
         // Unarchive a project
@@ -326,6 +451,11 @@ export const useProjectStore = create<ProjectState>()(
 
         // Add file to project
         addFileToProject: async (projectId, fileData) => {
+          if (isManagedCloudMode()) {
+            throw new Error(
+              'Device files stay Local. Upload a Cloud project knowledge file instead.',
+            );
+          }
           const project = get().projects.find((p) => p.id === projectId);
           if (!project) {
             throw new Error('Project not found');
@@ -343,6 +473,9 @@ export const useProjectStore = create<ProjectState>()(
 
         // Remove file from project
         removeFileFromProject: async (projectId, fileId) => {
+          if (isManagedCloudMode()) {
+            throw new Error('Device project files are only available in Local mode.');
+          }
           const project = get().projects.find((p) => p.id === projectId);
           if (!project) {
             throw new Error('Project not found');
@@ -354,6 +487,9 @@ export const useProjectStore = create<ProjectState>()(
 
         // Add a knowledge base file (with extracted content)
         addKnowledgeBaseFile: async (projectId, fileData) => {
+          if (isManagedCloudMode()) {
+            throw new Error('Cloud knowledge uploads must use the managed project upload flow.');
+          }
           const project = get().projects.find((p) => p.id === projectId);
           if (!project) {
             throw new Error('Project not found');
@@ -371,6 +507,11 @@ export const useProjectStore = create<ProjectState>()(
 
         // Remove a knowledge base file
         removeKnowledgeBaseFile: async (projectId, fileId) => {
+          if (isManagedCloudMode()) {
+            throw new Error(
+              'Cloud knowledge files must be removed through the managed project source flow.',
+            );
+          }
           const project = get().projects.find((p) => p.id === projectId);
           if (!project) {
             throw new Error('Project not found');
@@ -380,30 +521,107 @@ export const useProjectStore = create<ProjectState>()(
           await get().updateProject(projectId, { knowledgeBaseFiles: updatedFiles });
         },
 
-        // Link conversation to project
-        linkConversation: async (projectId, conversationId) => {
-          const project = get().projects.find((p) => p.id === projectId);
-          if (!project) {
+        // One authoritative project-membership transition. It updates the
+        // canonical conversation row once, then projects that result into the
+        // chat and project stores. Callers must not pair this with
+        // `setConversationProject`, `linkConversation`, or `unlinkConversation`.
+        moveConversationToProject: async (conversationId, projectId) => {
+          const projectsBefore = get().projects;
+          const chatBefore = useChatStore.getState();
+          const conversation = chatBefore.conversations.find(
+            (candidate) => candidate.id === conversationId,
+          );
+          if (!conversation) throw new Error('Conversation not found');
+          if (projectId && !projectsBefore.some((project) => project.id === projectId)) {
             throw new Error('Project not found');
           }
 
-          if (!project.conversationIds.includes(conversationId)) {
-            const updatedConversationIds = [...project.conversationIds, conversationId];
-            await get().updateProject(projectId, { conversationIds: updatedConversationIds });
+          const previousProjectId =
+            conversation.projectId ??
+            projectsBefore.find((project) => project.conversationIds.includes(conversationId))
+              ?.id ??
+            null;
+          if (previousProjectId === projectId) return;
+
+          const projectMembership = (candidate: Project): string[] => {
+            const withoutConversation = candidate.conversationIds.filter(
+              (id) => id !== conversationId,
+            );
+            return candidate.id === projectId
+              ? [...withoutConversation, conversationId]
+              : withoutConversation;
+          };
+
+          if (isManagedCloudMode()) {
+            useChatStore.getState().setConversationProject(conversationId, projectId);
+            set({
+              projects: projectsBefore.map((candidate) => {
+                const conversationIds = projectMembership(candidate);
+                const previousCount =
+                  candidate.conversationCount ?? candidate.conversationIds.length;
+                const countDelta =
+                  candidate.id === previousProjectId ? -1 : candidate.id === projectId ? 1 : 0;
+                return {
+                  ...candidate,
+                  conversationIds,
+                  conversationCount: Math.max(0, previousCount + countDelta),
+                };
+              }),
+              error: null,
+            });
+
+            try {
+              await updateCloudConversation(conversationId, { projectId });
+            } catch (error) {
+              useChatStore.getState().setConversationProject(conversationId, previousProjectId);
+              set({
+                projects: projectsBefore,
+                error: error instanceof Error ? error.message : String(error),
+              });
+              throw error;
+            }
+            return;
           }
+
+          if (previousProjectId) {
+            const previousProject = projectsBefore.find(
+              (candidate) => candidate.id === previousProjectId,
+            );
+            if (previousProject) {
+              await get().updateProject(previousProjectId, {
+                conversationIds: previousProject.conversationIds.filter(
+                  (id) => id !== conversationId,
+                ),
+              });
+            }
+          }
+          if (projectId) {
+            const targetProject = get().projects.find((candidate) => candidate.id === projectId);
+            if (!targetProject) throw new Error('Project not found');
+            await get().updateProject(projectId, {
+              conversationIds: Array.from(
+                new Set([...targetProject.conversationIds, conversationId]),
+              ),
+            });
+          }
+          useChatStore.getState().setConversationProject(conversationId, projectId);
         },
 
-        // Unlink conversation from project
-        unlinkConversation: async (projectId, conversationId) => {
-          const project = get().projects.find((p) => p.id === projectId);
-          if (!project) {
-            throw new Error('Project not found');
-          }
+        // Compatibility wrappers delegate to the authoritative transition.
+        linkConversation: async (projectId, conversationId) => {
+          await get().moveConversationToProject(conversationId, projectId);
+        },
 
-          const updatedConversationIds = project.conversationIds.filter(
-            (id) => id !== conversationId,
-          );
-          await get().updateProject(projectId, { conversationIds: updatedConversationIds });
+        unlinkConversation: async (projectId, conversationId) => {
+          const conversation = useChatStore
+            .getState()
+            .conversations.find((candidate) => candidate.id === conversationId);
+          const linkedProject =
+            conversation?.projectId ??
+            get().projects.find((candidate) => candidate.conversationIds.includes(conversationId))
+              ?.id;
+          if (linkedProject !== projectId) return;
+          await get().moveConversationToProject(conversationId, null);
         },
 
         // Get project for a conversation
@@ -419,6 +637,11 @@ export const useProjectStore = create<ProjectState>()(
 
         // Update project settings
         updateProjectSettings: async (projectId, settings) => {
+          if (isManagedCloudMode()) {
+            throw new Error(
+              'Cloud project defaults are not available yet. Project instructions and sources are synced separately.',
+            );
+          }
           const currentSettings = get().projectSettings[projectId] || {};
           const updatedSettings = { ...currentSettings, ...settings };
 
@@ -592,13 +815,26 @@ export const useProjectStore = create<ProjectState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        partialize: (state) => ({
-          projects: state.projects,
-          activeProjectId: state.activeProjectId,
-          projectSettings: state.projectSettings,
-          currentFolder: state.currentFolder,
-          recentFolders: state.recentFolders,
-        }),
+        partialize: (state) => {
+          const localProjects = state.projects.filter(
+            (project) => project.defaultPrivacyMode !== 'managed',
+          );
+          const localProjectIds = new Set(localProjects.map((project) => project.id));
+          return {
+            projects: localProjects,
+            activeProjectId:
+              state.activeProjectId && localProjectIds.has(state.activeProjectId)
+                ? state.activeProjectId
+                : null,
+            projectSettings: Object.fromEntries(
+              Object.entries(state.projectSettings).filter(([projectId]) =>
+                localProjectIds.has(projectId),
+              ),
+            ),
+            currentFolder: state.currentFolder,
+            recentFolders: state.recentFolders,
+          };
+        },
         migrate: (state) => state as ProjectState,
       },
     ),

@@ -36,6 +36,7 @@ vi.mock('@/lib/server/localized-pricing-service', () => ({
   getCheckoutPriceSelection: vi.fn(async () => ({
     priceId: 'price_max_15x_monthly',
     currency: 'usd',
+    amountMinor: 20_000,
   })),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
@@ -96,6 +97,25 @@ describe('POST /api/checkout', () => {
     );
   });
 
+  it('passes a validated caller idempotency key into Stripe session creation', async () => {
+    const response = await POST(
+      new NextRequest('https://agiworkforce.com/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-vercel-ip-country': 'US',
+          'Idempotency-Key': 'agi.checkout.desktop.request-1',
+        },
+        body: JSON.stringify({ plan: 'max_15x', billingInterval: 'monthly' }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(stripeMocks.createCheckoutSession).toHaveBeenCalledWith(expect.any(Object), {
+      idempotencyKey: 'checkout:user_123:agi.checkout.desktop.request-1',
+    });
+  });
+
   it('marks a full-price replacement so existing usage can be carried forward', async () => {
     dbMocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) {
@@ -154,6 +174,16 @@ describe('POST /api/checkout', () => {
     const response = await POST(makeRequest('pro'));
 
     expect(response.status).toBe(409);
+    expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it('does not create a customer or checkout when billing state cannot be verified', async () => {
+    dbMocks.query.mockReset().mockRejectedValue(new Error('database unavailable'));
+
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(503);
+    expect(stripeMocks.createCustomer).not.toHaveBeenCalled();
     expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 });

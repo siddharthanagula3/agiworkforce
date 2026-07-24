@@ -69,8 +69,44 @@ describe('AGI Desktop Cloud mode entry', () => {
 
     await browser.saveScreenshot('/tmp/agi-desktop-cloud-auth.png');
 
+    await continueButton.click();
+    await browser.waitUntil(async () => (await browser.getWindowHandles()).length === 2, {
+      timeout: 20_000,
+      interval: 250,
+      timeoutMsg: 'Desktop did not create an owned Cloud sign-in window',
+    });
+
+    const windowHandles = await browser.getWindowHandles();
+    expect(windowHandles).toContain('cloud-sign-in');
+    await browser.switchToWindow('cloud-sign-in');
+    await browser.waitUntil(async () => (await browser.getUrl()).includes('/auth/device'), {
+      timeout: 20_000,
+      interval: 250,
+      timeoutMsg: 'Cloud sign-in window did not reach the device authorization page',
+    });
+    expect(await browser.getUrl()).toContain('surface=desktop');
+    await browser.saveScreenshot('/tmp/agi-desktop-cloud-sign-in-window.png');
+    await browser.closeWindow();
+    await browser.switchToWindow('main');
+    await browser.saveScreenshot('/tmp/agi-desktop-cloud-return.png');
+
+    // Closing the owned authorization window aborts the pending device flow.
+    // Depending on how quickly the abort reaches React, the main shell may
+    // already be back in Local Mode or may briefly show the Cloud sign-in card.
+    await browser.waitUntil(
+      async () =>
+        (await $('button=Use Local Mode').isExisting()) ||
+        (await $('textarea[aria-label="Chat message input"]').isExisting()),
+      {
+        timeout: 20_000,
+        interval: 250,
+        timeoutMsg: 'Desktop did not recover after closing the Cloud sign-in window',
+      },
+    );
     const useLocalButton = await $('button=Use Local Mode');
-    await useLocalButton.click();
+    if (await useLocalButton.isExisting()) {
+      await useLocalButton.click();
+    }
     const composer = await $('textarea[aria-label="Chat message input"]');
     await composer.waitForDisplayed({ timeout: 20_000 });
   });
