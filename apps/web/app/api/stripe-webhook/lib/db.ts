@@ -636,6 +636,7 @@ export async function upsertSubscriptionFromSession(
             planTier,
             new Date(currentPeriodStart),
             new Date(currentPeriodEnd),
+            db,
           );
         } else {
           await SubscriptionService.allocateCreditsForPeriod(
@@ -644,6 +645,7 @@ export async function upsertSubscriptionFromSession(
             planTier,
             new Date(currentPeriodStart),
             new Date(currentPeriodEnd),
+            { db },
           );
         }
         logger.info(
@@ -686,6 +688,7 @@ export async function upsertSubscriptionFromSession(
         { error: lastError, userId: resolvedUserId, subscriptionId: data.id, planTier },
         'CRITICAL: Failed to allocate credits after all retries - user may need manual sync',
       );
+      throw lastError;
     }
   }
 }
@@ -841,6 +844,7 @@ export async function updateSubscriptionFromStripeSubscription(
           planTier,
           new Date(updateData.current_period_start),
           new Date(updateData.current_period_end),
+          db,
         );
       }
 
@@ -897,6 +901,7 @@ export async function updateSubscriptionFromStripeSubscription(
               planTier,
               new Date(pStart),
               new Date(pEnd),
+              { db },
             );
             logger.info(
               { userId: resolvedUserId, subscriptionId: updatedRow.id, planTier },
@@ -909,6 +914,7 @@ export async function updateSubscriptionFromStripeSubscription(
               planTier,
               new Date(pStart),
               new Date(pEnd),
+              { db },
             );
             logger.info(
               { userId: resolvedUserId, subscriptionId: updatedRow.id, planTier },
@@ -920,6 +926,11 @@ export async function updateSubscriptionFromStripeSubscription(
             { error: creditError, userId: resolvedUserId, subscriptionId: updatedRow.id },
             'Failed to allocate/reset credits for subscription',
           );
+          // Entitlement and its usage ledger are one billing outcome. Returning
+          // 2xx here would acknowledge the Stripe event while leaving the user
+          // on the new plan with a stale or missing allowance. Re-throw so
+          // Stripe retries the idempotent reconciliation.
+          throw creditError;
         }
       }
     } else {
@@ -1130,6 +1141,7 @@ export async function updateSubscriptionFromStripeSubscription(
                 planTier,
                 new Date(pStart),
                 new Date(pEnd),
+                db,
               );
             } else {
               await SubscriptionService.allocateCreditsForPeriod(
@@ -1138,6 +1150,7 @@ export async function updateSubscriptionFromStripeSubscription(
                 planTier,
                 new Date(pStart),
                 new Date(pEnd),
+                { db },
               );
             }
             logger.info(
@@ -1156,6 +1169,7 @@ export async function updateSubscriptionFromStripeSubscription(
               { error: creditError, userId: resolvedUserId, subscriptionId: upsertedRow.id },
               'Failed to allocate or carry credits for new subscription',
             );
+            throw creditError;
           }
         }
       } else {

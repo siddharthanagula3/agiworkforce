@@ -13,8 +13,7 @@ import {
 } from '@agiworkforce/sync';
 import type { PrivacyMode } from '@agiworkforce/types';
 import { WEB_APP_URL } from '../api/config';
-import { getAuthHeaders } from '../api/cloudApi';
-import { guardedFetch } from '../lib/egressGuard';
+import { cloudFetch, getAuthHeaders } from '../api/cloudApi';
 import { storageFallback } from '../lib/storageFallback';
 import { selectPrivacyMode, useAppModeStore } from '../stores/appModeStore';
 import {
@@ -518,7 +517,7 @@ function applyDesktopCloudSafeSettings(settings: CloudSafeSettings): void {
 export function initManagedCloudSettingsSync(): () => void {
   const client = createManagedCloudSettingsClient({
     baseUrl: WEB_APP_URL,
-    fetchImpl: (input, init) => guardedFetch(input, init),
+    fetchImpl: cloudFetch,
     getHeaders: () => getAuthHeaders(),
   });
   const coordinator = createManagedCloudSettingsSyncCoordinator({

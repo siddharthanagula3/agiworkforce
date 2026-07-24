@@ -3,7 +3,12 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
-import { handleCorsPreflightRequest, getSecurityHeaders, getCorsHeaders } from '@/lib/cors';
+import {
+  handleCorsPreflightRequest,
+  getSecurityHeaders,
+  getCorsHeaders,
+  withCorsRoute,
+} from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { runAuthGate } from './lib/auth-gate';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
@@ -604,7 +609,7 @@ async function handleChatCompletions(request: NextRequest) {
   );
 }
 
-export const POST = withErrorHandler(handleChatCompletions);
+export const POST = withCorsRoute(withErrorHandler(handleChatCompletions));
 
 export function OPTIONS(request: NextRequest) {
   return (

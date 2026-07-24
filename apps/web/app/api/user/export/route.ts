@@ -4,7 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '@/lib/cors';
+import {
+  getSecurityHeaders,
+  getCorsHeaders,
+  handleCorsPreflightRequest,
+  withCorsRoute,
+} from '@/lib/cors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service';
@@ -461,7 +466,9 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
   );
 }
 
-export const GET = withErrorHandler(handleExportUserData);
+// Wrap outside the error handler so Desktop can read rate-limit, auth, and
+// server failure responses instead of receiving an opaque cross-origin error.
+export const GET = withCorsRoute(withErrorHandler(handleExportUserData));
 
 /**
  * OPTIONS handler for CORS preflight requests.

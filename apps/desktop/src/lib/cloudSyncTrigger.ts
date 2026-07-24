@@ -9,8 +9,8 @@
  * MANAGED-ONLY gate: mirrors egressGuard's exact logic.
  *   selectPrivacyMode(useAppModeStore.getState()) === 'managed'
  *
- * BYOK runs under appMode='cloud' but must NEVER trigger sync.  The 'managed'
- * check is the only safe discriminator.
+ * BYOK conversations live inside the Local workspace and must NEVER trigger
+ * sync. The canonical privacy-mode check is the safe discriminator.
  *
  * FAIL-CLOSED: any error reading the store or auth state is treated as
  * non-managed and sync is skipped.
@@ -26,10 +26,12 @@ import { useUnifiedAuthStore } from '../stores/auth';
 
 const SYNC_INTERVAL_MS = 30_000;
 
-/** Returns the current user ID, or null if not authenticated. */
+/** Returns the Cloud account owner only when a validated bearer is present. */
 function getCurrentUserId(): string | null {
   try {
-    return useUnifiedAuthStore.getState().user?.id ?? null;
+    const auth = useUnifiedAuthStore.getState();
+    if (!auth.isAuthenticated || !auth.accessToken) return null;
+    return auth.user?.id ?? null;
   } catch {
     return null;
   }

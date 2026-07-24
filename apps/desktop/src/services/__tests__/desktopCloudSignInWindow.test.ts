@@ -9,6 +9,7 @@ const windowHarness = vi.hoisted(() => ({
     close: ReturnType<typeof vi.fn>;
     setFocus: ReturnType<typeof vi.fn>;
     closeHandler?: () => void;
+    destroyedHandler?: () => void;
   }>,
   existing: null as {
     close: ReturnType<typeof vi.fn>;
@@ -24,6 +25,7 @@ vi.mock('@tauri-apps/api/webviewWindow', () => {
     close = vi.fn(async () => undefined);
     setFocus = vi.fn(async () => undefined);
     closeHandler?: () => void;
+    destroyedHandler?: () => void;
 
     constructor(label: string, options: Record<string, unknown>) {
       this.label = label;
@@ -34,6 +36,8 @@ vi.mock('@tauri-apps/api/webviewWindow', () => {
     async once(event: string, callback: (event: { payload?: unknown }) => void) {
       if (event === 'tauri://created') {
         queueMicrotask(() => callback({}));
+      } else if (event === 'tauri://destroyed') {
+        this.destroyedHandler = () => callback({});
       }
       return vi.fn();
     }
@@ -96,6 +100,17 @@ describe('Desktop Cloud in-app sign-in window', () => {
     windowHarness.created[0]?.closeHandler?.();
 
     expect(onUserClosed).not.toHaveBeenCalled();
+  });
+
+  it('cancels pending authorization when the window is destroyed directly', async () => {
+    const onUserClosed = vi.fn();
+    await openDesktopCloudSignInWindow('https://agiworkforce.com/auth/device?user_code=ABCD-1234', {
+      onUserClosed,
+    });
+
+    windowHarness.created[0]?.destroyedHandler?.();
+
+    expect(onUserClosed).toHaveBeenCalledOnce();
   });
 
   it('rejects an authorization URL outside the configured AGI Cloud origin', async () => {

@@ -4,23 +4,22 @@
  * Renders the shared @agiworkforce/ui SettingsModal shell for desktop CLOUD mode.
  * Pattern mirrors apps/web/features/settings/components/WebSettingsModal.tsx:
  *   - sectionContent maps section keys → existing desktop tab components (fully wired, IPC/store-backed)
- *   - A DesktopSettingsDataAdapter bridges the cloud connectors API + skillMarketplaceStore into
- *     the SettingsDataAdapter contract, so the shared Connectors/Skills/Plugins panels render
- *     with real data and connect/disconnect actions.
+ *   - A DesktopSettingsDataAdapter bridges the Cloud connectors and managed
+ *     skills APIs into the SettingsDataAdapter contract, so the shared
+ *     Connectors and Skills panels render real account-owned data.
  *
  * LOCAL mode: NOT used here. App.tsx continues to render SettingsPanel for local mode.
  * CLOUD mode: App.tsx swaps in this component so web + desktop share the same modal shell.
  *
  * Section coverage:
  *   general      → GeneralTab (theme, hotkey, onboarding restart)
- *   account      → AccountTab (cloud account, usage dashboard, team)
- *   privacy      → PrivacyTab (master password, data export, crash reporting, governance)
+ *   account      → AccountTab (cloud identity, plan, credits, and sign-out)
+ *   privacy      → PrivacyTab cloud scope (account data, app telemetry, governance)
  *   memory       → MemoryTab  (MemoryEditor from unified-chat)
  *   connectors   → built-in ConnectorsPanel (adapter-driven from api/cloudConnectors.ts —
  *                  a real client of web's /api/connectors, NOT local Tauri connector state;
  *                  see stores/connectorsStore.ts for the separate LOCAL-mode gallery)
  *   skills       → built-in SkillsPanel    (adapter-driven from skillMarketplaceStore)
- *   plugins      → built-in PluginsPanel   (adapter-driven from skillMarketplaceStore)
  *   billing      → DesktopBillingSection   (minimal wired panel — see below)
  *   usage        → DesktopUsageSection     (wraps existing UsageDashboard)
  *   capabilities → DesktopCapabilitiesSection (feature flags + agent mode knobs)
@@ -32,6 +31,7 @@
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SettingsModal } from '@agiworkforce/ui';
+import { toast } from 'sonner';
 import type {
   SettingsDataAdapter,
   SettingsSkill,
@@ -43,11 +43,13 @@ import { CONNECTORS } from '../connectors/connectorDefinitions';
 import {
   listConnectors as fetchCloudConnectorState,
   connectConnector as apiConnectConnector,
+  createCustomConnector as apiCreateCustomConnector,
+  deleteCustomConnector as apiDeleteCustomConnector,
   disconnectConnector as apiDisconnectConnector,
   type CloudConnectorEntry,
 } from '../../api/cloudConnectors';
-import { openExternalUrl } from '../../utils/navigation';
-import { useSkillMarketplaceStore } from '../../stores/skillMarketplaceStore';
+import { completeDesktopCloudConnectorInstall } from '../../services/desktopCloudConnectorInstall';
+import { listCloudSkills } from '../../api/cloudSkills';
 import {
   createDefaultWindowPreferences,
   getDefaultGlobalHotkeyCombo,
@@ -56,9 +58,20 @@ import {
   type GlobalHotkeyPreferences,
 } from '../../stores/settingsStore';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
+import { getCloudUsage, type CloudUsage } from '../../api/cloudApi';
+import { openBillingPortal } from '../../lib/stripeCheckout';
+import { selectPlan, useAuthStore } from '../../stores/auth';
 import type { SettingsTab } from '../../stores/settingsDialogStore';
 import { LEGACY_TAB_MAP } from '../../stores/settingsDialogStore';
+import { PLAN_DISPLAY_NAMES } from '../../lib/cloudAccountTypes';
 import { useShallow } from 'zustand/react/shallow';
+import { WEB_APP_URL } from '../../api/config';
+import { openExternalUrl } from '../../utils/navigation';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
+import {
+  assertManagedCloudBoundary,
+  captureManagedCloudBoundary,
+} from '../../services/managedCloudBoundary';
 
 // ── Tab components (existing, fully wired) ────────────────────────────────────
 
@@ -72,14 +85,13 @@ const LazyPrivacyTab = lazy(() =>
   import('./tabs/Privacy').then((m) => ({ default: m.PrivacyTab })),
 );
 const LazyMemoryTab = lazy(() => import('./tabs/Memory').then((m) => ({ default: m.MemoryTab })));
-const LazyUsageDashboard = lazy(() =>
-  import('./UsageDashboard').then((m) => ({ default: m.UsageDashboard })),
-);
-
 // ── Cloud-only sections that have no dedicated desktop tab ────────────────────
 
-/** Minimal Billing section: proxies into the existing PlansModal via a chat:action event */
-function DesktopBillingSection() {
+function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
+  const plan = useAuthStore(selectPlan);
+  const [portalError, setPortalError] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -89,115 +101,230 @@ function DesktopBillingSection() {
         </p>
       </div>
       <div className="rounded-lg border border-border bg-card/40 p-5">
-        <p className="text-sm text-muted-foreground mb-4">
-          Billing and subscription management is handled through the Plans modal.
+        <p className="text-xs text-muted-foreground">Current plan</p>
+        <p className="mt-1 text-lg font-semibold text-foreground">
+          {plan ? PLAN_DISPLAY_NAMES[plan] : 'Loading…'}
         </p>
-        <button
-          type="button"
-          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90"
-          onClick={() =>
-            window.dispatchEvent(
-              new CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } }),
-            )
-          }
-        >
-          Open Plans &amp; Billing
-        </button>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Upgrades show the exact prorated amount before charging. Downgrades, cancellation, and
+          payment methods are managed through Stripe’s secure portal.
+        </p>
+        {portalError ? <p className="mt-3 text-xs text-red-500">{portalError}</p> : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90"
+            onClick={onOpenPlans}
+          >
+            Compare or upgrade
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            disabled={portalLoading}
+            onClick={() => {
+              setPortalError(null);
+              setPortalLoading(true);
+              void openBillingPortal(async () => {
+                await cloudAccountAuth.refreshUserData();
+              })
+                .then((error) => {
+                  if (error) setPortalError(error);
+                })
+                .catch((error: unknown) => {
+                  setPortalError(
+                    error instanceof Error ? error.message : 'Could not open billing.',
+                  );
+                })
+                .finally(() => setPortalLoading(false));
+            }}
+          >
+            {portalLoading ? 'Opening billing…' : 'Manage subscription'}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-/** Usage section: wraps the existing wired UsageDashboard */
+function UsageMeter({
+  label,
+  value,
+  resetAt,
+}: {
+  label: string;
+  value: number;
+  resetAt: string | null;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-sm tabular-nums text-muted-foreground">{Math.round(value)}% used</p>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary transition-[width]"
+          style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+        />
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        {resetAt ? `Resets ${new Date(resetAt).toLocaleString()}` : 'No active reset window'}
+      </p>
+    </div>
+  );
+}
+
 function DesktopUsageSection() {
+  const [usage, setUsage] = useState<CloudUsage | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestGeneration = useRef(0);
+
+  const refresh = useCallback(async () => {
+    const generation = ++requestGeneration.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const boundary = captureManagedCloudBoundary('Cloud usage');
+      const nextUsage = await getCloudUsage();
+      assertManagedCloudBoundary(boundary);
+      if (requestGeneration.current === generation) {
+        setUsage(nextUsage);
+      }
+    } catch (cause) {
+      if (requestGeneration.current === generation) {
+        setError(cause instanceof Error ? cause.message : 'Could not load managed usage.');
+      }
+    } finally {
+      if (requestGeneration.current === generation) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h2 className="text-base font-semibold text-foreground">Usage</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Token budget, model usage breakdown, and cost tracking.
+          Managed Cloud allowance and rolling safety windows. Exact private ledger operands stay
+          server-side.
         </p>
       </div>
-      <Suspense fallback={<div className="h-32 animate-pulse rounded-lg bg-muted/40" />}>
-        <LazyUsageDashboard />
-      </Suspense>
+      {loading ? <div className="h-32 animate-pulse rounded-lg bg-muted/40" /> : null}
+      {error ? (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
+          <p className="text-sm text-red-500">{error}</p>
+          <button
+            type="button"
+            className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+            onClick={() => void refresh()}
+          >
+            Try again
+          </button>
+        </div>
+      ) : null}
+      {!loading && usage ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <UsageMeter
+            label={`${
+              PLAN_DISPLAY_NAMES[usage.plan_tier as keyof typeof PLAN_DISPLAY_NAMES] ??
+              usage.plan_tier
+            } plan`}
+            value={usage.usage_percentage}
+            resetAt={usage.usage_reset_at}
+          />
+          <UsageMeter
+            label="Current 5-hour window"
+            value={usage.session_usage_percentage}
+            resetAt={usage.session_reset_at}
+          />
+          <UsageMeter
+            label="Weekly usage"
+            value={usage.weekly_usage_percentage}
+            resetAt={usage.weekly_reset_at}
+          />
+          <UsageMeter
+            label="Flagship model weekly usage"
+            value={usage.flagship_weekly_usage_percentage}
+            resetAt={usage.flagship_weekly_reset_at}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
 
-/** Capabilities section: agent mode toggle and auto-approve controls */
+/** Managed capability status. Native Local agent controls stay in Local settings. */
 function DesktopCapabilitiesSection() {
-  // alwaysUseAgentMode and autoApproveTools live on chatPreferences (not executionPreferences)
-  const alwaysUseAgentMode = useSettingsStore(
-    (s) => s.chatPreferences?.alwaysUseAgentMode ?? false,
-  );
-  const autoApproveTools = useSettingsStore((s) => s.chatPreferences?.autoApproveTools ?? false);
-  const setAlwaysUseAgentMode = useSettingsStore((s) => s.setAlwaysUseAgentMode);
-  const setAutoApproveTools = useSettingsStore((s) => s.setAutoApproveTools);
+  const featureFlags = useAuthStore((state) => state.featureFlags);
+  const capabilities = [
+    {
+      label: 'Managed code execution',
+      description: 'Run supported code in an isolated AGI Cloud sandbox.',
+      status: featureFlags['code_execution'] === true ? 'Available' : 'Not enabled',
+    },
+    {
+      label: 'Managed web search',
+      description: 'Search and fetch current web sources when the selected model supports it.',
+      status:
+        featureFlags['generic_web_search'] === true || featureFlags['native_web_search'] === true
+          ? 'Available'
+          : 'Model-dependent',
+    },
+    {
+      label: 'Cloud projects and sync',
+      description:
+        'Keep account-owned chats, project instructions, and sources available across surfaces.',
+      status: 'Available',
+    },
+  ] as const;
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-base font-semibold text-foreground">Capabilities</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Agent mode controls and execution preferences.
+          Capabilities authorized for this AGI Cloud account and deployment.
         </p>
       </div>
 
-      <div className="rounded-lg border border-border bg-card/40 p-5 flex flex-col gap-5">
-        {/* Agent mode toggle */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">Always use Agent Mode</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Automatically enables multi-step agentic execution for every conversation.
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={alwaysUseAgentMode}
-            onClick={() => setAlwaysUseAgentMode(!alwaysUseAgentMode)}
-            className={`relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              alwaysUseAgentMode ? 'bg-primary' : 'bg-muted'
+      <div className="overflow-hidden rounded-lg border border-border bg-card/40">
+        {capabilities.map((capability, index) => (
+          <div
+            key={capability.label}
+            className={`flex items-start justify-between gap-4 p-5 ${
+              index > 0 ? 'border-t border-border/60' : ''
             }`}
           >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">{capability.label}</p>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                {capability.description}
+              </p>
+            </div>
             <span
-              className={`inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform ${
-                alwaysUseAgentMode ? 'translate-x-6' : ''
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                capability.status === 'Available'
+                  ? 'bg-emerald-500/10 text-emerald-500'
+                  : 'bg-muted text-muted-foreground'
               }`}
-            />
-          </button>
-        </div>
-
-        <div className="border-t border-border/60" />
-
-        {/* Auto-approve tools toggle */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">AGI Mode (Auto-approve all tools)</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Bypasses per-tool approval gates. Use only in trusted environments. Opt-in; default is
-              fail-closed approval.
-            </p>
+            >
+              {capability.status}
+            </span>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={autoApproveTools}
-            onClick={() => setAutoApproveTools(!autoApproveTools)}
-            className={`relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-              autoApproveTools ? 'bg-amber-500' : 'bg-muted'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm transition-transform ${
-                autoApproveTools ? 'translate-x-6' : ''
-              }`}
-            />
-          </button>
-        </div>
+        ))}
       </div>
+
+      <p className="text-xs leading-5 text-muted-foreground">
+        Tool approvals are enforced by the Managed Cloud policy for each task. Local agent and
+        auto-approval controls apply only to the Local workspace and remain in Local settings.
+      </p>
     </div>
   );
 }
@@ -267,6 +394,12 @@ function toDesktopConnectorId(serverId: string): string {
   return SERVER_TO_DESKTOP_CONNECTOR_ID[serverId] ?? serverId;
 }
 
+function toDisplayConnectorId(connector: CloudConnectorEntry): string {
+  return connector.source === 'custom'
+    ? `custom-${connector.id}`
+    : toDesktopConnectorId(connector.connectorId);
+}
+
 /**
  * Maps desktop's ConnectorDef[] (names/logos/categories — static catalog
  * metadata) → shared SettingsConnector[], gated by the server's `available`
@@ -275,7 +408,7 @@ function toDesktopConnectorId(serverId: string): string {
  * Everything else renders "Coming soon" instead of a fake-connectable entry.
  */
 function toSettingsConnectors(availableIds: ReadonlySet<string>): SettingsConnector[] {
-  return CONNECTORS.map((c, idx) => {
+  return CONNECTORS.map((c) => {
     const canConnect = availableIds.has(toServerConnectorId(c.id));
     return {
       id: c.id,
@@ -283,8 +416,10 @@ function toSettingsConnectors(availableIds: ReadonlySet<string>): SettingsConnec
       description: c.description,
       category: c.category,
       authType: c.authType,
-      // actionCount used as rough popularity rank; comingSoon connectors get 0
-      actionCount: c.comingSoon ? 0 : Math.max(0, CONNECTORS.length - idx),
+      // The server does not expose a verified tool/action count. Zero keeps
+      // the optional Actions row hidden instead of fabricating a metric from
+      // static catalog order.
+      actionCount: 0,
       // comingSoon → phase 2 so the shared shell renders "Soon"
       phase: c.comingSoon ? 2 : 1,
       iconBg: COLOR_TO_GRADIENT[c.color] ?? 'from-gray-500 to-gray-600',
@@ -313,6 +448,7 @@ export function DesktopCloudSettingsModal({
   // ── Resolve initial section from legacy tab map ──────────────────────────
   const resolveSection = (tab: SettingsTab): string => {
     const mapped = (LEGACY_TAB_MAP[tab] ?? tab) as string;
+    if (mapped === 'models-keys') return 'capabilities';
     // Cloud modal only shows these sections; fall back to general for anything else
     const CLOUD_SECTIONS = new Set([
       'general',
@@ -323,7 +459,6 @@ export function DesktopCloudSettingsModal({
       'capabilities',
       'connectors',
       'skills',
-      'plugins',
       'memory',
     ]);
     return CLOUD_SECTIONS.has(mapped) ? mapped : 'general';
@@ -346,32 +481,40 @@ export function DesktopCloudSettingsModal({
   );
   const [connectorsLoading, setConnectorsLoading] = useState(false);
   const [hasLoadedConnectors, setHasLoadedConnectors] = useState(false);
+  const [connectorsError, setConnectorsError] = useState<string | null>(null);
+
+  const refreshCloudConnectors = useCallback(async () => {
+    const { connectors, available } = await fetchCloudConnectorState();
+    setCloudConnectors(connectors);
+    setAvailableConnectorIds(new Set(available));
+    setConnectorsError(null);
+    setHasLoadedConnectors(true);
+    return connectors;
+  }, []);
+
+  const loadCloudConnectors = useCallback(async () => {
+    setConnectorsLoading(true);
+    setConnectorsError(null);
+    try {
+      await refreshCloudConnectors();
+    } catch (error) {
+      setHasLoadedConnectors(true);
+      setConnectorsError(
+        error instanceof Error ? error.message : 'Could not load Cloud connectors.',
+      );
+    } finally {
+      setConnectorsLoading(false);
+    }
+  }, [refreshCloudConnectors]);
+
+  const isCloudDirectorySection = activeSection === 'connectors' || activeSection === 'skills';
 
   useEffect(() => {
-    if (!open || activeSection !== 'connectors' || hasLoadedConnectors || connectorsLoading) {
+    if (!open || !isCloudDirectorySection || hasLoadedConnectors || connectorsLoading) {
       return;
     }
-    let cancelled = false;
-    setConnectorsLoading(true);
-    fetchCloudConnectorState()
-      .then(({ connectors, available }) => {
-        if (cancelled) return;
-        setCloudConnectors(connectors);
-        setAvailableConnectorIds(new Set(available));
-        setHasLoadedConnectors(true);
-      })
-      .catch((err) => {
-        // Non-fatal: leave hasLoadedConnectors false so re-opening this
-        // section retries instead of pinning a stale/empty list.
-        console.error('[DesktopCloudSettingsModal] Failed to load cloud connectors:', err);
-      })
-      .finally(() => {
-        if (!cancelled) setConnectorsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, activeSection, hasLoadedConnectors, connectorsLoading]);
+    void loadCloudConnectors();
+  }, [open, isCloudDirectorySection, hasLoadedConnectors, connectorsLoading, loadCloudConnectors]);
 
   // cloudConnectors always holds server-shaped rows (server id space); the
   // adapter surface (connectedConnectors / SettingsConnector.id) always uses
@@ -380,88 +523,160 @@ export function DesktopCloudSettingsModal({
   const connectedConnectors: ConnectedConnector[] = useMemo(
     () =>
       cloudConnectors.map((c) => ({
-        connectorId: toDesktopConnectorId(c.connectorId),
+        connectorId: toDisplayConnectorId(c),
         connectedAt: c.connectedAt || undefined,
         status: 'connected' as const,
       })),
     [cloudConnectors],
   );
 
-  const connectConnector = useCallback(async (id: string) => {
-    const serverId = toServerConnectorId(id);
-    const result = await apiConnectConnector(serverId);
-    if (result.status === 'connected') {
-      setCloudConnectors((prev) => [
-        ...prev.filter((c) => c.connectorId !== serverId),
-        result.connector,
-      ]);
-      return;
-    }
-    if (result.status === 'install-required') {
-      await openExternalUrl(result.installUrl);
-      throw new Error(
-        'Opened the install page in your browser. Finish there, then reopen Settings to refresh.',
+  const connectConnector = useCallback(
+    async (id: string) => {
+      const serverId = toServerConnectorId(id);
+      const authType = CONNECTORS.find((connector) => connector.id === id)?.authType;
+      const result = await apiConnectConnector(serverId, authType);
+      if (result.status === 'connected') {
+        setCloudConnectors((prev) => [
+          ...prev.filter((c) => c.connectorId !== serverId),
+          result.connector,
+        ]);
+        return;
+      }
+      if (result.status === 'install-required') {
+        await completeDesktopCloudConnectorInstall(result.installUrl, {
+          isConnected: async () => {
+            const connectors = await refreshCloudConnectors();
+            return connectors.some(
+              (connector) =>
+                connector.connectorId === serverId && connector.source === 'github-app',
+            );
+          },
+        });
+        await refreshCloudConnectors();
+        return;
+      }
+      throw new Error(result.message);
+    },
+    [refreshCloudConnectors],
+  );
+
+  const disconnectConnector = useCallback(
+    async (id: string) => {
+      if (id.startsWith('custom-')) {
+        const custom = cloudConnectors.find(
+          (connector) => connector.source === 'custom' && toDisplayConnectorId(connector) === id,
+        );
+        if (!custom) throw new Error('This custom connector could not be found.');
+        await apiDeleteCustomConnector(custom.id);
+        setCloudConnectors((prev) => prev.filter((connector) => connector.id !== custom.id));
+        return;
+      }
+      const serverId = toServerConnectorId(id);
+      await apiDisconnectConnector(serverId);
+      setCloudConnectors((prev) => prev.filter((c) => c.connectorId !== serverId));
+    },
+    [cloudConnectors],
+  );
+
+  const addCustomConnector = useCallback(
+    async (input: { name: string; url: string }) => {
+      await apiCreateCustomConnector(input);
+      await refreshCloudConnectors();
+    },
+    [refreshCloudConnectors],
+  );
+
+  // ── Skills (Managed Cloud catalog — the same source chat admission uses) ─
+  const [skills, setSkills] = useState<SettingsSkill[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [hasLoadedSkills, setHasLoadedSkills] = useState(false);
+  const [skillsError, setSkillsError] = useState<string | null>(null);
+
+  const loadCloudSkills = useCallback(async () => {
+    setSkillsLoading(true);
+    setSkillsError(null);
+    try {
+      const catalog = await listCloudSkills();
+      setSkills(
+        catalog.map((skill) => ({
+          id: skill.name,
+          name: skill.name,
+          description: skill.description,
+          source: skill.source,
+          tab: skill.source === 'builtin' ? 'prompts' : 'agents',
+        })),
       );
+      setHasLoadedSkills(true);
+    } catch (error) {
+      setHasLoadedSkills(true);
+      setSkillsError(error instanceof Error ? error.message : 'Could not load Cloud skills.');
+    } finally {
+      setSkillsLoading(false);
     }
-    throw new Error(result.message);
   }, []);
-
-  const disconnectConnector = useCallback(async (id: string) => {
-    const serverId = toServerConnectorId(id);
-    await apiDisconnectConnector(serverId);
-    setCloudConnectors((prev) => prev.filter((c) => c.connectorId !== serverId));
-  }, []);
-
-  // ── Skills (from skillMarketplaceStore) ──────────────────────────────────
-  const marketplaceSkills = useSkillMarketplaceStore((s) => s.skills);
-  const skillsLoading = useSkillMarketplaceStore((s) => s.isLoading);
-  const hasSkillsLoaded = useSkillMarketplaceStore((s) => s.hasLoaded);
-  const fetchSkills = useSkillMarketplaceStore((s) => s.fetchSkills);
 
   useEffect(() => {
-    if (open && activeSection === 'skills' && !hasSkillsLoaded && !skillsLoading) {
-      void fetchSkills();
-    }
-  }, [open, activeSection, hasSkillsLoaded, skillsLoading, fetchSkills]);
+    if (!open || !isCloudDirectorySection || hasLoadedSkills || skillsLoading) return;
+    void loadCloudSkills();
+  }, [open, isCloudDirectorySection, hasLoadedSkills, skillsLoading, loadCloudSkills]);
 
-  const skills: SettingsSkill[] = useMemo(
-    () =>
-      marketplaceSkills.map((s) => ({
-        id: s.name,
-        name: s.name,
-        description: s.description,
-        source: s.sourceType,
-        tab: (s.sourceType === 'builtin' ? 'prompts' : 'agents') as 'prompts' | 'agents',
-      })),
-    [marketplaceSkills],
-  );
+  useEffect(() => {
+    if (open) return;
+    setHasLoadedConnectors(false);
+    setHasLoadedSkills(false);
+  }, [open]);
 
-  const settingsConnectors: SettingsConnector[] = useMemo(
-    () => toSettingsConnectors(availableConnectorIds),
-    [availableConnectorIds],
-  );
+  const settingsConnectors: SettingsConnector[] = useMemo(() => {
+    const custom = cloudConnectors
+      .filter((connector) => connector.source === 'custom')
+      .map((connector) => ({
+        id: toDisplayConnectorId(connector),
+        name: connector.name ?? 'Custom MCP',
+        description: 'Private remote MCP connector',
+        category: 'Custom',
+        authType: 'custom_mcp',
+        actionCount: 0,
+        phase: 1,
+        iconBg: 'from-slate-500 to-slate-600',
+        iconText: 'MCP',
+        canConnect: false,
+      }));
+    return [...toSettingsConnectors(availableConnectorIds), ...custom];
+  }, [availableConnectorIds, cloudConnectors]);
 
   // ── Data adapter ─────────────────────────────────────────────────────────
   const adapter: SettingsDataAdapter = useMemo(
     () => ({
       connectors: settingsConnectors,
+      connectorsLoading,
+      connectorsError,
+      retryConnectors: loadCloudConnectors,
       connectedConnectors,
       connectConnector,
       disconnectConnector,
+      addCustomConnector,
+      openHref: (href) => {
+        const url = new URL(href, WEB_APP_URL);
+        return openExternalUrl(url.toString());
+      },
       skills,
       skillsLoading,
-      // Plugins surface in desktop comes from the skill engine; no separate plugin store yet.
-      // Return empty list so the shared PluginsPanel shows the "install via CLI" empty state.
-      plugins: [],
-      pluginsLoading: false,
+      skillsError,
+      retrySkills: loadCloudSkills,
     }),
     [
       settingsConnectors,
+      connectorsLoading,
+      connectorsError,
+      loadCloudConnectors,
       connectedConnectors,
       connectConnector,
       disconnectConnector,
+      addCustomConnector,
       skills,
       skillsLoading,
+      skillsError,
+      loadCloudSkills,
     ],
   );
 
@@ -490,12 +705,21 @@ export function DesktopCloudSettingsModal({
     useUnifiedChatStore.getState().openSidecar('governance');
   }, [onClose]);
 
+  const openPlans = useCallback(() => {
+    // Close Settings before opening Pricing so two modal focus traps never
+    // overlap. This keeps keyboard focus and animation behavior deterministic.
+    onClose();
+    window.dispatchEvent(new CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } }));
+  }, [onClose]);
+
   // ── Auto-save general settings when section changes away from general ─────
   const prevSectionRef = useRef(activeSection);
   useEffect(() => {
     if (prevSectionRef.current === 'general' && activeSection !== 'general') {
-      void saveSettings().catch(() => {
-        // Non-fatal; settings will be saved on next explicit save
+      void saveSettings().catch((error: unknown) => {
+        toast.error('Device settings were not saved', {
+          description: error instanceof Error ? error.message : String(error),
+        });
       });
     }
     prevSectionRef.current = activeSection;
@@ -519,23 +743,23 @@ export function DesktopCloudSettingsModal({
       ),
       account: (
         <Suspense fallback={<SectionSkeleton />}>
-          <LazyAccountTab />
+          <LazyAccountTab scope="cloud" />
         </Suspense>
       ),
       privacy: (
         <Suspense fallback={<SectionSkeleton />}>
-          <LazyPrivacyTab onOpenGovernanceWorkspace={openGovernanceWorkspace} />
+          <LazyPrivacyTab scope="cloud" onOpenGovernanceWorkspace={openGovernanceWorkspace} />
         </Suspense>
       ),
-      billing: <DesktopBillingSection />,
+      billing: <DesktopBillingSection onOpenPlans={openPlans} />,
       usage: <DesktopUsageSection />,
       capabilities: <DesktopCapabilitiesSection />,
       memory: (
         <Suspense fallback={<SectionSkeleton />}>
-          <LazyMemoryTab />
+          <LazyMemoryTab scope="cloud" />
         </Suspense>
       ),
-      // connectors / skills / plugins fall through to adapter-driven built-in panels
+      // connectors / skills fall through to adapter-driven built-in panels
     }),
 
     [
@@ -543,6 +767,7 @@ export function DesktopCloudSettingsModal({
       resolvedGlobalHotkeyPreferences,
       defaultGlobalHotkeyCombo,
       openGovernanceWorkspace,
+      openPlans,
       setTheme,
       setLanguage,
       setGlobalHotkeyEnabled,
@@ -560,7 +785,6 @@ export function DesktopCloudSettingsModal({
     'capabilities',
     'connectors',
     'skills',
-    'plugins',
     'memory',
   ];
 

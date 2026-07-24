@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -128,6 +129,9 @@ async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
   return NextResponse.json({ success: true });
 }
 
-export const GET = withErrorHandler(handleGetMemory);
-export const PUT = withErrorHandler(handleUpdateMemory);
-export const DELETE = withErrorHandler(handleDeleteMemory);
+export const GET = withCorsRoute(withErrorHandler(handleGetMemory));
+export const PUT = withCorsRoute(withErrorHandler(handleUpdateMemory));
+export const DELETE = withCorsRoute(withErrorHandler(handleDeleteMemory));
+export function OPTIONS(request: NextRequest) {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 405 });
+}

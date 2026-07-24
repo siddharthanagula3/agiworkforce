@@ -62,12 +62,15 @@ export function MyWorkflowsTab() {
     (acc, workflow) => ({
       views: acc.views + workflow.view_count,
       clones: acc.clones + workflow.clone_count,
-      avgRating:
-        acc.avgRating +
-        (workflow.total_reviews > 0 ? workflow.avg_rating : 0) / myPublishedWorkflows.length,
+      ratingTotal: acc.ratingTotal + (workflow.total_reviews > 0 ? workflow.avg_rating : 0),
+      ratedWorkflowCount: acc.ratedWorkflowCount + (workflow.total_reviews > 0 ? 1 : 0),
     }),
-    { views: 0, clones: 0, avgRating: 0 },
+    { views: 0, clones: 0, ratingTotal: 0, ratedWorkflowCount: 0 },
   );
+  const averageRating =
+    totalStats.ratedWorkflowCount > 0
+      ? totalStats.ratingTotal / totalStats.ratedWorkflowCount
+      : null;
 
   if (isLoading) {
     return (
@@ -95,24 +98,24 @@ export function MyWorkflowsTab() {
               icon={<Upload className="h-5 w-5 text-blue-500" />}
               label="Published"
               value={myPublishedWorkflows.length.toString()}
-              trend="+2 this month"
+              trend="Current total"
             />
             <StatCard
               icon={<Eye className="h-5 w-5 text-green-500" />}
               label="Total Views"
               value={totalStats.views.toLocaleString()}
-              trend="+12% vs last week"
+              trend="All time"
             />
             <StatCard
               icon={<Copy className="h-5 w-5 text-purple-500" />}
               label="Total Clones"
               value={totalStats.clones.toLocaleString()}
-              trend="+8% vs last week"
+              trend="All time"
             />
             <StatCard
               icon={<Star className="h-5 w-5 text-yellow-500" />}
               label="Avg Rating"
-              value={totalStats.avgRating > 0 ? totalStats.avgRating.toFixed(1) : 'N/A'}
+              value={averageRating === null ? 'N/A' : averageRating.toFixed(1)}
               trend="Across all workflows"
             />
           </div>
@@ -205,16 +208,21 @@ export function MyWorkflowsTab() {
                   <h4 className="font-semibold mb-4">Analytics</h4>
                   <div className="space-y-4">
                     <AnalyticItem
-                      label="Views (7 days)"
-                      value={Math.floor(workflow.view_count * 0.3).toString()}
-                      change="+12%"
+                      label="Total views"
+                      value={workflow.view_count.toLocaleString()}
                     />
                     <AnalyticItem
-                      label="Clones (7 days)"
-                      value={Math.floor(workflow.clone_count * 0.2).toString()}
-                      change="+8%"
+                      label="Total clones"
+                      value={workflow.clone_count.toLocaleString()}
                     />
-                    <AnalyticItem label="Favorites" value="0" change="-" />
+                    <AnalyticItem
+                      label="Rating"
+                      value={
+                        workflow.total_reviews > 0
+                          ? `${workflow.avg_rating.toFixed(1)} (${workflow.total_reviews})`
+                          : 'No reviews'
+                      }
+                    />
                     <div className="pt-4 border-t">
                       <p className="text-xs text-muted-foreground mb-1">Published</p>
                       <p className="text-sm font-medium">
@@ -281,22 +289,12 @@ function StatCard({ icon, label, value, trend }: StatCardProps) {
 interface AnalyticItemProps {
   label: string;
   value: string;
-  change: string;
 }
 
-function AnalyticItem({ label, value, change }: AnalyticItemProps) {
-  const isPositive = change.startsWith('+');
-
+function AnalyticItem({ label, value }: AnalyticItemProps) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        {change !== '-' && (
-          <span className={`text-xs font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-            {change}
-          </span>
-        )}
-      </div>
+      <p className="mb-1 text-sm text-muted-foreground">{label}</p>
       <p className="text-lg font-bold">{value}</p>
     </div>
   );

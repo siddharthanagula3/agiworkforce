@@ -29,6 +29,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 /**
  * Cloud-safe settings namespaces — device-agnostic UI/personalization prefs that are
@@ -144,13 +145,13 @@ async function handleGet(request: NextRequest) {
 // ---------------------------------------------------------------------------
 
 async function handlePost(request: NextRequest) {
+  const { db, userId } = await getUserScopedDb(request);
+
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const { db, userId } = await getUserScopedDb(request);
 
   let rawBody: unknown;
   try {
@@ -240,5 +241,9 @@ function bigintGreater(a: string, b: string): boolean {
   return na > nb;
 }
 
-export const GET = withErrorHandler(handleGet);
-export const POST = withErrorHandler(handlePost);
+export const GET = withCorsRoute(withErrorHandler(handleGet));
+export const POST = withCorsRoute(withErrorHandler(handlePost));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

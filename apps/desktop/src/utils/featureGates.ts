@@ -1,5 +1,8 @@
 import { getPlanById, GRACE_PERIOD_DAYS } from '../constants/pricing';
 import type { SubscriptionInfo, UsageStats } from '../types/billing';
+import { asPlanTier } from '../lib/cloudAccountTypes';
+import { PLAN_FEATURES, type PlanFeatures } from '../constants/planFeatures';
+import { effectivePlanTier } from '@agiworkforce/types';
 
 export type FeatureId =
   | 'unlimited_automations'
@@ -29,86 +32,54 @@ export interface UsageLimitCheckResult {
   reason?: string;
 }
 
+const FEATURE_PLAN_KEYS: Readonly<
+  Record<Exclude<FeatureId, 'unlimited_automations'>, keyof PlanFeatures>
+> = {
+  browser_automation: 'browserAutomation',
+  advanced_ui_automation: 'advancedUiAutomation',
+  email_support: 'emailSupport',
+  priority_support: 'prioritySupport',
+  custom_workflows: 'customWorkflows',
+  webhook_integration: 'webhookIntegration',
+  team_features: 'teamFeatures',
+  sso: 'sso',
+  analytics: 'analytics',
+  llm_cost_tracking: 'llmCostTracking',
+};
+
+function suggestedPlanForFeature(feature: FeatureId): 'pro' | 'max' | 'team' | 'enterprise' {
+  if (feature === 'team_features') return 'team';
+  if (feature === 'sso') return 'enterprise';
+  if (
+    feature === 'priority_support' ||
+    feature === 'custom_workflows' ||
+    feature === 'webhook_integration' ||
+    feature === 'analytics'
+  ) {
+    return 'max';
+  }
+  return 'pro';
+}
+
 export function checkFeatureAccess(
   feature: FeatureId,
   subscription?: SubscriptionInfo | null,
 ): FeatureCheckResult {
-  const planName = (subscription?.plan_name || 'free').toLowerCase();
+  const features =
+    PLAN_FEATURES[asPlanTier(effectivePlanTier(subscription?.plan_name, subscription?.status))];
+  const allowed =
+    feature === 'unlimited_automations'
+      ? features.automationsPerDay === 'unlimited'
+      : Boolean(features[FEATURE_PLAN_KEYS[feature]]);
+  if (allowed) return { allowed: true };
 
-  if (planName === 'free' || planName === 'none') {
-    const restrictedFeatures: FeatureId[] = [
-      'unlimited_automations',
-      'browser_automation',
-      'advanced_ui_automation',
-      'email_support',
-      'priority_support',
-      'custom_workflows',
-      'webhook_integration',
-      'team_features',
-      'sso',
-      'analytics',
-      'llm_cost_tracking',
-    ];
-
-    if (restrictedFeatures.includes(feature)) {
-      return {
-        allowed: false,
-        reason: `This feature requires a Basic subscription or higher`,
-        upgradeRequired: true,
-        suggestedPlan: 'basic',
-      };
-    }
-
-    return { allowed: true };
-  }
-
-  switch (feature) {
-    case 'unlimited_automations':
-    case 'browser_automation':
-    case 'advanced_ui_automation':
-    case 'email_support':
-    case 'llm_cost_tracking':
-      // 'team' is not a canonical PlanTier.
-      // If a 'team' tier is ever added, update PlanTier, subscriptionGate.ts,
-      // and Rust billing/models.rs simultaneously.
-      return ['basic', 'pro', 'max', 'enterprise'].includes(planName)
-        ? { allowed: true }
-        : {
-            allowed: false,
-            reason: 'Upgrade to Basic to access this feature',
-            upgradeRequired: true,
-            suggestedPlan: 'basic',
-          };
-
-    case 'priority_support':
-    case 'custom_workflows':
-    case 'webhook_integration':
-    case 'analytics':
-      return ['max', 'enterprise'].includes(planName)
-        ? { allowed: true }
-        : {
-            allowed: false,
-            reason: 'Upgrade to Max to access this feature',
-            upgradeRequired: true,
-            suggestedPlan: 'max',
-          };
-
-    case 'team_features':
-    case 'sso':
-      // team_features and sso are enterprise-only until a 'team' tier is formally added
-      // to the canonical PlanTier taxonomy.
-      return ['enterprise'].includes(planName)
-        ? { allowed: true }
-        : {
-            allowed: false,
-            reason: 'Upgrade to Enterprise to access this feature',
-            upgradeRequired: true,
-            suggestedPlan: 'enterprise',
-          };
-
-    default:
-      return { allowed: true };
-  }
+  const suggestedPlan = suggestedPlanForFeature(feature);
+  return {
+    allowed: false,
+    reason: `Upgrade to ${suggestedPlan === 'team' ? 'Team' : suggestedPlan[0]!.toUpperCase() + suggestedPlan.slice(1)} to access this feature`,
+    upgradeRequired: true,
+    suggestedPlan,
+  };
 }
 
 export function checkUsageLimit(
@@ -116,7 +87,7 @@ export function checkUsageLimit(
   currentUsage: number,
   subscription?: SubscriptionInfo | null,
 ): UsageLimitCheckResult {
-  const planName = subscription?.plan_name || 'free';
+  const planName = effectivePlanTier(subscription?.plan_name, subscription?.status);
   const plan = getPlanById(planName);
 
   if (!plan) {

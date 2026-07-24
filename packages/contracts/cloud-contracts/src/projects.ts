@@ -58,6 +58,7 @@ const ManagedCloudProjectWriteFields = {
   allowedSurfaces: z.array(SourceSurfaceSchema).optional(),
   defaultModelId: z.string().nullable().optional(),
   importedFrom: ProjectImportSourceSchema.nullable().optional(),
+  conversationIds: z.array(z.string().min(1).max(200)).max(500).optional(),
 };
 
 export const ManagedCloudProjectCreateRequestSchema = z.object({

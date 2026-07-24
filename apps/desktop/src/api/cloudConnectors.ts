@@ -16,8 +16,11 @@
  * the case for every authenticated desktop cloud-mode request.
  */
 
-import { guardedFetch } from '../lib/egressGuard';
-import { getAuthHeaders, CLOUD_API_BASE_URL } from './cloudApi';
+import { cloudFetch, getAuthHeaders, CLOUD_API_BASE_URL } from './cloudApi';
+import {
+  assertManagedCloudBoundary,
+  captureManagedCloudBoundary,
+} from '../services/managedCloudBoundary';
 
 // ============================================================================
 // Type Definitions
@@ -30,7 +33,8 @@ export interface CloudConnectorEntry {
   authType: string;
   connectedAt: string;
   updatedAt: string;
-  source: 'user' | 'github-app';
+  source: 'user' | 'github-app' | 'custom';
+  name?: string;
 }
 
 export interface ListConnectorsResult {
@@ -42,10 +46,54 @@ export interface ListConnectorsResult {
 
 export type ConnectConnectorResult =
   | { status: 'connected'; connector: CloudConnectorEntry }
-  /** github (and any future install-flow connector): open `installUrl` in the system browser. */
+  /** GitHub (and future install-flow connectors): open `installUrl` in an owned app webview. */
   | { status: 'install-required'; installUrl: string }
   /** Server does not support connecting this id yet (501). */
   | { status: 'unsupported'; message: string };
+
+export interface CreateCustomConnectorInput {
+  name: string;
+  url: string;
+}
+
+function readApiError(body: unknown, fallback: string): string {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return fallback;
+  const record = body as Record<string, unknown>;
+  if (typeof record['error'] === 'string') return record['error'];
+  const nested = record['error'];
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const message = (nested as Record<string, unknown>)['message'];
+    if (typeof message === 'string') return message;
+  }
+  if (typeof record['message'] === 'string') return record['message'];
+  return fallback;
+}
+
+function parseConnectorEntry(value: unknown): CloudConnectorEntry | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record['id'] !== 'string' ||
+    typeof record['connectorId'] !== 'string' ||
+    typeof record['authType'] !== 'string' ||
+    typeof record['connectedAt'] !== 'string' ||
+    typeof record['updatedAt'] !== 'string' ||
+    (record['source'] !== 'user' &&
+      record['source'] !== 'github-app' &&
+      record['source'] !== 'custom')
+  ) {
+    return null;
+  }
+  return {
+    id: record['id'],
+    connectorId: record['connectorId'],
+    authType: record['authType'],
+    connectedAt: record['connectedAt'],
+    updatedAt: record['updatedAt'],
+    source: record['source'],
+    ...(typeof record['name'] === 'string' ? { name: record['name'] } : {}),
+  };
+}
 
 // ============================================================================
 // API
@@ -57,9 +105,10 @@ export type ConnectConnectorResult =
  * instead of static catalog data.
  */
 export async function listConnectors(): Promise<ListConnectorsResult> {
+  const boundary = captureManagedCloudBoundary('Cloud connectors');
   const headers = await getAuthHeaders();
 
-  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
+  const res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
     method: 'GET',
     headers,
   });
@@ -68,8 +117,19 @@ export async function listConnectors(): Promise<ListConnectorsResult> {
     throw new Error(`Failed to list connectors: HTTP ${res.status}`);
   }
 
-  const data = (await res.json()) as Partial<ListConnectorsResult>;
-  return { connectors: data.connectors ?? [], available: data.available ?? [] };
+  const data = await res.json();
+  assertManagedCloudBoundary(boundary);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('The cloud connector service returned an invalid response.');
+  }
+  const record = data as Record<string, unknown>;
+  const connectors = Array.isArray(record['connectors'])
+    ? record['connectors'].map(parseConnectorEntry).filter((entry) => entry !== null)
+    : [];
+  const available = Array.isArray(record['available'])
+    ? record['available'].filter((id): id is string => typeof id === 'string')
+    : [];
+  return { connectors, available };
 }
 
 /**
@@ -82,25 +142,40 @@ export async function connectConnector(
   connectorId: string,
   authType?: string,
 ): Promise<ConnectConnectorResult> {
+  const boundary = captureManagedCloudBoundary('Cloud connector connection');
   const headers = await getAuthHeaders();
 
-  const res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
+  const res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/connectors`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ connectorId, ...(authType ? { authType } : {}) }),
   });
 
   if (res.status === 201) {
-    const data = (await res.json()) as { connector: CloudConnectorEntry };
-    return { status: 'connected', connector: data.connector };
+    const payload: unknown = await res.json();
+    assertManagedCloudBoundary(boundary);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new Error('The cloud connector service returned an invalid connection.');
+    }
+    const data = payload as Record<string, unknown>;
+    const connector = parseConnectorEntry(data['connector']);
+    if (!connector) {
+      throw new Error('The cloud connector service returned an invalid connection.');
+    }
+    return { status: 'connected', connector };
   }
 
   if (res.status === 409) {
-    const body = (await res.json().catch(() => ({}))) as { installStartPath?: string };
-    if (body.installStartPath) {
+    const payload: unknown = await res.json().catch(() => null);
+    assertManagedCloudBoundary(boundary);
+    const installStartPath =
+      payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)['installStartPath']
+        : undefined;
+    if (typeof installStartPath === 'string') {
       return {
         status: 'install-required',
-        installUrl: `${CLOUD_API_BASE_URL}${body.installStartPath}`,
+        installUrl: `${CLOUD_API_BASE_URL}${installStartPath}`,
       };
     }
     throw new Error(
@@ -109,18 +184,24 @@ export async function connectConnector(
   }
 
   if (res.status === 501) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    return { status: 'unsupported', message: body.error ?? 'This connector is not available yet.' };
+    const payload: unknown = await res.json().catch(() => null);
+    assertManagedCloudBoundary(boundary);
+    return {
+      status: 'unsupported',
+      message: readApiError(payload, 'This connector is not available yet.'),
+    };
   }
 
-  throw new Error(`Failed to connect connector: HTTP ${res.status}`);
+  const body = await res.json().catch(() => null);
+  throw new Error(readApiError(body, `Failed to connect connector: HTTP ${res.status}`));
 }
 
 /** Disconnects a connector server-side (soft-delete / unlink). */
 export async function disconnectConnector(connectorId: string): Promise<void> {
+  const boundary = captureManagedCloudBoundary('Cloud connector disconnection');
   const headers = await getAuthHeaders();
 
-  const res = await guardedFetch(
+  const res = await cloudFetch(
     `${CLOUD_API_BASE_URL}/api/connectors?connectorId=${encodeURIComponent(connectorId)}`,
     {
       method: 'DELETE',
@@ -129,6 +210,43 @@ export async function disconnectConnector(connectorId: string): Promise<void> {
   );
 
   if (!res.ok) {
-    throw new Error(`Failed to disconnect connector: HTTP ${res.status}`);
+    const body = await res.json().catch(() => null);
+    throw new Error(readApiError(body, `Failed to disconnect connector: HTTP ${res.status}`));
   }
+  assertManagedCloudBoundary(boundary);
+}
+
+export async function createCustomConnector(input: CreateCustomConnectorInput): Promise<void> {
+  const boundary = captureManagedCloudBoundary('Custom Cloud connector creation');
+  const headers = await getAuthHeaders();
+  const res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/connectors/custom`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      name: input.name,
+      url: input.url,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(readApiError(body, `Failed to add connector: HTTP ${res.status}`));
+  }
+  assertManagedCloudBoundary(boundary);
+}
+
+export async function deleteCustomConnector(id: string): Promise<void> {
+  const boundary = captureManagedCloudBoundary('Custom Cloud connector deletion');
+  const headers = await getAuthHeaders();
+  const res = await cloudFetch(
+    `${CLOUD_API_BASE_URL}/api/connectors/custom?id=${encodeURIComponent(id)}`,
+    {
+      method: 'DELETE',
+      headers,
+    },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(readApiError(body, `Failed to remove connector: HTTP ${res.status}`));
+  }
+  assertManagedCloudBoundary(boundary);
 }

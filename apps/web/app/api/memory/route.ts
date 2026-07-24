@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 async function handleGetMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
@@ -115,5 +116,8 @@ async function handleCreateMemory(request: NextRequest) {
   );
 }
 
-export const GET = withErrorHandler(handleGetMemories);
-export const POST = withErrorHandler(handleCreateMemory);
+export const GET = withCorsRoute(withErrorHandler(handleGetMemories));
+export const POST = withCorsRoute(withErrorHandler(handleCreateMemory));
+export function OPTIONS(request: NextRequest) {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 405 });
+}

@@ -48,7 +48,9 @@ const mockExecute = vi.fn();
 const mockDb = {
   query: mockQuery,
   execute: mockExecute,
-  transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+  transaction: vi.fn((fn: (db: unknown) => unknown) =>
+    fn({ query: mockQuery, execute: mockExecute }),
+  ),
   withUser: vi.fn(() => mockDb),
   dispose: vi.fn(),
 };
@@ -896,8 +898,9 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       const response = await POST(request);
 
-      // Subscription update should still succeed even if credit allocation fails
-      expect(response.status).toBe(200);
+      // Allocation and entitlement changes are one financial operation; retry
+      // the webhook instead of acknowledging a partially provisioned plan.
+      expect(response.status).toBe(500);
       expect(mockLoggerError).toHaveBeenCalled();
     });
   });
@@ -907,6 +910,9 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: false }]);
+        }
+        if (sql.includes('processed_stripe_events')) {
+          return Promise.resolve([{ status: 'succeeded' }]);
         }
         return Promise.resolve([]);
       });

@@ -35,6 +35,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 const MAX_MEMORIES_PULL = 1000;
 
@@ -126,13 +127,13 @@ async function handleStatus(request: NextRequest) {
 // ---------------------------------------------------------------------------
 
 async function handlePost(request: NextRequest) {
+  const { db, userId } = await getUserScopedDb(request);
+
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const { db, userId } = await getUserScopedDb(request);
 
   // Body is optional: the legacy trigger posts no body. Parse defensively.
   let rawBody: unknown = {};
@@ -257,15 +258,17 @@ async function handlePost(request: NextRequest) {
 }
 
 function hasMemoriesKey(value: unknown): boolean {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && 'memories' in value);
+  return Boolean(
+    value && typeof value === 'object' && !Array.isArray(value) && 'memories' in value,
+  );
 }
 
 function hasSyncProtocolV2(value: unknown): boolean {
   return Boolean(
     value &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      (value as Record<string, unknown>)['protocolVersion'] === 2,
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>)['protocolVersion'] === 2,
   );
 }
 
@@ -330,5 +333,9 @@ function bigintGreater(a: string, b: string): boolean {
   return na > nb;
 }
 
-export const GET = withErrorHandler(handleGet);
-export const POST = withErrorHandler(handlePost);
+export const GET = withCorsRoute(withErrorHandler(handleGet));
+export const POST = withCorsRoute(withErrorHandler(handlePost));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

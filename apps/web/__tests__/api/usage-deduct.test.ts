@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 vi.mock('server-only', () => ({}));
 
@@ -79,11 +80,19 @@ describe('POST /api/usage/deduct', () => {
   });
 
   it('has no Desktop caller that can submit raw usage', () => {
-    const desktopSubscriptionService = readFileSync(
-      '../desktop/src/services/subscriptionService.ts',
-      'utf8',
-    );
+    const desktopSourceRoot = '../desktop/src';
+    const sourceFiles: string[] = [];
+    const visit = (directory: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) visit(path);
+        else if (entry.isFile() && /\.(?:ts|tsx)$/.test(entry.name)) sourceFiles.push(path);
+      }
+    };
+    visit(desktopSourceRoot);
 
-    expect(desktopSubscriptionService).not.toContain('/api/usage/deduct');
+    expect(
+      sourceFiles.filter((path) => readFileSync(path, 'utf8').includes('/api/usage/deduct')),
+    ).toEqual([]);
   });
 });

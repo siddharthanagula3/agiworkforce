@@ -136,6 +136,13 @@ export interface FinishAgentActivityLocallyOptions {
   completedAtMs: number;
   /** Safe, user-visible transport failure summary. Never pass provider scratchpad text. */
   error?: string;
+  /**
+   * A host-side protocol validator may discover that a nominal server success
+   * is unusable (for example, an end-turn with no text, tool output, source,
+   * or artifact). In that narrow case the durable projection may replace a
+   * terminal `completed` status with `failed`.
+   */
+  overrideTerminal?: boolean;
 }
 
 export interface StartAgentActivityLocallyOptions {
@@ -563,9 +570,10 @@ export function finishAgentActivityLocally(
   options: FinishAgentActivityLocallyOptions,
 ): AgentActivityState {
   if (
-    current.status === 'completed' ||
-    current.status === 'failed' ||
-    current.status === 'cancelled'
+    !options.overrideTerminal &&
+    (current.status === 'completed' ||
+      current.status === 'failed' ||
+      current.status === 'cancelled')
   ) {
     return current;
   }

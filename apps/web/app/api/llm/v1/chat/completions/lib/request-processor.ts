@@ -1078,18 +1078,37 @@ export async function processRequest(
       // Project-scoped conversation ("AGI Work"): load the owned project's
       // instructions + knowledge-file manifest and merge them into the system
       // context. Without this, a persisted project_id scopes nothing and the
-      // composer's project picker would be cosmetic. Enrichment is
-      // best-effort: a project-load failure must not take down the chat turn
-      // (ownership above already hard-fails), but it is logged loudly because
-      // silently dropping the user's project instructions is a scope lie.
+      // composer's project picker would be cosmetic. This fails closed: a
+      // project-scoped turn must never silently run without its requested
+      // instructions, sources, and relevant conversation history.
       if (ownedRows[0].project_id) {
         try {
           const projectContext = await loadProjectContext(userScopedDb.db, {
             projectId: ownedRows[0].project_id,
             userId,
             currentConversationId: ownedRows[0].id,
+            currentUserQuery: extractTextContent(
+              [...chatRequest.messages].reverse().find((message) => message.role === 'user')
+                ?.content ?? '',
+            ),
           });
-          const projectPrompt = projectContext ? formatProjectSystemPrompt(projectContext) : null;
+          if (!projectContext) {
+            return {
+              ok: false,
+              response: NextResponse.json(
+                {
+                  error: {
+                    message:
+                      'This project is archived, deleted, or unavailable. Remove the conversation from the project or restore the project before retrying.',
+                    type: 'invalid_request_error',
+                    code: 'project_context_unavailable',
+                  },
+                },
+                { status: 409 },
+              ),
+            };
+          }
+          const projectPrompt = formatProjectSystemPrompt(projectContext);
           if (projectPrompt) {
             applyProjectContext(chatRequest, projectPrompt);
           }
@@ -1101,8 +1120,22 @@ export async function processRequest(
               conversationId: chatRequest.conversation_id,
               projectId: ownedRows[0].project_id,
             },
-            'Project context load failed; continuing without project instructions',
+            'Project context load failed',
           );
+          return {
+            ok: false,
+            response: NextResponse.json(
+              {
+                error: {
+                  message:
+                    'Project context could not be loaded. No unscoped response was generated; retry when project sources are available.',
+                  type: 'server_error',
+                  code: 'project_context_load_failed',
+                },
+              },
+              { status: 503 },
+            ),
+          };
         }
       }
     } catch (error) {

@@ -6,7 +6,7 @@ import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 
 /**
@@ -31,7 +31,9 @@ async function handler(request: NextRequest) {
   }
 }
 
-export const GET = withErrorHandler(withRateLimitHandler(handler, 'credits-balance'));
+export const GET = withCorsRoute(
+  withErrorHandler(withRateLimitHandler(handler, 'credits-balance')),
+);
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

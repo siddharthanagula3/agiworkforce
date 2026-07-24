@@ -42,7 +42,9 @@ const mockExecute = vi.fn();
 const mockDb = {
   query: mockQuery,
   execute: mockExecute,
-  transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+  transaction: vi.fn((fn: (db: unknown) => unknown) =>
+    fn({ query: mockQuery, execute: mockExecute }),
+  ),
   withUser: vi.fn(() => mockDb),
   dispose: vi.fn(),
 };
@@ -504,8 +506,8 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       const response = await POST(request);
 
-      // Should still return 200 as webhook was processed (error is caught and logged)
-      expect(response.status).toBe(200);
+      // A transient lookup failure must fail closed so Stripe retries.
+      expect(response.status).toBe(500);
     });
 
     it('should handle handle_refund SQL failure gracefully', async () => {
@@ -540,8 +542,8 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       const response = await POST(request);
 
-      // Should still return 200 as error is logged but not fatal
-      expect(response.status).toBe(200);
+      // Credit revocation is part of the financial event and must be retried.
+      expect(response.status).toBe(500);
     });
   });
 
@@ -551,6 +553,9 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
       mockQuery.mockImplementation((sql: string) => {
         if (sql.includes('process_stripe_event_idempotent')) {
           return Promise.resolve([{ process_stripe_event_idempotent: false }]);
+        }
+        if (sql.includes('processed_stripe_events')) {
+          return Promise.resolve([{ status: 'succeeded' }]);
         }
         return Promise.resolve([]);
       });

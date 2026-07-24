@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, Wrench } from 'lucide-react';
+import { Copy, Check, Download, FileText, Image as ImageIcon, Wrench } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from '@agiworkforce/ui';
 import { ActionBar } from './ActionBar';
@@ -10,7 +10,8 @@ import { DownloadCard } from './DownloadCard';
 import { MessageGeneratedFiles, hasRunningExecutionTool } from './MessageGeneratedFiles';
 import { ToolCallCard } from './ToolCallCard';
 import { AgentActivityTimeline } from './AgentActivityTimeline';
-import type { ChatMessage, Artifact, ToolCall } from '../lib/types';
+import { useHostBridge } from '../lib/hostBridge';
+import type { ChatMessage, Artifact, Attachment, ToolCall } from '../lib/types';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 
 interface MessageBubbleProps {
@@ -460,6 +461,111 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
   );
 }
 
+function formatAttachmentSize(size: number | undefined): string | null {
+  if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return null;
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.max(0.1, size / 1024).toFixed(1)} KB`;
+  return `${Math.max(0.1, size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function UserMessageAttachments({ attachments }: { attachments: Attachment[] }) {
+  const hostBridge = useHostBridge();
+  const [inFlightIds, setInFlightIds] = useState<Record<string, true>>({});
+  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
+
+  async function downloadAttachment(attachment: Attachment) {
+    const href = attachment.url ? safeHref(attachment.url) : null;
+    if (!href) return;
+
+    setInFlightIds((previous) => ({ ...previous, [attachment.id]: true }));
+    try {
+      const blob = hostBridge?.fetchCloudFile
+        ? await hostBridge.fetchCloudFile(href)
+        : await (async () => {
+            const response = await fetch(href, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.blob();
+          })();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = attachment.name;
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+      setDownloadErrors((previous) => {
+        if (!(attachment.id in previous)) return previous;
+        const next = { ...previous };
+        delete next[attachment.id];
+        return next;
+      });
+    } catch {
+      setDownloadErrors((previous) => ({
+        ...previous,
+        [attachment.id]: 'Download failed. Try again.',
+      }));
+    } finally {
+      setInFlightIds((previous) => {
+        const next = { ...previous };
+        delete next[attachment.id];
+        return next;
+      });
+    }
+  }
+
+  return (
+    <div className="flex max-w-full flex-wrap justify-end gap-2" aria-label="Message attachments">
+      {attachments.map((attachment) => {
+        const isImage = attachment.type.toLowerCase().startsWith('image/');
+        const isDownloading = Boolean(inFlightIds[attachment.id]);
+        const hasDownload = Boolean(attachment.url && safeHref(attachment.url));
+        const size = formatAttachmentSize(attachment.size);
+
+        return (
+          <div key={attachment.id} className="max-w-full">
+            <div className="flex min-w-0 max-w-[19rem] items-center gap-2 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-3 py-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]">
+                {isImage ? (
+                  <ImageIcon className="h-4 w-4" aria-hidden />
+                ) : (
+                  <FileText className="h-4 w-4" aria-hidden />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-[var(--chat-text-primary)]">
+                  {attachment.name}
+                </span>
+                <span className="block truncate text-xs text-[var(--chat-text-muted)]">
+                  {[attachment.type || 'File', size].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              {hasDownload && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={isDownloading}
+                  aria-label={
+                    isDownloading ? `Downloading ${attachment.name}` : `Download ${attachment.name}`
+                  }
+                  onClick={() => void downloadAttachment(attachment)}
+                  className="h-8 w-8 shrink-0 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                >
+                  <Download className={cn('h-4 w-4', isDownloading && 'animate-pulse')} />
+                </Button>
+              )}
+            </div>
+            {downloadErrors[attachment.id] && (
+              <p role="alert" className="mt-1 text-right text-xs text-red-400">
+                {downloadErrors[attachment.id]}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function MessageBubble({
   message,
   onRetry,
@@ -516,6 +622,9 @@ export function MessageBubble({
         data-role="user"
         className="group message-enter flex max-w-[85%] min-w-0 flex-col items-end gap-1"
       >
+        {message.attachments && message.attachments.length > 0 && (
+          <UserMessageAttachments attachments={message.attachments} />
+        )}
         {/* Right-aligned rounded bubble (web .user-bubble parity: px-4 py-2.5,
             radius-2xl, --chat-user-bubble-bg). No per-message timestamp — the
             web feed uses date dividers + provenance for time cues, not a stamp

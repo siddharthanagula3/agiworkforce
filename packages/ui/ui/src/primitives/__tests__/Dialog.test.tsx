@@ -48,6 +48,20 @@ describe('Dialog', () => {
     expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
   });
 
+  it('can render critical native dialogs without keyframe visibility dependencies', () => {
+    render(
+      <Dialog open>
+        <DialogContent disableAnimation>
+          <DialogTitle>Native settings</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).not.toContain('animate-in');
+    expect(dialog.previousElementSibling?.className).not.toContain('animate-in');
+  });
+
   it('keeps AccessibleDialog title and description registered with Radix', () => {
     const diagnostics = captureDialogDiagnostics(() => {
       render(

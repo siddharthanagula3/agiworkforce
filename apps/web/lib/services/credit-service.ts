@@ -410,8 +410,8 @@ export class CreditService {
     periodStart: Date,
     periodEnd: Date,
     allocationDeltaCents: number,
+    db: DatabaseAdapter = getNeonDb(),
   ): Promise<string> {
-    const db = getNeonDb();
     const [row] = await db.query<{ account_id: string }>(
       `with current_account as (
          select id
@@ -462,8 +462,8 @@ export class CreditService {
     periodStart: Date,
     periodEnd: Date,
     creditsAllocatedCents: number,
+    db: DatabaseAdapter = getNeonDb(),
   ): Promise<string> {
-    const db = getNeonDb();
     try {
       const [row] = await db.query<{ get_or_create_credit_account: string }>(
         'select get_or_create_credit_account($1, $2, $3, $4, $5) as get_or_create_credit_account',
@@ -488,8 +488,8 @@ export class CreditService {
     periodStart: Date,
     periodEnd: Date,
     creditsAllocatedCents: number,
+    db: DatabaseAdapter = getNeonDb(),
   ): Promise<string> {
-    const db = getNeonDb();
     try {
       const [row] = await db.query<{ reset_credits_for_period: string }>(
         'select reset_credits_for_period($1, $2, $3, $4, $5) as reset_credits_for_period',

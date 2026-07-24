@@ -25,6 +25,7 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
+  withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
 // Clerk auth mock — hoisted so it survives clearAllMocks
@@ -250,7 +251,7 @@ describe('Me API', () => {
     });
 
     describe('Error Handling', () => {
-      it('should handle subscription fetch error gracefully', async () => {
+      it('fails closed when subscription entitlement cannot be verified', async () => {
         mockMeGetSubscription.mockRejectedValueOnce(new Error('Subscription fetch failed'));
 
         const request = new NextRequest('http://localhost/api/me', {
@@ -258,10 +259,9 @@ describe('Me API', () => {
         });
 
         const response = await GET(request);
-        expect(response.status).toBe(200);
-
+        expect(response.status).toBe(500);
         const data = await response.json();
-        expect(data.plan.tier).toBe('free'); // Falls back to free
+        expect(data).not.toHaveProperty('plan');
       });
     });
 

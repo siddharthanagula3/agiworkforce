@@ -7,7 +7,12 @@ import { AgentTaskStateSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
-import { getCorsHeaders, getSecurityHeaders, handleCorsPreflightRequest } from '@/lib/cors';
+import {
+  getCorsHeaders,
+  getSecurityHeaders,
+  handleCorsPreflightRequest,
+  withCorsRoute,
+} from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   listCloudAgentRuns,
@@ -78,7 +83,7 @@ async function handleGet(request: NextRequest) {
   );
 }
 
-export const GET = withErrorHandler(handleGet);
+export const GET = withCorsRoute(withErrorHandler(handleGet));
 
 export function OPTIONS(request: NextRequest) {
   return (

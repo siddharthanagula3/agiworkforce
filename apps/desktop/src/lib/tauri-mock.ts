@@ -4,7 +4,6 @@ import {
   deleteCloudConversation,
   getCloudConversation,
   getCloudModels,
-  getCloudUsage,
   listCloudConversations,
   updateCloudConversationTitle,
 } from '../api/cloudApi';
@@ -204,24 +203,16 @@ async function handleCloudWebCommand<T>(
     }
 
     case 'llm_get_usage_stats': {
-      try {
-        const usage = await getCloudUsage();
-        return {
-          totalTokens: usage.token_count ?? 0,
-          totalCost: usage.cost_usd ?? 0,
-          messageCount: usage.message_count ?? 0,
-          byProvider: {},
-          byModel: {},
-        } as T;
-      } catch {
-        return {
-          totalTokens: 0,
-          totalCost: 0,
-          messageCount: 0,
-          byProvider: {},
-          byModel: {},
-        } as T;
-      }
+      // The managed-cloud usage API intentionally exposes percentages and reset
+      // windows only. `llm_get_usage_stats` is a local/BYOK telemetry command,
+      // so never fabricate token or cost operands from the public cloud summary.
+      return {
+        totalTokens: 0,
+        totalCost: 0,
+        messageCount: 0,
+        byProvider: {},
+        byModel: {},
+      } as T;
     }
 
     default:
@@ -1820,10 +1811,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_first_run_statistics':
       return null as T;
 
-    // ── Subscription commands ───────────────────────────────────────
-    case 'get_pricing_plans':
-      return [] as T;
-
     case 'get_user_credits':
       return { credits: 0, usedCredits: 0 } as T;
 
@@ -1833,10 +1820,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'has_reward':
     case 'has_unlocked_feature':
       return false as T;
-
-    case 'subscribe_to_plan':
-    case 'upgrade_plan':
-      return undefined as T;
 
     // ── Marketplace (new) ───────────────────────────────────────────
     case 'fork_marketplace_workflow':
@@ -2324,7 +2307,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'get_best_practices':
     case 'get_process_success_rates':
     case 'get_process_templates':
-    case 'get_current_plan':
     case 'get_outcome_tracking':
     case 'get_session_info':
     case 'reset_session_cost':
@@ -2388,7 +2370,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'cloud_complete_oauth':
     case 'cloud_download':
     case 'cloud_delete':
-    case 'cancel_subscription':
     case 'chat_set_monthly_budget':
     case 'error_report':
     case 'api_oauth_create_client':

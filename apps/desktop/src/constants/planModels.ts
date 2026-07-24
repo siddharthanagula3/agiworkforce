@@ -6,18 +6,27 @@
  * The backend handles model routing and access control.
  */
 
-// All subscription tiers available in the system.
-// Mirrors the Rust `PlanTier` enum at apps/desktop/src-tauri/src/sys/billing/models.rs:8-24.
-export const SUBSCRIPTION_TIERS = [
-  'local-only',
-  'byok',
-  'free',
-  'basic',
-  'pro',
-  'max',
-  'enterprise',
-] as const;
-export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[number];
+import {
+  BILLING_PLAN_PRICING,
+  canUseBillingPlanCapability,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
+
+// The shared billing catalog is the only tier taxonomy. Desktop must not keep
+// a shorter copy: doing so previously dropped Max 15x and Team from model and
+// feature gates after a successful Cloud account sync.
+export const SUBSCRIPTION_TIERS = Object.freeze(
+  Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[],
+);
+export type SubscriptionTier = BillingPlanTier;
+
+export interface TierFeatures {
+  maxMessagesPerDay: number;
+  hasOllama: boolean;
+  hasImageGen?: boolean;
+  hasVideoGen?: boolean;
+  hasPrioritySupport?: boolean;
+}
 
 /**
  * Feature access by subscription tier
@@ -26,7 +35,7 @@ export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[number];
  * Note: 'local-only' and 'byok' have no managed-cloud message budget — usage is
  * limited only by the user's own Ollama / API-key quotas, not by us.
  */
-export const TIER_FEATURES = {
+export const TIER_FEATURES: Readonly<Record<SubscriptionTier, TierFeatures>> = {
   'local-only': {
     maxMessagesPerDay: -1,
     hasOllama: true,
@@ -46,24 +55,36 @@ export const TIER_FEATURES = {
   pro: {
     maxMessagesPerDay: 1000,
     hasOllama: true,
-    hasImageGen: true,
+    hasImageGen: canUseBillingPlanCapability('pro', 'image_generation'),
   },
   max: {
     maxMessagesPerDay: -1,
     hasOllama: true,
-    hasImageGen: true,
-    hasVideoGen: true,
+    hasImageGen: canUseBillingPlanCapability('max', 'image_generation'),
+    hasVideoGen: canUseBillingPlanCapability('max', 'video_generation'),
+    hasPrioritySupport: true,
+  },
+  max_15x: {
+    maxMessagesPerDay: -1,
+    hasOllama: true,
+    hasImageGen: canUseBillingPlanCapability('max_15x', 'image_generation'),
+    hasVideoGen: canUseBillingPlanCapability('max_15x', 'video_generation'),
+    hasPrioritySupport: true,
+  },
+  team: {
+    maxMessagesPerDay: 1000,
+    hasOllama: true,
+    hasImageGen: canUseBillingPlanCapability('team', 'image_generation'),
+    hasVideoGen: canUseBillingPlanCapability('team', 'video_generation'),
   },
   enterprise: {
     maxMessagesPerDay: -1,
     hasOllama: true,
-    hasImageGen: true,
-    hasVideoGen: true,
+    hasImageGen: canUseBillingPlanCapability('enterprise', 'image_generation'),
+    hasVideoGen: canUseBillingPlanCapability('enterprise', 'video_generation'),
     hasPrioritySupport: true,
   },
-} as const;
-
-export type TierFeatures = (typeof TIER_FEATURES)[SubscriptionTier];
+};
 
 /**
  * Check if a tier has a specific feature

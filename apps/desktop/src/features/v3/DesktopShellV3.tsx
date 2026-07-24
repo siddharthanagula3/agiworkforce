@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import {
   ChatInterface,
   CapabilityProvider,
@@ -21,6 +22,7 @@ import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { invoke } from '../../lib/tauri-mock';
 import { ActionRecorder } from '@/features/automation/ActionRecorder';
+import { ProjectSettingsDialog } from '@/features/chat/ProjectSettingsDialog';
 import {
   formatSelectedContextDraft,
   SelectedContextReview,
@@ -45,6 +47,7 @@ type V3Panel = 'chat' | 'projects' | 'artifacts' | 'scheduled' | 'record-skill';
 export interface DesktopShellV3Props {
   runtime: ChatRuntime | null;
   className?: string;
+  externalSendRequest?: ChatInterfaceProps['externalSendRequest'];
   hostBridge?: ChatHostBridge | null;
   onModelSelectorClick?: () => void;
   onVoiceClick?: () => void;
@@ -66,6 +69,7 @@ export interface DesktopShellV3Props {
 export function DesktopShellV3({
   runtime,
   className,
+  externalSendRequest,
   hostBridge,
   onModelSelectorClick,
   onVoiceClick,
@@ -76,6 +80,7 @@ export function DesktopShellV3({
   const { mode } = useV3Mode();
   const [activePanel, setActivePanel] = useState<V3Panel>('chat');
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
   // Artifact panel is driven by the same artifactStore that AgiWorkArtifacts writes.
   // conversationId is optional on ArtifactPanel so it works in the gallery context.
@@ -88,6 +93,25 @@ export function DesktopShellV3({
   // in both the attachment menu and the composer scope picker.
   const privacyMode = useAppModeStore(selectPrivacyMode);
   const folderSeamEnabled = privacyMode === 'local';
+
+  useEffect(() => {
+    if (
+      privacyMode === 'managed' &&
+      ['artifacts', 'scheduled', 'record-skill'].includes(activePanel)
+    ) {
+      setActivePanel('chat');
+    }
+  }, [activePanel, privacyMode]);
+
+  useEffect(() => {
+    const navigate = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (detail === 'projects') setActivePanel('projects');
+      if (detail === 'chat') setActivePanel('chat');
+    };
+    window.addEventListener('desktop:navigate-panel', navigate);
+    return () => window.removeEventListener('desktop:navigate-panel', navigate);
+  }, []);
 
   // Clear mirrors FolderSelector's flow: reset the backend folder context,
   // then the store label (project/folder mutual exclusion + chip clear).
@@ -102,9 +126,9 @@ export function DesktopShellV3({
   }, []);
 
   // Composer "Project or folder" picker (web ChatComposerNew parity).
-  // Selection applies to the ACTIVE conversation immediately via the same
-  // scoping seam handleNewChat uses (setConversationProject + project links →
-  // TauriRuntime carries projectId into the backend row on first send).
+  // Selection applies to the active conversation through one authoritative
+  // membership transition. Cloud persists the conversation's project_id;
+  // Local updates the native project projection.
   const projects = useProjectStore((s) => s.projects);
   const pickerProjects = useMemo(
     () => projects.filter((p) => !p.isArchived).map((p) => ({ id: p.id, name: p.name })),
@@ -125,28 +149,29 @@ export function DesktopShellV3({
       }
       if (!conversationId) return;
 
-      const previousProjectId =
-        chat.conversations.find((c) => c.id === conversationId)?.projectId ?? null;
-      useChatStore.getState().setConversationProject(conversationId, projectId);
-
-      const projectStore = useProjectStore.getState();
-      if (previousProjectId && previousProjectId !== projectId) {
-        void projectStore.unlinkConversation(previousProjectId, conversationId);
-      }
-      if (projectId && projectId !== previousProjectId) {
-        void projectStore.linkConversation(projectId, conversationId);
-      }
+      void useProjectStore
+        .getState()
+        .moveConversationToProject(conversationId, projectId)
+        .catch((error) => {
+          toast.error(error instanceof Error ? error.message : String(error));
+        });
     },
     [hostBridge],
   );
+
+  const handleCreateProject = useCallback(() => {
+    setActivePanel('projects');
+    setCreateProjectOpen(true);
+  }, []);
 
   const composerProjectPicker = useMemo(
     () => ({
       projects: pickerProjects,
       activeProjectId: activeComposerProjectId,
       onSelectProject: handleSelectProject,
+      onCreateProject: handleCreateProject,
     }),
-    [pickerProjects, activeComposerProjectId, handleSelectProject],
+    [pickerProjects, activeComposerProjectId, handleSelectProject, handleCreateProject],
   );
 
   const handleSwitchModel = useCallback(() => {
@@ -169,12 +194,22 @@ export function DesktopShellV3({
         hostBridge?.selectConversation?.(conversationId);
         // Scope the new chat to a project when started from a project folder.
         if (projectId) {
-          useChatStore.getState().setConversationProject(conversationId, projectId);
-          // Real link (not just chat-side metadata) so project.conversationIds
-          // — and the project card's session count — reflect the new chat.
-          void useProjectStore.getState().linkConversation(projectId, conversationId);
+          void useProjectStore
+            .getState()
+            .moveConversationToProject(conversationId, projectId)
+            .catch((error) => {
+              toast.error(error instanceof Error ? error.message : String(error));
+            });
         }
       }
+    },
+    [hostBridge],
+  );
+
+  const handleOpenProjectConversation = useCallback(
+    (conversationId: string) => {
+      hostBridge?.selectConversation?.(conversationId);
+      setActivePanel('chat');
     },
     [hostBridge],
   );
@@ -186,10 +221,18 @@ export function DesktopShellV3({
         return;
       }
       if (view === 'artifacts') {
+        if (privacyMode !== 'local') {
+          toast.info('Device artifacts are available in Local mode.');
+          return;
+        }
         setActivePanel('artifacts');
         return;
       }
       if (view === 'work-scheduled') {
+        if (privacyMode !== 'local') {
+          toast.info('Device schedules are available in Local mode.');
+          return;
+        }
         setActivePanel('scheduled');
         return;
       }
@@ -198,7 +241,7 @@ export function DesktopShellV3({
         onNavigateView(view as Parameters<NonNullable<typeof onNavigateView>>[0]);
       }
     },
-    [onNavigateView],
+    [onNavigateView, privacyMode],
   );
 
   return (
@@ -212,6 +255,7 @@ export function DesktopShellV3({
           mode={mode}
           onNewChat={handleNewChat}
           onOpenSearch={onOpenSearch}
+          onCreateProject={handleCreateProject}
           onNavigateView={handleNavigateView}
           onOpenAccountMenu={() => setAccountMenuOpen((o) => !o)}
           accountMenuOpen={accountMenuOpen}
@@ -226,13 +270,16 @@ export function DesktopShellV3({
             <ChatInterface
               runtime={runtime}
               className="h-full w-full"
+              externalSendRequest={externalSendRequest}
               manageTheme={false}
               enableShortcuts={true}
               hostBridge={hostBridge}
               onModelSelectorClick={onModelSelectorClick}
               onVoiceClick={onVoiceClick}
               onSelectFolder={folderSeamEnabled ? selectFolder : undefined}
-              onRecordSkill={() => setActivePanel('record-skill')}
+              onRecordSkill={
+                privacyMode === 'local' ? () => setActivePanel('record-skill') : undefined
+              }
               currentFolderLabel={folderSeamEnabled ? currentFolderLabel : null}
               onClearFolder={folderSeamEnabled ? clearFolder : undefined}
               projectPicker={composerProjectPicker}
@@ -242,24 +289,34 @@ export function DesktopShellV3({
               enableSearchOverlay={false}
               showProvenanceFooter={true}
             />
-          ) : activePanel === 'record-skill' ? (
+          ) : activePanel === 'record-skill' && privacyMode === 'local' ? (
             <ActionRecorder
               onClose={() => setActivePanel('chat')}
               onSkillCreated={() => setActivePanel('chat')}
             />
           ) : activePanel === 'projects' ? (
-            <AgiWorkProjects />
-          ) : activePanel === 'artifacts' ? (
+            <AgiWorkProjects
+              onCreateProject={handleCreateProject}
+              onNewChat={(projectId) => handleNewChat(projectId)}
+              onOpenConversation={handleOpenProjectConversation}
+            />
+          ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
             <AgiWorkArtifacts />
-          ) : (
+          ) : activePanel === 'scheduled' && privacyMode === 'local' ? (
             <AgiWorkScheduled />
+          ) : (
+            <AgiWorkProjects
+              onCreateProject={handleCreateProject}
+              onNewChat={(projectId) => handleNewChat(projectId)}
+              onOpenConversation={handleOpenProjectConversation}
+            />
           )}
           <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
 
           {/* Artifact viewer panel — mounts when the artifact store requests it open.
             Shares the same artifactStore instance that AgiWorkArtifacts writes,
             so setActiveArtifact + openPanel in the grid card opens this panel. */}
-          {artifactPanelOpen && (
+          {privacyMode === 'local' && artifactPanelOpen && (
             <div
               data-testid="v3-artifact-panel"
               style={{
@@ -275,6 +332,15 @@ export function DesktopShellV3({
             </div>
           )}
           <SelectedContextReview onAccept={handleSelectedContextAccept} />
+          <ProjectSettingsDialog
+            open={createProjectOpen}
+            onOpenChange={setCreateProjectOpen}
+            mode="create"
+            onCreated={(project) => {
+              useProjectStore.getState().setActiveProject(project.id);
+              setActivePanel('projects');
+            }}
+          />
         </div>
       </div>
     </CapabilityProvider>

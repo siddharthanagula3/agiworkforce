@@ -1,0 +1,104 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  execute: vi.fn(),
+  getObject: vi.fn(),
+  deleteObject: vi.fn(),
+}));
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
+}));
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: () => ({
+    query: mocks.query,
+    execute: mocks.execute,
+  }),
+}));
+vi.mock('@/lib/server/object-storage', () => ({
+  objectKeyFromStorageUri: (value: string) => value,
+  getObject: mocks.getObject,
+  deleteObject: mocks.deleteObject,
+}));
+
+import { DELETE, GET } from '@/app/api/projects/[id]/knowledge-files/[fileId]/route';
+
+const context = {
+  params: Promise.resolve({ id: 'project-1', fileId: 'file-1' }),
+};
+
+describe('project knowledge file bytes and deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.query.mockResolvedValue([
+      {
+        mime_type: 'text/plain',
+        file_name: 'notes.txt',
+        storage_uri: 'knowledge-files/projects/project-1/notes.txt',
+      },
+    ]);
+    mocks.execute.mockResolvedValue(1);
+    mocks.getObject.mockResolvedValue({
+      data: Buffer.from('hello'),
+      contentType: 'text/plain',
+    });
+    mocks.deleteObject.mockResolvedValue(undefined);
+  });
+
+  it('serves bytes only through the authenticated private response', async () => {
+    const response = await GET(
+      new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1'),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('hello');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(String(mocks.query.mock.calls[0]?.[0])).toContain('p.user_id = $3');
+  });
+
+  it('soft-deletes metadata before removing the backing object', async () => {
+    const order: string[] = [];
+    mocks.execute.mockImplementation(async () => {
+      order.push('metadata');
+      return 1;
+    });
+    mocks.deleteObject.mockImplementation(async () => {
+      order.push('object');
+    });
+
+    const response = await DELETE(
+      new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1', {
+        method: 'DELETE',
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(order).toEqual(['metadata', 'object']);
+  });
+
+  it('restores visible metadata when backing-object deletion fails', async () => {
+    mocks.deleteObject.mockRejectedValueOnce(new Error('R2 unavailable'));
+
+    const response = await DELETE(
+      new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1', {
+        method: 'DELETE',
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(500);
+    expect(mocks.execute).toHaveBeenCalledTimes(2);
+    expect(String(mocks.execute.mock.calls[1]?.[0])).toContain('set deleted_at = null');
+  });
+});

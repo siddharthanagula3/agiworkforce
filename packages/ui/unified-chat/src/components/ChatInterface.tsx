@@ -228,6 +228,17 @@ export interface ChatInterfaceProps {
   runtime: ChatRuntime | null;
   className?: string;
   /**
+   * Host-issued send request for global launchers such as Desktop Quick Query.
+   * The opaque id provides exactly-once consumption across React re-renders;
+   * requests wait for the current stream to settle and still pass through the
+   * same shared model admission, optimistic transcript, and runtime pipeline
+   * as composer submissions.
+   */
+  externalSendRequest?: {
+    id: string;
+    content: string;
+  } | null;
+  /**
    * When true the chat package manages theme on document.documentElement.
    * Default false — host app is expected to set data-theme-managed on <html>
    * or manage theme itself.
@@ -309,6 +320,7 @@ export interface ChatInterfaceProps {
 export function ChatInterface({
   runtime,
   className,
+  externalSendRequest = null,
   manageTheme = false,
   enableShortcuts = true,
   enableSearchOverlay = true,
@@ -393,11 +405,61 @@ export function ChatInterface({
       ? (s.messagesByConversation[activeConversationId] ?? emptyMessages)
       : emptyMessages,
   );
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  const loadedConversationIdsRef = useRef(new Set<string>());
+  const [messageLoadAttempt, setMessageLoadAttempt] = useState(0);
+  const [messageLoadState, setMessageLoadState] = useState<
+    { status: 'idle' | 'loading' } | { status: 'error'; message: string }
+  >({ status: 'idle' });
   const activeView = useUIStore((s) => s.activeView);
   const searchModalOpen = useUIStore((s) => s.searchModalOpen);
   const toggleSearchModal = useUIStore((s) => s.toggleSearchModal);
 
   const hasMessages = messages.length > 0;
+
+  useEffect(() => {
+    loadedConversationIdsRef.current.clear();
+    setMessageLoadState({ status: 'idle' });
+  }, [runtime]);
+
+  useEffect(() => {
+    if (!activeConversationId || !runtime || isStreaming) {
+      setMessageLoadState({ status: 'idle' });
+      return;
+    }
+
+    const loadMessages = runtime.loadMessages ?? runtime.getMessages;
+    if (!loadMessages) return;
+    const cached = useChatStore.getState().messagesByConversation[activeConversationId];
+    if ((cached?.length ?? 0) > 0) {
+      loadedConversationIdsRef.current.add(activeConversationId);
+      setMessageLoadState({ status: 'idle' });
+      return;
+    }
+    if (loadedConversationIdsRef.current.has(activeConversationId)) return;
+
+    let cancelled = false;
+    setMessageLoadState({ status: 'loading' });
+    void loadMessages
+      .call(runtime, activeConversationId)
+      .then((loaded) => {
+        if (cancelled) return;
+        useChatStore.getState().setMessages(activeConversationId, loaded);
+        loadedConversationIdsRef.current.add(activeConversationId);
+        setMessageLoadState({ status: 'idle' });
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setMessageLoadState({
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Could not load this conversation.',
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeConversationId, runtime, isStreaming, messageLoadAttempt]);
 
   // Determine disclaimer variant based on the most recent assistant message
   const disclaimerVariant = useMemo((): 'default' | 'citations' | 'code' => {
@@ -426,10 +488,24 @@ export function ChatInterface({
         research,
         writingStyle,
         workScope?.workMode,
+        workScope?.projectId,
       );
     },
     [sendMessage],
   );
+  const consumedExternalSendIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !externalSendRequest ||
+      !externalSendRequest.content.trim() ||
+      isStreaming ||
+      consumedExternalSendIdRef.current === externalSendRequest.id
+    ) {
+      return;
+    }
+    consumedExternalSendIdRef.current = externalSendRequest.id;
+    handleSend(externalSendRequest.content.trim());
+  }, [externalSendRequest, handleSend, isStreaming]);
 
   const setDraftContent = useChatStore((s) => s.setDraftContent);
   const setActiveView = useUIStore((s) => s.setActiveView);
@@ -625,7 +701,30 @@ export function ChatInterface({
         {/* Content area — grows to fill remaining vertical space, hides overflow for
             MessageList's own internal scroll container */}
         <div className="flex-1 overflow-hidden">
-          {hasMessages && activeConversationId ? (
+          {messageLoadState.status === 'loading' && activeConversationId ? (
+            <div
+              className="flex h-full items-center justify-center text-sm text-[var(--chat-text-muted)]"
+              role="status"
+            >
+              Loading conversation…
+            </div>
+          ) : messageLoadState.status === 'error' && activeConversationId ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <p className="text-sm font-medium text-[var(--chat-text-primary)]">
+                Could not load this conversation
+              </p>
+              <p className="max-w-md text-xs text-[var(--chat-text-muted)]">
+                {messageLoadState.message}
+              </p>
+              <button
+                type="button"
+                onClick={() => setMessageLoadAttempt((attempt) => attempt + 1)}
+                className="rounded-lg bg-[var(--chat-surface-hover)] px-3 py-1.5 text-xs text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-accent-primary)]/10"
+              >
+                Try again
+              </button>
+            </div>
+          ) : hasMessages && activeConversationId ? (
             <MessageList
               conversationId={activeConversationId}
               onArtifactClick={handleArtifactClick}
@@ -657,6 +756,7 @@ export function ChatInterface({
                 onPlusClick={handlePlusClick}
                 onModelSelectorClick={handleModelSelectorClick}
                 allowModelFallbackModels={allowModelFallbackModels}
+                supportsAgentControl={runtime?.supportsAgentControl !== false}
                 onVoiceClick={handleVoiceClick}
                 onSelectFolder={onSelectFolderProp ? handleSelectFolder : undefined}
                 onRecordSkill={onRecordSkill}
@@ -667,10 +767,11 @@ export function ChatInterface({
                 disabled={!runtime}
                 disabledMessage="Connect to start chatting"
                 conversationId={activeConversationId}
-                projectId={null}
+                projectId={projectPicker?.activeProjectId ?? null}
                 supportsCodeExecution={runtime?.supportsCodeExecution ?? false}
                 supportsResearch={runtime?.supportsResearch ?? false}
                 supportsManagedWebSearch={runtime?.supportsManagedWebSearch ?? false}
+                attachmentPolicy={runtime?.attachmentPolicy}
               />
               {/* Sample-prompt mode chips below the composer (claude.ai parity —
                   ref: claude_reference/015). This is a composer-area element shown

@@ -1,10 +1,14 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { WEB_APP_URL } from '../../api/config';
 import { openExternalUrl } from '../../utils/navigation';
 import { useAuthStore } from '../../stores/auth';
 import { PlansModal } from './PlansModal';
+
+const billingMocks = vi.hoisted(() => ({
+  openBillingPortal: vi.fn(),
+  refreshUserData: vi.fn(),
+}));
 
 vi.mock('./PlanCard', () => ({
   PlanCard: ({
@@ -29,9 +33,26 @@ vi.mock('../../utils/navigation', () => ({
   openExternalUrl: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../lib/stripeCheckout', () => ({
+  openBillingPortal: billingMocks.openBillingPortal,
+}));
+
+vi.mock('../../services/cloudAccountAuth', () => ({
+  cloudAccountAuth: {
+    refreshUserData: billingMocks.refreshUserData,
+  },
+}));
+
+vi.mock('./DesktopUpgradeConfirmDialog', () => ({
+  DesktopUpgradeConfirmDialog: ({ request }: { request: { tier: string } | null }) =>
+    request ? <div data-testid="upgrade-confirm">{request.tier}</div> : null,
+}));
+
 describe('PlansModal account plan ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    billingMocks.openBillingPortal.mockResolvedValue(null);
+    billingMocks.refreshUserData.mockResolvedValue(undefined);
     useAuthStore.setState({
       isAuthenticated: true,
       plan: 'pro',
@@ -57,6 +78,31 @@ describe('PlansModal account plan ownership', () => {
 
     expect(screen.getByTestId('plan-local')).toHaveTextContent(/current/);
     expect(screen.getByTestId('plan-byok')).toHaveTextContent(/not-current/);
+  });
+
+  it('shows the managed Cloud Free tier as the current account plan', () => {
+    useAuthStore.setState({ plan: 'free', planDisplayName: 'Free' });
+
+    render(<PlansModal open onOpenChange={vi.fn()} />);
+
+    expect(screen.getByTestId('plan-free')).toHaveTextContent(/current/);
+    expect(screen.getByTestId('plan-local')).toHaveTextContent(/not-current/);
+    expect(screen.getByTestId('plan-byok')).toHaveTextContent(/not-current/);
+  });
+
+  it('does not pretend BYOK is current while account plan sync is unresolved', () => {
+    useAuthStore.setState({ plan: null, planDisplayName: undefined });
+
+    render(<PlansModal open onOpenChange={vi.fn()} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/checking your current cloud plan/i);
+    expect(screen.getByTestId('plan-free')).toHaveTextContent(/not-current/);
+    expect(screen.getByTestId('plan-basic')).toHaveTextContent(/not-current/);
+    expect(screen.getByTestId('plan-max')).toHaveTextContent(/not-current/);
+
+    fireEvent.click(screen.getByTestId('cta-pro'));
+    expect(screen.queryByTestId('upgrade-confirm')).toBeNull();
+    expect(screen.getByText(/current cloud plan is still loading/i)).toBeInTheDocument();
   });
 
   it('lets Radix own the accessible title and description ids', () => {
@@ -98,15 +144,16 @@ describe('PlansModal paid-plan CTA routing (public alpha — no waitlist)', () =
   });
 
   it.each(['pro', 'max'] as const)(
-    'opens the web pricing page (canonical checkout surface) for the %s CTA and closes the modal',
+    'opens the in-app upgrade confirmation for the %s CTA',
     (tier) => {
       const onOpenChange = vi.fn();
       render(<PlansModal open onOpenChange={onOpenChange} />);
 
       fireEvent.click(screen.getByTestId(`cta-${tier}`));
 
-      expect(openExternalUrl).toHaveBeenCalledWith(`${WEB_APP_URL}/pricing`);
-      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(screen.getByTestId('upgrade-confirm')).toHaveTextContent(tier);
+      expect(openExternalUrl).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
     },
   );
 

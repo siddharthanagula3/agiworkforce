@@ -180,6 +180,7 @@ describe('checkout subscription Price authority', () => {
       'max_15x',
       new Date(periodStart * 1000),
       new Date((periodStart + 30 * 24 * 60 * 60) * 1000),
+      db,
     );
     expect(mocks.allocateCredits).not.toHaveBeenCalled();
   });

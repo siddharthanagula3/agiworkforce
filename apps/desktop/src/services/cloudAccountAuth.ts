@@ -6,8 +6,9 @@ import {
   type Subscription,
   asPlanTier,
 } from '../lib/cloudAccountTypes';
-import { API_BASE_URL, WEB_APP_URL } from '../api/config';
+import { WEB_APP_URL } from '../api/config';
 import { parseMeResponse, type MeResponse } from '@agiworkforce/cloud-contracts';
+import { effectivePlanTier, normalizeUIPlanTier, tierAtLeast } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
 // `isTauri` from the zero-import leaf, not the barrel: this module runs during
 // auth-store init (checkSession → isLocalDevBrowser), and pulling `isTauri`
@@ -18,6 +19,7 @@ import {
   openDesktopCloudSignInWindow,
   type DesktopCloudSignInWindowSession,
 } from './desktopCloudSignInWindow';
+import { openDesktopCloudAccountWindow } from './desktopCloudAccountWindow';
 // NOTE: egressGuard is required LAZILY at its call site (fetchAccountSnapshot)
 // to break the load-time cycle egressGuard → appModeStore → auth →
 // cloudAccountAuth → egressGuard. A static import here re-introduces it.
@@ -52,11 +54,6 @@ export interface AuthResponse {
   error: AuthError | null;
 }
 
-export interface OAuthResponse {
-  data: { provider: AuthProvider; url: string | null };
-  error: AuthError | null;
-}
-
 export type SubscriptionFetchStatus = 'idle' | 'fetching' | 'succeeded' | 'failed';
 
 export interface AuthState {
@@ -70,28 +67,21 @@ export interface AuthState {
   subscriptionFetchStatus: SubscriptionFetchStatus;
 }
 
-export type AuthProvider = 'google' | 'github' | 'apple' | 'discord';
-
-export interface SignUpData {
-  email: string;
-  password: string;
-  displayName?: string;
-}
-
-export interface SignInData {
-  email: string;
-  password: string;
-}
-
 interface AccountSnapshot {
   profile: Profile | null;
   subscription: Subscription | null;
   featureFlags: Record<string, boolean>;
 }
 
+interface NativeDeviceAuthorizationResponse {
+  status: number;
+  body: string;
+}
+
 const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
 const AUTH_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const DEV_BROWSER_SESSION_STORAGE_KEY = '__AGI_DEV_BROWSER_CLOUD_SESSION__';
+const NATIVE_SESSION_RESTORE_TIMEOUT_MS = 8_000;
 
 interface CachedAuthData<T> {
   data: T;
@@ -102,6 +92,23 @@ interface CachedAuthData<T> {
 function isLocalDevBrowser(): boolean {
   if (isTauri || typeof window === 'undefined' || !import.meta.env.DEV) return false;
   return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+}
+
+async function restoreNativeAccessToken(): Promise<string | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      invoke<string | null>('account_restore_access_token'),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error('The system credential vault did not respond in time.')),
+          NATIVE_SESSION_RESTORE_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 function readDevBrowserSessionSeed(): {
@@ -218,7 +225,8 @@ function buildSubscription(userId: string, plan: MeResponse['plan'] | null): Sub
   if (!plan) return null;
   const now = new Date().toISOString();
   const tier = asPlanTier(plan.tier);
-  const currentPeriodEnd = dateFromUnknown(plan.current_period_end);
+  const currentPeriodEnd =
+    plan.current_period_end === null ? null : dateFromUnknown(plan.current_period_end);
 
   return {
     id: `cloud-account-${userId}`,
@@ -254,11 +262,10 @@ async function openWebAccount(path = '/sign-in'): Promise<void> {
   }
 
   try {
-    const { open } = await import('@tauri-apps/plugin-shell');
-    await open(url);
+    await openDesktopCloudAccountWindow(path, 'AGI Cloud account');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    toast.error(`Could not open AGI web sign-in: ${message}`);
+    toast.error(`Could not open the AGI Cloud account window: ${message}`);
   }
 }
 
@@ -276,6 +283,8 @@ class CloudAccountAuthService {
     subscriptionFetchStatus: 'idle',
   };
   private deviceAuthorizationController: AbortController | null = null;
+  private invalidSessionCleanup: Promise<void> | null = null;
+  private sessionExpiryTimer: ReturnType<typeof setTimeout> | null = null;
 
   static getInstance(): CloudAccountAuthService {
     if (!CloudAccountAuthService.instance) {
@@ -294,7 +303,7 @@ class CloudAccountAuthService {
     if (isTauri && !this.currentState.session) {
       this.updateState({ isLoading: true, error: null });
       try {
-        const accessToken = await invoke<string | null>('account_restore_access_token');
+        const accessToken = await restoreNativeAccessToken();
         if (accessToken) {
           await this.setSession({ access_token: accessToken });
           return;
@@ -322,10 +331,57 @@ class CloudAccountAuthService {
 
     try {
       const { guardedFetch } = await import('../lib/egressGuard');
+      if (isTauri) {
+        // Device authorization, account validation, managed chat persistence,
+        // and native sync all terminate at the Next.js managed-cloud origin.
+        // Set it before requesting a code so a fresh install cannot fall back
+        // to a stale API-gateway override.
+        await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });
+      }
       const credential = await authorizeDesktopDevice({
         origin: WEB_APP_URL,
         signal: controller.signal,
         post: async (url, payload, headers) => {
+          if (isTauri) {
+            const endpoint = new URL(url);
+            const trustedOrigin = new URL(WEB_APP_URL).origin;
+            if (endpoint.origin !== trustedOrigin) {
+              throw new Error('Refusing an untrusted AGI Cloud authorization endpoint.');
+            }
+
+            let response: NativeDeviceAuthorizationResponse;
+            if (endpoint.pathname === '/api/auth/device/code') {
+              response = await invoke<NativeDeviceAuthorizationResponse>(
+                'account_start_device_authorization',
+              );
+            } else if (endpoint.pathname === '/api/auth/device/token') {
+              const record =
+                payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+                  ? (payload as Record<string, unknown>)
+                  : {};
+              const deviceCode = record['device_code'];
+              if (typeof deviceCode !== 'string' || deviceCode.length === 0) {
+                throw new Error('Missing AGI Cloud device authorization code.');
+              }
+              response = await invoke<NativeDeviceAuthorizationResponse>(
+                'account_poll_device_authorization',
+                { deviceCode },
+              );
+            } else {
+              throw new Error('Refusing an unsupported AGI Cloud authorization endpoint.');
+            }
+
+            if (
+              response === null ||
+              typeof response !== 'object' ||
+              typeof response.status !== 'number' ||
+              typeof response.body !== 'string'
+            ) {
+              throw new Error('AGI Desktop received an invalid Cloud authorization response.');
+            }
+            return response;
+          }
+
           const response = await guardedFetch(url, {
             method: 'POST',
             credentials: 'omit',
@@ -389,56 +445,50 @@ class CloudAccountAuthService {
     };
   }
 
-  async signUp(_data: SignUpData): Promise<AuthResponse> {
+  async signIn(_legacyCredentials?: unknown): Promise<AuthResponse> {
     return this.authorizeCloudAccount();
-  }
-
-  async signIn(_data: SignInData): Promise<AuthResponse> {
-    return this.authorizeCloudAccount();
-  }
-
-  async signInWithMagicLink(_email: string): Promise<{ error: AuthError | null }> {
-    const response = await this.authorizeCloudAccount();
-    return { error: response.error };
-  }
-
-  async verifyOtp(_email: string, _token: string): Promise<AuthResponse> {
-    return {
-      data: { user: null, session: null },
-      error: new AuthError('Email-code verification is handled by Clerk on AGI web.', 400),
-    };
-  }
-
-  async signInWithOAuth(provider: AuthProvider): Promise<OAuthResponse> {
-    const response = await this.authorizeCloudAccount();
-    return {
-      data: { provider, url: response.error ? null : `${WEB_APP_URL}/auth/device` },
-      error: response.error,
-    };
-  }
-
-  async exchangeCodeForSession(_code: string): Promise<AuthResponse> {
-    return {
-      data: { user: null, session: null },
-      error: new AuthError(
-        'Desktop auth now uses Clerk device-link approval, not code exchange.',
-        400,
-      ),
-    };
   }
 
   async signOut(): Promise<void> {
     this.deviceAuthorizationController?.abort();
     this.deviceAuthorizationController = null;
     this.updateState({ isLoading: true });
+    const accessToken = this.currentState.session?.access_token;
     try {
+      if (accessToken) {
+        try {
+          const { guardedFetch } = await import('../lib/egressGuard');
+          await guardedFetch(`${WEB_APP_URL}/api/auth/logout`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-AGI-Surface': 'desktop',
+            },
+            body: '{}',
+          });
+        } catch (error) {
+          // Local credential removal must still complete when the network is
+          // unavailable. The server-side developer token is short-lived and
+          // will expire even if this best-effort revocation cannot be sent.
+          console.warn('[Auth] Could not revoke the Cloud session remotely:', error);
+        }
+      }
       if (isTauri) {
         await invoke('account_clear_tokens').catch((error) => {
           console.warn('[Auth] Failed to clear cloud account tokens:', error);
         });
       }
-      sessionStorage.clear();
+      if (typeof window !== 'undefined') {
+        // Cloud sign-out must not erase unrelated session-scoped Desktop UI
+        // state. Only the development-browser credential seed belongs here;
+        // Tauri credentials live in the native encrypted account store.
+        window.sessionStorage.removeItem(DEV_BROWSER_SESSION_STORAGE_KEY);
+      }
     } finally {
+      this.clearSessionExpiryTimer();
       clearAuthCache();
       this.updateState({
         user: null,
@@ -453,14 +503,8 @@ class CloudAccountAuthService {
     }
   }
 
-  async resetPassword(email: string): Promise<{ error: AuthError | null }> {
-    await openWebAccount(`/sign-in?email=${encodeURIComponent(email)}&redirect=reset-password`);
-    return { error: null };
-  }
-
-  async updatePassword(_newPassword: string): Promise<{ error: AuthError | null }> {
+  async openAccountManagement(): Promise<void> {
     await openWebAccount('/user');
-    return { error: null };
   }
 
   async updateProfile(
@@ -471,14 +515,48 @@ class CloudAccountAuthService {
       return { error: new Error('Not authenticated') };
     }
 
-    const updatedProfile: Profile = {
-      ...currentProfile,
-      display_name: updates.display_name ?? currentProfile.display_name,
-      avatar_url: updates.avatar_url ?? currentProfile.avatar_url,
-      updated_at: new Date().toISOString(),
-    };
-    this.updateState({ profile: updatedProfile });
-    return { error: null };
+    try {
+      const { guardedFetch } = await import('../lib/egressGuard');
+      const response = await guardedFetch(`${WEB_APP_URL}/api/me?surface=desktop`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Authorization: `Bearer ${this.currentState.session?.access_token ?? ''}`,
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-AGI-Surface': 'desktop',
+        },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) {
+        if (response.status === 401) {
+          await this.invalidateSession();
+        }
+        throw new Error(`AGI Cloud profile update failed (HTTP ${response.status}).`);
+      }
+
+      const payload: unknown = await response.json();
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        throw new Error('AGI Cloud returned an invalid profile update response.');
+      }
+      const record = payload as Record<string, unknown>;
+      const displayName =
+        typeof record['display_name'] === 'string' ? record['display_name'] : null;
+      const avatarUrl = typeof record['avatar_url'] === 'string' ? record['avatar_url'] : null;
+      const updatedProfile: Profile = {
+        ...currentProfile,
+        display_name: displayName ?? updates.display_name ?? currentProfile.display_name,
+        avatar_url:
+          record['avatar_url'] === null
+            ? null
+            : (avatarUrl ?? updates.avatar_url ?? currentProfile.avatar_url),
+        updated_at: new Date().toISOString(),
+      };
+      this.updateState({ profile: updatedProfile });
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error(String(error)) };
+    }
   }
 
   getState(): AuthState {
@@ -493,8 +571,41 @@ class CloudAccountAuthService {
     return this.currentState.session;
   }
 
+  async getValidSession(): Promise<Session | null> {
+    const session = this.currentState.session;
+    if (!session) return null;
+
+    if (session.expires_at && session.expires_at <= Math.floor(Date.now() / 1000)) {
+      await this.invalidateSession('Your AGI Cloud session has expired. Please connect again.');
+      return null;
+    }
+
+    return session;
+  }
+
+  async invalidateSession(
+    message = 'Your AGI Cloud session is no longer authorized. Please connect again.',
+  ): Promise<void> {
+    if (this.invalidSessionCleanup) {
+      await this.invalidSessionCleanup;
+      return;
+    }
+
+    this.invalidSessionCleanup = this.clearInvalidSession(message);
+    try {
+      await this.invalidSessionCleanup;
+    } finally {
+      this.invalidSessionCleanup = null;
+    }
+  }
+
   getPlanTier(): PlanTier {
-    return asPlanTier(this.currentState.subscription?.plan_tier);
+    return asPlanTier(
+      effectivePlanTier(
+        this.currentState.subscription?.plan_tier,
+        this.currentState.subscription?.status,
+      ),
+    );
   }
 
   isAuthenticated(): boolean {
@@ -518,7 +629,7 @@ class CloudAccountAuthService {
         401,
         'session_expired',
       );
-      await this.clearInvalidSession(error.message);
+      await this.invalidateSession(error.message);
       return { error };
     }
 
@@ -529,18 +640,27 @@ class CloudAccountAuthService {
       error: null,
       subscriptionFetchStatus: 'fetching',
     });
+    this.scheduleSessionExpiry(session);
 
     if (isTauri) {
       try {
-        await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
+        await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });
         await invoke('account_store_access_token', { accessToken: session.access_token });
         if (session.refresh_token) {
           await invoke('account_store_refresh_token', { refreshToken: session.refresh_token });
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        this.updateState({ error: message });
-        return { error: new AuthError(message, 500, 'token_store_failed') };
+        const authError = new AuthError(
+          `Could not save the AGI Cloud session securely: ${message}`,
+          500,
+          'token_store_failed',
+        );
+        // The native vault may have accepted one token before a later write
+        // failed. Clear both native and in-memory state so the UI can never
+        // appear authenticated with a session that cannot be restored safely.
+        await this.invalidateSession(authError.message);
+        return { error: authError };
       }
     }
 
@@ -551,7 +671,7 @@ class CloudAccountAuthService {
         401,
         'session_invalid',
       );
-      await this.clearInvalidSession(error.message);
+      await this.invalidateSession(error.message);
       return { error };
     }
     return { error: null };
@@ -559,16 +679,7 @@ class CloudAccountAuthService {
 
   hasPlan(tier: PlanTier): boolean {
     const currentTier = this.getPlanTier();
-    const tierHierarchy: Record<PlanTier, number> = {
-      'local-only': 0,
-      byok: 0,
-      free: 0,
-      basic: 1,
-      pro: 2,
-      max: 3,
-      enterprise: 4,
-    };
-    return (tierHierarchy[currentTier] ?? 0) >= (tierHierarchy[tier] ?? 0);
+    return tierAtLeast(normalizeUIPlanTier(currentTier), normalizeUIPlanTier(tier));
   }
 
   hasFeature(flagName: string): boolean {
@@ -609,22 +720,40 @@ class CloudAccountAuthService {
 
       this.updateState({
         ...snapshot,
-        subscriptionFetchStatus: snapshot.subscription ? 'succeeded' : 'failed',
+        // A successful account snapshot with no subscription is the canonical
+        // Free-tier state, not a billing fetch failure. The orchestrator uses
+        // `succeeded + null subscription` to select the Free plan honestly.
+        subscriptionFetchStatus: 'succeeded',
         error: null,
       });
       return true;
     } catch (error) {
       console.warn('[Auth] Failed to refresh Clerk/Neon account data:', error);
-      this.updateState({ subscriptionFetchStatus: 'failed' });
-      return false;
+      const authorizationRejected =
+        error instanceof AuthError && (error.status === 401 || error.status === 403);
+      this.updateState({
+        subscriptionFetchStatus: 'failed',
+        error: authorizationRejected
+          ? error.message
+          : 'AGI Cloud account details are temporarily unavailable. Your session is still connected.',
+      });
+      // Only an explicit authorization response invalidates the credential.
+      // Network, rate-limit, server, and contract failures keep the revocable
+      // session connected so a transient /api/me outage cannot sign the user
+      // back out immediately after a successful in-app authorization.
+      return !authorizationRejected;
     }
   }
 
   private async clearInvalidSession(message: string): Promise<void> {
+    this.clearSessionExpiryTimer();
     if (isTauri) {
       await invoke('account_clear_tokens').catch((error) => {
         console.warn('[Auth] Failed to clear an invalid Cloud session:', error);
       });
+    }
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(DEV_BROWSER_SESSION_STORAGE_KEY);
     }
     clearAuthCache();
     this.updateState({
@@ -639,12 +768,30 @@ class CloudAccountAuthService {
     });
   }
 
+  private clearSessionExpiryTimer(): void {
+    if (this.sessionExpiryTimer) {
+      clearTimeout(this.sessionExpiryTimer);
+      this.sessionExpiryTimer = null;
+    }
+  }
+
+  private scheduleSessionExpiry(session: Session): void {
+    this.clearSessionExpiryTimer();
+    if (!session.expires_at) return;
+
+    const delayMs = Math.max(0, session.expires_at * 1000 - Date.now());
+    this.sessionExpiryTimer = setTimeout(() => {
+      this.sessionExpiryTimer = null;
+      void this.invalidateSession('Your AGI Cloud session has expired. Please connect again.');
+    }, delayMs);
+  }
+
   private async fetchAccountSnapshot(accessToken: string): Promise<AccountSnapshot> {
     // Dynamic import breaks the egressGuard ↔ appModeStore load-time cycle while
     // working under ESM (a relative `require()` does not resolve here). By the
     // time this async method runs, the module graph is fully loaded.
     const { guardedFetch } = await import('../lib/egressGuard');
-    const response = await guardedFetch(`${WEB_APP_URL}/api/me`, {
+    const response = await guardedFetch(`${WEB_APP_URL}/api/me?surface=desktop`, {
       method: 'GET',
       credentials: 'include',
       headers: {
@@ -654,7 +801,15 @@ class CloudAccountAuthService {
     });
 
     if (!response.ok) {
-      throw new Error(`Account API returned ${response.status}`);
+      throw new AuthError(
+        response.status === 401 || response.status === 403
+          ? 'Your AGI Cloud session is no longer authorized.'
+          : `AGI Cloud account API returned ${response.status}.`,
+        response.status,
+        response.status === 401 || response.status === 403
+          ? 'session_unauthorized'
+          : 'account_api_failed',
+      );
     }
 
     // Validate against the shared /api/me contract (packages/services) — a

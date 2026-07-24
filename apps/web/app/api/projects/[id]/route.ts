@@ -18,10 +18,35 @@ import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { ManagedCloudProjectUpdateRequestSchema } from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import {
+  ProjectConversationMembershipError,
+  replaceProjectConversationMembership,
+} from '@/lib/services/project-membership-service';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+async function selectProjectWithConversationCount(
+  db: ReturnType<typeof getNeonDb>,
+  id: string,
+  userId: string,
+): Promise<Record<string, unknown> | undefined> {
+  const [project] = await db.query<Record<string, unknown>>(
+    `select p.*,
+            (select count(*)::int
+               from web_conversations c
+              where c.project_id = p.id::text
+                and c.user_id = $2
+                and c.deleted_at is null) as conversation_count
+       from user_projects p
+      where p.id = $1 and p.user_id = $2 and p.deleted_at is null
+      limit 1`,
+    [id, userId],
+  );
+  return project;
+}
 
 async function handleGetProject(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
@@ -31,12 +56,7 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
   const db = getNeonDb();
   const { id } = await context.params;
 
-  const [data] = await db.query<Record<string, unknown>>(
-    `select * from user_projects
-     where id = $1 and user_id = $2 and deleted_at is null
-     limit 1`,
-    [id, userId],
-  );
+  const data = await selectProjectWithConversationCount(db, id, userId);
 
   if (!data) {
     throw createError.notFound('Project not found');
@@ -48,6 +68,8 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
 }
 
 async function handleUpdateProject(request: NextRequest, context: RouteContext) {
+  const { userId } = await getClerkAuthUser(request);
+
   // CSRF protection for state-changing PUT endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -55,7 +77,6 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
   const { id } = await context.params;
 
@@ -132,39 +153,70 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     };
   }
 
-  let rowData: Record<string, unknown>;
-  try {
-    const { sql, params } = buildUpdateSql(hasRound10);
-    const [updated] = await db.query<Record<string, unknown>>(sql, params);
+  const executeUpdate = async (targetDb: ReturnType<typeof getNeonDb>, includeRound10: boolean) => {
+    const { sql, params } = buildUpdateSql(includeRound10);
+    const [updated] = await targetDb.query<Record<string, unknown>>(sql, params);
     if (!updated) throw createError.notFound('Project not found');
-    rowData = updated;
-  } catch (firstError) {
-    if (
-      hasRound10 &&
-      firstError &&
-      typeof firstError === 'object' &&
-      (firstError as { code?: string }).code === PG_UNDEFINED_COLUMN
-    ) {
-      // Migration not yet applied · retry with only legacy fields
+  };
+
+  const updateAndReplaceMembership = (includeRound10: boolean) =>
+    db.transaction(async (tx) => {
+      await executeUpdate(tx, includeRound10);
+      await replaceProjectConversationMembership(tx, {
+        userId,
+        projectId: id,
+        conversationIds: body.isArchived === true ? [] : (body.conversationIds ?? []),
+      });
+    });
+
+  try {
+    if (body.isArchived === true || body.conversationIds !== undefined) {
       try {
-        const { sql, params } = buildUpdateSql(false);
-        const [updated] = await db.query<Record<string, unknown>>(sql, params);
-        if (!updated) throw createError.notFound('Project not found');
-        rowData = updated;
-      } catch (retryError) {
-        throw retryError;
+        await updateAndReplaceMembership(hasRound10);
+      } catch (error) {
+        if (
+          hasRound10 &&
+          error &&
+          typeof error === 'object' &&
+          (error as { code?: string }).code === PG_UNDEFINED_COLUMN
+        ) {
+          await updateAndReplaceMembership(false);
+        } else {
+          throw error;
+        }
       }
     } else {
-      throw firstError;
+      try {
+        await executeUpdate(db, hasRound10);
+      } catch (error) {
+        if (
+          hasRound10 &&
+          error &&
+          typeof error === 'object' &&
+          (error as { code?: string }).code === PG_UNDEFINED_COLUMN
+        ) {
+          await executeUpdate(db, false);
+        } else {
+          throw error;
+        }
+      }
     }
+  } catch (error) {
+    if (error instanceof ProjectConversationMembershipError) {
+      throw createError.validation(error.message);
+    }
+    throw error;
   }
 
-  return NextResponse.json({
-    project: mapProjectRow(rowData),
-  });
+  const projectWithCount = await selectProjectWithConversationCount(db, id, userId);
+  if (!projectWithCount) throw createError.notFound('Project not found');
+
+  return NextResponse.json({ project: mapProjectRow(projectWithCount) });
 }
 
 async function handleDeleteProject(request: NextRequest, context: RouteContext) {
+  const { userId } = await getClerkAuthUser(request);
+
   // CSRF protection for state-changing DELETE endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -172,7 +224,6 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
   const { id } = await context.params;
 
@@ -184,12 +235,23 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
     // carries the tombstone. Hard-deleting would resurrect the row on the next pull
     // from another device that still has it. updated_at is bumped so last-writer-wins
     // treats the delete as the latest change.
-    affected = await db.execute(
-      `update user_projects
-         set deleted_at = now(), updated_at = now()
-       where id = $1 and user_id = $2 and deleted_at is null`,
-      [id, userId],
-    );
+    affected = await db.transaction(async (tx) => {
+      const deleted = await tx.execute(
+        `update user_projects
+           set deleted_at = now(), updated_at = now()
+         where id = $1 and user_id = $2 and deleted_at is null`,
+        [id, userId],
+      );
+      if (deleted > 0) {
+        await tx.execute(
+          `update web_conversations
+              set project_id = null, updated_at = now()
+            where project_id = $1 and user_id = $2 and deleted_at is null`,
+          [id, userId],
+        );
+      }
+      return deleted;
+    });
   } catch (error) {
     logger.error({ error, projectId: id, userId }, 'Failed to delete project');
     throw createError.internal('Failed to delete project');
@@ -202,6 +264,10 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   return NextResponse.json({ success: true });
 }
 
-export const GET = withErrorHandler(handleGetProject);
-export const PUT = withErrorHandler(handleUpdateProject);
-export const DELETE = withErrorHandler(handleDeleteProject);
+export const GET = withCorsRoute(withErrorHandler(handleGetProject));
+export const PUT = withCorsRoute(withErrorHandler(handleUpdateProject));
+export const DELETE = withCorsRoute(withErrorHandler(handleDeleteProject));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

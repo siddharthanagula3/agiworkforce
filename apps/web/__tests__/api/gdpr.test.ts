@@ -27,6 +27,7 @@ vi.mock('@/lib/cors', () => ({
   getSecurityHeaders: () => ({ 'X-Content-Type-Options': 'nosniff' }),
   getCorsHeaders: () => ({ 'Access-Control-Allow-Origin': '*' }),
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
+  withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
 // Mock errors

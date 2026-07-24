@@ -1,10 +1,8 @@
 /**
  * CloudRuntime unit tests — mock-only, no live backend.
  *
- * Live E2E verification requires a signed Tauri build + real Clerk
- * credentials + the PA-3 gate lifted (DCL-4) — none obtainable in this
- * sandbox. See docs/strategy/PUBLIC-ALPHA-CUTOVER.md and
- * docs/agent-context/known-flaws.md (DESKTOP-CLOUD-MODE-SPEC-VS-REALITY-01).
+ * Live E2E verification requires a signed Tauri build plus a real Cloud
+ * account. Managed Cloud itself is public alpha and no longer waitlist-gated.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { StreamEvent } from '@agiworkforce/unified-chat';
@@ -57,11 +55,39 @@ vi.mock('../../lib/cloudChatPersistence', () => ({
   }),
 }));
 
+vi.mock('../../stores/appModeStore', () => ({
+  useAppModeStore: {
+    getState: () => ({ mode: 'cloud' }),
+  },
+  selectPrivacyMode: () => 'managed',
+}));
+
+vi.mock('../../stores/auth', () => {
+  const state = {
+    isAuthenticated: true,
+    accessToken: 'desktop-cloud-token',
+    user: { id: 'user-desktop' },
+  };
+  return {
+    useAuthStore: { getState: () => state },
+    useUnifiedAuthStore: { getState: () => state },
+  };
+});
+
+vi.mock('../sessionLabeling', () => ({
+  desktopExecutionProfileFor: vi.fn(() => ({})),
+  labelDesktopSession: vi.fn(() => ({})),
+}));
+
 const sendCloudMessage = vi.fn();
 const followRun = vi.fn();
 const cancelRun = vi.fn();
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
+  cloudFetch: vi.fn(),
+  getAuthHeaders: vi.fn(async () => ({
+    Authorization: 'Bearer desktop-cloud-token',
+  })),
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
   createDesktopCloudAgentRunClient: () => ({ followRun, cancelRun }),
 }));
@@ -79,6 +105,34 @@ describe('CloudRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     saveMessage.mockResolvedValue({ id: 'saved-id' });
+    createConversation.mockImplementation(
+      async (input: { id: string; title: string; model?: string; projectId?: string }) => ({
+        id: input.id,
+        title: input.title,
+        model: input.model ?? null,
+        projectId: input.projectId ?? null,
+        pinned: false,
+        starred: false,
+        archived: false,
+        isTemporary: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    );
+    updateConversation.mockImplementation(async (id: string, updates: Record<string, unknown>) => ({
+      id,
+      title: typeof updates['title'] === 'string' ? updates['title'] : 'New chat',
+      model: typeof updates['model'] === 'string' ? updates['model'] : null,
+      projectId: typeof updates['projectId'] === 'string' ? updates['projectId'] : null,
+      pinned: updates['pinned'] === true,
+      starred: false,
+      archived: updates['archived'] === true,
+      isTemporary: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }));
+    deleteConversation.mockResolvedValue(undefined);
+    cancelRun.mockResolvedValue(managedRun('cancelled', 0));
   });
 
   describe('sendMessage', () => {
@@ -115,7 +169,7 @@ describe('CloudRuntime', () => {
         ) => {
           onChunk('Hello');
           onChunk(' world');
-          onDone();
+          await onDone();
         },
       );
 
@@ -145,8 +199,10 @@ describe('CloudRuntime', () => {
       );
     });
 
-    it('persists canonical activity metadata for a tool-only cloud turn', async () => {
+    it('fails a lifecycle-only cloud turn that completed without renderable output', async () => {
+      const events: StreamEvent[] = [];
       const runtime = new CloudRuntime();
+      runtime.onStream((event) => events.push(event));
 
       sendCloudMessage.mockImplementation(
         async (
@@ -191,7 +247,7 @@ describe('CloudRuntime', () => {
               },
             ],
           });
-          onDone();
+          await onDone();
         },
       );
 
@@ -207,12 +263,21 @@ describe('CloudRuntime', () => {
           metadata: {
             agentActivity: expect.objectContaining({
               turnId: 'turn-1',
-              status: 'completed',
+              status: 'failed',
               lastSequence: 1,
             }),
+            finishReason: 'error',
+            streamError: {
+              message: 'AGI Cloud completed without returning a response.',
+            },
           },
         }),
       );
+      expect(events).toContainEqual({
+        type: 'error',
+        error: 'AGI Cloud completed without returning a response. Please retry.',
+      });
+      expect(events.some((event) => event.type === 'done')).toBe(false);
     });
 
     it('emits an error and does not call sendCloudMessage when the user-message save fails', async () => {
@@ -226,7 +291,7 @@ describe('CloudRuntime', () => {
       expect(events).toEqual([{ type: 'error', error: 'network down' }]);
     });
 
-    it('surfaces a save failure for the assistant turn as a follow-up error event without hiding done', async () => {
+    it('surfaces a save failure and does not report the reply as durably done', async () => {
       const runtime = new CloudRuntime();
       const events = collectEvents(runtime);
 
@@ -239,7 +304,7 @@ describe('CloudRuntime', () => {
           onDone: () => void,
         ) => {
           onChunk('Reply');
-          onDone();
+          await onDone();
         },
       );
       saveMessage.mockResolvedValueOnce({ id: 'user-saved' }); // user save ok
@@ -247,7 +312,7 @@ describe('CloudRuntime', () => {
 
       await runtime.sendMessage('conv_1', 'Hi');
 
-      expect(events.some((e) => e.type === 'done')).toBe(true);
+      expect(events.some((e) => e.type === 'done')).toBe(false);
       await vi.waitFor(() => {
         expect(events.some((e) => e.type === 'error' && e.error.includes('save failed'))).toBe(
           true,
@@ -318,12 +383,12 @@ describe('CloudRuntime', () => {
         2,
         'conv_reject',
         expect.objectContaining({
-          metadata: {
+          metadata: expect.objectContaining({
             agentActivity: expect.objectContaining({
               turnId: 'turn-reject',
               status: 'failed',
             }),
-          },
+          }),
         }),
       );
     });
@@ -556,12 +621,12 @@ describe('CloudRuntime', () => {
         'conv_cancel',
         expect.objectContaining({
           role: 'assistant',
-          metadata: {
+          metadata: expect.objectContaining({
             agentActivity: expect.objectContaining({
               turnId: 'turn-cancel',
               status: 'cancelled',
             }),
-          },
+          }),
         }),
       );
     });
@@ -582,6 +647,39 @@ describe('CloudRuntime', () => {
       runtime.stopGeneration('conv_server_cancel');
 
       await vi.waitFor(() => expect(cancelRun).toHaveBeenCalledWith(MANAGED_RUN_ID));
+    });
+  });
+
+  describe('runtime lifecycle', () => {
+    it('disposes an active Cloud turn without emitting or persisting a synthetic failure', async () => {
+      sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+        const signal = args[6] as AbortSignal;
+        const onRunHandle = args[14] as (handle: { runId: string; runPath: string }) => void;
+        onRunHandle({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+        await new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      });
+
+      const runtime = new CloudRuntime();
+      const events = collectEvents(runtime);
+      const send = runtime.sendMessage('conv_dispose', 'keep this private');
+      await vi.waitFor(() => expect(sendCloudMessage).toHaveBeenCalledOnce());
+      const savesBeforeDispose = saveMessage.mock.calls.length;
+      const eventsBeforeDispose = [...events];
+
+      await runtime.dispose();
+      await send;
+
+      expect(cancelRun).toHaveBeenCalledWith(
+        MANAGED_RUN_ID,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+      expect(saveMessage).toHaveBeenCalledTimes(savesBeforeDispose);
+      expect(events).toEqual(eventsBeforeDispose);
+      await expect(runtime.sendMessage('conv_after_dispose', 'must not send')).rejects.toThrow(
+        'no longer active',
+      );
     });
   });
 

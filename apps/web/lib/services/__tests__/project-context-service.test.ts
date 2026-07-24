@@ -38,7 +38,16 @@ describe('loadProjectContext', () => {
           extracted_text: 'Pro costs $20 per month.',
         },
       ])
-      .mockResolvedValueOnce([{ title: 'Pricing chat', preview: 'How much is Pro?' }]);
+      .mockResolvedValueOnce([
+        {
+          id: 'conv-pricing',
+          title: 'Pricing chat',
+          updated_at: '2026-07-23T12:00:00.000Z',
+          role: 'user',
+          content: 'How much is Pro?',
+          created_at: '2026-07-23T11:59:00.000Z',
+        },
+      ]);
 
     const context = await loadProjectContext(
       { query },
@@ -63,7 +72,9 @@ describe('loadProjectContext', () => {
     expect(query.mock.calls[1]?.[0]).toContain(
       "to_jsonb(project_knowledge_files)->>'extracted_text'",
     );
-    expect(context?.siblingChats).toEqual([{ title: 'Pricing chat', preview: 'How much is Pro?' }]);
+    expect(context?.siblingChats).toEqual([
+      { title: 'Pricing chat', preview: 'User: How much is Pro?' },
+    ]);
     // Sibling query is owner-scoped (user_id) and excludes the current conversation.
     expect(query.mock.calls[2]?.[0]).toContain('from web_conversations');
     expect(query.mock.calls[2]?.[0]).toContain('c.id <> $3');
@@ -97,8 +108,12 @@ describe('loadProjectContext', () => {
       )
       .mockResolvedValueOnce([
         {
+          id: 'conv-launch',
           title: 'Launch checklist',
-          preview: 'The launch checklist owner is Maya Chen and the checkpoint number is 7319.',
+          updated_at: '2026-07-23T12:00:00.000Z',
+          role: 'assistant',
+          content: 'The launch checklist owner is Maya Chen and the checkpoint number is 7319.',
+          created_at: '2026-07-23T11:59:00.000Z',
         },
       ]);
 
@@ -111,10 +126,59 @@ describe('loadProjectContext', () => {
     expect(context?.siblingChats).toEqual([
       {
         title: 'Launch checklist',
-        preview: 'The launch checklist owner is Maya Chen and the checkpoint number is 7319.',
+        preview:
+          'Assistant: The launch checklist owner is Maya Chen and the checkpoint number is 7319.',
       },
     ]);
     expect(query).toHaveBeenCalledTimes(3);
+  });
+
+  it('ranks a relevant past conversation ahead of a newer unrelated chat', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 'proj-1',
+          name: 'Investor Demo Recall',
+          description: null,
+          instructions: null,
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'conv-newer',
+          title: 'Lunch notes',
+          updated_at: '2026-07-23T13:00:00.000Z',
+          role: 'assistant',
+          content: 'The team ordered sandwiches.',
+          created_at: '2026-07-23T12:59:00.000Z',
+        },
+        {
+          id: 'conv-relevant',
+          title: 'Investor demo launch checklist',
+          updated_at: '2026-07-23T12:00:00.000Z',
+          role: 'assistant',
+          content: 'The investor demo checkpoint number is 7319.',
+          created_at: '2026-07-23T11:59:00.000Z',
+        },
+      ]);
+
+    const context = await loadProjectContext(
+      { query },
+      {
+        projectId: 'proj-1',
+        userId: 'user-1',
+        currentConversationId: 'conv-current',
+        currentUserQuery: 'Check past conversations for the investor demo checkpoint',
+      },
+    );
+
+    expect(context?.siblingChats.map((chat) => chat.title)).toEqual([
+      'Investor demo launch checklist',
+      'Lunch notes',
+    ]);
+    expect(context?.siblingChats[0]?.preview).toContain('7319');
   });
 });
 
@@ -187,7 +251,7 @@ describe('formatProjectSystemPrompt', () => {
         ],
       }),
     );
-    expect(prompt).toContain('Other chats in this project');
+    expect(prompt).toContain('Relevant chats in this project');
     expect(prompt).toContain('- "Pricing model" — How should we price the Pro tier?');
     expect(prompt).toContain('- "Launch checklist"');
     expect(prompt).toContain('untrusted reference data');

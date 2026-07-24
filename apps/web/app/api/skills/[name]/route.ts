@@ -12,6 +12,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { findManagedSkillByName } from '@/lib/services/skill-catalog-service';
 
 export const runtime = 'nodejs';
@@ -31,4 +32,8 @@ async function handleGetBody(request: NextRequest, context: { params: Promise<{ 
   return NextResponse.json({ body: skill.body });
 }
 
-export const GET = withErrorHandler(handleGetBody);
+export const GET = withCorsRoute(withErrorHandler(handleGetBody));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

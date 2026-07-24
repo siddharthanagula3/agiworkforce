@@ -30,6 +30,7 @@ import { connectMcpServer } from '@agiworkforce/mcp';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -141,13 +142,13 @@ interface CreateBody {
 }
 
 async function handlePost(request: NextRequest) {
+  const { userId } = await getClerkAuthUser(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const { userId } = await getClerkAuthUser(request);
 
   let body: CreateBody;
   try {
@@ -290,13 +291,13 @@ async function handlePost(request: NextRequest) {
 // ─── DELETE: remove a custom connector ──────────────────────────────────────
 
 async function handleDelete(request: NextRequest) {
+  const { userId } = await getClerkAuthUser(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const { userId } = await getClerkAuthUser(request);
 
   const url = new URL(request.url);
   const id = url.searchParams.get('id');
@@ -329,6 +330,10 @@ async function handleDelete(request: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
-export const GET = withErrorHandler(handleGet);
-export const POST = withErrorHandler(handlePost);
-export const DELETE = withErrorHandler(handleDelete);
+export const GET = withCorsRoute(withErrorHandler(handleGet));
+export const POST = withCorsRoute(withErrorHandler(handlePost));
+export const DELETE = withCorsRoute(withErrorHandler(handleDelete));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

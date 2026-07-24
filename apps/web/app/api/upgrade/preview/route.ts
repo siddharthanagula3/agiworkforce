@@ -10,8 +10,9 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { CheckoutRequestSchema } from '@/lib/validations/checkout';
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import {
   getLocalizedPricingCatalog,
@@ -55,14 +56,13 @@ function getStripe(): Stripe {
  * mutates the subscription or charges the card.
  */
 async function handleUpgradePreview(request: NextRequest): Promise<NextResponse> {
+  const { userId } = await getClerkAuthUser(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'upgrade');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const { userId } = await (await import('@clerk/nextjs/server')).auth();
-  if (!userId) throw createError.unauthorized('Please sign in to continue');
 
   let rawBody: unknown;
   try {
@@ -85,18 +85,44 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     SubscriptionRow,
     'status' | 'plan_tier' | 'stripe_customer_id' | 'stripe_subscription_id'
   >;
-  const subRows = await db
-    .query<SubRow>(
+  let subRows: SubRow[];
+  try {
+    subRows = await db.query<SubRow>(
       `select status, plan_tier, stripe_customer_id, stripe_subscription_id
        from subscriptions where user_id = $1 limit 1`,
       [userId],
-    )
-    .catch(() => [] as SubRow[]);
+    );
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to load subscription for upgrade preview');
+    throw createError.serviceUnavailable(
+      'Billing details could not be verified. No upgrade was prepared; please retry.',
+    );
+  }
   const sub = subRows[0] ?? null;
 
   if (!sub || !['active', 'trialing'].includes(sub.status)) {
-    throw createError.validation(
-      'No active subscription found. Use checkout to start a new subscription.',
+    const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
+    const catalog = await getLocalizedPricingCatalog(country);
+    const checkoutPrice = catalog.plans[targetPlan]?.[billingInterval];
+    if (!checkoutPrice?.checkoutReady) {
+      throw createError.validation(
+        `Checkout pricing is not configured for ${targetPlan} ${billingInterval} in your region.`,
+      );
+    }
+    return NextResponse.json(
+      {
+        error: {
+          message: 'Starting this paid plan requires Stripe Checkout.',
+          type: 'invalid_request_error',
+          code: 'checkout_required',
+        },
+        checkout: {
+          amountDueNowCents: checkoutPrice.amountMinor,
+          currency: checkoutPrice.currency,
+          recurringAmountCents: checkoutPrice.amountMinor,
+        },
+      },
+      { status: 409 },
     );
   }
 
@@ -109,11 +135,18 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
 
   let stripeCustomerId = sub.stripe_customer_id;
   if (!isStripeCustomerId(stripeCustomerId)) {
-    const profileRows = await db
-      .query<
-        Pick<SubscriptionRow, 'stripe_customer_id'>
-      >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
-      .catch(() => [] as Pick<SubscriptionRow, 'stripe_customer_id'>[]);
+    let profileRows: Array<Pick<SubscriptionRow, 'stripe_customer_id'>>;
+    try {
+      profileRows = await db.query<Pick<SubscriptionRow, 'stripe_customer_id'>>(
+        'select stripe_customer_id from profiles where id = $1 limit 1',
+        [userId],
+      );
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to load billing customer for upgrade preview');
+      throw createError.serviceUnavailable(
+        'Billing customer details could not be verified. No upgrade was prepared; please retry.',
+      );
+    }
     stripeCustomerId = profileRows[0]?.stripe_customer_id ?? null;
   }
 
@@ -151,6 +184,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
           checkout: {
             amountDueNowCents: checkoutPrice.amountMinor,
             currency: checkoutPrice.currency,
+            recurringAmountCents: checkoutPrice.amountMinor,
           },
         },
         { status: 409 },
@@ -201,6 +235,10 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
         items: [{ id: stripeItemId, price: newPriceId }],
         proration_behavior: 'always_invoice',
         billing_cycle_anchor: 'now',
+        // Pin the calculation instant into the signed preview token. The apply
+        // endpoint reuses this exact second so Stripe cannot charge a value
+        // different from the amount the user confirmed.
+        proration_date: prorationDate,
       },
     });
   } catch (err) {
@@ -216,6 +254,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     // the old plan. This is the ONLY figure the server must compute — the going-
     // forward recurring price is a static catalog value the client already knows.
     amountDueNowCents: preview.amount_due,
+    recurringAmountCents: priceSelection.amountMinor,
     previewToken: createUpgradePreviewToken(
       {
         userId,
@@ -229,7 +268,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   });
 }
 
-export const POST = withErrorHandler(handleUpgradePreview);
+export const POST = withCorsRoute(withErrorHandler(handleUpgradePreview));
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

@@ -23,16 +23,19 @@
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
-import { accountApi } from '../api/accountApi';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import type { CustomerInfo, SubscriptionInfo } from '../types/billing';
-import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
-import { isSubscriptionActive, isInGracePeriod } from '../utils/featureGates';
-import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/cloudAccountTypes';
+import { PLAN_FEATURES, type PlanFeatures } from '../constants/planFeatures';
+import { type PlanTier, PLAN_DISPLAY_NAMES } from '../lib/cloudAccountTypes';
+import { isFreePlan, normalizeUIPlanTier, PLAN_DESCRIPTION } from '@agiworkforce/types';
 
 // =============================================================================
 // Helpers
 // =============================================================================
+
+export function isPaidCloudPlan(plan: PlanTier | null): boolean {
+  return plan !== null && !isFreePlan(normalizeUIPlanTier(plan));
+}
 
 // =============================================================================
 // Types
@@ -209,11 +212,7 @@ interface AuthActions {
   isAuthReady: () => boolean;
 
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, name?: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  signInWithMagicLink: (email: string) => Promise<{ error: string | null }>;
-  signInWithOAuth: (provider: 'github' | 'google') => Promise<{ error: string | null }>;
-  resetPassword: (email: string) => Promise<{ error: string | null }>;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Account Methods (from accountStore)
@@ -224,10 +223,7 @@ interface AuthActions {
   setEmail: (email: string) => void;
   setAvatar: (avatarUrl: string | null) => void;
   setFeatureFlag: (flag: string, enabled: boolean) => void;
-  login: (tokens: { accessToken: string; refreshToken: string }) => void;
   logout: () => Promise<void>;
-  syncWithBackend: () => Promise<void>;
-  simulatePlan: (plan: PlanTier) => void;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Billing Methods (from billingStore)
@@ -239,8 +235,6 @@ interface AuthActions {
   // ─────────────────────────────────────────────────────────────────────────
   setStripeCustomer: (customer: CustomerInfo | null) => void;
   setStripeSubscription: (subscription: SubscriptionInfo | null) => void;
-  isSubscriptionActive: () => boolean;
-  isInGracePeriod: () => boolean;
   getCurrentPlan: () => string;
   updateCredits: (info: {
     remaining_cents: number;
@@ -295,48 +289,8 @@ type UnifiedAuthStore = AuthState & AuthActions;
 // Version for storage migration
 const UNIFIED_AUTH_STORE_VERSION = 1;
 
-// Subscription cache for resilience against fetch failures
+// Legacy cache key retained only so sign-out/reset can erase stale pre-v1 data.
 const SUBSCRIPTION_CACHE_KEY = 'agiworkforce_subscription_cache';
-const SUBSCRIPTION_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-interface SubscriptionCache {
-  planTier: PlanTier;
-  subscriptionStatus: SubscriptionStatus;
-  fetchedAt: number;
-  userId: string;
-}
-
-function getCachedSubscription(userId: string): SubscriptionCache | null {
-  try {
-    const cached = localStorage.getItem(SUBSCRIPTION_CACHE_KEY);
-    if (!cached) return null;
-    const data = JSON.parse(cached) as SubscriptionCache;
-    if (data.userId === userId && Date.now() - data.fetchedAt < SUBSCRIPTION_CACHE_MAX_AGE_MS) {
-      return data;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function setCachedSubscription(
-  userId: string,
-  planTier: PlanTier,
-  subscriptionStatus: SubscriptionStatus,
-): void {
-  try {
-    const cache: SubscriptionCache = {
-      planTier,
-      subscriptionStatus,
-      fetchedAt: Date.now(),
-      userId,
-    };
-    localStorage.setItem(SUBSCRIPTION_CACHE_KEY, JSON.stringify(cache));
-  } catch {
-    // Ignore localStorage errors
-  }
-}
 
 function clearCachedSubscription(): void {
   try {
@@ -401,14 +355,20 @@ function resetRetryCount(): void {
   }
 }
 
-// Sync lock to prevent concurrent syncWithBackend calls
-let syncInProgress = false;
-let pendingSyncPromise: Promise<void> | null = null;
-
 async function runLogoutCleanup(): Promise<void> {
   const { cleanupAllStoresOnLogout, clearPersistedUserData } = await import('./logoutCleanup');
   cleanupAllStoresOnLogout();
   clearPersistedUserData();
+}
+
+async function disposeAuthenticatedChatRuntime(): Promise<void> {
+  const { disposeActiveDesktopChatRuntime } = await import('../runtime/desktopChatRuntime');
+  await disposeActiveDesktopChatRuntime();
+}
+
+async function closeAuthenticatedChildWindows(): Promise<void> {
+  const { closeOwnedCloudWebviewWindows } = await import('../services/ownedWebviewWindow');
+  await closeOwnedCloudWebviewWindows();
 }
 
 // =============================================================================
@@ -444,8 +404,8 @@ function getDefaultState(): AuthState {
     subscriptionStatus: 'none',
     subscriptionFetchStatus: 'idle',
     currentPeriodEnd: null,
-    isPro: false,
-    isEnterprise: false,
+    isPro: isPaidCloudPlan(plan),
+    isEnterprise: plan === 'enterprise',
     featureFlags: {},
 
     // Stripe
@@ -539,6 +499,49 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               isLoading: false,
               error: null,
               sessionValidated: true,
+              plan: null,
+              planDisplayName: 'Loading...',
+              subscriptionStatus: 'none',
+              subscriptionFetchStatus: 'idle',
+              currentPeriodEnd: null,
+              isPro: false,
+              isEnterprise: false,
+              featureFlags: {},
+              stripeCustomerId: null,
+              stripeCustomer: null,
+              stripeSubscription: null,
+              credits: null,
+              creditBalance_cents: null,
+              dailyUsage_cents: null,
+              dailyLimit_cents: null,
+              dailyResetAt: null,
+              accessToken: null,
+              refreshToken: null,
+              deviceLinkId: null,
+              deviceLinkCode: null,
+              lastSyncedAt: null,
+              account: {
+                id: null,
+                email: null,
+                displayName: null,
+                avatar: null,
+                plan: null,
+                planDisplayName: 'Loading...',
+                subscriptionStatus: 'none',
+                subscriptionFetchStatus: 'idle',
+                currentPeriodEnd: null,
+                stripeCustomerId: null,
+                featureFlags: {},
+                credits: null,
+                accessToken: null,
+                refreshToken: null,
+                deviceLinkId: null,
+                deviceLinkCode: null,
+                createdAt: Date.now(),
+                lastSyncedAt: null,
+              },
+              subscription: null,
+              customer: null,
             },
             undefined,
             'auth/clearAuth',
@@ -580,39 +583,19 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           }
         },
 
-        signUp: async (email: string, password: string, name?: string) => {
-          set({ isLoading: true, error: null }, undefined, 'auth/signUp/start');
-
-          try {
-            const response = await cloudAccountAuth.signUp({
-              email,
-              password,
-              displayName: name,
-            });
-
-            if (response.error) {
-              set({ error: response.error.message }, undefined, 'auth/signUp/error');
-              return { error: response.error.message };
-            }
-
-            return { error: null };
-          } catch (error) {
-            console.error('[UnifiedAuth] Sign up exception:', error);
-            const message = error instanceof Error ? error.message : String(error);
-            set({ error: message }, undefined, 'auth/signUp/exception');
-            return { error: message };
-          } finally {
-            set({ isLoading: false }, undefined, 'auth/signUp/complete');
-          }
-        },
-
         signOut: async () => {
           set({ isLoading: true }, undefined, 'auth/signOut/start');
           try {
-            // Clear sync lock before signOut
-            syncInProgress = false;
-            pendingSyncPromise = null;
-
+            // Abort and cancel managed work while its bearer credential is
+            // still available. Replacing the runtime after auth is cleared is
+            // too late: the orphaned instance could otherwise persist or emit
+            // into the next account boundary.
+            await disposeAuthenticatedChatRuntime().catch((error: unknown) => {
+              console.warn('[UnifiedAuth] Could not fully dispose the active chat runtime:', error);
+            });
+            await closeAuthenticatedChildWindows().catch((error: unknown) => {
+              console.warn('[UnifiedAuth] Could not close every Cloud child window:', error);
+            });
             await cloudAccountAuth.signOut();
 
             // Clean up all stores after successful sign out
@@ -640,72 +623,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               undefined,
               'auth/signOut/complete',
             );
-          }
-        },
-
-        signInWithMagicLink: async (email: string) => {
-          set({ isLoading: true, error: null }, undefined, 'auth/signInWithMagicLink/start');
-
-          try {
-            const { error } = await cloudAccountAuth.signInWithMagicLink(email);
-
-            if (error) {
-              set({ error: error.message }, undefined, 'auth/signInWithMagicLink/error');
-              return { error: error.message };
-            }
-
-            return { error: null };
-          } catch (error) {
-            console.error('[UnifiedAuth] Magic link sign in exception:', error);
-            const message = error instanceof Error ? error.message : String(error);
-            set({ error: message }, undefined, 'auth/signInWithMagicLink/exception');
-            return { error: message };
-          } finally {
-            set({ isLoading: false }, undefined, 'auth/signInWithMagicLink/complete');
-          }
-        },
-
-        resetPassword: async (email: string) => {
-          set({ isLoading: true, error: null }, undefined, 'auth/resetPassword/start');
-
-          try {
-            const { error } = await cloudAccountAuth.resetPassword(email);
-
-            if (error) {
-              set({ error: error.message }, undefined, 'auth/resetPassword/error');
-              return { error: error.message };
-            }
-
-            return { error: null };
-          } catch (error) {
-            console.error('[UnifiedAuth] Reset password exception:', error);
-            const message = error instanceof Error ? error.message : String(error);
-            set({ error: message }, undefined, 'auth/resetPassword/exception');
-            return { error: message };
-          } finally {
-            set({ isLoading: false }, undefined, 'auth/resetPassword/complete');
-          }
-        },
-
-        signInWithOAuth: async (provider: 'github' | 'google') => {
-          set({ isLoading: true, error: null }, undefined, 'auth/signInWithOAuth/start');
-
-          try {
-            const { error } = await cloudAccountAuth.signInWithOAuth(provider);
-
-            if (error) {
-              set({ error: error.message }, undefined, 'auth/signInWithOAuth/error');
-              return { error: error.message };
-            }
-
-            return { error: null };
-          } catch (error) {
-            console.error(`[UnifiedAuth] OAuth sign in exception (${provider}):`, error);
-            const message = error instanceof Error ? error.message : String(error);
-            set({ error: message }, undefined, 'auth/signInWithOAuth/exception');
-            return { error: message };
-          } finally {
-            set({ isLoading: false }, undefined, 'auth/signInWithOAuth/complete');
           }
         },
 
@@ -782,12 +699,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 deviceLinkCode: newDeviceLinkCode,
                 lastSyncedAt: newLastSyncedAt,
                 // Derived tier flags
-                isPro:
-                  newPlan !== null &&
-                  (newPlan === 'basic' ||
-                    newPlan === 'pro' ||
-                    newPlan === 'max' ||
-                    newPlan === 'enterprise'),
+                isPro: isPaidCloudPlan(newPlan),
                 isEnterprise: newPlan === 'enterprise',
                 // Backwards compatibility - update account object
                 account: {
@@ -823,7 +735,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               plan,
               planDisplayName: PLAN_DISPLAY_NAMES[plan],
               subscriptionStatus: plan === 'free' ? 'none' : 'active',
-              isPro: plan === 'basic' || plan === 'pro' || plan === 'max' || plan === 'enterprise',
+              isPro: isPaidCloudPlan(plan),
               isEnterprise: plan === 'enterprise',
             },
             undefined,
@@ -874,171 +786,8 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           );
         },
 
-        login: async (tokens: { accessToken: string; refreshToken: string }) => {
-          set(
-            {
-              accessToken: tokens.accessToken,
-              refreshToken: tokens.refreshToken,
-              isAuthenticated: true,
-            },
-            undefined,
-            'auth/login',
-          );
-        },
-
         logout: async () => {
           await get().signOut();
-        },
-
-        syncWithBackend: async () => {
-          // Prevent concurrent sync calls
-          if (syncInProgress && pendingSyncPromise) {
-            return pendingSyncPromise;
-          }
-
-          syncInProgress = true;
-          pendingSyncPromise = (async () => {
-            try {
-              await cloudAccountAuth.refreshUserData();
-
-              const authState = cloudAccountAuth.getState();
-
-              if (!authState.user) {
-                console.warn('[UnifiedAuth] No authenticated user - skipping sync');
-                return;
-              }
-
-              // Guard: if user signed out while refresh was in-flight, bail
-              if (!get().isAuthenticated) {
-                console.warn('[UnifiedAuth] User signed out during sync - aborting');
-                return;
-              }
-
-              // Determine plan tier with cache fallback
-              let planTier: PlanTier | null;
-              let fetchStatus: SubscriptionFetchStatus;
-              let subscriptionStatus: SubscriptionStatus = 'none';
-              const userId = authState.user?.id;
-
-              if (authState.subscription?.plan_tier) {
-                planTier = asPlanTier(authState.subscription.plan_tier);
-                subscriptionStatus =
-                  (authState.subscription.status as SubscriptionStatus) || 'active';
-                fetchStatus = 'succeeded';
-
-                if (userId) {
-                  setCachedSubscription(userId, planTier, subscriptionStatus);
-                  resetRetryCount();
-                }
-              } else if (userId && authState.subscriptionFetchStatus === 'failed') {
-                const cached = getCachedSubscription(userId);
-                if (cached) {
-                  planTier = cached.planTier;
-                  subscriptionStatus = cached.subscriptionStatus;
-                  fetchStatus = 'succeeded';
-                } else {
-                  planTier = null;
-                  fetchStatus = 'failed';
-                }
-              } else if (userId && authState.subscriptionFetchStatus === 'succeeded') {
-                planTier = 'free';
-                fetchStatus = 'succeeded';
-                clearCachedSubscription();
-                resetRetryCount();
-              } else {
-                planTier = null;
-                fetchStatus = 'fetching';
-              }
-
-              // Fetch credits from API if we have a session
-              let credits: CreditBalance | null = null;
-              if (authState.session) {
-                try {
-                  const profile = await accountApi.fetchUserProfile(authState.session.access_token);
-                  // Normalize credit field names (API returns credits_allocated_cents but we expect allocated_cents)
-                  const apiCredits = profile.credits;
-                  if (apiCredits) {
-                    const apiCreditsAny = apiCredits as unknown as Record<string, unknown>;
-                    credits = {
-                      account_id: apiCredits.account_id,
-                      period_start: apiCredits.period_start,
-                      period_end: apiCredits.period_end,
-                      allocated_cents:
-                        apiCredits.allocated_cents ??
-                        (apiCreditsAny['credits_allocated_cents'] as number),
-                      used_cents:
-                        apiCredits.used_cents ?? (apiCreditsAny['credits_used_cents'] as number),
-                      remaining_cents:
-                        apiCredits.remaining_cents ??
-                        (apiCreditsAny['credits_remaining_cents'] as number),
-                      percentage_used: apiCredits.percentage_used,
-                      daily_limit_cents: apiCredits.daily_limit_cents,
-                      daily_used_cents: apiCredits.daily_used_cents,
-                      daily_remaining_cents: apiCredits.daily_remaining_cents,
-                      daily_reset_at:
-                        apiCredits.daily_reset_at ??
-                        (apiCreditsAny['last_daily_reset_at'] as string),
-                    };
-                  }
-                } catch {
-                  // Continue without credits
-                }
-              }
-
-              // Guard: re-check auth after async credit fetch (user may have signed out)
-              if (!get().isAuthenticated) {
-                return;
-              }
-
-              set(
-                {
-                  user: {
-                    id: authState.user?.id || '',
-                    email: authState.user?.email || '',
-                    name: authState.profile?.display_name || undefined,
-                    avatar: authState.profile?.avatar_url || undefined,
-                  },
-                  isAuthenticated: true,
-                  plan: planTier,
-                  planDisplayName: planTier ? PLAN_DISPLAY_NAMES[planTier] : 'Loading...',
-                  subscriptionStatus:
-                    (authState.subscription?.status as SubscriptionStatus) || 'none',
-                  subscriptionFetchStatus: fetchStatus,
-                  currentPeriodEnd: authState.subscription?.current_period_end
-                    ? new Date(authState.subscription.current_period_end).getTime()
-                    : null,
-                  stripeCustomerId: authState.subscription?.stripe_customer_id || null,
-                  featureFlags: authState.featureFlags,
-                  credits,
-                  creditBalance_cents: credits?.remaining_cents ?? null,
-                  dailyUsage_cents: credits?.daily_used_cents ?? null,
-                  dailyLimit_cents: credits?.daily_limit_cents ?? null,
-                  dailyResetAt: credits?.daily_reset_at ?? null,
-                  lastSyncedAt: Date.now(),
-                  isPro:
-                    planTier !== null &&
-                    (planTier === 'pro' ||
-                      planTier === 'max' ||
-                      planTier === 'enterprise' ||
-                      planTier === 'basic'),
-                  isEnterprise: planTier === 'enterprise',
-                },
-                undefined,
-                'auth/syncWithBackend',
-              );
-            } catch (error) {
-              console.error('Failed to sync with backend:', error);
-            } finally {
-              syncInProgress = false;
-              pendingSyncPromise = null;
-            }
-          })();
-
-          return pendingSyncPromise;
-        },
-
-        simulatePlan: (plan: PlanTier) => {
-          get().setPlan(plan);
         },
 
         // ═══════════════════════════════════════════════════════════════════
@@ -1060,19 +809,9 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             'auth/setStripeSubscription',
           ),
 
-        isSubscriptionActive: () => {
-          const { stripeSubscription } = get();
-          return isSubscriptionActive(stripeSubscription);
-        },
-
-        isInGracePeriod: () => {
-          const { stripeSubscription } = get();
-          return isInGracePeriod(stripeSubscription);
-        },
-
         getCurrentPlan: () => {
-          const { stripeSubscription, plan } = get();
-          return stripeSubscription?.plan_name || plan || 'free';
+          const { plan } = get();
+          return plan || 'free';
         },
 
         updateCredits: (info) => {
@@ -1110,8 +849,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           clearCachedSubscription();
           clearCreditsCache();
           resetRetryCount();
-          syncInProgress = false;
-          pendingSyncPromise = null;
 
           set(
             {
@@ -1130,8 +867,9 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => ({
-          // Only persist user identity, not subscription or auth state
-          // Plan/subscription data should always be fetched fresh from backend
+          // Persist only non-secret identity hints. Authentication, billing,
+          // entitlements, and credits are account-scoped server state and must
+          // be revalidated from the native credential vault on every launch.
           user: state.user
             ? {
                 id: state.user.id,
@@ -1140,10 +878,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 avatar: state.user.avatar,
               }
             : null,
-          isAuthenticated: state.isAuthenticated,
           lastSyncedAt: state.lastSyncedAt,
-          // Persist credit balance for offline/restart continuity
-          creditBalance_cents: state.creditBalance_cents,
         }),
         onRehydrateStorage: () => (state) => {
           if (state) {
@@ -1163,38 +898,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
 );
 
 // =============================================================================
-// Initialization
-// =============================================================================
-
-export function initializeUnifiedAuthStore(): () => void {
-  const unsubscribe = cloudAccountAuth.onAuthStateChange((authState) => {
-    const store = useUnifiedAuthStore.getState();
-
-    if (authState.user) {
-      // Reset subscription retry counter when a new user signs in
-      const previousUserId = store.user?.id;
-      if (previousUserId !== authState.user.id) {
-        resetRetryCount();
-      }
-
-      store.setUser({
-        id: authState.user.id,
-        email: authState.user.email || '',
-        name:
-          authState.profile?.display_name ||
-          (authState.user.user_metadata?.['full_name'] as string),
-        avatar:
-          authState.profile?.avatar_url || (authState.user.user_metadata?.['avatar_url'] as string),
-      });
-    } else if (!authState.isLoading) {
-      store.clearAuth();
-    }
-  });
-
-  return unsubscribe;
-}
-
-// =============================================================================
 // Selectors
 // =============================================================================
 
@@ -1205,9 +908,9 @@ export const selectIsAuthReady = (state: UnifiedAuthStore): boolean =>
 export const selectUser = (state: UnifiedAuthStore) => state.user;
 export const selectIsAuthenticated = (state: UnifiedAuthStore) => state.isAuthenticated;
 export const selectHasCloudAccountSession = (state: UnifiedAuthStore): boolean => {
-  const hasCloudToken = Boolean(state.accessToken || state.refreshToken);
+  const hasCloudToken = Boolean(state.accessToken);
   const hasCloudIdentity = Boolean(state.user?.email?.trim());
-  return state.plan !== 'local-only' && (hasCloudToken || hasCloudIdentity);
+  return state.isAuthenticated && state.plan !== 'local-only' && hasCloudToken && hasCloudIdentity;
 };
 export const selectIsLoading = (state: UnifiedAuthStore) => state.isLoading;
 export const selectAuthError = (state: UnifiedAuthStore) => state.error;
@@ -1302,7 +1005,7 @@ export const waitForBillingHydration = waitForHydration;
  * Check if user has a specific feature
  */
 export function hasFeature(featureKey: string): boolean {
-  const { featureFlags, isPro, isEnterprise } = useUnifiedAuthStore.getState();
+  const { featureFlags, plan } = useUnifiedAuthStore.getState();
 
   if (featureFlags[featureKey] !== undefined) {
     return featureFlags[featureKey]!;
@@ -1323,32 +1026,11 @@ export function hasFeature(featureKey: string): boolean {
 
   const mappedFeature = featureMap[featureKey];
   if (mappedFeature) {
-    return subscriptionService.hasFeatureAccess(mappedFeature);
+    return Boolean(PLAN_FEATURES[plan ?? 'free'][mappedFeature]);
   }
 
-  const proFeatures = [
-    'unlimited_automations',
-    'browser_automation',
-    'advanced_ui_automation',
-    'email_support',
-    'llm_cost_tracking',
-  ];
-
-  const enterpriseFeatures = [
-    'team_features',
-    'sso',
-    'priority_support',
-    'custom_workflows',
-    'webhook_integration',
-    'analytics',
-  ];
-
-  if (enterpriseFeatures.includes(featureKey)) {
-    return isEnterprise;
-  }
-
-  if (proFeatures.includes(featureKey)) {
-    return isPro || isEnterprise;
+  if (featureKey === 'unlimited_automations') {
+    return PLAN_FEATURES[plan ?? 'free'].automationsPerDay === 'unlimited';
   }
 
   return true;
@@ -1358,18 +1040,7 @@ export function hasFeature(featureKey: string): boolean {
  * Get description for a plan tier
  */
 export function getPlanDescription(plan: PlanTier): string {
-  const descriptions: Record<PlanTier, string> = {
-    'local-only':
-      'Run everything on your own machine with Ollama / LMStudio. No managed cloud, no sync.',
-    byok: 'Bring your own API keys while the desktop app stays local. Managed cloud is also available as an explicit signed-in Cloud mode.',
-    basic: 'Perfect for getting started; managed cloud entry tier on the $8/mo Basic plan.',
-    free: 'Limited automations; Community support',
-    pro: 'Unlimited automations; 1,050 credits per billing cycle; Priority support',
-    max: 'Maximum performance; 10,500 credits per billing cycle; Dedicated support',
-    enterprise: 'Custom solutions; Dedicated support; SSO',
-  };
-
-  return descriptions[plan];
+  return PLAN_DESCRIPTION[normalizeUIPlanTier(plan)];
 }
 
 /**
@@ -1379,8 +1050,6 @@ export function cleanupUnifiedAuthStore(): void {
   resetRetryCount();
   clearCachedSubscription();
   clearCreditsCache();
-  syncInProgress = false;
-  pendingSyncPromise = null;
 }
 
 // =============================================================================
@@ -1391,11 +1060,6 @@ export function cleanupUnifiedAuthStore(): void {
 export const useAuthStore = useUnifiedAuthStore;
 export const useAccountStore = useUnifiedAuthStore;
 export const useBillingStore = useUnifiedAuthStore;
-
-// Re-export initialization functions
-export const initializeAuthStore = initializeUnifiedAuthStore;
-export const initializeAccountStore = initializeUnifiedAuthStore;
-export const initializeBillingStore = initializeUnifiedAuthStore;
 
 // Re-export cleanup function with old name
 export const cleanupAccountStore = cleanupUnifiedAuthStore;
@@ -1427,9 +1091,4 @@ export interface DesktopAccount {
   deviceLinkCode?: string | null;
   createdAt: number;
   lastSyncedAt: number | null;
-}
-
-// Check session on load (browser only)
-if (typeof window !== 'undefined') {
-  cloudAccountAuth.checkSession();
 }

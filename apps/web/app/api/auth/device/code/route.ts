@@ -22,6 +22,14 @@ export const runtime = 'nodejs';
 
 const DEVICE_CODE_EXPIRES_SECONDS = 900; // 15 min
 const POLL_INTERVAL_SECONDS = 5;
+const DEVICE_SURFACES = {
+  cli: { name: 'AGI CLI', type: 'cli' },
+  desktop: { name: 'AGI Desktop', type: 'desktop' },
+  vscode: { name: 'AGI for VS Code', type: 'vscode' },
+  chrome: { name: 'AGI Browser Extension', type: 'chrome' },
+} as const;
+
+type DeviceSurface = keyof typeof DEVICE_SURFACES;
 
 // XXXX-XXXX user code; excludes ambiguous 0/O/1/I/L for readability.
 const USER_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 31 chars
@@ -45,6 +53,20 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) return rateLimitResponse;
 
+  const rawBody = (await request.json().catch(() => ({}))) as unknown;
+  const surfaceValue =
+    rawBody !== null && typeof rawBody === 'object' && !Array.isArray(rawBody)
+      ? (rawBody as Record<string, unknown>)['surface']
+      : undefined;
+  if (
+    surfaceValue !== undefined &&
+    (typeof surfaceValue !== 'string' || !(surfaceValue in DEVICE_SURFACES))
+  ) {
+    return NextResponse.json({ error: 'Invalid device surface' }, { status: 400 });
+  }
+  const surface = (surfaceValue ?? 'cli') as DeviceSurface;
+  const device = DEVICE_SURFACES[surface];
+
   const deviceCode = crypto.randomUUID();
   const userCode = generateUserCode();
   const expiresAt = new Date(Date.now() + DEVICE_CODE_EXPIRES_SECONDS * 1000).toISOString();
@@ -53,25 +75,29 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
   await db.execute(
     `INSERT INTO device_authorization_codes
        (device_id, device_name, device_type, user_code, status, expires_at)
-     VALUES ($1, 'AGI CLI', 'cli', $2, 'pending', $3)`,
-    [deviceCode, userCode, expiresAt],
+     VALUES ($1, $2, $3, $4, 'pending', $5)`,
+    [deviceCode, device.name, device.type, userCode, expiresAt],
   );
 
   const verificationUri = `${new URL(request.url).origin}/auth/device`;
+  const verificationParams = new URLSearchParams({
+    user_code: userCode,
+    surface,
+  });
   // Correlation id only — never log the raw device_code (it is the poll secret).
   const deviceRef = crypto
     .createHash('sha256')
     .update(deviceCode + (process.env['LOG_SALT'] ?? ''))
     .digest('hex')
     .slice(0, 12);
-  logger.info({ deviceRef }, 'Device code issued');
+  logger.info({ deviceRef, surface }, 'Device code issued');
 
   return NextResponse.json(
     {
       device_code: deviceCode,
       user_code: userCode,
       verification_uri: verificationUri,
-      verification_uri_complete: `${verificationUri}?user_code=${encodeURIComponent(userCode)}`,
+      verification_uri_complete: `${verificationUri}?${verificationParams.toString()}`,
       interval: POLL_INTERVAL_SECONDS,
       expires_in: DEVICE_CODE_EXPIRES_SECONDS,
     },

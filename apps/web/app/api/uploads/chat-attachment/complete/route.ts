@@ -14,6 +14,8 @@ import {
   isSupportedChatAttachment,
   MAX_CHAT_ATTACHMENT_BYTES,
 } from '@/lib/chat-attachment-policy';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { SYNCED_APP_SURFACES, type SyncedAppSurface } from '@agiworkforce/types';
 
 const CompleteChatAttachmentSchema = z.object({
   storageKey: z.string().min(1).max(600),
@@ -23,6 +25,14 @@ const CompleteChatAttachmentSchema = z.object({
 });
 
 async function handleComplete(request: NextRequest): Promise<NextResponse> {
+  const { userId } = await getClerkAuthUser(request);
+  const declaredSurface = request.headers.get('x-agi-surface')?.trim().toLowerCase();
+  const sourceSurface: SyncedAppSurface = (SYNCED_APP_SURFACES as readonly string[]).includes(
+    declaredSurface ?? '',
+  )
+    ? (declaredSurface as SyncedAppSurface)
+    : 'web';
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -33,7 +43,6 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     throw createError.internal('Object storage is not configured');
   }
 
-  const { userId } = await getClerkAuthUser(request);
   const parsed = CompleteChatAttachmentSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid request body');
@@ -85,7 +94,7 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     byteSize: object.data.byteLength,
     storageUrl: publicUrlForKey(storageKey),
     storagePathname: storageKey,
-    sourceSurface: 'web',
+    sourceSurface,
     metadata: {
       filename: fileName,
       origin: 'upload',
@@ -110,4 +119,8 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
   });
 }
 
-export const POST = withErrorHandler(handleComplete);
+export const POST = withCorsRoute(withErrorHandler(handleComplete));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

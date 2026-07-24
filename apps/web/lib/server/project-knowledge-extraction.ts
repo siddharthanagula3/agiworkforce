@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import { isTextAttachmentMeta } from '@agiworkforce/types';
-import { getObject, objectKeyFromPublicUrl } from './object-storage';
+import { getObject, objectKeyFromStorageUri } from './object-storage';
 
 export const MAX_EXTRACTED_PROJECT_TEXT_CHARS = 200_000;
 const MAX_PDF_PAGES = 250;
@@ -97,7 +97,7 @@ async function extractPdfText(data: Buffer): Promise<string | null> {
 export async function extractProjectKnowledgeFile(
   input: ExtractProjectKnowledgeFileInput,
 ): Promise<{ extractedText: string | null }> {
-  const objectKey = objectKeyFromPublicUrl(input.storageUri);
+  const objectKey = objectKeyFromStorageUri(input.storageUri);
   const expectedPrefix = `knowledge-files/projects/${input.projectId}/`;
   if (!objectKey || !objectKey.startsWith(expectedPrefix)) {
     throw new ProjectKnowledgeExtractionError(

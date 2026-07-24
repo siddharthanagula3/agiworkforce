@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-layer';
 import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
-import { assertAccountActive } from '@/lib/api-auth';
+import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
 
 let rlsDb: DatabaseAdapter | null = null;
 
@@ -43,23 +43,22 @@ export interface UserScopedDb {
  * Throws 401 when unauthenticated, 403 when the account is suspended.
  */
 export async function getUserScopedDb(request: NextRequest): Promise<UserScopedDb> {
-  // Path 1: Bearer token (mobile/desktop) — verify the signature, then bind sub.
+  // Path 1: Bearer token (mobile/desktop) — validate through the canonical
+  // dual-token auth boundary, then bind the verified JWT subject to RLS.
+  // `getClerkAuthUser` accepts both Clerk JWTs and first-party developer-device
+  // JWTs (including revocation + account-status checks). The old code verified
+  // only Clerk JWTs, so Desktop could sign in and use ordinary API routes while
+  // every RLS-backed chat/project/settings sync route still returned 401.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
-    const secretKey = process.env['CLERK_SECRET_KEY'];
-    if (secretKey) {
-      try {
-        const { verifyToken } = await import('@clerk/backend');
-        const claims = await verifyToken(token, { secretKey });
-        if (typeof claims.sub === 'string' && claims.sub.length > 0) {
-          await assertAccountActive(claims.sub);
-          return { db: getRlsCapableDb().withUser(token), userId: claims.sub };
-        }
-      } catch {
-        // Invalid token — fall through to 401.
-      }
+    // API keys are valid for stateless REST calls but cannot be used as an RLS
+    // JWT because they carry no signed `sub` claim.
+    if (token.startsWith('sk_live_') || token.startsWith('sk_test_')) {
+      throw createError.unauthorized();
     }
+    const { userId } = await getClerkAuthUser(request);
+    return { db: getRlsCapableDb().withUser(token), userId };
   }
 
   // Path 2: Clerk session (browser) — getToken() returns a signed session JWT.

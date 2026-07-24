@@ -1,6 +1,7 @@
 import { WEB_APP_URL } from '../api/config';
+import { OWNED_CLOUD_WINDOW_LABELS, waitForOwnedWebviewWindow } from './ownedWebviewWindow';
 
-const CLOUD_SIGN_IN_WINDOW_LABEL = 'cloud-sign-in';
+const CLOUD_SIGN_IN_WINDOW_LABEL = OWNED_CLOUD_WINDOW_LABELS.signIn;
 
 export interface DesktopCloudSignInWindowSession {
   close(): Promise<void>;
@@ -57,37 +58,29 @@ export async function openDesktopCloudSignInWindow(
     contentProtected: true,
   });
 
-  await new Promise<void>((resolve, reject) => {
-    let settled = false;
-    const settle = (next: () => void) => {
-      if (settled) return;
-      settled = true;
-      next();
-    };
-
-    void authWindow.once('tauri://created', () => settle(resolve));
-    void authWindow.once<unknown>('tauri://error', (event) =>
-      settle(() =>
-        reject(
-          new Error(
-            `Could not open the AGI Cloud sign-in window: ${
-              typeof event.payload === 'string' ? event.payload : 'unknown native window error'
-            }`,
-          ),
-        ),
-      ),
-    );
-  });
+  await waitForOwnedWebviewWindow(authWindow, 'Could not open the AGI Cloud sign-in window');
 
   let closingFromApp = false;
+  let userCloseNotified = false;
+  const notifyUserClosed = () => {
+    if (closingFromApp || userCloseNotified) return;
+    userCloseNotified = true;
+    onUserClosed();
+  };
   const unlistenClose = await authWindow.onCloseRequested(() => {
-    if (!closingFromApp) onUserClosed();
+    notifyUserClosed();
   });
+  // Native title-bar closes normally emit close-requested first, but direct
+  // destruction (including WebDriver and some OS teardown paths) may only emit
+  // the terminal window event. Listen to both so the pending auth request
+  // cannot leave the main window stuck on its loading skeleton.
+  const unlistenDestroyed = await authWindow.once('tauri://destroyed', notifyUserClosed);
 
   return {
     close: async () => {
       closingFromApp = true;
       unlistenClose();
+      unlistenDestroyed();
       await authWindow.close().catch(() => undefined);
     },
   };

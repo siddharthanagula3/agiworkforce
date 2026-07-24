@@ -7,13 +7,15 @@ import {
   PinOff,
   Pencil,
   Archive,
+  FolderInput,
+  FolderMinus,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import type { ConversationSummary } from '../../stores/chat';
 
-const MENU_WIDTH = 172;
-const MENU_EST_HEIGHT = 156;
+const MENU_WIDTH = 220;
+const MENU_EST_HEIGHT = 340;
 
 export interface ConversationRowProps {
   conversation: ConversationSummary;
@@ -23,6 +25,8 @@ export interface ConversationRowProps {
   onDelete: (id: string) => void;
   onTogglePin: (id: string) => void;
   onArchive: (id: string) => void;
+  projects: Array<{ id: string; name: string }>;
+  onMoveToProject: (conversationId: string, projectId: string | null) => void;
 }
 
 // ─── 3-dots menu item ─────────────────────────────────────────────────────────
@@ -74,6 +78,8 @@ export function ConversationRow({
   onDelete,
   onTogglePin,
   onArchive,
+  projects,
+  onMoveToProject,
 }: ConversationRowProps) {
   const { t } = useTranslation('v3');
   const [hovered, setHovered] = useState(false);
@@ -295,6 +301,55 @@ export function ConversationRow({
                 setMenuOpen(false);
               }}
             />
+            {projects.length > 0 && (
+              <>
+                <div
+                  role="separator"
+                  style={{ height: 1, background: 'var(--chat-border)', margin: '3px 4px' }}
+                />
+                <div
+                  style={{
+                    padding: '4px 9px 2px',
+                    color: 'var(--chat-text-muted)',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Move to project
+                </div>
+                <div style={{ maxHeight: 132, overflowY: 'auto' }}>
+                  {projects.map((project) => (
+                    <MenuItem
+                      key={project.id}
+                      icon={FolderInput}
+                      label={
+                        conversation.projectId === project.id
+                          ? `${project.name} · Current`
+                          : project.name
+                      }
+                      onClick={() => {
+                        if (conversation.projectId !== project.id) {
+                          onMoveToProject(conversation.id, project.id);
+                        }
+                        setMenuOpen(false);
+                      }}
+                    />
+                  ))}
+                </div>
+                {conversation.projectId && (
+                  <MenuItem
+                    icon={FolderMinus}
+                    label="Remove from project"
+                    onClick={() => {
+                      onMoveToProject(conversation.id, null);
+                      setMenuOpen(false);
+                    }}
+                  />
+                )}
+              </>
+            )}
             <MenuItem
               icon={Trash2}
               danger

@@ -8,17 +8,23 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getPresignedUploadUrl, isObjectStorageConfigured } from '@/lib/server/object-storage';
+import {
+  deleteObject,
+  getPresignedUploadUrl,
+  isObjectStorageConfigured,
+} from '@/lib/server/object-storage';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { secureFilenameSegment } from '@/lib/secure-random';
 import { randomUUID } from 'node:crypto';
 import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 /**
  * Presigned-upload API · client code never imports the R2/S3 SDK or holds
  * credentials. It asks this route for a short-lived PUT URL, uploads bytes
- * directly to R2 via `fetch`, then registers the resulting public URL with
- * the owning resource (profile avatar or project knowledge file).
+ * directly to R2 via `fetch`, then registers the resulting object locator with
+ * the owning resource. Private project knowledge receives only an opaque key;
+ * public URLs remain limited to resource types that intentionally use them.
  *
  * A server proxy route can't be used here: Vercel serverless functions cap
  * request bodies at ~4.5MB, well under the knowledge-file size cap, so the
@@ -35,6 +41,15 @@ const PresignRequestSchema = z.object({
   byteCount: z.number().int().positive(),
   projectId: z.string().min(1).max(200).optional(),
 });
+const CleanupRequestSchema = z.object({
+  kind: z.literal('knowledge-file'),
+  projectId: z.string().min(1).max(200),
+  storageKey: z
+    .string()
+    .min(1)
+    .max(1_000)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
+});
 
 function extOf(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -47,6 +62,8 @@ function extOf(name: string): string {
 }
 
 async function handlePresign(request: NextRequest): Promise<NextResponse> {
+  const { userId } = await getClerkAuthUser(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -56,8 +73,6 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   if (!isObjectStorageConfigured()) {
     throw createError.internal('Object storage is not configured');
   }
-
-  const { userId } = await getClerkAuthUser(request);
 
   const body = await request.json().catch(() => null);
   const parsed = PresignRequestSchema.safeParse(body);
@@ -93,7 +108,10 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     }
     const db = getNeonDb();
     const [project] = await db.query<{ id: string }>(
-      `select id from user_projects where id = $1 and user_id = $2 limit 1`,
+      `select id
+         from user_projects
+        where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
+        limit 1`,
       [projectId, userId],
     );
     if (!project) {
@@ -116,9 +134,45 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     uploadUrl,
     uploadMethod: 'PUT' as const,
     uploadHeaders: { 'Content-Type': mimeType },
-    publicUrl,
+    ...(kind === 'knowledge-file' ? {} : { publicUrl }),
     expiresAt: new Date(Date.now() + 300 * 1000).toISOString(),
   });
 }
 
-export const POST = withErrorHandler(handlePresign);
+async function handleCleanup(request: NextRequest): Promise<NextResponse> {
+  const { userId } = await getClerkAuthUser(request);
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+  const rateLimitResponse = await withRateLimit(request, 'uploads-presign');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const parsed = CleanupRequestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) throw createError.validation('Invalid upload cleanup request');
+  const { projectId, storageKey } = parsed.data;
+  const expectedPrefix = `knowledge-files/projects/${projectId}/`;
+  if (
+    !storageKey.startsWith(expectedPrefix) ||
+    storageKey.includes('//') ||
+    storageKey.split('/').some((segment) => segment === '.' || segment === '..')
+  ) {
+    throw createError.validation('Invalid project upload key');
+  }
+
+  const [project] = await getNeonDb().query<{ id: string }>(
+    `select id
+       from user_projects
+      where id = $1 and user_id = $2 and deleted_at is null
+      limit 1`,
+    [projectId, userId],
+  );
+  if (!project) throw createError.notFound('Project not found');
+  await deleteObject(storageKey);
+  return NextResponse.json({ success: true });
+}
+
+export const POST = withCorsRoute(withErrorHandler(handlePresign));
+export const DELETE = withCorsRoute(withErrorHandler(handleCleanup));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

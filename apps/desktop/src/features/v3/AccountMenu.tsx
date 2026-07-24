@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useUnifiedAuthStore } from '../../stores/auth';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
+import { useAppModeStore } from '../../stores/appModeStore';
 
 type MenuItemDef =
   | { kind: 'header'; label: string; sub?: string }
@@ -37,6 +38,7 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
   const planDisplayName = useUnifiedAuthStore((s) => s.planDisplayName);
   const signOut = useUnifiedAuthStore((s) => s.signOut);
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
+  const setMode = useAppModeStore((s) => s.setMode);
 
   const displayLabel = user?.name || user?.email || t('accountMenu.accountFallback');
   const emailSub = user?.name && user?.email ? user.email : undefined;
@@ -87,6 +89,7 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
       icon: Cpu,
       label: t('accountMenu.byokLocal'),
       action: () => {
+        setMode('local');
         openSettings('models-keys');
         onClose();
       },

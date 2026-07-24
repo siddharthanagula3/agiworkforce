@@ -1,5 +1,11 @@
 import { asPlanTier, type PlanTier } from '../lib/cloudAccountTypes';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
+import {
+  effectivePlanTier,
+  isEntitledSubscriptionStatus,
+  normalizeUIPlanTier,
+  tierAtLeast,
+} from '@agiworkforce/types';
 
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'none';
 
@@ -10,16 +16,6 @@ export interface SubscriptionGateResult {
   currentStatus?: SubscriptionStatus;
   requiresUpgrade?: boolean;
 }
-
-const PLAN_TIER_HIERARCHY: PlanTier[] = [
-  'local-only',
-  'byok',
-  'free',
-  'basic',
-  'pro',
-  'max',
-  'enterprise',
-];
 
 export function checkSubscriptionGate(): SubscriptionGateResult {
   const authState = cloudAccountAuth.getState();
@@ -46,23 +42,7 @@ export function checkSubscriptionGate(): SubscriptionGateResult {
   const planTier = asPlanTier(subscription.plan_tier);
   const status = subscription.status as SubscriptionStatus;
 
-  const activeStatuses: SubscriptionStatus[] = ['active', 'trialing'];
-  const GRACE_PERIOD_DAYS = 7;
-
-  let isGracePeriod = false;
-  if (status === 'past_due' && subscription.current_period_end) {
-    const parsedEnd = new Date(subscription.current_period_end);
-    if (!isNaN(parsedEnd.getTime())) {
-      const now = Math.floor(Date.now() / 1000);
-      const endDate = parsedEnd.getTime() / 1000;
-      const gracePeriodEnd = endDate + GRACE_PERIOD_DAYS * 24 * 60 * 60;
-      if (now < gracePeriodEnd) {
-        isGracePeriod = true;
-      }
-    }
-  }
-
-  if (!activeStatuses.includes(status) && !isGracePeriod) {
+  if (!isEntitledSubscriptionStatus(status)) {
     return {
       hasAccess: false,
       reason: `Your subscription is ${status}. Please update your payment method to continue using AGI Workforce.`,
@@ -94,11 +74,9 @@ export function checkAutoModeAccess(): SubscriptionGateResult {
   }
 
   const subscription = authState.subscription;
-  const planTier = asPlanTier(subscription.plan_tier);
-  const currentTierIndex = PLAN_TIER_HIERARCHY.indexOf(planTier);
-  const basicTierIndex = PLAN_TIER_HIERARCHY.indexOf('basic');
+  const planTier = asPlanTier(effectivePlanTier(subscription.plan_tier, subscription.status));
 
-  if (currentTierIndex < basicTierIndex) {
+  if (!tierAtLeast(normalizeUIPlanTier(planTier), 'basic')) {
     return {
       hasAccess: false,
       reason: 'Auto Mode requires a Basic plan or higher.',

@@ -81,6 +81,7 @@ describe('cloudAccountAuth', () => {
       }),
     );
     await cloudAccountAuth.signOut();
+    vi.mocked(fetch).mockClear();
   });
 
   it('restores and validates a machine-encrypted Cloud session on startup', async () => {
@@ -150,6 +151,14 @@ describe('cloudAccountAuth', () => {
     expect(cloudAccountAuth.isAuthenticated()).toBe(false);
   });
 
+  it('does not erase unrelated Desktop session state during Cloud sign-out', async () => {
+    window.sessionStorage.setItem('desktop-ui-state', 'keep-me');
+
+    await cloudAccountAuth.signOut();
+
+    expect(window.sessionStorage.getItem('desktop-ui-state')).toBe('keep-me');
+  });
+
   it('uses an in-app device authorization window for Desktop sign-in', async () => {
     const accessToken = jwtWithClaims({
       sub: 'user_123',
@@ -179,5 +188,56 @@ describe('cloudAccountAuth', () => {
     );
     expect(close).toHaveBeenCalledOnce();
     expect(cloudAccountAuth.getSession()?.access_token).toBe(accessToken);
+  });
+
+  it('uses the native allowlisted transport for Desktop device authorization', async () => {
+    const accessToken = jwtWithClaims({
+      sub: 'user_123',
+      email: 'user@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      if (command === 'account_start_device_authorization') {
+        return { status: 200, body: '{"device_code":"device-code"}' };
+      }
+      if (command === 'account_poll_device_authorization') {
+        expect(args).toEqual({ deviceCode: 'device-code' });
+        return { status: 403, body: '{"error":"authorization_pending"}' };
+      }
+      return undefined;
+    });
+    openDesktopCloudSignInWindowMock.mockResolvedValue({
+      close: vi.fn(async () => undefined),
+    });
+    authorizeDesktopDeviceMock.mockImplementation(async (options) => {
+      await expect(
+        options.post('https://agiworkforce.com/api/auth/device/code', {}),
+      ).resolves.toEqual({
+        status: 200,
+        body: '{"device_code":"device-code"}',
+      });
+      await expect(
+        options.post('https://agiworkforce.com/api/auth/device/token', {
+          device_code: 'device-code',
+        }),
+      ).resolves.toEqual({
+        status: 403,
+        body: '{"error":"authorization_pending"}',
+      });
+      await options.openAuthorization('https://agiworkforce.com/auth/device?user_code=ABCD-1234');
+      return { accessToken, expiresAt: Date.now() + 3_600_000 };
+    });
+
+    const result = await cloudAccountAuth.signIn({
+      email: '',
+      password: '',
+    });
+
+    expect(result.error).toBeNull();
+    expect(invokeMock).toHaveBeenCalledWith('account_start_device_authorization');
+    expect(invokeMock).toHaveBeenCalledWith('account_poll_device_authorization', {
+      deviceCode: 'device-code',
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

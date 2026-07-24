@@ -24,6 +24,7 @@ import { useAgentControlStore } from '../stores/agentControlStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import type { WritingStyle } from '../lib/writingStyle';
+import type { ChatAttachmentPolicy } from '../lib/runtime';
 import {
   ALLOWED_ATTACHMENT_ACCEPT,
   getModelMetadataById,
@@ -56,6 +57,8 @@ export interface ChatInputProjectPicker {
   projects: Array<{ id: string; name: string }>;
   activeProjectId: string | null;
   onSelectProject: (projectId: string | null) => void;
+  /** Opens the host-owned project creation flow; absent when creation is unsupported. */
+  onCreateProject?: () => void;
 }
 
 export interface ChatInputProps {
@@ -79,6 +82,8 @@ export interface ChatInputProps {
   onPlusClick: () => void;
   onModelSelectorClick: () => void;
   allowModelFallbackModels?: boolean;
+  /** Show Ask/Auto/Plan/Bypass only when the active runtime enforces it. */
+  supportsAgentControl?: boolean;
   onVoiceClick?: () => void;
   /**
    * Called when the user picks "Select folder" from the attachment menu.
@@ -129,6 +134,8 @@ export interface ChatInputProps {
   supportsResearch?: boolean;
   /** Whether this runtime sends Web search through Managed Cloud. */
   supportsManagedWebSearch?: boolean;
+  /** Runtime-specific limits layered over the suite-wide local attachment policy. */
+  attachmentPolicy?: ChatAttachmentPolicy;
 }
 
 export function ChatInput({
@@ -137,6 +144,7 @@ export function ChatInput({
   onPlusClick: _onPlusClick,
   onModelSelectorClick,
   allowModelFallbackModels = true,
+  supportsAgentControl = true,
   onVoiceClick: _onVoiceClick,
   onSelectFolder,
   onRecordSkill,
@@ -152,6 +160,7 @@ export function ChatInput({
   supportsCodeExecution = false,
   supportsResearch = false,
   supportsManagedWebSearch = false,
+  attachmentPolicy,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -183,6 +192,14 @@ export function ChatInput({
   const [projectQuery, setProjectQuery] = useState('');
   const scopePickerRef = useRef<HTMLDivElement>(null);
   const activeProjectId = projectPicker?.activeProjectId ?? null;
+
+  // A persisted/reloaded project conversation is an AGI Work conversation.
+  // Keep the visible mode and the next request aligned with that durable
+  // membership; otherwise reopening a project chat silently sends
+  // `work_mode: "chat"` until the user toggles AGI Work again.
+  useEffect(() => {
+    setWorkMode(activeProjectId ? 'agiwork' : 'chat');
+  }, [activeProjectId, conversationId]);
 
   // Entering with a preselected project (sidebar "New chat in project") lands
   // the composer in AGI Work mode so the scoping is visible, never silent.
@@ -328,7 +345,7 @@ export function ChatInput({
 
   // Resolve agent control state for the active conversation
   const resolveAgentControl = useAgentControlStore((s) => s.resolve);
-  const showAgentControl = Boolean(conversationId);
+  const showAgentControl = Boolean(conversationId && supportsAgentControl);
   const { state: voiceState, start: startVoice } = useVoiceInput({
     onTranscript: (text) => {
       const cleanedText = cleanupVoiceDictation(text);
@@ -375,23 +392,49 @@ export function ChatInput({
   // contract (MIME prefix + extension allowlist + MAX_ATTACHMENT_BYTES). Any
   // rejection surfaces the first failure message under the textarea so the
   // user knows why nothing attached. Round-2 audit P0 #4 (2026-05-21).
-  const appendFiles = useCallback((candidates: File[]) => {
-    if (candidates.length === 0) return;
-    const accepted: File[] = [];
-    const rejections: string[] = [];
-    for (const file of candidates) {
-      const result = validateAttachmentFile(file);
-      if (result.ok) {
+  const appendFiles = useCallback(
+    (candidates: File[]) => {
+      if (candidates.length === 0) return;
+      const accepted: File[] = [];
+      const rejections: string[] = [];
+      for (const file of candidates) {
+        const result = validateAttachmentFile(file);
+        if (!result.ok) {
+          rejections.push(result.message);
+          continue;
+        }
+        const runtimeRejection = attachmentPolicy?.validate(file);
+        if (runtimeRejection) {
+          rejections.push(runtimeRejection);
+          continue;
+        }
         accepted.push(file);
-      } else {
-        rejections.push(result.message);
       }
-    }
-    if (accepted.length > 0) {
-      setAttachedFiles((prev) => [...prev, ...accepted]);
-    }
-    setAttachmentError(rejections[0] ?? null);
-  }, []);
+      if (accepted.length > 0) {
+        const maxFiles = attachmentPolicy?.maxFiles ?? Number.POSITIVE_INFINITY;
+        const maxBytes = attachmentPolicy?.maxTotalBytes ?? Number.POSITIVE_INFINITY;
+        const availableCount = Math.max(0, maxFiles - attachedFiles.length);
+        const bounded: File[] = [];
+        let totalBytes = attachedFiles.reduce((sum, file) => sum + file.size, 0);
+        for (const file of accepted.slice(0, availableCount)) {
+          if (totalBytes + file.size > maxBytes) {
+            rejections.push(
+              `Attached files exceed the ${Math.round(maxBytes / (1024 * 1024))} MiB total limit.`,
+            );
+            continue;
+          }
+          totalBytes += file.size;
+          bounded.push(file);
+        }
+        if (accepted.length > availableCount) {
+          rejections.push(`Attach at most ${maxFiles} files per message.`);
+        }
+        setAttachedFiles((previous) => [...previous, ...bounded]);
+      }
+      setAttachmentError(rejections[0] ?? null);
+    },
+    [attachedFiles, attachmentPolicy],
+  );
 
   // Drag-drop + paste-image — parity-gap round-2 P0 #3 (2026-05-21). Mirrors
   // Claude / ChatGPT: dropping files anywhere on the composer or pasting an
@@ -660,7 +703,7 @@ export function ChatInput({
                   type="file"
                   multiple
                   className="hidden"
-                  accept={ALLOWED_ATTACHMENT_ACCEPT}
+                  accept={attachmentPolicy?.accept ?? ALLOWED_ATTACHMENT_ACCEPT}
                   onChange={(e) => {
                     const files = e.target.files;
                     if (files && files.length > 0) {
@@ -888,6 +931,23 @@ export function ChatInput({
                   </button>
                 ))}
               </div>
+
+              {projectPicker.onCreateProject && (
+                <>
+                  <div className="my-1 border-t border-[var(--chat-border)]" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeScopePicker();
+                      projectPicker.onCreateProject?.();
+                    }}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+                  >
+                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    Create project
+                  </button>
+                </>
+              )}
 
               {/* Local folder — rendered only when the host feeds the folder
                   seam (desktop-only + privacy-gated at the host). */}

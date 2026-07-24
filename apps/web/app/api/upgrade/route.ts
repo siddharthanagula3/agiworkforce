@@ -10,8 +10,9 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { UpgradeApplyRequestSchema } from '@/lib/validations/checkout';
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
@@ -41,14 +42,13 @@ function getStripe(): Stripe {
 }
 
 async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
+  const { userId } = await getClerkAuthUser(request);
+
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'upgrade');
   if (rateLimitResponse) return rateLimitResponse;
-
-  const { userId } = await (await import('@clerk/nextjs/server')).auth();
-  if (!userId) throw createError.unauthorized('Please sign in to continue');
 
   let rawBody: unknown;
   try {
@@ -72,13 +72,19 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     SubscriptionRow,
     'status' | 'plan_tier' | 'stripe_customer_id' | 'stripe_subscription_id'
   >;
-  const subRows = await db
-    .query<SubRow>(
+  let subRows: SubRow[];
+  try {
+    subRows = await db.query<SubRow>(
       `select status, plan_tier, stripe_customer_id, stripe_subscription_id
        from subscriptions where user_id = $1 limit 1`,
       [userId],
-    )
-    .catch(() => [] as SubRow[]);
+    );
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to load subscription for upgrade');
+    throw createError.serviceUnavailable(
+      'Billing details could not be verified. Your current plan is unchanged; please retry.',
+    );
+  }
   const sub = subRows[0] ?? null;
 
   if (!sub || !['active', 'trialing'].includes(sub.status)) {
@@ -96,11 +102,18 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
 
   let stripeCustomerId = sub.stripe_customer_id;
   if (!isStripeCustomerId(stripeCustomerId)) {
-    const profileRows = await db
-      .query<
-        Pick<SubscriptionRow, 'stripe_customer_id'>
-      >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
-      .catch(() => [] as Pick<SubscriptionRow, 'stripe_customer_id'>[]);
+    let profileRows: Array<Pick<SubscriptionRow, 'stripe_customer_id'>>;
+    try {
+      profileRows = await db.query<Pick<SubscriptionRow, 'stripe_customer_id'>>(
+        'select stripe_customer_id from profiles where id = $1 limit 1',
+        [userId],
+      );
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to load billing customer for upgrade');
+      throw createError.serviceUnavailable(
+        'Billing customer details could not be verified. Your current plan is unchanged; please retry.',
+      );
+    }
     stripeCustomerId = profileRows[0]?.stripe_customer_id ?? null;
   }
 
@@ -191,6 +204,10 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         // credit only the unused TIME on the old plan.
         billing_cycle_anchor: 'now',
         proration_behavior: 'always_invoice',
+        // Must match the signed invoice preview exactly. Stripe documents
+        // using the same proration_date on preview and update to prevent a
+        // time-of-confirmation price drift.
+        proration_date: prorationDate,
         // Stripe applies the plan change only after the immediate invoice is paid.
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
@@ -215,6 +232,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         success: false,
         paymentActionRequired: true,
         message: 'Complete the upgrade payment before the new plan is activated.',
+        ...(invoice?.hosted_invoice_url ? { paymentUrl: invoice.hosted_invoice_url } : {}),
         ...(invoice?.confirmation_secret?.client_secret
           ? { clientSecret: invoice.confirmation_secret.client_secret }
           : {}),
@@ -244,7 +262,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   });
 }
 
-export const POST = withErrorHandler(handleUpgrade);
+export const POST = withCorsRoute(withErrorHandler(handleUpgrade));
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

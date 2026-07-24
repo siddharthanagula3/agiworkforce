@@ -385,17 +385,22 @@ function DirectoryBrowse({
     return map;
   }, [adapter?.connectedConnectors]);
   const skills = adapter?.skills ?? [];
+  const hasPluginDirectory =
+    adapter != null && ('pluginCatalog' in adapter || 'plugins' in adapter);
   const plugins = adapter?.pluginCatalog ?? adapter?.plugins ?? [];
+  const connectorsLoading = adapter?.connectorsLoading ?? false;
+  const connectorsError = adapter?.connectorsError;
   const skillsLoading = adapter?.skillsLoading ?? false;
+  const skillsError = adapter?.skillsError;
   const pluginsLoading = adapter?.pluginsLoading ?? false;
 
-  // The directory is shared across the Skills / Connectors / Plugins Browse
-  // buttons — all three tabs always render; an empty tab shows an honest
-  // empty state rather than being hidden.
+  // Only advertise directory categories implemented by the current surface.
+  // An explicitly supplied empty plugin list is still a real plugin surface
+  // with an honest empty state; omitting plugin fields means unsupported.
   const tabs: { key: BrowseTab; label: string }[] = [
     { key: 'skills', label: 'Skills' },
     { key: 'connectors', label: 'Connectors' },
-    { key: 'plugins', label: 'Plugins' },
+    ...(hasPluginDirectory ? [{ key: 'plugins' as const, label: 'Plugins' }] : []),
   ];
 
   const categories = useMemo(
@@ -438,7 +443,9 @@ function DirectoryBrowse({
       <div>
         <h2 className="text-base font-semibold text-foreground">Browse directory</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Explore skills, connectors, and plugins available in this environment.
+          {hasPluginDirectory
+            ? 'Explore skills, connectors, and plugins available in this environment.'
+            : 'Explore skills and connectors available in this environment.'}
         </p>
       </div>
 
@@ -501,7 +508,25 @@ function DirectoryBrowse({
 
       {/* Card grids */}
       {tab === 'connectors' &&
-        (visibleConnectors.length === 0 ? (
+        (connectorsLoading ? (
+          <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading connectors…
+          </p>
+        ) : connectorsError ? (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
+            <p className="text-sm text-red-500">{connectorsError}</p>
+            {adapter?.retryConnectors ? (
+              <button
+                type="button"
+                className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+                onClick={() => void adapter.retryConnectors?.()}
+              >
+                Try again
+              </button>
+            ) : null}
+          </div>
+        ) : visibleConnectors.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No connectors match.</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -585,6 +610,19 @@ function DirectoryBrowse({
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Loading skills…
           </p>
+        ) : skillsError ? (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
+            <p className="text-sm text-red-500">{skillsError}</p>
+            {adapter?.retrySkills ? (
+              <button
+                type="button"
+                className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+                onClick={() => void adapter.retrySkills?.()}
+              >
+                Try again
+              </button>
+            ) : null}
+          </div>
         ) : visibleSkills.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {skills.length === 0 ? 'No skills loaded in this environment.' : 'No skills match.'}
@@ -735,9 +773,19 @@ function AddCustomConnectorForm({
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Connect a remote MCP server to give the assistant new tools.{' '}
-          <a href="/docs" className="text-foreground underline underline-offset-2">
-            Learn more
-          </a>
+          {adapter?.openHref ? (
+            <button
+              type="button"
+              onClick={() => void adapter.openHref?.('/docs')}
+              className="text-foreground underline underline-offset-2"
+            >
+              Learn more
+            </button>
+          ) : (
+            <a href="/docs" className="text-foreground underline underline-offset-2">
+              Learn more
+            </a>
+          )}
         </p>
       </div>
 
@@ -816,6 +864,8 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
     for (const c of adapter?.connectedConnectors ?? []) map.set(c.connectorId, c);
     return map;
   }, [adapter?.connectedConnectors]);
+  const loading = adapter?.connectorsLoading ?? false;
+  const loadError = adapter?.connectorsError;
 
   const tabCounts = useMemo(() => {
     let connected = 0;
@@ -889,146 +939,168 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         </p>
       </div>
 
-      {/* Toolbar: filter tabs (left) + search + Add (right) */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div role="tablist" aria-label="Filter connectors" className="flex items-center gap-1">
-          {CONNECTOR_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={cn(
-                'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                activeTab === tab.key
-                  ? 'bg-foreground text-background'
-                  : 'border border-border text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {tab.label}
-              <span className="ml-1 opacity-60">{tabCounts[tab.key]}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <div className="relative w-48">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="search"
-              placeholder="Search connectors..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-          <Menu
-            align="end"
-            trigger={({ toggle, open }) => (
-              <button
-                type="button"
-                onClick={toggle}
-                aria-haspopup="menu"
-                aria-expanded={open}
-                className="flex h-8 items-center gap-1 rounded-lg bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
-              >
-                Add
-                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            )}
-            menuClassName="w-52"
-          >
-            {({ close }) => (
-              <>
-                <MenuItem close={close} onSelect={() => setView('browse')}>
-                  Browse connectors
-                </MenuItem>
-                <MenuItem close={close} onSelect={() => setView('add-custom')}>
-                  Add custom connector
-                </MenuItem>
-              </>
-            )}
-          </Menu>
-        </div>
-      </div>
-
-      {/* Table */}
-      {filtered.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          {connectors.length === 0
-            ? 'No connectors available in this environment.'
-            : 'No connectors match your filters.'}
+      {loading ? (
+        <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Loading connectors…
         </p>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-border/80">
-          <table className="w-full border-collapse text-left">
-            <thead>
-              <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <th scope="col" className="px-3 py-2 font-semibold">
-                  Connector
-                </th>
-                <th scope="col" className="px-3 py-2 font-semibold">
-                  Type
-                </th>
-                <th scope="col" className="px-3 py-2 font-semibold">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {filtered.map((connector) => {
-                const connection = connectionById.get(connector.id);
-                const canConnect = Boolean(connector.canConnect && adapter?.connectConnector);
-                const rowError = rowErrors[connector.id];
-                return (
-                  <tr
-                    key={connector.id}
-                    onClick={() => setDetailId(connector.id)}
-                    className="cursor-pointer transition-colors hover:bg-muted/40"
-                  >
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <ConnectorLogo
-                          connectorId={connector.id}
-                          fallbackGradient={connector.iconBg}
-                          fallbackText={connector.iconText}
-                          size="sm"
-                        />
-                        <div className="min-w-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDetailId(connector.id);
-                            }}
-                            className="block max-w-full truncate text-sm font-medium text-foreground hover:underline"
-                          >
-                            {connector.name}
-                          </button>
-                          {rowError && (
-                            <p className="mt-0.5 text-[11px] text-red-500">{rowError}</p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                      {connector.category}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <ConnectorStatusCell
-                        connector={connector}
-                        connection={connection}
-                        canConnect={canConnect}
-                        mutating={mutatingIds.has(connector.id)}
-                        onConnect={() => handleConnect(connector.id)}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      ) : loadError ? (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
+          <p className="text-sm text-red-500">{loadError}</p>
+          {adapter?.retryConnectors ? (
+            <button
+              type="button"
+              className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+              onClick={() => void adapter.retryConnectors?.()}
+            >
+              Try again
+            </button>
+          ) : null}
         </div>
+      ) : (
+        <>
+          {/* Toolbar: filter tabs (left) + search + Add (right) */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div role="tablist" aria-label="Filter connectors" className="flex items-center gap-1">
+              {CONNECTOR_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                    activeTab === tab.key
+                      ? 'bg-foreground text-background'
+                      : 'border border-border text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  {tab.label}
+                  <span className="ml-1 opacity-60">{tabCounts[tab.key]}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <div className="relative w-48">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="search"
+                  placeholder="Search connectors..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <Menu
+                align="end"
+                trigger={({ toggle, open }) => (
+                  <button
+                    type="button"
+                    onClick={toggle}
+                    aria-haspopup="menu"
+                    aria-expanded={open}
+                    className="flex h-8 items-center gap-1 rounded-lg bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
+                  >
+                    Add
+                    <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+                menuClassName="w-52"
+              >
+                {({ close }) => (
+                  <>
+                    <MenuItem close={close} onSelect={() => setView('browse')}>
+                      Browse connectors
+                    </MenuItem>
+                    <MenuItem close={close} onSelect={() => setView('add-custom')}>
+                      Add custom connector
+                    </MenuItem>
+                  </>
+                )}
+              </Menu>
+            </div>
+          </div>
+
+          {/* Table */}
+          {filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {connectors.length === 0
+                ? 'No connectors available in this environment.'
+                : 'No connectors match your filters.'}
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-border/80">
+              <table className="w-full border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                    <th scope="col" className="px-3 py-2 font-semibold">
+                      Connector
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-semibold">
+                      Type
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-semibold">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filtered.map((connector) => {
+                    const connection = connectionById.get(connector.id);
+                    const canConnect = Boolean(connector.canConnect && adapter?.connectConnector);
+                    const rowError = rowErrors[connector.id];
+                    return (
+                      <tr
+                        key={connector.id}
+                        onClick={() => setDetailId(connector.id)}
+                        className="cursor-pointer transition-colors hover:bg-muted/40"
+                      >
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <ConnectorLogo
+                              connectorId={connector.id}
+                              fallbackGradient={connector.iconBg}
+                              fallbackText={connector.iconText}
+                              size="sm"
+                            />
+                            <div className="min-w-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDetailId(connector.id);
+                                }}
+                                className="block max-w-full truncate text-sm font-medium text-foreground hover:underline"
+                              >
+                                {connector.name}
+                              </button>
+                              {rowError && (
+                                <p className="mt-0.5 text-[11px] text-red-500">{rowError}</p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                          {connector.category}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <ConnectorStatusCell
+                            connector={connector}
+                            connection={connection}
+                            canConnect={canConnect}
+                            mutating={mutatingIds.has(connector.id)}
+                            onConnect={() => handleConnect(connector.id)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -1050,6 +1122,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [view, setView] = useState<'table' | 'browse'>('table');
   const skills = useMemo(() => adapter?.skills ?? [], [adapter?.skills]);
   const loading = adapter?.skillsLoading ?? false;
+  const loadError = adapter?.skillsError;
 
   const filtered = useMemo(() => {
     if (!search) return skills;
@@ -1103,6 +1176,19 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/40" />
           ))}
+        </div>
+      ) : loadError ? (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
+          <p className="text-sm text-red-500">{loadError}</p>
+          {adapter?.retrySkills ? (
+            <button
+              type="button"
+              className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+              onClick={() => void adapter.retrySkills?.()}
+            >
+              Try again
+            </button>
+          ) : null}
         </div>
       ) : filtered.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">

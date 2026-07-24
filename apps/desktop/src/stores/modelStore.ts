@@ -372,9 +372,9 @@ export const useModelStore = create<ModelState>()(
             if (provider !== 'ollama' && modelId !== 'auto') {
               const currentPlan = (() => {
                 try {
-                  return useAccountStore.getState()?.plan ?? 'basic';
+                  return useAccountStore.getState()?.plan ?? 'free';
                 } catch {
-                  return 'basic' as const;
+                  return 'free' as const;
                 }
               })();
               const normalizedTier = normalizeSubscriptionTier(currentPlan);
@@ -952,9 +952,9 @@ export const initializeModelStoreFromSettings = async () => {
     const settingsStore = useSettingsStore.getState();
     const currentPlan = (() => {
       try {
-        return useAccountStore.getState()?.plan ?? 'basic';
+        return useAccountStore.getState()?.plan ?? 'free';
       } catch {
-        return 'basic' as const;
+        return 'free' as const;
       }
     })();
 
@@ -1116,7 +1116,7 @@ if (typeof window !== 'undefined') {
         return;
       }
 
-      const currentPlan = useAccountStore.getState().account.plan ?? 'basic';
+      const currentPlan = useAccountStore.getState().account.plan ?? 'free';
       const targetAutoMode = getBestAutoModeForSubscriptionTier(currentPlan);
       const modelStore = useModelStore.getState();
 
