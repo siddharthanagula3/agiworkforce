@@ -17,12 +17,24 @@ export function AuthShell({
   lede,
   points,
   children,
+  embedded = false,
 }: {
   title: string;
   lede: string;
   points: string[];
   children: ReactNode;
+  embedded?: boolean;
 }) {
+  if (embedded) {
+    return (
+      <div data-design="agi">
+        <main className="agi-auth-embedded-shell" data-testid="desktop-auth-shell">
+          <div className="agi-auth-card">{children}</div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div data-design="agi">
       <main className="agi-shell">

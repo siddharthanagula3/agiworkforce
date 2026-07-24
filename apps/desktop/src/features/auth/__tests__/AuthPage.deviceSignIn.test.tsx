@@ -23,19 +23,20 @@ describe('Desktop Cloud device sign-in', () => {
     useAppModeStore.setState({ mode: 'cloud' });
   });
 
-  it('uses one browser-approved sign-in action without collecting a desktop password', () => {
+  it('offers one in-app Cloud sign-in action without rendering a password in the main shell', () => {
     render(<AuthPage />);
 
-    expect(screen.getByRole('button', { name: /continue in browser/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sign in to agi cloud/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/browser-approved device session/i)).toBeInTheDocument();
+    expect(screen.getByText(/private in-app sign-in/i)).toBeInTheDocument();
+    expect(screen.queryByText(/continue in browser/i)).not.toBeInTheDocument();
   });
 
   it('completes sign-in through the auth store and can return to Local Mode', async () => {
     const onAuthSuccess = vi.fn();
     render(<AuthPage onAuthSuccess={onAuthSuccess} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /continue in browser/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sign in to agi cloud/i }));
 
     await waitFor(() => expect(signIn).toHaveBeenCalledWith('', ''));
     await waitFor(() => expect(onAuthSuccess).toHaveBeenCalledOnce());

@@ -29,11 +29,18 @@ function getErrorMessage(body: unknown): string {
 function DeviceForm() {
   const searchParams = useSearchParams();
   const { isLoaded, isSignedIn } = useAuth();
+  const isDesktopSurface = searchParams.get('surface') === 'desktop';
   const [code, setCode] = useState(formatUserCode(searchParams.get('user_code') || ''));
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
-  const redirectPath = `/auth/device${code ? `?user_code=${encodeURIComponent(code)}` : ''}`;
-  const signInHref = `/login?redirectTo=${encodeURIComponent(redirectPath)}`;
+  const redirectParams = new URLSearchParams();
+  if (code) redirectParams.set('user_code', code);
+  if (isDesktopSurface) redirectParams.set('surface', 'desktop');
+  const redirectQuery = redirectParams.toString();
+  const redirectPath = `/auth/device${redirectQuery ? `?${redirectQuery}` : ''}`;
+  const signInHref = isDesktopSurface
+    ? `/login?surface=desktop&redirectTo=${encodeURIComponent(redirectPath)}`
+    : `/login?redirectTo=${encodeURIComponent(redirectPath)}`;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,7 +90,9 @@ function DeviceForm() {
         Connect a device.
       </h1>
       <p className="agi-device-auth-lede">
-        Confirm the code shown in AGI Desktop, VS Code, Chrome, or the AGI CLI.{' '}
+        {isDesktopSurface
+          ? 'Confirm the code requested by AGI Desktop. '
+          : 'Confirm the code shown in AGI Desktop, VS Code, Chrome, or the AGI CLI. '}
         <strong>
           Only approve a request you started. This device will be able to use your AGI account.
         </strong>
@@ -130,28 +139,52 @@ function DeviceForm() {
       </form>
       <div className="agi-device-auth-note">
         <strong>Using AGI Cloud models?</strong> Approval signs this device into your account. Local
-        Mode remains local and does not require account access.{' '}
-        <Link href="/pricing">Compare plans &rarr;</Link>
+        Mode remains local and does not require account access.
+        {!isDesktopSurface ? (
+          <>
+            {' '}
+            <Link href="/pricing">Compare plans &rarr;</Link>
+          </>
+        ) : null}
       </div>
       <p className="agi-device-auth-cancel">
-        <Link href="/">Cancel</Link>
+        {isDesktopSurface ? 'Close this window to cancel.' : <Link href="/">Cancel</Link>}
       </p>
     </section>
+  );
+}
+
+function DeviceAuthContent() {
+  const searchParams = useSearchParams();
+  const isDesktopSurface = searchParams.get('surface') === 'desktop';
+
+  if (isDesktopSurface) {
+    return (
+      <main className="agi-device-auth-desktop-shell" data-testid="desktop-device-auth-shell">
+        <div className="agi-device-auth-stage">
+          <DeviceForm />
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="agi-shell">
+      <Header minimal />
+      <div className="agi-device-auth-stage">
+        <DeviceForm />
+      </div>
+      <MarketingFooter />
+    </main>
   );
 }
 
 export default function AuthDevicePage() {
   return (
     <div data-design="agi">
-      <main className="agi-shell">
-        <Header minimal />
-        <div className="agi-device-auth-stage">
-          <Suspense fallback={null}>
-            <DeviceForm />
-          </Suspense>
-        </div>
-        <MarketingFooter />
-      </main>
+      <Suspense fallback={null}>
+        <DeviceAuthContent />
+      </Suspense>
     </div>
   );
 }

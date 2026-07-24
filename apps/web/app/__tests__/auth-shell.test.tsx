@@ -75,4 +75,18 @@ describe('AuthShell', () => {
 
     expect(screen.getByTestId('header')).toHaveAttribute('data-minimal', 'true');
   });
+
+  it('removes marketing chrome for an embedded Desktop sign-in window', () => {
+    render(
+      <AuthShell {...shellProps} embedded>
+        <div data-testid="clerk-card" />
+      </AuthShell>,
+    );
+
+    expect(screen.getByTestId('desktop-auth-shell')).toBeVisible();
+    expect(screen.getByTestId('clerk-card')).toBeVisible();
+    expect(screen.queryByTestId('header')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('footer')).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Why AGI' })).not.toBeInTheDocument();
+  });
 });

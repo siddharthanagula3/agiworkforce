@@ -13,6 +13,7 @@ const authState = vi.hoisted(() => ({
 
 const searchState = vi.hoisted(() => ({
   userCode: 'ABCD-1234',
+  surface: null as string | null,
 }));
 
 vi.mock('@clerk/nextjs', () => ({
@@ -21,7 +22,11 @@ vi.mock('@clerk/nextjs', () => ({
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({
-    get: (key: string) => (key === 'user_code' ? searchState.userCode : null),
+    get: (key: string) => {
+      if (key === 'user_code') return searchState.userCode;
+      if (key === 'surface') return searchState.surface;
+      return null;
+    },
   }),
 }));
 
@@ -58,6 +63,7 @@ describe('/auth/device page', () => {
     authState.isLoaded = true;
     authState.isSignedIn = true;
     searchState.userCode = 'ABCD-1234';
+    searchState.surface = null;
     vi.restoreAllMocks();
   });
 
@@ -114,6 +120,23 @@ describe('/auth/device page', () => {
 
     expect(screen.getByTestId('header')).toHaveAttribute('data-minimal', 'true');
     expect(screen.getByText(/AGI Desktop, VS Code, Chrome, or the AGI CLI/)).toBeVisible();
+  });
+
+  it('renders a dedicated in-app Desktop surface and preserves it through sign-in', () => {
+    authState.isSignedIn = false;
+    searchState.surface = 'desktop';
+
+    render(<AuthDevicePage />);
+
+    expect(screen.getByTestId('desktop-device-auth-shell')).toBeVisible();
+    expect(screen.queryByTestId('header')).not.toBeInTheDocument();
+    expect(screen.queryByText('Footer')).not.toBeInTheDocument();
+    expect(screen.getByText('Close this window to cancel.')).toBeVisible();
+    expect(screen.queryByRole('link', { name: /compare plans/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      '/login?surface=desktop&redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234%26surface%3Ddesktop',
+    );
   });
 
   it('directs the user back to the requesting app after approval', async () => {

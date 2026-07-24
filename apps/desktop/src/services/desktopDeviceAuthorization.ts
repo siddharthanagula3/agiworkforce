@@ -7,7 +7,7 @@ import {
 export interface DesktopDeviceAuthorizationOptions {
   origin: string;
   post: DeviceAuthorizationPost;
-  openExternal: (url: string) => Promise<void>;
+  openAuthorization: (url: string) => Promise<void>;
   wait?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
   signal?: AbortSignal;
 }
@@ -41,22 +41,22 @@ function waitForPoll(milliseconds: number, signal?: AbortSignal): Promise<void> 
 }
 
 /**
- * Runs the browser-approved device authorization loop used by Desktop Cloud.
+ * Runs the device authorization loop used by Desktop Cloud.
  *
- * The browser owns primary authentication. Desktop receives only the
- * short-lived, revocable bearer after the user approves the displayed code.
+ * The authorization surface owns primary authentication. The main Desktop
+ * webview receives only the short-lived, revocable bearer after approval.
  */
 export async function authorizeDesktopDevice({
   origin,
   post,
-  openExternal,
+  openAuthorization,
   wait = waitForPoll,
   signal,
 }: DesktopDeviceAuthorizationOptions): Promise<DesktopDeviceCredential> {
   if (signal?.aborted) throw abortError();
 
   const authorization = await requestDeviceAuthorization(origin, post);
-  await openExternal(authorization.verificationUrl);
+  await openAuthorization(authorization.verificationUrl);
 
   const maxPolls = Math.max(1, Math.ceil(authorization.expiresInMs / authorization.pollIntervalMs));
   for (let attempt = 0; attempt < maxPolls; attempt += 1) {
