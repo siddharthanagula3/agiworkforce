@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authorizeDesktopDeviceMock = vi.hoisted(() => vi.fn());
+const openDesktopCloudSignInWindowMock = vi.hoisted(() => vi.fn());
 const invokeMock = vi.hoisted(() => vi.fn());
 vi.mock('../desktopDeviceAuthorization', () => ({
   authorizeDesktopDevice: authorizeDesktopDeviceMock,
+}));
+vi.mock('../desktopCloudSignInWindow', () => ({
+  openDesktopCloudSignInWindow: openDesktopCloudSignInWindowMock,
 }));
 vi.mock('../../lib/runtimeEnvironment', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/runtimeEnvironment')>()),
@@ -36,6 +40,7 @@ describe('cloudAccountAuth', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
     authorizeDesktopDeviceMock.mockReset();
+    openDesktopCloudSignInWindowMock.mockReset();
     invokeMock.mockReset();
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'account_restore_access_token') {
@@ -145,15 +150,20 @@ describe('cloudAccountAuth', () => {
     expect(cloudAccountAuth.isAuthenticated()).toBe(false);
   });
 
-  it('uses browser-approved device authorization for Desktop sign-in', async () => {
+  it('uses an in-app device authorization window for Desktop sign-in', async () => {
     const accessToken = jwtWithClaims({
       sub: 'user_123',
       email: 'user@example.com',
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
-    authorizeDesktopDeviceMock.mockResolvedValue({
-      accessToken,
-      expiresAt: Date.now() + 3_600_000,
+    const close = vi.fn(async () => undefined);
+    openDesktopCloudSignInWindowMock.mockResolvedValue({ close });
+    authorizeDesktopDeviceMock.mockImplementation(async (options) => {
+      await options.openAuthorization('https://agiworkforce.com/auth/device?user_code=ABCD-1234');
+      return {
+        accessToken,
+        expiresAt: Date.now() + 3_600_000,
+      };
     });
 
     const result = await cloudAccountAuth.signIn({
@@ -163,6 +173,11 @@ describe('cloudAccountAuth', () => {
 
     expect(result.error).toBeNull();
     expect(authorizeDesktopDeviceMock).toHaveBeenCalledOnce();
+    expect(openDesktopCloudSignInWindowMock).toHaveBeenCalledWith(
+      'https://agiworkforce.com/auth/device?user_code=ABCD-1234',
+      expect.objectContaining({ onUserClosed: expect.any(Function) }),
+    );
+    expect(close).toHaveBeenCalledOnce();
     expect(cloudAccountAuth.getSession()?.access_token).toBe(accessToken);
   });
 });

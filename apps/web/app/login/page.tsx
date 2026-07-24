@@ -8,13 +8,18 @@ const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkfo
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirectTo?: string; next?: string }>;
+  searchParams: Promise<{ redirectTo?: string; next?: string; surface?: string }>;
 }) {
   const params = await searchParams;
   const redirectTo = getSafeRedirectUrl(params.redirectTo ?? params.next, getAppUrl(), '/chat');
+  const isDesktopSurface = params.surface === 'desktop';
+  const signUpUrl = isDesktopSurface
+    ? `/signup?surface=desktop&redirectTo=${encodeURIComponent(redirectTo)}`
+    : '/signup';
 
   return (
     <AuthShell
+      embedded={isDesktopSurface}
       title="Welcome back."
       lede="Sign in to pick up your chats, projects, and artifacts. Managed cloud is open in public alpha, so you can start right away."
       points={[
@@ -25,7 +30,7 @@ export default async function LoginPage({
     >
       <SignIn
         routing="hash"
-        signUpUrl="/signup"
+        signUpUrl={signUpUrl}
         fallbackRedirectUrl={redirectTo}
         signUpFallbackRedirectUrl={redirectTo}
         appearance={agiClerkAppearance}

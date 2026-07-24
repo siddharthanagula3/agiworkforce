@@ -33,6 +33,7 @@
     "core:window:allow-set-skip-taskbar",
     "core:window:allow-start-dragging",
     "core:webview:allow-print",
+    "core:webview:allow-create-webview-window",
     "core:app:allow-version",
     "core:app:allow-name",
     "core:app:allow-tauri-version",

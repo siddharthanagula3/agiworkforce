@@ -8,13 +8,18 @@ const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkfo
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirectTo?: string; next?: string }>;
+  searchParams: Promise<{ redirectTo?: string; next?: string; surface?: string }>;
 }) {
   const params = await searchParams;
   const redirectTo = getSafeRedirectUrl(params.redirectTo ?? params.next, getAppUrl(), '/chat');
+  const isDesktopSurface = params.surface === 'desktop';
+  const signInUrl = isDesktopSurface
+    ? `/login?surface=desktop&redirectTo=${encodeURIComponent(redirectTo)}`
+    : '/login';
 
   return (
     <AuthShell
+      embedded={isDesktopSurface}
       title="Create your AGI account."
       lede="Start with hosted AGI Web, then take the same account to Mobile and Desktop Cloud. Serious work can stay Local or BYOK. No account needed there."
       points={[
@@ -25,7 +30,7 @@ export default async function SignupPage({
     >
       <SignUp
         routing="hash"
-        signInUrl="/login"
+        signInUrl={signInUrl}
         fallbackRedirectUrl={redirectTo}
         signInFallbackRedirectUrl={redirectTo}
         appearance={agiClerkAppearance}

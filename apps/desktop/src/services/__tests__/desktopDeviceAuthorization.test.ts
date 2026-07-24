@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { authorizeDesktopDevice } from '../desktopDeviceAuthorization';
 
 describe('authorizeDesktopDevice', () => {
-  it('opens the browser approval URL, polls, and returns the approved credential', async () => {
+  it('opens the approval surface, polls, and returns the approved credential', async () => {
     const post = vi
       .fn()
       .mockResolvedValueOnce({
@@ -29,17 +29,17 @@ describe('authorizeDesktopDevice', () => {
           expires_in: 600,
         }),
       });
-    const openExternal = vi.fn().mockResolvedValue(undefined);
+    const openAuthorization = vi.fn().mockResolvedValue(undefined);
     const wait = vi.fn().mockResolvedValue(undefined);
 
     const result = await authorizeDesktopDevice({
       origin: 'https://agiworkforce.com',
       post,
-      openExternal,
+      openAuthorization,
       wait,
     });
 
-    expect(openExternal).toHaveBeenCalledWith(
+    expect(openAuthorization).toHaveBeenCalledWith(
       'https://agiworkforce.com/auth/device?user_code=ABCD-2345',
     );
     expect(wait).toHaveBeenCalledTimes(2);
@@ -69,7 +69,7 @@ describe('authorizeDesktopDevice', () => {
       authorizeDesktopDevice({
         origin: 'https://agiworkforce.com',
         post,
-        openExternal: vi.fn().mockResolvedValue(undefined),
+        openAuthorization: vi.fn().mockResolvedValue(undefined),
         wait: vi.fn().mockResolvedValue(undefined),
       }),
     ).rejects.toThrow(message);
@@ -93,7 +93,7 @@ describe('authorizeDesktopDevice', () => {
       authorizeDesktopDevice({
         origin: 'https://agiworkforce.com',
         post,
-        openExternal: async () => {
+        openAuthorization: async () => {
           controller.abort();
         },
         wait: vi.fn().mockResolvedValue(undefined),
