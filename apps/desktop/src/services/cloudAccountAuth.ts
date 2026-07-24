@@ -14,6 +14,10 @@ import { invoke } from '../lib/tauri-mock';
 // through the cyclic `tauri-mock` barrel reads it before initialization.
 import { isTauri } from '../lib/runtimeEnvironment';
 import { authorizeDesktopDevice } from './desktopDeviceAuthorization';
+import {
+  openDesktopCloudSignInWindow,
+  type DesktopCloudSignInWindowSession,
+} from './desktopCloudSignInWindow';
 // NOTE: egressGuard is required LAZILY at its call site (fetchAccountSnapshot)
 // to break the load-time cycle egressGuard → appModeStore → auth →
 // cloudAccountAuth → egressGuard. A static import here re-introduces it.
@@ -314,6 +318,7 @@ class CloudAccountAuthService {
     const controller = new AbortController();
     this.deviceAuthorizationController = controller;
     this.updateState({ isLoading: true, error: null });
+    const signInWindow: { current: DesktopCloudSignInWindowSession | null } = { current: null };
 
     try {
       const { guardedFetch } = await import('../lib/egressGuard');
@@ -334,10 +339,11 @@ class CloudAccountAuthService {
           });
           return { status: response.status, body: await response.text() };
         },
-        openExternal: async (url) => {
+        openAuthorization: async (url) => {
           if (isTauri) {
-            const { open } = await import('@tauri-apps/plugin-shell');
-            await open(url);
+            signInWindow.current = await openDesktopCloudSignInWindow(url, {
+              onUserClosed: () => controller.abort(),
+            });
             return;
           }
           const opened = window.open(url, '_blank', 'noopener,noreferrer');
@@ -350,6 +356,8 @@ class CloudAccountAuthService {
       if (controller.signal.aborted) {
         throw new AuthError('AGI Cloud sign-in was cancelled.', 499, 'authorization_cancelled');
       }
+      await signInWindow.current?.close();
+      signInWindow.current = null;
       return await this.finishDeviceAuthorization(credential.accessToken);
     } catch (error) {
       const authError =
@@ -363,6 +371,7 @@ class CloudAccountAuthService {
       this.updateState({ isLoading: false, error: authError.message });
       return { data: { user: null, session: null }, error: authError };
     } finally {
+      await signInWindow.current?.close();
       if (this.deviceAuthorizationController === controller) {
         this.deviceAuthorizationController = null;
       }

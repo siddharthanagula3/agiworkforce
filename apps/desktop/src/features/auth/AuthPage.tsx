@@ -4,11 +4,11 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
-  ExternalLink,
   Globe,
   KeyRound,
   Layers,
   Loader2,
+  LogIn,
   Lock,
   RotateCcw,
   ShieldCheck,
@@ -82,8 +82,8 @@ function DeviceSignInCard({ onSuccess }: { onSuccess?: () => void }) {
     setError(null);
     try {
       // Credentials are intentionally empty: primary authentication happens
-      // in the user's browser, and Desktop receives only a revocable device
-      // credential after explicit approval.
+      // in an isolated AGI Desktop sign-in window, and the main Desktop
+      // webview receives only a revocable device credential after approval.
       const result = await signIn('', '');
       if (result.error) {
         setError(result.error);
@@ -109,20 +109,21 @@ function DeviceSignInCard({ onSuccess }: { onSuccess?: () => void }) {
       </div>
 
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-        Continue to AGI Cloud
+        Sign in to AGI Cloud
       </h1>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        Sign in securely in your browser, approve this Mac, and return here automatically.
+        Sign in directly in AGI Desktop. Your Cloud workspace opens here when authorization is
+        complete.
       </p>
 
       <div className="my-6 rounded-xl border border-border bg-muted/35 p-4">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
           <div>
-            <p className="text-sm font-medium text-foreground">Browser-approved device session</p>
+            <p className="text-sm font-medium text-foreground">Private in-app sign-in</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Your password never enters the Desktop app. Access is short-lived, revocable, and
-              stored in the system credential vault.
+              Your password stays inside AGI&apos;s secure sign-in window. Desktop receives a
+              short-lived, revocable session stored in your system credential vault.
             </p>
           </div>
         </div>
@@ -147,19 +148,19 @@ function DeviceSignInCard({ onSuccess }: { onSuccess?: () => void }) {
         {isConnecting ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Waiting for browser approval…
+            Signing in…
           </>
         ) : (
           <>
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-            Continue in browser
+            <LogIn className="h-4 w-4" aria-hidden="true" />
+            Sign in to AGI Cloud
           </>
         )}
       </Button>
 
       {isConnecting ? (
         <p className="mt-3 text-center text-xs text-muted-foreground" role="status">
-          Keep this window open while you approve the code in your browser.
+          Complete sign-in in the AGI window.
         </p>
       ) : null}
 
