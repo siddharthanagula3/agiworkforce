@@ -23,15 +23,38 @@ export async function register() {
       if (result.valid) {
         console.debug('✅ Server initialization complete - environment validated');
       } else {
-        // Log errors but do NOT throw — let the site render.
-        // Features that need missing vars will fail gracefully at call time.
+        // AUDIT-FIX STB-3: fail closed in production. validate-env.ts documents
+        // its critical list as "Missing these will cause server startup to fail
+        // in production" — that was the stated intent and the code did the
+        // opposite, so a deploy missing DATABASE_URL or STRIPE_SECRET_KEY booted
+        // green and 500'd on the first user request. `errors` only ever contains
+        // critical vars and required Stripe price IDs; everything softer is
+        // already routed to `warnings`, which stays non-fatal.
+        //
+        // AGI_ALLOW_INVALID_ENV=1 is a deliberate operator escape hatch for
+        // incident response (e.g. bringing the site up with billing degraded).
+        const message =
+          `Environment validation failed with ${result.errors.length} error(s):\n` +
+          result.errors.map((e) => `  - ${e}`).join('\n');
+
+        const allowInvalid = process.env['AGI_ALLOW_INVALID_ENV'] === '1';
+        if (process.env['NODE_ENV'] === 'production' && !allowInvalid) {
+          console.error(`❌ ${message}`);
+          throw new Error(
+            `${message}\nSet AGI_ALLOW_INVALID_ENV=1 to boot anyway (degraded).`,
+          );
+        }
+
         console.error(
-          `⚠️ Environment validation found ${result.errors.length} error(s). ` +
-            'Some features may not work until env vars are configured.',
+          `⚠️ ${message}\nContinuing — some features will not work until these are configured.`,
         );
       }
     } catch (error) {
-      // Even if validation itself crashes, don't take down the site
+      // A genuine validation failure above must propagate; only swallow the case
+      // where the validation module itself could not be loaded or crashed.
+      if (error instanceof Error && error.message.startsWith('Environment validation failed')) {
+        throw error;
+      }
       console.error('⚠️ Environment validation could not run:', error);
     }
   }

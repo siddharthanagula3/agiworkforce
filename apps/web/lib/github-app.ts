@@ -99,16 +99,31 @@ export async function getGitHubAppJwt(): Promise<string> {
 // Cache the dev fallback key so encrypt/decrypt use the same key within a process
 let _devFallbackKey: Buffer | null = null;
 
+const HEX_64_RE = /^[0-9a-fA-F]{64}$/;
+
 function getEncryptionKey(): Buffer {
   const keyHex = GITHUB_TOKEN_ENCRYPTION_KEY;
-  if (!keyHex || keyHex.length !== 64) {
-    // Fallback for development - in production GITHUB_TOKEN_ENCRYPTION_KEY must be set
-    if (!_devFallbackKey) {
-      _devFallbackKey = randomBytes(32);
-    }
-    return _devFallbackKey;
+  if (keyHex && HEX_64_RE.test(keyHex)) {
+    return Buffer.from(keyHex, 'hex');
   }
-  return Buffer.from(keyHex, 'hex');
+
+  // AUDIT-FIX STB-2: fail closed outside development. See the identical guard in
+  // lib/custom-connector-crypto.ts — a per-process random key makes installation
+  // tokens written by one serverless instance undecryptable by every other, and
+  // permanently undecryptable after a redeploy, with no signal that anything is
+  // wrong. The shape check is hex, not length: a 64-char non-hex value silently
+  // truncated through Buffer.from(_, 'hex').
+  if (process.env['NODE_ENV'] === 'production') {
+    throw new Error(
+      'GITHUB_TOKEN_ENCRYPTION_KEY is missing or malformed (expected 64 hex characters). ' +
+        'GitHub App installation tokens cannot be encrypted or decrypted without it.',
+    );
+  }
+
+  if (!_devFallbackKey) {
+    _devFallbackKey = randomBytes(32);
+  }
+  return _devFallbackKey;
 }
 
 function encryptToken(token: string): string {

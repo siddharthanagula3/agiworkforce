@@ -58,6 +58,15 @@ export function validateRequiredEnvVars(): ValidationResult {
     'TOTP_ENCRYPTION_KEY',
     // API gateway base URL used by web → backend calls; falls back to localhost:3001
     'NEXT_PUBLIC_API_URL',
+    // AUDIT-FIX STB-3: secret-bearing vars that previously had zero coverage.
+    // Each has a fail-closed guard at its point of use, but a warning at boot
+    // turns a silent misconfiguration into an operator-visible one.
+    // Encrypt GitHub App installation tokens (lib/github-app.ts).
+    'GITHUB_TOKEN_ENCRYPTION_KEY',
+    // Encrypt user-supplied custom MCP connector bearer tokens.
+    'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY',
+    // Pseudonymizes device/user identifiers in auth logs.
+    'LOG_SALT',
   ];
 
   // Stripe price IDs (required for checkout to work)

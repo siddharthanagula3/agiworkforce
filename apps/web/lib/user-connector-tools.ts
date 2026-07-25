@@ -663,15 +663,36 @@ export async function getUserCustomConnectorSummaries(
   }
 }
 
+/**
+ * Raised when a stored custom-connector credential exists but cannot be
+ * decrypted. Distinct from a transport failure so callers can tell the user to
+ * reconnect rather than reporting a generic connector error.
+ */
+export class ConnectorCredentialError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConnectorCredentialError';
+  }
+}
+
 function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
   const headers: Record<string, string> = {};
   if (row.auth_header_enc) {
+    // AUDIT-FIX CON-13: fail closed. Previously a decryption failure was logged
+    // and the connection proceeded with an empty header set — silently
+    // downgrading an authenticated connector to an anonymous one. If the remote
+    // server treats unauthenticated callers as a public or lower-privileged
+    // principal, the user gets a different (possibly another tenant's) view of
+    // the data with no indication anything changed.
     try {
       headers['Authorization'] = `Bearer ${decryptConnectorToken(row.auth_header_enc)}`;
     } catch (err) {
       logger.warn(
         { rowId: row.id, error: err instanceof Error ? err.message : err },
-        '[user-connector] failed to decrypt custom connector token — connecting without auth',
+        '[user-connector] failed to decrypt custom connector token — refusing to connect',
+      );
+      throw new ConnectorCredentialError(
+        'Stored credentials for this connector could not be decrypted. Reconnect the connector to continue.',
       );
     }
   }
@@ -834,6 +855,9 @@ async function executeCustomConnectorTool(
         content: 'Connector endpoint blocked by security policy.',
         isError: true,
       };
+    }
+    if (err instanceof ConnectorCredentialError) {
+      return { handled: true, content: err.message, isError: true };
     }
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn(
