@@ -37,16 +37,50 @@ function toolCallChunk(index: number, id: string, name: string, args: string) {
   };
 }
 
-describe('isReadOnlyTool — prefix match only (no substring false positives)', () => {
-  it('treats genuine read verbs as read-only', () => {
-    for (const name of ['read_file', 'list_directory', 'get_weather', 'search_web', 'query_db']) {
+// CHANGED BY AUDIT-FIX SYS-25 — read loudly.
+//
+// `isReadOnlyTool` no longer prefix-matches tool NAMES; it reads the declared
+// tool metadata model (lib/tool-metadata.ts). The previous expectations
+// (`read_file`, `list_directory`, `get_weather`, `search_web`, `query_db` are
+// read-only) asserted a classification that could never fire in production:
+// NO tool on this route is named any of those. Platform tools are
+// `web_search` / `url_fetch` / `execute_code` / ... and every MCP or connector
+// tool is qualified `mcp__<server>__<tool>`, so the old function returned false
+// for every real tool and the parallel branch was dead code.
+//
+// The replacement expectations below use REAL tool names and assert the
+// property that actually matters: declared read-class tools may run in
+// parallel; everything else — including any undeclared MCP tool, whatever it is
+// named — serialises.
+describe('isReadOnlyTool — driven by the declared tool metadata model', () => {
+  it('treats declared read-class platform and connector tools as parallel-safe', () => {
+    for (const name of ['web_search', 'url_fetch', 'skill', 'mcp__github__get_pull_request_diff']) {
       expect(isReadOnlyTool(name)).toBe(true);
     }
   });
 
-  it('treats mutating tools that merely CONTAIN a read verb as NOT read-only', () => {
-    // The old substring match misclassified these as parallel-safe.
-    for (const name of ['budget_transfer', 'create_playlist', 'delete_query', 'reset_getters']) {
+  it('serialises writes, executions and external sends', () => {
+    for (const name of [
+      'execute_code',
+      'write_file',
+      'create_folder',
+      'create_office_file',
+      'mcp__github__post_issue_comment',
+      'mcp__github__post_pull_request_review',
+    ]) {
+      expect(isReadOnlyTool(name)).toBe(false);
+    }
+  });
+
+  it('serialises UNDECLARED MCP tools no matter how read-like the name looks', () => {
+    // The whole point of the metadata model: a remote server can name a
+    // mutating tool `get_and_archive`. Unknown means write, never read.
+    for (const name of [
+      'mcp__acme__get_and_archive',
+      'mcp__acme__list_then_delete',
+      'mcp__acme__search',
+      'mcp__acme__query',
+    ]) {
       expect(isReadOnlyTool(name)).toBe(false);
     }
   });

@@ -104,15 +104,18 @@ export interface ToolLoopStepSink {
  * duplicate that error-UX decision -- it only supplies the throw; the loop's
  * unchanged catch block decides what to do with it.
  *
- * NO ABORTSIGNAL THREADING: `runToolLoop` has never received one --
- * `ProcessedRequest`/`ToolLoopOptions` carry no signal, and the OLD
- * `LLMProviderFactory.streamRequest(provider, request)` call took no signal
- * parameter either (client-disconnect cancellation has only ever worked via
- * the generator's own `.return()` on the next pull, not by aborting an
- * in-flight upstream fetch). A fresh, never-triggered `AbortController`
- * reproduces that exactly -- `ProviderAdapter.stream()` requires a signal
- * argument, but nothing about tool-loop's cancellation contract changes by
- * giving it one that never fires.
+ * ABORTSIGNAL THREADING (AUDIT-FIX BUG-1): this function used to hand the
+ * adapter a fresh, NEVER-TRIGGERED `AbortController().signal`, because
+ * `ToolLoopOptions` carried no signal at all. Client-disconnect cancellation
+ * therefore worked only through the generator's own `.return()` on the next
+ * pull -- the in-flight upstream request kept running to completion, so a user
+ * who hit Stop (or closed the tab) was still billed for a full generation
+ * nobody would ever see, on the two paths that dominate paid usage. The caller
+ * now passes `request.signal` through `ToolLoopOptions.signal` /
+ * `ResearchLoopOptions.signal`. `signal` stays OPTIONAL: internal callers
+ * (durable workflow continuations, unit tests) legitimately have no request to
+ * bind to, and for them the previous never-fires behaviour is preserved
+ * exactly.
  */
 export async function buildToolLoopStream(
   provider: string,
@@ -120,6 +123,7 @@ export async function buildToolLoopStream(
   stepRequest: ProcessedRequest['llmRequest'],
   responseModel: string,
   sink?: ToolLoopStepSink,
+  signal?: AbortSignal,
 ): Promise<ReadableStream> {
   const adapterProvider = ADAPTER_PROVIDERS[provider];
   if (!adapterProvider) {
@@ -134,8 +138,12 @@ export async function buildToolLoopStream(
   const stepProcessed: ProcessedRequest = { ...processed, llmRequest: stepRequest };
   const adapter = adapterProvider.buildAdapter(stepProcessed);
   const chatRequest = adapterProvider.buildChatRequest(stepProcessed);
-  const signal = new AbortController().signal;
-  const chunks = await startProviderStream(adapter, chatRequest, signal, adapterProvider.mapError);
+  const chunks = await startProviderStream(
+    adapter,
+    chatRequest,
+    signal ?? new AbortController().signal,
+    adapterProvider.mapError,
+  );
   return chunksToOpenAiSse(chunks, responseModel, adapterProvider.wireMode, sink);
 }
 
@@ -207,10 +215,7 @@ export function chunksToOpenAiSse(
             // use the greatest observed final counter per dimension, then add
             // the step exactly once when its stream terminates.
             streamUsage.inputTokens = Math.max(streamUsage.inputTokens, chunk.inputTokens ?? 0);
-            streamUsage.outputTokens = Math.max(
-              streamUsage.outputTokens,
-              chunk.outputTokens ?? 0,
-            );
+            streamUsage.outputTokens = Math.max(streamUsage.outputTokens, chunk.outputTokens ?? 0);
             streamUsage.cacheReadTokens = Math.max(
               streamUsage.cacheReadTokens,
               chunk.cacheReadTokens ?? 0,

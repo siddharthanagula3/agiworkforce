@@ -8,6 +8,7 @@ import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
+import { canPersistAssistantTurn, persistAssistantTurn } from './assistant-turn-persistence';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -712,6 +713,31 @@ export async function buildAdapterStreamResponse(
   // the fetchers use the platform provider keys that created these ids.
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
 
+  // AUDIT-FIX BUG-10/STR-5: the server never persisted the assistant turn on
+  // this path either -- `onSuccessfulTurn` is auto-memory only, and the browser
+  // at `[DONE]` was the sole writer. The assembler already accumulates the
+  // tag-free assistant text, so persistence costs one write and no extra
+  // buffering. Gated on the turn being persistable at all (owned non-temporary
+  // conversation + caller-supplied assistant_message_id).
+  const assistantTurnPersistable = canPersistAssistantTurn(processed);
+  let assistantTurnPersisted = false;
+  const persistAssistantTurnSnapshot = async (truncated: boolean): Promise<void> => {
+    if (!assistantTurnPersistable || assistantTurnPersisted) return;
+    assistantTurnPersisted = true;
+    await persistAssistantTurn({
+      processed,
+      userId,
+      snapshot: {
+        content: assembler.canonicalText(),
+        model: modelUsed,
+        provider: providerUsed,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        truncated,
+      },
+    });
+  };
+
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       for await (const chunk of chunks) {
@@ -888,6 +914,9 @@ export async function buildAdapterStreamResponse(
       }
 
       if (assembler.lastError === null) {
+        // Financial settlement is durable at this point; persist the turn
+        // before the terminal sentinel so a reload always finds it.
+        await persistAssistantTurnSnapshot(false);
         await onSuccessfulTurn?.();
       }
 
@@ -941,6 +970,10 @@ export async function buildAdapterStreamResponse(
           outcome: 'failed',
         });
       }
+      // AUDIT-FIX BUG-10/STR-5: an aborted stream (tab close, Stop, dropped
+      // connection) already settled billing here but persisted nothing, so the
+      // turn was billed and lost. Save what was generated, marked truncated.
+      await persistAssistantTurnSnapshot(true);
     },
   });
 

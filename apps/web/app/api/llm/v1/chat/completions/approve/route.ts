@@ -16,6 +16,7 @@ import { runAuthGate } from '../lib/auth-gate';
 import { processRequest, type ProcessedRequest } from '../lib/request-processor';
 import { loadMcpToolDefs } from '../lib/tool-loop';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
+import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -32,6 +33,10 @@ import {
   type ClaimedCloudAgentApprovalCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
+import {
+  loadConnectorToolPermissions,
+  type ConnectorToolPermissions,
+} from '../lib/connector-tool-permissions';
 
 /**
  * Resume a suspended managed agent from tenant-owned server state.
@@ -166,44 +171,56 @@ async function handleToolApproval(request: NextRequest) {
   // Restore internal-only signed thinking blocks after public request parsing.
   processed.llmRequest.messages = claim.checkpoint.messages;
 
-  const mcpTools = await (async () => {
-    try {
-      const [operatorTools, connectorTools] = await Promise.all([
-        loadMcpToolDefs(),
-        loadUserConnectorToolDefs(userId, {
-          customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
-        }),
-      ]);
-      return [...operatorTools, ...connectorTools];
-    } catch (error) {
-      // No provider or tool side effect has started yet, so this exact lease
-      // is safe to return to pending. Without the release, a transient MCP or
-      // connector-discovery outage permanently strands the approval card.
-      // The admission pass may already have reserved paid usage, so release
-      // that reservation explicitly instead of waiting for reconciliation.
-      if (processed.managedUsage) {
-        await finalizeManagedUsageRequest({
-          ...processed.managedUsage,
-          outcome: 'failed',
-          actualCostCents: 0,
-          usage: { reason: 'tool_discovery_failed' },
-        }).catch((settlementError) => {
-          logger.error(
-            {
-              event: 'tool_resume_discovery_release_unrecorded',
-              error: settlementError,
-              userId,
-              requestId: processed.requestId,
-              runId: claim.checkpoint.runId,
-            },
-            'Managed tool-resume reservation release could not be persisted',
-          );
-        });
+  // AUDIT-FIX CON-1: the resume path used to trust the client's decision alone.
+  // The user's saved verdicts are loaded here, BEFORE the durable continuation
+  // starts, and applied twice:
+  //   1. `deny` tools are dropped from the offered catalog (CON-2), so the
+  //      loop's `isToolOffered` guard fails closed for them even if a decision
+  //      somehow survives;
+  //   2. any `approved` decision naming a blocked tool is rewritten to
+  //      `rejected` below, so the loop appends a denial result instead of
+  //      executing.
+  const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
+    await (async () => {
+      try {
+        const permissions = await loadConnectorToolPermissions(db, userId);
+        const [operatorTools, connectorTools] = await Promise.all([
+          loadMcpToolDefs(),
+          loadUserConnectorToolDefs(userId, {
+            customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+            isToolDenied: permissions.isConnectorToolDenied,
+          }),
+        ]);
+        return { mcpTools: [...operatorTools, ...connectorTools], permissions };
+      } catch (error) {
+        // No provider or tool side effect has started yet, so this exact lease
+        // is safe to return to pending. Without the release, a transient MCP or
+        // connector-discovery outage permanently strands the approval card.
+        // The admission pass may already have reserved paid usage, so release
+        // that reservation explicitly instead of waiting for reconciliation.
+        if (processed.managedUsage) {
+          await finalizeManagedUsageRequest({
+            ...processed.managedUsage,
+            outcome: 'failed',
+            actualCostCents: 0,
+            usage: { reason: 'tool_discovery_failed' },
+          }).catch((settlementError) => {
+            logger.error(
+              {
+                event: 'tool_resume_discovery_release_unrecorded',
+                error: settlementError,
+                userId,
+                requestId: processed.requestId,
+                runId: claim.checkpoint.runId,
+              },
+              'Managed tool-resume reservation release could not be persisted',
+            );
+          });
+        }
+        await releaseClaim(db, userId, claim);
+        throw error;
       }
-      await releaseClaim(db, userId, claim);
-      throw error;
-    }
-  })();
+    })();
 
   if (processed.managedUsage) {
     try {
@@ -238,6 +255,30 @@ async function handleToolApproval(request: NextRequest) {
     }
   }
 
+  const { mcpTools, permissions: connectorPermissions } = discovery;
+
+  // Rewrite approvals for blocked tools.
+  const blockedToolCallIds = new Set(
+    claim.checkpoint.pendingToolCalls
+      .filter((call) => connectorPermissions.isDenied(call.qualifiedName))
+      .map((call) => call.id),
+  );
+  const enforcedApprovals = claim.approvals.map((approval) =>
+    approval.decision === 'approved' && blockedToolCallIds.has(approval.toolCallId)
+      ? { ...approval, decision: 'rejected' as const }
+      : approval,
+  );
+  if (blockedToolCallIds.size > 0) {
+    logger.warn(
+      {
+        userId,
+        runId: claim.checkpoint.runId,
+        blockedToolCalls: blockedToolCallIds.size,
+      },
+      'Tool approval overridden: the resumed tool is blocked by the user permission store',
+    );
+  }
+
   let workflow;
   try {
     workflow = await startCloudAgentWorkflowExecution({
@@ -253,7 +294,7 @@ async function handleToolApproval(request: NextRequest) {
         initialEventSequence: claim.checkpoint.nextEventSequence,
         initialCompletedSteps: claim.checkpoint.completedSteps,
         invocationContinuation: false,
-        resume: { approvals: claim.approvals },
+        resume: { approvals: enforcedApprovals },
       },
       predecessorApproval: {
         checkpointId: claim.checkpoint.id,

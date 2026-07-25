@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { classifyError } from '@agiworkforce/provider-runtime';
 import { secureToken } from '@/lib/secure-random';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
@@ -242,6 +243,191 @@ export async function buildNonStreamResponse(
   return response;
 }
 
+/**
+ * Client-visible failure shape for an upstream provider error.
+ *
+ * AUDIT-FIX SYS-16/17/18/19: this used to map only 401/402/404/429 by
+ * SUBSTRING-MATCHING ENGLISH ERROR TEXT (`errorMessage.includes('rate limit')`),
+ * and everything else collapsed to `500 server_error` with the RAW provider
+ * message as `publicMessage` — which leaked the managed-cloud provider's
+ * identity, its internal error payloads, and occasionally upstream account
+ * detail straight into the browser. Meanwhile `adapter-errors.ts` had already
+ * been setting a structured `error.status` for years that nothing ever read.
+ *
+ * It now classifies through `classifyError` (which reads that structured
+ * status first and only falls back to text) and maps each category to a
+ * distinct, ACTIONABLE client code. `publicMessage` is always server-authored:
+ * upstream text is logged, never returned.
+ */
+interface UpstreamErrorShape {
+  status: number;
+  /** OpenAI-compatible `error.type`. Kept stable for existing consumers. */
+  type: string;
+  /** Specific, stable machine code the client can branch on. */
+  code: string;
+  message: string;
+}
+
+/**
+ * Category → client contract. Every branch returns a message the USER can act
+ * on; none of them contain provider names, payloads, or stack detail.
+ */
+function mapClassifiedUpstreamError(
+  classified: ReturnType<typeof classifyError>,
+  provider: string,
+): UpstreamErrorShape {
+  switch (classified.category) {
+    case 'aborted':
+      return {
+        status: 499,
+        type: 'request_cancelled',
+        code: 'request_cancelled',
+        message: 'The request was cancelled before the model finished.',
+      };
+
+    case 'api_timeout':
+      return {
+        status: 504,
+        type: 'timeout_error',
+        code: 'provider_timeout',
+        message:
+          'The model took too long to respond. Try again, or pick a faster model from the model picker.',
+      };
+
+    case 'rate_limit': {
+      // Retained verbatim (including the provider label) because it is an
+      // intentional, actionable recovery instruction and the serving provider
+      // is already visible in the model picker for explicit selections.
+      const providerLabel = provider === 'google' ? 'Google' : provider;
+      return {
+        status: 429,
+        type: 'rate_limit_error',
+        code: 'provider_rate_limited',
+        message: `${providerLabel} is temporarily at capacity. Try again shortly, or choose Auto to use another available model.`,
+      };
+    }
+
+    case 'server_overload':
+    case 'capacity_off_switch':
+      return {
+        status: 503,
+        type: 'service_unavailable',
+        code: 'provider_overloaded',
+        message:
+          'This model is overloaded right now. Try again in a moment, or choose Auto to use another available model.',
+      };
+
+    case 'context_overflow':
+      return {
+        status: 400,
+        type: 'invalid_request_error',
+        code: 'context_length_exceeded',
+        message:
+          'This conversation is too long for the selected model. Start a new chat, remove some attachments, or choose a model with a larger context window.',
+      };
+
+    case 'max_output':
+      return {
+        status: 400,
+        type: 'invalid_request_error',
+        code: 'max_output_tokens_exceeded',
+        message:
+          'The response hit the maximum output length for this model. Ask for a shorter answer, or split the request.',
+      };
+
+    case 'safety':
+      return {
+        status: 400,
+        type: 'content_filter',
+        code: 'content_filter',
+        message:
+          "The provider's safety system stopped this response. Rephrase the request, or try a different model.",
+      };
+
+    case 'media_too_large':
+      return {
+        status: 400,
+        type: 'invalid_request_error',
+        code: 'attachment_too_large',
+        message:
+          'An attachment is too large for the selected model. Remove or shrink it, or choose a model with larger media limits.',
+      };
+
+    case 'tool_validation':
+      return {
+        status: 400,
+        type: 'invalid_request_error',
+        code: 'tool_call_invalid',
+        message:
+          'The model produced a tool call this request could not accept. Try again, or turn off the tools you do not need for this turn.',
+      };
+
+    case 'invalid_model':
+      return {
+        status: 404,
+        type: 'not_found',
+        code: 'model_not_found',
+        message: 'The selected model is not available. Choose another model, or switch to Auto.',
+      };
+
+    case 'invalid_input':
+      return {
+        status: 400,
+        type: 'invalid_request_error',
+        code: 'provider_rejected_request',
+        message:
+          'The provider rejected this request as malformed. Try again, and remove any unusual attachments or parameters.',
+      };
+
+    case 'auth':
+      // An upstream 401/403 is OUR credential problem, not the caller's. The
+      // status is preserved (existing clients branch on it) but the message no
+      // longer implies the USER needs to re-authenticate with us.
+      return {
+        status: 401,
+        type: 'authentication_error',
+        code: 'provider_credentials_rejected',
+        message:
+          'This model is temporarily unavailable because of a service configuration problem. Choose another model, or try again shortly.',
+      };
+
+    case 'connection':
+      return {
+        status: 502,
+        type: 'upstream_error',
+        code: 'provider_unreachable',
+        message:
+          'The model could not be reached. Try again, or choose Auto to use another available model.',
+      };
+
+    case 'pause_turn':
+      return {
+        status: 502,
+        type: 'upstream_error',
+        code: 'provider_paused_turn',
+        message: 'The model paused mid-turn and could not continue. Try again.',
+      };
+
+    case 'client_error':
+      return {
+        status: 400,
+        type: 'invalid_request_error',
+        code: 'provider_rejected_request',
+        message: 'The provider rejected this request. Try again, or choose another model.',
+      };
+
+    case 'server_error':
+    case 'unknown':
+      return {
+        status: 502,
+        type: 'upstream_error',
+        code: 'provider_error',
+        message:
+          'The model failed to produce a response. Try again, or choose Auto to use another available model.',
+      };
+  }
+}
+
 export function buildUpstreamErrorResponse(
   error: unknown,
   provider: string,
@@ -252,12 +438,18 @@ export function buildUpstreamErrorResponse(
   context: 'streaming' | 'non-streaming',
 ): NextResponse {
   const errorMessage = error instanceof Error ? error.message : `${context} request failed`;
+  const classified = classifyError(error);
 
+  // The raw upstream text stays HERE, in the server log, with everything an
+  // operator needs to debug it. It is deliberately not part of the response.
   logger.error(
     {
       error,
       errorMessage,
       errorStack: error instanceof Error ? error.stack : undefined,
+      errorCategory: classified.category,
+      errorCode: classified.code,
+      upstreamStatus: classified.status,
       provider,
       model,
       originalModel: requestedModel,
@@ -267,28 +459,30 @@ export function buildUpstreamErrorResponse(
     context === 'streaming' ? 'Streaming request failed' : 'LLM request failed',
   );
 
-  let statusCode = 500;
-  let errorType = 'server_error';
-  let publicMessage = errorMessage;
-
-  if (errorMessage.includes('authentication') || errorMessage.includes('401')) {
-    statusCode = 401;
-    errorType = 'authentication_error';
-  } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
-    statusCode = 429;
-    errorType = 'rate_limit_error';
-    const providerLabel = provider === 'google' ? 'Google' : provider;
-    publicMessage = `${providerLabel} is temporarily at capacity. Try again shortly, or choose Auto to use another available model.`;
-  } else if (errorMessage.includes('insufficient credits') || errorMessage.includes('402')) {
-    statusCode = 402;
-    errorType = 'insufficient_credits';
-  } else if (errorMessage.includes('not found') || errorMessage.includes('404')) {
-    statusCode = 404;
-    errorType = 'not_found';
-  }
+  // Billing failures are not a provider taxonomy category: `classifyError`
+  // sees an upstream 402 as a generic client error, but the caller needs the
+  // distinct insufficient-credits contract that already exists.
+  const shape: UpstreamErrorShape =
+    classified.status === 402
+      ? {
+          status: 402,
+          type: 'insufficient_credits',
+          code: 'insufficient_credits',
+          message: 'This request could not be paid for. Top up credits and try again.',
+        }
+      : mapClassifiedUpstreamError(classified, provider);
 
   return NextResponse.json(
-    { error: { message: publicMessage, type: errorType } },
-    { status: statusCode },
+    {
+      error: {
+        message: shape.message,
+        type: shape.type,
+        code: shape.code,
+        // Retryability is already computed by the classifier; surfacing it
+        // saves every client from re-deriving it from the status code.
+        retryable: classified.retryable,
+      },
+    },
+    { status: shape.status },
   );
 }
