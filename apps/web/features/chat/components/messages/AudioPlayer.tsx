@@ -65,6 +65,11 @@ export const AudioPlayer = React.memo(function AudioPlayer({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [waveformData, setWaveformData] = useState<number[]>([]);
+  /**
+   * STB-28: true only when `waveformData` was measured from decoded audio.
+   * When false the bars are a neutral placeholder, not a property of the audio.
+   */
+  const [waveformMeasured, setWaveformMeasured] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Refs
@@ -105,13 +110,29 @@ export const AudioPlayer = React.memo(function AudioPlayer({
     return compact ? 24 : 48;
   }, [compact]);
 
+  /**
+   * STB-28: a flat, uniform bar row used whenever we have no decoded audio to
+   * measure — the normal case for a src-only message, and after a decode error.
+   *
+   * This previously rendered `0.2 + Math.random() * 0.8` per bar, i.e. an
+   * invented waveform presented as a property of the recording. It looked
+   * exactly like a real analysis, so a user reading loudness or silence off it
+   * was reading noise. A uniform row is visibly a placeholder.
+   */
+  const placeholderWaveform = useMemo(
+    () => Array.from({ length: barCount }, () => 0.35),
+    [barCount],
+  );
+
   // Generate waveform data from audio
   useEffect(() => {
     if (!audioBlob) {
-      // Generate random waveform for demo/fallback
-      const randomWaveform = Array.from({ length: barCount }, () => 0.2 + Math.random() * 0.8);
-      // Use queueMicrotask to avoid cascading renders
-      queueMicrotask(() => setWaveformData(randomWaveform));
+      // No bytes to analyse — show the neutral placeholder, and mark it as such.
+      // Use queueMicrotask to avoid cascading renders.
+      queueMicrotask(() => {
+        setWaveformData(placeholderWaveform);
+        setWaveformMeasured(false);
+      });
       return;
     }
 
@@ -140,17 +161,19 @@ export const AudioPlayer = React.memo(function AudioPlayer({
         const normalizedData = filteredData.map((val) => (maxVal > 0 ? val / maxVal : 0.2));
 
         setWaveformData(normalizedData);
+        setWaveformMeasured(true);
         audioContext.close();
       } catch (error) {
         console.error('Error analyzing audio:', error);
-        // Fallback to random waveform
-        const randomWaveform = Array.from({ length: barCount }, () => 0.2 + Math.random() * 0.8);
-        setWaveformData(randomWaveform);
+        // Decode failed — fall back to the neutral placeholder (STB-28), never
+        // to invented amplitudes.
+        setWaveformData(placeholderWaveform);
+        setWaveformMeasured(false);
       }
     };
 
     analyzeAudio();
-  }, [audioBlob, barCount]);
+  }, [audioBlob, barCount, placeholderWaveform]);
 
   // Initialize audio element
   useEffect(() => {
@@ -286,8 +309,11 @@ export const AudioPlayer = React.memo(function AudioPlayer({
         aria-valuenow={progressPercent}
         tabIndex={0}
       >
-        {/* Waveform bars */}
-        <div className="flex h-full w-full items-center justify-between">
+        {/* Waveform bars — measured amplitudes, or a neutral placeholder (STB-28) */}
+        <div
+          className="flex h-full w-full items-center justify-between"
+          title={waveformMeasured ? undefined : 'Waveform preview unavailable for this clip'}
+        >
           {waveformData.map((level, index) => {
             const barProgress = (index / waveformData.length) * 100;
             const isPlayed = barProgress <= progressPercent;
@@ -298,6 +324,8 @@ export const AudioPlayer = React.memo(function AudioPlayer({
                 className={cn(
                   'rounded-full transition-colors duration-100',
                   isPlayed ? 'bg-primary' : 'bg-muted-foreground/30',
+                  // STB-28: dim the placeholder so it never reads as measured data.
+                  !waveformMeasured && 'opacity-50',
                 )}
                 style={{
                   width: config.barWidth,

@@ -52,6 +52,10 @@ vi.mock('framer-motion', () => ({
     ),
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  // AUDIT-FIX GOV-33: the component now reads prefers-reduced-motion through
+  // framer-motion so it can drop INLINE motion styles the global CSS reset
+  // cannot reach. The mock must export it or every render throws.
+  useReducedMotion: () => false,
 }));
 
 vi.mock('@/lib/hooks/useTTS', () => ({
@@ -278,10 +282,51 @@ describe('ChatMessageList rendering', () => {
     expect(screen.getByRole('log')).toBeInTheDocument();
   });
 
-  it('has aria-live="polite" on the scroll container', () => {
+  /**
+   * AUDIT-FIX GOV-29: this test previously asserted aria-live="polite" on the
+   * SCROLL CONTAINER. That contract was the defect — it made the whole
+   * transcript one live region, so unrelated content was re-announced on every
+   * re-render and the streamed delta was never announced on its own. The
+   * container is now an inert log that reports aria-busy, and a dedicated
+   * off-screen status region carries the announcements.
+   */
+  it('silences the scroll container as a live region and reports busy state', () => {
     render(<ChatMessageList messages={messages} />);
     const log = screen.getByRole('log');
-    expect(log).toHaveAttribute('aria-live', 'polite');
+    expect(log).toHaveAttribute('aria-live', 'off');
+    expect(log).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('marks the scroll container busy while a response is generating', () => {
+    render(<ChatMessageList messages={messages} isLoading={true} />);
+    expect(screen.getByRole('log')).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('announces generation start and completion in a dedicated status region', async () => {
+    const streaming = [
+      makeMessage({ id: 'u1', role: 'user', content: 'hi' }),
+      makeMessage({ id: 'a1', role: 'assistant', content: 'partial', isStreaming: true }),
+    ];
+    const { rerender } = render(<ChatMessageList messages={streaming} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Generating response');
+    });
+
+    act(() => {
+      rerender(
+        <ChatMessageList
+          messages={[
+            makeMessage({ id: 'u1', role: 'user', content: 'hi' }),
+            makeMessage({ id: 'a1', role: 'assistant', content: 'all done', isStreaming: false }),
+          ]}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Response complete. all done');
+    });
   });
 });
 

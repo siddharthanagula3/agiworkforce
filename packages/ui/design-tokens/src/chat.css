@@ -10,9 +10,18 @@
     --chat-input-bg: #ffffff;
     --chat-code-bg: #f6f8fa;
     --chat-text-primary: #1a1915;
+    /* AUDIT-FIX GOV-34: every value below is used at 11-12px, where WCAG AA
+       requires 4.5:1. Measured against this theme's own surfaces
+       (--chat-bg #faf9f7 and --chat-input-bg #ffffff):
+         secondary   #6b6560  5.46:1 on #faf9f7  (unchanged)
+         muted       #726d67  4.87:1 on #faf9f7 / 5.12:1 on #ffffff (was #8b8680, 3.5:1)
+         placeholder #75706a  4.66:1 on #faf9f7 / 4.90:1 on #ffffff (was #9b9590, 3.0:1)
+       The prominence order primary > secondary > muted > placeholder is
+       preserved — every step is now just above the AA floor instead of below
+       it. */
     --chat-text-secondary: #6b6560;
-    --chat-text-muted: #8b8680;
-    --chat-text-placeholder: #9b9590;
+    --chat-text-muted: #726d67;
+    --chat-text-placeholder: #75706a;
     --chat-border: rgba(26, 25, 21, 0.08);
     --chat-border-strong: rgba(26, 25, 21, 0.15);
     --chat-border-subtle: rgba(26, 25, 21, 0.08);
@@ -51,9 +60,20 @@
     --chat-input-bg: #242220;
     --chat-code-bg: #11100d;
     --chat-text-primary: #e8e4db;
-    --chat-text-secondary: #8b8680;
-    --chat-text-muted: #5c5955;
-    --chat-text-placeholder: #6b6560;
+    /* AUDIT-FIX GOV-34: this theme was the worst of the four. --chat-text-muted
+       #5c5955 measured 2.53:1 against --chat-bg #1a1915 — barely more than half
+       the AA floor at the 11-12px sizes it is used at — and --chat-text-placeholder
+       #6b6560 measured 3.06:1 against --chat-input-bg #242220. The two also sat
+       so close to each other (and to the secondary tone) that the hierarchy did
+       not read at all. New values, measured:
+         secondary   #a8a29a  6.95:1 on #1a1915  (was #8b8680, 4.88:1)
+         muted       #8f8982  5.08:1 on #1a1915
+         placeholder #8f8982  4.58:1 on #242220 (the input surface it sits on)
+       Prominence now steps primary > secondary > muted/placeholder with real
+       separation, and every step clears AA. */
+    --chat-text-secondary: #a8a29a;
+    --chat-text-muted: #8f8982;
+    --chat-text-placeholder: #8f8982;
     --chat-border: rgba(255, 235, 205, 0.08);
     --chat-border-strong: rgba(255, 235, 205, 0.15);
     --chat-border-subtle: rgba(255, 235, 205, 0.08);
@@ -99,9 +119,17 @@
     --chat-input-bg: #ffffff;
     --chat-code-bg: #f7f7f8;
     --chat-text-primary: #0d0d0d;
+    /* AUDIT-FIX GOV-34: one #8e8e8e served as both muted and placeholder and
+       measured 3.28:1 on #ffffff — below AA at the 11-12px sizes in use.
+         secondary        #5d5d5d  6.58:1 on #ffffff (unchanged)
+         muted/placeholder #6a6a6a 5.41:1 on #ffffff, 5.14:1 on the
+                                   #f9f9f9 sidebar, 5.05:1 on the #f7f7f8 code
+                                   surface and 4.75:1 on the #f0f0f0 hover
+                                   surface — AA on every surface this theme
+                                   paints it against, not just the page bg. */
     --chat-text-secondary: #5d5d5d;
-    --chat-text-muted: #8e8e8e;
-    --chat-text-placeholder: #8e8e8e;
+    --chat-text-muted: #6a6a6a;
+    --chat-text-placeholder: #6a6a6a;
     --chat-border: rgba(0, 0, 0, 0.1);
     --chat-border-strong: rgba(0, 0, 0, 0.16);
     --chat-border-subtle: rgba(0, 0, 0, 0.08);
@@ -128,9 +156,14 @@
     --chat-input-bg: #2f2f2f;
     --chat-code-bg: #1e1e1e;
     --chat-text-primary: #ececec;
+    /* AUDIT-FIX GOV-34: the shared #8e8e8e cleared AA on --chat-bg #212121
+       (4.91:1) but not on --chat-input-bg #2f2f2f (4.09:1), which is exactly
+       where the placeholder is rendered.
+         secondary        #b4b4b4  7.77:1 on #212121 (unchanged)
+         muted/placeholder #999999 5.65:1 on #212121, 4.70:1 on #2f2f2f. */
     --chat-text-secondary: #b4b4b4;
-    --chat-text-muted: #8e8e8e;
-    --chat-text-placeholder: #8e8e8e;
+    --chat-text-muted: #999999;
+    --chat-text-placeholder: #999999;
     --chat-border: rgba(255, 255, 255, 0.1);
     --chat-border-strong: rgba(255, 255, 255, 0.16);
     --chat-border-subtle: rgba(255, 255, 255, 0.08);
