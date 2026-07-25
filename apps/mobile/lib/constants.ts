@@ -5,17 +5,31 @@
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://agiworkforce.com';
 
+/**
+ * Express api-gateway base URL.
+ *
+ * STB-8 fix: some routes live ONLY on the gateway (`services/api-gateway`), not
+ * on the Next.js app, and no rewrite bridges them — `next.config.ts` and
+ * `vercel.json` only rewrite `/v1/*` for the api host. Calling a gateway-only
+ * route against {@link API_URL} therefore 404s. Point those call sites here.
+ *
+ * Both hosts are ours, so `egressGuard` blocks them identically in Local mode.
+ */
+export const GATEWAY_URL = process.env.EXPO_PUBLIC_GATEWAY_URL ?? 'https://api.agiworkforce.com';
+
 // CRIT-MOB-02 fix (2026-05-04): EXPO_PUBLIC_* vars are inlined into the JS
 // bundle by Metro at build time — the Deepgram key was world-readable in any
 // extracted IPA/APK. The key is now held exclusively server-side.
 //
-// Real-time voice transcription uses an ephemeral Deepgram token issued by the
-// backend (/api/v1/voice/token) which is valid for 60 seconds and scoped to a
-// single request. The backend never returns the master key to the client.
-//
 // REMOVED: EXPO_PUBLIC_DEEPGRAM_API_KEY
-// Callers that previously passed DEEPGRAM_API_KEY to transcribeWithDeepgram()
-// must now call getDeepgramEphemeralToken() first.
+//
+// STB-22: the replacement described here — an ephemeral Deepgram token from
+// `/api/v1/voice/token` — was never built. No such route exists on the Next.js
+// app or the api-gateway; the real voice surface is server-side transcription at
+// `/api/voice/transcribe` (plus `/api/voice/health`), which keeps the provider
+// key server-side by never handing the client a token at all. The dead client
+// helpers that called it have been removed from
+// `src/features/voice/services/voice.ts`.
 
 export const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? 'wss://signaling.agiworkforce.com';
 

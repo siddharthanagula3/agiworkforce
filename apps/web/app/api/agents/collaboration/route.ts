@@ -1,118 +1,40 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
-import { requireCsrfToken } from '@/lib/csrf';
-import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { logger } from '@/lib/logger';
-import { randomUUID } from 'crypto';
+import { withRateLimitHandler } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 
 /**
- * Agent Collaboration API
- * Endpoint: POST /api/agents/collaboration
+ * POST /api/agents/collaboration
  *
- * Accepts multi-agent collaboration requests and returns a collaboration session
- * with a coordinator managing multiple agent participants.
+ * STB-20: RETIRED. Zero in-repo callers. The live /api/agents surface is the Express
+ * api-gateway's own agents router (services/api-gateway); this Next.js subtree is
+ * an abandoned parallel implementation that still authenticated and queried
+ * private rows on every request.
+ *
+ * Retired in place rather than deleted, matching the convention already used by
+ * /api/agents/session and /api/usage/deduct: any client still pointed here gets
+ * an explicit ENDPOINT_RETIRED signal instead of a 404 that reads like a broken
+ * deploy. The handler no longer authenticates against or reads private rows.
  */
-
-const CollaborationRequestSchema = z.object({
-  task: z.string().min(1).max(10_000),
-  sessionId: z.string().optional(),
-  agents: z.array(z.string()).min(1).max(10),
-});
-
-export type CollaborationStatus = 'pending' | 'active' | 'completed' | 'failed';
-
-export interface CollaborationResponse {
-  collaborationId: string;
-  agents: string[];
-  status: CollaborationStatus;
-  sessionId: string;
-  createdAt: string;
-}
-
-async function handleCollaboration(request: NextRequest): Promise<NextResponse> {
-  // CORS preflight
-  const preflightResponse = handleCorsPreflightRequest(request);
-  if (preflightResponse) return preflightResponse;
-
-  // CSRF protection for state-changing POST endpoint
-  const csrfError = await requireCsrfToken(request);
-  if (csrfError) return csrfError as NextResponse;
-
-  const { userId } = await getClerkAuthUser(request);
-
-  // Rate limiting - collaboration uses the same budget as LLM completion
-  const rateLimitResponse = await withRateLimit(request, 'llm-completion');
-  if (rateLimitResponse) return rateLimitResponse;
-
-  // Parse body
-  let body: unknown;
+async function handler(request: NextRequest): Promise<NextResponse> {
   try {
-    body = await request.json();
+    await getClerkAuthUser(request);
   } catch {
-    return NextResponse.json(
-      { error: 'Invalid JSON in request body' },
-      {
-        status: 400,
-        headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
-      },
-    );
+    throw createError.unauthorized('Authentication required');
   }
 
-  const validationResult = CollaborationRequestSchema.safeParse(body);
-  if (!validationResult.success) {
-    return NextResponse.json(
-      {
-        error: 'Invalid request body',
-        details: validationResult.error.issues,
-      },
-      {
-        status: 400,
-        headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
-      },
-    );
-  }
-
-  const { task, sessionId, agents } = validationResult.data;
-
-  // Generate a collaboration ID for this session
-  const collaborationId = randomUUID();
-  const resolvedSessionId = sessionId ?? randomUUID();
-
-  logger.info(
+  return NextResponse.json(
     {
-      collaborationId,
-      userId,
-      agentCount: agents.length,
-      sessionId: resolvedSessionId,
-      taskLength: task.length,
+      error: {
+        code: 'ENDPOINT_RETIRED',
+        message: 'Agent collaboration is handled by the api-gateway agents router.',
+      },
     },
-    'Agent collaboration session created',
-  );
-
-  const response: CollaborationResponse = {
-    collaborationId,
-    agents,
-    status: 'active',
-    sessionId: resolvedSessionId,
-    createdAt: new Date().toISOString(),
-  };
-
-  return NextResponse.json(response, {
-    status: 200,
-    headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
-  });
-}
-
-export const POST = withErrorHandler(handleCollaboration);
-
-export function OPTIONS(request: NextRequest) {
-  return (
-    handleCorsPreflightRequest(request) ??
-    new NextResponse(null, { status: 204, headers: getSecurityHeaders() })
+    { status: 410 },
   );
 }
+
+export const POST = withErrorHandler(withRateLimitHandler(handler, 'llm-completion'));

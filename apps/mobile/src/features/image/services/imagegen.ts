@@ -37,13 +37,6 @@ export interface GeneratedImage {
   revisedPrompt?: string;
 }
 
-export interface ImageGenProgress {
-  id: string;
-  status: 'pending' | 'generating' | 'completed' | 'failed';
-  progress: number;
-  estimatedTimeRemaining?: number;
-}
-
 // ---------------------------------------------------------------------------
 // API Functions
 // ---------------------------------------------------------------------------
@@ -68,28 +61,11 @@ export function getGeneratedImageUri(image: GeneratedImage | undefined): string 
   return null;
 }
 
-/**
- * Poll the status/progress of an in-flight image generation.
- * @throws {Error} On network or server errors
- */
-export async function getImageStatus(id: string): Promise<ImageGenProgress> {
-  if (!id) {
-    throw new Error('Image generation ID is required');
-  }
-  return api.get<ImageGenProgress>(`/api/media/image/status/${encodeURIComponent(id)}`);
-}
-
-/**
- * List all generated images for a conversation.
- * Returns empty array if the endpoint is unavailable.
- */
-export async function listGeneratedImages(conversationId: string): Promise<ImageGenResponse[]> {
-  if (!conversationId) return [];
-  try {
-    return await api.get<ImageGenResponse[]>(
-      `/api/media/image/list?conversationId=${encodeURIComponent(conversationId)}`,
-    );
-  } catch {
-    return [];
-  }
-}
+// STB-21: `getImageStatus()` and `listGeneratedImages()` were removed. They
+// targeted `/api/media/image/status/:id` and `/api/media/image/list`, neither of
+// which exists — only `/api/media/image/generate` does (the *video* pipeline has
+// a status route, which is where the shape was copied from). Both had zero
+// callers, and `listGeneratedImages` wrapped its 404 in `try {} catch { return
+// [] }`, so a caller would have rendered "no images" rather than an error.
+// `/api/media/image/generate` returns completed images inline; there is nothing
+// to poll. Generated media is listed via `/api/library`.

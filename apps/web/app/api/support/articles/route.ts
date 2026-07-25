@@ -1,19 +1,29 @@
+import 'server-only';
+
+import { NextResponse } from 'next/server';
+
 /**
- * GET /api/support/articles · list support articles.
- * Optionally filter by category_id via ?category=<id>.
- * Static data; no DB required.
+ * GET /api/support/articles
+ *
+ * STB-20: RETIRED. Zero in-repo callers. These served static arrays from
+ * lib/support/static-data.ts to a client that was never built; the /help and
+ * /support pages render their content directly.
+ *
+ * Retired in place rather than deleted, matching the convention already used by
+ * /api/agents/session and /api/usage/deduct: any client still pointed here gets
+ * an explicit ENDPOINT_RETIRED signal instead of a 404 that reads like a broken
+ * deploy.
  */
-
-import { NextRequest, NextResponse } from 'next/server';
-import { STATIC_ARTICLES } from '@/lib/support/static-data';
-
-export async function GET(request: NextRequest) {
-  const url = new URL(request.url);
-  const category = url.searchParams.get('category');
-
-  const articles = category
-    ? STATIC_ARTICLES.filter((a) => a.category_id === category)
-    : STATIC_ARTICLES;
-
-  return NextResponse.json({ articles });
+function handler(): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: 'ENDPOINT_RETIRED',
+        message: 'Support articles are rendered directly by the /help page.',
+      },
+    },
+    { status: 410 },
+  );
 }
+
+export const GET = handler;

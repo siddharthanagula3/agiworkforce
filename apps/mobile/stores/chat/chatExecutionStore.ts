@@ -939,10 +939,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           .filter((x) => x.result !== null);
 
         if (successful.length > 0) {
-          uploadedAttachments = successful.map(({ result, attachment }) => ({
+          // STB-4: keep the server-confirmed asset id, mime type, and name —
+          // the completion route is authoritative for all three.
+          uploadedAttachments = successful.map(({ result }) => ({
+            assetId: result!.id,
             url: result!.url,
-            mimeType: attachment.mimeType,
-            fileName: attachment.fileName,
+            mimeType: result!.mimeType,
+            fileName: result!.name,
           }));
         }
       } catch (err) {
@@ -1014,7 +1017,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     const historyMessages: Array<{
       role: string;
-      content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+      content:
+        | string
+        | Array<{
+            type: string;
+            text?: string;
+            image_url?: { url: string };
+            file?: { asset_id: string };
+          }>;
     }> = [
       ...existingMessages
         .filter((m) => !m.isStreaming)
@@ -1025,10 +1035,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               role: m.role,
               content: [
                 ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
-                ...imageAttachments.map((a) => ({
-                  type: 'image_url' as const,
-                  image_url: { url: a.url },
-                })),
+                ...imageAttachments.map((a) =>
+                  a.assetId
+                    ? { type: 'file' as const, file: { asset_id: a.assetId } }
+                    : { type: 'image_url' as const, image_url: { url: a.url } },
+                ),
               ],
             };
           }
@@ -1039,23 +1050,40 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const imageUploads = uploadedAttachments?.filter((a) => a.mimeType.startsWith('image/'));
     const fileUploads = uploadedAttachments?.filter((a) => !a.mimeType.startsWith('image/'));
 
+    // STB-4: an attachment with an `assetId` lives in managed-cloud storage and is
+    // hydrated server-side from that id (see the completions route's
+    // chat-attachment hydration). Only attachments still sitting on this device
+    // — Local mode, or an upload that did not complete — carry a readable
+    // `file://` url and need on-device extraction / OCR. Mixing the two would
+    // hand the on-device parser an `/api/files/{id}` path it cannot read and
+    // produce a "content could not be extracted" stub for a document the server
+    // can read perfectly well.
+    const remoteUploads: string[] =
+      uploadedAttachments?.flatMap((a) => (a.assetId ? [a.assetId] : [])) ?? [];
+    const localImageUploads = imageUploads?.filter((a) => !a.assetId) ?? [];
+    const localFileUploads = fileUploads?.filter((a) => !a.assetId) ?? [];
+
     let messageContent = content;
-    if (fileUploads && fileUploads.length > 0) {
-      const documentContext = await buildAttachedDocumentContext(fileUploads);
+    if (localFileUploads.length > 0) {
+      const documentContext = await buildAttachedDocumentContext(localFileUploads);
       messageContent = [...documentContext, content].filter(Boolean).join('\n\n');
     }
 
-    if (shouldUseLocalRuntime && imageUploads && imageUploads.length > 0) {
-      const imageContext = await buildLocalImageOcrContext(imageUploads);
+    if (shouldUseLocalRuntime && localImageUploads.length > 0) {
+      const imageContext = await buildLocalImageOcrContext(localImageUploads);
       messageContent = [messageContent, ...imageContext].filter(Boolean).join('\n\n');
     }
 
-    if (imageUploads && imageUploads.length > 0) {
+    if (remoteUploads.length > 0 || localImageUploads.length > 0) {
       historyMessages.push({
         role: 'user',
         content: [
           ...(messageContent ? [{ type: 'text', text: messageContent }] : []),
-          ...imageUploads.map((a) => ({ type: 'image_url', image_url: { url: a.url } })),
+          ...remoteUploads.map((assetId) => ({ type: 'file', file: { asset_id: assetId } })),
+          ...localImageUploads.map((a) => ({
+            type: 'image_url',
+            image_url: { url: a.url },
+          })),
         ],
       });
     } else {

@@ -11,7 +11,6 @@
  * never enter this browser store.
  */
 
-import React from 'react';
 import { create } from 'zustand';
 import { normalizeUsagePercentage, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 
@@ -193,29 +192,12 @@ export function selectBudget(state: BillingUsageState): BudgetState {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy / compatibility exports kept from the old stub
+// STB-25: the "legacy / compatibility exports kept from the old stub" block was
+// removed. It shadowed seven real desktop components with null-rendering
+// look-alikes (BrowserVisualization, MonacoEditor, TerminalPanel, MemoryPanel,
+// ScreenCaptureButton, TimeoutWarningDialog, DiffViewer) plus
+// `invoke = async () => ({})` and `countTokens = () => 0`. All type-checked at
+// any call or JSX site that reached them, so a mistaken import rendered nothing
+// and reported success — and `countTokens = () => 0` inside a *billing* store
+// silently zeroed metered usage. None had importers.
 // ---------------------------------------------------------------------------
-
-export const invoke = async () => ({});
-export const isTauri = false;
-export const countTokens = () => 0;
-export const getTokenPercentage = () => 0;
-
-export const BrowserVisualization = () => null;
-export const MonacoEditor = () => null;
-export const TerminalPanel = () => null;
-export const MemoryPanel = () => null;
-export const ScreenCaptureButton = () => null;
-
-export const ErrorBoundary = ({ children }: { children: React.ReactNode }) => children;
-export const TimeoutWarningDialog = () => null;
-export const DiffViewer = () => null;
-export const handleSlashCommand = () => {};
-
-/** Back-compat: old stub exported selectBudget with this fallback shape */
-export const _selectBudgetLegacy = (_state: BillingUsageState): BudgetState => ({
-  enabled: false,
-  dailyBudget: 0,
-  monthlyBudget: 0,
-  spent: 0,
-});

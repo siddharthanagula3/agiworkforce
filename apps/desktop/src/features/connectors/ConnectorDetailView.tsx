@@ -125,6 +125,9 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
   // View may unmount when user clicks Back mid-permission-save.
   const isMounted = useIsMounted();
   const [loadError, setLoadError] = useState<string | null>(null);
+  // CON-26: a failed permission write used to be console.error-only, so the
+  // optimistic toggle rolled back with no explanation on screen.
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const store = getConnectorPermissionStore();
@@ -174,13 +177,16 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
       // Optimistic update
       setPermissions((prev) => ({ ...prev, [tool.name]: level }));
       setSaving((prev) => ({ ...prev, [tool.name]: true }));
+      if (isMounted.current) setSaveError(null);
       try {
         await store.set(connector.id, tool.name, level, tool.destructive);
       } catch (err) {
-        // Rollback on failure
+        // Rollback on failure — and say so. A permission toggle that snaps back
+        // without explanation is indistinguishable from a mis-click.
         if (isMounted.current) {
           const previous = permissions[tool.name] ?? defaultPermissionForTool(tool.destructive);
           setPermissions((prev) => ({ ...prev, [tool.name]: previous }));
+          setSaveError(`${tool.name}: ${err instanceof Error ? err.message : String(err)}`);
         }
         console.error('[ConnectorDetailView] save failed:', err);
       } finally {
@@ -238,11 +244,20 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
         </p>
       </div>
 
-      {/* Error banner */}
+      {/* Error banners */}
       {loadError && (
         <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           <span>Could not load saved permissions: {loadError}</span>
+        </div>
+      )}
+      {saveError && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          <span>Permission not saved — {saveError}</span>
         </div>
       )}
 

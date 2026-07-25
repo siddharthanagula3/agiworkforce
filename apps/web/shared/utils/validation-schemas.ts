@@ -170,11 +170,10 @@ export const missionSchema = z.object({
 // BILLING SCHEMAS
 // ===================================
 
-export const tokenPackPurchaseSchema = z.object({
-  packId: z.string().min(1, 'Pack ID is required'),
-  tokens: z.number().int().positive('Tokens must be positive'),
-  price: z.number().positive('Price must be positive'),
-});
+// STB-7: `tokenPackPurchaseSchema` was removed alongside
+// features/billing/services/token-pack-purchase.ts. Token packs / credit
+// top-ups are a retired product path ("no top-ups, ever"); the schema had zero
+// consumers and described a purchase no surface can initiate.
 
 export const subscriptionSchema = z.object({
   plan: z.enum(['free', 'pro', 'max']),

@@ -9,11 +9,22 @@ import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } fr
 // passthrough; flipping `PINNING_ENFORCED` in lib/pinning.ts (after ops
 // drops SPKI hashes) makes it enforce pin coverage at the JS layer.
 //
-// Zero-leak: every request here targets OUR managed cloud (`${API_URL}/api/...`,
-// `${API_URL}/api/upload`). Route through guardedFetch so Local mode refuses the
-// call before any network I/O (fail-closed); guardedFetch delegates to
-// secureFetch (TLS pinning) when the request is allowed.
+// Zero-leak: every request here targets OUR managed cloud (`${API_URL}/api/...`).
+// Route through guardedFetch so Local mode refuses the call before any network
+// I/O (fail-closed); guardedFetch delegates to secureFetch (TLS pinning) when
+// the request is allowed. The one exception is the presigned chat-attachment
+// PUT in uploadFile(), which targets the storage provider rather than our cloud
+// and is only reachable after the guarded presign call has already succeeded.
 import { guardedFetch } from '@/lib/egressGuard';
+import { getInfoAsync, uploadAsync, FileSystemUploadType } from 'expo-file-system/legacy';
+import {
+  MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
+  MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  ManagedCloudChatAttachmentCompleteResponseSchema,
+  ManagedCloudChatAttachmentPresignResponseSchema,
+  resolveChatAttachmentMimeType,
+} from '@agiworkforce/cloud-contracts';
 
 // ---------------------------------------------------------------------------
 // Paywall error type
@@ -142,6 +153,12 @@ function handleUnrecoverableAuth(): void {
 interface RequestOptions {
   timeout?: number;
   signal?: AbortSignal;
+  /**
+   * Override the base URL for this request. Use {@link GATEWAY_URL} for routes
+   * that exist only on the Express api-gateway (STB-8); omit for the Next.js
+   * app, which is the default.
+   */
+  baseUrl?: string;
   /** Extra request headers (e.g. an `x-csrf-token` for state-changing posts). */
   headers?: Record<string, string>;
   /** Skip the automatic 401 retry (used internally to avoid infinite loops). */
@@ -164,7 +181,7 @@ async function request<T>(
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const response = await guardedFetch(`${API_URL}${path}`, {
+    const response = await guardedFetch(`${options.baseUrl ?? API_URL}${path}`, {
       ...init,
       headers: {
         ...headers,
@@ -281,6 +298,30 @@ async function request<T>(
   }
 }
 
+/**
+ * Turn a failed upload-step response into a message that is safe to show the
+ * user. Structured `{ error }` bodies carry a human-readable string; anything
+ * else (HTML error page, proxy output) must never be rendered verbatim.
+ */
+async function uploadErrorMessage(response: Response, fileName: string): Promise<string> {
+  const body = await response.text().catch(() => '');
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const candidate = parsed['error'] ?? parsed['message'];
+    if (typeof candidate === 'string' && candidate.trim()) return candidate;
+    const nested = (parsed['error'] as { message?: unknown } | undefined)?.message;
+    if (typeof nested === 'string' && nested.trim()) return nested;
+  } catch {
+    // Not JSON — fall through to the generic message below.
+  }
+  if (__DEV__ && body) {
+    console.warn(`[api] upload step -> HTTP ${response.status}:`, body.slice(0, 500));
+  }
+  return response.status >= 500
+    ? `Uploading "${fileName}" failed because the server hit a problem. Please try again.`
+    : `Uploading "${fileName}" failed (HTTP ${response.status}). Please try again.`;
+}
+
 export interface UploadFileInput {
   name: string;
   type: string;
@@ -289,8 +330,18 @@ export interface UploadFileInput {
 }
 
 export interface UploadFileResult {
-  url: string;
+  /** Owner-scoped media asset id. This is what the chat wire format references. */
   id: string;
+  /** Same-origin authenticated serve path for the stored bytes. */
+  url: string;
+  /** Server-confirmed MIME type. */
+  mimeType: string;
+  /** Server-confirmed file name. */
+  name: string;
+  /** Server-confirmed byte count. */
+  byteCount: number;
+  /** Whether the asset is renderable as an image or handled as a document. */
+  type: 'image' | 'file';
 }
 
 export const api = {
@@ -309,24 +360,25 @@ export const api = {
     request<T>(path, { method: 'DELETE' }, options),
 
   /**
-   * Persist conversation tags to the backend.
-   * Used by the auto-tagging service to associate tag labels with a conversation.
-   */
-  tagConversation: async (id: string, tags: string[], options?: RequestOptions): Promise<void> => {
-    await request<void>(
-      `/api/conversations/${id}/tags`,
-      { method: 'POST', body: JSON.stringify({ tags }) },
-      options,
-    );
-  },
-
-  /**
-   * Upload a file to the server using multipart/form-data.
-   * Accepts a React Native file descriptor { uri, name, type }.
-   * Returns the remote URL and a server-assigned file ID.
+   * Upload a chat attachment using the managed-cloud two-step flow.
+   *
+   * STB-4 fix: this previously POSTed multipart/form-data to `/api/upload`, a
+   * route that has never existed in `apps/web/app/api` or the api-gateway. Every
+   * mobile file/image attach 404'd, was retried three times by the caller, and
+   * then failed with a generic alert. The real surface is the same one Web uses:
+   *
+   *   1. POST /api/uploads/presign            -> short-lived direct-to-R2 PUT URL
+   *   2. PUT  <uploadUrl>                     -> raw bytes, no credentials of ours
+   *   3. POST /api/uploads/chat-attachment/complete
+   *                                           -> verifies bytes, registers the
+   *                                              owner-scoped media asset
+   *
+   * Steps 1 and 3 go through `guardedFetch`, so Local mode refuses the upload
+   * before any byte leaves the device. Step 2 targets the storage provider (not
+   * our cloud) and is only reachable once step 1 has already passed that gate.
    *
    * Hardened behaviour:
-   *  - 401: attempts token refresh + one retry (same logic as request())
+   *  - 401 on presign: attempts token refresh + one retry (same logic as request())
    *  - Timeout: aborts and throws a clear "timed out" message
    *  - Network interruption mid-upload: throws with message; caller retries
    */
@@ -334,31 +386,56 @@ export const api = {
     file: UploadFileInput,
     options?: RequestOptions,
   ): Promise<UploadFileResult> => {
+    const mimeType = resolveChatAttachmentMimeType(file.name, file.type);
+    if (!mimeType) {
+      throw new Error(
+        `"${file.name}" is not a supported attachment. Chat supports images, PDFs, and text/code files.`,
+      );
+    }
+
+    const info = await getInfoAsync(file.uri);
+    if (!info.exists || info.isDirectory) {
+      throw new Error(`"${file.name}" could not be read from this device.`);
+    }
+    const byteCount = info.size;
+    if (byteCount <= 0) {
+      throw new Error(`"${file.name}" is empty and cannot be attached.`);
+    }
+    if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
+      throw new Error(`"${file.name}" is larger than the 12 MiB chat attachment limit.`);
+    }
+
     const token = await getAuthToken();
-
-    const formData = new FormData();
-    // React Native FormData accepts { uri, type, name } objects for binary uploads.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    formData.append('file', { uri: file.uri, name: file.name, type: file.type } as any);
-
     const controller = new AbortController();
     const timeout = options?.timeout ?? TIMEOUTS.UPLOAD;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
+    const signal = options?.signal
+      ? combineAbortSignals([options.signal, controller.signal])
+      : controller.signal;
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     try {
-      const response = await guardedFetch(`${API_URL}/api/upload`, {
-        method: 'POST',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          // Do NOT set Content-Type — fetch will set it with the correct multipart boundary
+      // ---- Step 1: presign ------------------------------------------------
+      const presignResponse = await guardedFetch(
+        `${API_URL}${MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...authHeaders,
+          },
+          body: JSON.stringify({
+            kind: 'chat-attachment',
+            fileName: file.name,
+            mimeType,
+            byteCount,
+          }),
+          signal,
         },
-        body: formData,
-        signal: options?.signal
-          ? combineAbortSignals([options.signal, controller.signal])
-          : controller.signal,
-      });
+      );
 
-      if (response.status === 401 && !options?._skipAuthRetry) {
+      if (presignResponse.status === 401 && !options?._skipAuthRetry) {
         const refreshed = await tryRefreshToken();
         if (refreshed) {
           return api.uploadFile(file, { ...options, _skipAuthRetry: true });
@@ -366,13 +443,64 @@ export const api = {
         handleUnrecoverableAuth();
         throw new Error('Upload failed: session expired. Please sign in again.');
       }
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(`Upload failed: HTTP ${response.status}: ${body}`);
+      if (!presignResponse.ok) {
+        throw new Error(await uploadErrorMessage(presignResponse, file.name));
       }
 
-      return (await response.json()) as UploadFileResult;
+      const presign = ManagedCloudChatAttachmentPresignResponseSchema.parse(
+        await presignResponse.json(),
+      );
+
+      // ---- Step 2: direct-to-storage PUT ----------------------------------
+      // expo-file-system streams the file from disk instead of materialising a
+      // 12 MiB base64 string in the JS heap. This host is the storage provider,
+      // never our cloud, and is only reachable after step 1 cleared the guard.
+      const putResult = await uploadAsync(presign.uploadUrl, file.uri, {
+        httpMethod: 'PUT',
+        uploadType: FileSystemUploadType.BINARY_CONTENT,
+        headers: presign.uploadHeaders,
+      });
+      if (putResult.status < 200 || putResult.status >= 300) {
+        throw new Error(
+          `Upload of "${file.name}" to storage failed (HTTP ${putResult.status}). Please try again.`,
+        );
+      }
+
+      // ---- Step 3: complete ------------------------------------------------
+      const completeResponse = await guardedFetch(
+        `${API_URL}${MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'x-agi-surface': 'mobile',
+            ...authHeaders,
+          },
+          body: JSON.stringify({
+            storageKey: presign.storageKey,
+            fileName: file.name,
+            mimeType,
+            byteCount,
+          }),
+          signal,
+        },
+      );
+      if (!completeResponse.ok) {
+        throw new Error(await uploadErrorMessage(completeResponse, file.name));
+      }
+
+      const { attachment } = ManagedCloudChatAttachmentCompleteResponseSchema.parse(
+        await completeResponse.json(),
+      );
+      return {
+        id: attachment.id,
+        url: attachment.url,
+        mimeType: attachment.mimeType,
+        name: attachment.name,
+        byteCount: attachment.byteCount,
+        type: attachment.type,
+      };
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         throw new Error('Upload timed out. Please check your connection and try again.');

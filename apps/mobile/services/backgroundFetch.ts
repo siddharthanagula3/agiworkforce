@@ -2,6 +2,7 @@ import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { api } from './api';
+import { GATEWAY_URL } from '@/lib/constants';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { notificationAllowed } from './notificationGate';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -58,7 +59,11 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
         await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
       }
 
+      // STB-8: /api/mobile/agent-status is served only by the Express
+      // api-gateway. Sending it to API_URL (the Next.js app) 404'd on every
+      // background wake-up, so approval-needed push notifications never fired.
       const result = await api.get<AgentStatusResponse>('/api/mobile/agent-status', {
+        baseUrl: GATEWAY_URL,
         timeout: 15_000,
         signal: controller.signal,
       });
