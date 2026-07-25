@@ -166,136 +166,21 @@ describe('Artifact Store (consolidated)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Version control
+  // AUDIT-FIX ART-21: the "Version Control" and "shareArtifact" suites were
+  // deleted together with the API they covered.
+  //
+  //   - addVersion / setCurrentVersion drove a web-only `versions[]` side-map
+  //     with revert-by-index semantics. No non-test caller ever wrote to it,
+  //     so no user could ever produce one of these versions. Real edit history
+  //     is the shared engine's content-keyed `versionsById`, read through
+  //     getArtifactVersions (and now persisted across reloads — see ART-19).
+  //   - shareArtifact minted a `share-<timestamp>-<random>` id client-side and
+  //     POSTed it to /api/artifacts/publish. It also had no non-test callers.
+  //     The canonical publish boundary is @agiworkforce/artifacts
+  //     `publishArtifact` (covered by that package's own tests), which as of
+  //     ART-27 returns a real cloud result or an honest "unavailable" — not a
+  //     waitlist gate.
   // -------------------------------------------------------------------------
-
-  describe('Version Control', () => {
-    it('should add a version to an artifact', () => {
-      const { addArtifactForMessage, addVersion, getMessageArtifacts } =
-        useArtifactStore.getState();
-      const messageId = 'msg-v';
-      const artifact = makeArtifact({ id: 'art-v1' });
-
-      addArtifactForMessage(messageId, artifact);
-      addVersion(artifact.id, {
-        id: 'v1',
-        content: 'Version 1 content',
-        timestamp: new Date(),
-        description: 'Initial version',
-      });
-
-      const found = getMessageArtifacts(messageId);
-      expect(found[0]!.versions).toHaveLength(1);
-      expect(found[0]!.versions![0]!.content).toBe('Version 1 content');
-      expect(found[0]!.currentVersion).toBe(0);
-    });
-
-    it('should track the latest version index after multiple adds', () => {
-      const { addArtifactForMessage, addVersion, getMessageArtifacts } =
-        useArtifactStore.getState();
-      const messageId = 'msg-vm';
-      const artifact = makeArtifact({ id: 'art-vm' });
-
-      addArtifactForMessage(messageId, artifact);
-      addVersion(artifact.id, { id: 'va1', content: 'V1', timestamp: new Date() });
-      addVersion(artifact.id, { id: 'va2', content: 'V2', timestamp: new Date() });
-      addVersion(artifact.id, { id: 'va3', content: 'V3', timestamp: new Date() });
-
-      const found = getMessageArtifacts(messageId);
-      expect(found[0]!.versions).toHaveLength(3);
-      expect(found[0]!.currentVersion).toBe(2);
-    });
-
-    it('should switch current version and update content', () => {
-      const { addArtifactForMessage, addVersion, setCurrentVersion, getMessageArtifacts } =
-        useArtifactStore.getState();
-      const messageId = 'msg-vc';
-      const artifact = makeArtifact({ id: 'art-vc' });
-
-      addArtifactForMessage(messageId, artifact);
-      addVersion(artifact.id, { id: 'vb0', content: 'Version 0', timestamp: new Date() });
-      addVersion(artifact.id, { id: 'vb1', content: 'Version 1', timestamp: new Date() });
-      addVersion(artifact.id, { id: 'vb2', content: 'Version 2', timestamp: new Date() });
-
-      setCurrentVersion(artifact.id, 1);
-
-      const found = getMessageArtifacts(messageId);
-      expect(found[0]!.currentVersion).toBe(1);
-      expect(found[0]!.content).toBe('Version 1');
-    });
-
-    it('should not change version for an out-of-range index', () => {
-      const { addArtifactForMessage, addVersion, setCurrentVersion, getMessageArtifacts } =
-        useArtifactStore.getState();
-      const messageId = 'msg-voor';
-      const artifact = makeArtifact({ id: 'art-voor' });
-
-      addArtifactForMessage(messageId, artifact);
-      addVersion(artifact.id, { id: 'vc0', content: 'Version 0', timestamp: new Date() });
-
-      setCurrentVersion(artifact.id, 999);
-
-      expect(getMessageArtifacts(messageId)[0]!.currentVersion).toBe(0);
-    });
-
-    it('should not change version for a negative index', () => {
-      const { addArtifactForMessage, addVersion, setCurrentVersion, getMessageArtifacts } =
-        useArtifactStore.getState();
-      const messageId = 'msg-vneg';
-      const artifact = makeArtifact({ id: 'art-vneg' });
-
-      addArtifactForMessage(messageId, artifact);
-      addVersion(artifact.id, { id: 'vd0', content: 'Version 0', timestamp: new Date() });
-
-      setCurrentVersion(artifact.id, -1);
-
-      expect(getMessageArtifacts(messageId)[0]!.currentVersion).toBe(0);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Sharing
-  // -------------------------------------------------------------------------
-
-  describe('shareArtifact', () => {
-    it('should return a share ID string', async () => {
-      const { addArtifactForMessage, shareArtifact } = useArtifactStore.getState();
-      const artifact = makeArtifact({ id: 'share1' });
-
-      addArtifactForMessage('msg-s1', artifact);
-      vi.setSystemTime(new Date('2024-01-01'));
-
-      const shareId = await shareArtifact(artifact.id);
-
-      expect(shareId).toMatch(/^share-/);
-    });
-
-    it('should store shareId on the artifact', async () => {
-      const { addArtifactForMessage, shareArtifact, getMessageArtifacts } =
-        useArtifactStore.getState();
-      const artifact = makeArtifact({ id: 'share2' });
-
-      addArtifactForMessage('msg-s2', artifact);
-      const shareId = await shareArtifact(artifact.id);
-
-      const found = getMessageArtifacts('msg-s2');
-      expect(found[0]!.shareId).toBe(shareId);
-    });
-
-    it('should throw when artifact does not exist', async () => {
-      const { shareArtifact } = useArtifactStore.getState();
-
-      let error: Error | undefined;
-      try {
-        await shareArtifact('non-existent');
-      } catch (e) {
-        error = e as Error;
-      }
-      expect(error).toBeDefined();
-      expect(error!.message).toBe('Artifact not found');
-    });
-  });
-
   // -------------------------------------------------------------------------
   // Panel selection
   // -------------------------------------------------------------------------
@@ -363,19 +248,6 @@ describe('Artifact Store (consolidated)', () => {
   // -------------------------------------------------------------------------
 
   describe('Edge cases', () => {
-    it('should handle adding a version to an artifact with no versions array', () => {
-      const { addArtifactForMessage, addVersion, getMessageArtifacts } =
-        useArtifactStore.getState();
-      const artifact = makeArtifact({ id: 'edge1' });
-      delete (artifact as Partial<ArtifactData>).versions;
-
-      addArtifactForMessage('msg-e', artifact);
-      addVersion(artifact.id, { id: 've0', content: 'New version', timestamp: new Date() });
-
-      const found = getMessageArtifacts('msg-e');
-      expect(found[0]!.versions).toHaveLength(1);
-    });
-
     it('getMessageArtifacts should return empty array for unknown message', () => {
       expect(useArtifactStore.getState().getMessageArtifacts('unknown')).toEqual([]);
     });

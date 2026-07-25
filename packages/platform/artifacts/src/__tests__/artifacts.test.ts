@@ -78,13 +78,19 @@ describe('publishArtifact — local path', () => {
 // 2. Cloud paths return waitlist-gated (no network)
 // ---------------------------------------------------------------------------
 
-describe('publishArtifact — cloud waitlist gate', () => {
+// AUDIT-FIX ART-27: this suite used to assert `kind: 'waitlist'` /
+// `waitlistGated: true` for byok+managed. That expectation encoded a product
+// gate the founder removed on 2026-06-27 (managed cloud is public alpha, open
+// by default; AGI_MANAGED_COMPUTE_PRIVATE_BETA survives only as an incident
+// kill-switch — and this code path never read it). The behaviour under test has
+// changed deliberately: no gate, a host-injected publisher when one exists, and
+// an honest capability statement when one does not.
+describe('publishArtifact — cloud path (no waitlist gate)', () => {
   it.each(['byok', 'managed'] as const)(
-    'returns WaitlistPublishResult for privacyMode=%s without touching the network',
+    'returns an honest unavailable result for privacyMode=%s when no cloudPublisher is injected',
     async (privacyMode) => {
-      // Assert no fetch / network calls are made by confirming the function
-      // resolves to waitlist shape immediately. If a cloud endpoint were hit,
-      // it would throw in a node environment with no network stub.
+      // Still asserts the no-network invariant: this module performs no I/O of
+      // its own, it only calls adapters the host supplies.
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('no network'));
 
       const result = await publishArtifact({
@@ -94,15 +100,52 @@ describe('publishArtifact — cloud waitlist gate', () => {
         // localFileWriter intentionally omitted — cloud path must not use it
       });
 
-      expect(result.kind).toBe('waitlist');
+      expect(result.kind).toBe('unavailable');
       expect(result.shareUrl).toBeNull();
-      expect(result.waitlistGated).toBe(true);
-      // Confirm fetch was never called
+      expect(result.waitlistGated).toBe(false);
+      if (result.kind === 'unavailable') {
+        // No waitlist language, and no invented endpoint.
+        expect(result.reason).not.toMatch(/waitlist/i);
+        expect(result.reason.length).toBeGreaterThan(0);
+      }
       expect(fetchSpy).not.toHaveBeenCalled();
 
       fetchSpy.mockRestore();
     },
   );
+
+  it.each(['byok', 'managed'] as const)(
+    'publishes through the host-injected cloudPublisher for privacyMode=%s',
+    async (privacyMode) => {
+      const cloudPublisher = vi.fn(async () => ({
+        shareUrl: 'https://share.example.invalid/a1',
+        publishedAt: '2026-07-25T00:00:00.000Z',
+      }));
+
+      const result = await publishArtifact({
+        artifact: baseArtifact,
+        privacyMode,
+        surface: 'desktop',
+        cloudPublisher,
+      });
+
+      expect(cloudPublisher).toHaveBeenCalledWith(baseArtifact, privacyMode);
+      expect(result.kind).toBe('cloud');
+      expect(result.shareUrl).toBe('https://share.example.invalid/a1');
+      expect(result.waitlistGated).toBe(false);
+    },
+  );
+
+  it('throws when the injected cloudPublisher resolves without a shareUrl', async () => {
+    await expect(
+      publishArtifact({
+        artifact: baseArtifact,
+        privacyMode: 'managed',
+        surface: 'desktop',
+        cloudPublisher: async () => ({ shareUrl: '' }),
+      }),
+    ).rejects.toThrow(/shareUrl/);
+  });
 });
 
 // ---------------------------------------------------------------------------
