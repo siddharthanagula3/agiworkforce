@@ -246,11 +246,18 @@ function parseCodeBlocks(
   conversationId?: string,
 ): Omit<Artifact, 'id' | 'createdAt'>[] {
   const results: Omit<Artifact, 'id' | 'createdAt'>[] = [];
-  const regex = /```(\w+)?\s*\n([\s\S]*?)```/g;
+  // AUDIT-FIX ART-2: line-anchored fences with a permissive info string. The old
+  // `(\w+)?\s*\n` form matched no opening fence carrying attributes
+  // (```html title="x"), a hyphen/dot in the tag (```objective-c) or a CRLF line
+  // ending, so the scan resumed at that block's CLOSING fence and paired it AS AN
+  // OPENING one — every later block in the message was then parsed from the wrong
+  // offsets (bodies made of prose, fences left in the text).
+  const regex = /^```([^\n`]*)\r?\n([\s\S]*?)^```/gm;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(content)) !== null) {
-    const language = match[1] || 'text';
+    // Info strings can carry attributes — only the leading token is the language.
+    const language = (match[1] ?? '').trim().split(/\s+/)[0]?.toLowerCase() || 'text';
     const code = match[2]!.trim();
     if (code.length < 10) continue;
     const filename = extractFilename(code);
