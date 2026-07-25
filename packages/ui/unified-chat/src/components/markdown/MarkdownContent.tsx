@@ -7,6 +7,7 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
+import { cn } from '../../lib/utils';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
 import type { Components } from 'react-markdown';
@@ -48,7 +49,7 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
           variant="ghost"
           size="sm"
           onClick={handleCopy}
-          className="h-7 gap-1.5 px-2 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100"
+          className="h-7 gap-1.5 px-2 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
           aria-label={copied ? 'Code copied' : 'Copy code'}
         >
           {copied ? (
@@ -86,7 +87,31 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
  * `data:`/`blob:` sources survive sanitization (see markdownSanitizeSchema.ts);
  * any other scheme is left to the sanitizer's http(s) allow-list, so no
  * arbitrary/off-origin fetch is introduced here.
+ *
+ * AUDIT-FIX BUG-26: the click-to-expand anchor is gated on the source scheme.
+ * `markdownSanitizeSchema.ts` deliberately widens `protocols.src` to `data:`
+ * and `blob:` while keeping `href` on the strict default list, with a comment
+ * stating that links must not smuggle `data:` payloads. Wrapping every image in
+ * `<a href={src}>` routed exactly those widened sources back into an href and
+ * broke that invariant — a `blob:` URL holding HTML navigates same-origin and
+ * executes in the app's origin. Non-navigable sources now render the image with
+ * no link rather than a link the sanitizer would never have allowed.
  */
+
+/**
+ * True when `src` is safe to put in an `href`: an http(s) URL, or a
+ * scheme-less relative/protocol-relative reference (e.g. `/api/files/123`).
+ * Anything carrying its own scheme — `data:`, `blob:`, `javascript:`,
+ * `filesystem:` — is rejected.
+ */
+function isNavigableImageSource(src: string): boolean {
+  const trimmed = src.trim();
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed);
+  if (!scheme) return true;
+  const protocol = (scheme[1] ?? '').toLowerCase();
+  return protocol === 'http' || protocol === 'https';
+}
+
 const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?: string }) => {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
 
@@ -105,15 +130,10 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
     );
   }
 
-  return (
-    <a
-      href={src}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="relative my-2 inline-block max-w-full align-top no-underline"
-      title={title || alt || 'Open image in a new tab'}
-      aria-label={alt ? `Open image in a new tab: ${alt}` : 'Open image in a new tab'}
-    >
+  const navigable = isNavigableImageSource(src);
+
+  const picture = (
+    <>
       {status === 'loading' && (
         <span
           className="absolute inset-0 animate-pulse rounded-lg bg-muted/50"
@@ -129,8 +149,36 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
         loading="lazy"
         onLoad={() => setStatus('loaded')}
         onError={() => setStatus('error')}
-        className="max-h-[512px] max-w-full cursor-zoom-in rounded-lg border border-border/50 object-contain"
+        className={cn(
+          'max-h-[512px] max-w-full rounded-lg border border-border/50 object-contain',
+          navigable && 'cursor-zoom-in',
+        )}
       />
+    </>
+  );
+
+  // AUDIT-FIX BUG-26: no anchor for `data:`/`blob:` (or any other non-http)
+  // source. The image still renders at full size inline; what is dropped is an
+  // affordance that would have violated the sanitizer's href invariant, not
+  // any content.
+  if (!navigable) {
+    return (
+      <span className="relative my-2 inline-block max-w-full align-top" title={title || alt}>
+        {picture}
+      </span>
+    );
+  }
+
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="relative my-2 inline-block max-w-full align-top no-underline"
+      title={title || alt || 'Open image in a new tab'}
+      aria-label={alt ? `Open image in a new tab: ${alt}` : 'Open image in a new tab'}
+    >
+      {picture}
     </a>
   );
 };

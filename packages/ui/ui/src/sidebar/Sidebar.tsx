@@ -17,7 +17,7 @@
  * Navigation is done by the surface inside the injected handlers; surface
  * chrome (account menu, notifications, incognito toggle) goes in `footerSlot`.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
   Calendar,
@@ -312,6 +312,56 @@ export function Sidebar(props: SidebarProps) {
     });
   }, []);
 
+  /**
+   * AUDIT-FIX GOV-31: `focusedIndex` used to drive a purely VISUAL ring — this
+   * file contained zero `.focus()` calls and zero `tabIndex`. Assistive tech
+   * therefore never learned that the "focused" conversation had changed, and
+   * the highlight diverged from real Tab focus, so pressing Enter could act on
+   * a different conversation than the one the ring was drawn around.
+   *
+   * The list is now a roving-tabindex composite: exactly one row is tabbable at
+   * a time, arrow keys move REAL DOM focus (which is what the ring follows),
+   * Tabbing into a row syncs the highlight back, and Escape releases the list.
+   */
+  const listRef = useRef<HTMLDivElement>(null);
+  /** Set by the arrow-key handler so the layout effect below moves focus. */
+  const pendingFocusRef = useRef(false);
+
+  /** Index that owns `tabIndex={0}` when the user has not arrowed yet. */
+  const activeRowIndex = useMemo(() => {
+    if (focusedIndex >= 0 && focusedIndex < visible.length) return focusedIndex;
+    const activeIdx = visible.findIndex((s) => s.id === activeSessionId);
+    return activeIdx >= 0 ? activeIdx : 0;
+  }, [focusedIndex, visible, activeSessionId]);
+
+  const rowButtonAt = useCallback((index: number): HTMLElement | null => {
+    const row = listRef.current?.querySelector<HTMLElement>(
+      `[data-sidebar-session-index="${index}"]`,
+    );
+    return row?.querySelector<HTMLElement>('button') ?? null;
+  }, []);
+
+  // Apply the roving tabindex, and move real focus when an arrow key asked for it.
+  useEffect(() => {
+    const container = listRef.current;
+    if (!container) return;
+    const rows = container.querySelectorAll<HTMLElement>('[data-sidebar-session-index]');
+    rows.forEach((row) => {
+      const index = Number(row.dataset['sidebarSessionIndex']);
+      const button = row.querySelector<HTMLElement>('button');
+      if (!button) return;
+      button.tabIndex = index === activeRowIndex ? 0 : -1;
+    });
+    if (pendingFocusRef.current) {
+      pendingFocusRef.current = false;
+      rowButtonAt(activeRowIndex)?.focus();
+    }
+    // `focusedIndex` is a dependency even though `activeRowIndex` is derived
+    // from it: -1 -> 0 leaves `activeRowIndex` at 0 (its no-selection default),
+    // so without it the FIRST ArrowDown would update the highlight but never
+    // move real focus — exactly the divergence this fix exists to remove.
+  }, [activeRowIndex, focusedIndex, visible, rowButtonAt]);
+
   // Keyboard arrow navigation over the visible list (ported from desktop).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -320,13 +370,35 @@ export function Sidebar(props: SidebarProps) {
         return;
       }
       if (internalSearchOpen) return;
+      if (visible.length === 0) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
+        pendingFocusRef.current = true;
         setFocusedIndex((p) => (p + 1 >= visible.length ? 0 : p + 1));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
+        pendingFocusRef.current = true;
         setFocusedIndex((p) => (p - 1 < 0 ? visible.length - 1 : p - 1));
+      } else if (e.key === 'Home' && focusedIndex >= 0) {
+        e.preventDefault();
+        pendingFocusRef.current = true;
+        setFocusedIndex(0);
+      } else if (e.key === 'End' && focusedIndex >= 0) {
+        e.preventDefault();
+        pendingFocusRef.current = true;
+        setFocusedIndex(visible.length - 1);
+      } else if (e.key === 'Escape' && focusedIndex >= 0) {
+        // AUDIT-FIX GOV-31: there was no way to leave the list.
+        e.preventDefault();
+        rowButtonAt(focusedIndex)?.blur();
+        setFocusedIndex(-1);
       } else if (e.key === 'Enter' && focusedIndex >= 0) {
+        // Real focus now sits on the highlighted row, so the browser already
+        // dispatches its click. Only synthesize the activation when focus never
+        // landed there (e.g. the row was unmounted between keystrokes) —
+        // otherwise the conversation would be selected twice.
+        const button = rowButtonAt(focusedIndex);
+        if (button && button.contains(target)) return;
         e.preventDefault();
         const conv = visible[focusedIndex];
         if (conv) {
@@ -337,31 +409,51 @@ export function Sidebar(props: SidebarProps) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [internalSearchOpen, visible, focusedIndex, onSelect]);
+  }, [internalSearchOpen, visible, focusedIndex, onSelect, rowButtonAt]);
+
+  /**
+   * AUDIT-FIX GOV-31: Tabbing straight into a row (or clicking one) must move
+   * the highlight to that row, otherwise the visual ring and the browser's real
+   * focus point at two different conversations.
+   */
+  const handleListFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-sidebar-session-index]');
+    if (!row) return;
+    const index = Number(row.dataset['sidebarSessionIndex']);
+    if (Number.isNaN(index)) return;
+    setFocusedIndex(index);
+  }, []);
+
+  const handleListBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const next = event.relatedTarget as HTMLElement | null;
+    if (next && event.currentTarget.contains(next)) return;
+    setFocusedIndex(-1);
+  }, []);
 
   const renderSessionRow = useCallback(
     (session: SidebarSession) => {
       const globalIndex = visible.findIndex((c) => c.id === session.id);
       return (
-        <SessionItem
-          key={session.id}
-          session={session}
-          isActive={session.id === activeSessionId}
-          isKeyboardFocused={globalIndex === focusedIndex}
-          projectName={session.projectId ? projectNameById.get(session.projectId) : undefined}
-          projects={projects}
-          simple={isSimpleMode}
-          onSelect={onSelect}
-          onRename={onRename}
-          onDelete={onDelete}
-          onTogglePin={onTogglePin}
-          onStar={onStar}
-          onArchive={onArchive}
-          onRestore={onRestore}
-          onShare={onShare}
-          onMoveToProject={onMoveToProject}
-          onOpenCustomInstructions={onOpenCustomInstructions}
-        />
+        <div key={session.id} data-sidebar-session-index={globalIndex}>
+          <SessionItem
+            session={session}
+            isActive={session.id === activeSessionId}
+            isKeyboardFocused={globalIndex === focusedIndex}
+            projectName={session.projectId ? projectNameById.get(session.projectId) : undefined}
+            projects={projects}
+            simple={isSimpleMode}
+            onSelect={onSelect}
+            onRename={onRename}
+            onDelete={onDelete}
+            onTogglePin={onTogglePin}
+            onStar={onStar}
+            onArchive={onArchive}
+            onRestore={onRestore}
+            onShare={onShare}
+            onMoveToProject={onMoveToProject}
+            onOpenCustomInstructions={onOpenCustomInstructions}
+          />
+        </div>
       );
     },
     [
@@ -622,8 +714,15 @@ export function Sidebar(props: SidebarProps) {
           </div>
         )}
 
-        {/* Conversation list */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Conversation list.
+            AUDIT-FIX GOV-31: the roving-tabindex container — it owns the row
+            refs, syncs the highlight with real focus, and releases it on blur. */}
+        <div
+          ref={listRef}
+          className="flex-1 overflow-y-auto"
+          onFocus={handleListFocus}
+          onBlur={handleListBlur}
+        >
           <div className="p-2">
             {/* Projects section — header + pinned sub-section + unpinned list */}
             {projectListEnabled && (pinnedProjects.length > 0 || unpinnedProjects.length > 0) && (

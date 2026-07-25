@@ -37,6 +37,21 @@ function formatTimer(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+/**
+ * AUDIT-FIX BUG-30: client-only capability probe. Called from an effect, never
+ * during render, so it can assume a browser environment.
+ */
+function detectVoiceInputSupport(): boolean {
+  if (typeof window === 'undefined') return false;
+  const vendor = window as unknown as Record<string, unknown>;
+  if (vendor['SpeechRecognition'] || vendor['webkitSpeechRecognition']) return true;
+  return (
+    typeof navigator !== 'undefined' &&
+    Boolean(navigator.mediaDevices) &&
+    typeof navigator.mediaDevices.getUserMedia === 'function'
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInputButtonProps) {
@@ -57,14 +72,23 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   const isTranscribing = mode === 'transcribing';
   const isActive = isListening || isTranscribing;
 
-  // Check for basic browser support
-  const isSupported =
-    typeof window !== 'undefined' &&
-    !!(
-      (typeof window !== 'undefined' &&
-        ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) ||
-      (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function')
-    );
+  /**
+   * AUDIT-FIX BUG-30: capability detection moved out of the render path.
+   *
+   * The guarded-global expression evaluated to `false` on the server, so the
+   * server HTML shipped a disabled mic labelled "Voice input not supported in
+   * this browser". React keeps the server DOM for the first paint and this
+   * value never recomputed, so the control stayed permanently disabled on
+   * browsers that DO support voice input. Optimistic default + post-mount
+   * correction keeps hydration identical and ends up honest either way.
+   *
+   * The `as any` casts are gone too: the two vendor constructors are read
+   * through a typed record instead.
+   */
+  const [isSupported, setIsSupported] = useState(true);
+  useEffect(() => {
+    setIsSupported(detectVoiceInputSupport());
+  }, []);
 
   // ── Timer for recording duration ───────────────────────────────────────
 
@@ -168,7 +192,8 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         aria-label={label}
         aria-pressed={isListening}
         className={cn(
-          'relative flex h-9 w-9 items-center justify-center rounded-full transition-all duration-150',
+          // AUDIT-FIX GOV-38: 44px touch target on phones, compact on pointer viewports.
+          'relative flex h-11 w-11 touch-manipulation sm:h-9 sm:w-9 items-center justify-center rounded-full transition-all duration-150',
           'text-muted-foreground hover:text-foreground hover:bg-muted/60',
           isListening && [
             'bg-red-500/20 text-red-500 hover:bg-red-500/30 hover:text-red-500',

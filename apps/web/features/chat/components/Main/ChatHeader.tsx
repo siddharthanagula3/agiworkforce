@@ -236,11 +236,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     <header className="flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       {/* Left: Sidebar toggle + Title */}
       <div className="flex min-w-0 flex-1 items-center gap-3">
+        {/* AUDIT-FIX GOV-38: 44px touch target on touch viewports - this is the
+            only route to navigation on a phone and was 32px, below the minimum. */}
         <Button
           variant="ghost"
           size="icon"
           onClick={onToggleSidebar}
-          className="h-8 w-8 flex-shrink-0"
+          className="h-11 w-11 touch-manipulation flex-shrink-0 sm:h-8 sm:w-8"
           aria-label="Toggle sidebar"
         >
           <Menu className="h-4 w-4" />

@@ -9,6 +9,7 @@
 
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { SharedMessageTimestamp } from './SharedMessageTimestamp';
 
 interface SharedMessage {
   role: string;
@@ -132,20 +133,17 @@ export default async function SharedConversationPage({ params }: PageProps) {
                 {/* Message content - preserve newlines */}
                 <p className="whitespace-pre-wrap break-words">{msg.content}</p>
 
-                {/* Timestamp if available */}
+                {/* Timestamp if available.
+                    AUDIT-FIX BUG-30: formatted in a client-only boundary — this
+                    is a server component, so `toLocaleString` here rendered the
+                    DEPLOYMENT's locale and timezone for every reader. */}
                 {msg.created_at && (
-                  <p
-                    className={`mt-1.5 text-[10px] ${
+                  <SharedMessageTimestamp
+                    isoTimestamp={msg.created_at}
+                    className={`mt-1.5 block text-[10px] ${
                       isUserRole(msg.role) ? 'text-blue-300' : 'text-zinc-400'
                     }`}
-                  >
-                    {new Date(msg.created_at).toLocaleString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
+                  />
                 )}
               </div>
             </li>

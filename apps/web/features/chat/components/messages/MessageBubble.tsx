@@ -10,7 +10,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { motion, type Variants } from 'framer-motion';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -121,6 +121,15 @@ interface Attachment {
 
 const MAX_INLINE_GENERATED_TEXT_BYTES = 2 * 1024 * 1024;
 
+/**
+ * AUDIT-FIX GOV-38: message action buttons were `h-7 w-7` — a 28px target,
+ * below the 44px minimum, across every site in the action row. Touch viewports
+ * now get a true 44px control; pointer viewports (sm and up, where the row is
+ * hover-revealed anyway) keep a compact 32px button. `touch-manipulation`
+ * removes the 300ms tap delay that made the small targets feel unresponsive.
+ */
+const ACTION_BUTTON_SIZE = 'h-11 w-11 touch-manipulation sm:h-8 sm:w-8';
+
 function generatedFileLanguage(file: GeneratedFileMetadataEntry): string {
   const extension = file.fileName.toLowerCase().split('.').pop() ?? '';
   const candidate = file.kind === 'other' ? extension : file.kind;
@@ -138,6 +147,24 @@ function generatedFileArtifactType(file: GeneratedFileMetadataEntry): ArtifactDa
   if (language === 'csv' || language === 'tsv') return 'csv';
   if (language === 'markdown' || language === 'txt' || language === 'text') return 'document';
   return 'code';
+}
+
+/**
+ * AUDIT-FIX BUG-31: close a trailing unterminated code fence.
+ *
+ * The artifact path already strips a growing unclosed block from the chat body
+ * (see `cleanedContent`), but that only covers RENDERABLE artifact languages.
+ * For every other language — python, sql, a bare fence with no info string —
+ * the partial buffer reached the markdown renderer with an open fence. micromark
+ * tolerates it, but the block renders unstyled (no `language-*` class, so no
+ * highlighting) and the whole tail is re-lexed on every token.
+ *
+ * Appending the closing fence is a pure display repair: it never mutates the
+ * stored message, and it is a no-op when the fence is already closed.
+ */
+function closeUnterminatedFence(markdown: string): string {
+  if (!extractTrailingUnclosedBlock(markdown)) return markdown;
+  return markdown + (markdown.endsWith('\n') ? '' : '\n') + '```';
 }
 
 function isGeneratedTextArtifact(file: GeneratedFileMetadataEntry): boolean {
@@ -322,6 +349,14 @@ const MessageBubbleComponent = function MessageBubble({
   const [brokenAttachmentIds, setBrokenAttachmentIds] = useState<Set<string>>(
     () => new Set<string>(),
   );
+  /**
+   * AUDIT-FIX GOV-33: framer-motion drives the staggered message entry through
+   * INLINE opacity/transform styles, which the global prefers-reduced-motion
+   * reset in globals.css (`transition-duration: 0.01ms !important`) cannot
+   * reach — it only caps CSS transitions and animations. The preference has to
+   * be read here and the entry animation skipped outright.
+   */
+  const prefersReducedMotion = useReducedMotion();
   const markAttachmentBroken = useCallback((id: string) => {
     setBrokenAttachmentIds((prev) => {
       if (prev.has(id)) return prev;
@@ -642,8 +677,10 @@ const MessageBubbleComponent = function MessageBubble({
     const base = streamingBlock
       ? message.content.slice(0, streamingBlock.startIndex).trimEnd()
       : message.content;
-    if (artifacts.length === 0) return base;
-    return removeArtifactBlocks(base, artifacts);
+    const stripped = artifacts.length === 0 ? base : removeArtifactBlocks(base, artifacts);
+    // AUDIT-FIX BUG-31: non-artifact languages get the same "don't hand the
+    // renderer a half-open fence" treatment the artifact path already gets.
+    return closeUnterminatedFence(stripped);
   }, [message.content, artifacts, streamingBlock]);
 
   const handleCopy = useCallback(async () => {
@@ -737,9 +774,11 @@ const MessageBubbleComponent = function MessageBubble({
       data-role={isUser ? 'user' : 'assistant'}
       data-message-id={message.id}
       variants={messageBubbleVariants}
-      initial="hidden"
+      initial={prefersReducedMotion ? false : 'hidden'}
       animate="visible"
-      transition={{ delay: animationIndex * 0.06 }}
+      transition={
+        prefersReducedMotion ? { duration: 0, delay: 0 } : { delay: animationIndex * 0.06 }
+      }
       className={cn(
         /* Row · py-6 px-4 matches desktop .message-row / .message-container */
         'group message-row message-bubble',
@@ -1227,7 +1266,7 @@ const MessageBubbleComponent = function MessageBubble({
               Read from top-level message.model first (set by useChatStream), then fall
               back to message.metadata.model (set on messages loaded from DB). */}
           {!isUser && !message.isStreaming && (message.model ?? message.metadata?.model) && (
-            <div className="mt-1.5 text-[11px] text-[var(--chat-text-muted)] opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="mt-1.5 text-[11px] text-[var(--chat-text-muted)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
               {
                 (message.model ?? message.metadata?.model ?? '')
                   .replace(
@@ -1245,8 +1284,16 @@ const MessageBubbleComponent = function MessageBubble({
           {!message.isStreaming && (
             <div
               className={cn(
-                'mt-2 flex items-center gap-1 transition-opacity',
-                isUser ? 'justify-end opacity-0 group-hover:opacity-100' : 'opacity-100',
+                // AUDIT-FIX GOV-30: `opacity-0 group-hover:opacity-100` with no
+                // focus counterpart meant a keyboard user tabbed into copy /
+                // edit / delete while they were fully transparent —
+                // focus-visible ring and all. `group-focus-within` reveals the
+                // row the moment focus enters it. The row also stays flex-wrap
+                // so the larger touch targets (GOV-38) cannot overflow a phone.
+                'mt-2 flex flex-wrap items-center gap-1 transition-opacity',
+                isUser
+                  ? 'justify-end opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                  : 'opacity-100',
               )}
             >
               <TooltipProvider delayDuration={300}>
@@ -1255,7 +1302,7 @@ const MessageBubbleComponent = function MessageBubble({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className={ACTION_BUTTON_SIZE}
                       onClick={handleCopy}
                       aria-label={copied ? 'Message copied' : 'Copy message'}
                     >
@@ -1275,7 +1322,10 @@ const MessageBubbleComponent = function MessageBubble({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={cn('h-7 w-7', message.metadata?.isPinned && 'text-amber-500')}
+                        className={cn(
+                          ACTION_BUTTON_SIZE,
+                          message.metadata?.isPinned && 'text-amber-500',
+                        )}
                         onClick={() => onPin(message.id)}
                         aria-label={message.metadata?.isPinned ? 'Unpin message' : 'Pin message'}
                         aria-pressed={Boolean(message.metadata?.isPinned)}
@@ -1299,7 +1349,7 @@ const MessageBubbleComponent = function MessageBubble({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
+                        className={ACTION_BUTTON_SIZE}
                         onClick={() => onReadAloud(message.id, message.content)}
                         aria-label={isReadingAloud ? 'Stop reading message' : 'Read message aloud'}
                         aria-pressed={isReadingAloud}
@@ -1325,7 +1375,7 @@ const MessageBubbleComponent = function MessageBubble({
                           variant="ghost"
                           size="icon"
                           className={cn(
-                            'h-7 w-7',
+                            ACTION_BUTTON_SIZE,
                             message.metadata?.reaction === 'thumbsUp' &&
                               'text-[var(--chat-accent-primary)]',
                           )}
@@ -1363,7 +1413,7 @@ const MessageBubbleComponent = function MessageBubble({
                           variant="ghost"
                           size="icon"
                           className={cn(
-                            'h-7 w-7',
+                            ACTION_BUTTON_SIZE,
                             message.metadata?.reaction === 'thumbsDown' &&
                               'text-[var(--chat-accent-primary)]',
                           )}
@@ -1405,7 +1455,7 @@ const MessageBubbleComponent = function MessageBubble({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
+                        className={ACTION_BUTTON_SIZE}
                         onClick={() => onRegenerate(message.id)}
                         aria-label="Regenerate response"
                       >
@@ -1422,7 +1472,7 @@ const MessageBubbleComponent = function MessageBubble({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className={ACTION_BUTTON_SIZE}
                       aria-label="More message actions"
                     >
                       <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1481,14 +1531,141 @@ const MessageBubbleComponent = function MessageBubble({
 };
 
 /**
+ * AUDIT-FIX BUG-28: attachment descriptors, compared field by field.
+ *
+ * `attachments` was absent from the comparator entirely while the parent
+ * (ChatMessageList) hands this component a freshly built array. When an upload
+ * finished and nothing else on the message changed, the comparator answered
+ * "equal" and the card kept rendering the pre-upload state forever. A custom
+ * comparator that omits a real prop is worse than no comparator at all.
+ */
+function attachmentsEqual(prev?: Attachment[], next?: Attachment[]): boolean {
+  if (prev === next) return true;
+  const a = prev ?? [];
+  const b = next ?? [];
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index];
+    const right = b[index];
+    if (!left || !right) return false;
+    if (
+      left.id !== right.id ||
+      left.name !== right.name ||
+      left.type !== right.type ||
+      left.size !== right.size ||
+      left.url !== right.url ||
+      left.thumbnailUrl !== right.thumbnailUrl
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * AUDIT-FIX STR-17: every tool entry, not a sample of the ends.
+ * With three or more parallel tools the middle cards never left 'running', and
+ * Approve/Reject — which flips one entry, usually an interior one — produced no
+ * visible feedback until the whole batch resolved.
+ */
+function toolEntriesEqual(prev?: ToolEntry[], next?: ToolEntry[]): boolean {
+  if (prev === next) return true;
+  if (!prev || !next) return false;
+  if (prev.length !== next.length) return false;
+  for (let index = 0; index < prev.length; index += 1) {
+    const a = prev[index];
+    const b = next[index];
+    if (!a || !b) return false;
+    if (
+      a.id !== b.id ||
+      a.toolCallId !== b.toolCallId ||
+      a.name !== b.name ||
+      a.status !== b.status ||
+      a.requiresApproval !== b.requiresApproval ||
+      a.durationMs !== b.durationMs ||
+      a.args !== b.args ||
+      a.error !== b.error ||
+      a.result !== b.result ||
+      a.statusPhrase !== b.statusPhrase ||
+      a.parallelGroup !== b.parallelGroup
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * AUDIT-FIX BUG-29 / STR-17: metadata equality without serializing the bag.
+ *
+ * The previous implementation ran `JSON.stringify` over BOTH metadata objects
+ * on every comparison — once per streamed token per visible message, on the
+ * render-critical path, in a list with no virtualization, over a bag that
+ * carries the full tool timeline, search results, thinking segments and file
+ * descriptors. It was also key-order sensitive, so a re-serialized bag with
+ * reordered keys reported "changed" even when nothing had.
+ *
+ * Field comparison replaces it. Reference identity is the right test for the
+ * object-valued spines because the store patches metadata immutably
+ * (`{ ...m.metadata, ...patch }` in web-chat-store) and the activity reducer
+ * returns a new object for every event it applies — so `!==` means "changed"
+ * with no traversal.
+ */
+function metadataEqual(prev: Message['metadata'], next: Message['metadata']): boolean {
+  if (prev === next) return true;
+  return (
+    prev?.isPinned === next?.isPinned &&
+    prev?.isPasted === next?.isPasted &&
+    prev?.reaction === next?.reaction &&
+    prev?.model === next?.model &&
+    prev?.tokensUsed === next?.tokensUsed &&
+    prev?.inputTokens === next?.inputTokens &&
+    prev?.outputTokens === next?.outputTokens &&
+    prev?.cost === next?.cost &&
+    prev?.thinkingContent === next?.thinkingContent &&
+    prev?.isThinkingStreaming === next?.isThinkingStreaming &&
+    prev?.thinkingDurationSeconds === next?.thinkingDurationSeconds &&
+    prev?.thinkingSegments === next?.thinkingSegments &&
+    prev?.thinkingSteps === next?.thinkingSteps &&
+    prev?.isThinking === next?.isThinking &&
+    prev?.agentActivity === next?.agentActivity &&
+    prev?.research === next?.research &&
+    prev?.generatedFiles === next?.generatedFiles &&
+    prev?.generatedFile === next?.generatedFile &&
+    prev?.artifactManifest === next?.artifactManifest &&
+    prev?.computeSession === next?.computeSession &&
+    prev?.documentData === next?.documentData &&
+    prev?.searchResults === next?.searchResults &&
+    prev?.isSearching === next?.isSearching &&
+    prev?.citations === next?.citations &&
+    prev?.comparisonOptions === next?.comparisonOptions &&
+    prev?.comparisonChoice === next?.comparisonChoice &&
+    prev?.collaborationMessages === next?.collaborationMessages &&
+    prev?.isMultiAgent === next?.isMultiAgent &&
+    prev?.paywall === next?.paywall &&
+    prev?.imageUrl === next?.imageUrl &&
+    prev?.imageData === next?.imageData &&
+    prev?.imageGenPrompt === next?.imageGenPrompt &&
+    prev?.imageGenAspect === next?.imageGenAspect &&
+    prev?.imageGenModel === next?.imageGenModel &&
+    prev?.videoUrl === next?.videoUrl &&
+    prev?.videoData === next?.videoData &&
+    prev?.thumbnailUrl === next?.thumbnailUrl &&
+    prev?.toolResult === next?.toolResult &&
+    prev?.toolType === next?.toolType &&
+    prev?.isDocument === next?.isDocument &&
+    prev?.documentTitle === next?.documentTitle &&
+    toolEntriesEqual(prev?.tools, next?.tools)
+  );
+}
+
+/**
  * MessageBubble with memoization to prevent unnecessary re-renders.
  *
  * Custom comparison function checks:
- * - message.id, message.content, message.role, message.timestamp
+ * - message.id, message.content, message.role, message.timestamp, attachments
  * - Callback references (onEdit, onRegenerate, etc.)
- * - metadata hash for deep equality
- *
- * This reduces MessageBubble re-renders from ~40/message to <5.
+ * - every metadata field the component actually renders
  */
 export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => {
   // Return true if props are EQUAL (skip re-render), false if different (re-render)
@@ -1514,12 +1691,11 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
     return false;
   }
 
-  // Check metadata equality (simple hash of stringified metadata)
-  const prevMetaStr = JSON.stringify(prev.message.metadata || {});
-  const nextMetaStr = JSON.stringify(next.message.metadata || {});
-  if (prevMetaStr !== nextMetaStr) {
-    return false;
-  }
+  // AUDIT-FIX BUG-28: attachments participate.
+  if (!attachmentsEqual(prev.message.attachments, next.message.attachments)) return false;
+
+  // AUDIT-FIX BUG-29: targeted comparison, no per-token JSON.stringify.
+  if (!metadataEqual(prev.message.metadata, next.message.metadata)) return false;
 
   // Check callback references (they should be memoized by parent)
   if (prev.onEdit !== next.onEdit) return false;
@@ -1529,6 +1705,7 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onReact !== next.onReact) return false;
   if (prev.onBranch !== next.onBranch) return false;
   if (prev.onReadAloud !== next.onReadAloud) return false;
+  if (prev.onRegenerateImage !== next.onRegenerateImage) return false;
 
   // Check flags
   if (prev.isReadingAloud !== next.isReadingAloud) return false;
