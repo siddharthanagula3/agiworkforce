@@ -50,7 +50,8 @@ import type {
   SettingsSkill,
   ConnectedConnector,
 } from './types';
-import type { SettingsNavGroupResolved } from '../settings-nav';
+import { SETTINGS_NAV_KEYWORDS } from '../settings-nav';
+import type { SettingsNavGroupResolved, SettingsNavKey } from '../settings-nav';
 import { ConnectorLogo } from './ConnectorLogo';
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,20 @@ interface NavEntry {
   key: string;
   label: string;
   icon: LucideIcon;
+}
+
+/**
+ * AUDIT-FIX PAR-16: nav search matched the visible label only, so the aliases
+ * the repo already authored on SETTINGS_NAV.keywords never applied — searching
+ * the obvious term ("theme", "shortcuts", "invoice") returned no results.
+ */
+function matchesNavFilter(
+  entry: { key: string; label: string; keywords?: string[] },
+  filter: string,
+): boolean {
+  if (entry.label.toLowerCase().includes(filter)) return true;
+  const keywords = entry.keywords ?? SETTINGS_NAV_KEYWORDS[entry.key as SettingsNavKey] ?? [];
+  return keywords.some((keyword) => keyword.toLowerCase().includes(filter));
 }
 
 const ALL_NAV_ENTRIES: NavEntry[] = [
@@ -1519,7 +1534,7 @@ export function SettingsModal({
     return navGroups
       .map((g) => ({
         label: g.label,
-        items: filter ? g.items.filter((i) => i.label.toLowerCase().includes(filter)) : g.items,
+        items: filter ? g.items.filter((i) => matchesNavFilter(i, filter)) : g.items,
       }))
       .filter((g) => g.items.length > 0);
   }, [navGroups, navSearch]);
@@ -1530,7 +1545,7 @@ export function SettingsModal({
     const keySet = activeKeys ? new Set(activeKeys) : null;
     return ALL_NAV_ENTRIES.filter((e) => {
       if (keySet && !keySet.has(e.key)) return false;
-      if (filter) return e.label.toLowerCase().includes(filter);
+      if (filter) return matchesNavFilter(e, filter);
       return true;
     });
   }, [navSearch, activeKeys]);
