@@ -12,7 +12,17 @@ import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 export interface AuthUser {
   id: string;
   email: string;
+  /** Canonical display name resolved by GET /api/me (PER-8). */
   name?: string;
+  /**
+   * What the assistant should call the user. Resolved server-side from the
+   * `general` settings namespace — PER-2: the greeting used to read a
+   * `localStorage['agi.profile.preferredName']` key that nothing in the
+   * repository ever wrote.
+   */
+  preferredName?: string;
+  /** Self-described role from Settings → General, when set. */
+  workDescription?: string;
   avatar?: string;
   role?: string;
   plan?: string;
@@ -54,6 +64,10 @@ class AuthService {
         id: data.id,
         email: data.email || '',
         name: data.name,
+        ...(data.profile?.preferred_name ? { preferredName: data.profile.preferred_name } : {}),
+        ...(data.profile?.work_description
+          ? { workDescription: data.profile.work_description }
+          : {}),
         avatar: data.avatar_url ?? undefined,
         role: 'user',
         plan: data.plan.tier || 'free',

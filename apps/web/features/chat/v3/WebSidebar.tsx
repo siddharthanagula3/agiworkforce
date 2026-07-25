@@ -152,7 +152,11 @@ export function WebSidebar({
   const [showAll, setShowAll] = useState(false);
 
   const user = useBillingStore((s) => s.user);
-  const sidebarUserMeta = (user?.['user_metadata'] as Record<string, unknown> | undefined) ?? {};
+  // PER-3/PER-8: `user` is finally populated (refreshUser writes it now) and
+  // carries the server-resolved name, so the sidebar no longer reads a
+  // `user_metadata.full_name` key that /api/me never emitted and therefore no
+  // longer falls back to 'Account' for every signed-in user.
+  const sidebarDisplayName = user?.profile?.display_name ?? user?.name ?? undefined;
   const subscription = useBillingStore((s) => s.subscription);
   const planDisplayName = subscription?.display_name ?? 'Free';
   const conversations = useMemo(
@@ -570,7 +574,7 @@ export function WebSidebar({
               flexShrink: 0,
             }}
           >
-            {initials(sidebarUserMeta['full_name'] as string | undefined, user?.email)}
+            {initials(sidebarDisplayName, user?.email)}
           </div>
           {!collapsed && (
             <>
@@ -585,7 +589,7 @@ export function WebSidebar({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {(sidebarUserMeta['full_name'] as string | undefined) ?? user?.email ?? 'Account'}
+                  {sidebarDisplayName ?? user?.email ?? 'Account'}
                 </div>
                 <div
                   style={{

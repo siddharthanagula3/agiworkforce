@@ -24,6 +24,63 @@ type UpdateMessageFn = (id: string, updates: Partial<Message>) => void;
  * (`metadata.toolType === 'image-generation'` → <ImageGenerationCard>).
  */
 
+/**
+ * PER-30 — a metadata patch that MERGES instead of replacing.
+ *
+ * `updateMessage` performs a shallow merge on the message, so passing
+ * `metadata: {...}` REPLACES the whole metadata object. `applyImageError`
+ * passed `metadata: undefined` on the non-paywall branch, and the paywall
+ * branch passed an object containing only `paywall` — either way
+ * `imageGenPrompt` / `imageGenAspect` / `imageGenModel` were discarded, which
+ * are precisely the fields a retry needs. Callers must build their metadata
+ * patch through this helper against the message's CURRENT metadata.
+ */
+export function mergeImageGenerationMetadata(
+  previous: MessageMetadata | undefined,
+  patch: Partial<MessageMetadata>,
+): MessageMetadata {
+  return { ...(previous ?? {}), ...patch };
+}
+
+/**
+ * PER-29 — the metadata for entering the "regenerating" state.
+ *
+ * In-place regeneration used to clear `metadata.imageUrl` and set
+ * `isStreaming: true` BEFORE awaiting the provider, with no try/catch around
+ * the await. A failure therefore left a card that spun forever, with the
+ * original image already gone and nothing persisted. The original URL is
+ * preserved here (under `imageUrl`) so `imageGenerationFailureMetadata` can put
+ * it back, and the card's spinner is driven by the message's `isStreaming`
+ * flag, which the caller must clear in a `finally`.
+ */
+export function imageRegenerationPendingMetadata(
+  previous: MessageMetadata | undefined,
+  opts: { prompt: string; aspectRatio: string; modelId?: string },
+): MessageMetadata {
+  return mergeImageGenerationMetadata(previous, {
+    toolType: 'image-generation',
+    imageGenPrompt: opts.prompt,
+    imageGenAspect: opts.aspectRatio,
+    ...(opts.modelId !== undefined ? { imageGenModel: opts.modelId } : {}),
+  });
+}
+
+/**
+ * PER-29/PER-30 — the metadata for a failed (re)generation.
+ *
+ * Keeps every retry parameter, restores the previous image if there was one,
+ * and never returns `undefined` (which would wipe the metadata object).
+ */
+export function imageGenerationFailureMetadata(
+  previous: MessageMetadata | undefined,
+  options: { paywall?: MessageMetadata['paywall'] } = {},
+): MessageMetadata {
+  return mergeImageGenerationMetadata(previous, {
+    toolType: 'image-generation',
+    ...(options.paywall ? { paywall: options.paywall } : {}),
+  });
+}
+
 export function isTemporaryConversationById(
   conversations: Array<{ id: string; isTemporary?: boolean }>,
   conversationId: string,

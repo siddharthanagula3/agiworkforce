@@ -2,12 +2,22 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { WebSidebar } from './WebSidebar';
 
+// PER-3/PER-8: the mock used to carry `user_metadata.full_name`, a shape
+// `/api/me` never emitted (and `useBillingStore.user` was structurally null
+// anyway, so the sidebar always rendered 'Account'). It now mirrors the real
+// resolved `/api/me` payload.
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       user: {
+        id: 'user_test',
         email: 'user@example.com',
-        user_metadata: { full_name: 'Test User' },
+        name: 'Test User',
+        profile: {
+          display_name: 'Test User',
+          preferred_name: 'Test',
+          work_description: null,
+        },
       },
       subscription: { display_name: 'Pro' },
     }),

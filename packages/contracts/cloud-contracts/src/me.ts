@@ -59,10 +59,34 @@ export const MeRoutingPreferencesSchema = z
   })
   .catchall(z.unknown());
 
+/**
+ * Canonical profile identity (PER-8).
+ *
+ * The full name used to live in three places at once — `profiles.display_name`
+ * (written by `PATCH /api/me`), Clerk `unsafeMetadata.full_name` (written by
+ * Settings → General) and the `general` settings namespace — and the reader in
+ * `/api/me` consulted only the first two, so "Full name" in Settings could not
+ * change the greeting, header or sidebar. The server now resolves ONE answer
+ * and ships it here; clients read this and never re-derive it.
+ */
+export const MeProfileSchema = z.object({
+  /** Full name, or null when the user has never set one. */
+  display_name: z.string().nullable(),
+  /** What the assistant should call the user; null falls back to the first token of display_name. */
+  preferred_name: z.string().nullable(),
+  /** Self-described role (Settings → General), or null. */
+  work_description: z.string().nullable(),
+});
+
 export const MeResponseSchema = z.object({
   id: z.string(),
   email: z.string().nullable(),
   name: z.string(),
+  /**
+   * Resolved profile identity. Optional for rollout compatibility (older
+   * fixtures/clients predate it), mirroring `feature_flags.code_execution`.
+   */
+  profile: MeProfileSchema.optional(),
   avatar_url: z.string().nullable(),
   /** Currently always null from the route; typed loosely for when it's wired. */
   created_at: z.union([z.string(), z.number()]).nullable(),
@@ -83,6 +107,7 @@ export const MeResponseSchema = z.object({
 });
 
 export type MePlan = z.infer<typeof MePlanSchema>;
+export type MeProfile = z.infer<typeof MeProfileSchema>;
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 /**

@@ -8,12 +8,15 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   ScheduleConflictError,
+  ScheduleLimitError,
   ScheduleNotFoundError,
   ScheduleValidationError,
+  assertScheduleQuota,
   createSchedule,
   listSchedules,
   type ScheduleInput,
 } from '@/lib/services/schedule-service';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 
 export const runtime = 'nodejs';
 
@@ -23,6 +26,8 @@ function integerQueryValue(value: string | null, fallback: number): number {
 }
 
 function rethrowScheduleError(error: unknown): never {
+  // GOV-8: a plan ceiling is an entitlement refusal, not a malformed request.
+  if (error instanceof ScheduleLimitError) throw createError.forbidden(error.message);
   if (error instanceof ScheduleValidationError) throw createError.validation(error.message);
   if (error instanceof ScheduleNotFoundError) throw createError.notFound('Schedule not found');
   if (error instanceof ScheduleConflictError) throw createError.conflict(error.message);
@@ -43,10 +48,14 @@ async function requestObject(request: NextRequest): Promise<Record<string, unkno
 }
 
 async function handleGetSchedules(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  // GOV-16: resolve the authenticated principal FIRST so the limit is keyed per
+  // user. Previously no identifier was passed, so this bucket fell back to the
+  // caller's IP and every user behind one NAT/office egress shared 60/min.
+  const { db, userId } = await getUserScopedDb(request);
+
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
   const url = new URL(request.url);
   const limit = Math.min(100, Math.max(1, integerQueryValue(url.searchParams.get('limit'), 50)));
   const offset = Math.min(
@@ -58,15 +67,23 @@ async function handleGetSchedules(request: NextRequest) {
 }
 
 async function handleCreateSchedule(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  // GOV-16: user-keyed, not IP-keyed (see handleGetSchedules).
+  const { db, userId } = await getUserScopedDb(request);
+
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
   const body = await requestObject(request);
 
   try {
+    // GOV-8: every firing of a schedule runs an unattended managed turn through
+    // `reserveManagedUsageRequest`. A rate limit bounds how fast schedules can
+    // be CREATED; only this plan ceiling bounds how many can exist and fire.
+    const subscription = await SubscriptionService.getSubscription(db, userId);
+    await assertScheduleQuota(db, userId, subscription?.plan_tier);
+
     const schedule = await createSchedule(db, userId, body as unknown as ScheduleInput);
     return NextResponse.json({ schedule }, { status: 201 });
   } catch (error) {

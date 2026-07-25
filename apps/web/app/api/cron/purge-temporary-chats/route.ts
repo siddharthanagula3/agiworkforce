@@ -12,6 +12,19 @@ import { getNeonChatDb } from '@/lib/server/neon-chat';
 // docs/products/agi-mobile/volume-23-settings.md ("Temporary Chat").
 // Hard-deletes rather than soft-deleting (deleted_at) since temporary
 // conversations were never meant to be recoverable or visible in trash.
+// `web_messages` goes with it via `on delete cascade`.
+//
+// PER-25 (tracked gap, not silently ignored): files ATTACHED to or GENERATED
+// inside a purged temporary conversation are not removed here, because
+// `media_assets` carries no conversation reference — verified against every
+// writer (`uploads/chat-attachment/complete`, `media/image/generate`,
+// `generated-file-persist`), and `LibraryView` documents the same absence.
+// Those rows stay owner-scoped and visible in the Library, where the user can
+// delete them (which now removes the bytes: see
+// `/api/cron/purge-deleted-media`), and account deletion erases them
+// unconditionally (`lib/server/account-erasure.ts`). Closing the gap properly
+// requires the upload/generation writers to record `metadata.conversationId`;
+// inventing a join here would delete the wrong rows.
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized cron request');

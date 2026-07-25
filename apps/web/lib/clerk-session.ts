@@ -23,3 +23,84 @@ export function hasClerkSessionCookie(): boolean {
   const value = Number(match[1]);
   return Number.isFinite(value) && value > 0;
 }
+
+/**
+ * Raw `__client_uat` cookie value, or `null` when the cookie is absent.
+ *
+ * PER-1: the auth bootstraps need to know not just "signed in?" but "signed in
+ * as of WHICH session" — Clerk bumps this timestamp on sign-in, sign-out and
+ * session switch. Comparing the raw value against the one a cached auth state
+ * was resolved from is what lets the stores notice that the cookie landed (or
+ * changed) AFTER module evaluation, instead of latching the bootstrap answer
+ * for the rest of the SPA session.
+ */
+export function clerkSessionCookieValue(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)__client_uat=([^;]*)/);
+  return match?.[1] ?? null;
+}
+
+type ClerkSessionListener = () => void;
+
+const clerkSessionListeners = new Set<ClerkSessionListener>();
+let clerkSessionWatcherInstalled = false;
+let lastObservedSessionCookie: string | null = null;
+
+/** Poll interval for the cookie watcher. Cheap: one string read + one regex. */
+const CLERK_SESSION_POLL_MS = 1500;
+
+function notifyClerkSessionListeners(): void {
+  for (const listener of clerkSessionListeners) {
+    try {
+      listener();
+    } catch {
+      // A single misbehaving subscriber must never stop the others.
+    }
+  }
+}
+
+function pollClerkSessionCookie(): void {
+  const current = clerkSessionCookieValue();
+  if (current === lastObservedSessionCookie) return;
+  lastObservedSessionCookie = current;
+  notifyClerkSessionListeners();
+}
+
+/**
+ * Subscribe to Clerk session-cookie changes plus the browser events after
+ * which a stale auth snapshot is most likely (tab refocus, restore from
+ * bfcache, regained connectivity).
+ *
+ * Subscribers are also notified on those events even when the cookie value is
+ * unchanged, so a bootstrap that failed transiently (network blip, upstream
+ * timeout) gets a deterministic retry point rather than staying wrong for the
+ * whole session. Subscribers must therefore be idempotent and cheap when
+ * nothing has actually changed.
+ *
+ * Returns an unsubscribe function. Safe to call on the server (no-op).
+ */
+export function subscribeToClerkSessionChange(listener: ClerkSessionListener): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+
+  clerkSessionListeners.add(listener);
+
+  if (!clerkSessionWatcherInstalled) {
+    clerkSessionWatcherInstalled = true;
+    lastObservedSessionCookie = clerkSessionCookieValue();
+    window.setInterval(pollClerkSessionCookie, CLERK_SESSION_POLL_MS);
+    const revalidate = () => {
+      pollClerkSessionCookie();
+      notifyClerkSessionListeners();
+    };
+    window.addEventListener('focus', revalidate);
+    window.addEventListener('online', revalidate);
+    window.addEventListener('pageshow', revalidate);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') revalidate();
+    });
+  }
+
+  return () => {
+    clerkSessionListeners.delete(listener);
+  };
+}

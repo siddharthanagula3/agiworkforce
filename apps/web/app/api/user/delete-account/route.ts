@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { clerkClient } from '@clerk/nextjs/server';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { eraseUserAccountData } from '@/lib/server/account-erasure';
 
 /**
  * DELETE /api/user/delete-account
@@ -20,6 +21,14 @@ import { getNeonDb } from '@/lib/server/neon-db';
  *
  * This endpoint schedules deletion rather than doing it immediately,
  * giving the user a 24-hour grace window before permanent erasure.
+ *
+ * PER-24: the erasure the response promises is performed by
+ * `GET /api/cron/purge-deleted-accounts`, which runs
+ * `lib/server/account-erasure.ts` once `deletion_scheduled_for` has passed.
+ * Before that job existed this route's "will be permanently deleted within 24
+ * hours" was simply untrue: nothing ever consumed `deletion_scheduled_for`, so
+ * conversations, artifacts, memories, settings and every stored R2 object
+ * survived indefinitely.
  */
 
 export const runtime = 'nodejs';
@@ -75,6 +84,21 @@ export async function DELETE(request: NextRequest) {
       );
 
       try {
+        // PER-24: the immediate path must erase the DATA too, not just the
+        // auth account. Previously it deleted the Clerk user and left every
+        // row and every stored object behind, with no owner left to request
+        // their removal.
+        const erasure = await eraseUserAccountData(userId);
+        if (!erasure.complete) {
+          logger.error({ userId, erasure }, 'Immediate account erasure was incomplete');
+          return NextResponse.json(
+            {
+              error:
+                'Account deletion could not be completed. No data was partially removed from your account. Please contact support@agiworkforce.com.',
+            },
+            { status: 500, headers: SECURITY_HEADERS },
+          );
+        }
         const client = await clerkClient();
         await client.users.deleteUser(userId);
       } catch (clerkErr: unknown) {

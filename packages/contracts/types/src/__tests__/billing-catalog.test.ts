@@ -5,6 +5,11 @@ import {
   getPlanPriceCents,
   getPlanPriceInr,
   getBillingPlanProductLimits,
+  getPlanMaxConcurrentTurns,
+  getPlanMaxConnectorTools,
+  getPlanMaxSandboxes,
+  getPlanMaxScheduledTasks,
+  getPlanSandboxTtlMs,
   canUseBillingPlanCapability,
   isSelfServePaidPlanTier,
   isPlanSelectableOnSurface,
@@ -112,27 +117,27 @@ describe('billing catalog', () => {
 
   describe('managed product limits', () => {
     it('uses the founder-set project and custom MCP limits', () => {
-      expect(getBillingPlanProductLimits('free')).toEqual({
+      expect(getBillingPlanProductLimits('free')).toMatchObject({
         projects: 1,
         customMcpServers: 1,
       });
-      expect(getBillingPlanProductLimits('basic')).toEqual({
+      expect(getBillingPlanProductLimits('basic')).toMatchObject({
         projects: 5,
         customMcpServers: 5,
       });
-      expect(getBillingPlanProductLimits('pro')).toEqual({
+      expect(getBillingPlanProductLimits('pro')).toMatchObject({
         projects: 25,
         customMcpServers: 25,
       });
-      expect(getBillingPlanProductLimits('team')).toEqual({
+      expect(getBillingPlanProductLimits('team')).toMatchObject({
         projects: 25,
         customMcpServers: 25,
       });
-      expect(getBillingPlanProductLimits('max')).toEqual({
+      expect(getBillingPlanProductLimits('max')).toMatchObject({
         projects: 'unlimited',
         customMcpServers: 'unlimited',
       });
-      expect(getBillingPlanProductLimits('max_15x')).toEqual({
+      expect(getBillingPlanProductLimits('max_15x')).toMatchObject({
         projects: 'unlimited',
         customMcpServers: 'unlimited',
       });
@@ -141,6 +146,45 @@ describe('billing catalog', () => {
     it('fails unknown cloud tiers closed instead of giving Free limits', () => {
       expect(getBillingPlanProductLimits('hobby')).toBeNull();
       expect(getBillingPlanProductLimits(undefined)).toBeNull();
+    });
+
+    // GOV-3 / GOV-4 / GOV-7: paid tiers must buy real compute headroom, and an
+    // unknown tier must resolve to 0 (deny) rather than to a Free allowance.
+    it('scales the compute dimensions monotonically across paid tiers', () => {
+      const tiers = ['free', 'basic', 'pro', 'max', 'max_15x'] as const;
+      const turns = tiers.map((tier) => getPlanMaxConcurrentTurns(tier) ?? Number.MAX_SAFE_INTEGER);
+      const sandboxes = tiers.map((tier) => getPlanMaxSandboxes(tier) ?? Number.MAX_SAFE_INTEGER);
+      const ttls = tiers.map((tier) => getPlanSandboxTtlMs(tier));
+      const tools = tiers.map((tier) => getPlanMaxConnectorTools(tier) ?? Number.MAX_SAFE_INTEGER);
+      const tasks = tiers.map((tier) => getPlanMaxScheduledTasks(tier) ?? Number.MAX_SAFE_INTEGER);
+
+      for (const series of [turns, sandboxes, ttls, tools, tasks]) {
+        for (let index = 1; index < series.length; index += 1) {
+          expect(series[index]!).toBeGreaterThan(series[index - 1]!);
+        }
+      }
+    });
+
+    it('fails unknown tiers closed and leaves negotiated Enterprise uncapped', () => {
+      expect(getPlanMaxConcurrentTurns('hobby')).toBe(0);
+      expect(getPlanMaxSandboxes(undefined)).toBe(0);
+      expect(getPlanMaxScheduledTasks(null)).toBe(0);
+      expect(getPlanSandboxTtlMs('hobby')).toBe(0);
+
+      expect(getPlanMaxConcurrentTurns('enterprise')).toBeNull();
+      expect(getPlanMaxSandboxes('enterprise')).toBeNull();
+      expect(getPlanMaxConnectorTools('enterprise')).toBeNull();
+      expect(getPlanMaxScheduledTasks('enterprise')).toBeNull();
+      expect(getPlanSandboxTtlMs('enterprise')).toBeGreaterThan(0);
+    });
+
+    it('denies managed sandboxes and scheduled tasks to the local trust boundary', () => {
+      for (const tier of ['local-only', 'byok'] as const) {
+        expect(getPlanMaxSandboxes(tier)).toBe(0);
+        expect(getPlanSandboxTtlMs(tier)).toBe(0);
+        expect(getPlanMaxScheduledTasks(tier)).toBe(0);
+        expect(getPlanMaxConcurrentTurns(tier)).toBeNull();
+      }
     });
   });
 });

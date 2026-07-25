@@ -11,8 +11,9 @@ vi.mock('../security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 
-// A minimal request stub. We always pass an explicit identifier so the header
-// path in getRateLimitIdentifier is never exercised.
+// A minimal request stub. We always pass an explicit identifier so neither the
+// verified-user path nor the trusted-proxy header path in
+// resolveRateLimitIdentifier is exercised here.
 const req = { headers: new Headers() } as unknown as NextRequest;
 
 describe('rate-limit in-memory bucketing', () => {

@@ -5,7 +5,12 @@ import type {
   ManagedCloudScheduleRun,
   ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
-import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  getModelMetadataById,
+  getPlanMaxScheduledTasks,
+  isAutoModeModelId,
+} from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import {
@@ -36,6 +41,22 @@ export class ScheduleConflictError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ScheduleConflictError';
+  }
+}
+
+/**
+ * GOV-7 / GOV-8: the caller already owns as many scheduled tasks as their plan
+ * allows (or their plan allows none). Distinct from ScheduleValidationError so
+ * the route can answer 403 with an upgrade path rather than a generic 400.
+ */
+export class ScheduleLimitError extends Error {
+  constructor(
+    message: string,
+    readonly planTier: string,
+    readonly limit: number,
+  ) {
+    super(message);
+    this.name = 'ScheduleLimitError';
   }
 }
 
@@ -400,6 +421,58 @@ function validateScheduleInput(input: ScheduleInput, now: Date): ValidatedSchedu
   });
 }
 
+/** Number of scheduled tasks `userId` currently owns. */
+export async function countSchedules(db: DatabaseAdapter, userId: string): Promise<number> {
+  const [row] = await db.query<{ count: string }>(
+    `select count(*)::text as count from scheduled_tasks where user_id = $1`,
+    [userId],
+  );
+  const parsed = Number.parseInt(row?.count ?? '0', 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * GOV-8: enforce the per-plan scheduled-task ceiling before another unattended
+ * managed turn can be armed.
+ *
+ * `POST /api/schedules` previously had NO per-user count limit and no plan
+ * gate; its only governor was `withRateLimit(request, 'chat-conversation')` at
+ * 60/min, IP-keyed because no identifier was passed. Every firing runs through
+ * `reserveManagedUsageRequest`, so an unbounded schedule list is a durable,
+ * unattended path to consume provider spend.
+ *
+ * Fail-closed: an unknown tier resolves to 0 through
+ * `getPlanMaxScheduledTasks` and is refused.
+ */
+export async function assertScheduleQuota(
+  db: DatabaseAdapter,
+  userId: string,
+  planTier: string | null | undefined,
+): Promise<void> {
+  const limit = getPlanMaxScheduledTasks(planTier);
+  // null = the tier declares itself uncapped (negotiated Enterprise contract).
+  if (limit === null) return;
+
+  const label = getBillingPlanPricing(planTier).label;
+
+  if (limit <= 0) {
+    throw new ScheduleLimitError(
+      `${label} plans do not include scheduled tasks. Upgrade to schedule unattended runs.`,
+      planTier ?? 'unknown',
+      0,
+    );
+  }
+
+  const existing = await countSchedules(db, userId);
+  if (existing >= limit) {
+    throw new ScheduleLimitError(
+      `${label} plans can have up to ${limit} scheduled ${limit === 1 ? 'task' : 'tasks'}. Delete one or upgrade to add another.`,
+      planTier ?? 'unknown',
+      limit,
+    );
+  }
+}
+
 export async function listSchedules(
   db: DatabaseAdapter,
   userId: string,
@@ -443,6 +516,14 @@ async function getScheduleForUpdate(
   return mapScheduleTask(row);
 }
 
+/**
+ * Persist one scheduled task.
+ *
+ * GOV-8: the per-plan ceiling is enforced by `assertScheduleQuota`, which the
+ * sole caller (`POST /api/schedules`) runs immediately before this — that route
+ * is where the authenticated subscription tier is resolved. Any NEW caller must
+ * run the same gate first; this function does not re-derive the plan.
+ */
 export async function createSchedule(
   db: DatabaseAdapter,
   userId: string,

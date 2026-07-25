@@ -3,9 +3,9 @@ import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
-  getPlanFlagshipWeeklyUsageBudgetCents,
-  getPlanSessionUsageBudgetCents,
-  getPlanWeeklyUsageBudgetCents,
+  getPlanFlagshipWeeklyUsageCapCents,
+  getPlanSessionUsageCapCents,
+  getPlanWeeklyUsageCapCents,
 } from '@/lib/server/managed-usage-policy';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
@@ -187,9 +187,13 @@ export async function reserveManagedUsageRequest(input: {
 }): Promise<ManagedUsageRequestReservation> {
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
-  const sessionCapCents = getPlanSessionUsageBudgetCents(input.planTier);
-  const weeklyCapCents = getPlanWeeklyUsageBudgetCents(input.planTier);
-  const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageBudgetCents(input.planTier);
+  // GOV-1: `null` is passed ONLY for a tier that declares itself uncapped.
+  // Every other tier — including one whose numeric allowance is 0 — passes a
+  // number, and the 0070 migration's `is not null` guard turns 0 into a denial
+  // instead of the unlimited bypass the old `> 0` guard produced.
+  const sessionCapCents = getPlanSessionUsageCapCents(input.planTier);
+  const weeklyCapCents = getPlanWeeklyUsageCapCents(input.planTier);
+  const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageCapCents(input.planTier);
   const row = await queryOne(
     input.db,
     `select * from public.reserve_managed_usage_request_with_limits(
@@ -257,9 +261,10 @@ export async function reserveManagedUsageProviderStep(input: {
     );
   }
 
-  const sessionCapCents = getPlanSessionUsageBudgetCents(input.planTier);
-  const weeklyCapCents = getPlanWeeklyUsageBudgetCents(input.planTier);
-  const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageBudgetCents(input.planTier);
+  // GOV-1: same null-means-declared-uncapped contract as the reservation path.
+  const sessionCapCents = getPlanSessionUsageCapCents(input.planTier);
+  const weeklyCapCents = getPlanWeeklyUsageCapCents(input.planTier);
+  const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageCapCents(input.planTier);
   const reservation = input.reservation;
   const row = await queryOne(
     reservation.db,

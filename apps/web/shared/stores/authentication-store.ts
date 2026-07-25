@@ -4,130 +4,216 @@ import { immer } from 'zustand/middleware/immer';
 import {
   authService,
   AuthUser,
-  AuthResponse,
   LoginData,
   RegisterData,
 } from '@shared/services/authentication-manager';
 import { logger } from '@shared/lib/logger';
-import { hasClerkSessionCookie } from '@/lib/clerk-session';
+import {
+  clerkSessionCookieValue,
+  hasClerkSessionCookie,
+  subscribeToClerkSessionChange,
+} from '@/lib/clerk-session';
+
+// ---------------------------------------------------------------------------
+// PER-11 / PER-12 — sign-out cleanup
+// ---------------------------------------------------------------------------
 
 /**
- * Central cleanup function to reset all stores on logout
- * Prevents data leaks between user sessions
+ * Minimal structural view of a zustand store created with the `persist`
+ * middleware.
+ *
+ * PER-11: the previous implementation removed EIGHT hardcoded localStorage
+ * keys, only two of which matched a real `persist({ name })`. Artifact bodies
+ * (`agi-artifacts-store`), the web chat transcript (`agiworkforce-web-chat`,
+ * `agi-web-chat`), remembered memory facts (`agi-memory-store-v1`), the model
+ * picker, the company hub and the media job list all survived sign-out, so on
+ * a shared browser the next user inherited them. Rather than re-typing a
+ * longer hand-written list that can drift again, the key is read back out of
+ * `persist.getOptions().name` — the very object the store persisted under.
  */
-async function cleanupAllStores(): Promise<void> {
-  // Each store's cleanup is fully independent (own dynamic import + reset)
-  // and runs via Promise.allSettled rather than Promise.all: this function's
-  // whole purpose is preventing cross-user data leaks, so one store failing
-  // to load (e.g. a stale chunk hash right after a deploy, or a transient
-  // network blip) or failing to reset must not silently skip cleanup for the
-  // other nine — a partial failure here is strictly better than an
-  // all-or-nothing one. Previously a single rejected import aborted the
-  // whole Promise.all, jumping straight to a catch-all that skipped every
-  // remaining reset AND the localStorage cleanup below it.
-  const tasks: Array<{ name: string; run: () => Promise<void> }> = [
-    {
-      name: 'workforce-store',
-      run: async () => {
-        const { useWorkforceStore, cleanupWorkforceSubscription } =
-          await import('./workforce-store');
-        useWorkforceStore.getState().reset();
-        cleanupWorkforceSubscription();
-      },
-    },
-    {
-      name: 'mission-control-store',
-      run: async () => {
-        const { useMissionStore, stopMissionCleanupInterval } =
-          await import('./mission-control-store');
-        useMissionStore.getState().reset();
-        stopMissionCleanupInterval();
-      },
-    },
-    {
-      name: 'notification-store',
-      run: async () => {
-        const { useNotificationStore } = await import('./notification-store');
-        useNotificationStore.getState().clearAll();
-      },
-    },
-    {
-      name: 'artifact-store',
-      run: async () => {
-        const { useArtifactStore } = await import('./artifact-store');
-        const artifactState = useArtifactStore.getState();
-        if (typeof artifactState.reset === 'function') {
-          artifactState.reset();
-        } else {
-          logger.auth('Warning: Artifact store has no reset method');
-        }
-      },
-    },
-    {
-      name: 'layout-store',
-      run: async () => {
-        const { useUIStore } = await import('./layout-store');
-        const layoutState = useUIStore.getState();
-        if (typeof layoutState.reset === 'function') {
-          layoutState.reset();
-        } else {
-          logger.auth('Warning: Layout store has no reset method');
-        }
-      },
-    },
-    {
-      name: 'user-profile-store',
-      run: async () => {
-        const { useUserProfileStore } = await import('./user-profile-store');
-        const profileState = useUserProfileStore.getState();
-        if (typeof profileState.reset === 'function') {
-          profileState.reset();
-        } else {
-          logger.auth('Warning: User profile store has no reset method');
-        }
-      },
-    },
-  ];
+interface ZustandStoreHandle {
+  getState: () => unknown;
+  /** Present only when the store uses the `persist` middleware. */
+  persist?: {
+    getOptions: () => { name?: string };
+    clearStorage: () => void;
+  };
+}
 
-  // Each task's own name is baked into its rejection (rather than indexing
-  // back into `tasks` by position afterward) so the failure is attributable
-  // without relying on `results` and `tasks` staying index-aligned.
+/** Runtime shape check — no cast to `any`, no dependency on each store's declared type. */
+function asZustandStore(value: unknown): ZustandStoreHandle | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate['getState'] !== 'function') return null;
+  return value as ZustandStoreHandle;
+}
+
+/** True when this store persists to storage and can clear that payload itself. */
+function hasPersistApi(handle: ZustandStoreHandle): boolean {
+  const api = handle.persist;
+  return (
+    !!api &&
+    typeof api === 'object' &&
+    typeof api.getOptions === 'function' &&
+    typeof api.clearStorage === 'function'
+  );
+}
+
+/** Invoke `state[method]()` when it exists. Returns true when something ran. */
+function invokeStateMethod(state: unknown, method: string): boolean {
+  if (!state || typeof state !== 'object') return false;
+  const fn = (state as Record<string, unknown>)[method];
+  if (typeof fn !== 'function') return false;
+  (fn as () => void)();
+  return true;
+}
+
+/**
+ * Ordered "clear my state" verbs used across this codebase's stores; the first
+ * one a store exposes wins. A store that exposes none is not left dirty: every
+ * such store in `USER_SCOPED_STORE_MODULES` persists, so `clearStorage()` below
+ * removes its durable payload and both sign-out paths navigate away afterwards.
+ */
+const STORE_RESET_METHODS = ['resetOnLogout', 'reset', 'clearAll', 'clear'] as const;
+
+/** Reset a store's in-memory state through whichever clearing action it exposes. */
+function resetStoreState(handle: ZustandStoreHandle): void {
+  const state = handle.getState();
+  for (const method of STORE_RESET_METHODS) {
+    if (invokeStateMethod(state, method)) return;
+  }
+}
+
+/**
+ * Every module that owns user-scoped state which must not survive a sign-out.
+ * The module is imported and ALL of its exports are scanned for zustand stores
+ * (persisted or not) — so adding a new store to one of these modules is
+ * covered automatically, and renaming a persist key cannot desynchronize the
+ * cleanup list.
+ */
+const USER_SCOPED_STORE_MODULES: ReadonlyArray<{ label: string; load: () => Promise<unknown> }> = [
+  { label: 'workforce-store', load: () => import('./workforce-store') },
+  { label: 'mission-control-store', load: () => import('./mission-control-store') },
+  { label: 'notification-store', load: () => import('./notification-store') },
+  { label: 'artifact-store', load: () => import('./artifact-store') },
+  { label: 'layout-store', load: () => import('./layout-store') },
+  { label: 'user-profile-store', load: () => import('./user-profile-store') },
+  { label: 'web-chat-store', load: () => import('./web-chat-store') },
+  { label: 'web-settings-store', load: () => import('./web-settings-store') },
+  { label: 'media-store', load: () => import('./media-store') },
+  { label: 'model-store', load: () => import('./model-store') },
+  { label: 'thinking-store', load: () => import('./thinking-store') },
+  { label: 'tool-store', load: () => import('./tool-store') },
+  { label: 'agent-metrics-store', load: () => import('./agent-metrics-store') },
+  { label: 'company-hub-store', load: () => import('./company-hub-store') },
+  { label: 'artifacts-store', load: () => import('@/features/chat/stores/artifacts-store') },
+  { label: 'voice-input-store', load: () => import('@/features/chat/stores/voice-input-store') },
+  { label: 'style-store', load: () => import('@/features/chat/stores/style-store') },
+  { label: 'plugin-store', load: () => import('@/features/plugins/stores/plugin-store') },
+  {
+    label: 'tool-permissions-store',
+    load: () => import('@/features/connectors/stores/tool-permissions-store'),
+  },
+  { label: 'unified-chat-stores', load: () => import('@agiworkforce/unified-chat') },
+];
+
+/**
+ * localStorage key namespaces this app owns. Backstop for persisted stores
+ * whose zustand handle is module-private (e.g. the artifacts store's internal
+ * `_persistStore`), so a key can never be orphaned just because the store that
+ * wrote it is not exported. Anything matching is user-scoped by construction.
+ */
+const APP_STORAGE_KEY_PATTERNS: readonly RegExp[] = [
+  /^agi[-_.]/i,
+  /^agiworkforce[-_.]/i,
+  /^chat-/i,
+  /^tool-storage$/,
+  /^agent-metrics-storage$/,
+  /^__clerk_db_jwt$/,
+  /^sb-[a-z0-9]+-auth-token$/i,
+];
+
+function isAppOwnedStorageKey(key: string): boolean {
+  return APP_STORAGE_KEY_PATTERNS.some((pattern) => pattern.test(key));
+}
+
+/** Remove every app-owned key from a Storage area. Best-effort and synchronous. */
+function purgeAppOwnedStorage(area: Storage | undefined): number {
+  if (!area) return 0;
+  const doomed: string[] = [];
+  try {
+    for (let i = 0; i < area.length; i++) {
+      const key = area.key(i);
+      if (key && isAppOwnedStorageKey(key)) doomed.push(key);
+    }
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const key of doomed) {
+    try {
+      area.removeItem(key);
+      removed++;
+    } catch {
+      // Ignore per-key storage errors; keep purging the rest.
+    }
+  }
+  return removed;
+}
+
+/**
+ * Central cleanup on sign-out. Resets every user-scoped store's in-memory
+ * state AND clears its persisted payload, then sweeps any remaining app-owned
+ * storage keys. Exported so BOTH sign-out paths (`useAuthStore.logout()` and
+ * `useBillingStore.signOut()`) run the exact same cleanup — the two used to
+ * carry "keep this in sync" comments and had already drifted apart.
+ *
+ * Every step is independent and runs through `Promise.allSettled`: this
+ * function's whole purpose is preventing cross-user data leaks, so one module
+ * failing to load (a stale chunk hash right after a deploy, a transient
+ * network blip) must never skip the rest. A partial failure is strictly better
+ * than an all-or-nothing one.
+ */
+export async function cleanupAllStores(): Promise<void> {
   const results = await Promise.allSettled(
-    tasks.map((task) =>
-      task.run().catch((error: unknown) => {
-        logger.error(`Error cleaning up ${task.name} on logout:`, error);
+    USER_SCOPED_STORE_MODULES.map(async ({ label, load }) => {
+      try {
+        const mod = await load();
+        if (!mod || typeof mod !== 'object') return;
+        for (const exported of Object.values(mod as Record<string, unknown>)) {
+          const handle = asZustandStore(exported);
+          if (!handle) continue;
+          resetStoreState(handle);
+          // The persisted payload's key is read out of the store's own
+          // `persist({ name })` config rather than re-typed here, which is the
+          // whole point: the cleanup list cannot drift from reality.
+          if (hasPersistApi(handle)) handle.persist?.clearStorage();
+        }
+        // Module-level teardown that is not part of any store's state.
+        const moduleFns = mod as Record<string, unknown>;
+        for (const fnName of ['cleanupWorkforceSubscription', 'stopMissionCleanupInterval']) {
+          const fn = moduleFns[fnName];
+          if (typeof fn === 'function') (fn as () => void)();
+        }
+      } catch (error) {
+        logger.error(`Error cleaning up ${label} on logout:`, error);
         throw error;
-      }),
-    ),
+      }
+    }),
   );
   const failedCount = results.filter((result) => result.status === 'rejected').length;
 
-  // Clear persisted data from localStorage regardless of the per-store
-  // results above — this is synchronous, best-effort, and independent of
-  // any single store's in-memory reset succeeding.
-  const keysToRemove = [
-    'agi-chat-store',
-    'agi-notification-store',
-    'agi-multi-agent-chat-store',
-    'agi-usage-warning-store',
-    'agi-artifact-store',
-    'agi-layout-store',
-    'agi-settings-store',
-    'agi-user-profile-store',
-  ];
-  keysToRemove.forEach((key) => {
-    try {
-      localStorage.removeItem(key);
-    } catch (_e) {
-      // Ignore localStorage errors
-    }
-  });
+  // Storage sweep runs regardless of the per-module results above.
+  if (typeof window !== 'undefined') {
+    purgeAppOwnedStorage(window.localStorage);
+    purgeAppOwnedStorage(window.sessionStorage);
+  }
 
   if (failedCount === 0) {
     logger.auth('All stores cleaned up on logout');
   } else {
     logger.auth(
-      `Store cleanup on logout completed with ${failedCount} of ${tasks.length} store(s) failing; see preceding errors`,
+      `Store cleanup on logout completed with ${failedCount} of ${USER_SCOPED_STORE_MODULES.length} module(s) failing; see preceding errors`,
     );
   }
 }
@@ -149,6 +235,12 @@ export interface AuthState {
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
   initialize: () => Promise<void>;
+  /**
+   * PER-1: re-resolve the session when the Clerk cookie no longer matches the
+   * one the current state was resolved from, or when the previous attempt
+   * never settled. Cheap and idempotent when nothing has changed.
+   */
+  resyncSession: () => Promise<void>;
   updateUser: (user: AuthUser) => void;
   setError: (error: string | null) => void;
   reset: () => void;
@@ -169,6 +261,91 @@ const enableDevtools = process.env.NODE_ENV !== 'production';
 // Module-level flag to prevent double-init race condition
 let _initializingPromise: Promise<void> | null = null;
 
+// --- PER-1 -----------------------------------------------------------------
+// `initialize()` ran once at module import, was guarded by `if (initialized)
+// return`, and set `initialized: true` on EVERY exit path — including the
+// signed-out fast path and the 5s timeout — while nothing ever called
+// `fetchUser()` again. If the Clerk `__client_uat` cookie lagged module
+// evaluation (exactly what happens on a post-sign-in client-side navigation)
+// the store latched `user: null` for the whole SPA session and only a hard
+// reload recovered.
+//
+// The fix keeps `initialized` meaning "the bootstrap has run" (consumers and
+// tests rely on that), and adds the two things that were missing: WHAT the
+// state was resolved from, and WHETHER that resolution actually settled.
+/** Raw `__client_uat` value the current auth state was resolved from. */
+let _resolvedFromSessionToken: string | null = null;
+/** False after a timeout/exception — the answer is provisional, retry later. */
+let _sessionSettled = false;
+/** Start of the most recent resolution attempt, for the failure cooldown. */
+let _lastResolveAttemptAt = 0;
+
+/** Minimum gap between retries after an UNSETTLED attempt (ms). */
+const SESSION_RETRY_COOLDOWN_MS = 10_000;
+/** Upper bound on a single session resolution before it is treated as failed. */
+const SESSION_RESOLVE_TIMEOUT_MS = 5000;
+
+function clearSessionResolution(): void {
+  _resolvedFromSessionToken = null;
+  _sessionSettled = false;
+  _lastResolveAttemptAt = 0;
+}
+
+/** Drop auth material a rejected/expired session may have left behind. */
+function clearStaleAuthStorage(): void {
+  try {
+    localStorage.removeItem('__clerk_db_jwt');
+    localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
+  } catch (_e) {
+    logger.debug('Could not clear localStorage');
+  }
+}
+
+interface SessionResolution {
+  user: AuthUser | null;
+  error: string | null;
+  /** True when the server gave a definitive answer (including "not signed in"). */
+  settled: boolean;
+}
+
+/**
+ * Resolve the current session against `/api/me`, bounded by a timeout. A
+ * timeout or a thrown error is reported as UNSETTLED so the caller knows the
+ * `user: null` it is about to store is provisional, not an answer.
+ */
+async function resolveSession(): Promise<SessionResolution> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<SessionResolution>((resolve) => {
+    timer = setTimeout(
+      () => resolve({ user: null, error: 'Auth initialization timeout', settled: false }),
+      SESSION_RESOLVE_TIMEOUT_MS,
+    );
+  });
+
+  try {
+    return await Promise.race([
+      authService.getCurrentUser().then((result): SessionResolution => {
+        if (!result) {
+          return { user: null, error: 'Empty auth response', settled: false };
+        }
+        // An explicit error here (401 / expired session) IS a definitive
+        // answer: the server has told us there is no session.
+        return { user: result.user, error: result.error, settled: true };
+      }),
+      timeoutPromise,
+    ]);
+  } catch (error) {
+    logger.error('Session resolution error:', error);
+    return {
+      user: null,
+      error: error instanceof Error ? error.message : String(error),
+      settled: false,
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export const useAuthStore = create<AuthState>()(
   devtools(
     immer((set, get) => ({
@@ -179,70 +356,72 @@ export const useAuthStore = create<AuthState>()(
       initialized: false,
 
       initialize: async () => {
-        if (get().initialized) return;
+        // PER-1: delegates to resyncSession, which short-circuits when the
+        // current state was already resolved from exactly this Clerk cookie.
+        // That preserves the original "run once" behavior while making a
+        // LATER cookie change (post-sign-in client-side navigation) recover.
+        await get().resyncSession();
+      },
+
+      resyncSession: async () => {
+        if (typeof window === 'undefined') return;
+
+        const token = clerkSessionCookieValue();
+
+        // Settled against exactly this cookie value — nothing to do.
+        if (get().initialized && _sessionSettled && _resolvedFromSessionToken === token) return;
+
+        // Previous attempt never settled: retry, but not on every tick.
+        if (
+          !_sessionSettled &&
+          _lastResolveAttemptAt !== 0 &&
+          Date.now() - _lastResolveAttemptAt < SESSION_RETRY_COOLDOWN_MS
+        ) {
+          return;
+        }
+
+        // Prevent concurrent resolutions (race condition guard)
+        if (_initializingPromise) return _initializingPromise;
+
+        _lastResolveAttemptAt = Date.now();
+
         // Signed-out fast path: skip the guaranteed-401 /api/me probe (which the
         // browser logs to the console on every route that runs this bootstrap).
-        // Clerk's __client_uat cookie is 0/absent when signed out. A signed-in
-        // user always has it > 0 by the time client JS runs, so their init is
-        // unchanged. Regression: e2e/public-auth-clean.spec.ts.
+        // Clerk's __client_uat cookie is 0/absent when signed out.
+        // Regression: e2e/public-auth-clean.spec.ts.
+        //
+        // Unlike before, this records WHAT it resolved from, so the cookie
+        // appearing a moment later re-resolves instead of latching null.
         if (!hasClerkSessionCookie()) {
+          _resolvedFromSessionToken = token;
+          _sessionSettled = true;
           set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
           return;
         }
-        // Prevent concurrent initializations (race condition guard)
-        if (_initializingPromise) return _initializingPromise;
 
         _initializingPromise = (async () => {
-          logger.auth('Initializing auth state...');
+          logger.auth('Resolving auth state...');
           set({ isLoading: true });
 
-          try {
-            const timeoutPromise = new Promise<AuthResponse>((resolve) =>
-              setTimeout(
-                () =>
-                  resolve({
-                    user: null,
-                    error: 'Auth initialization timeout',
-                  }),
-                5000,
-              ),
-            );
+          const { user, error, settled } = await resolveSession();
 
-            const result = await Promise.race([authService.getCurrentUser(), timeoutPromise]);
-
-            if (!result) {
-              logger.debug('Initialization skipped: empty auth response');
-              set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
-              return;
-            }
-
-            const { user, error } = result;
-
-            if (error) {
-              logger.debug('No existing session:', error);
-              // Clear any invalid auth data from localStorage
-              try {
-                localStorage.removeItem('__clerk_db_jwt');
-                localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
-              } catch (_e) {
-                logger.debug('Could not clear localStorage');
-              }
-              set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
-            } else {
-              logger.auth('Restored user session:', user?.email);
-              set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
-            }
-          } catch (error) {
-            logger.error('Initialization error:', error);
-            // Clear any invalid auth data
-            try {
-              localStorage.removeItem('__clerk_db_jwt');
-              localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
-            } catch (_e) {
-              logger.debug('Could not clear localStorage');
-            }
+          if (error) {
+            logger.debug('No existing session:', error);
+            if (settled) clearStaleAuthStorage();
             set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
+          } else {
+            logger.auth('Restored user session:', user?.email);
+            set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
           }
+
+          // Only a settled answer may suppress future re-resolution. A timeout
+          // or a network failure leaves `_sessionSettled === false`, so the
+          // Clerk session watcher below retries at its next trigger — a cookie
+          // change, tab focus, visibility change, bfcache restore or `online`
+          // — subject to SESSION_RETRY_COOLDOWN_MS so repeated focus events
+          // cannot become a request storm.
+          _sessionSettled = settled;
+          _resolvedFromSessionToken = settled ? token : null;
         })().finally(() => {
           _initializingPromise = null;
         });
@@ -308,6 +487,10 @@ export const useAuthStore = create<AuthState>()(
         // Clean up all stores to prevent data leaks between sessions
         await cleanupAllStores();
 
+        // PER-1: forget which cookie the (now discarded) state was resolved
+        // from, so the next sign-in on this page resolves from scratch.
+        clearSessionResolution();
+
         set({
           user: null,
           isAuthenticated: false,
@@ -319,17 +502,21 @@ export const useAuthStore = create<AuthState>()(
       },
 
       fetchUser: async () => {
+        // PER-1/PER-8: an unconditional re-fetch of `/api/me`. Callers use it
+        // after writing the profile so the greeting/header/sidebar update
+        // without a reload. It records the resolution bookkeeping too, so a
+        // successful fetch also settles any provisional bootstrap state.
         set({ isLoading: true });
-        try {
-          const { user, error } = await authService.getCurrentUser();
-          if (error) {
-            set({ user: null, isAuthenticated: false, isLoading: false });
-          } else {
-            set({ user, isAuthenticated: !!user, isLoading: false });
-          }
-        } catch (_error) {
-          set({ user: null, isAuthenticated: false, isLoading: false });
+        const token = clerkSessionCookieValue();
+        _lastResolveAttemptAt = Date.now();
+        const { user, error, settled } = await resolveSession();
+        if (error) {
+          set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
+        } else {
+          set({ user, isAuthenticated: !!user, isLoading: false, initialized: true });
         }
+        _sessionSettled = settled;
+        _resolvedFromSessionToken = settled ? token : null;
       },
 
       updateUser: (user: AuthUser) => {
@@ -341,6 +528,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       reset: () => {
+        clearSessionResolution();
         set({
           user: null,
           isAuthenticated: false,
@@ -428,5 +616,13 @@ export const useAuthStore = create<AuthState>()(
 
 // Auto-initialize the store when imported
 if (typeof window !== 'undefined') {
-  useAuthStore.getState().initialize();
+  void useAuthStore.getState().initialize();
+  // PER-1: the bootstrap answer is no longer final. Re-resolve whenever the
+  // Clerk session cookie changes (post-sign-in client-side navigation, sign-out
+  // in another tab, session switch) or the tab regains focus/connectivity after
+  // an unsettled attempt. Without this, a cookie that lands after module
+  // evaluation left `user: null` until a hard reload — the reported bug.
+  subscribeToClerkSessionChange(() => {
+    void useAuthStore.getState().resyncSession();
+  });
 }

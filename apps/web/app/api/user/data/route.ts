@@ -9,6 +9,7 @@ import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { eraseUserAccountData, eraseUserMedia } from '@/lib/server/account-erasure';
 import { GET as exportUserDataGet } from '@/app/api/user/export/route';
 
 /**
@@ -51,19 +52,15 @@ export const GET = exportUserDataGet;
 
 // Hardcoded deletion order · children first to respect FK constraints.
 // NEVER interpolate user-supplied values into SQL; these names are constants.
-const TABLES_TO_DELETE = [
-  { table: 'credit_transactions', column: 'user_id' },
-  { table: 'token_credits', column: 'user_id' },
-  { table: 'beta_redemptions', column: 'user_id' },
-  { table: 'email_preferences', column: 'user_id' },
-  { table: 'device_authorizations', column: 'user_id' },
-  { table: 'desktop_devices', column: 'user_id' },
-  { table: 'mobile_devices', column: 'user_id' },
-  { table: 'sync_data', column: 'user_id' },
-  { table: 'organization_members', column: 'user_id' },
-  { table: 'subscriptions', column: 'user_id' },
-  { table: 'profiles', column: 'id' },
-] as const;
+/**
+ * PER-24: the hardcoded eleven-table list that used to live here covered
+ * neither the user's conversations, artifacts, memories and settings nor any
+ * stored media, named a table that does not exist (`device_authorizations`;
+ * the real one is `device_authorization_codes`) and swallowed that as a warn.
+ * The verified inventory now lives in `lib/server/account-erasure.ts` and is
+ * shared with the scheduled purge cron, so the two paths cannot disagree about
+ * what "delete my data" means.
+ */
 
 async function handleDeleteUserData(request: NextRequest) {
   // Handle CORS preflight
@@ -124,6 +121,20 @@ async function handleDeleteUserData(request: NextRequest) {
     }
 
     if (rpcSucceeded) {
+      // PER-24: the stored procedure is SQL-only — it cannot reach object
+      // storage, so every generated image and chat attachment survived a
+      // "successful" GDPR deletion. Remove the bytes here.
+      const mediaErasure = await eraseUserMedia(userId);
+      if (mediaErasure.mediaObjectsFailed > 0) {
+        logger.error(
+          { userId, mediaErasure },
+          'Stored media could not be fully deleted during GDPR erasure',
+        );
+        throw createError.internal(
+          'Your database records were deleted but some stored files could not be removed. Please contact support@agiworkforce.com.',
+        );
+      }
+
       logger.info({ userId, result: rpcData }, 'User data deleted successfully via RPC');
 
       return NextResponse.json(
@@ -132,7 +143,7 @@ async function handleDeleteUserData(request: NextRequest) {
           message: 'Your data has been successfully deleted.',
           user_id: userId,
           deletion_timestamp: new Date().toISOString(),
-          details: rpcData,
+          details: { rpc: rpcData, media: mediaErasure },
           note: 'To complete account deletion, please also delete your authentication account through account settings.',
         },
         {
@@ -144,30 +155,39 @@ async function handleDeleteUserData(request: NextRequest) {
       );
     }
 
-    // Fallback: manual deletion in FK-safe order using parameterized SQL.
-    // Table names come from the hardcoded TABLES_TO_DELETE constant · no user input.
-    const deletionResults: Record<string, { deleted: boolean; error?: string }> = {};
+    // Fallback: manual deletion in FK-safe order using parameterized SQL,
+    // including the stored media BYTES (PER-24/PER-25).
+    const erasure = await eraseUserAccountData(userId);
 
-    for (const { table, column } of TABLES_TO_DELETE) {
-      try {
-        await db.execute(`delete from ${table} where ${column} = $1`, [userId]);
-        deletionResults[table] = { deleted: true };
-      } catch (deleteErr: unknown) {
-        const pgErr = deleteErr as { message?: string };
-        deletionResults[table] = { deleted: false, error: pgErr.message };
-        logger.warn({ table, deleteErr, userId }, `Failed to delete from ${table}`);
-      }
+    logger.info({ userId, erasure }, 'Completed fallback data deletion');
+
+    if (!erasure.complete) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'Your data deletion request was only partially completed. Please contact support@agiworkforce.com so the remainder can be erased.',
+          user_id: userId,
+          deletion_timestamp: new Date().toISOString(),
+          details: erasure,
+        },
+        {
+          status: 500,
+          headers: {
+            ...getCorsHeaders(request),
+            ...getSecurityHeaders(),
+          },
+        },
+      );
     }
-
-    logger.info({ userId, results: deletionResults }, 'Completed fallback data deletion');
 
     return NextResponse.json(
       {
         success: true,
-        message:
-          'Your data deletion request has been processed. Some data may require manual review.',
+        message: 'Your data deletion request has been processed and your data has been deleted.',
         user_id: userId,
         deletion_timestamp: new Date().toISOString(),
+        details: erasure,
         note: 'To complete account deletion, please also delete your authentication account through account settings.',
       },
       {

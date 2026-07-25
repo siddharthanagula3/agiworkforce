@@ -34,7 +34,13 @@ export function defaultPermissionForTool(destructive: boolean): ConnectorPermiss
 }
 
 /**
- * Storage location enum — per DECISIONS.md D1.
- * Resolved at runtime via packages/client/client-runtime/src/detect.ts.
+ * Where connector tool permissions are stored for the active runtime.
+ *
+ * CON-26: `'cloud-neon'` was replaced by `'unsupported'`. The cloud branch was
+ * never implemented — its client resolved a global that is set nowhere, so it
+ * accepted writes and discarded them — and its queries were Supabase-shaped
+ * against a stack from which Supabase has been removed. Until a real
+ * cloud-backed store exists, non-Tauri runtimes report `'unsupported'` and their
+ * store throws rather than silently no-op.
  */
-export type ConnectorPermissionStorage = 'local-vault' | 'cloud-neon';
+export type ConnectorPermissionStorage = 'local-vault' | 'unsupported';

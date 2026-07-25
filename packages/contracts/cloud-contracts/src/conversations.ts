@@ -2,6 +2,39 @@ import { z } from 'zod';
 
 export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
+/**
+ * PER-5 — hard cap on a message's serialized `metadata`.
+ *
+ * `content` was capped at 100 000 chars but `metadata` was an uncapped
+ * `z.record(z.string(), z.unknown())`, and the server-side normalizer was a
+ * bare type check. So a 1.4–4 MB `data:image/png;base64,…` URL smuggled in as
+ * `metadata.imageUrl` sailed past every validator and only failed at the body
+ * limit — surfacing to the user as "Couldn't save this response" with no
+ * indication of what was wrong. 32 000 chars is ~10x the largest legitimate
+ * metadata payload (tool results, citations, image-generation parameters) and
+ * far below anything that could carry an inline image.
+ */
+export const MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH = 32_000;
+
+/** Serialized size of a metadata object, or Infinity when it cannot be serialized. */
+export function managedCloudMetadataLength(value: unknown): number {
+  try {
+    return JSON.stringify(value ?? {})?.length ?? 0;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+/**
+ * Message metadata: a JSON object bounded by
+ * `MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH`. The error message is written for a
+ * human reading a 400, not for a log line.
+ */
+export const ManagedCloudMessageMetadataSchema = z
+  .record(z.string(), z.unknown())
+  .refine((value) => managedCloudMetadataLength(value) <= MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH, {
+    message: `Message metadata exceeds ${MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH} characters. Large payloads (for example an inline data: image) must be uploaded to storage and referenced by id, not embedded in the message.`,
+  });
 export const MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE = 50;
 export const MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE = 100;
 export const MANAGED_CLOUD_REFLECT_PATH = '/api/reflect';
@@ -102,7 +135,7 @@ export const ManagedCloudCreateMessageRequestSchema = z.object({
     .refine((value) => value.trim().length > 0, 'Message content cannot be only whitespace'),
   model: z.string().min(1).optional().default('auto'),
   role: ManagedCloudMessageRoleSchema.optional().default('user'),
-  metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  metadata: ManagedCloudMessageMetadataSchema.optional().default({}),
   skipLlm: z.boolean().optional().default(false),
 });
 export type ManagedCloudCreateMessageRequest = z.input<
