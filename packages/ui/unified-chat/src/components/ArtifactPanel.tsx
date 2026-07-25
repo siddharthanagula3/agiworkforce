@@ -21,6 +21,47 @@ import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandb
 import { Button } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
 import { ReactPreview } from './artifact-components/ReactPreview';
+// AUDIT-FIX ART-17 / ART-18: reuse the sibling renderer's audited SVG allowlist
+// and its mermaid renderer instead of re-answering the same questions here.
+import { MermaidArtifact, sanitizeSvg } from './ArtifactRenderer';
+
+/**
+ * AUDIT-FIX ART-24: one guarded clipboard write for the whole panel.
+ *
+ * `navigator.clipboard` is undefined in an insecure context and `writeText`
+ * rejects on a denied permission or an unfocused document. Every call site here
+ * used to swallow that into an empty catch, so the user saw nothing at all —
+ * no tick, no error, no clue. Returning the outcome lets each caller say so.
+ */
+async function writeToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return false;
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * AUDIT-FIX ART-25: download a Blob reliably.
+ *
+ * The previous inline version created an anchor, never attached it to the
+ * document, clicked it, and revoked the object URL on the very next statement.
+ * Firefox ignores clicks on unattached anchors, and revoking synchronously can
+ * race the browser's fetch of the blob. Attach → click → detach → revoke on a
+ * later tick, which is what `ArtifactRenderer.handleDownload` already did.
+ */
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 // ---------------------------------------------------------------------------
 // Publish result contract
@@ -40,7 +81,39 @@ export interface ArtifactLocalPublishResult {
   waitlistGated: false;
 }
 
-/** Cloud publish is waitlist-gated until managed artifact publishing is proven. */
+/**
+ * Cloud publish succeeded — the artifact is reachable at a hosted URL.
+ *
+ * AUDIT-FIX ART-27: mirrors `CloudPublishResult` in @agiworkforce/artifacts.
+ */
+export interface ArtifactCloudPublishResult {
+  kind: 'cloud';
+  shareUrl: string;
+  publishedAt: string;
+  waitlistGated: false;
+}
+
+/**
+ * Cloud publish could not run because this host injected no cloud publisher.
+ *
+ * AUDIT-FIX ART-27: mirrors `CloudUnavailablePublishResult` in
+ * @agiworkforce/artifacts. This is a capability statement about the host, NOT
+ * a launch gate — managed cloud has been open by default since the founder
+ * decision of 2026-06-27.
+ */
+export interface ArtifactCloudUnavailablePublishResult {
+  kind: 'unavailable';
+  shareUrl: null;
+  reason: string;
+  waitlistGated: false;
+}
+
+/**
+ * @deprecated AUDIT-FIX ART-27 — retained only so a host still returning the
+ * pre-2026-06-27 shape keeps type-checking. The panel renders it exactly like
+ * `unavailable`: no waitlist, no sign-up link. Remove once every adapter
+ * (notably `apps/web/lib/artifact-publisher.ts`) has been migrated.
+ */
 export interface ArtifactWaitlistPublishResult {
   kind: 'waitlist';
   shareUrl: null;
@@ -48,7 +121,11 @@ export interface ArtifactWaitlistPublishResult {
 }
 
 /** Discriminated union of possible publish outcomes. */
-export type ArtifactPublishResult = ArtifactLocalPublishResult | ArtifactWaitlistPublishResult;
+export type ArtifactPublishResult =
+  | ArtifactLocalPublishResult
+  | ArtifactCloudPublishResult
+  | ArtifactCloudUnavailablePublishResult
+  | ArtifactWaitlistPublishResult;
 
 export interface ArtifactPanelProps {
   artifact: Artifact | null;
@@ -82,11 +159,6 @@ export interface ArtifactPanelProps {
    * deferred (TODO: EXEC-SUMMARY-r2 hours).
    */
   publishArtifact?: () => Promise<ArtifactPublishResult>;
-  /**
-   * Optional URL to the cloud waitlist sign-up page. Shown in the
-   * waitlist-gated toast CTA. Defaults to the AGI marketing waitlist URL.
-   */
-  cloudWaitlistUrl?: string;
 }
 
 function getTypeLabel(artifact: Artifact): string {
@@ -135,41 +207,78 @@ function getTypeCategory(artifact: Artifact): string {
   }
 }
 
+/**
+ * AUDIT-FIX ART-28: how many lines CodeView will mount at once.
+ *
+ * CodeView is the fallback body for every non-previewable artifact type, and it
+ * emitted one `<tr>` with two `<td>`s per line unconditionally — a 20k-line
+ * artifact meant ~60k DOM nodes built synchronously the moment the panel
+ * opened. The window keeps the first chunk instant and lets the user pull in
+ * more explicitly; the Copy button always copies the FULL content, so nothing
+ * is hidden from the clipboard or from Download.
+ */
+const CODE_VIEW_LINE_WINDOW = 1000;
+
 function CodeView({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
+  // AUDIT-FIX ART-24: a failed clipboard write is shown, not swallowed.
+  const [copyFailed, setCopyFailed] = useState(false);
+
+  const lines = useMemo(() => content.split('\n'), [content]);
+  // AUDIT-FIX ART-28: grows by one window per "Show more" click.
+  const [visibleLines, setVisibleLines] = useState(CODE_VIEW_LINE_WINDOW);
+
+  // Reset the window when the artifact body changes, so switching from a huge
+  // artifact to a small one does not leave an expanded window behind.
+  useEffect(() => {
+    setVisibleLines(CODE_VIEW_LINE_WINDOW);
+  }, [content]);
+
+  const shownLines = lines.length > visibleLines ? lines.slice(0, visibleLines) : lines;
+  const hiddenLineCount = lines.length - shownLines.length;
 
   async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(content);
+    // Always copies the whole artifact, never just the visible window.
+    if (await writeToClipboard(content)) {
+      setCopyFailed(false);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // clipboard write failed silently
+      return;
     }
+    setCopyFailed(true);
+    setTimeout(() => setCopyFailed(false), 2500);
   }
-
-  const lines = content.split('\n');
 
   return (
     <div className="relative flex-1 overflow-hidden">
       <Button
         variant="ghost"
         size="icon"
-        aria-label={copied ? 'Copied' : 'Copy code'}
+        aria-label={copyFailed ? 'Copy failed' : copied ? 'Copied' : 'Copy code'}
         onClick={handleCopy}
         className={cn(
           'absolute top-2 right-2 z-10 h-7 w-7',
           'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
           copied && 'text-[var(--chat-accent-secondary)]',
+          copyFailed && 'text-red-400',
         )}
       >
         <Copy size={13} />
       </Button>
 
+      {copyFailed && (
+        <div
+          role="status"
+          className="absolute top-10 right-2 z-10 rounded border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-[11px] text-red-400"
+        >
+          Copy failed — clipboard unavailable
+        </div>
+      )}
+
       <div className="h-full overflow-auto bg-[var(--chat-surface-overlay)]">
         <table className="w-full border-collapse">
           <tbody>
-            {lines.map((line, index) => (
+            {shownLines.map((line, index) => (
               <tr key={index} className="hover:bg-[var(--chat-surface-hover)]/40">
                 <td
                   className="select-none pr-4 pl-4 text-right text-[13px] font-mono text-[var(--chat-text-muted)] w-12 min-w-12"
@@ -184,6 +293,22 @@ function CodeView({ content }: { content: string }) {
             ))}
           </tbody>
         </table>
+
+        {hiddenLineCount > 0 && (
+          <div className="flex items-center gap-3 border-t border-[var(--chat-border)] px-4 py-2">
+            <span className="text-[11px] text-[var(--chat-text-muted)]">
+              {hiddenLineCount.toLocaleString()} more {hiddenLineCount === 1 ? 'line' : 'lines'} not
+              shown
+            </span>
+            <button
+              type="button"
+              onClick={() => setVisibleLines((n) => n + CODE_VIEW_LINE_WINDOW)}
+              className="rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[11px] text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+            >
+              Show {Math.min(hiddenLineCount, CODE_VIEW_LINE_WINDOW).toLocaleString()} more
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -256,8 +381,6 @@ function DropdownMenu({
   );
 }
 
-const CLOUD_WAITLIST_DEFAULT_URL = 'https://agi.engineer/waitlist';
-
 export function ArtifactPanel({
   artifact,
   viewMode,
@@ -267,7 +390,6 @@ export function ArtifactPanel({
   onSelectVersion,
   onSaveEdit,
   publishArtifact: publishArtifactProp,
-  cloudWaitlistUrl = CLOUD_WAITLIST_DEFAULT_URL,
 }: ArtifactPanelProps) {
   const [headerCopied, setHeaderCopied] = useState(false);
   // Run/Stop control for HTML preview. Defaults to running; pausing strips
@@ -292,6 +414,11 @@ export function ArtifactPanel({
   // Ref for the share-URL copy button feedback (avoids extra useState).
   const shareUrlCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shareUrlCopied, setShareUrlCopied] = useState(false);
+  // AUDIT-FIX ART-24: last clipboard failure, rendered in the notification bar.
+  const [copyError, setCopyError] = useState<string | null>(null);
+  // AUDIT-FIX ART-15: bumped by the toolbar Retry button to force a fresh
+  // preview mount (new iframe / new ReactPreview instance).
+  const [previewNonce, setPreviewNonce] = useState(0);
 
   useEffect(() => {
     setIsEditing(false);
@@ -302,6 +429,8 @@ export function ArtifactPanel({
     setPublishResult(null);
     setPublishError(null);
     setShareUrlCopied(false);
+    // AUDIT-FIX ART-24: a copy failure belongs to the artifact it happened on.
+    setCopyError(null);
   }, [artifact?.id]);
 
   // Cleanup share-URL copy timer on unmount.
@@ -336,13 +465,14 @@ export function ArtifactPanel({
 
   async function handleCopyContent() {
     if (!artifact) return;
-    try {
-      await navigator.clipboard.writeText(artifact.content);
+    // AUDIT-FIX ART-24: report the failure instead of leaving the button inert.
+    if (await writeToClipboard(artifact.content)) {
+      setCopyError(null);
       setHeaderCopied(true);
       setTimeout(() => setHeaderCopied(false), 1500);
-    } catch {
-      // clipboard write failed silently
+      return;
     }
+    setCopyError('Could not copy to the clipboard.');
   }
 
   function enterEditMode() {
@@ -384,13 +514,11 @@ export function ArtifactPanel({
                 : artifact.type === 'document'
                   ? 'md'
                   : (artifact.language ?? 'txt');
-    const blob = new Blob([artifact.content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}.${ext}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // AUDIT-FIX ART-25: see downloadBlob — attach/click/detach/late-revoke.
+    downloadBlob(
+      new Blob([artifact.content], { type: 'text/plain' }),
+      `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}.${ext}`,
+    );
   }
 
   const handlePublish = useCallback(async () => {
@@ -424,53 +552,118 @@ export function ArtifactPanel({
       artifact.content,
       '```',
     ].join('\n');
-    try {
-      await navigator.clipboard.writeText(snapshot);
+    // AUDIT-FIX ART-24: explicit success/failure instead of a bare try/catch.
+    if (await writeToClipboard(snapshot)) {
       // Reuse the existing copied-state feedback channel so the toolbar
       // briefly shows the check.
       setHeaderCopied(true);
       setTimeout(() => setHeaderCopied(false), 1500);
-    } catch {
-      // Clipboard write may fail (insecure context, denied permission) —
-      // fall back to a data-URL download so the user still gets the bytes.
-      const blob = new Blob([snapshot], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}-snapshot.md`;
-      a.click();
-      URL.revokeObjectURL(url);
+      return;
     }
+    // Clipboard unavailable (insecure context, denied permission) — fall back
+    // to a download so the user still gets the bytes.
+    // AUDIT-FIX ART-25: reliable anchor lifecycle, see downloadBlob.
+    downloadBlob(
+      new Blob([snapshot], { type: 'text/markdown' }),
+      `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}-snapshot.md`,
+    );
   }, [artifact, publishArtifactProp]);
 
   const handleCopyShareUrl = useCallback(async () => {
-    if (!publishResult || publishResult.kind !== 'local') return;
-    try {
-      await navigator.clipboard.writeText(publishResult.shareUrl);
+    // AUDIT-FIX ART-27: 'cloud' results carry a share URL too.
+    if (!publishResult) return;
+    if (publishResult.kind !== 'local' && publishResult.kind !== 'cloud') return;
+    // AUDIT-FIX ART-24: surface the failure rather than dropping it.
+    if (await writeToClipboard(publishResult.shareUrl)) {
+      setCopyError(null);
       setShareUrlCopied(true);
       if (shareUrlCopiedTimerRef.current) clearTimeout(shareUrlCopiedTimerRef.current);
       shareUrlCopiedTimerRef.current = setTimeout(() => setShareUrlCopied(false), 2000);
-    } catch {
-      // clipboard write failed silently
+      return;
     }
+    setCopyError('Could not copy the share URL to the clipboard.');
   }, [publishResult]);
 
+  /**
+   * AUDIT-FIX ART-15: the toolbar Retry button had an aria-label, a disabled
+   * guard, hover styling — and no onClick at all. It has been a decorative
+   * no-op for every user who ever pressed it. It now re-mounts the live
+   * preview (fresh iframe / fresh ReactPreview) and clears the transient
+   * failures the panel is showing, which is the only "retry" this component
+   * owns; artifact content itself is the host's to re-fetch.
+   */
+  const handleRetryPreview = useCallback(() => {
+    if (!artifact) return;
+    setPublishError(null);
+    setCopyError(null);
+    setHtmlPreviewRunning(true);
+    setPreviewNonce((n) => n + 1);
+  }, [artifact]);
+
+  /**
+   * AUDIT-FIX ART-18: `mermaid` is now previewable here.
+   *
+   * `getTypeLabel` happily labelled mermaid / json / code / research, so those
+   * artifacts got a type badge next to a Preview toggle that was permanently
+   * disabled at opacity-40 — a control that exists, is described, and can never
+   * do anything. Meanwhile the sibling `ArtifactRenderer` in this very package
+   * rendered mermaid diagrams fine. The two now agree: mermaid renders through
+   * the same `MermaidArtifact`, and for the genuinely non-previewable types
+   * (json / code / research) the Preview toggle is not rendered at all rather
+   * than rendered dead.
+   */
   const canPreview =
     artifact?.type === 'html' ||
     artifact?.type === 'react' ||
     artifact?.type === 'svg' ||
+    artifact?.type === 'mermaid' ||
     artifact?.type === 'markdown' ||
     artifact?.type === 'document' ||
     artifact?.type === 'image';
 
-  // Pre-build the sandboxed HTML once per artifact swap. Empty when paused.
-  const sandboxedHtmlSrcDoc = useMemo<string>(() => {
-    if (!artifact || artifact.type !== 'html') return '';
-    if (!htmlPreviewRunning) return '';
+  /**
+   * AUDIT-FIX ART-17: SVG previews are sanitized here with the same allowlist
+   * the sibling `ArtifactRenderer.SvgArtifact` uses, and encoded with
+   * `encodeURIComponent` instead of `btoa`.
+   *
+   * `btoa(artifact.content)` ran inline during render with no try/catch and
+   * throws `InvalidCharacterError` on any code point above U+00FF — a CJK
+   * label, a Cyrillic caption, an em-dash or an emoji inside the SVG took down
+   * the whole panel subtree with no error boundary in sight. A percent-encoded
+   * `utf8` data URL has no such limit and needs no base64 step.
+   */
+  const svgPreview = useMemo<{ src: string; error: string | null }>(() => {
+    if (!artifact || artifact.type !== 'svg') return { src: '', error: null };
+    const sanitized = sanitizeSvg(artifact.content);
+    if (!sanitized) {
+      return { src: '', error: 'This SVG could not be parsed, or it is not valid SVG markup.' };
+    }
+    return {
+      src: `data:image/svg+xml;utf8,${encodeURIComponent(sanitized)}`,
+      error: null,
+    };
+  }, [artifact]);
+
+  /**
+   * Pre-build the sandboxed HTML once per artifact swap. Empty when paused.
+   *
+   * AUDIT-FIX ART-16: a `buildSandboxedHtml` throw used to be swallowed into
+   * `''`, and the body branch was `htmlPreviewRunning && srcDoc ? iframe :
+   * <Run preview>` — so a BUILD FAILURE rendered an inert "Run preview" button,
+   * i.e. the panel presented its own failure as a pause the user had chosen.
+   * Clicking it did nothing because the state was already `running`. Failure
+   * and paused are now distinct states.
+   */
+  const htmlPreview = useMemo<{ srcDoc: string; error: string | null }>(() => {
+    if (!artifact || artifact.type !== 'html') return { srcDoc: '', error: null };
+    if (!htmlPreviewRunning) return { srcDoc: '', error: null };
     try {
-      return buildSandboxedHtml(artifact.content);
-    } catch {
-      return '';
+      return { srcDoc: buildSandboxedHtml(artifact.content), error: null };
+    } catch (err) {
+      return {
+        srcDoc: '',
+        error: err instanceof Error ? err.message : 'Could not prepare this HTML for preview.',
+      };
     }
   }, [artifact, htmlPreviewRunning]);
 
@@ -480,22 +673,25 @@ export function ArtifactPanel({
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--chat-border)] px-3">
         {/* Left: view mode toggles */}
         <div className="flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Preview mode"
-            onClick={() => onViewModeChange('preview')}
-            disabled={!canPreview}
-            className={cn(
-              'h-7 w-7',
-              viewMode === 'preview' && canPreview
-                ? 'text-[var(--chat-accent-primary)] bg-[var(--chat-accent-primary)]/10'
-                : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
-              !canPreview && 'opacity-40 cursor-not-allowed',
-            )}
-          >
-            <Eye size={14} />
-          </Button>
+          {/* AUDIT-FIX ART-18: rendered only when it can actually do something.
+              A permanently-disabled toggle at opacity-40 is a dead control that
+              still advertises a capability the panel does not have. */}
+          {canPreview && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Preview mode"
+              onClick={() => onViewModeChange('preview')}
+              className={cn(
+                'h-7 w-7',
+                viewMode === 'preview'
+                  ? 'text-[var(--chat-accent-primary)] bg-[var(--chat-accent-primary)]/10'
+                  : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
+              )}
+            >
+              <Eye size={14} />
+            </Button>
+          )}
 
           <Button
             variant="ghost"
@@ -628,15 +824,21 @@ export function ArtifactPanel({
             </>
           ) : null}
 
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Retry"
-            disabled={!artifact}
-            className="h-7 w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
-          >
-            <RotateCcw size={13} />
-          </Button>
+          {/* AUDIT-FIX ART-15: wired (was a decorative no-op). Only offered
+              where there is a live preview to re-mount. */}
+          {canPreview && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Retry preview"
+              title="Reload the preview"
+              disabled={!artifact}
+              onClick={handleRetryPreview}
+              className="h-7 w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+            >
+              <RotateCcw size={13} />
+            </Button>
+          )}
 
           <Button
             variant="ghost"
@@ -671,13 +873,33 @@ export function ArtifactPanel({
             />
           </div>
         ) : viewMode === 'preview' && artifact.type === 'svg' ? (
-          // SVG: render as <img> to prevent script execution — no allow-scripts
+          // SVG: render as <img> to prevent script execution — no allow-scripts.
+          // AUDIT-FIX ART-17: sanitized + percent-encoded (see svgPreview).
           <div className="flex h-full items-center justify-center overflow-auto p-4 bg-white">
-            <img
-              src={`data:image/svg+xml;base64,${btoa(artifact.content)}`}
-              alt={artifact.title ?? 'Artifact preview'}
-              className="max-h-full max-w-full object-contain"
-            />
+            {svgPreview.error ? (
+              <p
+                className="max-w-sm text-center text-sm text-[var(--chat-text-muted)]"
+                data-testid="artifact-panel-svg-error"
+              >
+                {svgPreview.error}
+              </p>
+            ) : (
+              <img
+                key={previewNonce}
+                src={svgPreview.src}
+                alt={artifact.title ?? 'Artifact preview'}
+                className="max-h-full max-w-full object-contain"
+              />
+            )}
+          </div>
+        ) : viewMode === 'preview' && artifact.type === 'mermaid' ? (
+          // AUDIT-FIX ART-18: mermaid renders through the same component the
+          // sibling ArtifactRenderer uses, instead of falling through to raw
+          // source behind a disabled Preview toggle. `isDark` is fixed to true
+          // because this panel's surface tokens (`--chat-surface-*`) are the
+          // dark chat shell; the panel takes no theme prop to thread through.
+          <div className="h-full overflow-auto p-4" data-testid="artifact-panel-mermaid-preview">
+            <MermaidArtifact key={previewNonce} artifact={artifact} isDark />
           </div>
         ) : viewMode === 'preview' && artifact.type === 'image' ? (
           <div className="flex h-full items-center justify-center overflow-auto bg-[var(--chat-surface-overlay)] p-4">
@@ -698,7 +920,8 @@ export function ArtifactPanel({
           // React: delegate to the in-package ReactPreview, which spins up a
           // sandboxed iframe with Babel + React from CDN and posts back ready/
           // error events. Round-2 audit P0 #9 live React preview.
-          <ReactPreview code={artifact.content} className="h-full" />
+          // AUDIT-FIX ART-15: `previewNonce` re-mounts it when Retry is pressed.
+          <ReactPreview key={previewNonce} code={artifact.content} className="h-full" />
         ) : viewMode === 'preview' && artifact.type === 'html' ? (
           // HTML: sandboxed iframe with CSP meta injection + Run/Stop control.
           // Uses the shared `buildSandboxedHtml` so the security envelope cannot
@@ -718,9 +941,31 @@ export function ArtifactPanel({
                 {htmlPreviewRunning ? <Pause size={12} /> : <Play size={12} />}
               </Button>
             </div>
-            {htmlPreviewRunning && sandboxedHtmlSrcDoc ? (
+            {/* AUDIT-FIX ART-16: three distinct states — build failure, running,
+                paused — instead of collapsing the first into the third. */}
+            {htmlPreview.error ? (
+              <div
+                className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
+                data-testid="artifact-panel-html-error"
+              >
+                <span className="text-sm text-[var(--chat-text-primary)]">
+                  This HTML couldn&apos;t be prepared for preview.
+                </span>
+                <span className="max-w-sm text-xs text-[var(--chat-text-muted)]">
+                  {htmlPreview.error}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onViewModeChange('code')}
+                  className="rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-xs text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                >
+                  View source
+                </button>
+              </div>
+            ) : htmlPreviewRunning ? (
               <iframe
-                srcDoc={sandboxedHtmlSrcDoc}
+                key={previewNonce}
+                srcDoc={htmlPreview.srcDoc}
                 sandbox={ARTIFACT_SANDBOX_ATTR}
                 referrerPolicy="no-referrer"
                 className="flex-1 w-full border-0 bg-white"
@@ -752,8 +997,8 @@ export function ArtifactPanel({
         )}
       </div>
 
-      {/* Publish notification bar — shown after a publish call resolves */}
-      {(isPublishing || publishResult || publishError) && (
+      {/* Publish / clipboard notification bar — shown after an action resolves */}
+      {(isPublishing || publishResult || publishError || copyError) && (
         <div
           className={cn(
             'shrink-0 border-t border-[var(--chat-border)] px-3 py-2',
@@ -764,47 +1009,56 @@ export function ArtifactPanel({
         >
           {isPublishing && <span className="text-[var(--chat-text-muted)]">Publishing…</span>}
 
-          {!isPublishing && publishResult?.kind === 'local' && (
-            <>
-              <Share2 size={11} className="shrink-0 text-[var(--chat-accent-secondary)]" />
-              <span className="min-w-0 truncate text-[var(--chat-text-secondary)]">
-                {publishResult.shareUrl}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={shareUrlCopied ? 'Copied' : 'Copy share URL'}
-                onClick={() => void handleCopyShareUrl()}
-                className={cn(
-                  'ml-auto h-6 w-6 shrink-0',
-                  'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
-                  shareUrlCopied && 'text-[var(--chat-accent-secondary)]',
-                )}
-              >
-                {shareUrlCopied ? <Check size={11} /> : <Copy size={11} />}
-              </Button>
-            </>
-          )}
+          {/* AUDIT-FIX ART-27: 'local' and 'cloud' both produce a real URL. */}
+          {!isPublishing &&
+            (publishResult?.kind === 'local' || publishResult?.kind === 'cloud') && (
+              <>
+                <Share2 size={11} className="shrink-0 text-[var(--chat-accent-secondary)]" />
+                <span className="min-w-0 truncate text-[var(--chat-text-secondary)]">
+                  {publishResult.shareUrl}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={shareUrlCopied ? 'Copied' : 'Copy share URL'}
+                  onClick={() => void handleCopyShareUrl()}
+                  className={cn(
+                    'ml-auto h-6 w-6 shrink-0',
+                    'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
+                    shareUrlCopied && 'text-[var(--chat-accent-secondary)]',
+                  )}
+                >
+                  {shareUrlCopied ? <Check size={11} /> : <Copy size={11} />}
+                </Button>
+              </>
+            )}
 
-          {!isPublishing && publishResult?.kind === 'waitlist' && (
-            <>
-              <Globe size={11} className="shrink-0 text-[var(--chat-text-muted)]" />
-              <span className="text-[var(--chat-text-secondary)]">Cloud publish is coming.</span>
-              <a
-                href={cloudWaitlistUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn(
-                  'ml-auto shrink-0 rounded border border-[var(--chat-border)]',
-                  'px-2 py-0.5 text-[11px] font-medium',
-                  'text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]',
-                  'hover:bg-[var(--chat-surface-hover)] transition-colors',
-                )}
-              >
-                Join waitlist
-              </a>
-            </>
-          )}
+          {/* AUDIT-FIX ART-27: no waitlist, no sign-up link.
+              Managed cloud has been open by default since the founder decision
+              of 2026-06-27; `AGI_MANAGED_COMPUTE_PRIVATE_BETA` survives only as
+              an incident kill-switch and was never what gated this bar. What is
+              actually true when we land here is narrower and duller: THIS host
+              injected no cloud publisher, so there is nothing to publish to.
+              Say that, and say what the user can do instead — Download works. */}
+          {!isPublishing &&
+            (publishResult?.kind === 'unavailable' || publishResult?.kind === 'waitlist') && (
+              <>
+                <Globe size={11} className="shrink-0 text-[var(--chat-text-muted)]" />
+                <span className="text-[var(--chat-text-secondary)]">
+                  {publishResult.kind === 'unavailable'
+                    ? publishResult.reason
+                    : 'Cloud publish is not wired up on this surface yet.'}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDownload}
+                  className="ml-auto h-6 shrink-0 px-2 text-[11px] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                >
+                  Download instead
+                </Button>
+              </>
+            )}
 
           {!isPublishing && publishError && (
             <>
@@ -814,6 +1068,25 @@ export function ArtifactPanel({
                 size="icon"
                 aria-label="Dismiss error"
                 onClick={() => setPublishError(null)}
+                className="ml-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+              >
+                <X size={11} />
+              </Button>
+            </>
+          )}
+
+          {/* AUDIT-FIX ART-24: clipboard failures were swallowed by three empty
+              catch blocks; the user pressed Copy and nothing at all happened. */}
+          {!isPublishing && !publishError && copyError && (
+            <>
+              <span className="text-red-400" role="status">
+                {copyError}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Dismiss copy error"
+                onClick={() => setCopyError(null)}
                 className="ml-auto h-6 w-6 shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
               >
                 <X size={11} />

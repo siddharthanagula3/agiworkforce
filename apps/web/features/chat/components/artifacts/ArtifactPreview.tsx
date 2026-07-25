@@ -55,11 +55,40 @@ import {
   sanitizeSVG,
   hasXSSRisk,
   buildSandboxSrcDoc,
+  buildArtifactCspMeta,
+  escapeForInlineScript,
+  escapeHTML,
 } from '@shared/utils/html-sanitizer';
 import { SandboxedIframe } from '../SandboxedIframe';
 import type { ArtifactRenderPayload, ArtifactKind } from '@/lib/artifact-sandbox';
 import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
+
+/**
+ * AUDIT-FIX ART-24: single guarded clipboard write.
+ *
+ * `navigator.clipboard` does not exist in an insecure context and `writeText`
+ * rejects on denied permission / unfocused document. Returns whether the copy
+ * actually happened so callers can tell the user the truth instead of showing
+ * a "Copied" tick for a copy that never occurred.
+ */
+async function writeToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return false;
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** AUDIT-FIX ART-6: banner copy per mitigation that genuinely ran. */
+const SECURITY_NOTICE_TEXT: Record<'sanitized' | 'escaped', string> = {
+  sanitized:
+    'This artifact contained potentially unsafe patterns. They were removed before rendering.',
+  escaped:
+    'This artifact contained potentially unsafe patterns. They were rendered as text and never executed.',
+};
 
 export interface ArtifactVersion {
   id: string;
@@ -143,7 +172,6 @@ export function ArtifactPreview({
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [securityWarning, setSecurityWarning] = useState(false);
   // Preview render failure surfaced by the cross-origin sandbox (production
   // path only). Reset on refresh / version change. Drives the error state.
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -165,7 +193,17 @@ export function ArtifactPreview({
   const [pdfError, setPdfError] = useState(false);
 
   // Convert DOCX base64/blob content to HTML via mammoth (Fix 40)
+  //
+  // AUDIT-FIX ART-7: the conversion output is cleared at the TOP of this effect
+  // and the effect is keyed on the artifact id as well as its content. Before,
+  // nothing reset `docxHtml`/`docxError` on an artifact swap, so opening DOCX B
+  // rendered DOCX A's converted HTML under B's title until B finished (and a
+  // failed conversion's error message stuck to the next document forever).
+  // Resetting here rather than in the id-keyed reset effect below keeps the
+  // clear and the re-convert in one place — they can never fall out of step.
   useEffect(() => {
+    setDocxHtml(null);
+    setDocxError(null);
     if (!isDocx || !artifact.content) return;
     let cancelled = false;
 
@@ -194,7 +232,7 @@ export function ArtifactPreview({
     return () => {
       cancelled = true;
     };
-  }, [isDocx, artifact.content]);
+  }, [isDocx, artifact.id, artifact.content]);
   // WEB-13 / WEB-20: bumped on refresh to force iframe re-mount.
   const [refreshKey, setRefreshKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -363,24 +401,37 @@ export function ArtifactPreview({
 
   // Reset version navigation + render error when the artifact identity changes
   // or a new version lands (so we snap to the latest and clear stale errors).
+  //
+  // AUDIT-FIX ART-7: this used to reset ONLY viewedVersionIndex / renderError /
+  // pdfError, so `copied` survived an artifact swap and showed a "Copied" tick
+  // for the wrong artifact. The other two leaks are fixed at their source:
+  // `docxHtml`/`docxError` are cleared by the conversion effect above, and
+  // `securityWarning` is no longer latched state at all — see securityNotice.
   useEffect(() => {
     setViewedVersionIndex(null);
     setRenderError(null);
     setPdfError(false);
+    setCopied(false);
   }, [artifact.id, versionCount]);
+
+  // AUDIT-FIX ART-6 / ART-14: the security banner is DERIVED, never latched,
+  // and it now states what actually happened per renderer:
+  //   - svg      → sanitizeSVG() really does strip tags/attrs → "removed".
+  //   - mermaid  → the diagram source is HTML-escaped before it reaches the
+  //                sandbox document, so markup is inert but nothing was
+  //                deleted → "shown as text".
+  //   - html/react → scripts are INTENTIONALLY executed inside the null-origin
+  //                sandbox; claiming a mitigation there would be a lie.
+  //   - code/document → rendered as React text nodes; no claim to make.
+  const securityNotice = useMemo<'sanitized' | 'escaped' | null>(() => {
+    if (artifact.type !== 'svg' && artifact.type !== 'mermaid') return null;
+    if (!hasXSSRisk(activeContent)) return null;
+    return artifact.type === 'svg' ? 'sanitized' : 'escaped';
+  }, [artifact.type, activeContent]);
 
   const getPreviewHTML = useCallback((): string => {
     const content = activeContent;
     const renderType = artifact.type === 'document' ? 'code' : artifact.type;
-
-    // SECURITY: Check for XSS risks — only set the warning if content was
-    // downgraded. For HTML artifacts that will run in the sandbox the warning
-    // is NOT shown because scripts are intentionally preserved; the sandbox
-    // is the security boundary. For non-sandboxed paths (main-document
-    // rendering) the strict sanitizer runs and the warning is appropriate.
-    if (renderType !== 'html' && hasXSSRisk(content)) {
-      queueMicrotask(() => setSecurityWarning(true));
-    }
 
     switch (renderType) {
       case 'html':
@@ -394,23 +445,49 @@ export function ArtifactPreview({
         return buildSandboxSrcDoc(content);
 
       case 'react': {
-        // For React, we'd need to transpile JSX - for now, show as HTML
-        const sanitizedReact = sanitizeArtifact(content, renderType);
+        // AUDIT-FIX ART-1: React source must reach Babel AS SOURCE.
+        //
+        // This branch used to pass `content` through
+        // `sanitizeArtifact(content, 'react')`, which returns
+        // `<pre><code>${escapeHTML(content)}</code></pre>`. That escaped string
+        // was then dropped inside `<script type="text/babel">`, so Babel was
+        // handed `&lt;div&gt;` markup instead of JSX and threw on every single
+        // React artifact — the type could never render, in any configuration.
+        //
+        // The source is now embedded verbatim (only `</script` is neutralised,
+        // which the JS parser cannot distinguish from `</script`). Executing it
+        // is the whole point: the null-origin sandbox (allow-scripts WITHOUT
+        // allow-same-origin) plus the CSP below is the boundary, exactly as it
+        // is for `html`.
+        //
+        // AUDIT-FIX ART-14: the old CSP here was `default-src 'self'
+        // 'unsafe-inline' 'unsafe-eval' https:` — that permitted fetch/XHR to
+        // ANY https origin from inside the frame. The shared policy pins
+        // `connect-src 'none'` and allows scripts only from the CDN allowlist.
+        //
+        // The mount bootstrap mirrors infrastructure/sandbox/index.html's
+        // renderReact() so the same artifact behaves identically on the
+        // cross-origin sandbox path and on this fallback path.
+        const reactSource = escapeForInlineScript(content);
         return `
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'self' 'unsafe-inline' https:;">
+    ${buildArtifactCspMeta()}
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="text/babel">
-      ${sanitizedReact}
+    <script type="text/babel" data-presets="env,react">
+${reactSource}
+;var __AgiApp = (typeof App !== 'undefined' && App) || (typeof Component !== 'undefined' && Component);
+if (__AgiApp) {
+  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(__AgiApp));
+}
     </script>
   </body>
 </html>`;
@@ -443,27 +520,42 @@ export function ArtifactPreview({
       }
 
       case 'mermaid':
+        // AUDIT-FIX ART-6: `content` used to be interpolated RAW into the
+        // document — a diagram body containing `<img onerror=…>` executed in
+        // the frame while the banner told the user unsafe patterns had been
+        // "removed". Mermaid reads the element's text, so HTML-escaping the
+        // source is both safe and lossless (the parser un-escapes back to the
+        // original characters before mermaid ever sees them).
+        // AUDIT-FIX ART-14: this document had no CSP at all; it now carries
+        // the shared one (jsdelivr is in the script allowlist).
         return `
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8">
+    ${buildArtifactCspMeta()}
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({ startOnLoad: true });</script>
+    <script>mermaid.initialize({ startOnLoad: true, securityLevel: 'strict' });</script>
   </head>
   <body>
     <div class="mermaid">
-      ${content}
+      ${escapeHTML(content)}
     </div>
   </body>
 </html>`;
 
       default:
+        // AUDIT-FIX ART-6: the text/code fallback interpolated `content` raw
+        // into `<body>`, so any artifact that fell through here rendered (and
+        // executed) attacker-authored markup. `white-space: pre-wrap` means the
+        // escaped text displays exactly as written.
+        // AUDIT-FIX ART-14: plus the shared CSP, which this document lacked.
         return `
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8">
+    ${buildArtifactCspMeta()}
     <style>
       body {
         margin: 0;
@@ -473,7 +565,7 @@ export function ArtifactPreview({
       }
     </style>
   </head>
-  <body>${content}</body>
+  <body>${escapeHTML(content)}</body>
 </html>`;
     }
   }, [activeContent, artifact.type]);
@@ -503,7 +595,12 @@ export function ArtifactPreview({
           runScripts: true,
         };
       case 'react':
-        return { type: 'render', kind: 'react', code: sanitizeArtifact(content, renderType) };
+        // AUDIT-FIX ART-1: the cross-origin sandbox puts `code` straight into a
+        // `text/babel` script element (see infrastructure/sandbox/index.html
+        // renderReact). Shipping `sanitizeArtifact(content, 'react')` meant
+        // shipping `<pre><code>&lt;div&gt;…` — Babel threw on every React
+        // artifact. Ship the source; the sandbox origin is the boundary.
+        return { type: 'render', kind: 'react', code: content };
       case 'svg':
         return { type: 'render', kind: 'svg', svg: sanitizeSVG(content) };
       case 'mermaid':
@@ -513,8 +610,15 @@ export function ArtifactPreview({
     }
   }, [activeContent, artifact.type]);
 
+  // AUDIT-FIX ART-24: `navigator.clipboard` is undefined in insecure contexts
+  // and `writeText` rejects when the permission is denied or the document is
+  // not focused. The unguarded call threw an unhandled rejection and left the
+  // button silently stuck on "Copy" with no explanation.
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(activeContent);
+    if (!(await writeToClipboard(activeContent))) {
+      toast.error('Could not copy to clipboard');
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -527,7 +631,15 @@ export function ArtifactPreview({
 
     switch (format) {
       case 'html':
-        blob = new Blob([getPreviewHTML()], { type: 'text/plain' });
+        // AUDIT-FIX ART-26: this shipped the sandbox scaffold under a `.html`
+        // name with a `text/plain` MIME — the OS/browser opened it as text, and
+        // for React artifacts the payload was ART-1's escaped `<pre><code>`
+        // dump rather than runnable source. With ART-1 + ART-6 fixed,
+        // getPreviewHTML() is a genuine standalone document for every type
+        // (correct DOCTYPE, the CSP envelope, real source), so it just needs
+        // the honest MIME. Downloads are saved, never navigated to, so no
+        // artifact content executes on our origin.
+        blob = new Blob([getPreviewHTML()], { type: 'text/html;charset=utf-8' });
         filename = `${artifact.title || 'artifact'}.html`;
         break;
       case 'md': {
@@ -591,7 +703,11 @@ export function ArtifactPreview({
       return;
     }
 
-    await navigator.clipboard.writeText(shareText);
+    // AUDIT-FIX ART-24: guarded — an unavailable clipboard used to reject
+    // unhandled and the user got no signal at all.
+    if (!(await writeToClipboard(shareText))) {
+      toast.error('Could not copy the share details to the clipboard');
+    }
   };
 
   const handleOpenInNewTab = () => {
@@ -1040,13 +1156,13 @@ export function ArtifactPreview({
           </div>
         </div>
 
-        {/* Security warning — keep for non-HTML artifacts with XSS patterns */}
-        {securityWarning && (
+        {/* AUDIT-FIX ART-6: honest, per-renderer security notice (see
+            securityNotice above). */}
+        {securityNotice && (
           <Alert className="m-4 shrink-0 border-yellow-500 bg-yellow-50">
             <Shield className="h-4 w-4 text-yellow-600" />
             <AlertDescription className="text-yellow-800">
-              <strong>Security Notice:</strong> This artifact contained potentially unsafe patterns
-              that were removed before rendering.
+              <strong>Security Notice:</strong> {SECURITY_NOTICE_TEXT[securityNotice]}
             </AlertDescription>
           </Alert>
         )}
@@ -1339,17 +1455,13 @@ export function ArtifactPreview({
         </div>
       </div>
 
-      {/* Security Warning — only shown for non-HTML types where dangerous
-          patterns were detected and stripped (e.g. script tags in SVG/code
-          artifacts that render in the main document). HTML artifacts run
-          inside a null-origin sandbox where scripts are intentionally
-          preserved, so no warning is needed for that path. */}
-      {securityWarning && (
+      {/* AUDIT-FIX ART-6: see securityNotice — the copy now matches the
+          mitigation the renderer actually performed. */}
+      {securityNotice && (
         <Alert className="m-4 border-yellow-500 bg-yellow-50">
           <Shield className="h-4 w-4 text-yellow-600" />
           <AlertDescription className="text-yellow-800">
-            <strong>Security Notice:</strong> This artifact contained potentially unsafe patterns
-            that were removed before rendering.
+            <strong>Security Notice:</strong> {SECURITY_NOTICE_TEXT[securityNotice]}
           </AlertDescription>
         </Alert>
       )}
