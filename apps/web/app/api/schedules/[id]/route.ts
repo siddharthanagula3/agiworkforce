@@ -48,9 +48,10 @@ async function authorizeMutation(request: NextRequest) {
 }
 
 async function handleGetSchedule(request: NextRequest, context: RouteContext) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
-  if (rateLimitResponse) return rateLimitResponse;
+  // GOV-16: authenticate first so the bucket is `user:<id>`, not the shared IP.
   const { db, userId } = await getUserScopedDb(request);
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
+  if (rateLimitResponse) return rateLimitResponse;
   const { id } = await context.params;
   try {
     return NextResponse.json({ schedule: await getSchedule(db, userId, id) });
@@ -60,9 +61,10 @@ async function handleGetSchedule(request: NextRequest, context: RouteContext) {
 }
 
 async function handleUpdateSchedule(request: NextRequest, context: RouteContext) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
-  if (rateLimitResponse) return rateLimitResponse;
+  // GOV-16: user-keyed rate limit (authenticate before bucketing).
   const { db, userId, csrfError } = await authorizeMutation(request);
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
+  if (rateLimitResponse) return rateLimitResponse;
   if (csrfError) return csrfError as NextResponse;
   const { id } = await context.params;
   const body = await requestObject(request);
@@ -76,9 +78,10 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
 }
 
 async function handleDeleteSchedule(request: NextRequest, context: RouteContext) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
-  if (rateLimitResponse) return rateLimitResponse;
+  // GOV-16: user-keyed rate limit (authenticate before bucketing).
   const { db, userId, csrfError } = await authorizeMutation(request);
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
+  if (rateLimitResponse) return rateLimitResponse;
   if (csrfError) return csrfError as NextResponse;
   const { id } = await context.params;
   try {
@@ -90,9 +93,10 @@ async function handleDeleteSchedule(request: NextRequest, context: RouteContext)
 }
 
 async function handleToggleSchedule(request: NextRequest, context: RouteContext) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
-  if (rateLimitResponse) return rateLimitResponse;
+  // GOV-16: user-keyed rate limit (authenticate before bucketing).
   const { db, userId, csrfError } = await authorizeMutation(request);
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
+  if (rateLimitResponse) return rateLimitResponse;
   if (csrfError) return csrfError as NextResponse;
   const { id } = await context.params;
   const body = await requestObject(request);

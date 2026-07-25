@@ -22,6 +22,55 @@ import { isMemoryCapabilityEnabled } from './memory-capability';
 
 const DEFAULT_WEB_CHAT_MODEL = 'auto';
 
+/**
+ * GOV-27: a conversation request that did not succeed.
+ *
+ * `getMessages` and `loadConversations` used to `return []` for ANY non-ok
+ * response, and the conversations API collapses not-found, soft-deleted, and
+ * "belongs to another user" into a single 404 — so opening a deleted or
+ * forbidden conversation rendered a silent, empty chat that looked like a real
+ * conversation with no messages. ChatInterface already has a load-error state;
+ * it was simply never given an error to show.
+ */
+export class ChatConversationError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly kind: 'not_found' | 'forbidden' | 'unauthorized' | 'server',
+  ) {
+    super(message);
+    this.name = 'ChatConversationError';
+  }
+}
+
+function conversationErrorFor(status: number, action: string): ChatConversationError {
+  if (status === 401) {
+    return new ChatConversationError(
+      'Your session expired. Sign in again.',
+      status,
+      'unauthorized',
+    );
+  }
+  if (status === 403) {
+    return new ChatConversationError(
+      'You do not have access to this conversation.',
+      status,
+      'forbidden',
+    );
+  }
+  if (status === 404 || status === 410) {
+    // The API cannot currently tell "never existed", "deleted", and "someone
+    // else's" apart. Say what is TRUE for all three rather than inventing a
+    // reason — and never render it as an empty-but-valid conversation.
+    return new ChatConversationError(
+      'This conversation is no longer available. It may have been deleted, or you may not have access to it.',
+      status,
+      'not_found',
+    );
+  }
+  return new ChatConversationError(`Could not ${action}. Please try again.`, status, 'server');
+}
+
 async function getAuthToken(): Promise<string> {
   const token = await getClerkToken();
   if (!token) throw new Error('Not authenticated');
@@ -292,7 +341,9 @@ export class WebChatRuntime implements ChatRuntime {
     const res = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return [];
+    // GOV-27: surface the failure. Returning [] here rendered a deleted or
+    // forbidden conversation as an ordinary empty chat.
+    if (!res.ok) throw conversationErrorFor(res.status, 'load this conversation');
     const data = (await res.json()) as { messages?: ApiMessage[] };
     return (data.messages ?? []).map(mapMessage);
   }
@@ -312,19 +363,25 @@ export class WebChatRuntime implements ChatRuntime {
 
   async deleteConversation(conversationId: string): Promise<void> {
     const token = await getAuthToken();
-    await fetch(`/api/chat/conversations/${conversationId}`, {
+    const res = await fetch(`/api/chat/conversations/${conversationId}`, {
       method: 'DELETE',
       headers: await authHeaders(token),
     });
+    // GOV-27: this response was not checked at all, so a failed delete was
+    // applied optimistically and reported as success — the conversation
+    // vanished from the sidebar and came back on the next reload.
+    if (!res.ok) throw conversationErrorFor(res.status, 'delete this conversation');
   }
 
   async renameConversation(conversationId: string, title: string): Promise<void> {
     const token = await getAuthToken();
-    await fetch(`/api/chat/conversations/${conversationId}`, {
+    const res = await fetch(`/api/chat/conversations/${conversationId}`, {
       method: 'PATCH',
       headers: await authHeaders(token),
       body: JSON.stringify({ title }),
     });
+    // GOV-27: same unchecked-mutation bug as delete above.
+    if (!res.ok) throw conversationErrorFor(res.status, 'rename this conversation');
   }
 
   async loadConversations(): Promise<Conversation[]> {
@@ -332,7 +389,10 @@ export class WebChatRuntime implements ChatRuntime {
     const res = await fetch('/api/chat/conversations', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return [];
+    // GOV-27: an empty list and a failed fetch are different facts. Returning
+    // [] for both showed "no conversations yet" to a user whose history simply
+    // failed to load.
+    if (!res.ok) throw conversationErrorFor(res.status, 'load your conversations');
     const data = (await res.json()) as { conversations?: ApiConversation[] };
     return (data.conversations ?? []).map(mapConversation);
   }

@@ -34,10 +34,12 @@ function rethrowScheduleError(error: unknown): never {
 }
 
 async function handleGetRuns(request: NextRequest, context: RouteContext) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  // GOV-16: user-keyed rate limit (authenticate before bucketing).
+  const { db, userId } = await getUserScopedDb(request);
+
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
   const { id: taskId } = await context.params;
   const url = new URL(request.url);
   const limit = Math.min(100, Math.max(1, integerQueryValue(url.searchParams.get('limit'), 20)));
@@ -55,10 +57,14 @@ async function handleGetRuns(request: NextRequest, context: RouteContext) {
 }
 
 async function handleTriggerRun(request: NextRequest, context: RouteContext) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  // GOV-8 / GOV-16: a manual trigger runs a real provider turn, so it is
+  // governed by the LLM budget (30/min, fail-closed) keyed to the verified
+  // user — not by the generic 60/min conversation limit keyed to an IP.
+  const { db, userId } = await getUserScopedDb(request);
+
+  const rateLimitResponse = await withRateLimit(request, 'llm-completion', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
 

@@ -7,7 +7,10 @@ export * from './lib/capabilities';
 export * from './lib/utils';
 export * from './lib/greetings';
 export { buildSandboxedHtml, ARTIFACT_SANDBOX_ATTR } from './lib/artifact-sandbox';
-export { getConnectorPermissionStore } from './lib/connectorPermissionStore';
+export {
+  getConnectorPermissionStore,
+  ConnectorPermissionsUnavailableError,
+} from './lib/connectorPermissionStore';
 export type { ConnectorPermissionStore } from './lib/connectorPermissionStore';
 export {
   isContinuableFinishReason,

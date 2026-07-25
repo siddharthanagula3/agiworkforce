@@ -14,12 +14,31 @@
 import { create } from 'zustand';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { normalizeBillingPlanTier, type BillingPlanTier } from '@agiworkforce/types';
-import { hasClerkSessionCookie } from '@/lib/clerk-session';
+import { hasClerkSessionCookie, subscribeToClerkSessionChange } from '@/lib/clerk-session';
+
+/**
+ * Canonical profile identity (PER-8). Resolved server-side by `GET /api/me`
+ * from `profiles.display_name` + the `general` settings namespace, so every
+ * surface reads ONE resolved answer instead of guessing between Clerk
+ * metadata, the profiles row and a settings namespace.
+ */
+export interface UserProfileSummary {
+  /** Full name. Null when the user has never set one. */
+  display_name: string | null;
+  /** What the assistant should call the user (greetings, follow-ups). */
+  preferred_name: string | null;
+  /** Self-described role, used to tailor responses. */
+  work_description: string | null;
+}
 
 // Minimal user shape retained for backward compatibility with components reading user.email/id.
 export interface User {
   id: string;
   email?: string;
+  /** Resolved display name from `/api/me` (never an email prefix guess client-side). */
+  name?: string;
+  avatar_url?: string | null;
+  profile?: UserProfileSummary;
   [key: string]: unknown;
 }
 
@@ -72,12 +91,10 @@ export interface AuthState {
   // Actions
   refreshUser: () => Promise<void>;
   signOut: () => Promise<void>;
-  /** Internal: updates user state after /api/me refresh */
-  _setUser: (user: User | null) => void;
   _reset: () => void;
 }
 
-const INITIAL_STATE: Omit<AuthState, 'refreshUser' | 'signOut' | '_setUser' | '_reset'> = {
+const INITIAL_STATE: Omit<AuthState, 'refreshUser' | 'signOut' | '_reset'> = {
   user: null,
   subscription: null,
   featureFlags: null,
@@ -92,7 +109,7 @@ const INITIAL_STATE: Omit<AuthState, 'refreshUser' | 'signOut' | '_setUser' | '_
 
 let refreshInFlight = false;
 
-export const useBillingStore = create<AuthState>()((set, get) => ({
+export const useBillingStore = create<AuthState>()((set) => ({
   ...INITIAL_STATE,
 
   refreshUser: async () => {
@@ -130,7 +147,25 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
           plan_name: data.plan.display_name,
         };
 
+        // PER-3: `user` used to be written ONLY by `_setUser`, which had zero
+        // call sites — so `useBillingStore.user` was structurally always null
+        // and every consumer silently fell back ('Account' in the sidebar, an
+        // empty profile form in Settings). refreshUser owns it now: the single
+        // /api/me fetch that already produces the plan also produces the user.
+        const user: User = {
+          id: data.id,
+          ...(data.email ? { email: data.email } : {}),
+          ...(data.name ? { name: data.name } : {}),
+          avatar_url: data.avatar_url,
+          profile: {
+            display_name: data.profile?.display_name ?? null,
+            preferred_name: data.profile?.preferred_name ?? null,
+            work_description: data.profile?.work_description ?? null,
+          },
+        };
+
         set({
+          user,
           subscription: plan,
           featureFlags: data.feature_flags,
           isLoading: false,
@@ -157,40 +192,22 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
     } catch {
       // Clerk not available or already signed out - proceed with local cleanup
     }
-    // Clear chat store (lazy import avoids circular dependency at module-init)
-    const { useChatStore } = await import('@shared/stores/web-chat-store');
-    useChatStore.getState().reset();
-    // Clear memory facts (lazy import avoids pulling the chat package into the
-    // module-init path). Memory facts are stored under a single global
-    // localStorage key (`agi-memory-store-v1`), not scoped per-user, so on a
-    // shared device the next signed-in user would otherwise inherit the
-    // previous user's remembered facts. See this file's signOut()
-    // — keep this in sync with shared/stores/authentication-store.ts's
-    // cleanupAllStores(), which performs the equivalent cleanup for the
-    // useAuthStore.logout() sign-out path.
+    // PER-12: both sign-out paths now run the SAME cleanup. This one used to
+    // reset only the chat store and memory facts while
+    // `useAuthStore.logout()` reset a different, also-incomplete set — with
+    // matching "keep this in sync" comments that had already drifted. There is
+    // one implementation, and it derives its localStorage keys from the real
+    // persist configs (lazy import avoids a module-init cycle).
     try {
-      const { useMemoryStore } = await import('@agiworkforce/unified-chat');
-      useMemoryStore.getState().clear();
-    } catch {
-      // Memory store unavailable — proceed with the rest of sign-out cleanup.
+      const { cleanupAllStores } = await import('@shared/stores/authentication-store');
+      await cleanupAllStores();
+    } catch (error) {
+      // Never block sign-out on cleanup: the redirect below must still happen.
+      console.error('[Auth] store cleanup during signOut failed:', error);
     }
     set({ ...INITIAL_STATE, isLoading: false, initialized: true });
     if (typeof window !== 'undefined') {
       window.location.href = '/login';
-    }
-  },
-
-  _setUser: (user: User | null) => {
-    set({ user });
-    if (user) {
-      get().refreshUser();
-    } else {
-      set({
-        subscription: null,
-        featureFlags: null,
-        initialized: true,
-        isLoading: false,
-      });
     }
   },
 
@@ -220,6 +237,24 @@ if (typeof window !== 'undefined') {
     // /api/me (which would 401 and log a console error on every page load).
     useBillingStore.getState()._reset();
   }
+
+  // PER-1 (sibling of the auth store's watcher): this bootstrap also ran once
+  // at module import, so a Clerk cookie that landed afterwards left the
+  // billing/user state cleared for the whole SPA session. Re-hydrate when the
+  // session cookie changes or the tab regains focus.
+  let lastBootstrapCookie = hasClerkSessionCookie();
+  subscribeToClerkSessionChange(() => {
+    const signedIn = hasClerkSessionCookie();
+    const wasSignedIn = lastBootstrapCookie;
+    lastBootstrapCookie = signedIn;
+    if (signedIn) {
+      if (!wasSignedIn || useBillingStore.getState().user === null) {
+        void useBillingStore.getState().refreshUser();
+      }
+      return;
+    }
+    if (wasSignedIn) useBillingStore.getState()._reset();
+  });
 }
 
 // ---------------------------------------------------------------------------

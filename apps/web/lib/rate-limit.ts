@@ -1,6 +1,7 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { NextRequest, NextResponse } from 'next/server';
+import { getPlanMaxConcurrentTurns } from '@agiworkforce/types';
 import { logger } from './logger';
 import { logRateLimitExceeded } from './security-audit';
 
@@ -239,11 +240,13 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 LLM requests per minute per user
     failClosed: true, // Security-sensitive: LLM API calls are expensive
   },
-  'llm-streaming': {
-    limit: 20,
-    window: '1 m', // 20 streaming requests per minute (more intensive)
-    failClosed: true, // Security-sensitive: streaming is resource-intensive
-  },
+  // GOV-22: an 'llm-streaming' config (20/min, failClosed) used to sit here and
+  // was referenced by no route — streaming has always been governed solely by
+  // 'llm-completion' above (applied in app/api/llm/v1/chat/completions/lib/
+  // auth-gate.ts). A config that reads as implemented and is not is worse than
+  // absent, so it is removed rather than left as false assurance. If streaming
+  // must be governed separately, add the key back AND apply it in auth-gate.ts
+  // in the same change.
   // Media generation endpoints - expensive operations
   'image-generation': {
     limit: 10,
@@ -580,36 +583,151 @@ function getRateLimiter(key: RateLimitKey): Ratelimit {
 }
 
 /**
- * Get identifier for rate limiting (user ID, IP, device ID, etc.)
+ * GOV-17: the trusted-proxy assumption, made EXPLICIT and CONFIGURABLE.
  *
- * Priority:
- * 1. Explicit identifier (e.g., validated user ID from handler)
- * 2. x-real-ip header (set by reverse proxies, harder to spoof)
- * 3. Rightmost IP from x-forwarded-for (Vercel appends real client IP at end)
- * 4. 'unknown' fallback
+ * The original code preferred `x-real-ip` and otherwise took the RIGHTMOST
+ * `x-forwarded-for` entry. That is sound only behind a proxy that OVERWRITES
+ * both headers. This module's own comments scope the deployment to
+ * "AWS / GCP / Fly / bare Node" as well as Vercel, and on a topology where the
+ * ingress merely APPENDS, a client can send its own `x-real-ip` and mint a
+ * fresh bucket per request — an unlimited rate-limit bypass.
  *
- * SEV-WEB-09 / WEB-32 (audit 2026-05-19): the previous code base64-decoded
- * the Bearer JWT payload (no signature verification) and used `sub` as the
- * rate-limit bucket. An attacker could forge a JWT with `sub` = victim UUID,
- * call any rate-limited route, and the victim's bucket would be incremented
- * · even though JWT verification at the route handler rejected the request.
- * That branch is removed. Routes that need user-keyed rate-limiting must
- * pass the verified user.id explicitly via the `identifier` parameter (after
- * `getAuthenticatedUser`); anonymous traffic falls through to IP-keyed.
+ * `AGI_RATE_LIMIT_CLIENT_IP_SOURCE` selects the extraction strategy:
+ *
+ *   'x-real-ip'      (DEFAULT) — current behaviour, byte-for-byte. Prefer
+ *                    `x-real-ip`, else the rightmost `x-forwarded-for` entry.
+ *                    Correct on Vercel, which overwrites both.
+ *   'xff-rightmost'  — ignore `x-real-ip` entirely; use the rightmost
+ *                    `x-forwarded-for` entry. For ingresses that append to XFF
+ *                    but leave a client-supplied `x-real-ip` intact.
+ *   'xff-hop:<n>'    — take the n-th entry counted from the RIGHT (1 = the
+ *                    rightmost). Set n to the number of trusted proxies in
+ *                    front of the app so the value read is the one the
+ *                    outermost trusted hop wrote, not anything the client
+ *                    prepended.
+ *
+ * The default is unchanged, so Vercel deployments are unaffected; self-hosted
+ * operators now have a documented knob instead of an unstated assumption.
  */
-function getRateLimitIdentifier(request: NextRequest, identifier?: string): string {
-  if (identifier) {
-    return identifier;
+const CLIENT_IP_SOURCE_ENV = 'AGI_RATE_LIMIT_CLIENT_IP_SOURCE';
+
+type ClientIpSource =
+  | { mode: 'x-real-ip' }
+  | { mode: 'xff-rightmost' }
+  | { mode: 'xff-hop'; hops: number };
+
+function parseClientIpSource(raw: string | undefined): ClientIpSource {
+  const value = raw?.trim().toLowerCase();
+  if (!value || value === 'x-real-ip') return { mode: 'x-real-ip' };
+  if (value === 'xff-rightmost') return { mode: 'xff-rightmost' };
+  const hopMatch = /^xff-hop:(\d{1,2})$/.exec(value);
+  if (hopMatch) {
+    const hops = Number.parseInt(hopMatch[1]!, 10);
+    if (hops >= 1) return { mode: 'xff-hop', hops };
+  }
+  logger.error(
+    { [CLIENT_IP_SOURCE_ENV]: raw },
+    'GOV-17: unrecognised client-IP source; falling back to the x-real-ip default',
+  );
+  return { mode: 'x-real-ip' };
+}
+
+const clientIpSource = parseClientIpSource(process.env[CLIENT_IP_SOURCE_ENV]);
+
+/** Trimmed, non-empty `x-forwarded-for` entries in wire order (left to right). */
+function forwardedForChain(request: NextRequest): string[] {
+  const xff = request.headers.get('x-forwarded-for');
+  if (!xff) return [];
+  return xff
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+/** GOV-17: resolve the client IP under the configured trusted-proxy model. */
+export function getClientIpForRateLimit(request: NextRequest): string {
+  const chain = forwardedForChain(request);
+
+  switch (clientIpSource.mode) {
+    case 'xff-rightmost':
+      return chain.at(-1) ?? 'unknown';
+    case 'xff-hop': {
+      // hops = 1 -> chain.at(-1); hops = 2 -> chain.at(-2); ...
+      return chain.at(-clientIpSource.hops) ?? chain.at(0) ?? 'unknown';
+    }
+    case 'x-real-ip':
+    default:
+      return request.headers.get('x-real-ip') ?? chain.at(-1) ?? 'unknown';
+  }
+}
+
+/**
+ * GOV-16: resolve a SIGNATURE-VERIFIED user bucket for an authenticated
+ * request, or null.
+ *
+ * SEV-WEB-09 / WEB-32 (audit 2026-05-19) removed an *unverified* base64 JWT
+ * decode from the bucket key: an attacker could forge `sub` = victim and
+ * poison the victim's bucket. The correct fix was never "always fall back to
+ * IP" — roughly 60 authenticated routes then omitted the identifier while
+ * their configs documented "per user", so one office/NAT/CGNAT egress IP
+ * shared a single bucket and a single abusive client 429'd everyone behind it.
+ *
+ * This resolves the principal the way the auth layer does — by VERIFYING the
+ * token signature — so the bucket is per-user without reintroducing the
+ * forgery. Routes that already know their verified user should still pass
+ * `identifier` explicitly: it is both cheaper and unambiguous.
+ *
+ * Never throws. AGI API keys (`sk_live_`/`sk_test_`) and first-party developer
+ * device tokens are opaque here and fall through to the IP bucket, exactly as
+ * before.
+ */
+async function resolveVerifiedUserBucket(request: NextRequest): Promise<string | null> {
+  const authHeader = request.headers.get('authorization');
+
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    // Opaque (non-JWT) credentials: nothing to verify locally.
+    if (!token || token.startsWith('sk_live_') || token.startsWith('sk_test_')) return null;
+
+    const secretKey = process.env['CLERK_SECRET_KEY'];
+    if (!secretKey) return null;
+    try {
+      const { verifyToken } = await import('@clerk/backend');
+      const claims = await verifyToken(token, { secretKey });
+      return typeof claims.sub === 'string' && claims.sub.length > 0 ? `user:${claims.sub}` : null;
+    } catch {
+      // Forged, expired, or simply not a Clerk token — stays IP-keyed.
+      return null;
+    }
   }
 
-  // H3: Prefer x-real-ip (set by Vercel/reverse proxy, not client-controlled).
-  // For x-forwarded-for, use the RIGHTMOST IP because Vercel (and most proxies)
-  // append the real client IP at the end. The leftmost value is client-supplied
-  // and trivially spoofable.
-  const xRealIp = request.headers.get('x-real-ip');
-  const xff = request.headers.get('x-forwarded-for');
-  const ip = xRealIp ?? (xff ? xff.split(',').at(-1)?.trim() : null) ?? 'unknown';
-  return `ip:${ip}`;
+  // Cookie session (first-party browser traffic). `auth()` is backed by
+  // clerkMiddleware in proxy.ts and verifies the session itself.
+  try {
+    const { auth } = await import('@clerk/nextjs/server');
+    const { userId } = await auth();
+    return userId ? `user:${userId}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get the identifier for rate limiting.
+ *
+ * Priority:
+ * 1. Explicit identifier (a verified user id passed by the handler)
+ * 2. GOV-16: a signature-verified Clerk principal on the request
+ * 3. GOV-17: the client IP under the configured trusted-proxy model
+ */
+async function resolveRateLimitIdentifier(
+  request: NextRequest,
+  identifier?: string,
+): Promise<string> {
+  if (identifier) return identifier;
+  const verified = await resolveVerifiedUserBucket(request);
+  if (verified) return verified;
+  return `ip:${getClientIpForRateLimit(request)}`;
 }
 
 /**
@@ -621,6 +739,12 @@ export interface RateLimitInfo {
   remaining: number;
   reset: number;
   headers: Record<string, string>;
+  /**
+   * GOV-16 / GOV-23: the bucket this decision was actually made against
+   * (`user:<verified id>` or `ip:<addr>`). Callers must not re-derive it —
+   * the audit sink in particular used to parse the Bearer payload itself.
+   */
+  identifier: string;
 }
 
 /**
@@ -633,7 +757,7 @@ export async function checkRateLimit(
   identifier?: string,
 ): Promise<RateLimitInfo> {
   const config = rateLimitConfigs[key];
-  const id = getRateLimitIdentifier(request, identifier);
+  const id = await resolveRateLimitIdentifier(request, identifier);
 
   // Use in-memory rate limiting if Redis is not configured
   if (!redis) {
@@ -664,6 +788,7 @@ export async function checkRateLimit(
             'Retry-After': '60',
             'X-RateLimit-Error': 'rate-limiter-unavailable',
           },
+          identifier: id,
         };
       }
     }
@@ -695,6 +820,7 @@ export async function checkRateLimit(
       remaining: result.remaining,
       reset: result.reset,
       headers,
+      identifier: id,
     };
   }
 
@@ -736,6 +862,7 @@ export async function checkRateLimit(
       remaining,
       reset,
       headers,
+      identifier: id,
     };
   } catch (error) {
     logger.error({ error, key, identifier }, 'Rate limiting check error');
@@ -754,6 +881,7 @@ export async function checkRateLimit(
         headers: {
           'Retry-After': '60',
         },
+        identifier: id,
       };
     }
 
@@ -765,6 +893,7 @@ export async function checkRateLimit(
       remaining: config.limit,
       reset: Date.now() + 60000,
       headers: {},
+      identifier: id,
     };
   }
 }
@@ -790,36 +919,40 @@ export async function withRateLimit(
       'Rate limit exceeded',
     );
 
-    // Log to security audit table.
-    // Extract userId from the JWT Bearer token sub claim for audit enrichment.
-    // This is only for audit metadata - the rate-limit identifier itself already
-    // uses the JWT sub claim (see getRateLimitIdentifier).
-    let userId: string | undefined;
-    const auditAuthHeader = request.headers.get('authorization');
-    if (auditAuthHeader?.startsWith('Bearer ')) {
-      try {
-        const payload = JSON.parse(atob(auditAuthHeader.slice(7).split('.')[1]!)) as {
-          sub?: string;
-        };
-        if (payload.sub) {
-          userId = payload.sub;
-        }
-      } catch {
-        // Malformed token - fall through to undefined
-      }
-    }
-    await logRateLimitExceeded(request, identifier || key, userId);
+    // GOV-23: the audit userId used to come from a base64 decode of the Bearer
+    // payload with NO signature verification — four lines after this same file
+    // removed unverified-JWT parsing from the bucket key. An attacker could
+    // craft an unsigned token with any `sub` and poison another user's abuse
+    // record. `info.identifier` is the bucket the decision was actually made
+    // against, and its `user:` form is only ever produced by a VERIFIED
+    // principal (see resolveVerifiedUserBucket), so it is safe to attribute.
+    const userId = info.identifier.startsWith('user:')
+      ? info.identifier.slice('user:'.length)
+      : undefined;
+
+    await logRateLimitExceeded(request, info.identifier, userId);
+
+    // GOV-21: return a STRUCTURED, localizable reset instead of a raw machine
+    // timestamp embedded in an English sentence. The client formats
+    // `retry_after_seconds` in the user's locale; `reset_at` stays for logs and
+    // for any consumer that wants the absolute instant.
+    const retryAfterSeconds = Math.max(0, Math.ceil((info.reset - Date.now()) / 1000));
+    const resetAtIso = new Date(info.reset).toISOString();
 
     return NextResponse.json(
       {
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          message: `Rate limit exceeded. Please try again after ${new Date(info.reset).toISOString()}`,
+          message: 'Too many requests. Please wait before trying again.',
+          retry_after_seconds: retryAfterSeconds,
+          reset_at: resetAtIso,
         },
         rateLimit: {
           limit: info.limit,
           remaining: 0,
-          reset: new Date(info.reset).toISOString(),
+          reset: resetAtIso,
+          reset_at: resetAtIso,
+          retry_after_seconds: retryAfterSeconds,
         },
       },
       {
@@ -831,6 +964,122 @@ export async function withRateLimit(
 
   // Return null to continue (rate limit headers added via checkRateLimit)
   return null;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * GOV-3: per-plan concurrent managed-turn slots.
+ *
+ * `BILLING_PLAN_PRODUCT_LIMITS` gained a `maxConcurrentTurns` dimension because
+ * nothing in the server bounded concurrent chats or parallel streams: grepping
+ * `activeRuns|concurrentRuns|MAX_ACTIVE|maxParallel|max_concurrent` returned a
+ * single hit (`maxParallelToolCalls`, inside ONE turn). A rate limit is a
+ * request-per-minute bound, not a concurrency bound — 30 simultaneous 10-minute
+ * streams pass `llm-completion` cleanly.
+ *
+ * Implemented as a TTL-bounded Redis sorted set per user: entries older than
+ * the lease age out, so a crashed request cannot leak a slot forever.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** How long an unreleased slot survives before it ages out of the set. */
+const MANAGED_TURN_SLOT_TTL_SECONDS = 15 * 60;
+
+export interface ManagedTurnSlot {
+  /** Idempotent; safe to call from a `finally`. */
+  release(): Promise<void>;
+}
+
+export interface ManagedTurnSlotResult {
+  /** False only when the caller's plan ceiling is already fully occupied. */
+  admitted: boolean;
+  /** The plan ceiling, or null when the tier declares itself uncapped. */
+  limit: number | null;
+  /** Live turns observed for this user at admission time. */
+  active: number;
+  /** Present only when `admitted` is true. */
+  slot: ManagedTurnSlot | null;
+}
+
+const NOOP_SLOT: ManagedTurnSlot = { release: async () => {} };
+
+function managedTurnSlotKey(userId: string): string {
+  return `agi-turns:${userId}`;
+}
+
+/**
+ * Reserve one concurrent-turn slot for `userId` under `planTier`.
+ *
+ * Fail behaviour: a Redis outage admits the turn and logs loudly. That is a
+ * deliberate, backstopped fail-open — the durable rolling 5-hour / weekly /
+ * flagship spend caps (0070 migration) still bound what those turns can cost,
+ * so a transient Upstash blip degrades a concurrency nicety instead of taking
+ * the product down. In production the module already refuses to boot without
+ * Redis, so this path is a dev/preview concern.
+ */
+export async function acquireManagedTurnSlot(input: {
+  userId: string;
+  planTier: string | null | undefined;
+  /** Stable id for this turn; reused as the sorted-set member. */
+  turnId: string;
+}): Promise<ManagedTurnSlotResult> {
+  const limit = getPlanMaxConcurrentTurns(input.planTier);
+
+  if (limit === null) {
+    return { admitted: true, limit: null, active: 0, slot: NOOP_SLOT };
+  }
+  if (limit <= 0) {
+    return { admitted: false, limit, active: 0, slot: null };
+  }
+  if (!redis) {
+    logger.warn(
+      { userId: input.userId, limit },
+      'GOV-3: concurrent-turn slots unavailable without Redis; admitting (spend caps still apply)',
+    );
+    return { admitted: true, limit, active: 0, slot: NOOP_SLOT };
+  }
+
+  // Capture the narrowed client so the release closure keeps the non-null type.
+  const client = redis;
+  const key = managedTurnSlotKey(input.userId);
+  const now = Date.now();
+
+  try {
+    // Age out slots whose owning request never released them.
+    await client.zremrangebyscore(key, 0, now - MANAGED_TURN_SLOT_TTL_SECONDS * 1000);
+    const active = await client.zcard(key);
+    if (active >= limit) {
+      return { admitted: false, limit, active, slot: null };
+    }
+
+    await client.zadd(key, { score: now, member: input.turnId });
+    await client.expire(key, MANAGED_TURN_SLOT_TTL_SECONDS);
+
+    let released = false;
+    return {
+      admitted: true,
+      limit,
+      active: active + 1,
+      slot: {
+        release: async () => {
+          if (released) return;
+          released = true;
+          try {
+            await client.zrem(key, input.turnId);
+          } catch (error) {
+            logger.warn(
+              { error, userId: input.userId },
+              'GOV-3: concurrent-turn slot release failed; it will age out',
+            );
+          }
+        },
+      },
+    };
+  } catch (error) {
+    logger.error(
+      { error, userId: input.userId, limit },
+      'GOV-3: concurrent-turn slot check failed; admitting (spend caps still apply)',
+    );
+    return { admitted: true, limit, active: 0, slot: NOOP_SLOT };
+  }
 }
 
 /**

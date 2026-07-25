@@ -24,7 +24,7 @@ import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
 // AUDIT-P3: Use shared Stripe type helpers for safer period access
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
-import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
+import { getPlanUsageBudgetCents, isPlanUsageUncapped } from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 
 export interface SubscriptionInfo {
@@ -116,10 +116,19 @@ export class SubscriptionService {
     periodEnd: Date,
     options: CreditAllocationOptions = {},
   ): Promise<string> {
+    // GOV-2: an uncapped tier (Enterprise) used to resolve to 0 here, so no
+    // credit account was ever created, `CreditService.checkAvailable` returned
+    // false, and every Enterprise chat 402'd with "Usage budget exhausted.
+    // Upgrade your plan" — while BILLING_PLAN_CAPABILITY_TIERS grants that tier
+    // everything. `getPlanUsageBudgetCents` now returns real ledger headroom
+    // for declared-uncapped tiers, so the account is created like any other.
     const creditsCents = getPlanUsageBudgetCents(planTier, 'monthly');
 
     if (creditsCents === 0) {
-      logger.info({ userId, planTier }, 'No credits allocated for plan tier');
+      logger.info(
+        { userId, planTier, uncapped: isPlanUsageUncapped(planTier) },
+        'No paid-ledger credits allocated for plan tier',
+      );
       return '';
     }
 
@@ -222,6 +231,8 @@ export class SubscriptionService {
     periodEnd: Date,
     db?: DatabaseAdapter,
   ): Promise<string> {
+    // GOV-2: uncapped tiers resolve to ledger headroom rather than 0, so an
+    // upgrade INTO one is a legitimate carry-forward instead of an exception.
     const previousBudgetCents = getPlanUsageBudgetCents(previousPlanTier, 'monthly');
     const nextBudgetCents = getPlanUsageBudgetCents(nextPlanTier, 'monthly');
     if (previousBudgetCents <= 0 || nextBudgetCents < previousBudgetCents) {

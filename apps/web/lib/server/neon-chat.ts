@@ -5,6 +5,10 @@ import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
+  managedCloudMetadataLength,
+} from '@agiworkforce/cloud-contracts';
 
 export type ChatConversationRow = {
   id: string;
@@ -50,7 +54,22 @@ export async function requireCurrentUserId(request?: NextRequest): Promise<strin
   return userId;
 }
 
+/**
+ * PER-5 — the write-path guard for message metadata.
+ *
+ * This used to be a bare type check that returned the object unchanged, so a
+ * multi-megabyte payload (a `data:` image URL in `metadata.imageUrl`) reached
+ * the INSERT and blew up on the request body limit, surfacing as an opaque
+ * "Couldn't save this response". Oversized metadata is now rejected here with
+ * an actionable 400 that says what to do instead.
+ */
 export function normalizeMessageMetadata(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const length = managedCloudMetadataLength(value);
+  if (length > MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH) {
+    throw createError.validation(
+      `Message metadata is too large (${length} characters, limit ${MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH}). Upload large payloads such as generated images to storage and reference them by id instead of embedding them in the message.`,
+    );
+  }
   return value as Record<string, unknown>;
 }

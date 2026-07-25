@@ -29,9 +29,10 @@ function formatDateTime(value: Date | null | undefined): string {
 }
 
 export function AccountSection() {
-  // Read from the real, populated auth store (the one the sidebar/header use)
-  // rather than useBillingStore's `user` field, which is only ever written by
-  // a dead `_setUser` action with zero callers and is therefore always null.
+  // Reads the Clerk-backed auth store. PER-3: `useBillingStore.user` used to be
+  // structurally null (its only writer, `_setUser`, had zero call sites); that
+  // is fixed and `_setUser` is gone, but this section wants the auth store's
+  // `logout()` anyway, so it keeps reading the user from the same store.
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { signOut: clerkSignOut } = useClerk();

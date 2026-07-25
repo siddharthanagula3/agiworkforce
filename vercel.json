@@ -53,6 +53,18 @@
     {
       "path": "/api/cron/run-schedules",
       "schedule": "15 0 * * *"
+    },
+    {
+      "path": "/api/cron/reclaim-sandboxes",
+      "schedule": "45 * * * *"
+    },
+    {
+      "path": "/api/cron/purge-deleted-media",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/purge-deleted-accounts",
+      "schedule": "30 4 * * *"
     }
   ]
 }

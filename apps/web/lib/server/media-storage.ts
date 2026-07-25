@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { randomUUID } from 'crypto';
+import { logger } from '@/lib/logger';
 import { putObject, deleteObject, isObjectStorageConfigured } from './object-storage';
 
 /**
@@ -67,7 +68,63 @@ export async function storeMedia(params: {
   return { url, pathname, byteSize: data.byteLength, contentType };
 }
 
-/** Remove a previously stored object by pathname (best-effort cleanup). */
+/**
+ * PER-26 — the ONE client-facing address for stored media bytes.
+ *
+ * Generated images used to be handed to the client as `media_assets
+ * .storage_url`, i.e. the permanent public R2 URL from `publicUrlForKey`. That
+ * gave the same bytes two inconsistent access models: attachments went through
+ * the authenticated, owner-scoped, `deleted_at`-aware `/api/files/[id]` route,
+ * while generated images embedded a URL that never expires and is never revoked
+ * — so "delete" deleted nothing that mattered. Every surface now addresses
+ * media through this function.
+ */
+export function authenticatedMediaUrl(mediaAssetId: string): string {
+  return `/api/files/${mediaAssetId}`;
+}
+
+/** Remove a previously stored object by pathname. Throws on failure. */
 export async function deleteStoredMedia(pathname: string): Promise<void> {
   await deleteObject(pathname);
+}
+
+/**
+ * PER-24 / PER-25 — best-effort byte deletion for lifecycle jobs.
+ *
+ * Deleting a conversation, an asset or an account removed rows but never the
+ * R2 bytes, and `deleteStoredMedia` had exactly one occurrence in the whole
+ * repository: its own definition. Combined with the permanent public URLs of
+ * PER-26 that made this an ERASURE gap, not just a storage leak.
+ *
+ * Bulk callers (crons, account deletion) must not abort a purge because one
+ * object is already gone, so this reports rather than throws.
+ */
+export async function deleteStoredMediaObjects(
+  pathnames: ReadonlyArray<string | null | undefined>,
+): Promise<{ deleted: number; failedPathnames: string[] }> {
+  const present = pathnames.filter((p): p is string => typeof p === 'string' && p.length > 0);
+  if (!isObjectStorageConfigured()) {
+    // The bytes exist but this deployment cannot reach them. Report every
+    // pathname as failed so the caller retains its pointers instead of
+    // deleting the only record of an object it can no longer address.
+    if (present.length > 0) {
+      logger.warn(
+        { count: present.length },
+        'Object storage is not configured; stored media objects were not deleted',
+      );
+    }
+    return { deleted: 0, failedPathnames: [...present] };
+  }
+  let deleted = 0;
+  const failedPathnames: string[] = [];
+  for (const pathname of present) {
+    try {
+      await deleteObject(pathname);
+      deleted++;
+    } catch (error) {
+      failedPathnames.push(pathname);
+      logger.warn({ pathname, error }, 'Failed to delete stored media object');
+    }
+  }
+  return { deleted, failedPathnames };
 }

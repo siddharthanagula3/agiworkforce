@@ -61,7 +61,9 @@ export default async function SharedSessionPage({ params }: Props) {
     notFound();
   }
 
-  if (new Date(data.expires_at) < new Date()) {
+  // GOV-28: same predicate as GET /api/share/[token] (`<=`, not `<`), so the
+  // page and the API can never disagree about whether one URL has expired.
+  if (new Date(data.expires_at).getTime() <= Date.now()) {
     return <ExpiredShareBanner />;
   }
 
