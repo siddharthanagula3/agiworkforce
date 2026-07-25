@@ -26,6 +26,7 @@ import {
   claimCloudAgentApprovalCheckpoint,
   releaseCloudAgentApprovalCheckpoint,
   CloudAgentApprovalCheckpointConflictError,
+  CloudAgentApprovalCheckpointExpiredError,
   CloudAgentApprovalCheckpointNotFoundError,
   CloudAgentApprovalDecisionError,
   type ClaimedCloudAgentApprovalCheckpoint,
@@ -92,6 +93,11 @@ async function releaseClaim(
 function checkpointError(error: unknown): NextResponse | null {
   if (error instanceof CloudAgentApprovalDecisionError) {
     return jsonError('Approval decisions do not match the pending tool calls.', 400);
+  }
+  if (error instanceof CloudAgentApprovalCheckpointExpiredError) {
+    // AUDIT-FIX AGT-3: an aged-out approval is gone for a reason the user can
+    // act on, so say so instead of reporting it as never having existed.
+    return jsonError('This approval request expired and can no longer be resumed.', 410);
   }
   if (error instanceof CloudAgentApprovalCheckpointNotFoundError) {
     return jsonError('Pending approval not found.', 404);
