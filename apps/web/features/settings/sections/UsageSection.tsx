@@ -1,16 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Progress } from '@agiworkforce/ui';
-import {
-  getBillingPlanPricing,
-  normalizeUsagePercentage,
-  type ManagedUsageSummaryResponse,
-} from '@agiworkforce/types';
+import { getBillingPlanPricing, normalizeUsagePercentage } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
-
-type UsageResponse = ManagedUsageSummaryResponse;
+import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 
 const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
@@ -67,73 +62,17 @@ function formatReset(value: string | null, kind: 'rolling' | 'period', nowMs: nu
 }
 
 /**
- * GOV-19: the single source for "how much managed capacity is left".
- *
- * The shared `Sidebar` exposes `showUsageWidget` / `budgetPercent` and renders a
- * threshold progress bar, but no call site in `apps/` or `packages/` passed
- * them — so remaining quota was invisible in the web chat surface, and enabling
- * the widget without wiring the props would have rendered a confident,
- * permanent "0%". Exporting the fetch here keeps the chat sidebar and the
- * Settings > Usage page on one contract instead of two drifting fetches.
+ * GOV-19: `useManagedUsageSummary` / `getWorstUsagePercent` moved to
+ * `@/lib/hooks/useManagedUsageSummary` so the chat page can wire the shared
+ * Sidebar's usage widget without importing a settings SECTION COMPONENT
+ * module. Re-exported here so this file remains the discoverable entry point
+ * for the Settings > Usage surface and any existing importer keeps working.
  */
-export interface ManagedUsageSummaryState {
-  usage: UsageResponse | null;
-  loading: boolean;
-  error: string | null;
-  /** Null until a fetch has succeeded at least once. */
-  lastUpdatedAt: Date | null;
-  /** True when the most recent refresh attempt failed. */
-  stale: boolean;
-  refresh: () => Promise<void>;
-}
-
-export function useManagedUsageSummary(): ManagedUsageSummaryState {
-  const [usage, setUsage] = useState<UsageResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // PAR-4: real state, not the literal string 'Not loaded'. A failed refresh no
-  // longer leaves a timestamp that silently claims the data is current.
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [stale, setStale] = useState(false);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/usage', { credentials: 'include' });
-      if (!response.ok) throw new Error('Could not load usage');
-      setUsage((await response.json()) as UsageResponse);
-      setLastUpdatedAt(new Date());
-      setStale(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load usage');
-      setStale(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  return { usage, loading, error, lastUpdatedAt, stale, refresh };
-}
-
-/**
- * GOV-19: the percentage the sidebar widget should display — the WORST of the
- * windows that can actually stop the next turn. Showing the billing-period bar
- * alone would read 60% while the rolling 5-hour window is at 100%.
- */
-export function getWorstUsagePercent(usage: UsageResponse | null): number {
-  if (!usage) return 0;
-  return Math.max(
-    normalizeUsagePercentage(usage.usage_percentage),
-    normalizeUsagePercentage(usage.session_usage_percentage),
-    normalizeUsagePercentage(usage.weekly_usage_percentage),
-    normalizeUsagePercentage(usage.flagship_weekly_usage_percentage),
-  );
-}
+export {
+  getWorstUsagePercent,
+  useManagedUsageSummary,
+  type ManagedUsageSummaryState,
+} from '@/lib/hooks/useManagedUsageSummary';
 
 function UsageBar({
   label,

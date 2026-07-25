@@ -101,6 +101,16 @@ export interface PaywallSlot {
   feature: string;
   requiredTier: string;
   reason?: string;
+  /**
+   * GOV-20 — presentation flags from `classifyManagedQuotaErrorCode`. Optional
+   * so an already-persisted paywall slot written before this existed still
+   * renders (missing `showUpgradeCta` is treated as true, the old behaviour).
+   */
+  showUpgradeCta?: boolean;
+  showResetTime?: boolean;
+  suggestStandardModel?: boolean;
+  /** ISO instant the exhausted window refills, when the server sent one. */
+  resetAt?: string;
 }
 
 export interface ComparisonOptions {

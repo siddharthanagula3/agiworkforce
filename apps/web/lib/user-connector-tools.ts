@@ -42,7 +42,8 @@
  *     logged, never crash the request.
  *   - Auth material is server-side only (installation token / operator headers /
  *     the user's own encrypted bearer token, decrypted only at connect time).
- *   - Per-user tool count is capped (MAX_CONNECTOR_TOOLS_PER_USER).
+ *   - Per-user tool count is capped per plan (GOV-7, getPlanMaxConnectorTools,
+ *     falling back to MAX_CONNECTOR_TOOLS_PER_USER when the tier declares none).
  *   - Execution errors surface as tool-result errors, never as 500s.
  *   - The execution path re-validates authorization (defense-in-depth) so a model
  *     that hallucinates a connector tool the user has not connected gets an error,
@@ -73,9 +74,59 @@ import {
 } from '@/lib/github-app';
 import { decryptConnectorToken } from '@/lib/custom-connector-crypto';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
-/** Hard ceiling on connector tools injected per user, across all connectors. */
+/**
+ * GOV-7: fallback ceiling on connector tools injected per user, across all
+ * connectors, used only when the billing catalog declares no per-plan limit
+ * for the caller's tier (or no tier is known). The per-plan ceiling from
+ * `getPlanMaxConnectorTools` takes precedence — this flat number used to be
+ * the ONLY cap, so every tier from free to enterprise silently truncated at
+ * the same 32 and a paid plan bought no extra connector capacity.
+ */
 export const MAX_CONNECTOR_TOOLS_PER_USER = 32;
+
+/**
+ * GOV-7: one connector that lost tools to the per-plan ceiling.
+ *
+ * Truncation used to be log-only: tools were dropped server-side while the
+ * connector still read "Connected" in the UI, so the model simply could not
+ * call them and the user had no way to find out why. Returning the drop makes
+ * it something a caller can actually tell the user about.
+ */
+export interface DroppedConnectorTools {
+  /** MCP serverId of the connector that lost tools. */
+  connectorId: string;
+  /** Human label when the serverId is an opaque `custom-<hex>` id. */
+  connectorLabel: string;
+  /** How many of this connector's tools were not offered this turn. */
+  droppedToolCount: number;
+}
+
+/** GOV-7: the full result of assembling a user's connector tool catalog. */
+export interface UserConnectorToolCatalog {
+  /** The tools actually offered to the model this turn. */
+  tools: WebMcpToolDef[];
+  /** Non-empty only when the per-plan ceiling truncated the catalog. */
+  dropped: DroppedConnectorTools[];
+  /** The ceiling that was applied, or null when the plan declares none. */
+  limit: number | null;
+}
+
+/**
+ * GOV-7 — resolve the connector-tool ceiling for `planTier`.
+ *
+ * `getPlanMaxConnectorTools` returns null for BOTH 'unlimited' and 'custom',
+ * which for a recognised tier means "no product-side ceiling" — collapsing
+ * that onto the flat 32 would have capped enterprise below pro. The flat
+ * fallback therefore applies only when the tier is absent or unrecognised,
+ * where refusing to cap at all would be the unsafe answer.
+ */
+function resolveConnectorToolLimit(planTier: string | null | undefined): number | null {
+  const planLimit = getPlanMaxConnectorTools(planTier);
+  if (planLimit !== null) return planLimit;
+  return getBillingPlanProductLimits(planTier) ? null : MAX_CONNECTOR_TOOLS_PER_USER;
+}
 
 /** serverId reserved for the first-party GitHub built-in connector. */
 const GITHUB_SERVER_ID = 'github';
@@ -877,24 +928,45 @@ async function executeCustomConnectorTool(
  */
 export async function loadUserConnectorToolDefs(
   userId: string,
-  options: {
-    customConnectorLimit?: number;
-    /**
-     * AUDIT-FIX CON-2: drop tools the user has BLOCKED from the catalog
-     * entirely. Without this filter a blocked tool was still advertised to the
-     * model on every turn, so the model kept calling it and the approval card
-     * kept re-appearing — the user's "never do this" produced an endless prompt
-     * instead of silence. Filtering at the catalog is what actually makes the
-     * verdict stick; the tool loop's execution-time check (CON-1) remains as
-     * defense in depth for a model that hallucinates the name anyway.
-     *
-     * Receives the CONNECTOR id (the MCP serverId) and the BARE tool name,
-     * matching how `connector_tool_permissions` is keyed.
-     */
-    isToolDenied?: (connectorId: string, toolName: string) => boolean;
-  } = {},
+  options: LoadUserConnectorToolOptions = {},
 ): Promise<WebMcpToolDef[]> {
-  if (!userId) return [];
+  return (await loadUserConnectorToolCatalog(userId, options)).tools;
+}
+
+export interface LoadUserConnectorToolOptions {
+  customConnectorLimit?: number;
+  /**
+   * GOV-7: the caller's billing plan tier, used to resolve the per-plan
+   * connector-tool ceiling. Omitted/unknown falls back to
+   * `MAX_CONNECTOR_TOOLS_PER_USER`.
+   */
+  planTier?: string | null;
+  /**
+   * AUDIT-FIX CON-2: drop tools the user has BLOCKED from the catalog
+   * entirely. Without this filter a blocked tool was still advertised to the
+   * model on every turn, so the model kept calling it and the approval card
+   * kept re-appearing — the user's "never do this" produced an endless prompt
+   * instead of silence. Filtering at the catalog is what actually makes the
+   * verdict stick; the tool loop's execution-time check (CON-1) remains as
+   * defense in depth for a model that hallucinates the name anyway.
+   *
+   * Receives the CONNECTOR id (the MCP serverId) and the BARE tool name,
+   * matching how `connector_tool_permissions` is keyed.
+   */
+  isToolDenied?: (connectorId: string, toolName: string) => boolean;
+}
+
+/**
+ * GOV-7 — the catalog-returning form of `loadUserConnectorToolDefs`, for
+ * callers that want to tell the user when the per-plan ceiling dropped tools.
+ * `loadUserConnectorToolDefs` above is the array-only wrapper.
+ */
+export async function loadUserConnectorToolCatalog(
+  userId: string,
+  options: LoadUserConnectorToolOptions = {},
+): Promise<UserConnectorToolCatalog> {
+  const limit = resolveConnectorToolLimit(options.planTier);
+  if (!userId) return { tools: [], dropped: [], limit };
   try {
     const defs: WebMcpToolDef[] = [];
 
@@ -941,20 +1013,39 @@ export async function loadUserConnectorToolDefs(
       );
     }
 
-    if (allowed.length > MAX_CONNECTOR_TOOLS_PER_USER) {
-      logger.info(
-        { userId, total: allowed.length, cap: MAX_CONNECTOR_TOOLS_PER_USER },
-        '[user-connector] capping per-user connector tools',
+    // GOV-7: apply the PER-PLAN ceiling (was a flat 32 for every tier) and
+    // report what it cost. Truncating silently while the connector still reads
+    // "Connected" is the failure this replaces: the model could not call the
+    // dropped tools and nothing anywhere told the user why.
+    if (limit !== null && allowed.length > limit) {
+      const kept = allowed.slice(0, limit);
+      const droppedByConnector = new Map<string, DroppedConnectorTools>();
+      for (const def of allowed.slice(limit)) {
+        const existing = droppedByConnector.get(def.serverId);
+        if (existing) {
+          existing.droppedToolCount += 1;
+        } else {
+          droppedByConnector.set(def.serverId, {
+            connectorId: def.serverId,
+            connectorLabel: def.serverLabel ?? def.serverId,
+            droppedToolCount: 1,
+          });
+        }
+      }
+      const dropped = [...droppedByConnector.values()];
+      logger.warn(
+        { userId, total: allowed.length, cap: limit, planTier: options.planTier, dropped },
+        '[user-connector] per-plan connector-tool ceiling truncated the offered catalog',
       );
-      return allowed.slice(0, MAX_CONNECTOR_TOOLS_PER_USER);
+      return { tools: kept, dropped, limit };
     }
-    return allowed;
+    return { tools: allowed, dropped: [], limit };
   } catch (err) {
     logger.warn(
       { userId, error: err instanceof Error ? err.message : err },
       '[user-connector] failed to assemble connector tools — proceeding without them',
     );
-    return [];
+    return { tools: [], dropped: [], limit };
   }
 }
 

@@ -6,10 +6,17 @@ import { useAuth } from '@clerk/nextjs';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
 import { useChatStream, ToolApprovalProvider } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
+// GOV-19: remaining managed quota, shared with Settings > Usage.
+import { getWorstUsagePercent, useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 import {
   isTemporaryConversationById,
   persistImageGenerationUserMessage,
   persistImageGenerationAssistantMessage,
+  // PER-29/PER-30: metadata builders that MERGE rather than replace, so a
+  // failure or a pending regeneration cannot discard the retry parameters.
+  imageGenerationFailureMetadata,
+  imageRegenerationPendingMetadata,
+  mergeImageGenerationMetadata,
 } from '../lib/imageGenerationPersistence';
 import {
   useChatStore,
@@ -673,6 +680,24 @@ export default function WebChatPage() {
     [subscription, user],
   );
 
+  /**
+   * GOV-19 — the shared `Sidebar` has always exposed `showUsageWidget` /
+   * `budgetPercent` and rendered a threshold bar for them, but no call site in
+   * `apps/` or `packages/` passed either, so remaining quota was invisible in
+   * the chat surface. Turning the widget on without this wiring would have
+   * rendered a confident, permanent "0%", so the widget stays hidden until the
+   * first successful fetch resolves and `budgetPercent` is a real number.
+   *
+   * The percentage is the WORST of the billing-period, rolling 5-hour, rolling
+   * weekly and flagship-weekly windows — the one that will actually stop the
+   * next turn.
+   */
+  const { usage: managedUsageSummary } = useManagedUsageSummary();
+  const managedBudgetPercent = useMemo(
+    () => getWorstUsagePercent(managedUsageSummary),
+    [managedUsageSummary],
+  );
+
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const addMessage = useChatStore((s) => s.addMessage);
@@ -1037,6 +1062,23 @@ export default function WebChatPage() {
     return { size, provider };
   }, []);
 
+  /**
+   * PER-29/PER-30 — the message's CURRENT metadata, so a failure patch can be
+   * built against it instead of replacing it. `updateMessage` shallow-merges
+   * the MESSAGE, so a `metadata` key overwrites the whole metadata object.
+   */
+  const readMessageMetadata = useCallback(
+    (conversationId: string | null, messageId: string): MessageMetadata | undefined => {
+      if (!conversationId) return undefined;
+      const state = useChatStore.getState();
+      const bucket =
+        state.messagesByConversation[conversationId] ??
+        (state.activeConversationId === conversationId ? state.messages : []);
+      return bucket.find((message) => message.id === messageId)?.metadata;
+    },
+    [],
+  );
+
   // Shared paywall/error helper
   const applyImageError = useCallback(
     // AUDIT-FIX ROOT-CAUSE: image generation is a long async turn the user can
@@ -1047,26 +1089,34 @@ export default function WebChatPage() {
         raw.includes('403') ||
         raw.includes('plan_upgrade_required') ||
         raw.includes('subscription_required');
+      // PER-30: `metadata: undefined` used to REPLACE the metadata object on
+      // the non-paywall branch (and the paywall branch replaced it with a
+      // paywall-only object), discarding imageGenPrompt / imageGenAspect /
+      // imageGenModel — exactly the fields Retry needs. Merge onto the current
+      // metadata instead so a failed image can still be retried.
       updateMessage(
         msgId,
         {
           isStreaming: false,
           content: isPaywall ? '' : `Image generation failed: ${raw}`,
-          metadata: isPaywall
-            ? {
-                paywall: {
-                  feature: 'image_generation',
-                  requiredTier: 'pro',
-                  reason:
-                    'Image generation requires a Pro or higher plan. Upgrade to generate images.',
-                },
-              }
-            : undefined,
+          metadata: imageGenerationFailureMetadata(
+            readMessageMetadata(conversationId, msgId),
+            isPaywall
+              ? {
+                  paywall: {
+                    feature: 'image_generation',
+                    requiredTier: 'pro',
+                    reason:
+                      'Image generation requires a Pro or higher plan. Upgrade to generate images.',
+                  },
+                }
+              : {},
+          ),
         },
         conversationId,
       );
     },
-    [updateMessage],
+    [updateMessage, readMessageMetadata],
   );
 
   // ---------------------------------------------------------------------------
@@ -1248,69 +1298,102 @@ export default function WebChatPage() {
       // from, and every write below must still land on THIS transcript.
       const ownerConversationId = displayedConversationId;
 
-      // Mark as regenerating (state A again)
+      // PER-29: the pending state used to clear `metadata.imageUrl` and set
+      // `isStreaming: true` BEFORE awaiting the provider, with no try/catch
+      // around the await. Any failure therefore left a card spinning forever,
+      // with the original image already erased and nothing persisted — an
+      // unrecoverable state reachable by a single provider hiccup. The pending
+      // metadata now KEEPS `imageUrl` (so the previous image stays visible and
+      // is restorable), the await is wrapped, failure restores the retry
+      // parameters, and `isStreaming` is cleared in a `finally` that runs on
+      // every exit.
+      const previousMetadata = readMessageMetadata(ownerConversationId, messageId);
       updateMessage(
         messageId,
         {
           isStreaming: true,
-          metadata: {
-            toolType: 'image-generation',
-            imageUrl: undefined,
-            imageGenPrompt: opts.prompt,
-            imageGenAspect: opts.aspectRatio,
-            imageGenModel: opts.modelId,
-          },
+          metadata: imageRegenerationPendingMetadata(previousMetadata, {
+            prompt: opts.prompt,
+            aspectRatio: opts.aspectRatio,
+            ...(opts.modelId !== undefined ? { modelId: opts.modelId } : {}),
+          }),
         },
         ownerConversationId ?? undefined,
       );
 
-      const imageUrl = await generateImage(opts.prompt, { size, provider, model: opts.modelId });
-      const finalMetadata: MessageMetadata = {
-        toolType: 'image-generation',
-        imageUrl,
-        imageGenPrompt: opts.prompt,
-        imageGenAspect: opts.aspectRatio,
-        imageGenModel: opts.modelId,
-      };
-      updateMessage(
-        messageId,
-        {
-          isStreaming: false,
-          metadata: finalMetadata,
-        },
-        ownerConversationId ?? undefined,
-      );
-
-      // WEB-IMAGE-CHAT-PERSISTENCE-01: this updates an EXISTING assistant
-      // message in place, so persist via the same message id — the route is
-      // idempotent on client-supplied id (ON CONFLICT), so this upserts the
-      // row saved when the image was first generated instead of duplicating it.
-      const convId = ownerConversationId;
-      if (convId) {
-        const isTemporaryConversation = isTemporaryConversationById(
-          useChatStore.getState().conversations,
-          convId,
-        );
-        if (!isTemporaryConversation) {
-          const getAuthToken = async () => {
-            const token = await getToken();
-            if (!token) throw new Error('Not authenticated');
-            return token;
-          };
-          void persistImageGenerationAssistantMessage({
-            conversationId: convId,
-            messageId,
-            model: opts.modelId,
+      try {
+        const imageUrl = await generateImage(opts.prompt, { size, provider, model: opts.modelId });
+        const finalMetadata: MessageMetadata = mergeImageGenerationMetadata(previousMetadata, {
+          toolType: 'image-generation',
+          imageUrl,
+          imageGenPrompt: opts.prompt,
+          imageGenAspect: opts.aspectRatio,
+          imageGenModel: opts.modelId,
+        });
+        updateMessage(
+          messageId,
+          {
             metadata: finalMetadata,
-            getAuthToken,
-            updateMessage: (id, updates) => updateMessage(id, updates, convId),
-          });
-        }
-      }
+          },
+          ownerConversationId ?? undefined,
+        );
 
-      return imageUrl;
+        // WEB-IMAGE-CHAT-PERSISTENCE-01: this updates an EXISTING assistant
+        // message in place, so persist via the same message id — the route is
+        // idempotent on client-supplied id (ON CONFLICT), so this upserts the
+        // row saved when the image was first generated instead of duplicating it.
+        const convId = ownerConversationId;
+        if (convId) {
+          const isTemporaryConversation = isTemporaryConversationById(
+            useChatStore.getState().conversations,
+            convId,
+          );
+          if (!isTemporaryConversation) {
+            const getAuthToken = async () => {
+              const token = await getToken();
+              if (!token) throw new Error('Not authenticated');
+              return token;
+            };
+            void persistImageGenerationAssistantMessage({
+              conversationId: convId,
+              messageId,
+              model: opts.modelId,
+              metadata: finalMetadata,
+              getAuthToken,
+              updateMessage: (id, updates) => updateMessage(id, updates, convId),
+            });
+          }
+        }
+
+        return imageUrl;
+      } catch (error) {
+        // PER-29: put the card back in a usable state — the original image and
+        // every retry parameter survive, so the user can try again. Rethrown
+        // because ImageGenerationCard's edit panel awaits this promise and
+        // renders its own inline error from the rejection.
+        updateMessage(
+          messageId,
+          {
+            metadata: imageGenerationFailureMetadata(
+              readMessageMetadata(ownerConversationId, messageId) ?? previousMetadata,
+            ),
+          },
+          ownerConversationId ?? undefined,
+        );
+        throw error;
+      } finally {
+        // PER-29: the spinner is cleared on EVERY exit, success or failure.
+        updateMessage(messageId, { isStreaming: false }, ownerConversationId ?? undefined);
+      }
     },
-    [resolveImageParams, updateMessage, generateImage, displayedConversationId, getToken],
+    [
+      resolveImageParams,
+      updateMessage,
+      generateImage,
+      displayedConversationId,
+      getToken,
+      readMessageMetadata,
+    ],
   );
 
   /**
@@ -2465,6 +2548,13 @@ export default function WebChatPage() {
           onOpenSearch={handleOpenSearch}
           navItems={sidebarNavItems}
           footerSlot={sidebarFooterSlot}
+          // GOV-19: the two props the shared Sidebar's usage widget needs.
+          showUsageWidget={managedUsageSummary !== null}
+          budgetPercent={managedBudgetPercent}
+          onOpenUsage={() => {
+            setMobileNavOpen(false);
+            router.push('/settings/usage');
+          }}
           onSelect={(id) => {
             setMobileNavOpen(false);
             handleSelectSession(id);

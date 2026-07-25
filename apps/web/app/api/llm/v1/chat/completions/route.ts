@@ -10,12 +10,19 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
-import { runAuthGate } from './lib/auth-gate';
+import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
+// GOV-3: per-plan concurrent-turn admission (see handleChatCompletions).
+import { acquireManagedTurnSlot, type ManagedTurnSlotResult } from '@/lib/rate-limit';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
 import { buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
-import { loadUserConnectorToolDefs, makeUserConnectorExecutor } from '@/lib/user-connector-tools';
+// GOV-7: the catalog form reports which connectors the per-plan ceiling
+// truncated, so the client can say so instead of the tools just vanishing.
+import {
+  loadUserConnectorToolCatalog,
+  makeUserConnectorExecutor,
+} from '@/lib/user-connector-tools';
 import { runResearchLoop } from './lib/research-loop';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
 import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
@@ -212,11 +219,16 @@ function addAgentRunHeaders(headers: Record<string, string>, run: CloudAgentRun)
     `/api/llm/v1/chat/completions/runs/${encodeURIComponent(run.id)}`;
 }
 
-async function handleChatCompletions(request: NextRequest) {
-  // 1. Auth + rate-limit + CSRF + subscription gate
-  const authResult = await runAuthGate(request);
-  if (!authResult.ok) return authResult.response;
-
+/**
+ * GOV-3 — the request-scoped turn body, entered only once a concurrency slot
+ * has been admitted by `handleChatCompletions` below. Split out so the slot's
+ * acquire/release can wrap EVERY exit (return, throw, client abort) in one
+ * place instead of being repeated at each of this function's ~10 returns.
+ */
+async function dispatchChatCompletions(
+  request: NextRequest,
+  authResult: AuthGateSuccess,
+): Promise<NextResponse | Response> {
   const { userId, token, subscription } = authResult;
 
   // Free-tier (no subscription or plan_tier === 'free') users are on the economy
@@ -392,15 +404,21 @@ async function handleChatCompletions(request: NextRequest) {
           userId,
         )
       : EMPTY_CONNECTOR_TOOL_PERMISSIONS;
-    const [operatorTools, connectorTools] = modelSupportsTools
+    // GOV-7: the connector-tool ceiling is now the caller's PLAN ceiling, not a
+    // flat 32 for everybody, and the truncation it causes is reported back
+    // rather than only logged — a "Connected" connector whose tools were
+    // silently dropped is indistinguishable from a broken one.
+    const [operatorTools, connectorCatalog] = modelSupportsTools
       ? await Promise.all([
           loadMcpToolDefs(),
-          loadUserConnectorToolDefs(userId, {
+          loadUserConnectorToolCatalog(userId, {
             customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+            planTier: processed.subscriptionTier,
             isToolDenied: connectorPermissions.isConnectorToolDenied,
           }),
         ])
-      : [[], []];
+      : [[], { tools: [], dropped: [], limit: null }];
+    const connectorTools = connectorCatalog.tools;
     const mcpTools = [...operatorTools, ...connectorTools];
     const loopInputs = classifyToolLoopInputs(mcpTools, processed.llmRequest.tools);
 
@@ -504,6 +522,15 @@ async function handleChatCompletions(request: NextRequest) {
       addAgentRunHeaders(streamHeaders, run);
       if (processed.quotaWarningHeader) {
         streamHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
+      }
+      // GOV-7: name the connectors whose tools did not fit under this plan's
+      // ceiling so the client can surface it. Header-encoded because this is
+      // decided before the first SSE frame and applies to the whole turn.
+      if (connectorCatalog.dropped.length > 0) {
+        streamHeaders['X-AGI-Connector-Tools-Dropped'] = JSON.stringify({
+          limit: connectorCatalog.limit,
+          connectors: connectorCatalog.dropped,
+        });
       }
 
       // AUDIT-FIX BUG-8: same gap as the research branch -- the agentic stream
@@ -672,6 +699,138 @@ async function handleChatCompletions(request: NextRequest) {
     processed.requestId,
     'non-streaming',
   );
+}
+
+/**
+ * GOV-3 — the plan's concurrent-turn ceiling is already occupied.
+ *
+ * Actionable rather than generic: the user's own other turns are the cause and
+ * stopping one is the immediate fix, so say that and name the ceiling.
+ */
+function managedTurnSlotExhaustedResponse(slot: ManagedTurnSlotResult): NextResponse {
+  const limit = slot.limit ?? 0;
+  const headers: Record<string, string> = { ...getSecurityHeaders() };
+  if (slot.limit !== null) headers['X-AGI-Concurrent-Turn-Limit'] = String(slot.limit);
+  headers['X-AGI-Concurrent-Turns-Active'] = String(slot.active);
+  return NextResponse.json(
+    {
+      error: {
+        message:
+          limit > 0
+            ? `Your plan allows ${limit} response${limit === 1 ? '' : 's'} at a time and ${limit === 1 ? 'one is' : 'all of them are'} already running. Stop a running response or wait for it to finish, then send this message again. Upgrading raises this limit.`
+            : 'Your plan does not include concurrent managed responses. Upgrade to send this message.',
+        type: 'rate_limit_error',
+        code: 'concurrent_turn_limit_reached',
+        concurrent_turn_limit: slot.limit,
+        active_turns: slot.active,
+      },
+    },
+    { status: 429, headers },
+  );
+}
+
+/**
+ * GOV-3 — hand slot ownership to a streaming response.
+ *
+ * A streaming turn OUTLIVES this handler: the route returns as soon as the SSE
+ * body exists, while the provider keeps producing for minutes afterwards.
+ * Releasing in the handler's `finally` would therefore free the slot while the
+ * turn is still running and make the ceiling meaningless. Instead the body is
+ * passed through an identity `TransformStream` whose completion, error, and
+ * cancel all land in the same `finally` — which is exactly when the underlying
+ * stream's own terminal/`cancel()` hooks settle billing, because cancelling the
+ * branch propagates upstream and triggers them.
+ *
+ * One choke point for all three streaming shapes (research loop, agentic tool
+ * loop, single-turn adapter), so no dispatch path can leak a slot. Release is
+ * idempotent, and unreleased slots additionally age out of the Redis set, so
+ * the worst case of a missed edge is a bounded, self-healing over-count.
+ */
+function attachTurnSlotToStream(
+  response: NextResponse | Response,
+  release: () => Promise<void>,
+): Response {
+  const body = response.body;
+  if (!body) {
+    void release();
+    return response;
+  }
+  const passthrough = new TransformStream<Uint8Array, Uint8Array>();
+  void body
+    .pipeTo(passthrough.writable)
+    .catch(() => {
+      // Client aborts and upstream failures are already reported by the
+      // stream's own settlement hooks; this pipe only owns the slot.
+    })
+    .finally(() => {
+      void release();
+    });
+  return new Response(passthrough.readable, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
+function isEventStreamResponse(response: NextResponse | Response): boolean {
+  return (response.headers.get('content-type') ?? '').includes('text/event-stream');
+}
+
+/**
+ * GOV-3 — bound CONCURRENT managed turns per plan.
+ *
+ * `maxConcurrentTurns` existed in the billing catalog but nothing enforced it:
+ * the only limits on this route were requests-per-minute (`llm-completion`) and
+ * spend. Neither bounds concurrency — 30 simultaneous 10-minute streams pass a
+ * per-minute limiter cleanly — so this was the single control standing between
+ * a plan's advertised ceiling and unbounded parallel provider spend.
+ *
+ * Acquired after the auth gate (the first point with a userId AND a plan tier)
+ * and released on EVERY exit: non-streaming returns and thrown errors via the
+ * `finally` here, streaming responses via `attachTurnSlotToStream` above.
+ */
+async function handleChatCompletions(request: NextRequest): Promise<NextResponse | Response> {
+  // 1. Auth + rate-limit + CSRF + subscription gate
+  const authResult = await runAuthGate(request);
+  if (!authResult.ok) return authResult.response;
+
+  const turnSlot = await acquireManagedTurnSlot({
+    userId: authResult.userId,
+    planTier: authResult.subscription.plan_tier,
+    turnId: crypto.randomUUID(),
+  });
+  if (!turnSlot.admitted) {
+    logger.info(
+      {
+        userId: authResult.userId,
+        planTier: authResult.subscription.plan_tier,
+        limit: turnSlot.limit,
+        active: turnSlot.active,
+      },
+      'GOV-3: concurrent-turn ceiling reached; rejecting turn',
+    );
+    return managedTurnSlotExhaustedResponse(turnSlot);
+  }
+
+  const slot = turnSlot.slot;
+  const releaseTurnSlot = async (): Promise<void> => {
+    await slot?.release();
+  };
+
+  let streamOwnsSlot = false;
+  try {
+    const response = await dispatchChatCompletions(request, authResult);
+    if (isEventStreamResponse(response)) {
+      // Flag set only AFTER the pipe is installed, so a throw while wrapping
+      // still falls through to the `finally` release below.
+      const owned = attachTurnSlotToStream(response, releaseTurnSlot);
+      streamOwnsSlot = true;
+      return owned;
+    }
+    return response;
+  } finally {
+    if (!streamOwnsSlot) await releaseTurnSlot();
+  }
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleChatCompletions));

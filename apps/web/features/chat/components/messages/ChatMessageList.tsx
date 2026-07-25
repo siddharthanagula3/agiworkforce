@@ -487,6 +487,23 @@ function messageBubbleAttachments(message: ChatMessage) {
   });
 }
 
+/**
+ * GOV-20 — "when this clears" copy, or '' when there is nothing truthful to
+ * say. Returns empty unless the classification asked for a reset time AND the
+ * server actually sent a parsable instant: the card must never invent one.
+ */
+function paywallResetLabel(paywall: { showResetTime?: boolean; resetAt?: string }): string {
+  if (!paywall.showResetTime || !paywall.resetAt) return '';
+  const target = Date.parse(paywall.resetAt);
+  if (Number.isNaN(target)) return '';
+  return `Capacity refreshes ${new Date(target).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })}.`;
+}
+
 const MessageRow = ({
   message,
   onRegenerate,
@@ -541,6 +558,11 @@ const MessageRow = ({
         currentTier="free"
         requiredTier={normalizeRequiredTier(paywall.requiredTier)}
         reason={paywall.reason}
+        // GOV-20: the classifier's presentation flags. Absent on slots written
+        // before GOV-20, where the old always-upgrade behaviour is correct.
+        showUpgradeCta={paywall.showUpgradeCta ?? true}
+        suggestStandardModel={paywall.suggestStandardModel ?? false}
+        resetLabel={paywallResetLabel(paywall)}
         onUpgrade={handlePaywallUpgrade}
         onDismiss={handlePaywallDismiss}
       />

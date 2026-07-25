@@ -92,6 +92,11 @@ import {
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
 import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-attachment-hydration';
+// PER-7: Settings promises "AGI will keep these in mind across chats"; this is
+// the read side that makes that true (see the injection site below).
+import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
+// GOV-18: real `X-Quota-Warning` derivation, replacing the hardcoded null.
+import { buildQuotaWarningHeader } from '@/lib/server/managed-usage-policy';
 
 // OpenAI-compatible request schema
 export const ChatCompletionRequestSchema = z.object({
@@ -1738,7 +1743,11 @@ export async function processRequest(
   // Keeping the former token/daily assertQuota gate here created a second,
   // fail-open policy owner that could contradict the canonical 5-hour,
   // weekly, flagship-weekly, and billing-period spend caps.
-  const quotaWarningHeader: string | null = null;
+  // GOV-18: assigned below, once the billing-period credit balance has been
+  // read — `buildQuotaWarningHeader` needs plan tier AND used/allocated cents,
+  // neither of which exists this early. Declared here so it stays in scope for
+  // every emit site that reads it off the processed request.
+  let quotaWarningHeader: string | null = null;
 
   // Egress policy: validate custom provider base URLs
   // WEB-30 (audit 2026-05-19): extended map from 4 providers to 9 so all
@@ -2052,6 +2061,23 @@ export async function processRequest(
             );
       return { ok: false, response: managedUsageErrorResponse(managedError) };
     }
+
+    // GOV-18: derive the advisory `X-Quota-Warning` value for this admitted
+    // request. Placed here because it is the first point where BOTH the plan
+    // tier and the billing-period credit balance are known, and where
+    // `estimatedCostCents` is the reservation-adjusted figure, so the warning
+    // projects the request being admitted rather than the pre-reservation
+    // guess. Free-trial requests are skipped: they run on the token budget,
+    // not the cents ledger, so there is no allocation to be a percentage of.
+    // Rolling 5-hour/weekly observations are not read here (this path never
+    // loads them); the billing-period window alone still warns, and
+    // `buildQuotaWarningHeader` returns null for uncapped tiers.
+    quotaWarningHeader = buildQuotaWarningHeader({
+      planTier: subscription.plan_tier,
+      creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
+      creditsAllocatedCents: existingBalance?.credits_allocated_cents ?? 0,
+      estimatedCostCents,
+    });
   }
 
   // Build internal message format (preserving multimodal parts)
@@ -2175,10 +2201,29 @@ export async function processRequest(
   // us to prepend one.
   if (resolveCloudChatSurface(request) !== 'api') {
     const capabilityPreamble = buildCapabilityPreamble({ tools: resolvedTools });
-    if (capabilityPreamble) {
+
+    // PER-7: append the user's standing "Instructions for AGI" to the base
+    // preamble. Settings persists them and tells the user "AGI will keep these
+    // in mind across chats", but until this call no request path ever read the
+    // value, so the promise was false and the feature shipped inert.
+    //
+    // Appended to the capability preamble (rather than unshifted separately)
+    // so the model sees identity/date/tools first and the user's preferences
+    // as a trailing block of the same system turn — and so a user who has
+    // written no instructions produces byte-identical output to before.
+    // `buildCustomInstructionsPreamble` degrades to null on any read failure,
+    // so a settings outage drops the block instead of failing the turn.
+    // Skipped for surface 'api' along with the rest of the preamble: a
+    // third-party integrator owns their own prompt.
+    const customInstructionsPreamble = await buildCustomInstructionsPreamble(userId);
+    const preamble = [capabilityPreamble, customInstructionsPreamble]
+      .filter((block): block is string => Boolean(block))
+      .join('\n\n');
+
+    if (preamble) {
       internalMessages.unshift({
         role: 'system',
-        content: capabilityPreamble,
+        content: preamble,
         multimodal_content: undefined,
         tool_calls: undefined,
         tool_call_id: undefined,
