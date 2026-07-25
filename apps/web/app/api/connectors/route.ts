@@ -36,6 +36,39 @@ import { getGitHubAppInstallUrl, isGitHubAppConfigured } from '@/lib/github-app'
 
 const GITHUB_CONNECTOR_ID = 'github';
 
+/**
+ * AUDIT-FIX CON-6: drop the user's saved per-tool verdicts for a connector when
+ * they disconnect it.
+ *
+ * Disconnecting left `connector_tool_permissions` rows intact and reusable, so
+ * an "Always allow" set months earlier silently re-armed the moment the
+ * connector was reconnected — including after a user disconnected specifically
+ * BECAUSE they no longer trusted it. Reconnecting must start from the default
+ * (ask), not from a policy the user believed they had discarded.
+ *
+ * Best-effort: a connector is already disconnected at this point, and the tool
+ * loop will not offer its tools regardless, so a cleanup failure must not turn
+ * a successful disconnect into an error. It is logged, not swallowed.
+ */
+async function clearConnectorToolPermissions(
+  db: ReturnType<typeof getNeonDb>,
+  userId: string,
+  connectorId: string,
+): Promise<void> {
+  try {
+    await db.execute(
+      `delete from public.connector_tool_permissions where user_id = $1 and connector_id = $2`,
+      [userId, connectorId],
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) return;
+    logger.warn(
+      { userId, connectorId, error },
+      'Connector tool permissions could not be cleared on disconnect; a later reconnect may reuse them',
+    );
+  }
+}
+
 type UserConnectorRow = {
   id: string;
   connector_id: string;
@@ -362,6 +395,7 @@ async function handleDeleteConnector(request: NextRequest) {
     } catch (error) {
       if (!isUndefinedTable(error)) throw error;
     }
+    await clearConnectorToolPermissions(db, userId, GITHUB_CONNECTOR_ID);
     return NextResponse.json({ success: true });
   }
 
@@ -380,6 +414,8 @@ async function handleDeleteConnector(request: NextRequest) {
     }
     throw error;
   }
+
+  await clearConnectorToolPermissions(db, userId, connectorId);
 
   return NextResponse.json({ success: true });
 }

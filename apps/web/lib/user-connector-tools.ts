@@ -877,7 +877,22 @@ async function executeCustomConnectorTool(
  */
 export async function loadUserConnectorToolDefs(
   userId: string,
-  options: { customConnectorLimit?: number } = {},
+  options: {
+    customConnectorLimit?: number;
+    /**
+     * AUDIT-FIX CON-2: drop tools the user has BLOCKED from the catalog
+     * entirely. Without this filter a blocked tool was still advertised to the
+     * model on every turn, so the model kept calling it and the approval card
+     * kept re-appearing — the user's "never do this" produced an endless prompt
+     * instead of silence. Filtering at the catalog is what actually makes the
+     * verdict stick; the tool loop's execution-time check (CON-1) remains as
+     * defense in depth for a model that hallucinates the name anyway.
+     *
+     * Receives the CONNECTOR id (the MCP serverId) and the BARE tool name,
+     * matching how `connector_tool_permissions` is keyed.
+     */
+    isToolDenied?: (connectorId: string, toolName: string) => boolean;
+  } = {},
 ): Promise<WebMcpToolDef[]> {
   if (!userId) return [];
   try {
@@ -913,14 +928,27 @@ export async function loadUserConnectorToolDefs(
       if (catalog) defs.push(...catalogToConnectorToolDefs(catalog, row.name));
     }
 
-    if (defs.length > MAX_CONNECTOR_TOOLS_PER_USER) {
+    // AUDIT-FIX CON-2: apply the user's blocks BEFORE the per-user cap, so a
+    // blocked tool cannot crowd an allowed one out of the catalog.
+    const isToolDenied = options.isToolDenied;
+    const allowed = isToolDenied
+      ? defs.filter((def) => !isToolDenied(def.serverId, def.toolName))
+      : defs;
+    if (isToolDenied && allowed.length !== defs.length) {
       logger.info(
-        { userId, total: defs.length, cap: MAX_CONNECTOR_TOOLS_PER_USER },
+        { userId, blocked: defs.length - allowed.length },
+        '[user-connector] omitted blocked connector tools from the offered catalog',
+      );
+    }
+
+    if (allowed.length > MAX_CONNECTOR_TOOLS_PER_USER) {
+      logger.info(
+        { userId, total: allowed.length, cap: MAX_CONNECTOR_TOOLS_PER_USER },
         '[user-connector] capping per-user connector tools',
       );
-      return defs.slice(0, MAX_CONNECTOR_TOOLS_PER_USER);
+      return allowed.slice(0, MAX_CONNECTOR_TOOLS_PER_USER);
     }
-    return defs;
+    return allowed;
   } catch (err) {
     logger.warn(
       { userId, error: err instanceof Error ? err.message : err },
