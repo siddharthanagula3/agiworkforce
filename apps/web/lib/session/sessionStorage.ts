@@ -9,8 +9,58 @@
  * - Persist current model selection
  * - Persist sidebar and theme preferences
  * - Session versioning for safe migrations
- * - Encryption support for sensitive data (future)
+ *
+ * STB-26: every function in this module used to end in a comment-only
+ * `catch (error) { // Silently handle localStorage failure }`. The damaging one
+ * was `saveSession`: a `QuotaExceededError` returned normally, so the user kept
+ * chatting believing their history was being persisted and lost it on reload.
+ *
+ * Contract now:
+ *   - WRITE paths throw {@link SessionStorageWriteError} when the write does not
+ *     land. Callers must surface that to the user (`useSessionPersistence`
+ *     already catches and exposes it via its `error` field).
+ *   - READ paths still fall back to a default — an unreadable store legitimately
+ *     means "no saved sessions" — but they log instead of failing silently, so a
+ *     corrupt store is visible in diagnostics rather than invisible.
  */
+
+/**
+ * Thrown when session data could not be persisted. The most common cause is
+ * `QuotaExceededError`: localStorage is full and the session was NOT saved.
+ */
+export class SessionStorageWriteError extends Error {
+  readonly code = 'SESSION_STORAGE_WRITE_FAILED';
+
+  constructor(
+    readonly key: string,
+    options?: { cause?: unknown },
+  ) {
+    super(
+      `Could not save "${key}" to browser storage. Your chat history was not persisted — ` +
+        `browser storage may be full or disabled.`,
+    );
+    this.name = 'SessionStorageWriteError';
+    if (options && 'cause' in options) {
+      (this as { cause?: unknown }).cause = options.cause;
+    }
+  }
+}
+
+/** Write-or-throw wrapper around {@link safeSetJSON}. */
+function persist<T>(key: string, value: T): void {
+  let ok: boolean;
+  try {
+    ok = safeSetJSON(key, value);
+  } catch (error) {
+    throw new SessionStorageWriteError(key, { cause: error });
+  }
+  if (!ok) throw new SessionStorageWriteError(key);
+}
+
+/** Log a read-path failure instead of discarding it. */
+function warnReadFailure(operation: string, error: unknown): void {
+  console.warn(`[sessionStorage] ${operation} failed; falling back to default.`, error);
+}
 
 import { safeGetJSON, safeSetJSON } from '@shared/utils/localStorage';
 import type { EnhancedMessage } from '@shared/stores/unified-chat-types';
@@ -88,12 +138,13 @@ export function saveSession(session: {
     // Cap session history to prevent unbounded growth (keep last 50)
     const trimmedSessions = sessions.slice(Math.max(0, sessions.length - 50));
 
-    safeSetJSON(SESSION_STORAGE_KEY, trimmedSessions);
+    persist(SESSION_STORAGE_KEY, trimmedSessions);
 
     // Update metadata
     updateSessionMetadata();
   } catch (error) {
-    // Silently handle localStorage failure
+    if (error instanceof SessionStorageWriteError) throw error;
+    throw new SessionStorageWriteError(SESSION_STORAGE_KEY, { cause: error });
   }
 }
 
@@ -105,7 +156,7 @@ export function loadSession(sessionId: string): StoredChatSession | null {
     const sessions = loadAllSessions();
     return sessions.find((s) => s.id === sessionId) ?? null;
   } catch (error) {
-    // Silently handle localStorage failure
+    warnReadFailure('loadSession', error);
     return null;
   }
 }
@@ -118,7 +169,7 @@ export function loadAllSessions(): StoredChatSession[] {
     const data = safeGetJSON<StoredChatSession[]>(SESSION_STORAGE_KEY, []);
     return Array.isArray(data) ? data : [];
   } catch (error) {
-    // Silently handle localStorage failure
+    warnReadFailure('loadAllSessions', error);
     return [];
   }
 }
@@ -130,7 +181,7 @@ export function deleteSession(sessionId: string): void {
   try {
     let sessions = loadAllSessions();
     sessions = sessions.filter((s) => s.id !== sessionId);
-    safeSetJSON(SESSION_STORAGE_KEY, sessions);
+    persist(SESSION_STORAGE_KEY, sessions);
 
     // Clear current session if it was deleted
     const currentId = loadCurrentSessionId();
@@ -140,7 +191,8 @@ export function deleteSession(sessionId: string): void {
 
     updateSessionMetadata();
   } catch (error) {
-    // Silently handle localStorage failure
+    if (error instanceof SessionStorageWriteError) throw error;
+    throw new SessionStorageWriteError(SESSION_STORAGE_KEY, { cause: error });
   }
 }
 
@@ -154,7 +206,8 @@ export function clearAllSessions(): void {
     localStorage.removeItem(CURRENT_SESSION_KEY);
     // Don't call updateSessionMetadata() as we want to clear metadata too
   } catch (error) {
-    // Silently handle localStorage failure
+    // "Cleared" must not be reported when the rows are still there.
+    throw new SessionStorageWriteError(SESSION_STORAGE_KEY, { cause: error });
   }
 }
 
@@ -163,9 +216,10 @@ export function clearAllSessions(): void {
  */
 export function saveCurrentSessionId(sessionId: string): void {
   try {
-    safeSetJSON(CURRENT_SESSION_KEY, sessionId);
+    persist(CURRENT_SESSION_KEY, sessionId);
   } catch (error) {
-    // Silently handle localStorage failure
+    if (error instanceof SessionStorageWriteError) throw error;
+    throw new SessionStorageWriteError(CURRENT_SESSION_KEY, { cause: error });
   }
 }
 
@@ -177,7 +231,7 @@ export function loadCurrentSessionId(): string | null {
     const id = safeGetJSON<string>(CURRENT_SESSION_KEY, '');
     return typeof id === 'string' && id ? id : null;
   } catch (error) {
-    // Silently handle localStorage failure
+    warnReadFailure('loadCurrentSessionId', error);
     return null;
   }
 }
@@ -189,7 +243,7 @@ export function clearCurrentSessionId(): void {
   try {
     localStorage.removeItem(CURRENT_SESSION_KEY);
   } catch (error) {
-    // Silently handle localStorage failure
+    throw new SessionStorageWriteError(CURRENT_SESSION_KEY, { cause: error });
   }
 }
 
@@ -198,9 +252,10 @@ export function clearCurrentSessionId(): void {
  */
 export function saveModelSelection(model: { modelId: string; provider: string }): void {
   try {
-    safeSetJSON(MODEL_SELECTION_KEY, model);
+    persist(MODEL_SELECTION_KEY, model);
   } catch (error) {
-    // Silently handle localStorage failure
+    if (error instanceof SessionStorageWriteError) throw error;
+    throw new SessionStorageWriteError(MODEL_SELECTION_KEY, { cause: error });
   }
 }
 
@@ -215,7 +270,7 @@ export function loadModelSelection(): { modelId: string; provider: string } | nu
     });
     return data && data.modelId ? data : null;
   } catch (error) {
-    // Silently handle localStorage failure
+    warnReadFailure('loadModelSelection', error);
     return null;
   }
 }
@@ -225,9 +280,10 @@ export function loadModelSelection(): { modelId: string; provider: string } | nu
  */
 export function saveSidebarState(collapsed: boolean): void {
   try {
-    safeSetJSON(SIDEBAR_STATE_KEY, collapsed);
+    persist(SIDEBAR_STATE_KEY, collapsed);
   } catch (error) {
-    // Silently handle localStorage failure
+    if (error instanceof SessionStorageWriteError) throw error;
+    throw new SessionStorageWriteError(SIDEBAR_STATE_KEY, { cause: error });
   }
 }
 
@@ -239,7 +295,7 @@ export function loadSidebarState(): boolean | null {
     const data = safeGetJSON<boolean>(SIDEBAR_STATE_KEY, false);
     return typeof data === 'boolean' ? data : null;
   } catch (error) {
-    // Silently handle localStorage failure
+    warnReadFailure('loadSidebarState', error);
     return null;
   }
 }
@@ -249,9 +305,10 @@ export function loadSidebarState(): boolean | null {
  */
 export function saveThemePreference(theme: 'light' | 'dark' | 'system'): void {
   try {
-    safeSetJSON(THEME_PREFERENCE_KEY, theme);
+    persist(THEME_PREFERENCE_KEY, theme);
   } catch (error) {
-    // Silently handle localStorage failure
+    if (error instanceof SessionStorageWriteError) throw error;
+    throw new SessionStorageWriteError(THEME_PREFERENCE_KEY, { cause: error });
   }
 }
 
@@ -266,7 +323,7 @@ export function loadThemePreference(): 'light' | 'dark' | 'system' | null {
     }
     return null;
   } catch (error) {
-    // Silently handle localStorage failure
+    warnReadFailure('loadThemePreference', error);
     return null;
   }
 }
@@ -280,9 +337,10 @@ function updateSessionMetadata(): void {
       version: SESSION_STORAGE_VERSION,
       lastSyncTime: new Date().toISOString(),
     };
-    safeSetJSON(SESSION_METADATA_KEY, metadata);
+    persist(SESSION_METADATA_KEY, metadata);
   } catch (error) {
-    // Silently handle localStorage failure
+    if (error instanceof SessionStorageWriteError) throw error;
+    throw new SessionStorageWriteError(SESSION_METADATA_KEY, { cause: error });
   }
 }
 
@@ -297,7 +355,7 @@ export function getSessionMetadata(): SessionStorageMetadata | null {
     });
     return data && data.version ? data : null;
   } catch (error) {
-    // Silently handle localStorage failure
+    warnReadFailure('getSessionMetadata', error);
     return null;
   }
 }
@@ -323,7 +381,7 @@ export function getSessionStorageSize(): number {
 
     return JSON.stringify(data).length;
   } catch (error) {
-    // Silently handle localStorage failure
+    warnReadFailure('getSessionStorageSize', error);
     return 0;
   }
 }
@@ -353,8 +411,8 @@ export function exportSessions(): string {
 
     return JSON.stringify(backup, null, 2);
   } catch (error) {
-    // Silently handle localStorage failure
-    return '';
+    // An export that returns '' looks like "you have no sessions" — never that.
+    throw new SessionStorageWriteError('export', { cause: error });
   }
 }
 
@@ -370,32 +428,36 @@ export function importSessions(jsonString: string): boolean {
     }
 
     if (Array.isArray(data.sessions)) {
-      safeSetJSON(SESSION_STORAGE_KEY, data.sessions);
+      persist(SESSION_STORAGE_KEY, data.sessions);
     }
 
     if (data.metadata) {
-      safeSetJSON(SESSION_METADATA_KEY, data.metadata);
+      persist(SESSION_METADATA_KEY, data.metadata);
     }
 
     if (data.currentId) {
-      safeSetJSON(CURRENT_SESSION_KEY, data.currentId);
+      persist(CURRENT_SESSION_KEY, data.currentId);
     }
 
     if (data.modelSelection) {
-      safeSetJSON(MODEL_SELECTION_KEY, data.modelSelection);
+      persist(MODEL_SELECTION_KEY, data.modelSelection);
     }
 
     if (typeof data.sidebarState === 'boolean') {
-      safeSetJSON(SIDEBAR_STATE_KEY, data.sidebarState);
+      persist(SIDEBAR_STATE_KEY, data.sidebarState);
     }
 
     if (data.theme) {
-      safeSetJSON(THEME_PREFERENCE_KEY, data.theme);
+      persist(THEME_PREFERENCE_KEY, data.theme);
     }
 
     return true;
   } catch (error) {
-    // Silently handle localStorage failure
+    // A storage failure mid-import leaves a partial restore — that must reach
+    // the user, not collapse into the same `false` as a malformed backup file.
+    if (error instanceof SessionStorageWriteError) throw error;
+    // Malformed JSON / wrong shape: a legitimate `false`.
+    warnReadFailure('importSessions', error);
     return false;
   }
 }

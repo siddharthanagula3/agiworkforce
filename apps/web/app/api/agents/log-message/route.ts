@@ -1,43 +1,40 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
-import { readJsonBody } from '@/lib/read-json-body';
+import { withRateLimitHandler } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
-const LogMessageSchema = z.object({
-  sessionId: z.string(),
-  agentId: z.string().optional(),
-  role: z.enum(['user', 'assistant', 'system', 'tool']),
-  content: z.string(),
-  model: z.string().optional(),
-  provider: z.string().optional(),
-  tokensInput: z.number().int().nonnegative().optional(),
-  tokensOutput: z.number().int().nonnegative().optional(),
-  costCents: z.number().nonnegative().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
-
-async function handlePost(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
-  if (rateLimitResponse) return rateLimitResponse;
-
-  await getClerkAuthUser(request);
-
-  const body = await readJsonBody(request);
-  const parsed = LogMessageSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+/**
+ * POST /api/agents/log-message
+ *
+ * STB-20: RETIRED. Zero in-repo callers. The live /api/agents surface is the Express
+ * api-gateway's own agents router (services/api-gateway); this Next.js subtree is
+ * an abandoned parallel implementation that still authenticated and queried
+ * private rows on every request.
+ *
+ * Retired in place rather than deleted, matching the convention already used by
+ * /api/agents/session and /api/usage/deduct: any client still pointed here gets
+ * an explicit ENDPOINT_RETIRED signal instead of a 404 that reads like a broken
+ * deploy. The handler no longer authenticates against or reads private rows.
+ */
+async function handler(request: NextRequest): Promise<NextResponse> {
+  try {
+    await getClerkAuthUser(request);
+  } catch {
+    throw createError.unauthorized('Authentication required');
   }
 
-  // Agent message persistence table was removed. Do not return a fake success:
-  // callers must use the active conversation persistence path instead.
   return NextResponse.json(
-    { error: 'Agent message logging endpoint is no longer available' },
+    {
+      error: {
+        code: 'ENDPOINT_RETIRED',
+        message: 'Agent message logging is handled by the api-gateway agents router.',
+      },
+    },
     { status: 410 },
   );
 }
 
-export const POST = withErrorHandler(handlePost);
+export const POST = withErrorHandler(withRateLimitHandler(handler, 'chat-conversation'));

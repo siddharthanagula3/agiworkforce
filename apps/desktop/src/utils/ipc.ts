@@ -314,7 +314,6 @@ const ALLOWED_GENERIC_COMMANDS = new Set([
   'reject_request',
   'remove_member',
   'remove_team_seats',
-  'report_llm_usage',
   'requires_approval',
   'reset_onboarding',
   'reset_session_cost',

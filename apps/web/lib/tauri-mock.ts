@@ -1,8 +1,29 @@
 // Mock implementation of Tauri invoke for the web app.
 // The web app uses standard fetch calls instead of Tauri IPC.
 // Chat and agent commands are routed to real Next.js API endpoints.
-// Desktop-only commands (file I/O, git, browser automation) return empty
-// objects gracefully so callers don't crash in the web environment.
+//
+// STB-23: the default branch used to `return {} as T`. That handed the caller an
+// empty object wearing the command's real static type, so `if (result.enabled)`,
+// `result.items.length`, and every other read took the "absent/false/empty"
+// branch as though the desktop runtime had answered. Unsupported commands now
+// throw `TauriUnavailableError`, which callers must either guard with `isTauri`
+// (the correct pattern — see shared/stores/tool-store.ts) or handle explicitly.
+
+/**
+ * Thrown when web code reaches a Tauri command that only the desktop runtime can
+ * serve. Guard the call site with `isTauri` rather than catching this.
+ */
+export class TauriUnavailableError extends Error {
+  readonly code = 'TAURI_UNAVAILABLE';
+
+  constructor(readonly command: string) {
+    super(
+      `Tauri command '${command}' is not available in the web environment. ` +
+        `It requires the Tauri desktop runtime — guard this call site with isTauri.`,
+    );
+    this.name = 'TauriUnavailableError';
+  }
+}
 
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   switch (cmd) {
@@ -67,14 +88,10 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
 
     // ----------------------------------------------------------------
     // Default: desktop-only commands (file I/O, git, browser automation, etc.)
-    // These are not available in the web environment.
+    // These are not available in the web environment — fail loudly (STB-23).
     // ----------------------------------------------------------------
     default: {
-      console.warn(
-        `[tauri-mock] Unhandled Tauri command '${cmd}' in web environment. ` +
-          `This command requires the Tauri desktop runtime.`,
-      );
-      return {} as T;
+      throw new TauriUnavailableError(cmd);
     }
   }
 }
@@ -83,18 +100,24 @@ export type UnlistenFn = () => void;
 
 export const isTauri = false;
 
+/**
+ * STB-23: `listen()` used to resolve to a no-op unsubscribe, so a web caller
+ * believed it had a live subscription to a Tauri event that can never fire.
+ * There is no web equivalent of the Tauri event bus, so this fails loudly too.
+ */
 export async function listen<T = unknown>(
   event: string,
   _handler: (event: { payload: T }) => void,
 ): Promise<UnlistenFn> {
-  console.warn(`[tauri-mock] Called listen('${event}') in web environment.`);
-  return () => {};
+  void _handler;
+  throw new TauriUnavailableError(`listen(${event})`);
 }
 
 /**
- * Stub for Tauri's emit() - no-op in web environment.
- * Desktop uses Tauri's event bus; web components that call emit() are no-ops here.
+ * STB-23: `emit()` used to be a silent no-op, so a web caller believed its event
+ * had been published. Desktop uses Tauri's event bus; the web bundle has none.
  */
 export async function emit(event: string, _payload?: unknown): Promise<void> {
-  console.warn(`[tauri-mock] Called emit('${event}') in web environment.`);
+  void _payload;
+  throw new TauriUnavailableError(`emit(${event})`);
 }

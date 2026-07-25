@@ -2,17 +2,10 @@
 
 import { useState, useMemo } from 'react';
 import { getProviderDefaultModel } from '@agiworkforce/types';
-import {
-  Badge,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Button,
-} from '@agiworkforce/ui';
+import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
+  AlertTriangle,
   BarChart3,
   Zap,
   DollarSign,
@@ -20,10 +13,7 @@ import {
   Activity,
   TrendingUp,
   Trophy,
-  RefreshCw,
-  Download,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 
 import { AnalyticsSummaryCard } from '../components/AnalyticsSummaryCard';
@@ -38,8 +28,36 @@ import { ActivityTable, type ActivityRow } from '../components/ActivityTable';
 type DateRange = '7d' | '30d' | '90d';
 
 // ---------------------------------------------------------------------------
-// Local preview data generators. Replace with API data when telemetry is enabled.
+// STB-10 — SAMPLE DATA, NOT WORKSPACE DATA.
+//
+// Every number this component renders is a hand-written fixture. There is no
+// analytics API behind it: no executions, tokens, cost, per-model split, tool
+// counts, activity rows, or team members are read from anywhere. The named
+// "team leaderboard" entries are invented people.
+//
+// What changed here:
+//   - The `Math.random()` calls are gone. Random values made the fixtures shift
+//     on every render, which is precisely what a real feed looks like.
+//   - The Refresh button (a 900ms `setTimeout` that toasted "Analytics
+//     refreshed") is gone. It refreshed nothing.
+//   - The CSV export is gone. Exporting invented figures turns them into a file
+//     that outlives the screen that labelled them.
+//   - The rendered output now carries a sample-data banner, so the disclaimer
+//     survives a screenshot instead of living only in this comment.
+//
+// Wiring this to real data means replacing `buildAnalyticsSampleData` with an
+// API call AND removing the banner + `SAMPLE_DATA` guard below in the same
+// change — not one without the other.
 // ---------------------------------------------------------------------------
+
+/**
+ * Deterministic pseudo-noise in [0, 1) from an integer seed. Fixtures must be
+ * stable: a chart that redraws differently each render reads as live telemetry.
+ */
+function fixtureNoise(seed: number): number {
+  const x = Math.sin(seed * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
 
 function generateUsageTimeSeries(days: number): Array<{ date: string; value: number }> {
   const result: Array<{ date: string; value: number }> = [];
@@ -52,14 +70,14 @@ function generateUsageTimeSeries(days: number): Array<{ date: string; value: num
       days <= 7
         ? d.toLocaleDateString('en-US', { weekday: 'short' })
         : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    // Slightly noisy upward trend
-    base = Math.max(50, base + (Math.random() - 0.38) * 80);
+    // Slightly noisy upward trend — deterministic in the day offset.
+    base = Math.max(50, base + (fixtureNoise(i + 1) - 0.38) * 80);
     result.push({ date: label, value: Math.round(base) });
   }
   return result;
 }
 
-function buildAnalyticsPreviewData(range: DateRange) {
+function buildAnalyticsSampleData(range: DateRange) {
   const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
   const multiplier = days / 7;
 
@@ -159,9 +177,9 @@ function buildAnalyticsPreviewData(range: DateRange) {
     agent: agents[i % agents.length]!,
     model: models[i % models.length]!,
     status: statuses[i % statuses.length]!,
-    durationMs: Math.round(800 + Math.random() * 45000),
-    cost: parseFloat((Math.random() * 0.12).toFixed(6)),
-    startedAt: new Date(now - i * 1800000 - Math.random() * 600000).toISOString(),
+    durationMs: Math.round(800 + fixtureNoise(i + 101) * 45000),
+    cost: parseFloat((fixtureNoise(i + 211) * 0.12).toFixed(6)),
+    startedAt: new Date(now - i * 1800000 - fixtureNoise(i + 307) * 600000).toISOString(),
   }));
 
   // Team leaderboard
@@ -227,50 +245,10 @@ function buildAnalyticsPreviewData(range: DateRange) {
   };
 }
 
-type AnalyticsDashboardData = ReturnType<typeof buildAnalyticsPreviewData>;
-
-function csvValue(value: string | number): string {
-  const raw = String(value);
-  if (/[",\n\r]/.test(raw)) {
-    return `"${raw.replace(/"/g, '""')}"`;
-  }
-  return raw;
-}
-
-function downloadAnalyticsCsv(data: AnalyticsDashboardData, range: DateRange): void {
-  const rows: Array<Array<string | number>> = [
-    ['section', 'label', 'value', 'extra'],
-    ['summary', 'total_executions', data.totalExecutions, range],
-    ['summary', 'total_tokens', data.totalTokens, range],
-    ['summary', 'total_cost_usd', data.totalCost, range],
-    ['summary', 'active_users', data.activeUsers, range],
-    ...data.modelDistribution.map((item) => ['model_distribution', item.label, item.value, '']),
-    ...data.topTools.map((item) => ['top_tools', item.label, item.value, '']),
-    ...data.leaderboard.map((item) => [
-      'leaderboard',
-      item.name,
-      item.executions,
-      `${item.tokens} tokens / $${item.cost}`,
-    ]),
-    ...data.recentActivity.map((item) => [
-      'recent_activity',
-      item.taskName,
-      item.status,
-      `${item.agent} / ${item.model} / ${item.durationMs}ms / $${item.cost}`,
-    ]),
-  ];
-
-  const csv = rows.map((row) => row.map(csvValue).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `agi-analytics-${range}.csv`;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
+// STB-10: `downloadAnalyticsCsv()` / `csvValue()` were removed along with the
+// Export button. They serialised the fixtures below into `agi-analytics-<range>.csv`
+// — invented executions, costs, and named team members — and once a file leaves
+// the screen nothing travels with it to say the numbers are not real.
 
 // ---------------------------------------------------------------------------
 // Range picker
@@ -309,22 +287,8 @@ function RangePicker({ value, onChange }: RangePickerProps) {
 
 const AnalyticsDashboard: React.FC = () => {
   const [range, setRange] = useState<DateRange>('30d');
-  const [refreshing, setRefreshing] = useState(false);
 
-  const data = useMemo(() => buildAnalyticsPreviewData(range), [range]);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    // Simulate async fetch
-    await new Promise((r) => setTimeout(r, 900));
-    setRefreshing(false);
-    toast.success('Analytics refreshed');
-  };
-
-  const handleExport = () => {
-    downloadAnalyticsCsv(data, range);
-    toast.success('Analytics CSV exported');
-  };
+  const data = useMemo(() => buildAnalyticsSampleData(range), [range]);
 
   const formatTokens = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -341,33 +305,38 @@ const AnalyticsDashboard: React.FC = () => {
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold md:text-3xl">Workspace Analytics</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold md:text-3xl">Workspace Analytics</h1>
+              <Badge variant="destructive" className="uppercase tracking-wide">
+                Sample data
+              </Badge>
+            </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Adoption metrics, usage patterns, and task insights for your team.
+              Layout preview for adoption metrics, usage patterns, and task insights.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <RangePicker value={range} onChange={setRange} />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-              <span className="hidden sm:inline">Refresh</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              className="flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Export</span>
-            </Button>
           </div>
+        </div>
+
+        {/*
+          STB-10: the sample-data notice is rendered, not just commented. Every
+          figure below — executions, tokens, cost, model split, tool counts,
+          activity rows, and the named leaderboard — is a fixture. Delete this
+          banner only in the change that wires the real analytics API.
+        */}
+        <div
+          role="note"
+          className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong>Sample data.</strong> This page is a layout preview — no workspace analytics API
+            is connected. The executions, token counts, costs, model split, tool usage, activity
+            rows, and team leaderboard names below are illustrative fixtures, not your data. Do not
+            use them for reporting or billing.
+          </span>
         </div>
 
         {/* Summary cards */}

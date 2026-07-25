@@ -1,58 +1,14 @@
-import { captureError } from '@shared/lib/sentry';
-import { logger } from '@shared/lib/logger';
-import { getAuthToken } from '@shared/lib/get-auth-token';
-
-/**
- * Add tokens to user's balance
- *
- * Called by webhook after successful payment.
- * Updates user's token balance in the user_token_balances table.
- *
- * NOTE: Uses user_token_balances table (authoritative source) instead of
- * the deprecated users.token_balance column (dropped in migration 20260113000002).
- */
-export async function addTokensToUserBalance(
-  userId: string,
-  tokens: number,
-  transactionId: string,
-): Promise<void> {
-  try {
-    if (process.env.NODE_ENV === 'development') {
-      logger.info('[Add Tokens] Adding tokens to user balance:', {
-        userId,
-        tokens: tokens.toLocaleString(),
-        transactionId,
-      });
-    }
-
-    // Route through the server-side API (Neon SQL removed; Neon is server-only).
-    const authToken = await getAuthToken();
-    if (!authToken) {
-      throw new Error('Not authenticated');
-    }
-
-    const res = await fetch('/api/usage/add-tokens', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
-      body: JSON.stringify({ tokens, transaction_id: transactionId }),
-    });
-
-    if (!res.ok) {
-      const err = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(err.error ?? `add-tokens failed: ${res.status}`);
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      logger.info('[Add Tokens] Token balance updated via API:', { tokensAdded: tokens });
-    }
-  } catch (error) {
-    logger.error('[Add Tokens] Error:', error);
-    captureError(error as Error, {
-      tags: { feature: 'billing', operation: 'add_tokens' },
-      extra: { userId, tokens, transactionId },
-    });
-    throw error;
-  }
-}
-
-// Note: isStripeConfigured() is exported from stripe-payments.ts · do not duplicate here.
+// STB-7 TOMBSTONE — delete this file with `git rm` on a normal checkout.
+//
+// `addTokensToUserBalance()` POSTed to /api/usage/add-tokens, a route that has
+// never existed in apps/web/app/api or the api-gateway, and it had zero
+// importers repo-wide. It was the last remnant of the token-pack purchase flow,
+// which was removed deliberately: `apps/web/__tests__/billing-waitlist-gate.test.tsx`
+// records that "Credit top-ups (Topup.tsx, api/credit-topup, token-pack-purchase's
+// buyTokenPack) were removed entirely — the locked product rule is 'no top-ups,
+// ever'." Keeping a fulfillment helper for a retired purchase path is what made
+// "money in, no tokens out" look like a wiring gap instead of a removed feature.
+//
+// There is no purchase path to re-point: Stripe cannot take money for a token
+// pack because no checkout surface offers one. The honest state is "removed".
+export {};

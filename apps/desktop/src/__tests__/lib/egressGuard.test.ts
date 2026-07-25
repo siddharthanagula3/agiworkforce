@@ -100,15 +100,18 @@ describe('guardedFetch — DRIFT REGRESSION (Clerk hosts desktop missed are now 
     'https://frontend-api.clerk.services/v1/environment',
   ];
 
-  it.each(['local', 'byok'])('blocks the previously-drifted Clerk hosts in %s mode', async (mode) => {
-    getStateMock.mockReturnValue({ privacyMode: mode });
-    for (const url of PREVIOUSLY_LEAKED) {
-      await expect(guardedFetch(url, { method: 'POST' })).rejects.toThrow(
-        /blocked our-cloud egress/,
-      );
-    }
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
+  it.each(['local', 'byok'])(
+    'blocks the previously-drifted Clerk hosts in %s mode',
+    async (mode) => {
+      getStateMock.mockReturnValue({ privacyMode: mode });
+      for (const url of PREVIOUSLY_LEAKED) {
+        await expect(guardedFetch(url, { method: 'POST' })).rejects.toThrow(
+          /blocked our-cloud egress/,
+        );
+      }
+      expect(fetchSpy).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('guardedFetch — privacy mode "local"', () => {
@@ -204,7 +207,7 @@ describe('guardedFetch — desktop P0 endpoints stay behind the chokepoint', () 
   const P0_ENDPOINTS = [
     'https://agiworkforce.com/api/shared', // ShareConversationDialog — full conversation
     'https://www.agiworkforce.com/api/models', // App.tsx model-catalog fallback
-    'https://www.agiworkforce.com/api/pair/initiate', // connectionStore mobile pairing
+    'https://api.agiworkforce.com/api/pair/initiate', // connectionStore mobile pairing (gateway host)
   ];
 
   it.each(['local', 'byok'])('blocks every P0 endpoint in %s mode', async (mode) => {

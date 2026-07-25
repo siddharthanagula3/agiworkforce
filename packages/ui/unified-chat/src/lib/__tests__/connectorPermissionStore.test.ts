@@ -1,147 +1,68 @@
 /**
- * Tests for CloudStore.set() — Cloud-mode connector permission upsert.
+ * CON-26: connector permissions must never report a save that did not happen.
  *
- * The shipping bug (P0-L from cross-surface audit): the upsert payload was
- * missing `user_id`, but the underlying table's UNIQUE constraint is
- * (user_id, connector_id, tool_name). Without user_id in the payload, the
- * second call did not find the existing row by the conflict target and
- * silently inserted a duplicate (or, for elevated sessions, leaked rows under a
- * NULL user). Access controls independently required user_id to match the
- * authenticated principal.
+ * This file previously tested `CloudStore.set()` — the non-Tauri branch of
+ * `getConnectorPermissionStore()`. That store resolved its database client from
+ * `globalThis['__agi_cloud_db__']`, a global set nowhere in the repo, and
+ * returned early when it was absent. In production every `set()` therefore
+ * resolved successfully having written nothing, and `ConnectorDetailView`
+ * rendered the new permission level as saved. Its queries were also
+ * Supabase-shaped against a stack from which Supabase has been removed.
  *
- * Fix: resolve the current user's id via `client.auth.getUser()` inside
- * `set()` and include it in the upsert payload.
+ * Those tests passed only because they installed the missing global themselves,
+ * which is exactly why they never caught the shipping defect. CloudStore is gone;
+ * these tests lock in the replacement contract: outside the Tauri desktop runtime
+ * every operation REJECTS, so a caller cannot mistake "nowhere to store this" for
+ * "stored".
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { ConnectorPermissionLevel } from '@agiworkforce/types';
-import { getConnectorPermissionStore } from '../connectorPermissionStore';
-
-interface UpsertCall {
-  values: Record<string, unknown>;
-  opts: { onConflict?: string } | undefined;
-}
-
-interface MockState {
-  upsertCalls: UpsertCall[];
-  rows: Map<string, Record<string, unknown>>;
-  authUserId: string | null;
-  getUserCalls: number;
-}
-
-const state: MockState = {
-  upsertCalls: [],
-  rows: new Map(),
-  authUserId: 'user-001',
-  getUserCalls: 0,
-};
-
-beforeEach(() => {
-  state.upsertCalls = [];
-  state.rows = new Map();
-  state.authUserId = 'user-001';
-  state.getUserCalls = 0;
-
-  // Install a stub on globalThis.__agi_cloud_db__ that the CloudStore
-  // looks up at runtime. The real client is structurally typed and we
-  // only need from(), upsert(), and auth.getUser() to drive the test.
-  function rowKey(values: Record<string, unknown>): string {
-    return `${String(values['user_id'])}|${String(values['connector_id'])}|${String(values['tool_name'])}`;
-  }
-
-  const upsert = vi.fn((values: Record<string, unknown>, opts?: { onConflict?: string }) => {
-    state.upsertCalls.push({ values, opts });
-    // Simulate the real conflict resolution: when (user_id,connector_id,tool_name)
-    // matches an existing row, UPDATE; otherwise INSERT.
-    const k = rowKey(values);
-    state.rows.set(k, { ...state.rows.get(k), ...values });
-    return Promise.resolve({ data: null, error: null });
-  });
-
-  const from = vi.fn((_table: string) => ({
-    select: () => ({
-      eq: () => ({
-        eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: null, error: null }),
-        }),
-      }),
-    }),
-    upsert,
-  }));
-
-  const getUser = vi.fn(() => {
-    state.getUserCalls += 1;
-    if (state.authUserId === null) {
-      return Promise.resolve({ data: { user: null }, error: { message: 'no session' } });
-    }
-    return Promise.resolve({
-      data: { user: { id: state.authUserId } },
-      error: null,
-    });
-  });
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).__agi_cloud_db__ = {
-    from,
-    auth: { getUser },
-  };
-});
+import {
+  ConnectorPermissionsUnavailableError,
+  getConnectorPermissionStore,
+} from '../connectorPermissionStore';
 
 afterEach(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (globalThis as any).__agi_cloud_db__;
-  vi.clearAllMocks();
 });
 
-describe('CloudStore.set — P0-L user_id in upsert payload', () => {
-  it('first set() inserts a new row with user_id resolved from auth.getUser()', async () => {
-    const store = getConnectorPermissionStore();
-    await store.set('github', 'create_issue', 'needs-approval' as ConnectorPermissionLevel, true);
-
-    expect(state.upsertCalls).toHaveLength(1);
-    const call = state.upsertCalls[0]!;
-    expect(call.values).toMatchObject({
-      user_id: 'user-001',
-      connector_id: 'github',
-      tool_name: 'create_issue',
-      level: 'needs-approval',
-      destructive: true,
-    });
-    expect(call.opts).toEqual({ onConflict: 'user_id,connector_id,tool_name' });
-    // We resolved the user id via auth.getUser(), not by hardcoding.
-    expect(state.getUserCalls).toBe(1);
+describe('getConnectorPermissionStore — non-Tauri runtime', () => {
+  it('reports its storage as unsupported rather than claiming a cloud backend', () => {
+    expect(getConnectorPermissionStore().storage).toBe('unsupported');
   });
 
-  it('second set() with same (connector,tool) UPDATES the existing row instead of inserting a duplicate', async () => {
+  it('set() rejects instead of resolving without writing', async () => {
     const store = getConnectorPermissionStore();
-    await store.set('github', 'create_issue', 'needs-approval' as ConnectorPermissionLevel, true);
-    await store.set('github', 'create_issue', 'always-allow' as ConnectorPermissionLevel, true);
-
-    // Both calls were upserts (the second is treated as an update via onConflict)
-    expect(state.upsertCalls).toHaveLength(2);
-    // Each call carried user_id so the conflict target matched
-    for (const c of state.upsertCalls) {
-      expect(c.values['user_id']).toBe('user-001');
-      expect(c.opts).toEqual({ onConflict: 'user_id,connector_id,tool_name' });
-    }
-    // Our mock keys rows by (user,connector,tool); the second call must have
-    // collapsed onto the same key (no duplicate row).
-    expect(state.rows.size).toBe(1);
-    const row = Array.from(state.rows.values())[0]!;
-    expect(row['level']).toBe('always-allow');
+    await expect(
+      store.set('github', 'create_issue', 'needs-approval' as ConnectorPermissionLevel, true),
+    ).rejects.toBeInstanceOf(ConnectorPermissionsUnavailableError);
   });
 
-  it('rows for two different connectors stay distinct under one user', async () => {
+  it('get() rejects instead of returning null (which reads as "not configured")', async () => {
     const store = getConnectorPermissionStore();
-    await store.set('github', 'create_issue', 'always-allow' as ConnectorPermissionLevel);
-    await store.set('linear', 'close_issue', 'blocked' as ConnectorPermissionLevel);
-    expect(state.rows.size).toBe(2);
+    await expect(store.get('github', 'create_issue')).rejects.toBeInstanceOf(
+      ConnectorPermissionsUnavailableError,
+    );
   });
 
-  it('returns silently (no upsert) when the client cannot resolve a user id', async () => {
-    state.authUserId = null;
+  it('list() rejects instead of returning [] (which reads as "no permissions set")', async () => {
     const store = getConnectorPermissionStore();
-    await store.set('github', 'create_issue', 'always-allow' as ConnectorPermissionLevel);
-    expect(state.upsertCalls).toHaveLength(0);
+    await expect(store.list('github')).rejects.toBeInstanceOf(ConnectorPermissionsUnavailableError);
+  });
+
+  it('a stray __agi_cloud_db__ global does not resurrect a write path', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).__agi_cloud_db__ = {
+      from: () => {
+        throw new Error('the cloud store must not be reachable');
+      },
+      auth: { getUser: async () => ({ data: { user: { id: 'user-001' } }, error: null }) },
+    };
+    const store = getConnectorPermissionStore();
+    await expect(
+      store.set('github', 'create_issue', 'always-allow' as ConnectorPermissionLevel),
+    ).rejects.toBeInstanceOf(ConnectorPermissionsUnavailableError);
   });
 });

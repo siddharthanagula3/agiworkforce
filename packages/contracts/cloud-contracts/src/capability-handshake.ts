@@ -36,8 +36,12 @@
 import { z } from 'zod';
 import { CAPABILITY_LAYERS } from '@agiworkforce/types';
 
-/** `/api/me`-adjacent handshake endpoint path (stage-2 wiring; not mounted yet). */
-export const CAPABILITY_HANDSHAKE_PATH = '/api/me/capabilities';
+// STB-22: `CAPABILITY_HANDSHAKE_PATH = '/api/me/capabilities'` was removed. A
+// published path constant is a claim that the route exists; this one had zero
+// consumers and no route behind it, so the only thing it could do was mislead a
+// future caller into shipping a 404. The schema below stays — it is the wire
+// contract the route will implement — and the path belongs in the change that
+// actually mounts the handler.
 
 export const CapabilityLayerSchema = z.enum(CAPABILITY_LAYERS);
 
