@@ -26,6 +26,41 @@ describe('extractCodeBlocks', () => {
     expect(blocks[1]!.lineCount).toBe(4);
   });
 
+  // AUDIT-FIX ART-2: an info string the old /```(\w*)?\n/ could not match made the
+  // scan resume at that block's CLOSING fence and pair it as an OPENING one,
+  // shifting every later ordinal/startIndex/endIndex in the message.
+  it('pairs fences correctly when the info string is not a bare word', () => {
+    const md = [
+      'intro',
+      '```html title="x"',
+      '<div>one</div>',
+      '```',
+      'middle prose',
+      '```objective-c',
+      'NSLog(@"hi");',
+      '```',
+      'outro',
+    ].join('\n');
+    const blocks = extractCodeBlocks(md);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]!.language).toBe('html');
+    expect(blocks[0]!.content).toBe('<div>one</div>');
+    expect(blocks[1]!.language).toBe('objective-c');
+    expect(blocks[1]!.content).toBe('NSLog(@"hi");');
+    expect(md.slice(blocks[0]!.startIndex, blocks[0]!.endIndex)).toBe(
+      '```html title="x"\n<div>one</div>\n```',
+    );
+    // The message is fully closed — no phantom "still writing" fence.
+    expect(extractTrailingUnclosedBlock(md)).toBeNull();
+  });
+
+  it('pairs fences correctly with CRLF line endings', () => {
+    const blocks = extractCodeBlocks('a\r\n```html\r\n<div>x</div>\r\n```\r\nb');
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.language).toBe('html');
+    expect(blocks[0]!.content).toBe('<div>x</div>');
+  });
+
   it('uses a fresh regex per call (no shared lastIndex leakage)', () => {
     expect(extractCodeBlocks(HTML)).toHaveLength(1);
     expect(extractCodeBlocks(HTML)).toHaveLength(1);
@@ -196,14 +231,19 @@ describe('extractTrailingUnclosedBlock', () => {
   });
 
   it('stays consistent with extractCodeBlocks fence pairing on fence-like inner text', () => {
-    // extractCodeBlocks pairs lazily: the inner ``` closes the first block, and
-    // the next ```-with-newline opens a new (unclosed) one. The streaming parser
-    // MUST mirror that pairing — its ordinal/startIndex have to match what the
-    // canonical extractor will produce once the fence closes (id-handoff invariant).
-    const md = '```md\nUse ``` to open a fence\n```\n\nplain prose after';
+    // AUDIT-FIX ART-2: fences are line-anchored, so a ``` sitting INSIDE a line of
+    // body text no longer closes the block — the fence on its own line does. (The
+    // previous expectation, that the inner ``` closed the block, encoded the
+    // close-paired-as-open defect.) The streaming parser MUST still mirror the
+    // canonical pairing: its ordinal/startIndex have to match what the extractor
+    // produces once the fence closes (id-handoff invariant).
+    const md = '```md\nUse ``` to open a fence\n```\n\nnow streaming:\n\n```html\n<div>';
     const closed = extractCodeBlocks(md);
+    expect(closed).toHaveLength(1);
+    expect(closed[0]!.content).toBe('Use ``` to open a fence');
     const block = extractTrailingUnclosedBlock(md);
     expect(block).not.toBeNull();
+    expect(block!.language).toBe('html');
     expect(block!.ordinal).toBe(closed.length);
     expect(block!.startIndex).toBeGreaterThanOrEqual(closed[closed.length - 1]!.endIndex);
     // Once a closing fence arrives, the canonical extractor sees the same block.

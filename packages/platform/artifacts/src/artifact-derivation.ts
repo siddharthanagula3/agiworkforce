@@ -53,8 +53,29 @@ export interface DerivedCodeBlock {
   lineCount: number;
 }
 
-/** Matches a fenced code block: ```lang\n...```. `lang` optional. */
-const FENCED_CODE_RE = /```(\w*)?\n([\s\S]*?)```/g;
+/**
+ * Matches a fenced code block: ```info\n...\n```. The info string is optional.
+ *
+ * AUDIT-FIX ART-2: the info string is `[^\n`]*` (not `\w*`) and BOTH fences are
+ * anchored to a line start via the `m` flag. The old `\w*\n` form matched no
+ * opening fence that carried attributes (```html title="x"), a hyphen or dot in
+ * the tag (```objective-c) or a CRLF line ending. The scan then resumed at that
+ * block's CLOSING fence and paired it AS AN OPENING one, so every later
+ * `ordinal`, `startIndex` and `endIndex` in the message was wrong — which
+ * spliced the wrong ranges out of the transcript, reported phantom open fences
+ * to the streaming parser, and broke the streaming -> persisted id handoff.
+ */
+const FENCED_CODE_RE = /^```([^\n`]*)\r?\n([\s\S]*?)^```/gm;
+
+/**
+ * The fence info string is not just a language: it can carry attributes
+ * (```html title="x"). AUDIT-FIX ART-2: take only the leading whitespace-
+ * delimited token and lowercase it, so downstream language comparisons
+ * (`isRenderableArtifact`, `detectArtifactType`) still match.
+ */
+function parseFenceLanguage(info: string | undefined): string {
+  return (info ?? '').trim().split(/\s+/)[0]?.toLowerCase() || 'text';
+}
 
 /**
  * Extract every fenced code block from markdown, in document order, each tagged
@@ -63,13 +84,13 @@ const FENCED_CODE_RE = /```(\w*)?\n([\s\S]*?)```/g;
 export function extractCodeBlocks(markdown: string): DerivedCodeBlock[] {
   const blocks: DerivedCodeBlock[] = [];
   // Local regex instance — never share lastIndex across calls.
-  const re = new RegExp(FENCED_CODE_RE.source, 'g');
+  const re = new RegExp(FENCED_CODE_RE.source, FENCED_CODE_RE.flags);
   let match: RegExpExecArray | null;
   let ordinal = 0;
   while ((match = re.exec(markdown)) !== null) {
     const content = (match[2] ?? '').trim();
     blocks.push({
-      language: (match[1] ?? '').trim() || 'text',
+      language: parseFenceLanguage(match[1]),
       content,
       startIndex: match.index,
       endIndex: match.index + match[0].length,
@@ -201,7 +222,11 @@ export interface TrailingUnclosedBlock {
  * COMPLETE (terminated by a newline). While streaming, a partial "```ht"
  * without its newline must NOT match — the language tag may still be growing.
  */
-const OPEN_FENCE_RE = /```[^\S\n]*(\w*)[^\S\n]*\n/;
+// AUDIT-FIX ART-2: mirrors FENCED_CODE_RE — line-anchored, permissive info
+// string, CRLF tolerant. Anything narrower would miss the same opening fences
+// the canonical extractor now sees, desynchronising the streamed ordinal from
+// the one the completed artifact gets.
+const OPEN_FENCE_RE = /^```([^\n`]*)\r?\n/m;
 
 /**
  * Incremental-parse helper for live streaming: find the trailing UNCLOSED
@@ -226,7 +251,7 @@ export function extractTrailingUnclosedBlock(markdown: string): TrailingUnclosed
   if (!open) return null;
 
   return {
-    language: (open[1] ?? '').trim() || 'text',
+    language: parseFenceLanguage(open[1]),
     content: tail.slice(open.index + open[0].length),
     ordinal: blocks.length,
     startIndex: tailStart + open.index,
