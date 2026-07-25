@@ -85,6 +85,7 @@ import {
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
 import { resolveCloudChatSurface, type CloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { buildCapabilityPreamble } from './capability-preamble';
 import {
   createManagedOfficeFileToolDefinition,
   MANAGED_OFFICE_FILE_TOOL_NAME,
@@ -2130,6 +2131,38 @@ export async function processRequest(
       }
     } else if (resolvedModelCaps?.codeExecution ?? true) {
       resolvedTools = [...(resolvedTools ?? []), ...resolveCodeExecutionTools(providerLower)];
+    }
+  }
+
+  // AUDIT-FIX SYS-1/SYS-2/SYS-3/SYS-5: prepend the base capability preamble.
+  //
+  // This route previously assembled NO unconditional system prompt — every
+  // role:'system' injection was mode-specific (research, AGI Work, skills,
+  // project context, memory), so an ordinary chat turn reached the provider
+  // with no identity, no date and no tool inventory. Tools were attached and
+  // never described, which is why the model denied having a sandbox or file
+  // system while execute_code and write_file sat in its tool array.
+  //
+  // It is built HERE, after every tool gate has run, precisely because
+  // `internalMessages` was snapshotted from chatRequest.messages above: any
+  // injection made before `resolvedTools` is final would describe a tool set
+  // that does not match the request. Unshifting onto the already-built array
+  // keeps the preamble first without reordering the existing mode prompts,
+  // which continue to follow it.
+  //
+  // Skipped for surface 'api': that is the public OpenAI-compatible endpoint,
+  // where a third-party integrator owns their own prompt and would not expect
+  // us to prepend one.
+  if (resolveCloudChatSurface(request) !== 'api') {
+    const capabilityPreamble = buildCapabilityPreamble({ tools: resolvedTools });
+    if (capabilityPreamble) {
+      internalMessages.unshift({
+        role: 'system',
+        content: capabilityPreamble,
+        multimodal_content: undefined,
+        tool_calls: undefined,
+        tool_call_id: undefined,
+      });
     }
   }
 
