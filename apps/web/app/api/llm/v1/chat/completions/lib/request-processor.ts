@@ -53,6 +53,7 @@ import {
   resolveAutoRoute,
 } from '@agiworkforce/routing';
 import type { RoutingTaskType } from '@agiworkforce/routing';
+import { trimMessagesToContextWindow } from './context-window';
 import type { AuthGateSuccess } from './auth-gate';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -187,6 +188,13 @@ export const ChatCompletionRequestSchema = z.object({
   // The processor verifies it against web_conversations.user_id before billing, provider,
   // tool, or E2B work. A conversation id is never an authorization token.
   conversation_id: z.string().uuid().optional(),
+  // BUG-10/STR-5: the row id the CLIENT will use for this turn's assistant
+  // message. Optional and additive. When present the server persists the
+  // assistant turn itself (see assistant-turn-persistence.ts) under the SAME
+  // id, so the server write and the client's own `/api/chat/conversations/
+  // [id]/messages` upsert collapse into one row instead of duplicating the
+  // turn in the transcript. Absent means the caller owns persistence.
+  assistant_message_id: z.string().uuid().optional(),
   // Composer activation sends only a catalog identity. Host locations and
   // instruction content are never accepted on the browser contract.
   skill_name: z
@@ -380,6 +388,18 @@ export type ProcessedRequest = {
   chatRequest: ChatCompletionRequest;
   /** Conversation this request belongs to, if the caller sent one (see conversation_id). */
   conversationId: string | undefined;
+  /**
+   * BUG-10/STR-5: true when the owned conversation is a Temporary Chat.
+   * Server-side assistant-turn persistence is skipped for them, matching the
+   * client and the Temporary Chat contract.
+   */
+  conversationIsTemporary?: boolean;
+  /**
+   * BUG-10/STR-5: caller-supplied row id for this turn's assistant message.
+   * The single join key that lets the server-side write and the client-side
+   * write be the same row. Absent for callers that own persistence entirely.
+   */
+  assistantMessageId?: string | undefined;
   /** Conservative user-authored facts captured before server prompt enrichment. */
   autoMemoryFacts?: string[];
   requestedModel: string;
@@ -2187,6 +2207,14 @@ export async function processRequest(
     usePromptCache: chatRequest.use_prompt_cache,
   };
 
+  // AUDIT-FIX SYS-16: fit the thread to the RESOLVED model's context window
+  // before it ever reaches a provider. Nothing did this, so a long chat was
+  // shipped verbatim and the provider rejected the whole request. Mutates
+  // `internalMessages` (llmRequest.messages) in place, so every downstream
+  // path -- standard single turn, tool loop, research loop -- inherits the
+  // fitted thread. No-ops when the model carries no catalog contextWindow.
+  trimMessagesToContextWindow(internalMessages, chatRequest.model, maxTokens);
+
   if (freeTrialEnabled) {
     const trialReservationResult = await beginFreeTrialRequest({ userId, requestId });
     if (!trialReservationResult.ok) return freeTrialBudgetReachedResponse();
@@ -2210,6 +2238,8 @@ export async function processRequest(
     managedUsage,
     chatRequest,
     conversationId: chatRequest.conversation_id,
+    conversationIsTemporary,
+    assistantMessageId: chatRequest.assistant_message_id,
     autoMemoryFacts,
     requestedModel,
     provider,

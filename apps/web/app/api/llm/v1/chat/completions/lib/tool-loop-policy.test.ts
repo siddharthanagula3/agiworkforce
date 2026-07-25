@@ -14,14 +14,23 @@ function processed(workMode: 'chat' | 'agiwork' | undefined): ProcessedRequest {
 }
 
 describe('resolveToolLoopPolicy', () => {
-  it('keeps ordinary chat on the conservative ten-step limit', () => {
+  // CHANGED BY AUDIT-FIX SYS-26 — read loudly.
+  //
+  // Ordinary chat used to assert `maxDurationMs: undefined`, i.e. NO wall-clock
+  // budget at all. Ten steps at the 120 s per-tool cap exceeds the route's
+  // `export const maxDuration = 300`, so the platform SIGKILLed the function
+  // and skipped the generator `finally` that pauses/disposes the E2B sandbox
+  // (which keeps billing) and settles managed usage. Chat now gets the same
+  // four-minute budget AGI Work has, leaving one minute of teardown headroom
+  // inside the platform limit.
+  it('keeps ordinary chat on the conservative ten-step limit, inside the platform time limit', () => {
     expect(resolveToolLoopPolicy(processed('chat'), {})).toEqual({
       maxSteps: 10,
-      maxDurationMs: undefined,
+      maxDurationMs: 4 * 60_000,
     });
     expect(resolveToolLoopPolicy(processed(undefined), {})).toEqual({
       maxSteps: 10,
-      maxDurationMs: undefined,
+      maxDurationMs: 4 * 60_000,
     });
   });
 
