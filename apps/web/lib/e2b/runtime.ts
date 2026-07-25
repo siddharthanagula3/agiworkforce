@@ -30,13 +30,17 @@
  */
 import 'server-only';
 
+import { getPlanMaxSandboxes, getPlanSandboxTtlMs } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 import type { E2BExecutor, ExecutionResult, SandboxFileEntry } from './types';
 import { e2bExecutionEnabled } from './gate';
+import { meterSandboxComputeInterval } from './compute-metering';
 import {
   getE2BSession,
   saveE2BSession,
   deleteE2BSession,
+  withUserSandboxLock,
   type E2BSession,
   type StoredContext,
   type E2BSessionScope,
@@ -55,14 +59,48 @@ const E2B_SANDBOX_TIMEOUT_MS = 60_000;
 const E2B_CONVERSATION_TIMEOUT_MS = 10 * 60_000;
 
 /**
- * Per-user concurrency cap: the max number of live (running OR paused) sandboxes a single
- * authenticated user may hold across all their conversations. Backstops E2B's 100-per-team
- * account cap so one user (or a runaway loop opening a sandbox per conversation) cannot
- * exhaust the whole team's concurrency — and cost — budget. Only scoped (authenticated)
- * sandboxes are counted and enforced; ephemeral bare-API sandboxes self-dispose within
- * `E2B_SANDBOX_TIMEOUT_MS` and are never counted here.
+ * GOV-4: the per-user sandbox cap and the conversation sandbox lifetime are now
+ * PLAN DIMENSIONS (`BILLING_PLAN_PRODUCT_LIMITS.maxSandboxes` /
+ * `.sandboxTtlMs`), not one flat constant.
+ *
+ * They used to be `MAX_SANDBOXES_PER_USER = 5` and a flat 10-minute lifetime
+ * for every tier including Free, so a paid tier bought literally nothing in
+ * compute: same sandbox count, same lifetime, same everything.
+ *
+ * Only scoped (authenticated) sandboxes are counted and enforced; ephemeral
+ * bare-API sandboxes self-dispose within `E2B_SANDBOX_TIMEOUT_MS`.
  */
-const MAX_SANDBOXES_PER_USER = 5;
+function resolveSandboxLimits(planTier: string | null | undefined): {
+  maxSandboxes: number | null;
+  ttlMs: number;
+} {
+  return {
+    maxSandboxes: getPlanMaxSandboxes(planTier),
+    ttlMs: getPlanSandboxTtlMs(planTier),
+  };
+}
+
+/**
+ * GOV-4: resolve the owner's plan for a scoped call. When the caller did not
+ * supply one, read it from the subscription rather than assuming a tier.
+ *
+ * FAILS CLOSED: a lookup error returns null and the caller refuses to create a
+ * sandbox. Creating managed compute for an unknown entitlement is exactly the
+ * thing every other gate in this codebase refuses to do.
+ */
+async function resolveScopePlanTier(scope: E2BSessionScope): Promise<string | null> {
+  if (scope.planTier) return scope.planTier;
+  try {
+    const subscription = await SubscriptionService.getSubscription(scope.userId);
+    return subscription?.plan_tier ?? 'free';
+  } catch (err) {
+    logger.error(
+      { err, userId: scope.userId },
+      '[e2b] plan lookup failed; refusing to create managed compute (fail-closed)',
+    );
+    return null;
+  }
+}
 
 type E2BLanguage = 'python' | 'javascript' | 'typescript' | 'r' | 'java' | 'bash';
 
@@ -130,7 +168,39 @@ export async function pauseE2BSession(scope: E2BSessionScope): Promise<void> {
   } catch (err) {
     logger.warn({ err, conversationId: scope.conversationId }, '[e2b] pause failed');
   }
+  // GOV-5: the billable interval ends here — close it into the usage ledger.
+  await closeBillableInterval(scope, session, 'pause');
 }
+
+/**
+ * GOV-5: settle the open compute interval on `session` and clear it, so the
+ * next resume opens a fresh one and the same seconds are never billed twice.
+ * Best-effort; the sandbox lifecycle never depends on it.
+ */
+async function closeBillableInterval(
+  scope: E2BSessionScope,
+  session: E2BSession,
+  reason: 'pause' | 'kill' | 'reclaim',
+): Promise<void> {
+  const startedAtMs = session.activeSinceMs;
+  if (typeof startedAtMs !== 'number') return;
+
+  await meterSandboxComputeInterval({
+    userId: scope.userId,
+    sandboxId: session.sandboxId,
+    conversationId: scope.conversationId,
+    startedAtMs,
+    endedAtMs: Date.now(),
+    reason,
+  });
+
+  if (reason === 'pause') {
+    const { activeSinceMs: _closed, ...rest } = session;
+    await saveE2BSession(scope, rest);
+  }
+}
+
+export { closeBillableInterval };
 
 /**
  * Permanently release the conversation's sandbox (conversation deleted, or an idle
@@ -143,6 +213,8 @@ export async function killE2BSession(scope: E2BSessionScope): Promise<void> {
     await deleteE2BSession(scope);
     return;
   }
+  // GOV-5: bill whatever the sandbox ran before it was released.
+  await closeBillableInterval(scope, session, 'kill');
   // Kill FIRST (on the captured id), then clear the mapping — deleting first
   // would orphan the sandbox if kill is skipped (no SDK) or throws, since the
   // mapping needed to find it again is already gone.
@@ -183,7 +255,38 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
 
   const existingSession = scope ? await getE2BSession(scope) : null;
 
-  const sandboxTimeoutMs = conversationId ? E2B_CONVERSATION_TIMEOUT_MS : E2B_SANDBOX_TIMEOUT_MS;
+  // GOV-4: the sandbox count and lifetime a caller gets are plan dimensions.
+  // A scoped caller whose entitlement cannot be resolved gets NO sandbox.
+  let planTier: string | null = null;
+  let maxSandboxes: number | null = null;
+  let planTtlMs = 0;
+  if (scope) {
+    planTier = await resolveScopePlanTier(scope);
+    if (planTier === null) return null;
+    const limits = resolveSandboxLimits(planTier);
+    maxSandboxes = limits.maxSandboxes;
+    planTtlMs = limits.ttlMs;
+    if (maxSandboxes !== null && maxSandboxes <= 0) {
+      logger.warn(
+        { userId: scope.userId, planTier, conversationId },
+        '[e2b] plan does not include managed sandboxes; refusing (fail-closed)',
+      );
+      return null;
+    }
+    if (planTtlMs <= 0) {
+      logger.warn(
+        { userId: scope.userId, planTier, conversationId },
+        '[e2b] plan grants no managed sandbox lifetime; refusing (fail-closed)',
+      );
+      return null;
+    }
+  }
+
+  // Conversation-scoped sandboxes use the PLAN lifetime; ephemeral bare-API
+  // sandboxes keep the short per-call ceiling, which is not a plan dimension.
+  const sandboxTimeoutMs = conversationId
+    ? planTtlMs || E2B_CONVERSATION_TIMEOUT_MS
+    : E2B_SANDBOX_TIMEOUT_MS;
   // Conversation-scoped sandboxes auto-PAUSE (not kill) if `sandboxTimeoutMs` is ever
   // reached without an explicit `pauseE2BSession()` call (e.g. a crashed request) --
   // state survives so the next turn can still resume it. Ephemeral (no-conversationId)
@@ -202,41 +305,70 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
     : { timeoutMs: sandboxTimeoutMs, metadata };
 
   /**
-   * Create a fresh sandbox, first enforcing the per-user concurrency cap for scoped
-   * (authenticated) callers. Returns null (fail-closed) when the quota is reached or the
-   * create fails. A quota-CHECK error fails OPEN (proceed to create): the 100-per-team
-   * account cap is the hard backstop, so a transient list-API hiccup must not take down
-   * all execution.
+   * Create a fresh sandbox, first enforcing the caller's PLAN sandbox cap.
+   * Returns null (fail-closed) when the quota is reached or the create fails.
+   *
+   * GOV-24: the count and the create now run inside one per-user Redis lock, so
+   * two concurrent requests can no longer both observe "under the cap" and both
+   * create. Losing the race for the lock is a refusal, not a bypass.
+   *
+   * GOV-21-adjacent: a quota-CHECK error now fails CLOSED. It used to proceed,
+   * justified by "the team cap is the hard backstop" — but that backstop
+   * disappears for EVERY user simultaneously when the list API degrades, which
+   * is precisely when the per-user cap is the only thing left.
    */
   async function createFresh(): Promise<SandboxInstance | null> {
-    if (scope?.userId) {
+    const create = async (): Promise<SandboxInstance | null> => {
       try {
-        const live = await countUserSandboxes(SandboxCtor, scope.userId, MAX_SANDBOXES_PER_USER);
-        if (live >= MAX_SANDBOXES_PER_USER) {
+        return (await SandboxCtor.create(createOpts)) as SandboxInstance;
+      } catch (err) {
+        logger.warn({ err }, '[e2b] sandbox create failed; fail-closed');
+        return null;
+      }
+    };
+
+    if (!scope?.userId || maxSandboxes === null) return create();
+
+    const limit = maxSandboxes;
+    const guarded = await withUserSandboxLock(scope, async () => {
+      try {
+        const live = await countUserSandboxes(SandboxCtor, scope.userId, limit);
+        if (live >= limit) {
           logger.warn(
-            { userId: scope.userId, live, limit: MAX_SANDBOXES_PER_USER, conversationId },
+            { userId: scope.userId, live, limit, planTier, conversationId },
             '[e2b] per-user sandbox quota reached; refusing new sandbox (fail-closed)',
           );
           return null;
         }
       } catch (err) {
-        logger.warn(
-          { err, userId: scope.userId },
-          '[e2b] sandbox quota check failed; proceeding (team cap still applies)',
+        logger.error(
+          { err, userId: scope.userId, planTier },
+          '[e2b] sandbox quota check failed; refusing new sandbox (fail-closed)',
         );
+        return null;
       }
-    }
-    try {
-      return (await SandboxCtor.create(createOpts)) as SandboxInstance;
-    } catch (err) {
-      logger.warn({ err }, '[e2b] sandbox create failed; fail-closed');
+      return create();
+    });
+
+    if (!guarded.locked) {
+      logger.warn(
+        { userId: scope.userId, conversationId },
+        '[e2b] could not serialise sandbox creation; refusing (fail-closed)',
+      );
       return null;
     }
+    return guarded.result ?? null;
   }
 
   let sandbox: SandboxInstance;
   let sandboxId: string;
   const contexts: Record<string, StoredContext> = { ...(existingSession?.contexts ?? {}) };
+  /**
+   * GOV-5: epoch ms this executor's billable interval opened. Set once the
+   * sandbox is live (created or resumed) and cleared when it is paused, so the
+   * seconds between are settled exactly once into the usage ledger.
+   */
+  let activeSinceMs: number | undefined;
 
   if (existingSession) {
     try {
@@ -267,9 +399,18 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   /** Persist the (possibly updated) session mapping so the next call/turn can reuse it. */
   async function persistSession(): Promise<void> {
     if (!scope) return;
-    const session: E2BSession = { sandboxId, contexts };
+    const session: E2BSession = {
+      sandboxId,
+      contexts,
+      ...(activeSinceMs !== undefined ? { activeSinceMs } : {}),
+    };
     await saveE2BSession(scope, session);
   }
+
+  // GOV-5: open the billable interval and persist it immediately, so an
+  // abandoned/crashed request still leaves a record the reclaim job can settle.
+  activeSinceMs = Date.now();
+  await persistSession();
 
   /** Get (or lazily create + cache) the code context for `language`. */
   async function getContext(language: E2BLanguage): Promise<StoredContext> {
@@ -367,8 +508,13 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       // Conversation-scoped only. Pause THIS executor's own live sandbox by its
       // captured id — never via a Redis re-lookup, which fail-opens: a stale or
       // absent session mapping (saveE2BSession is best-effort) would otherwise
-      // leave the just-created sandbox billing until its 10-min timeout.
+      // leave the just-created sandbox billing until its plan timeout.
       if (!scope) return;
+      // GOV-5: close the billable interval BEFORE persisting, so the stored
+      // session for a paused (non-billing) sandbox carries no open interval and
+      // the reclaim job cannot bill these seconds a second time.
+      const intervalStartedAtMs = activeSinceMs;
+      activeSinceMs = undefined;
       // Persist first so the next turn can resume; even if this Redis write
       // fails, the live-handle pause below still stops billing.
       try {
@@ -381,6 +527,16 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         await Sandbox.pause(sandboxId);
       } catch (err) {
         logger.warn({ err, conversationId }, '[e2b] pause (live handle) failed');
+      }
+      if (intervalStartedAtMs !== undefined) {
+        await meterSandboxComputeInterval({
+          userId: scope.userId,
+          sandboxId,
+          conversationId,
+          startedAtMs: intervalStartedAtMs,
+          endedAtMs: Date.now(),
+          reason: 'pause',
+        });
       }
     },
     async dispose(): Promise<void> {
@@ -397,6 +553,10 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       } catch (err) {
         logger.warn({ err }, '[e2b] sandbox kill failed');
       }
+      // GOV-5: an ephemeral sandbox has no authenticated scope, so its seconds
+      // cannot be attributed to a ledger. It is instead bounded to
+      // E2B_SANDBOX_TIMEOUT_MS and killed here — the exposure is one minute of
+      // compute per bare-API call, not an open-ended meter.
     },
   };
 }

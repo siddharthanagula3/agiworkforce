@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
@@ -8,7 +8,9 @@ import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useUser } from '@clerk/nextjs';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
 import {
-  fetchPreferenceNamespace,
+  fetchStoredPreferenceNamespace,
+  refreshProfileConsumers,
+  saveDisplayName,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 
@@ -41,6 +43,19 @@ const WORK_DESCRIPTIONS = [
 
 type WorkDescription = (typeof WORK_DESCRIPTIONS)[number] | '';
 
+/**
+ * PER-8 — the ONE non-DB profile namespace.
+ *
+ * `displayName` is deliberately NOT stored here: the full name's single source
+ * of truth is `profiles.display_name`, written through `PATCH /api/me`. Before
+ * this change the name existed in three places at once (this namespace, Clerk
+ * `unsafeMetadata`, and the profiles row) and the reader in `/api/me` consulted
+ * a different pair than Settings wrote, so editing "Full name" here could not
+ * change the greeting, header or sidebar.
+ *
+ * PER-9: this namespace is now on the cloud-safe sync allowlist, so the
+ * "Synced to your account" copy is true in both directions.
+ */
 const PREF_NAMESPACE = 'general';
 
 interface PreferenceSettings {
@@ -49,7 +64,6 @@ interface PreferenceSettings {
 }
 
 interface GeneralSettings extends PreferenceSettings {
-  displayName: string;
   preferredName: string;
   workDescription: WorkDescription;
   instructions: string;
@@ -60,13 +74,12 @@ const DEFAULT_PREFS: PreferenceSettings = {
   voice: 'nova',
 };
 
-const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
-  displayName: '',
-  preferredName: '',
-  workDescription: '',
-  instructions: '',
-  ...DEFAULT_PREFS,
-};
+/** Trimmed value, or undefined when the stored value carries no information. */
+function storedText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Section component
@@ -75,35 +88,22 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
 export function GeneralSection() {
   const { theme: nextTheme, setTheme: setNextTheme } = useTheme();
   const user = useBillingStore((s) => s.user);
-  const { user: clerkUser } = useUser();
+  const billingInitialized = useBillingStore((s) => s.initialized);
+  // PER-10: `isLoaded` is what distinguishes "Clerk has not answered yet" from
+  // "this user has no name". Without it every field defaulted to '' on mount.
+  const { user: clerkUser, isLoaded: clerkLoaded } = useUser();
 
   const [mounted, setMounted] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
   // --- Profile state -------------------------------------------------------
-  const userMeta = useMemo(
-    () => (user?.['user_metadata'] as Record<string, unknown> | undefined) ?? {},
-    [user],
-  );
+  // PER-8: the server has already resolved the canonical identity; the client
+  // reads it instead of re-deriving a different answer from Clerk metadata.
+  const serverProfile = user?.profile;
   const accountEmail = user?.email ?? clerkUser?.primaryEmailAddress?.emailAddress ?? '';
-  const initialFullName =
-    (userMeta['full_name'] as string | undefined) ??
-    (userMeta['name'] as string | undefined) ??
-    clerkUser?.fullName ??
-    accountEmail.split('@')[0] ??
-    '';
 
-  const [displayName, setDisplayName] = useState(initialFullName);
-
-  const [preferredName, setPreferredName] = useState<string>(() => {
-    return (
-      (userMeta['preferred_name'] as string | undefined) ??
-      clerkUser?.firstName ??
-      initialFullName.split(' ')[0] ??
-      ''
-    );
-  });
-
+  const [displayName, setDisplayName] = useState('');
+  const [preferredName, setPreferredName] = useState('');
   const [workDescription, setWorkDescription] = useState<WorkDescription>('');
   const [instructions, setInstructions] = useState<string>('');
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -114,30 +114,64 @@ export function GeneralSection() {
   // --- Preferences state ---------------------------------------------------
   const [prefs, setPrefs] = useState<PreferenceSettings>(DEFAULT_PREFS);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // PER-10: the autosave must fire only after a REAL user edit. It used to fire
+  // as soon as the load effect populated state, so a first-time user's mount
+  // PUT `{displayName: '', preferredName: ''}` — and because the loader merged
+  // `{...fallback, ...serverSettings}`, those stored empty strings then
+  // permanently overrode the correct defaults on every later load.
+  const dirtyRef = useRef(false);
+  const hydratedRef = useRef(false);
+
+  function markDirty() {
+    dirtyRef.current = true;
+  }
 
   useEffect(() => {
     setMounted(true);
-    const defaults: GeneralSettings = {
-      ...DEFAULT_GENERAL_SETTINGS,
-      displayName: initialFullName,
-      preferredName:
-        (userMeta['preferred_name'] as string | undefined) ??
-        clerkUser?.firstName ??
-        initialFullName.split(' ')[0] ??
-        '',
-      workDescription: (userMeta['work_description'] as WorkDescription | undefined) ?? '',
-      instructions: (userMeta['instructions'] as string | undefined) ?? '',
-    };
+  }, []);
+
+  useEffect(() => {
+    // Hydrate exactly once, and only once both identity sources have actually
+    // resolved. Re-running on `clerkUser` arriving would also clobber edits the
+    // user had already typed.
+    if (hydratedRef.current) return;
+    if (!clerkLoaded || !billingInitialized) return;
+    hydratedRef.current = true;
+
+    const fallbackFullName =
+      serverProfile?.display_name ??
+      user?.name ??
+      clerkUser?.fullName ??
+      accountEmail.split('@')[0] ??
+      '';
 
     let cancelled = false;
-    void fetchPreferenceNamespace<GeneralSettings>(PREF_NAMESPACE, defaults)
-      .then((serverSettings) => {
+    void fetchStoredPreferenceNamespace<GeneralSettings>(PREF_NAMESPACE)
+      .then((stored) => {
         if (cancelled) return;
-        setDisplayName(serverSettings.displayName);
-        setPreferredName(serverSettings.preferredName);
-        setWorkDescription(serverSettings.workDescription);
-        setInstructions(serverSettings.instructions);
-        setPrefs({ chatFont: serverSettings.chatFont, voice: serverSettings.voice });
+        // Precedence is explicit: a stored value wins ONLY when it carries
+        // information. An empty stored string falls back to the derived
+        // default instead of silently locking the field empty forever.
+        setDisplayName(fallbackFullName);
+        setPreferredName(
+          storedText(stored.preferredName) ??
+            serverProfile?.preferred_name ??
+            clerkUser?.firstName ??
+            fallbackFullName.split(' ')[0] ??
+            '',
+        );
+        setWorkDescription(
+          (storedText(stored.workDescription) as WorkDescription | undefined) ??
+            (serverProfile?.work_description as WorkDescription | null) ??
+            '',
+        );
+        // Instructions and the two preference values are free-form: an empty
+        // stored value IS the user's answer, so no derived fallback applies.
+        setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
+        setPrefs({
+          chatFont: storedText(stored.chatFont) ?? DEFAULT_PREFS.chatFont,
+          voice: storedText(stored.voice) ?? DEFAULT_PREFS.voice,
+        });
         setLoadError(null);
       })
       .catch((error) => {
@@ -152,36 +186,44 @@ export function GeneralSection() {
     return () => {
       cancelled = true;
     };
-  }, [clerkUser?.firstName, initialFullName, userMeta]);
+  }, [
+    accountEmail,
+    billingInitialized,
+    clerkLoaded,
+    clerkUser?.firstName,
+    clerkUser?.fullName,
+    serverProfile,
+    user?.name,
+  ]);
 
-  // Auto-save preferences with 400ms debounce
+  // Auto-save the `general` namespace with a 400ms debounce, but ONLY after the
+  // user has actually edited something and only when the load succeeded —
+  // persisting over a failed load is how the empty-string corruption spread.
   useEffect(() => {
-    if (!mounted || !preferencesLoaded) return;
+    if (!mounted || !preferencesLoaded || !dirtyRef.current || loadError !== null) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const next: GeneralSettings = {
-        displayName,
-        preferredName,
+        preferredName: preferredName.trim(),
         workDescription,
         instructions,
         ...prefs,
       };
-      void savePreferenceNamespace(PREF_NAMESPACE, next).catch((error) => {
-        setSaveError(error instanceof Error ? error.message : 'Failed to save preferences');
-      });
+      void savePreferenceNamespace(PREF_NAMESPACE, next)
+        .then(() => {
+          setSaveError(null);
+          // The preferred name feeds the greeting; re-read /api/me so the
+          // change is visible without a reload.
+          return refreshProfileConsumers();
+        })
+        .catch((error) => {
+          setSaveError(error instanceof Error ? error.message : 'Failed to save preferences');
+        });
     }, 400);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [
-    displayName,
-    instructions,
-    mounted,
-    preferencesLoaded,
-    preferredName,
-    prefs,
-    workDescription,
-  ]);
+  }, [instructions, loadError, mounted, preferencesLoaded, preferredName, prefs, workDescription]);
 
   const theme = !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 
@@ -202,24 +244,23 @@ export function GeneralSection() {
     setSaving(true);
     setSaveError(null);
     try {
+      // PER-8: exactly two writes, to exactly two owners.
+      //   full name  → profiles.display_name  (PATCH /api/me)
+      //   everything → user_settings.general  (PUT /api/settings/preferences)
+      // The previous third write to Clerk `unsafeMetadata` is gone: nothing
+      // read it, and a third copy of the name is what made the profile
+      // unreconcilable in the first place.
+      await saveDisplayName(trimmedFull);
       await savePreferenceNamespace<GeneralSettings>(PREF_NAMESPACE, {
-        displayName: trimmedFull,
         preferredName: trimmedPreferred,
         workDescription,
         instructions,
         ...prefs,
       });
+      setPreferredName(trimmedPreferred);
 
-      if (clerkUser) {
-        await clerkUser.update({
-          unsafeMetadata: {
-            full_name: trimmedFull,
-            preferred_name: trimmedPreferred,
-            work_description: workDescription,
-            instructions: instructions.slice(0, 2000),
-          },
-        });
-      }
+      // Push the new identity into the greeting/header/sidebar now.
+      await refreshProfileConsumers();
       setSavedAt(Date.now());
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save profile.');
@@ -270,7 +311,10 @@ export function GeneralSection() {
               id="general-full-name"
               type="text"
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value.slice(0, 80))}
+              onChange={(e) => {
+                markDirty();
+                setDisplayName(e.target.value.slice(0, 80));
+              }}
               maxLength={80}
               placeholder="Your name"
               className="w-56 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring sm:w-64"
@@ -287,7 +331,10 @@ export function GeneralSection() {
               id="general-preferred-name"
               type="text"
               value={preferredName}
-              onChange={(e) => setPreferredName(e.target.value.slice(0, 60))}
+              onChange={(e) => {
+                markDirty();
+                setPreferredName(e.target.value.slice(0, 60));
+              }}
               maxLength={60}
               placeholder="Nickname or first name"
               className="w-56 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring sm:w-64"
@@ -299,7 +346,10 @@ export function GeneralSection() {
             <select
               id="general-work"
               value={workDescription}
-              onChange={(e) => setWorkDescription(e.target.value as WorkDescription)}
+              onChange={(e) => {
+                markDirty();
+                setWorkDescription(e.target.value as WorkDescription);
+              }}
               className="w-56 cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring sm:w-64"
               style={{ appearance: 'none', WebkitAppearance: 'none' }}
             >
@@ -321,7 +371,10 @@ export function GeneralSection() {
             </span>
             <textarea
               value={instructions}
-              onChange={(e) => setInstructions(e.target.value.slice(0, 2000))}
+              onChange={(e) => {
+                markDirty();
+                setInstructions(e.target.value.slice(0, 2000));
+              }}
               maxLength={2000}
               rows={4}
               placeholder="e.g. when learning new concepts, I find analogies particularly helpful"

@@ -57,6 +57,40 @@ export class MediaGenerationApiError extends Error {
   }
 }
 
+/**
+ * PER-4 — the client half of "never a data URL".
+ *
+ * This hook used to build `data:image/png;base64,${b64_json}` whenever the
+ * route returned inline bytes. That 1.4-4 MB string went into
+ * `metadata.imageUrl` and was POSTed inside the message metadata, blowing the
+ * request body cap: `saveMessageToDb` threw, the "Couldn't save this response"
+ * toast fired, and the message was never persisted.
+ *
+ * The route now returns an authenticated `/api/files/{id}` URL whenever object
+ * storage is configured, which is every real deployment. Inline bytes only
+ * occur on a dev branch without R2 credentials; there we mint a short-lived
+ * `blob:` object URL so the image still renders, the metadata written to the
+ * database stays a few dozen characters, and nothing multi-megabyte can reach
+ * the message body. A `blob:` URL does not survive a reload — that is an
+ * honest consequence of running without durable storage, and the warning below
+ * says so.
+ */
+function objectUrlFromBase64(b64: string | undefined): string | undefined {
+  if (!b64) return undefined;
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return undefined;
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    console.warn(
+      '[media] Object storage is not configured on this deployment, so the generated image was returned inline. It is shown from an in-memory blob: URL and will not survive a reload. Configure CLOUDFLARE_R2_* to persist generated media.',
+    );
+    return URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+  } catch {
+    return undefined;
+  }
+}
+
 export function useMediaGeneration() {
   const { addJob, updateJob } = useMediaStore();
 
@@ -114,10 +148,10 @@ export function useMediaGeneration() {
 
         const data = (await response.json()) as {
           images?: Array<{ url?: string; b64_json?: string }>;
+          persisted?: boolean;
         };
         const first = data.images?.[0];
-        const resultUrl =
-          first?.url || (first?.b64_json ? `data:image/png;base64,${first.b64_json}` : undefined);
+        const resultUrl = first?.url ?? objectUrlFromBase64(first?.b64_json);
 
         if (!resultUrl) throw new Error('No image URL in response');
 

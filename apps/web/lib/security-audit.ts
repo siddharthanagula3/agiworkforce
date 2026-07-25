@@ -114,6 +114,18 @@ export async function logAuthFailure(
 /**
  * Helper to log rate limit exceeded
  */
+/**
+ * GOV-23: `userId` must come from a SIGNATURE-VERIFIED principal.
+ *
+ * The caller in `lib/rate-limit.ts` used to base64-decode the Bearer payload
+ * with no verification to fill this field, so an attacker could craft an
+ * unsigned token carrying any `sub`, trip a rate limit, and write the abuse row
+ * against another user's account. It now passes the resolved rate-limit bucket,
+ * whose `user:` form is only ever produced after Clerk verification.
+ *
+ * `identifier` is the bucket the decision was actually made against — never a
+ * client-supplied value.
+ */
 export async function logRateLimitExceeded(
   request: Request,
   identifier: string,

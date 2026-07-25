@@ -10,6 +10,11 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
+import {
+  backfillDisplayNameFromUpstream,
+  readUserIdentity,
+  resolveVisibleName,
+} from '@/lib/server/user-identity';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { effectivePlanTier } from '@/lib/entitlement';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -53,8 +58,14 @@ async function handleGetMe(request: NextRequest) {
       const client = await clerkClient();
       // Cap the Clerk profile lookup: it is a network round-trip and the header
       // greeting is gated on the resolved name, so a slow Clerk must never stall
-      // /api/me (the reported "name did not load until reload"). On timeout we
-      // fall back to the email prefix and the real name resolves on a later load.
+      // /api/me.
+      //
+      // PER-31: a timeout used to become a SESSION-LONG wrong name, because the
+      // comment's promised "later load" never happened (PER-1). Two things fix
+      // that now: the client re-resolves when the Clerk session cookie changes
+      // or the tab regains focus, and any name we do resolve here is written
+      // back to `profiles.display_name` below — so the next read does not
+      // depend on Clerk at all.
       let nameTimer: ReturnType<typeof setTimeout> | undefined;
       const clerkUser = await Promise.race([
         client.users.getUser(userId).finally(() => {
@@ -75,26 +86,22 @@ async function handleGetMe(request: NextRequest) {
       logger.warn({ userId, error: clerkLookupError }, 'Failed to resolve Clerk profile name');
     }
 
-    const db = getNeonDb();
-
-    const [subscription, profile] = await Promise.all([
+    // PER-8: one resolver owns the profile identity (full name, preferred
+    // name, work description). Readers never re-derive it from Clerk metadata
+    // or a settings namespace on their own.
+    const [subscription, identity] = await Promise.all([
       SubscriptionService.getSubscription(userId),
-      (async (): Promise<ProfileRow | null> => {
-        try {
-          const [profileRow] = await db.query<ProfileRow>(
-            `select id, email, display_name, avatar_url, routing_preferences
-             from profiles
-             where id = $1
-             limit 1`,
-            [userId],
-          );
-          return profileRow ?? null;
-        } catch (prefsError) {
-          logger.warn({ userId, error: prefsError }, 'Failed to fetch profile');
-          return null;
-        }
-      })(),
+      readUserIdentity(userId),
     ]);
+    const profile = identity.profile;
+
+    // PER-31: cache an upstream-resolved name so a future Clerk slowdown is
+    // harmless. Only fills a name we have never been told; never overwrites one
+    // the user chose in Settings.
+    if (!identity.displayName && clerkName) {
+      await backfillDisplayNameFromUpstream(userId, clerkName);
+    }
+
     const rawRoutingPreferences = profile?.routing_preferences;
     const routing_preferences =
       rawRoutingPreferences &&
@@ -167,7 +174,13 @@ async function handleGetMe(request: NextRequest) {
     const responseBody: MeResponse = {
       id: userId,
       email: resolvedEmail ?? null,
-      name: profile?.display_name?.trim() || clerkName || resolvedEmail?.split('@')[0] || 'User',
+      name: resolveVisibleName(identity, clerkName, resolvedEmail),
+      profile: {
+        // The name the user actually set, or the upstream one we just cached.
+        display_name: identity.displayName ?? clerkName ?? null,
+        preferred_name: identity.preferredName,
+        work_description: identity.workDescription,
+      },
       avatar_url: profile?.avatar_url ?? null,
       created_at: null,
       updated_at: Date.now() / 1000,

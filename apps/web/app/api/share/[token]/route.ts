@@ -42,16 +42,37 @@ async function handleGetShare(request: NextRequest, context: RouteContext) {
 
   const db = getNeonDb();
 
+  // GOV-28: do NOT fold expiry into the WHERE clause. Doing so made "no such
+  // share" and "this share expired" indistinguishable, and the API's own 404
+  // message ("not found or expired") admitted the conflation — while
+  // app/share/[token]/page.tsx queried WITHOUT the expiry filter and rendered a
+  // dedicated expired banner. Two paths, two different answers for the same
+  // URL. Both now select the row first and judge expiry second.
   const [data] = await db.query<SharedSessionRow>(
     `select id, token, title, model_id, provider, messages, total_messages, expires_at, created_at
      from shared_sessions
-     where token = $1 and expires_at > $2
+     where token = $1
      limit 1`,
-    [token, new Date().toISOString()],
+    [token],
   );
 
   if (!data) {
-    throw createError.notFound('Shared session not found or expired');
+    throw createError.notFound('Shared session not found');
+  }
+
+  if (new Date(data.expires_at).getTime() <= Date.now()) {
+    // 410 Gone: the resource existed and is deliberately no longer served.
+    // Only the expiry timestamp is disclosed — never the conversation body.
+    return NextResponse.json(
+      {
+        error: {
+          code: 'SHARE_EXPIRED',
+          message: 'This shared conversation has expired.',
+          expires_at: data.expires_at,
+        },
+      },
+      { status: 410 },
+    );
   }
 
   return NextResponse.json(data);

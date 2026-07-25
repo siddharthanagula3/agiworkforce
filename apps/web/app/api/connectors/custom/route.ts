@@ -41,6 +41,7 @@ import { encryptConnectorToken } from '@/lib/custom-connector-crypto';
 import { evictCustomConnectorCaches } from '@/lib/user-connector-tools';
 import { getUserCustomConnectorSummaries } from '@/lib/user-connector-tools';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { getBillingPlanPricing, getPlanMaxConnectorTools } from '@agiworkforce/types';
 import {
   getCustomRemoteMcpLimit,
   getCustomRemoteMcpLimitErrorMessage,
@@ -123,10 +124,12 @@ async function allocateShortId(db: ReturnType<typeof getNeonDb>, userId: string)
 // ─── GET: list the user's custom connectors ────────────────────────────────
 
 async function handleGet(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  // GOV-16: authenticate before bucketing so the limit is per user, not per IP.
+  const { userId } = await getClerkAuthUser(request);
+
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
   const connectors = await getUserCustomConnectorSummaries(userId);
 
   return NextResponse.json({ connectors });
@@ -147,7 +150,8 @@ async function handlePost(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  // GOV-16: user-keyed rate limit.
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
   let body: CreateBody;
@@ -226,6 +230,21 @@ async function handlePost(request: NextRequest) {
     throw createError.serviceUnavailable(`Failed to connect to MCP server: ${message}`);
   }
 
+  // GOV-7: bound the connector TOOL surface, not just the connector count.
+  // `BILLING_PLAN_PRODUCT_LIMITS.maxConnectorTools` is a plan dimension because
+  // every tool definition is prompt weight and tool-loop fan-out on every turn;
+  // one 400-tool MCP server costs far more than four 5-tool ones. A tier that
+  // declares itself uncapped (negotiated Enterprise) resolves to null.
+  const connectorToolLimit = getPlanMaxConnectorTools(planTier);
+  if (connectorToolLimit !== null && toolCount > connectorToolLimit) {
+    const label = getBillingPlanPricing(planTier).label;
+    throw createError.validation(
+      connectorToolLimit === 0
+        ? `${label} plans cannot attach custom connector tools. Upgrade to add this connector.`
+        : `That server exposes ${toolCount} tools, above the ${connectorToolLimit}-tool limit for ${label} plans. Upgrade to attach it.`,
+    );
+  }
+
   const now = new Date().toISOString();
   const authHeaderEnc = authToken ? encryptConnectorToken(authToken) : null;
 
@@ -296,7 +315,8 @@ async function handleDelete(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  // GOV-16: user-keyed rate limit.
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
   const url = new URL(request.url);

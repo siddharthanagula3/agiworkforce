@@ -22,6 +22,8 @@ import {
 } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import {
+  authenticatedMediaUrl,
+  deleteStoredMedia,
   isMediaStorageConfigured,
   storeMedia,
   bytesFromBase64,
@@ -71,6 +73,13 @@ interface ImageGenerationResponse {
   model: string;
   latency_ms: number;
   error?: string;
+  /**
+   * PER-4: true when every returned image is backed by durable storage and
+   * addressed by an authenticated `/api/files/{id}` URL. False only when this
+   * deployment has no object storage configured, in which case `images` carry
+   * inline `b64_json` that must never be persisted into a chat message.
+   */
+  persisted?: boolean;
 }
 
 const OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY = {
@@ -959,6 +968,142 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
+  // -------------------------------------------------------------------------
+  // PER-4 / PER-6 / PER-26 — persist BEFORE settling the charge.
+  //
+  // This block used to run AFTER `finalizeManagedUsageRequest({outcome:
+  // 'completed'})` and swallowed every failure into a `logger.warn` while still
+  // returning `success: true`. Three failures were invisible:
+  //   1. an R2 object written with no `media_assets` row — an orphan that never
+  //      reaches the Library and can never be deleted, yet stays fetchable;
+  //   2. `insertMediaAsset` returning null (table not migrated) — same orphan;
+  //   3. the base64 fallthrough — the route handed back `b64_json`, the client
+  //      turned it into a 1.4-4 MB `data:image/png;base64,...` URL, that string
+  //      went into `metadata.imageUrl`, the write blew the body cap and the
+  //      message was never saved: the reported "Couldn't save this response".
+  //
+  // Now: persistence is mandatory whenever storage is configured, a partial
+  // failure rolls back its own R2 object, and a failure refunds the reservation
+  // and returns an actionable error instead of an unsaveable payload.
+  // -------------------------------------------------------------------------
+  const storageConfigured = isMediaStorageConfigured();
+  const persistenceFailures: string[] = [];
+
+  if (storageConfigured) {
+    const outcomes = await Promise.all(
+      result.images.map(
+        async (img, idx): Promise<{ idx: number; url?: string; error?: string }> => {
+          let storedPathname: string | null = null;
+          try {
+            let bytes: Buffer | null = null;
+            let contentType = 'image/png';
+            if (img.b64_json) {
+              bytes = bytesFromBase64(img.b64_json);
+            } else if (img.url) {
+              const fetched = await bytesFromUrl(img.url);
+              bytes = fetched.data;
+              contentType = fetched.contentType;
+            }
+            if (!bytes) {
+              return { idx, error: 'provider returned neither image bytes nor a URL' };
+            }
+
+            const stored = await storeMedia({ userId, kind: 'image', data: bytes, contentType });
+            storedPathname = stored.pathname;
+
+            // PER-26: store the object KEY, not a permanent public URL. The
+            // authenticated `/api/files/{id}` route reads bytes by
+            // `storage_pathname` and enforces ownership + `deleted_at`; a public
+            // R2 URL bypasses both, never expires and is never revoked. Storing
+            // the key is the convention `objectKeyFromStorageUri` already
+            // documents for private-resource paths.
+            const assetId = await insertMediaAsset({
+              userId,
+              kind: 'image',
+              mimeType: contentType,
+              byteSize: stored.byteSize,
+              storageUrl: stored.pathname,
+              storagePathname: stored.pathname,
+              prompt,
+              provider,
+              model: result.model,
+              sourceSurface: 'web',
+            });
+
+            if (!assetId) {
+              // No catalog row means the bytes are unreachable and undeletable.
+              // Roll the object back rather than leaving an orphan behind.
+              await deleteStoredMedia(stored.pathname).catch((cleanupError: unknown) => {
+                logger.error(
+                  { err: cleanupError, userId, pathname: stored.pathname },
+                  'Orphaned generated image could not be removed from storage',
+                );
+              });
+              return { idx, error: 'media catalog is unavailable (media_assets not migrated)' };
+            }
+
+            return { idx, url: authenticatedMediaUrl(assetId) };
+          } catch (err) {
+            if (storedPathname) {
+              await deleteStoredMedia(storedPathname).catch(() => undefined);
+            }
+            return { idx, error: err instanceof Error ? err.message : String(err) };
+          }
+        },
+      ),
+    );
+
+    for (const outcome of outcomes) {
+      if (outcome.url) {
+        result.images[outcome.idx] = { url: outcome.url };
+      } else {
+        persistenceFailures.push(`image ${outcome.idx}: ${outcome.error ?? 'unknown error'}`);
+      }
+    }
+  }
+
+  if (persistenceFailures.length > 0) {
+    logger.error(
+      { userId, provider, model: result.model, failures: persistenceFailures },
+      'Generated image persistence failed; refunding the reservation',
+    );
+    // Nothing was charged: the reservation is finalized as failed (which
+    // settles at 0 cents) rather than completed.
+    await finalizeManagedUsageRequest({
+      ...reservation,
+      outcome: 'failed',
+      actualCostCents: 0,
+      usage: {
+        operation: 'image',
+        sourceSurface,
+        provider,
+        model: catalogModel.id,
+        outputCount: 0,
+        failure: 'image_persistence_failed',
+      },
+    });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          'The image was generated but could not be saved to your library, so it was not charged. Please try again; if this keeps happening, contact support.',
+        images: [],
+        provider,
+        model: result.model,
+        latency_ms: Date.now() - startTime,
+        persisted: false,
+      } satisfies ImageGenerationResponse,
+      {
+        status: 502,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
+
   // Settle the exact number of billable images returned by the provider.
   const costEstimate = estimateImageCostCents(
     provider,
@@ -984,56 +1129,17 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     'Image generation credits deducted',
   );
 
-  // Persist each generated image to durable storage + the user-scoped media_assets
-  // catalog, so it survives a refresh and appears in the Library across every cloud
-  // surface. Best-effort: a storage/DB failure must NOT fail an already-billed
-  // generation, so on error we keep the original inline payload.
-  if (isMediaStorageConfigured()) {
-    await Promise.all(
-      result.images.map(async (img, idx) => {
-        try {
-          let bytes: Buffer | null = null;
-          let contentType = 'image/png';
-          if (img.b64_json) {
-            bytes = bytesFromBase64(img.b64_json);
-          } else if (img.url) {
-            const fetched = await bytesFromUrl(img.url);
-            bytes = fetched.data;
-            contentType = fetched.contentType;
-          }
-          if (!bytes) return;
-
-          const stored = await storeMedia({ userId, kind: 'image', data: bytes, contentType });
-          await insertMediaAsset({
-            userId,
-            kind: 'image',
-            mimeType: contentType,
-            byteSize: stored.byteSize,
-            storageUrl: stored.url,
-            storagePathname: stored.pathname,
-            prompt,
-            provider,
-            model: result.model,
-            sourceSurface: 'web',
-          });
-          // Hand the client the durable URL (slimmer payload, survives refresh).
-          result.images[idx] = { url: stored.url };
-        } catch (err) {
-          logger.warn(
-            { err: err instanceof Error ? err.message : String(err), userId, idx },
-            'Failed to persist generated image; returning it inline',
-          );
-        }
-      }),
-    );
-  }
-
   const response: ImageGenerationResponse = {
     success: true,
     images: result.images,
     provider,
     model: result.model,
     latency_ms: Date.now() - startTime,
+    // When storage is unconfigured (dev branches without R2 credentials) the
+    // images come back as inline base64 and CANNOT be persisted into a chat
+    // message. The client must not turn that into a `data:` URL — see
+    // `useMediaGeneration`.
+    persisted: storageConfigured,
   };
 
   try {

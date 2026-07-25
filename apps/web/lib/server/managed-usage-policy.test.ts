@@ -3,17 +3,22 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
+  MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS,
   getPlanDailyUsageUnits,
   getPlanFiveHourUsageBudgetMicrousd,
   getPlanFiveHourUsageUnits,
   getPlanFlagshipWeeklyUsageBudgetCents,
+  getPlanFlagshipWeeklyUsageCapCents,
   getPlanMonthlyUsageBudgetMicrousd,
   getPlanMonthlyUsageUnits,
   getPlanSessionUsageBudgetCents,
+  getPlanSessionUsageCapCents,
   getPlanUsageBudgetCents,
   getPlanWeeklyUsageBudgetMicrousd,
   getPlanWeeklyUsageBudgetCents,
+  getPlanWeeklyUsageCapCents,
   getPlanWeeklyUsageUnits,
+  isPlanUsageUncapped,
   toPublicUsagePercentage,
 } from './managed-usage-policy';
 
@@ -49,8 +54,33 @@ describe('managed usage policy', () => {
     expect(getPlanUsageBudgetCents('max')).toBe(5_000);
     expect(getPlanUsageBudgetCents('max_15x')).toBe(15_000);
     expect(getPlanUsageBudgetCents('team')).toBe(1_000);
-    expect(getPlanUsageBudgetCents('enterprise')).toBe(0);
+    // GOV-2 (CHANGED): Enterprise previously resolved to 0, which skipped
+    // credit-account creation and hard-blocked the tier with a 402. It now
+    // resolves to explicit uncapped ledger headroom.
+    expect(getPlanUsageBudgetCents('enterprise')).toBe(
+      MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS,
+    );
     expect(getPlanUsageBudgetCents('free')).toBe(0);
+  });
+
+  // GOV-1: "no cap configured" and "cap of zero" must be distinguishable, and
+  // anything that is not an explicit declaration of uncapped must DENY.
+  it('separates a declared-uncapped tier from a zero ceiling', () => {
+    expect(isPlanUsageUncapped('enterprise')).toBe(true);
+    expect(getPlanSessionUsageCapCents('enterprise')).toBeNull();
+    expect(getPlanWeeklyUsageCapCents('enterprise')).toBeNull();
+    expect(getPlanFlagshipWeeklyUsageCapCents('enterprise')).toBeNull();
+
+    for (const tier of ['byok', 'local-only', 'free', 'unknown-tier', null]) {
+      expect(isPlanUsageUncapped(tier)).toBe(false);
+      expect(getPlanSessionUsageCapCents(tier)).toBe(0);
+      expect(getPlanWeeklyUsageCapCents(tier)).toBe(0);
+      expect(getPlanFlagshipWeeklyUsageCapCents(tier)).toBe(0);
+    }
+
+    expect(getPlanSessionUsageCapCents('pro')).toBe(50);
+    expect(getPlanWeeklyUsageCapCents('pro')).toBe(250);
+    expect(getPlanFlagshipWeeklyUsageCapCents('pro')).toBe(75);
   });
 
   it('keeps the rolling five-hour and flagship sub-limits tied to the weekly window', () => {
@@ -63,6 +93,7 @@ describe('managed usage policy', () => {
     expect(getPlanMonthlyUsageUnits('unknown')).toBe(0);
     expect(getPlanWeeklyUsageUnits(undefined)).toBe(0);
     expect(getPlanUsageBudgetCents(null)).toBe(0);
+    expect(getPlanUsageBudgetCents('unknown')).toBe(0);
   });
 
   it('converts private ledger operands into a bounded public percentage', () => {

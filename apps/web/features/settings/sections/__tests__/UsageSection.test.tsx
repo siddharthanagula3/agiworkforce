@@ -56,8 +56,8 @@ beforeEach(() => {
         session_reset_at: '2026-07-22T18:15:00.000Z',
         weekly_usage_percentage: 40,
         weekly_reset_at: '2026-07-25T12:00:00.000Z',
-        flagship_weekly_usage_percentage: 0,
-        flagship_weekly_reset_at: null,
+        flagship_weekly_usage_percentage: 95,
+        flagship_weekly_reset_at: '2026-07-26T09:00:00.000Z',
       }),
     } as Response;
   }) as unknown as typeof fetch;
@@ -72,7 +72,34 @@ describe('UsageSection', () => {
     expect(screen.getByText('Rolling 7 days')).toBeTruthy();
     expect(screen.getByText('40% used')).toBeTruthy();
     expect(screen.getByText('Account month')).toBeTruthy();
-    expect(screen.getAllByText(/capacity refreshes|resets/i)).toHaveLength(3);
+    // PAR-1 (CHANGED): the flagship window is now a fourth bar, so this count
+    // moved from 3 to 4. A user at 95% on the expensive model family used to
+    // see only the 50% aggregate and hit a wall with no warning.
+    expect(screen.getAllByText(/capacity refreshes|resets/i)).toHaveLength(4);
+  });
+
+  it('renders the flagship weekly window the contract has always carried (PAR-1)', async () => {
+    render(React.createElement(UsageSection));
+    expect(await screen.findByText('Most capable models · 7 days')).toBeTruthy();
+    expect(screen.getByText('95% used')).toBeTruthy();
+  });
+
+  // PAR-3: the reset detail must give a relative countdown, not only a machine
+  // timestamp the user has to subtract from the current time themselves.
+  it('shows a relative countdown alongside the absolute reset instant', async () => {
+    render(React.createElement(UsageSection));
+    await screen.findByText('50% used');
+    expect(screen.getAllByText(/capacity refreshes (in|now)/i).length).toBeGreaterThan(0);
+  });
+
+  // PAR-4: 'Not loaded' was a literal that also survived a failed refresh.
+  it('reports never-loaded and stale states honestly', async () => {
+    global.fetch = vi.fn(
+      async () => ({ ok: false, json: async () => ({}) }) as Response,
+    ) as unknown as typeof fetch;
+    render(React.createElement(UsageSection));
+    expect(await screen.findByText(/Last updated: Never/)).toBeTruthy();
+    expect(screen.queryByText(/Not loaded/)).toBeNull();
   });
 
   it('never renders internal credit, dollar, or token balances', async () => {

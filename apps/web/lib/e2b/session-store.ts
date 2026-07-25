@@ -36,6 +36,13 @@ export interface E2BSession {
   sandboxId: string;
   /** Cached code contexts keyed by (mapped) language, e.g. "python" | "javascript". */
   contexts: Record<string, StoredContext>;
+  /**
+   * GOV-5: epoch ms at which the CURRENT billable interval began (sandbox
+   * created or resumed). Cleared when the sandbox is paused/killed and the
+   * interval has been metered, so a resumed sandbox opens a fresh interval and
+   * no interval is ever billed twice.
+   */
+  activeSinceMs?: number;
 }
 
 export interface E2BSessionScope {
@@ -45,6 +52,12 @@ export interface E2BSessionScope {
   userId: string;
   /** Owned web_conversations.id, validated before the sandbox path is reached. */
   conversationId: string;
+  /**
+   * GOV-4: the owner's billing plan, when the caller already knows it. Optional
+   * so existing call sites keep compiling; `runtime.ts` resolves the tier from
+   * the subscription when it is absent, and FAILS CLOSED if it cannot.
+   */
+  planTier?: string;
 }
 
 export const MANAGED_CLOUD_E2B_TENANT_ID = 'managed-cloud';
@@ -107,5 +120,87 @@ export async function deleteE2BSession(scope: E2BSessionScope): Promise<void> {
       { err, tenantId: scope.tenantId, userId: scope.userId, conversationId: scope.conversationId },
       '[e2b] session-store delete failed',
     );
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * GOV-24: serialize a user's sandbox-creation critical section.
+ *
+ * `runtime.ts` counted a user's live sandboxes and then created one with
+ * NOTHING serialising the check, so two concurrent requests both observed 4
+ * against a cap of 5 and both created — the cap was advisory under exactly the
+ * concurrency it exists to stop. This short-lived Redis lock makes
+ * count-then-create atomic per user.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Upper bound on how long one create critical section may hold the lock. */
+const SANDBOX_LOCK_TTL_MS = 30_000;
+/** Total time a waiter will spend trying to acquire before giving up. */
+const SANDBOX_LOCK_WAIT_MS = 10_000;
+const SANDBOX_LOCK_POLL_MS = 100;
+
+function sandboxLockKey(tenantId: string, userId: string): string {
+  return ['e2b:create-lock:v1', encodeKeyPart(tenantId), encodeKeyPart(userId)].join(':');
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Run `critical` while holding this user's sandbox-creation lock.
+ *
+ * Returns `{ locked: false }` WITHOUT running `critical` when the lock could
+ * not be taken within `SANDBOX_LOCK_WAIT_MS`; the caller decides whether that
+ * is a denial. When Redis is unconfigured (local dev) the section runs
+ * unserialised — same posture as the rest of this store, which is explicitly
+ * not a security boundary.
+ */
+export async function withUserSandboxLock<T>(
+  scope: Pick<E2BSessionScope, 'tenantId' | 'userId'>,
+  critical: () => Promise<T>,
+): Promise<{ locked: boolean; result?: T }> {
+  if (!redis) return { locked: true, result: await critical() };
+
+  const key = sandboxLockKey(scope.tenantId, scope.userId);
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const deadline = Date.now() + SANDBOX_LOCK_WAIT_MS;
+
+  let held = false;
+  try {
+    while (Date.now() < deadline) {
+      const acquired = await redis.set(key, token, { nx: true, px: SANDBOX_LOCK_TTL_MS });
+      if (acquired) {
+        held = true;
+        break;
+      }
+      await sleep(SANDBOX_LOCK_POLL_MS);
+    }
+  } catch (err) {
+    // A lock-store failure must not be more disruptive than the unserialised
+    // behaviour it replaces: run the section and let the team cap backstop.
+    logger.warn({ err, userId: scope.userId }, '[e2b] sandbox lock unavailable; proceeding');
+    return { locked: true, result: await critical() };
+  }
+
+  if (!held) {
+    logger.warn(
+      { userId: scope.userId },
+      '[e2b] sandbox create lock not acquired within the wait budget',
+    );
+    return { locked: false };
+  }
+
+  try {
+    return { locked: true, result: await critical() };
+  } finally {
+    try {
+      // Only release OUR lock: a section that overran the TTL must not delete
+      // the lock a different request has since taken.
+      const current = await redis.get<string>(key);
+      if (current === token) await redis.del(key);
+    } catch (err) {
+      logger.warn({ err, userId: scope.userId }, '[e2b] sandbox lock release failed');
+    }
   }
 }
