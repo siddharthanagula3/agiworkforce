@@ -50,7 +50,8 @@ export interface DesktopShellV3Props {
   externalSendRequest?: ChatInterfaceProps['externalSendRequest'];
   hostBridge?: ChatHostBridge | null;
   onModelSelectorClick?: () => void;
-  onVoiceClick?: () => void;
+  // AUDIT-FIX CMP-29: `onVoiceClick` removed — ChatInput owns the mic
+  // (useVoiceInput) and never invoked the forwarded handler.
   onNavigateView?: ChatInterfaceProps['onNavigateView'];
   onOpenSearch?: () => void;
   onBuyTopUp?: () => void;
@@ -72,7 +73,6 @@ export function DesktopShellV3({
   externalSendRequest,
   hostBridge,
   onModelSelectorClick,
-  onVoiceClick,
   onNavigateView,
   onOpenSearch,
   onBuyTopUp,
@@ -275,7 +275,6 @@ export function DesktopShellV3({
               enableShortcuts={true}
               hostBridge={hostBridge}
               onModelSelectorClick={onModelSelectorClick}
-              onVoiceClick={onVoiceClick}
               onSelectFolder={folderSeamEnabled ? selectFolder : undefined}
               onRecordSkill={
                 privacyMode === 'local' ? () => setActivePanel('record-skill') : undefined

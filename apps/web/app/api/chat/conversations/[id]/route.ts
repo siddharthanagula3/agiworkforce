@@ -133,6 +133,12 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (hasStarredUpdate) updates['starred'] = body['starred'];
   const hasArchivedUpdate = Object.prototype.hasOwnProperty.call(body, 'archived');
   if (hasArchivedUpdate) updates['archived'] = body['archived'];
+  // AUDIT-FIX CMP-3: the temporary-chat privacy flag is writable after
+  // creation. `request-processor.ts` reads `is_temporary` from this row to skip
+  // memory extraction and persistence, so this is the write that makes the
+  // composer's "Temporary chat" toggle mean anything.
+  const hasIsTemporaryUpdate = Object.prototype.hasOwnProperty.call(body, 'isTemporary');
+  if (hasIsTemporaryUpdate) updates['isTemporary'] = body['isTemporary'];
 
   // Moving a conversation into a project must verify the destination project is
   // owned by this user and live — otherwise the client could tag the thread to a
@@ -169,6 +175,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         pinned = case when $7::boolean then $8::boolean else pinned end,
         starred = case when $9::boolean then $10::boolean else starred end,
         archived = case when $11::boolean then $12::boolean else archived end,
+        is_temporary = case when $13::boolean then $14::boolean else is_temporary end,
         updated_at = now()
       where id = $1 and user_id = $2 and deleted_at is null
       returning id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
@@ -186,6 +193,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       updates['starred'] ?? false,
       hasArchivedUpdate,
       updates['archived'] ?? false,
+      hasIsTemporaryUpdate,
+      updates['isTemporary'] ?? false,
     ],
   );
 

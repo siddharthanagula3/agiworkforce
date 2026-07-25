@@ -16,7 +16,6 @@ function renderComposer(overrides: Partial<ChatInputProps> = {}) {
     <ChatInput
       onSend={onSend}
       onStop={vi.fn()}
-      onPlusClick={vi.fn()}
       onModelSelectorClick={vi.fn()}
       hasMessages={false}
       conversationId="conv-1"
@@ -114,7 +113,6 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
       <ChatInput
         onSend={vi.fn()}
         onStop={vi.fn()}
-        onPlusClick={vi.fn()}
         onModelSelectorClick={vi.fn()}
         hasMessages={false}
         conversationId="conv-1"

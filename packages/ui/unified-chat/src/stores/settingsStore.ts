@@ -14,7 +14,12 @@ interface UserProfile {
 interface SettingsState {
   profile: UserProfile;
   language: string;
-  webSearchEnabled: boolean;
+  // AUDIT-FIX CMP-13: `webSearchEnabled` (default true) used to live here as
+  // well as on `chatStore` (default false). Two persisted booleans with the
+  // same name and opposite defaults in one package; only the chatStore one was
+  // ever read (ChatInput renders it, useChat sends it), so this one was a
+  // permanently-wrong second answer to "is web search on?". Deleted -- read
+  // `useChatStore(s => s.webSearchEnabled)`.
   artifactsEnabled: boolean;
   inlineVisualizationsEnabled: boolean;
   /** User's "Run code" composer preference. Off by default (web parity) — forwarded as a send-time request only when also currently available (see `codeExecutionDeploymentEnabled` + `isCodeExecutionAvailable`). */
@@ -42,7 +47,6 @@ interface SettingsState {
 
   updateProfile: (updates: Partial<UserProfile>) => void;
   setLanguage: (lang: string) => void;
-  toggleWebSearch: () => void;
   toggleArtifacts: () => void;
   toggleInlineViz: () => void;
   toggleCodeExecution: () => void;
@@ -69,7 +73,6 @@ export const useSettingsStore = create<SettingsState>()(
         plan: 'free',
       },
       language: 'en-US',
-      webSearchEnabled: true,
       artifactsEnabled: true,
       inlineVisualizationsEnabled: true,
       // Off by default — mirrors web's composer-level "Run code" toggle
@@ -92,7 +95,6 @@ export const useSettingsStore = create<SettingsState>()(
       updateProfile: (updates) => set((state) => ({ profile: { ...state.profile, ...updates } })),
 
       setLanguage: (lang) => set({ language: lang }),
-      toggleWebSearch: () => set((s) => ({ webSearchEnabled: !s.webSearchEnabled })),
       toggleArtifacts: () => set((s) => ({ artifactsEnabled: !s.artifactsEnabled })),
       toggleInlineViz: () =>
         set((s) => ({ inlineVisualizationsEnabled: !s.inlineVisualizationsEnabled })),

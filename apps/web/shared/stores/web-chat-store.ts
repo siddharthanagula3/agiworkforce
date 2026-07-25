@@ -21,7 +21,58 @@ import type {
   CloudToolApprovalProjection,
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
+import type { CloudWorkMode } from '@agiworkforce/types';
 import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
+
+/**
+ * AUDIT-FIX CMP-1/CMP-2/CMP-5: the composer's send options, isolated PER
+ * CONVERSATION.
+ *
+ * These eight values used to live in `useState` inside `ChatComposerNew`, and
+ * `WebChatPage` renders that composer in the two opposite branches of an
+ * `isEmptyChat ? ... : ...` ternary. Sending the first message therefore
+ * UNMOUNTED the empty-state instance and MOUNTED the in-conversation one, so
+ * every toggle silently reset to its default from message 2 onward -- a
+ * conversation started in AGI Work continued as plain chat with nothing said.
+ * `clearComposerState()` deliberately does not reset them ("PERSISTENT toggles
+ * (claude.ai parity)"); the host layout was defeating that intent.
+ *
+ * Hoisting them here (next to `draftsByConversation`, the other piece of
+ * per-conversation composer state) makes them survive the branch swap AND scopes
+ * them to one conversation, so turning Deep Research on in chat A no longer
+ * leaks into chat B.
+ */
+export interface ComposerToggleState {
+  /** Chat | AGI Work. Stamped into send meta and enforced server-side. */
+  workMode: CloudWorkMode;
+  webSearchEnabled: boolean;
+  researchEnabled: boolean;
+  codeExecutionEnabled: boolean;
+  officeCreationEnabled: boolean;
+  /** Image-generation composer mode (routes to the media harness, not chat). */
+  imageMode: boolean;
+  /**
+   * Exact server-catalog skill name selected for this conversation, or null.
+   * Only the name is stored: it is the sole field the send path reads, and the
+   * catalog owns the body.
+   */
+  selectedSkillName: string | null;
+}
+
+/**
+ * Baseline for a conversation that has no stored composer state yet. The web
+ * search default is overridden per conversation by the persisted
+ * `webSearchByDefault` preference (AUDIT-FIX CMP-4/CMP-12).
+ */
+export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
+  workMode: 'chat',
+  webSearchEnabled: false,
+  researchEnabled: false,
+  codeExecutionEnabled: false,
+  officeCreationEnabled: false,
+  imageMode: false,
+  selectedSkillName: null,
+});
 
 /**
  * Deep Research run state persisted on the assistant message. Populated from
@@ -368,6 +419,25 @@ interface ChatState {
   /** Live draft for the ACTIVE conversation (derived from the map above). */
   draftContent: string;
 
+  /**
+   * AUDIT-FIX CMP-1/CMP-2/CMP-5: composer send options per conversation. See
+   * `ComposerToggleState`. Not persisted -- these describe one live
+   * conversation's next turn, not a user preference (the one preference that
+   * IS durable is `webSearchByDefault` below).
+   */
+  composerTogglesByConversation: Record<string, ComposerToggleState>;
+  /**
+   * AUDIT-FIX CMP-4/CMP-12: durable "search by default" preference.
+   *
+   * Web search previously defaulted OFF with NO persistence anywhere and no
+   * settings-level preference, so there was no code path by which "search by
+   * default" could ever take effect. Toggling Web search now also records the
+   * choice here, and every conversation that has no composer state yet seeds
+   * from it -- so the preference is honoured on the next new chat and across
+   * reloads. Persisted (see `partialize`).
+   */
+  webSearchByDefault: boolean;
+
   // Sidebar state
   sidebarCollapsed: boolean;
 
@@ -463,6 +533,24 @@ interface ChatState {
   /** Discard one conversation's parked draft. */
   clearDraftContent: (conversationId?: string | null) => void;
 
+  // Actions - Composer toggles (AUDIT-FIX CMP-1/CMP-2/CMP-5)
+  /**
+   * Read one conversation's composer send options, seeded from the durable
+   * defaults when that conversation has none yet. Never returns undefined, so
+   * the composer has no "first render has no toggles" hole.
+   */
+  getComposerToggles: (conversationId?: string | null) => ComposerToggleState;
+  /**
+   * Merge a partial update into one conversation's composer send options.
+   * `conversationId` defaults to the active conversation.
+   */
+  setComposerToggles: (
+    updates: Partial<ComposerToggleState>,
+    conversationId?: string | null,
+  ) => void;
+  /** Record the durable "search by default" preference (AUDIT-FIX CMP-4/CMP-12). */
+  setWebSearchByDefault: (enabled: boolean) => void;
+
   // Actions - Sidebar
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -485,6 +573,8 @@ const initialState = {
   selectedModelTier: 'balanced' as ModelTier,
   draftsByConversation: {} as Record<string, string>,
   draftContent: '',
+  composerTogglesByConversation: {} as Record<string, ComposerToggleState>,
+  webSearchByDefault: false,
   sidebarCollapsed: false,
 };
 
@@ -495,7 +585,7 @@ const initialState = {
  * real key instead of "whatever `messages` happens to hold" means a pre-create
  * write is still attributable and cannot be confused with a real conversation.
  */
-const PENDING_CONVERSATION_KEY = '__new_conversation__';
+export const PENDING_CONVERSATION_KEY = '__new_conversation__';
 
 function conversationKey(conversationId: string | null | undefined): string {
   return conversationId ?? PENDING_CONVERSATION_KEY;
@@ -610,11 +700,16 @@ export const useChatStore = create<ChatState>()(
               const { [id]: _removed, ...messagesByConversation } = state.messagesByConversation;
               // AUDIT-FIX STR-23: a deleted conversation's parked draft dies with it.
               const { [id]: _removedDraft, ...draftsByConversation } = state.draftsByConversation;
+              // AUDIT-FIX CMP-5: and so do its composer send options -- a
+              // recreated id must never resurrect a dead conversation's tools.
+              const { [id]: _removedToggles, ...composerTogglesByConversation } =
+                state.composerTogglesByConversation;
               const activeConversationId =
                 state.activeConversationId === id ? null : state.activeConversationId;
               return {
                 conversations: state.conversations.filter((c) => c.id !== id),
                 draftsByConversation,
+                composerTogglesByConversation,
                 draftContent: draftsByConversation[conversationKey(activeConversationId)] ?? '',
                 activeConversationId,
                 messagesByConversation,
@@ -970,6 +1065,43 @@ export const useChatStore = create<ChatState>()(
             'chat/clearDraftContent',
           ),
 
+        // Composer toggles (AUDIT-FIX CMP-1/CMP-2/CMP-5)
+        getComposerToggles: (conversationId) => {
+          const state = get();
+          const targetId =
+            conversationId === undefined ? state.activeConversationId : conversationId;
+          return (
+            state.composerTogglesByConversation[conversationKey(targetId)] ?? {
+              ...DEFAULT_COMPOSER_TOGGLES,
+              webSearchEnabled: state.webSearchByDefault,
+            }
+          );
+        },
+
+        setComposerToggles: (updates, conversationId) =>
+          set(
+            (state) => {
+              const targetId =
+                conversationId === undefined ? state.activeConversationId : conversationId;
+              const key = conversationKey(targetId);
+              const current = state.composerTogglesByConversation[key] ?? {
+                ...DEFAULT_COMPOSER_TOGGLES,
+                webSearchEnabled: state.webSearchByDefault,
+              };
+              return {
+                composerTogglesByConversation: {
+                  ...state.composerTogglesByConversation,
+                  [key]: { ...current, ...updates },
+                },
+              };
+            },
+            undefined,
+            'chat/setComposerToggles',
+          ),
+
+        setWebSearchByDefault: (enabled) =>
+          set({ webSearchByDefault: enabled }, undefined, 'chat/setWebSearchByDefault'),
+
         // Sidebar
         toggleSidebar: () =>
           set(
@@ -987,13 +1119,23 @@ export const useChatStore = create<ChatState>()(
       {
         name: 'agiworkforce-web-chat',
         storage: createJSONStorage(() => localStorage),
-        version: 1,
+        version: 2,
         partialize: (state) => ({
-          // Only persist model selection and sidebar state
+          // Only persist model selection, sidebar state, and the durable
+          // "search by default" preference (AUDIT-FIX CMP-4/CMP-12). The
+          // per-conversation composer toggles are deliberately NOT persisted:
+          // they describe one live conversation's next turn.
           selectedModel: state.selectedModel,
           selectedModelTier: state.selectedModelTier,
           sidebarCollapsed: state.sidebarCollapsed,
+          webSearchByDefault: state.webSearchByDefault,
         }),
+        migrate: (persisted: unknown, version: number) => {
+          if (version < 2) {
+            return { ...(persisted as Record<string, unknown>), webSearchByDefault: false };
+          }
+          return persisted;
+        },
       },
     ),
     { name: 'ChatStore', enabled: process.env.NODE_ENV === 'development' },

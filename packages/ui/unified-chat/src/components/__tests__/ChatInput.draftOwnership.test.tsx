@@ -10,7 +10,6 @@ function renderComposer(onSend = vi.fn(), supportsResearch = false) {
     <ChatInput
       onSend={onSend}
       onStop={vi.fn()}
-      onPlusClick={vi.fn()}
       onModelSelectorClick={vi.fn()}
       hasMessages={false}
       conversationId="conv-1"
@@ -152,7 +151,6 @@ describe('ChatInput draft ownership', () => {
       <ChatInput
         onSend={vi.fn()}
         onStop={vi.fn()}
-        onPlusClick={vi.fn()}
         onModelSelectorClick={vi.fn()}
         hasMessages
         conversationId="conv-1"
@@ -185,7 +183,6 @@ describe('ChatInput draft ownership', () => {
     const props = {
       onSend,
       onStop: vi.fn(),
-      onPlusClick: vi.fn(),
       onModelSelectorClick: vi.fn(),
       hasMessages: false,
       conversationId: 'conv-1',

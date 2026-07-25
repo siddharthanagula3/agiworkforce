@@ -11,7 +11,12 @@ import {
   persistImageGenerationUserMessage,
   persistImageGenerationAssistantMessage,
 } from '../lib/imageGenerationPersistence';
-import { useChatStore, selectConversationMessages } from '@shared/stores/web-chat-store';
+import {
+  useChatStore,
+  selectConversationMessages,
+  PENDING_CONVERSATION_KEY,
+} from '@shared/stores/web-chat-store';
+import { useThinkingStore } from '@shared/stores/thinking-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
@@ -115,7 +120,7 @@ import {
 import { runReplacingSend } from '../lib/replacingSend';
 import { isStaleActiveConversation } from '../lib/staleActiveConversation';
 import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
-import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
+import { LocalByokHandoffDialog, SendPreview, type ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
 import { useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
@@ -677,19 +682,46 @@ export default function WebChatPage() {
   const chatError = useChatStore((s) => s.error);
   const setChatError = useChatStore((s) => s.setError);
 
-  // SendPreview presentation · privacy-disclosure card rendered above the
-  // composer so users always see where the next turn is going (local device,
-  // BYOK provider host, or AGI managed gateway) before they send.
+  /**
+   * SendPreview presentation · privacy-disclosure card rendered above the
+   * composer so users always see where the next turn is going (local device,
+   * BYOK provider host, or AGI managed gateway) before they send.
+   *
+   * AUDIT-FIX CMP-17: this summary was computed on every render and only
+   * `.privacyShortLabel` was ever consumed — `<SendPreview>` was exported from
+   * the package with ZERO render sites while a comment at the composer call
+   * site claimed the disclosure was docked. It is rendered below now, and it is
+   * fed the REAL active tool list (read from the same per-conversation composer
+   * state the composer writes, so the two can never disagree) — making it the
+   * only UI that answers "which tools are active for this send".
+   */
+  const composerToggles = useChatStore(
+    (s) => s.composerTogglesByConversation[displayedConversationId ?? PENDING_CONVERSATION_KEY],
+  );
+  const thinkingEnabled = useThinkingStore((s) => s.enabled);
+  const sendPreviewToolNames = useMemo(() => {
+    const names: string[] = [];
+    if (composerToggles?.workMode === 'agiwork') names.push('AGI Work');
+    if (composerToggles?.webSearchEnabled) names.push('Web search');
+    if (composerToggles?.researchEnabled) names.push('Deep Research');
+    if (composerToggles?.codeExecutionEnabled) names.push('Run code');
+    if (composerToggles?.officeCreationEnabled) names.push('Office files');
+    if (thinkingEnabled) names.push('Extended thinking');
+    if (composerToggles?.selectedSkillName)
+      names.push(`Skill: ${composerToggles.selectedSkillName}`);
+    return names;
+  }, [composerToggles, thinkingEnabled]);
   const sendPreviewPresentation = useMemo<SendPreviewPresentation>(() => {
     const providerMode: ProviderMode = 'ManagedGateway';
     return summarizeSendPreview({
       providerMode,
       modelLabel: selectedModel?.name ?? undefined,
       modelId: activeModelId,
+      toolNames: sendPreviewToolNames,
       // User-facing label only — never leak the internal gateway hostname.
       destinationHost: 'AGI managed cloud',
     });
-  }, [activeModelId, selectedModel]);
+  }, [activeModelId, selectedModel, sendPreviewToolNames]);
 
   // Conversation CRUD
   const {
@@ -1694,6 +1726,22 @@ export default function WebChatPage() {
   // Composer "Project or folder" picker (new-chat composer only). Web offers
   // projects; the composer itself adds the local-folder action only on surfaces
   // with the working-directory capability (desktop), so this stays honest here.
+  /**
+   * AUDIT-FIX CMP-3: persist the "Temporary chat" privacy flag.
+   *
+   * `updateConversation` here is the network-backed hook action (PUT
+   * /api/chat/conversations/:id), not the store's local map write the composer
+   * used to call. It returns false when the write fails so the composer can say
+   * so instead of showing a privacy mode the database does not have.
+   */
+  const handleSetTemporaryChat = useCallback(
+    async (isTemporary: boolean): Promise<boolean> => {
+      if (!displayedConversationId) return false;
+      return updateConversation(displayedConversationId, { isTemporary });
+    },
+    [displayedConversationId, updateConversation],
+  );
+
   const composerProjectPicker = useMemo(
     () => ({
       projects: storeProjects.map((p) => ({ id: p.id, name: p.name })),
@@ -2556,6 +2604,9 @@ export default function WebChatPage() {
               <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center gap-6 px-6">
                 <GreetingBanner onSendMessage={setComposerPrefill} />
                 <div className="w-full max-w-[940px]">
+                  {/* AUDIT-FIX CMP-17: the send-destination + active-tools
+                      disclosure, docked above the composer on both surfaces. */}
+                  <SendPreview presentation={sendPreviewPresentation} className="mb-2" />
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}
@@ -2572,6 +2623,7 @@ export default function WebChatPage() {
                     onUpgradeRequest={handleOpenUpgradeDialog}
                     onGenerateImage={handleGenerateImage}
                     projectPicker={composerProjectPicker}
+                    onSetTemporaryChat={handleSetTemporaryChat}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
                       limitReached: freeUsageLimitReached,
@@ -2607,7 +2659,21 @@ export default function WebChatPage() {
 
               {/* Composer + Send Preview disclosure · docked in normal flow (not
                   absolute) so the banner/composer can never float over and overlap
-                  the follow-up suggestions or message content. */}
+                  the follow-up suggestions or message content.
+
+                  AUDIT-FIX CMP-17: the "Send Preview disclosure" this comment
+                  claimed was docked here did not exist — `<SendPreview>` had
+                  zero render sites. It is rendered below, and it is the only UI
+                  that answers "which tools are active for this send".
+
+                  AUDIT-FIX CMP-1: `projectPicker` used to be passed ONLY to the
+                  empty-state composer in the other branch of this ternary, so
+                  sending the first message unmounted that instance, mounted this
+                  one, and the Chat | AGI Work toggle vanished — the conversation
+                  silently continued as plain chat from message 2 and
+                  `applyWorkMode` server-side only ever applied to turn 1. Both
+                  instances receive it now, and the mode itself lives in the chat
+                  store keyed by conversation so it survives the swap. */}
               <div className="shrink-0 pb-4">
                 <div
                   className={cn(
@@ -2615,6 +2681,7 @@ export default function WebChatPage() {
                     effectiveSidebarCollapsed ? 'max-w-4xl' : '',
                   )}
                 >
+                  <SendPreview presentation={sendPreviewPresentation} className="mb-2" />
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}
@@ -2629,6 +2696,8 @@ export default function WebChatPage() {
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     onUpgradeRequest={handleOpenUpgradeDialog}
                     onGenerateImage={handleGenerateImage}
+                    projectPicker={composerProjectPicker}
+                    onSetTemporaryChat={handleSetTemporaryChat}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
                       limitReached: freeUsageLimitReached,

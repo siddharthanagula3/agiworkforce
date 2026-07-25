@@ -1,12 +1,9 @@
 export { ChatComposerNew } from './ChatComposerNew';
-export { FocusModeButtons } from './FocusModeButtons';
 export { SlashCommandMenu } from './SlashCommandMenu';
 export { SendButton } from './SendButton';
 export { ComposerFooter } from './ComposerFooter';
-export { InputFooter } from './InputFooter';
 export { StyleSelector } from './StyleSelector';
 export { AttachmentPreview } from './AttachmentPreview';
 export { VoiceInputButton as ComposerVoiceInput } from './VoiceInputButton';
 export { VoiceRecordingOverlay } from './VoiceRecordingOverlay';
-export type { FocusMode } from './FocusModeButtons';
 export type { SendButtonMode } from './SendButton';

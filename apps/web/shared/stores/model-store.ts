@@ -42,22 +42,28 @@ export type { RoutingTaskType };
 type PersistedModelState = {
   selectedModelId: string;
   selectedProvider: string | null;
-  thinkingEnabled: boolean;
-  thinkingBudget: number;
 };
 
+/**
+ * AUDIT-FIX CMP-24: extended-thinking state used to live HERE as well as in
+ * `@shared/stores/thinking-store` -- two persisted sources of truth for one
+ * concept. Worse, `applyModelSelection` unconditionally returned
+ * `thinkingEnabled: metadata.capabilities.thinking`, so merely switching models
+ * silently RE-ENABLED extended thinking a user had deliberately turned off (a
+ * silent latency and spend increase). Nothing outside this file ever read
+ * `thinkingEnabled` / `thinkingModeEnabled` / `thinkingBudget`, so the honest
+ * reconciliation is to delete them: `useThinkingStore` (enabled + effort) is
+ * the single source of truth, and both the composer and the ComposerFooter
+ * already read it.
+ */
 interface ModelState extends PersistedModelState {
   selectedModel: string;
-  thinkingModeEnabled: boolean;
   availableModels: AIModel[];
   loading: boolean;
   setSelectedModelId: (id: string) => void;
   setSelectedModel: (id: string, provider?: string | null) => void;
   selectModel: (id: string, provider?: string | null) => Promise<void>;
   setSelectedProvider: (provider: string | null) => void;
-  setThinkingEnabled: (enabled: boolean) => void;
-  setThinkingModeEnabled: (enabled: boolean) => void;
-  setThinkingBudget: (budget: number) => void;
   getSelectedModel: () => AIModel;
   getAvailableModels: () => Promise<AIModel[]>;
 }
@@ -187,28 +193,24 @@ function resolveProvider(modelId: string, explicitProvider?: string | null): str
   return getModelMetadata(canonicalModelId)?.provider ?? null;
 }
 
+/**
+ * AUDIT-FIX CMP-24: selecting a model now changes ONLY the model. Extended
+ * thinking is the user's choice and lives in `useThinkingStore`; the composer
+ * already clears it when the newly selected model cannot reason
+ * (`ChatComposerNew`'s capability effect), which is the one direction a model
+ * switch is allowed to move it.
+ */
 function applyModelSelection(
   modelId: string,
   explicitProvider?: string | null,
-): Pick<
-  ModelState,
-  | 'selectedModelId'
-  | 'selectedModel'
-  | 'selectedProvider'
-  | 'thinkingEnabled'
-  | 'thinkingModeEnabled'
-> {
+): Pick<ModelState, 'selectedModelId' | 'selectedModel' | 'selectedProvider'> {
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;
-  const metadata = getModelMetadata(canonicalModelId);
   const provider = resolveProvider(canonicalModelId, explicitProvider);
-  const supportsThinking = metadata?.capabilities?.thinking ?? false;
 
   return {
     selectedModelId: canonicalModelId,
     selectedModel: canonicalModelId,
     selectedProvider: provider,
-    thinkingEnabled: supportsThinking,
-    thinkingModeEnabled: supportsThinking,
   };
 }
 
@@ -216,7 +218,6 @@ export const useModelStore = create<ModelState>()(
   persist(
     (set, get) => ({
       ...applyModelSelection(DEFAULT_MODEL_ID),
-      thinkingBudget: 0,
       availableModels: AVAILABLE_MODELS,
       loading: false,
 
@@ -245,24 +246,6 @@ export const useModelStore = create<ModelState>()(
         set({ selectedProvider: provider });
       },
 
-      setThinkingEnabled: (enabled) => {
-        set({ thinkingEnabled: enabled, thinkingModeEnabled: enabled });
-      },
-
-      setThinkingModeEnabled: (enabled) => {
-        set({ thinkingEnabled: enabled, thinkingModeEnabled: enabled });
-      },
-
-      setThinkingBudget: (budget) => {
-        const supportsThinking =
-          getModelMetadata(get().selectedModelId)?.capabilities?.thinking ?? false;
-        set({
-          thinkingBudget: budget,
-          thinkingEnabled: supportsThinking && budget > 0,
-          thinkingModeEnabled: supportsThinking && budget > 0,
-        });
-      },
-
       getSelectedModel: () => {
         const { selectedModelId } = get();
         return (
@@ -274,13 +257,13 @@ export const useModelStore = create<ModelState>()(
     }),
     {
       name: 'agi-model-store',
-      version: 4,
+      // AUDIT-FIX CMP-24: v5 drops the duplicated thinking fields from the
+      // persisted payload; `useThinkingStore` owns that state.
+      version: 5,
       storage: createJSONStorage(() => localStorage),
       partialize: (state): PersistedModelState => ({
         selectedModelId: state.selectedModelId,
         selectedProvider: state.selectedProvider,
-        thinkingEnabled: state.thinkingEnabled,
-        thinkingBudget: state.thinkingBudget,
       }),
       migrate: (persistedState: unknown) => {
         const state = (persistedState as Partial<PersistedModelState>) ?? {};
@@ -289,8 +272,6 @@ export const useModelStore = create<ModelState>()(
         return {
           selectedModelId,
           selectedProvider: state.selectedProvider ?? resolveProvider(selectedModelId),
-          thinkingEnabled: state.thinkingEnabled ?? false,
-          thinkingBudget: state.thinkingBudget ?? 0,
         };
       },
     },

@@ -27,6 +27,8 @@ import {
   EFFORT_LABEL,
   getModelReasoning,
   getModelEffortOptions,
+  getAutoRoutingProfiles,
+  isAutoModeModelId,
   modelsById,
   type ProviderId,
   type CapabilityTier,
@@ -558,11 +560,16 @@ export function ModelSelector({
 
   // Separate out auto / managed_cloud models — "Best (auto)" lives in its own header section.
   // Everything else goes in provider groups.
+  //
+  // AUDIT-FIX CMP-21: the partition used `m.id.startsWith('auto')`, a string
+  // prefix that both over-matches (any future model id beginning "auto") and
+  // under-matches (an Auto alias the catalog names differently). The catalog
+  // exposes the authoritative predicate.
   const autoModels = displayModels.filter(
-    (m) => m.provider === 'managed_cloud' || m.id.startsWith('auto'),
+    (m) => m.provider === 'managed_cloud' || isAutoModeModelId(m.id),
   );
   const providerModels = displayModels.filter(
-    (m) => m.provider !== 'managed_cloud' && !m.id.startsWith('auto'),
+    (m) => m.provider !== 'managed_cloud' && !isAutoModeModelId(m.id),
   );
 
   // Group by provider, sorted per PROVIDER_ORDER
@@ -577,10 +584,17 @@ export function ModelSelector({
     return providerSortKey(a) - providerSortKey(b);
   });
 
-  // Determine the primary "Best (auto)" model ID to select
+  // Determine the primary "Best (auto)" model ID to select.
+  //
+  // AUDIT-FIX CMP-21: this hardcoded 'auto' then fell back to 'auto-balanced' —
+  // an alias the catalog marks `selectable: false` in routing-policies.json, so
+  // the fallback could name a profile the catalog deliberately excludes from
+  // pickers. `getAutoRoutingProfiles()` returns exactly the selectable profiles
+  // in catalog order, so the preferred id and its fallbacks all come from the
+  // registry (repo rule: model IDs come from the catalog, never from code).
+  const selectableAutoProfileIds = getAutoRoutingProfiles().map((profile) => profile.id);
   const bestAutoId =
-    autoModels.find((m) => m.id === 'auto')?.id ??
-    autoModels.find((m) => m.id === 'auto-balanced')?.id ??
+    selectableAutoProfileIds.map((id) => autoModels.find((m) => m.id === id)?.id).find(Boolean) ??
     autoModels[0]?.id;
 
   const isBestAutoSelected =

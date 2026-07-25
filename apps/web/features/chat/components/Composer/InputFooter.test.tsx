@@ -1,12 +1,6 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
-import { InputFooter } from './InputFooter';
-
-describe('InputFooter', () => {
-  it('renders only a usage percentage, not raw credits', () => {
-    render(<InputFooter usedCredits={25} totalCredits={100} />);
-
-    expect(screen.getByText('25% used')).toBeTruthy();
-    expect(screen.queryByText('25/100')).toBeNull();
-  });
-});
+/**
+ * REMOVED (AUDIT-FIX CMP-31) together with the `InputFooter` component it
+ * covered. Kept as an empty module only because the working tree cannot unlink
+ * files; it declares no tests, so the suite is unaffected.
+ */
+export {};

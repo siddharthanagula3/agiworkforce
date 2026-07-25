@@ -1685,10 +1685,6 @@ const DesktopShell = () => {
                 onModelSelectorClick={() =>
                   openSettingsDialog(isCloudMode ? 'capabilities' : 'models-keys')
                 }
-                onVoiceClick={() => {
-                  const event = new CustomEvent('toggle-voice-input');
-                  window.dispatchEvent(event);
-                }}
                 onOpenSearch={() => useSearchModal.getState().open()}
                 onNavigateView={(view) => {
                   if (view === 'connectors') {
