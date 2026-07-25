@@ -12,7 +12,7 @@ import {
   signOutbound,
   verifyInbound,
 } from '../services/dispatch';
-import { API_BASE_URL } from '../api/config';
+import { GATEWAY_BASE_URL } from '../api/config';
 import { cloudFetch } from '../api/cloudApi';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 
@@ -425,8 +425,13 @@ export const useConnectionStore = create<MobileCompanionState>()(
           // Mobile pairing is a managed-cloud (cross-device sync) operation.
           // Route through the egress guard so it fails closed in Local/BYOK mode
           // instead of reaching our signaling/gateway. (Trust-boundary chokepoint.)
+          //
+          // STB-8: /api/pair/* is served only by the Express api-gateway, so this
+          // must target GATEWAY_BASE_URL. Sending it to the Next.js origin 404'd
+          // and the QR code never rendered unless VITE_API_BASE_URL happened to
+          // be overridden at build time.
           const response = await cloudFetch(
-            `${API_BASE_URL.replace(/\/+$/, '')}/api/pair/initiate`,
+            `${GATEWAY_BASE_URL.replace(/\/+$/, '')}/api/pair/initiate`,
             {
               method: 'POST',
               headers: {

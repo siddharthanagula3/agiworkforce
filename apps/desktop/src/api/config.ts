@@ -1,17 +1,38 @@
 /**
  * Centralized API URL configuration.
  *
- * All API base URLs are derived from two environment variables:
- *  - VITE_API_BASE_URL  — the API gateway (Express backend)
- *  - VITE_WEB_APP_URL   — the public web app (Next.js)
+ * All API base URLs are derived from three environment variables:
+ *  - VITE_API_BASE_URL      — the Next.js app's `/api/*` surface
+ *  - VITE_WEB_APP_URL       — the public web app (Next.js)
+ *  - VITE_GATEWAY_BASE_URL  — the Express api-gateway (`services/api-gateway`)
  *
  * Every module that needs a base URL should import from here instead of
  * defining its own constant, so that overrides apply in one place.
  */
 
-/** API gateway base URL (Express backend). */
+/**
+ * Base URL for `/api/*` routes served by the Next.js app.
+ *
+ * STB-8: this used to be documented as "the API gateway (Express backend)"
+ * while defaulting to the web app origin. That mismatch is what sent
+ * gateway-only routes to the wrong host. Gateway-only routes must use
+ * {@link GATEWAY_BASE_URL}; everything under `apps/web/app/api` uses this.
+ */
 export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || 'https://agiworkforce.com';
 
 /** Public web app base URL (Next.js). */
 export const WEB_APP_URL: string =
   (import.meta.env['VITE_WEB_APP_URL'] as string | undefined) ?? 'https://agiworkforce.com';
+
+/**
+ * Express api-gateway base URL.
+ *
+ * STB-8 fix: routes such as `/api/pair/*` exist ONLY in
+ * `services/api-gateway` — there is no Next.js route and no rewrite bridging
+ * them (`next.config.ts` / `vercel.json` only rewrite `/v1/*`). Calling them
+ * against {@link API_BASE_URL} returns 404. Both hosts are ours, so the egress
+ * guard blocks them identically in Local/BYOK mode.
+ */
+export const GATEWAY_BASE_URL: string =
+  (import.meta.env['VITE_GATEWAY_BASE_URL'] as string | undefined) ??
+  'https://api.agiworkforce.com';

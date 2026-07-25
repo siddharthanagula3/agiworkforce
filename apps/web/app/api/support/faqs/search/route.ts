@@ -1,30 +1,29 @@
+import 'server-only';
+
+import { NextResponse } from 'next/server';
+
 /**
- * GET /api/support/faqs/search?q=<query> · search FAQs by keyword.
- * Static data; performs case-insensitive substring match on question and answer.
+ * GET /api/support/faqs/search
+ *
+ * STB-20: RETIRED. Zero in-repo callers. These served static arrays from
+ * lib/support/static-data.ts to a client that was never built; the /help and
+ * /support pages render their content directly.
+ *
+ * Retired in place rather than deleted, matching the convention already used by
+ * /api/agents/session and /api/usage/deduct: any client still pointed here gets
+ * an explicit ENDPOINT_RETIRED signal instead of a 404 that reads like a broken
+ * deploy.
  */
-
-import { NextRequest, NextResponse } from 'next/server';
-import { STATIC_FAQS } from '@/lib/support/static-data';
-
-export async function GET(request: NextRequest) {
-  const url = new URL(request.url);
-  const query = (url.searchParams.get('q') ?? '').trim().toLowerCase();
-
-  if (!query) {
-    // No query - return all published FAQs
-    const faqs = STATIC_FAQS.filter((f) => f.is_published).sort(
-      (a, b) => a.display_order - b.display_order,
-    );
-    return NextResponse.json({ faqs, query: '' });
-  }
-
-  const faqs = STATIC_FAQS.filter(
-    (f) =>
-      f.is_published &&
-      (f.question.toLowerCase().includes(query) ||
-        f.answer.toLowerCase().includes(query) ||
-        f.category.toLowerCase().includes(query)),
-  ).sort((a, b) => a.display_order - b.display_order);
-
-  return NextResponse.json({ faqs, query });
+function handler(): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: 'ENDPOINT_RETIRED',
+        message: 'FAQs are rendered directly by the /support page.',
+      },
+    },
+    { status: 410 },
+  );
 }
+
+export const GET = handler;

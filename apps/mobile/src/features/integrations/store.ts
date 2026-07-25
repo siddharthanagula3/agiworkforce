@@ -5,8 +5,8 @@
  * Extends the existing messagingStore pattern but covers the full set of
  * platforms: Slack, Teams, Discord, WhatsApp, Telegram, Gmail, Outlook.
  *
- * Device integrations (health, calendar, location, notifications) are read
- * at runtime via the deviceIntegrations / healthData services and stored
+ * Device integrations (calendar, contacts, notifications) are read
+ * at runtime via the deviceIntegrations service and stored
  * here for cross-component sharing without re-checking permissions on every
  * render.
  */
@@ -23,11 +23,6 @@ import {
   getContactsPermissionStatus,
   type PermissionStatus,
 } from '@/src/features/integrations/services/deviceIntegrations';
-import {
-  isHealthAvailable,
-  getHealthPermissionStatus,
-  type HealthPermissionStatus,
-} from '@/src/features/integrations/services/healthData';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import type { MessagingPlatformId } from '@/src/features/integrations/components/PlatformCard';
@@ -53,7 +48,7 @@ export interface PlatformIntegration {
 export type DeviceIntegrationStatus = 'active' | 'inactive' | 'needs-permission' | 'unavailable';
 
 export interface DeviceIntegration {
-  id: 'health' | 'calendar' | 'contacts' | 'notifications';
+  id: 'calendar' | 'contacts' | 'notifications';
   name: string;
   status: DeviceIntegrationStatus;
   lastSync?: string;
@@ -118,18 +113,8 @@ function permToStatus(p: PermissionStatus): DeviceIntegrationStatus {
   }
 }
 
-function healthToStatus(h: HealthPermissionStatus): DeviceIntegrationStatus {
-  switch (h) {
-    case 'granted':
-      return 'active';
-    case 'denied':
-      return 'needs-permission';
-    case 'unavailable':
-      return 'unavailable';
-    case 'undetermined':
-      return 'inactive';
-  }
-}
+// STB-21: healthToStatus() and the Health/Google Fit entry were removed with the
+// health-context service — the backend route they reported on never existed.
 
 // ---------------------------------------------------------------------------
 // Store
@@ -240,19 +225,9 @@ export const useIntegrationStore = create<IntegrationState>()(
 
           const notifPerm = notifResult.status as Notifications.PermissionStatus;
 
-          const healthStat = isHealthAvailable()
-            ? await getHealthPermissionStatus()
-            : 'unavailable';
-
           const now = new Date().toISOString();
 
           const next: DeviceIntegration[] = [
-            {
-              id: 'health',
-              name: Platform.OS === 'ios' ? 'Apple Health' : 'Google Fit',
-              status: healthToStatus(healthStat as HealthPermissionStatus),
-              lastSync: healthStat === 'granted' ? now : undefined,
-            },
             {
               id: 'calendar',
               name: Platform.OS === 'ios' ? 'Apple Calendar' : 'Google Calendar',

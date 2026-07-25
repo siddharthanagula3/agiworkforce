@@ -2,20 +2,11 @@
 /**
  * Voice service — thin facade over services/voiceInput.ts (on-device STT).
  *
- * The cloud Whisper + Deepgram helpers below are retained for v1.1 (cloud chat)
- * and gated behind FEATURES.cloudChat — they throw {@link CloudVoiceDisabledError}
- * in v1.
+ * STB-22: the cloud Deepgram helpers that used to live here were removed; see
+ * the note further down. Nothing in this module performs network I/O now — all
+ * transcription is on-device via `./voiceInput`.
  */
 
-import { Platform } from 'react-native';
-import { API_URL, TIMEOUTS } from '@/lib/constants';
-import { FEATURES } from '@/lib/v1FeatureFlags';
-// Zero-leak: the ephemeral-token endpoint is OUR cloud (`${API_URL}/api/v1/voice/token`)
-// → guardedFetch (Local mode blocks before network I/O, fail-closed). The Deepgram
-// call below is a direct-to-provider host, so it stays on secureFetch (TLS pinning).
-import { secureFetch } from '@/services/secureFetch';
-import { guardedFetch } from '@/lib/egressGuard';
-import { getAuthToken } from '@/services/authSession';
 import {
   startCaptureSession,
   stopCapture,
@@ -26,13 +17,6 @@ import {
   type OnDeviceTranscriptResult,
 } from './voiceInput';
 export { VoiceCaptureError, type VoicePartialResult } from './voiceInput';
-
-export class CloudVoiceDisabledError extends Error {
-  constructor(feature: string) {
-    super(`[voice] ${feature} requires FEATURES.cloudChat (v1.1+).`);
-    this.name = 'CloudVoiceDisabledError';
-  }
-}
 
 // Re-exports used by the rest of the app under the legacy names.
 export type VoiceMeteringEvent = VoiceInputMeteringEvent & {
@@ -177,84 +161,15 @@ export async function transcribe(_uri: string): Promise<TranscriptionResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Cloud paths (gated behind FEATURES.cloudChat — v1.1+)
+// STB-22: the cloud voice helpers were removed.
+//
+// `getDeepgramEphemeralToken()` POSTed to `${API_URL}/api/v1/voice/token`, a
+// route that has never existed on the Next.js app or the Express api-gateway.
+// The real voice surface is `/api/voice/transcribe` (server-side transcription)
+// plus `/api/voice/health`, which keeps the provider key server-side by never
+// minting a client token at all. `transcribeWithDeepgram()` existed only to
+// consume that token. Both had zero callers.
+//
+// Re-enabling cloud transcription means calling `/api/voice/transcribe`, not
+// resurrecting a client-held provider credential.
 // ---------------------------------------------------------------------------
-
-interface EphemeralTokenResponse {
-  token: string;
-  expiresAt: number;
-}
-
-/**
- * Request a short-lived Deepgram token from the backend (cloud-only).
- * @throws CloudVoiceDisabledError when FEATURES.cloudChat is false.
- */
-export async function getDeepgramEphemeralToken(): Promise<string> {
-  if (!FEATURES.cloudChat) {
-    throw new CloudVoiceDisabledError('getDeepgramEphemeralToken');
-  }
-  const authToken = await getAuthToken();
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.DEFAULT);
-
-  try {
-    const response = await guardedFetch(`${API_URL}/api/v1/voice/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Voice token request failed: HTTP ${response.status} — ${body}`);
-    }
-    const result = (await response.json()) as EphemeralTokenResponse;
-    return result.token;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-const DEEPGRAM_ENDPOINT = 'https://api.deepgram.com/v1/listen?model=nova-3&smart_format=true';
-
-/**
- * Transcribe a local audio URI directly via Deepgram (cloud-only).
- * @throws CloudVoiceDisabledError when FEATURES.cloudChat is false.
- */
-export async function transcribeWithDeepgram(uri: string, ephemeralToken: string): Promise<string> {
-  if (!FEATURES.cloudChat) {
-    throw new CloudVoiceDisabledError('transcribeWithDeepgram');
-  }
-  const formData = new FormData();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  formData.append('audio', { uri, type: 'audio/m4a', name: 'recording.m4a' } as any);
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.UPLOAD);
-
-  try {
-    const response = await secureFetch(DEEPGRAM_ENDPOINT, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${ephemeralToken}` },
-      body: formData,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Deepgram transcription failed (HTTP ${response.status})`);
-    }
-    const data = (await response.json()) as {
-      results?: { channels?: Array<{ alternatives?: Array<{ transcript?: string }> }> };
-    };
-    return data?.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? '';
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-// Suppress unused-platform warning until cloud paths re-enable Platform-specific logic.
-void Platform;

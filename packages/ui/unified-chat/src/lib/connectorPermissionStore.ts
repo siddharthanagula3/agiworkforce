@@ -1,10 +1,14 @@
 /**
- * Hybrid connector permission store (Desktop P0, audit C-rank 1).
+ * Connector permission store.
  *
- * Decision D1 (DECISIONS.md): HYBRID
- *   - Local mode (Tauri): encrypted via master_password.rs vault at
- *     `~/.agiworkforce/connector-permissions.json`
- *   - Cloud mode (non-Tauri): managed Neon `connector_tool_permissions` table
+ *   - Tauri (Desktop): encrypted via master_password.rs vault at
+ *     `~/.agiworkforce/connector-permissions.json`, reached through the
+ *     `connector_permission_*` Tauri commands. This is also what the Rust tool
+ *     executor reads when it enforces a permission, so the UI and the
+ *     enforcement point share one source of truth.
+ *   - Any other runtime: unsupported, and says so (CON-26). The previous
+ *     "Cloud mode" branch accepted writes and discarded them; see the note above
+ *     {@link ConnectorPermissionsUnavailableError}.
  *
  * Usage:
  *   import { getConnectorPermissionStore } from './connectorPermissionStore';
@@ -60,7 +64,7 @@ export function getConnectorPermissionStore(): ConnectorPermissionStore {
   if (isTauriEnv) {
     return new LocalVaultStore();
   }
-  return new CloudStore();
+  return new UnsupportedRuntimeStore();
 }
 
 // ── Local Vault Store (Tauri / Desktop) ──────────────────────────────────────
@@ -116,134 +120,56 @@ class LocalVaultStore implements ConnectorPermissionStore {
   }
 }
 
-// ── Cloud Store (Cloud / Web) ───────────────────────────────────────────────
+// ── Unsupported runtime (non-Tauri) ─────────────────────────────────────────
+//
+// CON-26: this used to return a `CloudStore` whose `getClient()` resolved
+// `globalThis['__agi_cloud_db__']` — a global set nowhere in the repo. Every
+// `set()` therefore returned a resolved promise having written nothing, and the
+// UI rendered a successful save; `get()`/`list()` returned null/[] as though the
+// user had simply never configured a permission. The queries were also
+// Supabase-shaped (`.from().select().eq().maybeSingle()`, `upsert` with
+// `onConflict`) against a stack from which Supabase has been removed, so even a
+// wired-up client would not have matched. A permission control that silently
+// discards writes is worse than no control at all.
+//
+// Connector tool permissions are enforced by the Rust side reading the
+// encrypted local vault (`connector_permission_get`/`_set`/`_list`). There is no
+// cloud-backed equivalent today, so a non-Tauri runtime must fail loudly rather
+// than pretend.
 
-class CloudStore implements ConnectorPermissionStore {
-  readonly storage: ConnectorPermissionStorage = 'cloud-neon';
+/** Thrown when connector permissions are used outside the Tauri desktop runtime. */
+export class ConnectorPermissionsUnavailableError extends Error {
+  readonly code = 'CONNECTOR_PERMISSIONS_UNAVAILABLE';
 
-  /** Lazily import cloud DB client from the host app bundle. */
-  private async getClient() {
-    // Dynamically resolve the cloud DB singleton that the host app configures.
-    // We can't import from '@/lib/cloud-db' (that's desktop-app relative),
-    // so we use a well-known global that the host app is expected to provide.
-    // Fall back to a no-op shim so the package compiles cleanly in isolation.
-    const g = globalThis as Record<string, unknown>;
-    if (g['__agi_cloud_db__']) {
-      return g['__agi_cloud_db__'] as CloudDbClient;
-    }
-    return null;
+  constructor(operation: string) {
+    super(
+      `Connector tool permissions are unavailable in this runtime (${operation}). ` +
+        `They are stored in the encrypted desktop vault via Tauri; no cloud-backed ` +
+        `permission store exists yet, so this request cannot be honoured.`,
+    );
+    this.name = 'ConnectorPermissionsUnavailableError';
   }
+}
 
-  /**
-   * Resolve the current user's id from the cloud DB client. Returns null
-   * when unauthenticated (or when the client doesn't expose `auth.getUser`,
-   * as in older test stubs); the caller treats that as a no-op upsert
-   * rather than an INSERT under the wrong user_id.
-   */
-  private async getUserId(client: CloudDbClient): Promise<string | null> {
-    const auth = client.auth;
-    if (!auth || typeof auth.getUser !== 'function') return null;
-    try {
-      const { data, error } = await auth.getUser();
-      if (error || !data?.user?.id) return null;
-      return data.user.id;
-    } catch {
-      return null;
-    }
-  }
+class UnsupportedRuntimeStore implements ConnectorPermissionStore {
+  readonly storage: ConnectorPermissionStorage = 'unsupported';
 
-  async get(connectorId: string, toolName: string): Promise<ConnectorPermissionLevel | null> {
-    const client = await this.getClient();
-    if (!client) return null;
-    const { data, error } = await client
-      .from('connector_tool_permissions')
-      .select('level')
-      .eq('connector_id', connectorId)
-      .eq('tool_name', toolName)
-      .maybeSingle();
-    if (error || !data) return null;
-    return (data as { level: string }).level as ConnectorPermissionLevel;
+  async get(_connectorId: string, _toolName: string): Promise<ConnectorPermissionLevel | null> {
+    throw new ConnectorPermissionsUnavailableError('get');
   }
 
   async set(
-    connectorId: string,
-    toolName: string,
-    level: ConnectorPermissionLevel,
-    destructive = false,
+    _connectorId: string,
+    _toolName: string,
+    _level: ConnectorPermissionLevel,
+    _destructive = false,
   ): Promise<void> {
-    const client = await this.getClient();
-    if (!client) return;
-    // The table's UNIQUE constraint is (user_id, connector_id, tool_name)
-    // so the upsert payload MUST include user_id — without it the second
-    // call inserts a duplicate row instead of updating the prior one. Access
-    // controls still require that the token belongs to this user_id.
-    const userId = await this.getUserId(client);
-    if (!userId) return;
-    const { error } = await client.from('connector_tool_permissions').upsert(
-      {
-        user_id: userId,
-        connector_id: connectorId,
-        tool_name: toolName,
-        level,
-        destructive,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,connector_id,tool_name' },
-    );
-    if (error) {
-      throw new Error(`[ConnectorPermissions] cloud db upsert: ${error.message}`);
-    }
+    throw new ConnectorPermissionsUnavailableError('set');
   }
 
-  async list(connectorId: string): Promise<ConnectorToolPermission[]> {
-    const client = await this.getClient();
-    if (!client) return [];
-    const { data, error } = await client
-      .from('connector_tool_permissions')
-      .select('tool_name, level, destructive')
-      .eq('connector_id', connectorId);
-    if (error || !data) return [];
-    return (data as Array<{ tool_name: string; level: string; destructive: boolean }>).map((r) => ({
-      toolName: r.tool_name,
-      level: r.level as ConnectorPermissionLevel,
-      destructive: r.destructive,
-    }));
+  async list(_connectorId: string): Promise<ConnectorToolPermission[]> {
+    throw new ConnectorPermissionsUnavailableError('list');
   }
-}
-
-// ── Minimal cloud DB client shape (structural typing, no runtime dep) ───────
-//
-// The real cloud client returns a query builder that is both thenable (resolves to
-// {data, error}) and has terminal methods like maybeSingle().  We model it as
-// a Promise-like value with extra methods.
-
-interface CloudDbResult {
-  data: unknown;
-  error: { message: string } | null;
-}
-
-interface CloudDbFilterBuilder extends Promise<CloudDbResult> {
-  eq(col: string, val: unknown): CloudDbFilterBuilder;
-  maybeSingle(): Promise<CloudDbResult>;
-}
-
-interface CloudDbQueryBuilder {
-  select(cols: string): CloudDbFilterBuilder;
-  upsert(values: Record<string, unknown>, opts?: { onConflict?: string }): Promise<CloudDbResult>;
-}
-
-interface CloudDbAuthGetUserResult {
-  data: { user: { id: string } | null } | null;
-  error: { message: string } | null;
-}
-
-interface CloudDbAuthClient {
-  getUser(): Promise<CloudDbAuthGetUserResult>;
-}
-
-interface CloudDbClient {
-  from(table: string): CloudDbQueryBuilder;
-  auth?: CloudDbAuthClient;
 }
 
 // Re-export the defaultPermissionForTool helper so callers can import from one place.

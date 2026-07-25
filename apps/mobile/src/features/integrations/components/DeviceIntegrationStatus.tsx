@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Pressable, Platform, Linking, Alert } from 'react-native';
 import {
-  Heart,
   Calendar,
   Users,
   Bell,
@@ -20,11 +19,6 @@ import {
   getContactsPermissionStatus,
   type PermissionStatus,
 } from '@/src/features/integrations/services/deviceIntegrations';
-import {
-  isHealthAvailable,
-  getHealthPermissionStatus,
-  type HealthPermissionStatus,
-} from '@/src/features/integrations/services/healthData';
 import * as Notifications from 'expo-notifications';
 
 // ---------------------------------------------------------------------------
@@ -56,18 +50,8 @@ function permissionToStatus(p: PermissionStatus): IntegrationStatus {
   }
 }
 
-function healthToStatus(h: HealthPermissionStatus): IntegrationStatus {
-  switch (h) {
-    case 'granted':
-      return 'active';
-    case 'denied':
-      return 'needs-permission';
-    case 'unavailable':
-      return 'unavailable';
-    case 'undetermined':
-      return 'inactive';
-  }
-}
+// STB-21: healthToStatus() and the Health/Google Fit row were removed with the
+// health-context service — the backend route they reported on never existed.
 
 function notifStatusToIntegration(s: Notifications.PermissionStatus): IntegrationStatus {
   if (s === 'granted') return 'active';
@@ -175,7 +159,6 @@ function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowPr
 
 function getIconMap(colors: ColorScheme): Record<string, React.ReactNode> {
   return {
-    health: <Heart size={18} color={colors.agentError} />,
     calendar: <Calendar size={18} color={colors.agentActive} />,
     contacts: <Users size={18} color={colors.purple} />,
     notifications: <Bell size={18} color={colors.teal} />,
@@ -201,21 +184,10 @@ export function DeviceIntegrationStatus() {
     ]);
 
     const notifPerm = notifResult.status as Notifications.PermissionStatus;
-    const healthStat = isHealthAvailable() ? await getHealthPermissionStatus() : 'unavailable';
 
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const next: DeviceIntegration[] = [
-      {
-        id: 'health',
-        name: Platform.OS === 'ios' ? 'Apple Health' : 'Google Fit',
-        description:
-          Platform.OS === 'ios'
-            ? 'Steps, heart rate and sleep via HealthKit bridge'
-            : 'Fitness and wellness data via Google Fit',
-        status: healthToStatus(healthStat as HealthPermissionStatus),
-        lastSync: healthStat === 'granted' ? now : undefined,
-      },
       {
         id: 'calendar',
         name: Platform.OS === 'ios' ? 'Apple Calendar' : 'Google Calendar',

@@ -25,6 +25,14 @@ export interface MessageAttachment {
   mimeType: string;
   /** Original file name */
   fileName: string;
+  /**
+   * Owner-scoped media asset id returned by the chat-attachment completion
+   * route. Present only for attachments that were uploaded to managed cloud;
+   * local-only attachments carry a device `file://` url and no asset id.
+   * The completions API hydrates provider content from this id — an
+   * authenticated `/api/files/{id}` URL is not fetchable by a provider.
+   */
+  assetId?: string;
 }
 
 export interface Artifact {

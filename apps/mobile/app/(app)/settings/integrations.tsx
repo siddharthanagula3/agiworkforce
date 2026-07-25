@@ -16,7 +16,6 @@ import {
   ArrowLeft,
   Calendar,
   Users,
-  Heart,
   CheckCircle,
   XCircle,
   HelpCircle,
@@ -35,12 +34,6 @@ import {
   getContactsPermissionStatus,
   type PermissionStatus,
 } from '@/src/features/integrations/services/deviceIntegrations';
-import {
-  isHealthAvailable,
-  getHealthPermissionStatus,
-  requestHealthPermission,
-  type HealthPermissionStatus,
-} from '@/src/features/integrations/services/healthData';
 import { PlatformCard } from '@/src/features/integrations/components/PlatformCard';
 import { DeviceIntegrationStatus } from '@/src/features/integrations/components/DeviceIntegrationStatus';
 import { useIntegrationStore } from '@/src/features/integrations/store';
@@ -122,11 +115,9 @@ export default function IntegrationsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
 
-  // -- Legacy permission state (Calendar / Contacts / Health) ---------------
+  // -- Legacy permission state (Calendar / Contacts) ------------------------
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>('undetermined');
   const [contactsStatus, setContactsStatus] = useState<PermissionStatus>('undetermined');
-  const [healthStatus, setHealthStatus] = useState<HealthPermissionStatus>('undetermined');
-  const healthAvailable = isHealthAvailable();
   const [isChecking, setIsChecking] = useState(true);
 
   // -- Messaging platform store ---------------------------------------------
@@ -163,14 +154,6 @@ export default function IntegrationsScreen() {
       ]);
       setCalendarStatus(calStat.status === 'fulfilled' ? calStat.value : 'undetermined');
       setContactsStatus(conStat.status === 'fulfilled' ? conStat.value : 'undetermined');
-
-      if (!isHealthAvailable()) {
-        setHealthStatus('unavailable');
-        return;
-      }
-
-      const hStat = await getHealthPermissionStatus();
-      setHealthStatus(hStat);
     } finally {
       setIsChecking(false);
     }
@@ -369,7 +352,7 @@ export default function IntegrationsScreen() {
         </View>
 
         {/* ------------------------------------------------------------------ */}
-        {/* SECTION 3: Legacy permission toggles (Calendar / Contacts / Health)  */}
+        {/* SECTION 3: Legacy permission toggles (Calendar / Contacts)           */}
         {/* ------------------------------------------------------------------ */}
         <View>
           <SectionHeader title="Permissions" colors={colors} />
@@ -461,77 +444,10 @@ export default function IntegrationsScreen() {
                 </Text>
               </Card>
 
-              {/* Health Data (iOS only) */}
-              {healthAvailable && (
-                <Card>
-                  <View className="flex-row items-center justify-between mb-3">
-                    <View className="flex-row items-center gap-3">
-                      <View
-                        className="w-9 h-9 rounded-lg items-center justify-center"
-                        style={{ backgroundColor: colors.dangerSurface }}
-                      >
-                        <Heart size={18} color={colors.agentError} />
-                      </View>
-                      <View>
-                        <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
-                          Health Data
-                        </Text>
-                        <View className="flex-row items-center gap-1.5 mt-0.5">
-                          <StatusIcon
-                            colors={colors}
-                            status={
-                              healthStatus === 'granted'
-                                ? 'granted'
-                                : healthStatus === 'denied'
-                                  ? 'denied'
-                                  : 'undetermined'
-                            }
-                          />
-                          <Badge
-                            label={
-                              healthStatus === 'granted'
-                                ? 'Granted'
-                                : healthStatus === 'unavailable'
-                                  ? 'Unavailable'
-                                  : healthStatus === 'denied'
-                                    ? 'Denied'
-                                    : 'Not Asked'
-                            }
-                            color={
-                              healthStatus === 'granted'
-                                ? 'green'
-                                : healthStatus === 'denied'
-                                  ? 'red'
-                                  : 'gray'
-                            }
-                          />
-                        </View>
-                      </View>
-                    </View>
-                    <Switch
-                      value={healthStatus === 'granted'}
-                      onValueChange={async (enabled) => {
-                        if (!enabled) {
-                          Alert.alert(
-                            'Health Data',
-                            'Health data is provided by the HxF companion app. Uninstall HxF to revoke access.',
-                            [{ text: 'OK' }],
-                          );
-                          return;
-                        }
-                        const granted = await requestHealthPermission();
-                        setHealthStatus(granted ? 'granted' : 'unavailable');
-                      }}
-                    />
-                  </View>
-                  <Separator className="mb-3" />
-                  <Text className="text-xs leading-4" style={{ color: colors.textMuted }}>
-                    Health data is read from the HxF companion app (HealthKit bridge). Steps, heart
-                    rate, sleep, and more can be shared with AI assistants for personalized
-                    insights.
-                  </Text>
-                </Card>
-              )}
+              {/* STB-21: the Health Data card was removed with the health-context
+                  service. It read from GET /api/health-context, a route that has
+                  never existed on any of our backends, and swallowed the 404 so
+                  the card rendered as a blank "no data yet" state. */}
             </View>
           )}
         </View>

@@ -11,7 +11,6 @@
  * The store hydrates by calling /api/me once on mount.
  */
 
-import React from 'react';
 import { create } from 'zustand';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { normalizeBillingPlanTier, type BillingPlanTier } from '@agiworkforce/types';
@@ -256,25 +255,15 @@ export function useAuth(): UseAuthReturn {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Legacy / compatibility exports from the old stub
-// Components importing misc things from this file keep compiling.
-// ---------------------------------------------------------------------------
-
-export const invoke = async () => ({});
-export const isTauri = false;
-export const countTokens = () => 0;
-export const getTokenPercentage = () => 0;
-
-export const BrowserVisualization = (_props?: unknown) => null;
-export const MonacoEditor = (_props?: unknown) => null;
-export const TerminalPanel = (_props?: unknown) => null;
-export const MemoryPanel = (_props?: unknown) => null;
-export const ScreenCaptureButton = (_props?: unknown) => null;
-export const ErrorBoundary = ({ children }: { children: React.ReactNode }) => children;
-export const TimeoutWarningDialog = (_props?: unknown) => null;
-export const DiffViewer = (_props?: unknown) => null;
-export const handleSlashCommand = () => {};
+// AUDIT-FIX STB-25: the "legacy compatibility" block that used to live here was
+// removed. It exported seven null-rendering React components shadowing real
+// desktop UI (BrowserVisualization, MonacoEditor, TerminalPanel, MemoryPanel,
+// ScreenCaptureButton, TimeoutWarningDialog, DiffViewer) plus
+// countTokens = () => 0 and getTokenPercentage = () => 0 inside an auth/billing
+// module. Nothing imported them - verified repo-wide - but an autoimport picking
+// the wrong TerminalPanel would have mounted a feature that silently renders
+// nothing, with no type error and no console output, and a zeroed token count in
+// a billing path is the same shape of landmine.
 
 // Alias so components that import useBillingUsageStore from here also compile
 export { useBillingStore as useBillingUsageStore };

@@ -35,10 +35,17 @@ export const FALLBACK_SUPPORTED_CONNECTOR_IDS: string[] = [
   'jira',
 ];
 
-export type ConnectorPermState = 'allow' | 'ask' | 'never';
-
-/** Persisted per-tool permission state: connectorId → toolName → PermState */
-export type ConnectorPermissions = Record<string, Record<string, ConnectorPermState>>;
+// CON-25: `ConnectorPermState`, `ConnectorPermissions`, the persisted
+// `connectorPermissions` map, and the `setToolPermission` / `getToolPermission`
+// actions were removed. They had ZERO readers: real per-tool enforcement runs in
+// Rust (`enforce_mcp_connector_permission` in core/llm/tool_executor), which
+// reads the encrypted vault through the `connector_permission_get` /
+// `connector_permission_set` / `connector_permission_list` Tauri commands — it
+// never consults this zustand map. Any UI wired to these actions would have
+// shown allow/deny toggles that granted and blocked nothing.
+//
+// Use `getConnectorPermissionStore()` from @agiworkforce/unified-chat, which is
+// backed by those Tauri commands.
 
 interface ConnectorsState {
   connectedIds: string[];
@@ -50,8 +57,6 @@ interface ConnectorsState {
   oauthStartedAt: Record<string, number>;
   /** Timer IDs for OAuth timeouts, keyed by connector ID */
   _oauthTimers: Record<string, ReturnType<typeof setTimeout>>;
-  /** Per-tool permission state, persisted across sessions */
-  connectorPermissions: ConnectorPermissions;
   /**
    * Connector ids the backend actually has a real MCP server mapping for
    * (see `mcp_get_supported_connector_ids`). The "Available to connect"
@@ -85,14 +90,6 @@ interface ConnectorsState {
   clearAllTimers: () => void;
   /** Full reset for logout — clears timers, state, and persisted data */
   resetOnLogout: () => void;
-  /** Set a single tool permission for a connector and persist it */
-  setToolPermission: (connectorId: string, toolName: string, state: ConnectorPermState) => void;
-  /** Get the current permission state for a connector tool */
-  getToolPermission: (
-    connectorId: string,
-    toolName: string,
-    defaultState: ConnectorPermState,
-  ) => ConnectorPermState;
 }
 
 export const useConnectorsStore = create<ConnectorsState>()(
@@ -105,7 +102,6 @@ export const useConnectorsStore = create<ConnectorsState>()(
         pendingOAuth: {},
         oauthStartedAt: {},
         _oauthTimers: {},
-        connectorPermissions: {},
         supportedConnectorIds: FALLBACK_SUPPORTED_CONNECTOR_IDS,
 
         connect: async (id: string) => {
@@ -319,22 +315,6 @@ export const useConnectorsStore = create<ConnectorsState>()(
           }));
         },
 
-        setToolPermission: (connectorId, toolName, state) => {
-          set((s) => ({
-            connectorPermissions: {
-              ...s.connectorPermissions,
-              [connectorId]: {
-                ...(s.connectorPermissions[connectorId] ?? {}),
-                [toolName]: state,
-              },
-            },
-          }));
-        },
-
-        getToolPermission: (connectorId, toolName, defaultState) => {
-          return get().connectorPermissions[connectorId]?.[toolName] ?? defaultState;
-        },
-
         clearAllTimers: () => {
           const timers = get()._oauthTimers;
           for (const timerId of Object.values(timers)) {
@@ -356,14 +336,15 @@ export const useConnectorsStore = create<ConnectorsState>()(
             pendingOAuth: {},
             oauthStartedAt: {},
             _oauthTimers: {},
-            connectorPermissions: {},
             supportedConnectorIds: FALLBACK_SUPPORTED_CONNECTOR_IDS,
           });
         },
       }),
       {
         name: 'connectors-store',
-        version: 6,
+        // CON-25: v7 drops the dead `connectorPermissions` map from persisted
+        // state so stale allow/deny entries stop being rehydrated on upgrade.
+        version: 7,
         migrate: (persistedState, version) => {
           if (version < 3) {
             return {
@@ -374,7 +355,6 @@ export const useConnectorsStore = create<ConnectorsState>()(
               pendingOAuth: {},
               oauthStartedAt: {},
               _oauthTimers: {},
-              connectorPermissions: {},
             } as unknown as ConnectorsState;
           }
           if (version < 4) {
@@ -382,13 +362,6 @@ export const useConnectorsStore = create<ConnectorsState>()(
               ...(persistedState as ConnectorsState),
               oauthStartedAt: {},
               _oauthTimers: {},
-              connectorPermissions: {},
-            } as ConnectorsState;
-          }
-          if (version < 5) {
-            return {
-              ...(persistedState as ConnectorsState),
-              connectorPermissions: {},
             } as ConnectorsState;
           }
           if (version < 6) {
@@ -396,6 +369,14 @@ export const useConnectorsStore = create<ConnectorsState>()(
               ...(persistedState as ConnectorsState),
               supportedConnectorIds: FALLBACK_SUPPORTED_CONNECTOR_IDS,
             } as ConnectorsState;
+          }
+          if (version < 7) {
+            const { connectorPermissions: _dropped, ...rest } =
+              persistedState as ConnectorsState & {
+                connectorPermissions?: unknown;
+              };
+            void _dropped;
+            return rest as ConnectorsState;
           }
           return persistedState as ConnectorsState;
         },
@@ -406,7 +387,6 @@ export const useConnectorsStore = create<ConnectorsState>()(
           error: state.error,
           pendingOAuth: state.pendingOAuth,
           oauthStartedAt: state.oauthStartedAt,
-          connectorPermissions: state.connectorPermissions,
           supportedConnectorIds: state.supportedConnectorIds,
         }),
       },
