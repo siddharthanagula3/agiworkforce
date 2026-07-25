@@ -16,7 +16,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
+// GOV-3: route.ts now acquires a per-plan concurrent-turn slot from this module,
+// so the mock must provide it or the handler crashes on an undefined import.
+// Always-admit + no-op release keeps every existing assertion unchanged.
+const admitManagedTurnSlot = () => ({
+  admitted: true,
+  limit: null,
+  active: 0,
+  slot: { release: async () => {} },
+});
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: vi.fn().mockResolvedValue(null),
+  acquireManagedTurnSlot: vi.fn(async () => admitManagedTurnSlot()),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 
 const tierMocks = vi.hoisted(() => ({

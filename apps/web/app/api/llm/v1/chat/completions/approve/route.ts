@@ -188,6 +188,10 @@ async function handleToolApproval(request: NextRequest) {
           loadMcpToolDefs(),
           loadUserConnectorToolDefs(userId, {
             customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+            // GOV-7: same per-plan connector-tool ceiling the initial turn
+            // used, so a resumed turn cannot be offered a different catalog
+            // than the one whose approval card the user is answering.
+            planTier: processed.subscriptionTier,
             isToolDenied: permissions.isConnectorToolDenied,
           }),
         ]);

@@ -29,6 +29,8 @@ import {
   Database,
   Server,
   Globe,
+  Timer,
+  Gauge,
 } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@agiworkforce/ui';
 import {
@@ -55,7 +57,12 @@ export type PaywallFeature =
   | 'mcp'
   | 'web_search'
   | 'model_access'
-  | 'paid_capability';
+  | 'paid_capability'
+  // GOV-20: the paid ceilings. Without these two the classifier's
+  // `rolling_capacity` / `request_rate` collapsed to 'paid_capability' and the
+  // card told a rate-limited user their plan lacked a capability it has.
+  | 'rolling_capacity'
+  | 'request_rate';
 
 export type UserTier = BillingPlanTier;
 export type RequiredTier = Exclude<BillingPlanTier, 'local-only' | 'byok' | 'free'>;
@@ -66,6 +73,19 @@ export interface InlinePaywallCardProps {
   requiredTier: RequiredTier;
   /** e.g. "10/10 images used this month" */
   reason?: string;
+  /**
+   * GOV-20 — hide the upgrade CTA for a refusal upgrading cannot fix (a plain
+   * rate limit). Defaults to true so every existing call site is unchanged.
+   */
+  showUpgradeCta?: boolean;
+  /** GOV-20 — the ceiling also clears by picking a non-flagship model. */
+  suggestStandardModel?: boolean;
+  /**
+   * GOV-20 — already-formatted "when this clears" copy. Only passed when the
+   * classification says to show it AND the server actually sent an instant;
+   * never synthesised, so the card cannot invent a reset time.
+   */
+  resetLabel?: string;
   onUpgrade: () => void;
   onDismiss: () => void;
 }
@@ -93,6 +113,30 @@ const FEATURE_LABELS: Record<PaywallFeature, string> = {
   web_search: 'web search',
   model_access: 'more models',
   paid_capability: 'this capability',
+  rolling_capacity: 'more capacity per window',
+  request_rate: 'a higher request rate',
+};
+
+/**
+ * GOV-20 — headline for a refusal an upgrade cannot fix (a plain rate limit,
+ * or a user already on the top self-serve tier). `FEATURE_LABELS` is written
+ * to complete "Upgrade to X for …" and reads wrong on its own ("You have hit a
+ * higher request rate"), so these are separate, complete phrasings.
+ */
+const FEATURE_LIMIT_HEADLINES: Record<PaywallFeature, string> = {
+  video_generation: 'You have reached your video generation limit',
+  opus_4_7: 'You have reached your Opus 4.7 limit',
+  gpt_5_5: 'You have reached your GPT-5.5 limit',
+  computer_use: 'You have reached your computer use limit',
+  deep_research: 'You have reached your deep research limit',
+  image_quota: 'You have reached your image generation limit',
+  token_cap: 'You have reached your usage limit',
+  mcp: 'You have reached your MCP limit',
+  web_search: 'You have reached your web search limit',
+  model_access: 'That model is not available on your plan',
+  paid_capability: 'You have reached a plan limit',
+  rolling_capacity: 'You have used your capacity for this window',
+  request_rate: 'You are sending requests too quickly',
 };
 
 const PAYWALL_FEATURES = new Set<PaywallFeature>(Object.keys(FEATURE_LABELS) as PaywallFeature[]);
@@ -144,6 +188,10 @@ const FeatureIcon = memo(function FeatureIcon({ feature, className }: FeatureIco
     <Database className={iconClass} aria-hidden="true" />
   ) : feature === 'mcp' ? (
     <Server className={iconClass} aria-hidden="true" />
+  ) : feature === 'rolling_capacity' ? (
+    <Timer className={iconClass} aria-hidden="true" />
+  ) : feature === 'request_rate' ? (
+    <Gauge className={iconClass} aria-hidden="true" />
   ) : (
     // web_search
     <Globe className={iconClass} aria-hidden="true" />
@@ -166,6 +214,8 @@ TierBadge.displayName = 'TierBadge';
 
 interface CtaButtonsProps {
   requiredTier: RequiredTier;
+  /** GOV-20 — false renders dismiss only. */
+  showUpgradeCta: boolean;
   onUpgrade: () => void;
   onDismiss: () => void;
 }
@@ -176,14 +226,17 @@ interface CtaButtonsProps {
  */
 const CtaButtons = memo(function CtaButtons({
   requiredTier,
+  showUpgradeCta,
   onUpgrade,
   onDismiss,
 }: CtaButtonsProps) {
   return (
     <div className="flex flex-wrap gap-2">
-      <Button type="button" size="sm" className="font-semibold" onClick={onUpgrade}>
-        Upgrade to {getBillingPlanPricing(requiredTier).label}
-      </Button>
+      {showUpgradeCta ? (
+        <Button type="button" size="sm" className="font-semibold" onClick={onUpgrade}>
+          Upgrade to {getBillingPlanPricing(requiredTier).label}
+        </Button>
+      ) : null}
 
       <Button variant="ghost" size="sm" onClick={onDismiss}>
         Try later
@@ -202,10 +255,16 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   currentTier: _currentTier,
   requiredTier,
   reason = EMPTY_REASON,
+  showUpgradeCta = true,
+  suggestStandardModel = false,
+  resetLabel = EMPTY_REASON,
   onUpgrade,
   onDismiss,
 }: InlinePaywallCardProps) {
-  const headline = `Upgrade to ${getBillingPlanPricing(requiredTier).label} for ${FEATURE_LABELS[feature]}`;
+  // GOV-20: a refusal upgrading cannot fix must not be headlined "Upgrade to…".
+  const headline = showUpgradeCta
+    ? `Upgrade to ${getBillingPlanPricing(requiredTier).label} for ${FEATURE_LABELS[feature]}`
+    : FEATURE_LIMIT_HEADLINES[feature];
 
   return (
     <Card
@@ -224,7 +283,8 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
             className="ml-3 text-base font-semibold leading-snug"
           >
             {headline}
-            <TierBadge tier={requiredTier} />
+            {/* GOV-20: no upgrade offered means no upgrade tier to advertise. */}
+            {showUpgradeCta ? <TierBadge tier={requiredTier} /> : null}
           </CardTitle>
         </div>
       </CardHeader>
@@ -232,10 +292,24 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
       <CardContent className="pb-0">
         {/* rendering-conditional-render: ternary, not && */}
         {reason !== EMPTY_REASON ? <p className="text-sm text-muted-foreground">{reason}</p> : null}
+        {/* GOV-20: the two other ways out, shown only when they actually apply. */}
+        {suggestStandardModel ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Switching to a standard (non-flagship) model clears this now.
+          </p>
+        ) : null}
+        {resetLabel !== EMPTY_REASON ? (
+          <p className="mt-2 text-sm text-muted-foreground">{resetLabel}</p>
+        ) : null}
       </CardContent>
 
       <CardFooter className="pt-4">
-        <CtaButtons requiredTier={requiredTier} onUpgrade={onUpgrade} onDismiss={onDismiss} />
+        <CtaButtons
+          requiredTier={requiredTier}
+          showUpgradeCta={showUpgradeCta}
+          onUpgrade={onUpgrade}
+          onDismiss={onDismiss}
+        />
       </CardFooter>
     </Card>
   );
