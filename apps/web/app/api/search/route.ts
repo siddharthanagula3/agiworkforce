@@ -9,6 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { readJsonBody } from '@/lib/read-json-body';
 
 // Postgres SQLSTATE for undefined_function — raised when a called function
 // signature does not exist (e.g. a migration adding/altering it hasn't run).
@@ -403,7 +404,7 @@ async function handlePost(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const parsed = TrackSearchSchema.safeParse(body);
   if (!parsed.success) throw createError.validation('Invalid request body');
 

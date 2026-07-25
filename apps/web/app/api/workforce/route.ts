@@ -9,6 +9,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { AI_EMPLOYEES } from '@/features/library/data/marketplace-employees';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { readJsonBody } from '@/lib/read-json-body';
 
 /**
  * Workforce API
@@ -186,7 +187,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const { userId, db } = await authenticateRequest(request);
     const corsHeaders = getCorsHeaders(request);
 
-    const body = (await request.json()) as { employeeId?: string };
+    const body = await readJsonBody<{ employeeId?: string }>(request);
     const { employeeId } = body;
 
     if (!employeeId || typeof employeeId !== 'string') {

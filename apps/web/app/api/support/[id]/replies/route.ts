@@ -13,6 +13,7 @@ import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { requireCsrfToken } from '@/lib/csrf';
+import { readJsonBody } from '@/lib/read-json-body';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -68,7 +69,7 @@ async function handleCreateReply(request: NextRequest, context: RouteContext) {
   const { userId } = await getClerkAuthUser(request);
   const { id: ticketId } = await context.params;
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const parsed = CreateReplySchema.safeParse(body);
   if (!parsed.success) throw createError.validation('Invalid request body');
 
