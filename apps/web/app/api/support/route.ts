@@ -8,6 +8,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
+import { readJsonBody } from '@/lib/read-json-body';
 
 const SubmitTicketSchema = z.object({
   name: z.string().min(1).max(200),
@@ -60,7 +61,7 @@ async function handlePost(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const parsed = SubmitTicketSchema.safeParse(body);
   if (!parsed.success) throw createError.validation('Invalid request body');
 
