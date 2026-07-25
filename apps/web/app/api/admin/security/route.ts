@@ -7,6 +7,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { isDbUnavailableError } from '@/lib/db-error';
 import { createError, type AppError } from '@/lib/errors';
+import { readJsonBody } from '@/lib/read-json-body';
 
 /** Convert an AppError to a NextResponse with structured error body. */
 function errorResponse(err: AppError, headers?: Record<string, string>): NextResponse {
@@ -207,14 +208,27 @@ export async function POST(request: NextRequest) {
       }
 
       case 'suspend-user': {
-        const body = await request.json();
+        const body = await readJsonBody(request);
         const { userId: targetUserId, reason } = body as {
           userId?: string;
           reason?: string;
         };
 
-        if (!targetUserId || !reason) {
-          return errorResponse(createError.badRequest('userId and reason are required'));
+        // AUDIT-FIX STB-14: these were truthy-only checks behind a TypeScript
+        // cast, so a non-string value satisfied them and reached both the SQL
+        // parameter and the Clerk SDK. It also defeated the self-modification
+        // guard below — an object is never === a string, so an admin could ban
+        // their own account by wrapping the id.
+        if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
+          return errorResponse(createError.badRequest('userId is required and must be a string'));
+        }
+
+        if (typeof reason !== 'string' || !reason.trim()) {
+          return errorResponse(createError.badRequest('reason is required and must be a string'));
+        }
+
+        if (reason.length > 1000) {
+          return errorResponse(createError.badRequest('reason exceeds the 1000 character limit'));
         }
 
         if (targetUserId === adminUserId) {
@@ -253,14 +267,27 @@ export async function POST(request: NextRequest) {
       }
 
       case 'ban-user': {
-        const body = await request.json();
+        const body = await readJsonBody(request);
         const { userId: targetUserId, reason } = body as {
           userId?: string;
           reason?: string;
         };
 
-        if (!targetUserId || !reason) {
-          return errorResponse(createError.badRequest('userId and reason are required'));
+        // AUDIT-FIX STB-14: these were truthy-only checks behind a TypeScript
+        // cast, so a non-string value satisfied them and reached both the SQL
+        // parameter and the Clerk SDK. It also defeated the self-modification
+        // guard below — an object is never === a string, so an admin could ban
+        // their own account by wrapping the id.
+        if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
+          return errorResponse(createError.badRequest('userId is required and must be a string'));
+        }
+
+        if (typeof reason !== 'string' || !reason.trim()) {
+          return errorResponse(createError.badRequest('reason is required and must be a string'));
+        }
+
+        if (reason.length > 1000) {
+          return errorResponse(createError.badRequest('reason exceeds the 1000 character limit'));
         }
 
         if (targetUserId === adminUserId) {
@@ -308,14 +335,27 @@ export async function POST(request: NextRequest) {
       }
 
       case 'reactivate-user': {
-        const body = await request.json();
+        const body = await readJsonBody(request);
         const { userId: targetUserId, reason } = body as {
           userId?: string;
           reason?: string;
         };
 
-        if (!targetUserId || !reason) {
-          return errorResponse(createError.badRequest('userId and reason are required'));
+        // AUDIT-FIX STB-14: these were truthy-only checks behind a TypeScript
+        // cast, so a non-string value satisfied them and reached both the SQL
+        // parameter and the Clerk SDK. It also defeated the self-modification
+        // guard below — an object is never === a string, so an admin could ban
+        // their own account by wrapping the id.
+        if (typeof targetUserId !== 'string' || !targetUserId.trim()) {
+          return errorResponse(createError.badRequest('userId is required and must be a string'));
+        }
+
+        if (typeof reason !== 'string' || !reason.trim()) {
+          return errorResponse(createError.badRequest('reason is required and must be a string'));
+        }
+
+        if (reason.length > 1000) {
+          return errorResponse(createError.badRequest('reason exceeds the 1000 character limit'));
         }
 
         if (targetUserId === adminUserId) {

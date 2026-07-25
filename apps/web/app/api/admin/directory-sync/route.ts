@@ -6,6 +6,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { OrganizationMemberRow, DirectorySyncConnectionRow } from '@/lib/server/neon-types';
+import { readJsonBody } from '@/lib/read-json-body';
 
 // ---------------------------------------------------------------------------
 // Admin auth verification
@@ -121,18 +122,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { provider, directory_id, display_name } = body as {
       provider?: string;
       directory_id?: string;
       display_name?: string;
     };
 
+    // AUDIT-FIX STB-15: `provider` was correctly allowlisted, but `directory_id`
+    // had only a truthiness check and `display_name` had none at all — no type,
+    // no length — on the row that binds this organization's identity provider.
+    if (typeof provider !== 'string' || typeof directory_id !== 'string') {
+      return NextResponse.json(
+        { error: 'provider and directory_id are required and must be strings' },
+        { status: 400 },
+      );
+    }
+
     if (!provider || !directory_id) {
       return NextResponse.json(
         { error: 'provider and directory_id are required' },
         { status: 400 },
       );
+    }
+
+    if (directory_id.length > 255) {
+      return NextResponse.json(
+        { error: 'directory_id exceeds the 255 character limit' },
+        { status: 400 },
+      );
+    }
+
+    if (display_name !== undefined && display_name !== null) {
+      if (typeof display_name !== 'string') {
+        return NextResponse.json({ error: 'display_name must be a string' }, { status: 400 });
+      }
+      if (display_name.length > 255) {
+        return NextResponse.json(
+          { error: 'display_name exceeds the 255 character limit' },
+          { status: 400 },
+        );
+      }
     }
 
     const validProviders = ['okta', 'azure_ad', 'google', 'onelogin', 'generic_scim'];

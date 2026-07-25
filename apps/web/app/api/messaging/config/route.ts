@@ -69,10 +69,24 @@ async function handlePostConfig(request: NextRequest) {
   if (configKeys.length > 20) {
     throw createError.validation('Config must have 20 or fewer keys');
   }
+  // AUDIT-FIX STB-12: the previous value check was guarded by
+  // `typeof value === 'string' &&`, so arrays, nested objects and numbers were
+  // entirely unbounded on their way into a jsonb column — a single non-string
+  // key could carry megabytes past both guards and bloat every subsequent GET.
+  // Measure the serialized size instead, which bounds every value shape.
   for (const [key, value] of Object.entries(config)) {
-    if (key.length > 100 || (typeof value === 'string' && value.length > 2000)) {
-      throw createError.validation('Config key/value size limit exceeded');
+    if (key.length > 100) {
+      throw createError.validation('Config key exceeds the 100 character limit');
     }
+    if (JSON.stringify(value ?? null).length > 2000) {
+      throw createError.validation(`Config value for "${key}" exceeds the 2000 character limit`);
+    }
+  }
+
+  // Bound the whole document too, so 20 keys just under the per-value limit
+  // cannot combine into an oversized row.
+  if (JSON.stringify(config).length > 20_000) {
+    throw createError.validation('Config exceeds the 20000 character limit');
   }
 
   const db = getNeonDb();
