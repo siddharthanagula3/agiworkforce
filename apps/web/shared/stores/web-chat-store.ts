@@ -303,6 +303,26 @@ interface ChatState {
   activeConversationId: string | null;
 
   // Messages
+  /**
+   * AUDIT-FIX ROOT-CAUSE (per-conversation transcripts): the canonical store of
+   * record. Previously the ONE flat `messages` array below WAS the source of
+   * truth, implicitly scoped to `activeConversationId`, so every stream writer
+   * (`addMessage`, `appendToMessage`, `appendToThinking`, `setToolTimeline`, ...)
+   * was a `.map()` over that single array matched by message id -- meaning any
+   * stream whose conversation was not currently displayed wrote into the wrong
+   * buffer or silently no-opped. Mirrors the proven shape in
+   * packages/ui/unified-chat/src/stores/chatStore.ts.
+   */
+  messagesByConversation: Record<string, Message[]>;
+  /**
+   * Derived mirror of `messagesByConversation[activeConversationId]`. Kept as a
+   * real state field (rather than a computed selector) so every existing
+   * consumer of `state.messages` / `useChatStore((s) => s.messages)` keeps
+   * working and keeps re-rendering on identity change. Never assign it
+   * directly: write through the message actions below, which target an explicit
+   * conversation and refresh this mirror when that conversation is the active
+   * one.
+   */
   messages: Message[];
 
   // UI State
@@ -317,6 +337,17 @@ interface ChatState {
    * actually streaming (mirrors mobile's chatExecutionStore fix).
    */
   streamingConversationIds: string[];
+  /**
+   * AUDIT-FIX STR-7/BUG-12: conversation ids with a TURN in flight. `isLoading`
+   * below is derived from this (plus `streamingConversationIds`) for the ACTIVE
+   * conversation only. Previously `isLoading` was one global boolean written
+   * UNSCOPED on `true` but scoped on `false`, and the reducer DISCARDED a
+   * `false` whose id was not the active one -- so a background stream left it
+   * stuck `true` forever and the composer (`isTurnActive`) stayed disabled in
+   * every other conversation.
+   */
+  loadingConversationIds: string[];
+  /** Derived: does the ACTIVE conversation have a turn in flight (see above). */
   isLoading: boolean;
   error: string | null;
 
@@ -325,6 +356,16 @@ interface ChatState {
   selectedModelTier: ModelTier;
 
   // Draft content for input persistence
+  /**
+   * AUDIT-FIX STR-23: unsent composer text, isolated PER CONVERSATION (plus the
+   * new-chat composer under `PENDING_CONVERSATION_KEY`). The composer used to
+   * hold its input in plain component state that was never keyed by
+   * conversation, so a half-typed private message followed the user into
+   * whatever chat they opened next. Mirrors `draftsByConversation` in
+   * packages/ui/unified-chat/src/stores/chatStore.ts.
+   */
+  draftsByConversation: Record<string, string>;
+  /** Live draft for the ACTIVE conversation (derived from the map above). */
   draftContent: string;
 
   // Sidebar state
@@ -339,32 +380,44 @@ interface ChatState {
   setActiveConversationWithMessages: (id: string, messages: Message[]) => void;
 
   // Actions - Messages
-  setMessages: (messages: Message[]) => void;
-  addMessage: (message: Message) => void;
-  updateMessage: (id: string, updates: Partial<Message>) => void;
-  appendToMessage: (id: string, content: string) => void;
-  appendToThinking: (id: string, thinking: string) => void;
-  setSearching: (id: string, isSearching: boolean) => void;
+  /**
+   * AUDIT-FIX ROOT-CAUSE: every message writer now takes an OPTIONAL trailing
+   * `conversationId` naming the transcript it targets. A stream writer MUST
+   * pass the conversation its stream belongs to -- otherwise a turn that
+   * outlives the user's navigation writes into whatever chat happens to be on
+   * screen. Omitting it targets the active conversation, which is the correct
+   * default for user-driven UI edits (message actions, artifact panel, ...)
+   * that can only act on what is currently rendered.
+   */
+  setMessages: (messages: Message[], conversationId?: string) => void;
+  addMessage: (message: Message, conversationId?: string) => void;
+  updateMessage: (id: string, updates: Partial<Message>, conversationId?: string) => void;
+  appendToMessage: (id: string, content: string, conversationId?: string) => void;
+  appendToThinking: (id: string, thinking: string, conversationId?: string) => void;
+  setSearching: (id: string, isSearching: boolean, conversationId?: string) => void;
   setSearchResults: (
     id: string,
     results: Array<{ url: string; title: string; snippet: string }>,
+    conversationId?: string,
   ) => void;
-  setExecutingCode: (id: string, isExecuting: boolean) => void;
-  setToolTimeline: (id: string, tools: MessageToolEntry[]) => void;
+  setExecutingCode: (id: string, isExecuting: boolean, conversationId?: string) => void;
+  setToolTimeline: (id: string, tools: MessageToolEntry[], conversationId?: string) => void;
   /** Merge Deep Research run state into the message metadata. */
-  setResearchState: (id: string, research: MessageResearchState) => void;
+  setResearchState: (id: string, research: MessageResearchState, conversationId?: string) => void;
   /** Update a single tool entry by toolCallId within the message's tool timeline. */
   updateToolEntry: (
     messageId: string,
     toolCallId: string,
     updates: Partial<MessageToolEntry>,
+    conversationId?: string,
   ) => void;
   setCodeExecutionResult: (
     id: string,
     result: NonNullable<MessageMetadata['codeExecutionResult']>,
+    conversationId?: string,
   ) => void;
-  deleteMessage: (id: string) => void;
-  clearMessages: () => void;
+  deleteMessage: (id: string, conversationId?: string) => void;
+  clearMessages: (conversationId?: string) => void;
 
   // Actions - Streaming
   startStreaming: (messageId: string, conversationId: string) => void;
@@ -377,11 +430,15 @@ interface ChatState {
    */
   stopStreaming: (conversationId?: string) => void;
   /**
-   * `conversationId` scopes a `false` write: a background conversation's
-   * stream completing must not clear `isLoading` out from under a
-   * conversation the user has since switched to and is genuinely sending
-   * in. Omit it (e.g. `loadConversation`'s fetch-loading use, or the
-   * user-initiated Stop path) to write unconditionally.
+   * AUDIT-FIX STR-7/BUG-12: records/clears "a turn is in flight" for ONE
+   * conversation. `conversationId` defaults to the active conversation; a
+   * caller driving a turn that can outlive the user's navigation MUST pass its
+   * own conversation id for BOTH the `true` and the `false` write. A write
+   * that resolves to no conversation at all (new-chat surface with nothing
+   * active) is a no-op rather than a global flag flip -- there is no turn to
+   * attribute it to, and this store's loading flag means "turn in flight",
+   * never "some fetch is happening" (see useConversations, which keeps its own
+   * local fetch-loading state).
    */
   setLoading: (loading: boolean, conversationId?: string) => void;
   /**
@@ -395,7 +452,16 @@ interface ChatState {
   setSelectedModel: (modelId: string, tier: ModelTier) => void;
 
   // Actions - Draft
-  setDraftContent: (content: string) => void;
+  /**
+   * AUDIT-FIX STR-23: write one conversation's draft. `conversationId`
+   * defaults to the active conversation; pass it explicitly to park the text
+   * of a conversation the user is leaving.
+   */
+  setDraftContent: (content: string, conversationId?: string | null) => void;
+  /** Read one conversation's parked draft ('' when there is none). */
+  getDraftContent: (conversationId?: string | null) => string;
+  /** Discard one conversation's parked draft. */
+  clearDraftContent: (conversationId?: string | null) => void;
 
   // Actions - Sidebar
   toggleSidebar: () => void;
@@ -408,21 +474,107 @@ interface ChatState {
 const initialState = {
   conversations: [],
   activeConversationId: null,
+  messagesByConversation: {} as Record<string, Message[]>,
   messages: [],
   isStreaming: false,
   streamingConversationIds: [] as string[],
+  loadingConversationIds: [] as string[],
   isLoading: false,
   error: null,
   selectedModel: 'auto',
   selectedModelTier: 'balanced' as ModelTier,
+  draftsByConversation: {} as Record<string, string>,
   draftContent: '',
   sidebarCollapsed: false,
 };
 
+/**
+ * AUDIT-FIX ROOT-CAUSE: bucket key for a transcript composed before its
+ * conversation row exists (the empty /chat surface). Mirrors
+ * `NEW_CONVERSATION_DRAFT_KEY` in packages/ui/unified-chat's chatStore. Using a
+ * real key instead of "whatever `messages` happens to hold" means a pre-create
+ * write is still attributable and cannot be confused with a real conversation.
+ */
+const PENDING_CONVERSATION_KEY = '__new_conversation__';
+
+function conversationKey(conversationId: string | null | undefined): string {
+  return conversationId ?? PENDING_CONVERSATION_KEY;
+}
+
+type MessageStateSlice = Pick<
+  ChatState,
+  'messages' | 'messagesByConversation' | 'activeConversationId'
+>;
+
+/**
+ * Current transcript for `key`. When the bucket is missing but `key` IS the
+ * active conversation, fall back to the derived `messages` mirror: that mirror
+ * is by definition the active conversation's transcript, so this makes a direct
+ * `useChatStore.setState({ messages, activeConversationId })` seed (used by
+ * tests and by any consumer predating the per-conversation model) behave
+ * exactly as if it had gone through `setMessages`.
+ */
+function readConversationMessages(state: MessageStateSlice, key: string): Message[] {
+  const bucket = state.messagesByConversation[key];
+  if (bucket) return bucket;
+  return key === conversationKey(state.activeConversationId) ? state.messages : [];
+}
+
+/** Write `next` into `key`'s bucket, refreshing the derived mirror when visible. */
+function writeConversationMessages(
+  state: MessageStateSlice,
+  key: string,
+  next: Message[],
+): Pick<ChatState, 'messagesByConversation'> & Partial<Pick<ChatState, 'messages'>> {
+  return {
+    messagesByConversation: { ...state.messagesByConversation, [key]: next },
+    ...(key === conversationKey(state.activeConversationId) ? { messages: next } : {}),
+  };
+}
+
+/** Apply `mapper` to one conversation's transcript (active one when unscoped). */
+function updateConversationMessages(
+  state: MessageStateSlice,
+  conversationId: string | undefined,
+  mapper: (messages: Message[]) => Message[],
+) {
+  const key = conversationKey(conversationId ?? state.activeConversationId);
+  return writeConversationMessages(state, key, mapper(readConversationMessages(state, key)));
+}
+
+/** Merge a metadata patch onto one message inside one conversation. */
+function patchMessageMetadata(
+  state: MessageStateSlice,
+  conversationId: string | undefined,
+  messageId: string,
+  patch: Partial<MessageMetadata>,
+) {
+  return updateConversationMessages(state, conversationId, (messages) =>
+    messages.map((m) => (m.id === messageId ? { ...m, metadata: { ...m.metadata, ...patch } } : m)),
+  );
+}
+
+/**
+ * AUDIT-FIX STR-7/BUG-12: `isLoading` is the ACTIVE conversation's busy flag,
+ * derived from the two per-conversation ledgers so it can never be left stuck
+ * true by a background conversation's turn.
+ */
+function deriveIsLoading(state: {
+  activeConversationId: string | null;
+  loadingConversationIds: string[];
+  streamingConversationIds: string[];
+}): boolean {
+  const active = state.activeConversationId;
+  if (!active) return false;
+  return (
+    state.loadingConversationIds.includes(active) || state.streamingConversationIds.includes(active)
+  );
+}
+
 export const useChatStore = create<ChatState>()(
   devtools(
     persist(
-      (set) => ({
+      (set, get) => ({
         ...initialState,
 
         // Conversations
@@ -451,29 +603,64 @@ export const useChatStore = create<ChatState>()(
 
         deleteConversation: (id) =>
           set(
-            (state) => ({
-              conversations: state.conversations.filter((c) => c.id !== id),
-              activeConversationId:
-                state.activeConversationId === id ? null : state.activeConversationId,
-              messages: state.activeConversationId === id ? [] : state.messages,
-            }),
+            (state) => {
+              // AUDIT-FIX ROOT-CAUSE: drop the deleted conversation's transcript
+              // bucket too, otherwise it leaks for the lifetime of the tab and a
+              // recreated id would resurrect a dead transcript.
+              const { [id]: _removed, ...messagesByConversation } = state.messagesByConversation;
+              // AUDIT-FIX STR-23: a deleted conversation's parked draft dies with it.
+              const { [id]: _removedDraft, ...draftsByConversation } = state.draftsByConversation;
+              const activeConversationId =
+                state.activeConversationId === id ? null : state.activeConversationId;
+              return {
+                conversations: state.conversations.filter((c) => c.id !== id),
+                draftsByConversation,
+                draftContent: draftsByConversation[conversationKey(activeConversationId)] ?? '',
+                activeConversationId,
+                messagesByConversation,
+                messages:
+                  state.activeConversationId === id
+                    ? []
+                    : readConversationMessages(
+                        { ...state, messagesByConversation },
+                        conversationKey(activeConversationId),
+                      ),
+                isLoading: deriveIsLoading({ ...state, activeConversationId }),
+              };
+            },
             undefined,
             'chat/deleteConversation',
           ),
 
         setActiveConversation: (id) =>
           set(
-            (state) => ({
-              activeConversationId: id,
-              messages: [], // Clear messages when switching conversations
-              error: null,
-              // A background stream for a DIFFERENT conversation must not
-              // leave the newly-active conversation showing stale
-              // isLoading:true; if `id` itself has a genuinely live stream
-              // (switching back to one whose send is still in flight), this
-              // correctly keeps isLoading true instead of clearing it.
-              isLoading: id !== null && state.streamingConversationIds.includes(id),
-            }),
+            (state) => {
+              // AUDIT-FIX ROOT-CAUSE: switching conversations no longer DESTROYS
+              // the transcript (the old `messages: []`); it re-points the derived
+              // mirror at the target conversation's own bucket. That is what lets
+              // an in-flight background turn keep writing into its own
+              // conversation, and what lets `loadConversation` short-circuit on a
+              // cached transcript instead of refetching and clobbering it.
+              const messagesByConversation =
+                id === null
+                  ? (({ [PENDING_CONVERSATION_KEY]: _pending, ...rest }) => rest)(
+                      state.messagesByConversation,
+                    )
+                  : state.messagesByConversation;
+              const activeConversationId = id;
+              return {
+                activeConversationId,
+                messagesByConversation,
+                // Returning to the new-chat surface still starts from an empty
+                // composer transcript (previous behaviour), so the pending
+                // bucket is discarded rather than resurrected.
+                messages: id === null ? [] : readConversationMessages(state, conversationKey(id)),
+                // AUDIT-FIX STR-23: the visible draft follows the conversation.
+                draftContent: state.draftsByConversation[conversationKey(id)] ?? '',
+                error: null,
+                isLoading: deriveIsLoading({ ...state, activeConversationId }),
+              };
+            },
             undefined,
             'chat/setActiveConversation',
           ),
@@ -482,173 +669,165 @@ export const useChatStore = create<ChatState>()(
           set(
             (state) => ({
               activeConversationId: id,
+              messagesByConversation: { ...state.messagesByConversation, [id]: messages },
               messages,
+              // AUDIT-FIX STR-23: the visible draft follows the conversation.
+              draftContent: state.draftsByConversation[conversationKey(id)] ?? '',
               error: null,
-              isLoading: state.streamingConversationIds.includes(id),
+              isLoading: deriveIsLoading({ ...state, activeConversationId: id }),
             }),
             undefined,
             'chat/setActiveConversationWithMessages',
           ),
 
         // Messages
-        setMessages: (messages) => set({ messages }, undefined, 'chat/setMessages'),
-
-        addMessage: (message) =>
+        setMessages: (messages, conversationId) =>
           set(
-            (state) => ({
-              messages: [...state.messages, message],
-            }),
+            (state) =>
+              writeConversationMessages(
+                state,
+                conversationKey(conversationId ?? state.activeConversationId),
+                messages,
+              ),
+            undefined,
+            'chat/setMessages',
+          ),
+
+        addMessage: (message, conversationId) =>
+          set(
+            (state) =>
+              updateConversationMessages(state, conversationId, (messages) => [
+                ...messages,
+                message,
+              ]),
             undefined,
             'chat/addMessage',
           ),
 
-        updateMessage: (id, updates) =>
+        updateMessage: (id, updates, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) => (m.id === id ? { ...m, ...updates } : m)),
-            }),
+            (state) =>
+              updateConversationMessages(state, conversationId, (messages) =>
+                messages.map((m) => (m.id === id ? { ...m, ...updates } : m)),
+              ),
             undefined,
             'chat/updateMessage',
           ),
 
-        appendToMessage: (id, content) =>
+        appendToMessage: (id, content, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) =>
-                m.id === id ? { ...m, content: m.content + content } : m,
+            (state) =>
+              updateConversationMessages(state, conversationId, (messages) =>
+                messages.map((m) => (m.id === id ? { ...m, content: m.content + content } : m)),
               ),
-            }),
             undefined,
             'chat/appendToMessage',
           ),
 
-        appendToThinking: (id, thinking) =>
+        appendToThinking: (id, thinking, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) =>
-                m.id === id
-                  ? {
-                      ...m,
-                      metadata: {
-                        ...m.metadata,
-                        thinkingContent: (m.metadata?.thinkingContent ?? '') + thinking,
-                      },
-                    }
-                  : m,
+            (state) =>
+              updateConversationMessages(state, conversationId, (messages) =>
+                messages.map((m) =>
+                  m.id === id
+                    ? {
+                        ...m,
+                        metadata: {
+                          ...m.metadata,
+                          thinkingContent: (m.metadata?.thinkingContent ?? '') + thinking,
+                        },
+                      }
+                    : m,
+                ),
               ),
-            }),
             undefined,
             'chat/appendToThinking',
           ),
 
-        setSearching: (id, isSearching) =>
+        setSearching: (id, isSearching, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) =>
-                m.id === id ? { ...m, metadata: { ...m.metadata, isSearching } } : m,
-              ),
-            }),
+            (state) => patchMessageMetadata(state, conversationId, id, { isSearching }),
             undefined,
             'chat/setSearching',
           ),
 
-        setSearchResults: (id, results) =>
+        setSearchResults: (id, results, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) =>
-                m.id === id
-                  ? {
-                      ...m,
-                      metadata: { ...m.metadata, searchResults: results, isSearching: false },
-                    }
-                  : m,
-              ),
-            }),
+            (state) =>
+              patchMessageMetadata(state, conversationId, id, {
+                searchResults: results,
+                isSearching: false,
+              }),
             undefined,
             'chat/setSearchResults',
           ),
 
-        setExecutingCode: (id, isExecuting) =>
+        setExecutingCode: (id, isExecuting, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) =>
-                m.id === id
-                  ? { ...m, metadata: { ...m.metadata, isExecutingCode: isExecuting } }
-                  : m,
-              ),
-            }),
+            (state) =>
+              patchMessageMetadata(state, conversationId, id, { isExecutingCode: isExecuting }),
             undefined,
             'chat/setExecutingCode',
           ),
 
-        setToolTimeline: (id, tools) =>
+        setToolTimeline: (id, tools, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) =>
-                m.id === id ? { ...m, metadata: { ...m.metadata, tools } } : m,
-              ),
-            }),
+            (state) => patchMessageMetadata(state, conversationId, id, { tools }),
             undefined,
             'chat/setToolTimeline',
           ),
 
-        setResearchState: (id, research) =>
+        setResearchState: (id, research, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) =>
-                m.id === id ? { ...m, metadata: { ...m.metadata, research } } : m,
-              ),
-            }),
+            (state) => patchMessageMetadata(state, conversationId, id, { research }),
             undefined,
             'chat/setResearchState',
           ),
 
-        updateToolEntry: (messageId, toolCallId, updates) =>
+        updateToolEntry: (messageId, toolCallId, updates, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) => {
-                if (m.id !== messageId) return m;
-                const tools = m.metadata?.tools ?? [];
-                const updatedTools = tools.map((t) =>
-                  t.toolCallId === toolCallId ? { ...t, ...updates } : t,
-                );
-                return { ...m, metadata: { ...m.metadata, tools: updatedTools } };
-              }),
-            }),
+            (state) =>
+              updateConversationMessages(state, conversationId, (messages) =>
+                messages.map((m) => {
+                  if (m.id !== messageId) return m;
+                  const tools = m.metadata?.tools ?? [];
+                  const updatedTools = tools.map((t) =>
+                    t.toolCallId === toolCallId ? { ...t, ...updates } : t,
+                  );
+                  return { ...m, metadata: { ...m.metadata, tools: updatedTools } };
+                }),
+              ),
             undefined,
             'chat/updateToolEntry',
           ),
 
-        setCodeExecutionResult: (id, result) =>
+        setCodeExecutionResult: (id, result, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.map((m) =>
-                m.id === id
-                  ? {
-                      ...m,
-                      metadata: {
-                        ...m.metadata,
-                        codeExecutionResult: result,
-                        isExecutingCode: false,
-                      },
-                    }
-                  : m,
-              ),
-            }),
+            (state) =>
+              patchMessageMetadata(state, conversationId, id, {
+                codeExecutionResult: result,
+                isExecutingCode: false,
+              }),
             undefined,
             'chat/setCodeExecutionResult',
           ),
 
-        deleteMessage: (id) =>
+        deleteMessage: (id, conversationId) =>
           set(
-            (state) => ({
-              messages: state.messages.filter((m) => m.id !== id),
-            }),
+            (state) =>
+              updateConversationMessages(state, conversationId, (messages) =>
+                messages.filter((m) => m.id !== id),
+              ),
             undefined,
             'chat/deleteMessage',
           ),
 
-        clearMessages: () => set({ messages: [] }, undefined, 'chat/clearMessages'),
+        clearMessages: (conversationId) =>
+          set(
+            (state) => updateConversationMessages(state, conversationId, () => []),
+            undefined,
+            'chat/clearMessages',
+          ),
 
         // Streaming
         startStreaming: (messageId, conversationId) =>
@@ -662,9 +841,12 @@ export const useChatStore = create<ChatState>()(
               return {
                 streamingConversationIds,
                 isStreaming: true,
-                messages: state.messages.map((m) =>
-                  m.id === messageId ? { ...m, isStreaming: true } : m,
+                // AUDIT-FIX ROOT-CAUSE: flip the flag inside the OWNING
+                // conversation's transcript, not "whatever is on screen".
+                ...updateConversationMessages(state, conversationId, (messages) =>
+                  messages.map((m) => (m.id === messageId ? { ...m, isStreaming: true } : m)),
                 ),
+                isLoading: deriveIsLoading({ ...state, streamingConversationIds }),
               };
             },
             undefined,
@@ -678,19 +860,19 @@ export const useChatStore = create<ChatState>()(
               const streamingConversationIds = targetId
                 ? state.streamingConversationIds.filter((id) => id !== targetId)
                 : state.streamingConversationIds;
-              // Only sweep the visible messages' isStreaming flag when the
-              // stream ending belongs to the conversation currently loaded
-              // in `messages` (or no id was given -- the user-initiated Stop
-              // path, which always targets whatever's on screen). An
-              // orphaned background conversation's completion must not touch
-              // a genuinely-active different conversation's message bubbles.
-              const affectsVisible = !targetId || targetId === state.activeConversationId;
+              // AUDIT-FIX ROOT-CAUSE: sweep the isStreaming flag on the ENDING
+              // conversation's own transcript. Previously this could only touch
+              // the visible array, so a background stream's teardown left its
+              // bubbles stuck "streaming" forever once the user navigated away.
               return {
                 streamingConversationIds,
                 isStreaming: streamingConversationIds.length > 0,
-                messages: affectsVisible
-                  ? state.messages.map((m) => ({ ...m, isStreaming: false }))
-                  : state.messages,
+                ...(targetId
+                  ? updateConversationMessages(state, targetId, (messages) =>
+                      messages.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)),
+                    )
+                  : {}),
+                isLoading: deriveIsLoading({ ...state, streamingConversationIds }),
               };
             },
             undefined,
@@ -700,14 +882,26 @@ export const useChatStore = create<ChatState>()(
         setLoading: (loading, conversationId) =>
           set(
             (state) => {
-              if (
-                loading === false &&
-                conversationId &&
-                conversationId !== state.activeConversationId
-              ) {
-                return state;
+              // AUDIT-FIX STR-7/BUG-12: record the turn against ITS conversation
+              // instead of flipping one global boolean. The old reducer accepted
+              // every unscoped `true` and DISCARDED a scoped `false` whose id was
+              // not active, which is exactly how a background stream left the
+              // composer disabled in every other chat.
+              const targetId = conversationId ?? state.activeConversationId;
+              if (!targetId) return state;
+              const alreadyLoading = state.loadingConversationIds.includes(targetId);
+              if (loading === alreadyLoading) {
+                // No ledger change, but the derived flag may still be stale
+                // (e.g. a stream started/ended since the last write).
+                return { isLoading: deriveIsLoading(state) };
               }
-              return { isLoading: loading };
+              const loadingConversationIds = loading
+                ? [...state.loadingConversationIds, targetId]
+                : state.loadingConversationIds.filter((id) => id !== targetId);
+              return {
+                loadingConversationIds,
+                isLoading: deriveIsLoading({ ...state, loadingConversationIds }),
+              };
             },
             undefined,
             'chat/setLoading',
@@ -730,8 +924,51 @@ export const useChatStore = create<ChatState>()(
           ),
 
         // Draft
-        setDraftContent: (content) =>
-          set({ draftContent: content }, undefined, 'chat/setDraftContent'),
+        setDraftContent: (content, conversationId) =>
+          set(
+            (state) => {
+              const targetId =
+                conversationId === undefined ? state.activeConversationId : conversationId;
+              const key = conversationKey(targetId);
+              const draftsByConversation = { ...state.draftsByConversation };
+              if (content) draftsByConversation[key] = content;
+              else delete draftsByConversation[key];
+              return {
+                draftsByConversation,
+                ...(key === conversationKey(state.activeConversationId)
+                  ? { draftContent: content }
+                  : {}),
+              };
+            },
+            undefined,
+            'chat/setDraftContent',
+          ),
+
+        getDraftContent: (conversationId) => {
+          const state = get();
+          const targetId =
+            conversationId === undefined ? state.activeConversationId : conversationId;
+          return state.draftsByConversation[conversationKey(targetId)] ?? '';
+        },
+
+        clearDraftContent: (conversationId) =>
+          set(
+            (state) => {
+              const targetId =
+                conversationId === undefined ? state.activeConversationId : conversationId;
+              const key = conversationKey(targetId);
+              const draftsByConversation = { ...state.draftsByConversation };
+              delete draftsByConversation[key];
+              return {
+                draftsByConversation,
+                ...(key === conversationKey(state.activeConversationId)
+                  ? { draftContent: '' }
+                  : {}),
+              };
+            },
+            undefined,
+            'chat/clearDraftContent',
+          ),
 
         // Sidebar
         toggleSidebar: () =>
@@ -769,6 +1006,20 @@ export const selectConversations = (state: ChatState) => state.conversations;
 export const selectActiveConversationId = (state: ChatState) => state.activeConversationId;
 export const selectIsStreaming = (state: ChatState) => state.isStreaming;
 export const selectIsLoading = (state: ChatState) => state.isLoading;
+/**
+ * AUDIT-FIX STR-7/BUG-12: whether ONE named conversation has a turn in flight.
+ * Use this (not the derived active-only `isLoading`) anywhere a component must
+ * reason about a conversation other than the one currently displayed.
+ */
+export const selectIsConversationLoading = (conversationId: string | null) => (state: ChatState) =>
+  conversationId !== null &&
+  (state.loadingConversationIds.includes(conversationId) ||
+    state.streamingConversationIds.includes(conversationId));
+/** AUDIT-FIX ROOT-CAUSE: one named conversation's transcript. */
+export const selectConversationMessages =
+  (conversationId: string | null) =>
+  (state: ChatState): Message[] =>
+    conversationId === null ? [] : (state.messagesByConversation[conversationId] ?? []);
 /** Whether the ACTIVE conversation specifically has a live stream -- what
  *  per-conversation UI (composer, Stop button) should key off instead of
  *  the global `isStreaming`, which stays true while any background
