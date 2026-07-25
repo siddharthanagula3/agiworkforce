@@ -16,6 +16,7 @@ import {
 import { cn } from '@shared/lib/utils';
 import {
   useStyleStore,
+  RESPONSE_LENGTH_OPTIONS,
   type PresetStyle,
   type CustomStyle,
 } from '@features/chat/stores/style-store';
@@ -39,9 +40,11 @@ const EMPTY_FORM: CreateFormState = { name: '', sampleText: '', instruction: '' 
 export function StyleSelector() {
   const {
     style,
+    length,
     activeCustomStyleId,
     customStyles,
     setStyle,
+    setLength,
     setActiveCustomStyle,
     addCustomStyle,
     deleteCustomStyle,
@@ -63,7 +66,9 @@ export function StyleSelector() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const isActive = style !== 'default';
+  // AUDIT-FIX CMP-6/CMP-7: the pill is "active" when EITHER axis is off its
+  // default, so the length control is never an invisible setting.
+  const isActive = style !== 'default' || length !== 'brief';
 
   const activeLabel = React.useMemo<string>(() => {
     if (style === 'custom') {
@@ -162,6 +167,38 @@ export function StyleSelector() {
               </button>
             );
           })}
+
+          {/* Divider */}
+          <div className="my-2 border-t border-border/40" />
+
+          {/* Response length · AUDIT-FIX CMP-6/CMP-7. Orthogonal to style: this
+              is the verbosity axis the surface previously had no control for. */}
+          <div className="mb-1.5 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Response Length
+          </div>
+          <div
+            className="mb-1 flex items-center gap-1 px-1"
+            role="group"
+            aria-label="Response length"
+          >
+            {RESPONSE_LENGTH_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setLength(option.id)}
+                aria-pressed={length === option.id}
+                title={option.desc}
+                className={cn(
+                  'flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors',
+                  length === option.id
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
 
           {/* Divider */}
           <div className="my-2 border-t border-border/40" />

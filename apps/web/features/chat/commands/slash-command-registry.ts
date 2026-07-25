@@ -12,6 +12,21 @@
  * desktop/agentic actions (browser, terminal, database, undo, compact).
  * Custom user-defined commands are appended at runtime by SlashCommandMenu
  * by reading from the settings store.
+ *
+ * ARGUMENT FORM (AUDIT-FIX CMP-9). Every `example` below shows the command
+ * followed by an argument (`/search latest AI news`), and that form is now the
+ * contract: `ChatComposerNew` splits a leading `/<id>` off the composer text at
+ * SEND time, applies the command, and sends the remainder as the message.
+ * Previously nothing parsed it — the slash menu closed on the first space and
+ * the whole line went out as literal text, so the documented form was
+ * unreachable. Selecting from the menu takes the same path, so the typed and
+ * clicked forms run identical capability checks.
+ *
+ * CUSTOM COMMANDS (AUDIT-FIX CMP-8). A user-defined command's `template`
+ * (settings store `customCommands`) is expanded on selection: `{{input}}` is
+ * replaced with the typed argument, and a template without that placeholder
+ * gets the argument appended. Custom commands previously did nothing at all
+ * except wipe the composer.
  */
 
 import type { PlatformCapability } from '@agiworkforce/types';

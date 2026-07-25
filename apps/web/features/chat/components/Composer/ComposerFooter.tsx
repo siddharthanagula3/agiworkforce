@@ -34,6 +34,7 @@ import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   getAllowedAutoModesForTier,
   getBestAutoModeForTier,
+  getModelMetadata,
   getModelReasoning,
   isModelAllowedForTier,
 } from '@shared/config/llm';
@@ -205,9 +206,30 @@ function modelLock(
   return { locked: false, kind: 'tier' };
 }
 
-/** True when the model name contains "Opus" · used to show usage-rate tooltip. */
-function isOpusModel(model: AIModel): boolean {
-  return model.name.toLowerCase().includes('opus');
+/**
+ * True for models that burn plan usage fastest · drives the usage-rate tooltip.
+ *
+ * AUDIT-FIX CMP-25: this used to be `model.name.toLowerCase().includes('opus')`
+ * — a substring match on a DISPLAY NAME. It silently missed every other premium
+ * model (and would have fired on any unrelated model whose name happened to
+ * contain the word). `getPickerModelTier` is the catalog's own answer to
+ * "which bucket is this model in", and is already what the picker's Pro badge
+ * uses, so the tooltip and the badge can no longer disagree.
+ */
+function isHighUsageRateModel(model: AIModel): boolean {
+  return getPickerModelTier(model.id) === 'premium';
+}
+
+/** Short capability badges for a picker row (AUDIT-FIX CMP-30). */
+function modelCapabilityBadges(modelId: string): string[] {
+  const capabilities = getModelMetadata(modelId)?.capabilities;
+  if (!capabilities) return [];
+  const badges: string[] = [];
+  if (capabilities.vision) badges.push('Vision');
+  if (capabilities.thinking) badges.push('Reasoning');
+  if (capabilities.search) badges.push('Search');
+  if (capabilities.tools) badges.push('Tools');
+  return badges;
 }
 
 /**
@@ -360,6 +382,7 @@ function ModelRow({
 
   const isEnvLocked = isLocked && lockKind === 'env';
   const isComingSoon = isLocked && lockKind === 'coming_soon';
+  const capabilityBadges = modelCapabilityBadges(model.id);
   // Env-locked and coming_soon rows are HARD-disabled: not clickable, not
   // focusable, no upgrade CTA (upgrading can't satisfy either). Only tier-locked
   // rows are clickable (they open the upgrade dialog).
@@ -415,6 +438,21 @@ function ModelRow({
         {model.description && (
           <span className="block truncate text-xs text-muted-foreground">{model.description}</span>
         )}
+        {/* AUDIT-FIX CMP-30: rows carried no capability information at all, so
+            "can this model read my screenshot / search the web / reason?" was
+            unanswerable from the picker. Sourced from the catalog. */}
+        {capabilityBadges.length > 0 && (
+          <span className="mt-0.5 flex flex-wrap gap-1">
+            {capabilityBadges.map((badge) => (
+              <span
+                key={badge}
+                className="rounded bg-muted/60 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground"
+              >
+                {badge}
+              </span>
+            ))}
+          </span>
+        )}
       </span>
       {isComingSoon && (
         <span
@@ -448,7 +486,7 @@ function ModelRow({
     </button>
   );
 
-  if (isOpusModel(model)) {
+  if (isHighUsageRateModel(model)) {
     return (
       <TooltipProvider>
         <Tooltip>
@@ -456,7 +494,7 @@ function ModelRow({
             <div>{rowContent}</div>
           </TooltipTrigger>
           <TooltipContent side="left" sideOffset={8}>
-            Opus consumes usage limits faster than other models
+            {model.name} consumes usage limits faster than other models
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -468,7 +506,15 @@ function ModelRow({
 
 interface ComposerFooterProps {
   showModelSelector?: boolean;
-  /** When true, shows a search input inside the model dropdown (code surface only). */
+  /**
+   * Shows a search input inside the model dropdown.
+   *
+   * AUDIT-FIX CMP-30: this defaulted to `false` and the chat composer never
+   * passed it, so the search field AND the entire `isSearching` branch of
+   * `partitionModels` were unreachable dead code on the only surface that
+   * mounts this component. It now defaults to true and is rendered whenever the
+   * roster is long enough for search to be useful.
+   */
   showModelSearch?: boolean;
   onUpgradeRequest?: () => void;
   /** When true, render the selected model as a locked status pill instead of a dropdown. */
@@ -487,7 +533,7 @@ interface ComposerFooterProps {
 
 export function ComposerFooter({
   showModelSelector = true,
-  showModelSearch = false,
+  showModelSearch = true,
   onUpgradeRequest,
   lockModelSelector = false,
   showStyleSelector = true,
@@ -564,6 +610,10 @@ export function ComposerFooter({
 
   // Partition into recommended / more, respecting current tier and search
   const { recommended, more, isSearching } = partitionModels(AVAILABLE_MODELS, tier, searchQuery);
+  // AUDIT-FIX CMP-30: a roster short enough to read at a glance needs no
+  // search field; anything longer gets one (and with it the previously
+  // unreachable `isSearching` branch of partitionModels).
+  const modelSearchVisible = showModelSearch && AVAILABLE_MODELS.length > 8;
 
   // Auto-expand "More models" section when the selected model lives there
   const selectedInMore = more.some((m) => m.id === selectedModelId);
@@ -729,8 +779,10 @@ export function ComposerFooter({
                   <span className="text-xs font-medium text-foreground">Models</span>
                 </div>
 
-                {/* Search input · shown only in code surface */}
-                {showModelSearch && (
+                {/* Search input · AUDIT-FIX CMP-30. Hidden for a roster short
+                    enough to scan at a glance, so it never adds a control that
+                    filters nothing. */}
+                {modelSearchVisible && (
                   <div className="border-b border-border/40 px-3 py-1.5">
                     <input
                       className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"

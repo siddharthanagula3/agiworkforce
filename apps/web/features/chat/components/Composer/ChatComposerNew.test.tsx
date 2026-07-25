@@ -5,7 +5,8 @@ import { ChatComposerNew, type ComposerProjectPicker } from './ChatComposerNew';
 import { getSelectableModels, isAutoModeModelId } from '@shared/config/llm';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useModelStore } from '@shared/stores/model-store';
-import { useBillingStore } from '@shared/stores/web-auth-store';
+import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 
 // ─── Module mocks ──────────────────────────────────────────────────────────────
@@ -77,10 +78,6 @@ vi.mock('./ComposerFooter', () => ({
   ComposerFooter: () => <div data-testid="composer-footer" />,
 }));
 
-vi.mock('./InputFooter', () => ({
-  InputFooter: () => <div data-testid="input-footer" />,
-}));
-
 vi.mock('./VoiceInputButton', () => ({
   VoiceInputButton: ({ disabled }: { disabled?: boolean }) => (
     <button type="button" aria-label="Voice input" disabled={disabled}>
@@ -91,9 +88,22 @@ vi.mock('./VoiceInputButton', () => ({
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
+/**
+ * AUDIT-FIX CMP-14: a plan that really holds the `agi_work` capability, so the
+ * client gate under test is the same one the server enforces.
+ */
+const PRO_SUBSCRIPTION: SubscriptionPlan = {
+  tier: 'pro',
+  display_name: 'Pro',
+  status: 'active',
+  current_period_end: null,
+  plan_name: 'Pro',
+};
+
 describe('ChatComposerNew', () => {
   let originalModelId: string;
   let originalFeatureFlags: ReturnType<typeof useBillingStore.getState>['featureFlags'];
+  let originalSubscription: ReturnType<typeof useBillingStore.getState>['subscription'];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -108,11 +118,27 @@ describe('ChatComposerNew', () => {
     chatComposerMocks.skillResult.error = null;
     originalModelId = useModelStore.getState().selectedModelId;
     originalFeatureFlags = useBillingStore.getState().featureFlags;
+    originalSubscription = useBillingStore.getState().subscription;
+    // AUDIT-FIX CMP-14: the Chat | AGI Work toggle is gated on the canonical
+    // `agi_work` billing capability (PRO_TIERS) so the client agrees with
+    // `request-processor.ts`. It used to be gated on `!isFreeTrial`, which left
+    // BASIC-tier users with an enabled control and a hard
+    // `agi_work_plan_required` error on send. These tests exercise the paid
+    // path, so they need a plan that actually has the capability; the
+    // free-plan expectations below pass `freeTrial` explicitly.
+    useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
+    // AUDIT-FIX CMP-1/CMP-2/CMP-5: composer toggles are per-conversation store
+    // state now, so each test must start from a clean bucket.
+    useChatStore.setState({ composerTogglesByConversation: {}, webSearchByDefault: false });
   });
 
   afterEach(() => {
     useModelStore.getState().setSelectedModelId(originalModelId);
-    useBillingStore.setState({ featureFlags: originalFeatureFlags });
+    useBillingStore.setState({
+      featureFlags: originalFeatureFlags,
+      subscription: originalSubscription,
+    });
+    useChatStore.setState({ composerTogglesByConversation: {}, webSearchByDefault: false });
     vi.unstubAllGlobals();
   });
 
@@ -487,6 +513,9 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('button', { name: /web search/i })).toBeDisabled();
   });
 
+  // AUDIT-FIX CMP-3: "Temporary chat" only renders when the host supplies
+  // `onSetTemporaryChat` (a real PUT). Without an active conversation AND that
+  // handler there is nothing to persist, so the control must stay absent.
   it('does not show incognito when no active conversation can be made temporary', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 

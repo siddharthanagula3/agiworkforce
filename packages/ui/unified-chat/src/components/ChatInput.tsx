@@ -79,12 +79,19 @@ export interface ChatInputProps {
     workScope?: ChatWorkScope,
   ) => void;
   onStop: () => void;
-  onPlusClick: () => void;
+  /**
+   * AUDIT-FIX CMP-29: `onPlusClick` (REQUIRED) and `onVoiceClick` used to be
+   * declared here, destructured to `_`-prefixed aliases, and never referenced —
+   * so every host was forced to wire a handler that could not run. This
+   * component owns both behaviours itself: the "+" button is the trigger for
+   * the shared `AttachmentMenu`, and the mic runs `useVoiceInput`. Both props
+   * are removed rather than fired alongside the internal handlers, which would
+   * have double-driven the desktop host's legacy `toggle-voice-input` event.
+   */
   onModelSelectorClick: () => void;
   allowModelFallbackModels?: boolean;
   /** Show Ask/Auto/Plan/Bypass only when the active runtime enforces it. */
   supportsAgentControl?: boolean;
-  onVoiceClick?: () => void;
   /**
    * Called when the user picks "Select folder" from the attachment menu.
    * Host apps that expose `canUseWorkingDirectory` (desktop) should provide
@@ -141,11 +148,9 @@ export interface ChatInputProps {
 export function ChatInput({
   onSend,
   onStop,
-  onPlusClick: _onPlusClick,
   onModelSelectorClick,
   allowModelFallbackModels = true,
   supportsAgentControl = true,
-  onVoiceClick: _onVoiceClick,
   onSelectFolder,
   onRecordSkill,
   currentFolderLabel = null,

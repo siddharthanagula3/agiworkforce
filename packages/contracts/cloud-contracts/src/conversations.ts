@@ -78,6 +78,16 @@ export const ManagedCloudUpdateConversationRequestSchema = z.object({
   pinned: z.boolean().optional(),
   starred: z.boolean().optional(),
   archived: z.boolean().optional(),
+  /**
+   * AUDIT-FIX CMP-3: "Temporary chat" is a PRIVACY control, and it could only
+   * be set at conversation-creation time. Toggling it afterwards wrote to a
+   * local Zustand map with no network call, while the server reads
+   * `is_temporary` straight from the DB to decide auto-memory extraction and
+   * persistence — so a user who turned the control on mid-conversation was
+   * still having that conversation remembered. The update contract carries it
+   * now, so the toggle reaches the row it claims to control.
+   */
+  isTemporary: z.boolean().optional(),
 });
 export type ManagedCloudUpdateConversationRequest = z.infer<
   typeof ManagedCloudUpdateConversationRequestSchema
