@@ -153,6 +153,18 @@ export class CloudAgentApprovalCheckpointNotFoundError extends Error {
   }
 }
 
+/**
+ * AUDIT-FIX AGT-3: an approval that aged out is materially different from one
+ * that never existed — the caller must be able to tell the user the request
+ * expired instead of reporting it as missing.
+ */
+export class CloudAgentApprovalCheckpointExpiredError extends Error {
+  constructor(message = 'Cloud agent approval checkpoint has expired') {
+    super(message);
+    this.name = 'CloudAgentApprovalCheckpointExpiredError';
+  }
+}
+
 export class CloudAgentApprovalDecisionError extends Error {
   constructor(message = 'Approval decisions do not match the pending tool calls') {
     super(message);
@@ -614,6 +626,13 @@ export async function saveCloudAgentApprovalCheckpoint(
 }
 
 /**
+ * AUDIT-FIX AGT-3: checkpoints carry no expiry column, so a pending approval
+ * created months ago used to stay claimable and would execute its tools
+ * against a world that has since changed. Bound the claim by checkpoint age.
+ */
+export const APPROVAL_CHECKPOINT_TTL_HOURS = 24;
+
+/**
  * Atomically bind a complete decision set to the latest pending checkpoint.
  * Exact set equality prevents forged ids, omitted calls, and double resumes.
  */
@@ -642,11 +661,24 @@ export async function claimCloudAgentApprovalCheckpoint(
     const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
       `select * from public.cloud_agent_approval_checkpoints
         where run_id = $1 and user_id = $2 and state = 'pending'
+          and created_at > now() - make_interval(hours => $3)
         order by version desc
         limit 1
         for update`,
-      [input.runId, input.userId],
+      [input.runId, input.userId, APPROVAL_CHECKPOINT_TTL_HOURS],
     );
+    if (!rows[0]) {
+      // AUDIT-FIX AGT-3: the age predicate above hides an expired checkpoint
+      // from the claim, so look again without it to report expiry distinctly
+      // rather than telling the user the approval simply vanished.
+      const expiredRows = await tx.query<{ id: string }>(
+        `select id from public.cloud_agent_approval_checkpoints
+          where run_id = $1 and user_id = $2 and state = 'pending'
+          limit 1`,
+        [input.runId, input.userId],
+      );
+      if (expiredRows[0]) throw new CloudAgentApprovalCheckpointExpiredError();
+    }
     const checkpoint = requireApprovalCheckpoint(rows);
     const pendingIds = new Set(checkpoint.pendingToolCalls.map((call) => call.id));
     const decisionIds = new Set(approvals.map((approval) => approval.toolCallId));
@@ -671,13 +703,21 @@ export async function claimCloudAgentApprovalCheckpoint(
       claimedRows,
       new CloudAgentApprovalCheckpointConflictError(),
     );
-    await tx.query<CloudAgentRunRow>(
+    // AUDIT-FIX AGT-5: an unconstrained update revived terminal runs — a run
+    // that failed while its checkpoint stayed pending could be flipped back to
+    // 'running' by a client POST and execute side-effecting tools inside an
+    // execution context that was already torn down and billed out.
+    const resumedRuns = await tx.query<CloudAgentRunRow>(
       `update public.cloud_agent_runs
           set state = 'running', completed_at = null, updated_at = now()
         where id = $1 and user_id = $2
+          and state in ('queued', 'running', 'awaiting_input', 'paused')
         returning *`,
       [input.runId, input.userId],
     );
+    if (!resumedRuns[0]) {
+      throw new CloudAgentApprovalCheckpointConflictError('Cloud agent run is no longer resumable');
+    }
     if (!claimed.leaseToken) throw new CloudAgentApprovalCheckpointConflictError();
     return { checkpoint: claimed, approvals, leaseToken: claimed.leaseToken };
   });
