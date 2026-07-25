@@ -14,6 +14,11 @@ import { Button } from '@agiworkforce/ui';
 import { Copy, Check, ImageOff } from 'lucide-react';
 // KaTeX CSS must be loaded alongside rehype-katex so rendered math is styled.
 import 'katex/dist/katex.min.css';
+// AUDIT-FIX ART-9: rehype-highlight only emits `hljs-*` class names; no theme
+// stylesheet was ever imported and no `.hljs*` rule exists in the app CSS, so
+// syntax highlighting produced no colour at all. github-dark is chosen to pair
+// with the pinned dark `.code-block-body` background (ART-8, apps/web globals.css).
+import 'highlight.js/styles/github-dark.css';
 
 const CodeBlock = ({ className, children }: { className?: string; children: React.ReactNode }) => {
   const [copied, setCopied] = useState(false);

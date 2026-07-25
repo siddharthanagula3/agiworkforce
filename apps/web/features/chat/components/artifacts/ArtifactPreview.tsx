@@ -808,7 +808,11 @@ export function ArtifactPreview({
         ref={containerRef}
         className={cn(
           'flex h-full min-h-0 flex-col',
-          isFullscreen && 'fixed inset-0 z-modal',
+          // AUDIT-FIX ART-13: `z-modal` is not a utility in this Tailwind v4 setup
+          // (no --z-modal theme key), so it compiled to nothing and the fullscreen
+          // overlay sat at z-index:auto - header, composer and toasts painted over
+          // it. Use the repo's established form (see ui/src/primitives/Dialog.tsx).
+          isFullscreen && 'fixed inset-0 z-[var(--z-modal,300)]',
           className,
         )}
       >
@@ -1170,7 +1174,10 @@ export function ArtifactPreview({
       ref={containerRef}
       className={cn(
         'mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-lg',
-        isFullscreen && 'fixed inset-0 z-modal rounded-none',
+        // AUDIT-FIX ART-13: `z-modal` compiled to nothing (no such Tailwind v4
+        // utility here), leaving the fullscreen card at z-index:auto under the
+        // chrome. Matches ui/src/primitives/Dialog.tsx.
+        isFullscreen && 'fixed inset-0 z-[var(--z-modal,300)] rounded-none',
         className,
       )}
     >
