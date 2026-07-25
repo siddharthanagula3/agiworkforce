@@ -4,7 +4,10 @@
  * POST /api/shared - Store a packaged conversation and return its public URL.
  * GET  /api/shared?token=<token> - Retrieve a stored conversation by token.
  *
- * POST requires no authentication - the share token acts as the capability.
+ * POST requires an authenticated user and records them as the owner.
+ * GET is intentionally public — the unguessable token IS the capability, which
+ * is the point of a share link.
+ *
  * The conversation is stored in the Neon `shared_conversations` table and
  * expires after 30 days (enforced by the GET handler and a DB cron job).
  */
@@ -16,6 +19,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { createError } from '@/lib/errors';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { requireCsrfToken } from '@/lib/csrf';
 
 // Maximum size in bytes for the messages payload (~2 MB).
 const MAX_MESSAGES_BYTES = 2 * 1024 * 1024;
@@ -30,8 +35,21 @@ function getDb() {
 
 /** POST /api/shared - upload a packaged conversation */
 async function handlePost(request: NextRequest) {
-  // Rate-limit uploads to prevent abuse.
-  const rateLimitResponse = await withRateLimit(request, 'share-create');
+  // AUDIT-FIX BUG-19: this endpoint publishes caller-supplied content at a
+  // first-party https://agiworkforce.com/shared/<token> URL. Leaving it
+  // anonymous made the product's own domain a ready-made host for fabricated
+  // "AI conversations" — a phishing and disinformation primitive carrying the
+  // brand's TLS and reputation — and left growth bounded only by a per-IP
+  // limit. It also meant shares had no owner, so account deletion and data
+  // export could not reach them.
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const { userId } = await getClerkAuthUser(request);
+
+  // Rate-limit uploads to prevent abuse. Now keyed per user rather than per IP,
+  // so a shared NAT does not pool one budget across unrelated people.
+  const rateLimitResponse = await withRateLimit(request, 'share-create', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
   let body: unknown;
@@ -75,8 +93,8 @@ async function handlePost(request: NextRequest) {
   const db = getDb();
   try {
     await db.execute(
-      'insert into shared_conversations (token, messages_json, title, expires_at) values ($1, $2, $3, $4)',
-      [token, messages, safeTitle, expiresAt.toISOString()],
+      'insert into shared_conversations (token, messages_json, title, expires_at, user_id) values ($1, $2, $3, $4, $5)',
+      [token, messages, safeTitle, expiresAt.toISOString(), userId],
     );
   } catch (err: unknown) {
     // Duplicate token (23505) - return the existing URL instead of erroring.
