@@ -8,15 +8,47 @@
 
 export const ARTIFACT_SANDBOX_ATTR = 'allow-scripts allow-modals';
 
-const CSP_META =
-  `<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; ` +
-  `script-src 'unsafe-inline' 'unsafe-eval'; ` +
-  `style-src 'unsafe-inline' *; ` +
-  `img-src * data: blob:; ` +
-  `font-src * data:; ` +
-  `connect-src 'none'; ` +
-  `frame-src 'none'; ` +
-  `object-src 'none';">`;
+// AUDIT-FIX ART-6 / ART-14: the artifact CSP, identical on every renderer.
+//
+// This package cannot import from `apps/web`, so these directives are MIRRORED
+// byte-for-byte by `buildArtifactCspContent()` in
+// `apps/web/shared/utils/html-sanitizer.ts` (which the web sandbox srcDoc,
+// ArtifactPreview's react/svg/mermaid/text documents and ArtifactBlock all
+// consume). Edit the two together — that file carries the full rationale for
+// each directive, in particular why `'self'` must never appear: in a
+// null-origin sandbox it matches nothing and browsers have been observed to
+// drop the artifact's inline scripts as a result.
+//
+// Changes from the previous value here:
+//   - `default-src 'self' blob: data:` → `'none'` (`'self'` was inert anyway;
+//     every resource type is now enumerated explicitly).
+//   - `script-src` gains the fixed CDN allowlist, so an HTML artifact that
+//     bootstraps React/mermaid/Tailwind from a CDN renders on this surface
+//     exactly as it does on web instead of silently losing its scripts.
+//   - added `media-src`, `child-src`, `base-uri` and `form-action`.
+const ARTIFACT_SCRIPT_CDN_HOSTS = [
+  'https://unpkg.com',
+  'https://cdn.jsdelivr.net',
+  'https://cdnjs.cloudflare.com',
+  'https://esm.sh',
+] as const;
+
+export const ARTIFACT_CSP_CONTENT = [
+  "default-src 'none'",
+  `script-src 'unsafe-inline' 'unsafe-eval' ${ARTIFACT_SCRIPT_CDN_HOSTS.join(' ')}`,
+  "style-src 'unsafe-inline' https:",
+  'img-src data: blob: https:',
+  'font-src data: https:',
+  'media-src data: blob:',
+  "connect-src 'none'",
+  "frame-src 'none'",
+  "child-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
+
+const CSP_META = `<meta http-equiv="Content-Security-Policy" content="${ARTIFACT_CSP_CONTENT}">`;
 
 const BASE_STYLES =
   `<style>` +

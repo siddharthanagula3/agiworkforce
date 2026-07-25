@@ -20,6 +20,7 @@ import { useState, type ReactNode } from 'react';
 import { Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { cn } from '@shared/lib/utils';
+import { buildSandboxSrcDoc } from '@shared/utils/html-sanitizer';
 import { SandboxedIframe } from './SandboxedIframe';
 import type { ArtifactRenderPayload } from '@/lib/artifact-sandbox';
 
@@ -67,25 +68,45 @@ function extractCodeBlocks(content: string): CodeBlock[] {
 
 function CopyButton({ text, className }: { text: string; className?: string }) {
   const [copied, setCopied] = useState(false);
+  // AUDIT-FIX ART-24: surfaced copy failure (see handleCopy).
+  const [failed, setFailed] = useState(false);
 
+  // AUDIT-FIX ART-24: the unguarded call threw an unhandled rejection whenever
+  // the clipboard API was missing (insecure context) or the permission was
+  // denied, and the button just sat there saying "Copy" forever. Now the
+  // failure is visible.
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+        throw new Error('Clipboard unavailable');
+      }
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setFailed(false);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setFailed(true);
+      setTimeout(() => setFailed(false), 2000);
+    }
   };
 
   return (
     <button
       type="button"
       onClick={handleCopy}
-      aria-label={copied ? 'Copied' : 'Copy code'}
+      aria-label={failed ? 'Copy failed' : copied ? 'Copied' : 'Copy code'}
       className={cn(
         'flex items-center gap-1 h-7 px-2 rounded text-xs',
         'text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors',
         className,
       )}
     >
-      {copied ? (
+      {failed ? (
+        <>
+          <Copy className="h-3 w-3 text-destructive" aria-hidden="true" />
+          Copy failed
+        </>
+      ) : copied ? (
         <>
           <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
           Copied
@@ -112,20 +133,14 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
 function HtmlBlock({ code }: { code: string }) {
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const fallbackSrcDoc = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy"
-          content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https:;
-                   script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net;
-                   style-src 'self' 'unsafe-inline' https:;
-                   connect-src 'none';">
-    <style>body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, sans-serif; }</style>
-  </head>
-  <body>${code}</body>
-</html>`;
+  // AUDIT-FIX ART-14: this hand-rolled document was the third distinct CSP in
+  // the codebase (it named `'self'` — meaningless in a null origin — and
+  // allowed `default-src https:`) and it interpolated `code` into `<body>`
+  // with no sanitizer at all. `buildSandboxSrcDoc` is the same builder the
+  // ArtifactPreview HTML path uses: sandbox-profile DOMPurify (scripts kept,
+  // `<base>`/meta-refresh/nested `allow-same-origin` stripped) plus the single
+  // shared CSP. One posture, one implementation.
+  const fallbackSrcDoc = buildSandboxSrcDoc(code);
 
   const payload: ArtifactRenderPayload = {
     type: 'render',

@@ -163,8 +163,15 @@ const SVG_ALLOWED_ATTRS = new Set([
   'patternTransform',
 ]);
 
-/** Safely sanitize an SVG string by stripping disallowed tags/attributes. */
-function sanitizeSvg(raw: string): string {
+/**
+ * Safely sanitize an SVG string by stripping disallowed tags/attributes.
+ *
+ * AUDIT-FIX ART-17: exported so `ArtifactPanel` can run the SAME allowlist
+ * before it renders an SVG artifact. The panel used to embed unsanitized SVG
+ * bytes directly while this sibling renderer sanitized them — one package, two
+ * different answers to "is this SVG safe?".
+ */
+export function sanitizeSvg(raw: string): string {
   // Parse using browser DOM parser, then walk and strip
   try {
     const parser = new DOMParser();
@@ -328,7 +335,12 @@ function SvgArtifact({ artifact }: { artifact: Artifact }) {
   );
 }
 
-function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDark: boolean }) {
+/**
+ * AUDIT-FIX ART-18: exported so `ArtifactPanel` renders mermaid artifacts with
+ * this component instead of labelling them "Mermaid" and then refusing to
+ * preview them.
+ */
+export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDark: boolean }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [svg, setSvg] = React.useState<string>('');
   const [error, setError] = React.useState<string | null>(null);
@@ -406,12 +418,21 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
 
   // Shared CSP envelope lives in `lib/artifact-sandbox` so this surface and
   // `ArtifactPanel` cannot drift on the iframe's security attributes.
-  const srcDoc = useMemo(() => {
-    if (!isRunning) return '';
+  //
+  // AUDIT-FIX ART-16: `buildSandboxedHtml` throwing used to be swallowed into
+  // `srcDoc = ''`, and the render was `{isRunning && srcDoc && <iframe/>}` +
+  // `{!isRunning && <Run again/>}` — so a build failure matched NEITHER branch
+  // and the component rendered a toolbar above dead empty space with no error,
+  // no retry and no explanation. The failure is now a first-class state.
+  const build = useMemo<{ srcDoc: string; error: string | null }>(() => {
+    if (!isRunning) return { srcDoc: '', error: null };
     try {
-      return buildSandboxedHtml(artifact.content);
-    } catch {
-      return '';
+      return { srcDoc: buildSandboxedHtml(artifact.content), error: null };
+    } catch (err) {
+      return {
+        srcDoc: '',
+        error: err instanceof Error ? err.message : 'Could not prepare this HTML for preview.',
+      };
     }
   }, [artifact.content, isRunning]);
 
@@ -429,17 +450,31 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
           {isRunning ? 'Stop' : 'Run'}
         </button>
       </div>
-      {isRunning && srcDoc && (
+      {build.error ? (
+        <div
+          className="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center"
+          data-testid="html-artifact-error"
+        >
+          <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
+          <p className="text-sm text-foreground">
+            This HTML couldn&apos;t be prepared for preview.
+          </p>
+          <p className="max-w-sm text-xs text-muted-foreground">{build.error}</p>
+          {/* No retry affordance here on purpose: buildSandboxedHtml is a pure
+              function of the artifact content, so re-running it with the same
+              bytes cannot produce a different result. Offering a Retry button
+              would be the same lie the "Run preview" button told. */}
+        </div>
+      ) : isRunning ? (
         <iframe
           ref={iframeRef}
-          srcDoc={srcDoc}
+          srcDoc={build.srcDoc}
           title={artifact.title || 'HTML Preview'}
           className="flex-1 border-0 w-full"
           sandbox={ARTIFACT_SANDBOX_ATTR}
           referrerPolicy="no-referrer"
         />
-      )}
-      {!isRunning && (
+      ) : (
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
           <button
             type="button"

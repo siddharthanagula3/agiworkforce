@@ -1,8 +1,10 @@
 'use client';
 
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@agiworkforce/ui';
+import { useChatUIStore } from '@agiworkforce/unified-chat';
 import type { SharedArtifact } from '@agiworkforce/types';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
@@ -90,6 +92,65 @@ function ArtifactViewer({
 }
 
 // ============================================================================
+// AUDIT-FIX ART-22 / ART-23 helpers
+// ============================================================================
+
+/** Tailwind's `sm` breakpoint — below it the panel is a full-screen overlay. */
+const MOBILE_OVERLAY_QUERY = '(max-width: 639px)';
+
+/** Panel width bounds, matching the shared UI store's own clamp. */
+const MIN_PANEL_WIDTH = 280;
+const MAX_PANEL_WIDTH = 900;
+const PANEL_WIDTH_KEY_STEP = 24;
+
+/**
+ * AUDIT-FIX ART-22: which layout the panel is in.
+ *
+ * `'unknown'` until the first client-side measurement, so the server-rendered
+ * markup never guesses (guessing desktop would paint a 480px inline width over
+ * the mobile full-screen overlay for one frame). The modal semantics and the
+ * focus trap apply ONLY in `'mobile'`, because on desktop the panel is an
+ * inline column — marking that `aria-modal` would lie to screen readers about
+ * the rest of the page being inert.
+ */
+function useOverlayLayout(): 'unknown' | 'mobile' | 'desktop' {
+  const [layout, setLayout] = useState<'unknown' | 'mobile' | 'desktop'>('unknown');
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      setLayout('desktop');
+      return;
+    }
+    const query = window.matchMedia(MOBILE_OVERLAY_QUERY);
+    const apply = () => setLayout(query.matches ? 'mobile' : 'desktop');
+    apply();
+    query.addEventListener('change', apply);
+    return () => query.removeEventListener('change', apply);
+  }, []);
+
+  return layout;
+}
+
+/** Focusable descendants, in DOM order, for the ART-22 focus trap. */
+function focusableWithin(root: HTMLElement): HTMLElement[] {
+  return Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+}
+
+/** AUDIT-FIX ART-30: the artifact id requested by the current URL, if any. */
+function readArtifactDeepLink(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return new URLSearchParams(window.location.search).get('artifact');
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================================
 // Main Panel
 // ============================================================================
 
@@ -101,11 +162,23 @@ export function ArtifactsPanel() {
     panelOpen,
     cloudSyncStatus,
     cloudSyncError,
+    persistenceDegraded,
     selectArtifact,
     setPanelOpen,
   } = useArtifactsStore();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const streaming = useStreamingArtifactStore((s) => s.streaming);
+  // AUDIT-FIX ART-23: the width the user chose. `artifactPanelWidth` /
+  // `setArtifactPanelWidth` have existed in the shared UI store (and been
+  // re-exported through `useArtifact`) with no caller for the setter and a
+  // hardcoded `md:w-1/2 lg:w-[480px]` here — a persisted preference the product
+  // never let anyone express. The drag handle below wires it up, and because it
+  // is the same store `ChatInterface` reads, the two surfaces stay in sync.
+  const panelWidth = useChatUIStore((s) => s.artifactPanelWidth);
+  const setPanelWidth = useChatUIStore((s) => s.setArtifactPanelWidth);
+  const layout = useOverlayLayout();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   // Only show artifacts that belong to the current conversation.
   // When there is no active conversation (new/empty chat), the list is empty.
@@ -132,6 +205,150 @@ export function ArtifactsPanel() {
     streamingArtifact && (selectedArtifactId === streamingArtifact.artifactId || !selectedArtifact),
   );
 
+  // ---------------------------------------------------------------------------
+  // AUDIT-FIX ART-29: selection must not leak across conversations.
+  //
+  // `selectedArtifactId` is global UI state, so switching chats left the panel
+  // pointing at the previous chat's artifact. The render already papered over
+  // that by falling back to `artifacts[0]`, but the STORE stayed wrong — the
+  // stale id was persisted, and it decided whether the streaming view showed.
+  // Repair the selection on an actual conversation change (never on first
+  // mount, and never on the null→id transition of a brand-new chat).
+  // ---------------------------------------------------------------------------
+  const previousConversationRef = useRef<string | null>(activeConversationId);
+  useEffect(() => {
+    const previous = previousConversationRef.current;
+    previousConversationRef.current = activeConversationId;
+    if (!previous || !activeConversationId || previous === activeConversationId) return;
+
+    const store = useArtifactsStore.getState();
+    const conversationArtifacts = store.getConversationArtifacts(activeConversationId);
+    const selected = store.selectedArtifactId;
+    if (selected && conversationArtifacts.some((artifact) => artifact.id === selected)) return;
+    store.selectArtifact(conversationArtifacts[0]?.id ?? null);
+  }, [activeConversationId]);
+
+  // ---------------------------------------------------------------------------
+  // AUDIT-FIX ART-30: `?artifact=<id>` deep link.
+  //
+  // Read here rather than in WebChatPage (which only parses highlightMessage /
+  // search / projectId) so the panel owns its own URL contract and no other
+  // surface has to know about it. `popstate` is handled too, so a back/forward
+  // navigation between two artifact links re-selects correctly. The id is only
+  // honoured once it resolves to an artifact the store actually has, which also
+  // covers the case where the link is opened before the conversation loads.
+  // ---------------------------------------------------------------------------
+  const [deepLinkId, setDeepLinkId] = useState<string | null>(() => readArtifactDeepLink());
+  const appliedDeepLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    const onPopState = () => setDeepLinkId(readArtifactDeepLink());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+  const artifactCount = artifacts.length;
+  useEffect(() => {
+    if (!deepLinkId || appliedDeepLinkRef.current === deepLinkId) return;
+    // Read so this effect re-runs as artifacts land (a link can be opened
+    // before the conversation's artifacts have been derived). The store is read
+    // through getState() because the deep-linked artifact may belong to a
+    // conversation other than the active one.
+    void artifactCount;
+    const store = useArtifactsStore.getState();
+    if (!store.artifacts.some((artifact) => artifact.id === deepLinkId)) return;
+    appliedDeepLinkRef.current = deepLinkId;
+    store.selectArtifact(deepLinkId);
+    store.setPanelOpen(true);
+  }, [deepLinkId, artifactCount]);
+
+  // ---------------------------------------------------------------------------
+  // AUDIT-FIX ART-22: the mobile overlay is a real modal dialog.
+  //
+  // It was a bare `fixed inset-0` div: no role, no aria-modal, no accessible
+  // name, no Escape handler, and no focus management — a screen-reader user got
+  // no announcement and could tab straight back into the chat behind the
+  // backdrop, while a keyboard user had no way to dismiss it. Desktop keeps the
+  // plain inline-column semantics (see useOverlayLayout).
+  // ---------------------------------------------------------------------------
+  const isModalOverlay = layout === 'mobile' && panelOpen;
+
+  useEffect(() => {
+    if (!isModalOverlay) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    restoreFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const initial = focusableWithin(panel)[0] ?? panel;
+    initial.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setPanelOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = focusableWithin(panel);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === panel)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    panel.addEventListener('keydown', onKeyDown);
+    return () => {
+      panel.removeEventListener('keydown', onKeyDown);
+      // Return focus to whatever opened the panel (the toggle button).
+      const restore = restoreFocusRef.current;
+      restoreFocusRef.current = null;
+      if (restore && document.contains(restore)) restore.focus();
+    };
+  }, [isModalOverlay, setPanelOpen]);
+
+  // ---------------------------------------------------------------------------
+  // AUDIT-FIX ART-23: pointer + keyboard resize.
+  // ---------------------------------------------------------------------------
+  const onResizePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (layout !== 'desktop') return;
+      event.preventDefault();
+      const onPointerMove = (move: PointerEvent) => {
+        setPanelWidth(window.innerWidth - move.clientX);
+      };
+      const onPointerUp = () => {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+        document.body.style.removeProperty('user-select');
+      };
+      document.body.style.setProperty('user-select', 'none');
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    },
+    [layout, setPanelWidth],
+  );
+
+  const onResizeKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+      setPanelWidth(
+        panelWidth + (event.key === 'ArrowLeft' ? PANEL_WIDTH_KEY_STEP : -PANEL_WIDTH_KEY_STEP),
+      );
+    },
+    [panelWidth, setPanelWidth],
+  );
+
   if (!panelOpen) return null;
 
   return (
@@ -145,17 +362,43 @@ export function ArtifactsPanel() {
 
       {/* Panel */}
       <div
+        ref={panelRef}
+        // AUDIT-FIX ART-22: real dialog semantics on the mobile overlay only.
+        role={isModalOverlay ? 'dialog' : undefined}
+        aria-modal={isModalOverlay ? true : undefined}
+        aria-label={isModalOverlay ? 'Artifacts' : undefined}
+        tabIndex={isModalOverlay ? -1 : undefined}
+        // AUDIT-FIX ART-23: user-chosen width wins on desktop; the mobile
+        // overlay stays full-bleed. `undefined` until the layout is measured so
+        // the server-rendered markup never fights the responsive classes.
+        style={layout === 'desktop' ? { width: panelWidth } : undefined}
         className={cn(
-          'flex flex-col border-l border-border/30',
+          'flex flex-col border-l border-border/30 outline-none',
           'bg-card/95 backdrop-blur-xl',
           // Mobile: full-screen overlay
           'fixed inset-y-0 right-0 z-40 w-full',
-          // Desktop: inline panel · responsive width
+          // Desktop: inline panel · width comes from the shared UI store
           'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:shrink-0',
           // Slide-in animation
           'animate-in slide-in-from-right duration-300',
         )}
       >
+        {/* AUDIT-FIX ART-23: drag handle (desktop only). Also keyboard
+            operable — a mouse-only resize is not a resize for everyone. */}
+        {layout === 'desktop' && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize artifacts panel"
+            aria-valuenow={panelWidth}
+            aria-valuemin={MIN_PANEL_WIDTH}
+            aria-valuemax={MAX_PANEL_WIDTH}
+            tabIndex={0}
+            onPointerDown={onResizePointerDown}
+            onKeyDown={onResizeKeyDown}
+            className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize bg-transparent transition-colors hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
+          />
+        )}
         {/* Header — slim strip: panel title + count badge + Download all.
             Close X only shown here when no artifact is selected (no toolbar
             Close visible). When an artifact IS selected, the ArtifactPreview
@@ -169,6 +412,16 @@ export function ArtifactsPanel() {
             {artifacts.length > 0 && (
               <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                 {artifacts.length}
+              </span>
+            )}
+            {/* AUDIT-FIX ART-20: quota-exhausted persistence is stated, not
+                hidden. Without this the artifacts simply vanish on reload. */}
+            {persistenceDegraded && (
+              <span
+                className="text-[10px] text-destructive"
+                title="Browser storage is full, so artifacts are not being saved. They will disappear when this tab is closed."
+              >
+                Not saved
               </span>
             )}
             {cloudSyncStatus !== 'idle' && (

@@ -22,6 +22,13 @@ function cloudDelta(overrides: Partial<ArtifactWireDelta> = {}): ArtifactWireDel
   };
 }
 
+// AUDIT-FIX ART-21: the two `extractArtifactsFromContent` cases that used to
+// live here were deleted with the API they covered. That action wrapped a
+// forked `parseCodeBlocks` inside this store, which the module's own header
+// forbids ("do NOT reimplement derivation here"); it had no non-test callers,
+// so these tests were the only thing keeping the fork alive. Artifact
+// derivation is covered where it actually happens, in
+// packages/platform/artifacts/src/__tests__/artifact-derivation.test.ts.
 describe('chat artifacts sidecar store', () => {
   beforeEach(() => {
     useArtifactsStore.getState().clearArtifacts();
@@ -52,18 +59,6 @@ describe('chat artifacts sidecar store', () => {
     expect(state.artifacts[0]?.id).toBe('artifact-1');
     expect(state.artifacts[0]?.title).toBe('Preview v2');
     expect(state.selectedArtifactId).toBe('artifact-1');
-  });
-
-  it('extracts markdown code blocks into typed sidecar artifacts', () => {
-    useArtifactsStore
-      .getState()
-      .extractArtifactsFromContent('```html\n<section>AGI</section>\n```', 'msg-2');
-
-    const artifact = useArtifactsStore.getState().artifacts[0];
-    expect(artifact?.messageId).toBe('msg-2');
-    expect(artifact?.type).toBe('html');
-    expect(artifact?.language).toBe('html');
-    expect(artifact?.content).toContain('<section>AGI</section>');
   });
 
   it('scopes artifacts to their conversationId via addArtifactForMessage', () => {
@@ -101,19 +96,6 @@ describe('chat artifacts sidecar store', () => {
     expect(state.getConversationArtifacts('conv-b')[0]?.id).toBe('art-conv-b');
     // A new/empty chat with no matching id sees nothing.
     expect(state.getConversationArtifacts('conv-c')).toHaveLength(0);
-  });
-
-  it('extracts code blocks with conversationId so they are scoped correctly', () => {
-    useArtifactsStore
-      .getState()
-      .extractArtifactsFromContent('```ts\nconst y = 42;\n```', 'msg-3', 'conv-extract');
-
-    const state = useArtifactsStore.getState();
-    const convoArtifacts = state.getConversationArtifacts('conv-extract');
-    expect(convoArtifacts).toHaveLength(1);
-    expect(convoArtifacts[0]?.conversationId).toBe('conv-extract');
-    // Does not appear under a different conversation id.
-    expect(state.getConversationArtifacts('conv-other')).toHaveLength(0);
   });
 
   it('getConversationArtifacts excludes orphaned artifacts without a conversationId', () => {

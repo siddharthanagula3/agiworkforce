@@ -532,27 +532,113 @@ export function stripMetaRefreshFromSandboxHtml(html: string): string {
   return html.replace(/<meta[^>]*http-equiv\s*=\s*['"]?refresh['"]?[^>]*>/gi, '');
 }
 
-// No inner CSP <meta> is injected.
+// ---------------------------------------------------------------------------
+// AUDIT-FIX ART-6 / ART-14: ONE CSP posture for every artifact renderer.
 //
-// The iframe is rendered with sandbox="allow-scripts" WITHOUT allow-same-origin.
-// That combination creates a null (opaque) origin context where scripts cannot
-// touch the parent's cookies, localStorage, DOM, or make same-origin requests.
-// The sandbox attribute IS the security boundary — the same model used by
-// ChatGPT Artifacts, Claude Artifacts, and CodeSandbox.
+// HISTORY (why this used to be the empty string): an earlier attempt injected
+// `script-src 'self' 'unsafe-inline'`. Inside a null-origin (opaque) sandbox
+// `'self'` matches nothing, and Chrome was observed to refuse the artifact's
+// inline scripts and inline event handlers anyway — artifacts rendered dead.
+// The mitigation was to ship NO inner CSP at all. That left the PRIMARY web
+// path with zero egress control while
+// `packages/ui/unified-chat/src/lib/artifact-sandbox.ts` and ArtifactBlock's
+// fallback each shipped a different one: three renderers, three policies, and
+// a security banner in ArtifactPreview claiming a mitigation that never ran.
 //
-// Adding a `<meta http-equiv="Content-Security-Policy" content="script-src 'self'
-// 'unsafe-inline'">` inside a null-origin frame causes Chrome (and other browsers)
-// to BLOCK inline scripts and onclick handlers in practice, even though 'unsafe-inline'
-// should theoretically permit them. The interaction between opaque origin, 'self'
-// keyword resolution, and inline-script policy enforcement is browser-defined and
-// not reliably safe to rely on — observed to break artifacts in production.
+// FIX: keep an inner CSP but never name `'self'`. `'unsafe-inline'` is what
+// actually authorises inline <script> blocks and inline `on*=` handlers, and
+// it is honoured in an opaque origin (this is exactly the policy the unified
+// chat package has shipped in production). The policy built here is the single
+// source of truth for the web surface — `buildSandboxSrcDoc`, ArtifactPreview's
+// react / svg / mermaid / text renderers, and ArtifactBlock's fallback srcDoc
+// all use it. `CSP_META` in
+// `packages/ui/unified-chat/src/lib/artifact-sandbox.ts` mirrors these exact
+// directives; that package cannot import from apps/web, so the two definitions
+// must be edited together (each names the other).
 //
-// Since the sandbox is already sufficient isolation, the inner CSP is both
-// redundant (doesn't add security beyond the sandbox) and harmful (breaks
-// interactivity). We intentionally omit it.
-// Intentionally empty — no inner CSP meta tag is injected.
-// See the block comment above for the full rationale.
-const SANDBOX_CSP_META = '';
+// Posture (deliberate and documented):
+//   - active content: inline + eval + a FIXED CDN allowlist. An artifact can
+//     never pull executable code from an attacker-chosen host.
+//   - egress: `connect-src 'none'` + `form-action 'none'` — no fetch, XHR,
+//     WebSocket, EventSource or form POST can leave the frame. This is the
+//     directive the old react branch dropped when it used `default-src https:`.
+//   - passive subresources (img / style / font / media) may load over https so
+//     the artifact still looks like what the model authored. This is the one
+//     intentional outbound channel and it cannot read a response back.
+//   - `frame-src` / `child-src` / `object-src` / `base-uri` are 'none'.
+//
+// The sandbox attribute (allow-scripts WITHOUT allow-same-origin) remains the
+// PRIMARY boundary; this CSP is defence in depth layered on top of it.
+// ---------------------------------------------------------------------------
+
+/**
+ * Script origins an artifact is allowed to load executable code from.
+ * Kept to the CDNs our own renderers bootstrap (React/Babel for `react`,
+ * mermaid for `mermaid`) plus the two general-purpose module CDNs models
+ * reach for most often. Anything else is blocked by `script-src`.
+ */
+export const ARTIFACT_SCRIPT_CDN_HOSTS = [
+  'https://unpkg.com',
+  'https://cdn.jsdelivr.net',
+  'https://cdnjs.cloudflare.com',
+  'https://esm.sh',
+] as const;
+
+/**
+ * AUDIT-FIX ART-6 / ART-14: build the artifact Content-Security-Policy value.
+ *
+ * @param extraScriptSources Additional `script-src` sources for a renderer
+ *   that bootstraps from a host outside {@link ARTIFACT_SCRIPT_CDN_HOSTS}.
+ */
+export function buildArtifactCspContent(extraScriptSources: readonly string[] = []): string {
+  const scriptSrc = [
+    "'unsafe-inline'",
+    "'unsafe-eval'",
+    ...ARTIFACT_SCRIPT_CDN_HOSTS,
+    ...extraScriptSources,
+  ];
+  return [
+    "default-src 'none'",
+    `script-src ${scriptSrc.join(' ')}`,
+    "style-src 'unsafe-inline' https:",
+    'img-src data: blob: https:',
+    'font-src data: https:',
+    'media-src data: blob:',
+    "connect-src 'none'",
+    "frame-src 'none'",
+    "child-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join('; ');
+}
+
+/** AUDIT-FIX ART-6 / ART-14: the CSP as a ready-to-inject `<meta>` tag. */
+export function buildArtifactCspMeta(extraScriptSources: readonly string[] = []): string {
+  return `<meta http-equiv="Content-Security-Policy" content="${buildArtifactCspContent(
+    extraScriptSources,
+  )}">`;
+}
+
+/**
+ * AUDIT-FIX ART-1: make arbitrary source safe to embed inside an inline
+ * `<script>` element WITHOUT altering what the JavaScript engine sees.
+ *
+ * The HTML tokenizer ends a script element at the first `</script`, so source
+ * containing that sequence (in a string literal, a template, a regex) would
+ * truncate the block and spill the remainder into the document as markup.
+ * `<\/script` is the canonical escape: identical to `</script` for the JS
+ * parser, invisible to the HTML tokenizer. `<!--` gets the same treatment
+ * because it opens a script-data-escaped state.
+ *
+ * This is NOT sanitization — artifact source is MEANT to execute inside the
+ * null-origin sandbox. It is a correctness fix for HTML embedding only.
+ */
+export function escapeForInlineScript(source: string): string {
+  return source.replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--');
+}
+
+const SANDBOX_CSP_META = buildArtifactCspMeta();
 
 /**
  * Build a complete, ready-to-use `srcDoc` string for a null-origin sandboxed

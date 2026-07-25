@@ -7,9 +7,21 @@
  *   - `privacyMode === 'local'`  → returns a file:// URL pointing to the
  *     exported artifact under the user data directory supplied by the host
  *     adapter. No network call is made.
- *   - `privacyMode === 'byok' | 'managed'` → returns `{ kind: 'waitlist',
- *     waitlistGated: true, shareUrl: null }`. Cloud publish is not wired to
- *     an endpoint until the managed artifact publishing path is proven.
+ *   - `privacyMode === 'byok' | 'managed'` → delegates to the host-injected
+ *     {@link CloudPublisher}. When the host supplies one the result is
+ *     `{ kind: 'cloud', shareUrl }`; when it does not, the result is
+ *     `{ kind: 'unavailable', reason }` — a statement about THIS host's wiring,
+ *     not a launch gate.
+ *
+ * AUDIT-FIX ART-27 (2026-07-25): this function used to return
+ * `{ kind: 'waitlist', waitlistGated: true }` for byok/managed unconditionally,
+ * and the panel turned that into a "Cloud publish is coming — join waitlist"
+ * bar pointing at a marketing domain. Per the critical rules in CLAUDE.md the
+ * managed-cloud waitlist gate was REMOVED by founder decision on 2026-06-27:
+ * managed cloud is public alpha, open by default, and
+ * `AGI_MANAGED_COMPUTE_PRIVATE_BETA` survives only as an incident-response
+ * kill-switch. This check was never that env var — it was a hardcoded privacy
+ * mode test, so it kept advertising a gate the product had already dropped.
  *
  * Trust-boundary enforcement:
  *   1. `assertSurfaceCanSyncChats(surface)` — rejects CLI / VS Code / Chrome;
@@ -30,8 +42,10 @@
  *   - Versioning: `publishedArtifact.version` is always 1 in the current path.
  *   - Inline editor / edit-in-place is not wired; the panel accepts content
  *     as-is from the artifact store.
- *   - Cloud publish endpoint waits for managed publishing, retention, deletion,
- *     billing, and abuse controls.
+ *   - No surface ships a {@link CloudPublisher} yet, so byok/managed publish
+ *     currently resolves to `{ kind: 'unavailable' }` everywhere. Retention,
+ *     deletion, billing and abuse controls must land with the first adapter —
+ *     they are a requirement ON that adapter, not a gate in this module.
  *
  * @module artifacts
  */
@@ -75,9 +89,32 @@ export interface LocalPublishResult {
   waitlistGated: false;
 }
 
+/** Cloud publish succeeded — the host's publisher returned a hosted URL. */
+export interface CloudPublishResult {
+  kind: 'cloud';
+  shareUrl: string;
+  publishedAt: string;
+  waitlistGated: false;
+}
+
 /**
- * Cloud publish is waitlist-gated until managed artifact publishing is proven.
- * The caller should show a "Join Cloud waitlist" CTA.
+ * No cloud publisher is wired up on this host, so there is nowhere to publish
+ * to. `reason` is user-facing copy: state the capability gap, do not invent a
+ * launch gate. The caller should offer the local download path instead.
+ */
+export interface CloudUnavailablePublishResult {
+  kind: 'unavailable';
+  shareUrl: null;
+  reason: string;
+  waitlistGated: false;
+}
+
+/**
+ * @deprecated AUDIT-FIX ART-27 — `publishArtifact` no longer produces this.
+ * It stays in the union only so adapters that still construct the pre-
+ * 2026-06-27 shape (notably `apps/web/lib/artifact-publisher.ts`, owned
+ * elsewhere) keep type-checking until they are migrated. Consumers must treat
+ * it exactly like {@link CloudUnavailablePublishResult}: no waitlist, no CTA.
  */
 export interface WaitlistPublishResult {
   kind: 'waitlist';
@@ -86,7 +123,11 @@ export interface WaitlistPublishResult {
 }
 
 /** Discriminated union returned by `publishArtifact`. */
-export type PublishResult = LocalPublishResult | WaitlistPublishResult;
+export type PublishResult =
+  | LocalPublishResult
+  | CloudPublishResult
+  | CloudUnavailablePublishResult
+  | WaitlistPublishResult;
 
 export interface PublishArtifactInput {
   artifact: PublishableArtifact;
@@ -101,6 +142,18 @@ export interface PublishArtifactInput {
    * When `privacyMode !== 'local'` the adapter is never called.
    */
   localFileWriter?: LocalFileWriter;
+  /**
+   * Host-supplied cloud publisher for the byok / managed paths.
+   *
+   * AUDIT-FIX ART-27: publishing to the cloud is an I/O capability the host
+   * owns, exactly like {@link LocalFileWriter}. This package performs no
+   * network I/O of its own and does not name an endpoint — when no publisher
+   * is injected, `publishArtifact` says so plainly instead of claiming a
+   * product gate that no longer exists.
+   *
+   * When `privacyMode === 'local'` the adapter is never called.
+   */
+  cloudPublisher?: CloudPublisher;
 }
 
 /**
@@ -109,6 +162,16 @@ export interface PublishArtifactInput {
  * adapter) so the service itself has no platform dependency.
  */
 export type LocalFileWriter = (artifact: PublishableArtifact) => Promise<string>;
+
+/**
+ * Platform adapter that uploads the artifact and returns its hosted share URL.
+ * Injected by the host so this service keeps zero transport dependencies.
+ * AUDIT-FIX ART-27.
+ */
+export type CloudPublisher = (
+  artifact: PublishableArtifact,
+  privacyMode: PrivacyMode,
+) => Promise<{ shareUrl: string; publishedAt?: string }>;
 
 // ============================================================================
 // Internal helpers
@@ -204,20 +267,42 @@ function buildTrustBoundaryInput(
  * @throws {Error} When the trust boundary is violated.
  * @throws {Error} When `privacyMode === 'local'` and no `localFileWriter` is
  *   supplied, or when the writer itself throws.
+ * @throws {Error} When a supplied `cloudPublisher` throws, or returns no URL.
  */
 export async function publishArtifact(input: PublishArtifactInput): Promise<PublishResult> {
-  const { artifact, privacyMode, surface, localFileWriter } = input;
+  const { artifact, privacyMode, surface, localFileWriter, cloudPublisher } = input;
 
   // --- Trust-boundary 1: surface sync rule ---
   // CLI / VSCode / Chrome are developer-session surfaces; they must not
   // participate in the consumer-facing artifact publish pipeline.
   assertSurfaceCanSyncChats(surface);
 
-  // --- Cloud waitlist gate ---
-  // BYOK and managed publish routes are gated here; do not hit a cloud endpoint
-  // until the managed artifact publishing boundary is proven.
+  // --- Cloud path (byok / managed) ---
+  // AUDIT-FIX ART-27: no waitlist gate. Managed cloud is open by default
+  // (founder decision 2026-06-27); the only question left here is whether THIS
+  // host injected a publisher. If it did, publish. If it did not, say exactly
+  // that — an honest capability gap, not a fabricated launch gate.
   if (privacyMode === 'byok' || privacyMode === 'managed') {
-    return { kind: 'waitlist', shareUrl: null, waitlistGated: true };
+    if (!cloudPublisher) {
+      return {
+        kind: 'unavailable',
+        shareUrl: null,
+        reason:
+          'Cloud publish is not available on this surface yet. Download the artifact instead.',
+        waitlistGated: false,
+      };
+    }
+
+    const published = await cloudPublisher(artifact, privacyMode);
+    if (!published?.shareUrl) {
+      throw new Error('publishArtifact: cloudPublisher resolved without a shareUrl.');
+    }
+    return {
+      kind: 'cloud',
+      shareUrl: published.shareUrl,
+      publishedAt: published.publishedAt ?? new Date().toISOString(),
+      waitlistGated: false,
+    };
   }
 
   // --- Local path ---

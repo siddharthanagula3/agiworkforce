@@ -378,16 +378,20 @@ describe('buildSandboxSrcDoc — full document input (no double-wrap)', () => {
     expect(hasEventHandler(result, 'onclick')).toBe(true);
   });
 
-  it('does NOT inject an inner CSP meta (sandbox is the boundary)', () => {
-    // An inner `script-src` CSP in a null-origin sandboxed iframe has been
-    // observed to block inline scripts in Chrome even with 'unsafe-inline'
-    // because browsers may not resolve 'self' == null origin as expected.
-    // The sandbox="allow-scripts" (no allow-same-origin) attribute is the
-    // correct security boundary — it is sufficient and does not block scripts.
-    // Therefore SANDBOX_CSP_META is intentionally empty and no inner CSP is
-    // injected. This test guards that decision against accidental reversion.
+  it("injects the shared artifact CSP, and never names 'self'", () => {
+    // AUDIT-FIX ART-6 / ART-14: this test previously asserted the OPPOSITE —
+    // that no inner CSP is emitted — on the theory that any inner CSP breaks
+    // inline scripts in a null-origin frame. The real culprit was the `'self'`
+    // source, which matches nothing in an opaque origin; `'unsafe-inline'`
+    // alone authorises inline scripts and handlers and is exactly what the
+    // unified-chat sandbox has shipped in production. Emitting nothing left the
+    // primary web path with no egress control at all while two other renderers
+    // had one. The assertion is inverted deliberately.
     const result = buildSandboxSrcDoc(FULL_DOC_COUNTER);
-    expect(result).not.toContain('Content-Security-Policy');
+    expect(result).toContain('Content-Security-Policy');
+    expect(result).toContain("connect-src 'none'");
+    expect(result).toContain("script-src 'unsafe-inline' 'unsafe-eval'");
+    expect(result).not.toContain("'self'");
   });
 
   it('includes DOCTYPE', () => {
@@ -440,10 +444,13 @@ describe('buildSandboxSrcDoc — fragment input (wraps in shell, no double html)
     expect(hasEventHandler(result, 'onclick')).toBe(true);
   });
 
-  it('does NOT inject an inner CSP meta (sandbox is the boundary)', () => {
-    // See the full-doc variant above for the reasoning. No inner CSP injected.
+  it("injects the shared artifact CSP, and never names 'self'", () => {
+    // AUDIT-FIX ART-6 / ART-14: inverted deliberately — see the full-doc
+    // variant above for the full reasoning.
     const result = buildSandboxSrcDoc(FRAGMENT_COUNTER);
-    expect(result).not.toContain('Content-Security-Policy');
+    expect(result).toContain('Content-Security-Policy');
+    expect(result).toContain("connect-src 'none'");
+    expect(result).not.toContain("'self'");
   });
 
   it('includes DOCTYPE', () => {
