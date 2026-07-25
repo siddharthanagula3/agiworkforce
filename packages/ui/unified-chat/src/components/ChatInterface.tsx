@@ -254,14 +254,17 @@ export interface ChatInterfaceProps {
    * Desktop hosts use their own Cmd+K search modal to avoid duplicate dialogs.
    */
   enableSearchOverlay?: boolean;
-  /** Called when the user clicks the "+" attachment button */
-  onPlusClick?: () => void;
+  /**
+   * AUDIT-FIX CMP-29: `onPlusClick` and `onVoiceClick` are gone. `ChatInput`
+   * (this package) owns the "+" attachment menu and the mic itself, so the two
+   * callbacks were forwarded into props that were destructured and never
+   * referenced — dead in every host that wired them. Hosts that need to react
+   * to attachments should use the runtime/store, not a click ping.
+   */
   /** Called when the user clicks the model selector */
   onModelSelectorClick?: () => void;
   /** When false, the model selector does not fall back to cloud catalog rows if host models are empty. */
   allowModelFallbackModels?: boolean;
-  /** Called when the user clicks the voice/mic button */
-  onVoiceClick?: () => void;
   /**
    * Called when the user picks "Select folder" from the composer's attachment
    * menu. Only reachable when the host surface exposes `canUseWorkingDirectory`
@@ -324,10 +327,8 @@ export function ChatInterface({
   manageTheme = false,
   enableShortcuts = true,
   enableSearchOverlay = true,
-  onPlusClick: onPlusClickProp,
   onModelSelectorClick: onModelSelectorClickProp,
   allowModelFallbackModels = true,
-  onVoiceClick: onVoiceClickProp,
   onSelectFolder: onSelectFolderProp,
   onRecordSkill,
   currentFolderLabel = null,
@@ -528,17 +529,9 @@ export function ChatInterface({
     [setDraftContent],
   );
 
-  const handlePlusClick = useCallback(() => {
-    onPlusClickProp?.();
-  }, [onPlusClickProp]);
-
   const handleModelSelectorClick = useCallback(() => {
     onModelSelectorClickProp?.();
   }, [onModelSelectorClickProp]);
-
-  const handleVoiceClick = useCallback(() => {
-    onVoiceClickProp?.();
-  }, [onVoiceClickProp]);
 
   const handleSelectFolder = useCallback(() => {
     onSelectFolderProp?.();
@@ -753,11 +746,9 @@ export function ChatInterface({
               <ChatInput
                 onSend={handleSend}
                 onStop={stopGeneration}
-                onPlusClick={handlePlusClick}
                 onModelSelectorClick={handleModelSelectorClick}
                 allowModelFallbackModels={allowModelFallbackModels}
                 supportsAgentControl={runtime?.supportsAgentControl !== false}
-                onVoiceClick={handleVoiceClick}
                 onSelectFolder={onSelectFolderProp ? handleSelectFolder : undefined}
                 onRecordSkill={onRecordSkill}
                 currentFolderLabel={currentFolderLabel}

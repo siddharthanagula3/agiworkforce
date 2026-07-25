@@ -23,7 +23,8 @@ export interface WebShellV3Props {
   className?: string;
   hostBridge?: ChatHostBridge | null;
   onModelSelectorClick?: () => void;
-  onVoiceClick?: () => void;
+  // AUDIT-FIX CMP-29: `onVoiceClick` removed — ChatInput owns the mic
+  // (useVoiceInput) and never invoked the forwarded handler.
   onNavigateView?: ChatInterfaceProps['onNavigateView'];
 }
 
@@ -55,7 +56,6 @@ export function WebShellV3({
   className,
   hostBridge,
   onModelSelectorClick,
-  onVoiceClick,
   onNavigateView,
 }: WebShellV3Props) {
   const router = useRouter();
@@ -143,7 +143,6 @@ export function WebShellV3({
           enableShortcuts={true}
           hostBridge={hostBridge}
           onModelSelectorClick={onModelSelectorClick}
-          onVoiceClick={onVoiceClick}
           onNavigateView={onNavigateView}
           emptyStateSlot={<WebEmptyChat />}
           sidebarSlot={null}

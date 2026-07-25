@@ -1,43 +1,22 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { AgentMode } from '@/features/chat/types/agentMode';
-
-interface ChatPreferencesState {
-  agentMode: AgentMode;
-  preferWhisperCloud: boolean;
-  thinkingEnabled: boolean;
-  connectorBarDismissed: boolean;
-}
-
-interface ChatPreferencesActions {
-  setAgentMode: (mode: AgentMode) => void;
-  setPreferWhisperCloud: (prefer: boolean) => void;
-  setThinkingEnabled: (enabled: boolean) => void;
-  setConnectorBarDismissed: (dismissed: boolean) => void;
-}
-
-export const useChatPreferencesStore = create<ChatPreferencesState & ChatPreferencesActions>()(
-  persist(
-    (set) => ({
-      agentMode: 'standard',
-      preferWhisperCloud: false,
-      thinkingEnabled: false,
-      connectorBarDismissed: false,
-
-      setAgentMode: (mode) => set({ agentMode: mode }),
-      setPreferWhisperCloud: (prefer) => set({ preferWhisperCloud: prefer }),
-      setThinkingEnabled: (enabled) => set({ thinkingEnabled: enabled }),
-      setConnectorBarDismissed: (dismissed) => set({ connectorBarDismissed: dismissed }),
-    }),
-    {
-      name: 'agi-chat-preferences',
-      version: 2,
-      migrate: (persisted: unknown, version: number) => {
-        if (version < 2) {
-          return { ...(persisted as Record<string, unknown>), connectorBarDismissed: false };
-        }
-        return persisted;
-      },
-    },
-  ),
-);
+/**
+ * REMOVED (AUDIT-FIX CMP-18/CMP-19).
+ *
+ * `useChatPreferencesStore` had exactly ONE occurrence repo-wide -- its own
+ * definition -- yet it persisted to localStorage under 'agi-chat-preferences'
+ * with a v2 migration and read like an implemented agent-mode feature. None of
+ * `agentMode`, `thinkingEnabled`, `preferWhisperCloud`, or
+ * `connectorBarDismissed` was ever read or written by a caller:
+ *
+ *  - `thinkingEnabled` duplicates `@shared/stores/thinking-store` (the live one).
+ *  - `preferWhisperCloud` is a real `useVoiceTranscription` option, but no
+ *    caller sets it; the hook's own default (`false`) is the behaviour today.
+ *    Wiring a cloud-transcription preference is a product decision with a
+ *    privacy boundary attached, so it is left unimplemented rather than
+ *    half-implemented behind a store nothing reads.
+ *  - `agentMode` had no switcher; the `AgentMode` type it imported is likewise
+ *    now unreferenced.
+ *
+ * Contents deleted; the file survives only because the working tree cannot
+ * unlink files.
+ */
+export {};

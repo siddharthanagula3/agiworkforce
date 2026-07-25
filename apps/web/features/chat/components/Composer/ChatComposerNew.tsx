@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   Plus,
   X,
@@ -26,15 +26,23 @@ import {
 import { cn } from '@shared/lib/utils';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
+import { BUILT_IN_SLASH_COMMANDS } from '@features/chat/commands/slash-command-registry';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
 import { ComposerFooter } from './ComposerFooter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
+import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import {
+  useChatStore,
+  DEFAULT_COMPOSER_TOGGLES,
+  PENDING_CONVERSATION_KEY,
+  type ComposerToggleState,
+} from '@shared/stores/web-chat-store';
 import { useModelStore } from '@shared/stores/model-store';
 import {
   getAllowedAutoModesForTier,
@@ -44,10 +52,16 @@ import {
   isAutoModeModelId,
 } from '@shared/config/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
-import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
+import {
+  useStyleStore,
+  getStyleInstruction,
+  RESPONSE_LENGTH_OPTIONS,
+  type PresetStyle,
+} from '@features/chat/stores/style-store';
 import { useRouter } from 'next/navigation';
 import {
   EFFORT_LABEL,
+  canUseBillingPlanCapability,
   getModels,
   resolveModelEffort,
   type CloudWorkMode,
@@ -56,6 +70,18 @@ import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-searc
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
+import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
+
+/**
+ * AUDIT-FIX CMP-32: the composer had no `maxLength`, no character counter and
+ * no budget warning, so an over-long message was only rejected server-side
+ * after the user had written it. This is the SAME ceiling the managed-cloud
+ * message contract enforces (`ManagedCloudCreateMessageRequestSchema`), not a
+ * second hand-picked number.
+ */
+const COMPOSER_MAX_CHARS = MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH;
+/** Show the counter only once the message is long enough for it to matter. */
+const COMPOSER_COUNTER_THRESHOLD = Math.floor(COMPOSER_MAX_CHARS * 0.75);
 
 /** Composer work mode — claude.ai Chat/Cowork parity ("AGI Work" here). */
 export type ComposerWorkMode = CloudWorkMode;
@@ -76,9 +102,17 @@ interface ChatComposerProps {
       officeCreationEnabled?: boolean;
       /** Deep Research mode: server injects research system prompt and forces web search. */
       researchEnabled?: boolean;
-      /** Output style hint forwarded to the LLM system prompt. undefined = 'normal'. */
-      styleMode?: string;
-      /** Resolved Response-Style instruction (preset or custom) from StyleSelector. */
+      /**
+       * Resolved Response-Style instruction: the ONE style value this composer
+       * emits (AUDIT-FIX CMP-6/CMP-7). It composes the selected style with the
+       * new length axis and is never empty.
+       *
+       * The separate `styleMode` hint this meta used to carry is gone: the send
+       * path (`useChatStream`) always preferred `styleInstruction` and dropped
+       * `styleMode` on the floor, so emitting it only created a second, silently
+       * ignored vocabulary. `styleMode` survives in `SendReplayMetadata` purely
+       * to replay messages recorded before this change.
+       */
       styleInstruction?: string;
       /** Exact server-catalog skill name; the server resolves and loads its body. */
       skillName?: string;
@@ -143,6 +177,21 @@ interface ChatComposerProps {
     limitReached: boolean;
   };
   /**
+   * Persists the "Temporary chat" privacy flag for the ACTIVE conversation.
+   *
+   * AUDIT-FIX CMP-3: the toggle used to call the chat store's
+   * `updateConversation` — a local Zustand map update with NO network call —
+   * while the server reads `is_temporary` from the database to decide
+   * auto-memory extraction and persistence, and `conversations` is excluded
+   * from the store's `partialize` so the flag was also lost on reload. A user
+   * who switched a live chat to "Temporary" was still having it remembered.
+   *
+   * Hosts must resolve `true` only once the write is durable. When this prop is
+   * absent the control is NOT rendered: a privacy switch with no backing is
+   * worse than no switch.
+   */
+  onSetTemporaryChat?: (isTemporary: boolean) => Promise<boolean>;
+  /**
    * "Project or folder" picker (Claude-composer parity). Provided only by hosts
    * with real project data for a NEW chat (web /chat empty state). Selecting a
    * project scopes the next created conversation (the host threads it into
@@ -161,19 +210,22 @@ export interface ComposerProjectPicker {
   onCreateProject: () => void;
 }
 
-type StyleMode = 'normal' | 'concise' | 'formal' | 'explanatory';
-
-interface StyleOption {
-  id: StyleMode;
-  label: string;
-  description: string;
-}
-
-const STYLE_OPTIONS: StyleOption[] = [
-  { id: 'normal', label: 'Normal', description: 'Default balanced style' },
+/**
+ * AUDIT-FIX CMP-6/CMP-7: the composer-local `StyleMode`
+ * (normal|concise|formal|explanatory) is gone. It was a THIRD style vocabulary
+ * alongside the footer StyleSelector's `PresetStyle` and unified-chat's
+ * `WritingStyle`; both web controls rendered simultaneously for paid users with
+ * independent checkmarks, and `handleSubmit` forwarded the resolved
+ * `styleInstruction` while dropping `styleMode` on the floor. The "+" menu
+ * flyout below now reads and writes the SAME `useStyleStore` the footer control
+ * uses, so the two surfaces are two views of one value.
+ */
+const STYLE_OPTIONS: ReadonlyArray<{ id: PresetStyle; label: string; description: string }> = [
+  { id: 'default', label: 'Default', description: 'Direct, no filler' },
   { id: 'concise', label: 'Concise', description: 'Short and to the point' },
-  { id: 'formal', label: 'Formal', description: 'Professional and precise' },
-  { id: 'explanatory', label: 'Explanatory', description: 'Detailed with examples' },
+  { id: 'detailed', label: 'Detailed', description: 'Thorough with examples' },
+  { id: 'technical', label: 'Technical', description: 'Precise, code-forward' },
+  { id: 'creative', label: 'Creative', description: 'Expressive and vivid' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -230,6 +282,41 @@ export const IMAGE_MODELS: ImageModelOption[] = getModels({ modelTypes: ['image'
 // default purely by ordering the curation file — no id referenced in code).
 const IMAGE_MODEL_DEFAULT = IMAGE_MODELS[0]?.id ?? '';
 
+/**
+ * AUDIT-FIX CMP-9: split a leading `/token` off the composer text.
+ *
+ * The registry documents the argument form (`/search latest AI news`) but the
+ * composer only ever recognised a bare token — the slash menu closed on the
+ * first space and nothing else parsed the line, so the documented form was
+ * unreachable and sent as literal text. These helpers let both the menu path
+ * and the send path read the same shape.
+ */
+function splitSlashCommand(value: string): { token: string; argument: string } | null {
+  const match = /^\/([A-Za-z0-9][A-Za-z0-9_-]*)(?:[ \t]+([\s\S]*))?$/.exec(value);
+  if (!match) return null;
+  return { token: match[1] ?? '', argument: (match[2] ?? '').trim() };
+}
+
+/** The text a command should leave behind once its token is consumed. */
+function stripSlashCommandToken(value: string): string {
+  return splitSlashCommand(value)?.argument ?? value;
+}
+
+/** Outcome of resolving a slash command against the current capability set. */
+type SlashCommandOutcome =
+  | { status: 'unavailable'; notice: string }
+  | {
+      status: 'applied';
+      /** Message body once the command token is consumed. */
+      content: string;
+      /** Per-conversation toggles the command turns on. */
+      toggles: Partial<ComposerToggleState>;
+      /** Extended thinking lives in its own store, so it is reported separately. */
+      enableThinking?: boolean;
+      /** True when the command also makes web search the durable default. */
+      persistWebSearchDefault?: boolean;
+    };
+
 /** Toggle row used in the + menu for connected send options. */
 function MenuToggleRow({
   icon: Icon,
@@ -285,6 +372,7 @@ const ChatComposerNewComponent = ({
   freeTrial,
   onGenerateImage,
   projectPicker,
+  onSetTemporaryChat,
 }: ChatComposerProps) => {
   const isTurnActive = isLoading || isGenerating;
   const [message, setMessage] = useState('');
@@ -315,6 +403,8 @@ const ChatComposerNewComponent = ({
   } | null>(null);
   const wasLoadingRef = useRef(false);
   const [queuedPreview, setQueuedPreview] = useState<string | null>(null);
+  /** Human-readable list of tools the queued follow-up will carry (CMP-16). */
+  const [queuedToolsLabel, setQueuedToolsLabel] = useState<string | null>(null);
   const {
     attachments,
     previews,
@@ -328,11 +418,13 @@ const ChatComposerNewComponent = ({
   // Settings-modal opener for the plus-menu Skills/Connectors/Plugins entries
   // (founder directive 2026-07-10: entries open the modal pane, no inline lists).
   const { openSettings } = useSettingsModal();
+  // AUDIT-FIX CMP-8: user-defined commands are read here so `template` is
+  // actually applied (it was previously never read by any composer code).
+  const customCommands = useSettingsStore((s) => s.customCommands);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [isFocused, setIsFocused] = useState(false);
-  const [selectedSkill, setSelectedSkill] = useState<SkillItem | null>(null);
   const { skills: availableSkills, loading: skillsLoading, error: skillsError } = useSkillsList();
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
@@ -344,13 +436,84 @@ const ChatComposerNewComponent = ({
   const router = useRouter();
   const isFreeTrial = freeTrial?.enabled ?? false;
 
-  // Work-mode segmented toggle (Chat | AGI Work) — claude.ai Chat/Cowork
-  // parity. 'agiwork' reveals the "Project or folder" picker row BELOW the
-  // composer and stamps workMode + projectId into the send meta; both are
-  // backed (conversation project_id persistence + server-side project-context
-  // injection), so the toggle is a real product mode, not a decorative tab.
-  // Rendered only when the host passes projectPicker (real project data).
-  const [workMode, setWorkMode] = useState<ComposerWorkMode>('chat');
+  /**
+   * AUDIT-FIX CMP-11/CMP-14: client gates now read the SAME canonical billing
+   * catalog the server enforces.
+   *
+   * AGI Work was gated on `!isFreeTrial` (i.e. any tier that is not the website
+   * free trial), while `request-processor.ts` requires
+   * `canUseBillingPlanCapability(planTier, 'agi_work')` — PRO_TIERS. A
+   * **basic**-tier user therefore got a fully enabled Chat | AGI Work toggle and
+   * a hard `agi_work_plan_required` error on send. "Create image" had no tier
+   * check at all while `/api/media/image/generate` rejects non-Pro with 403,
+   * so the user composed a whole prompt and failed after a round trip.
+   */
+  const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
+  const canUseAgiWork = !isFreeTrial && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
+  const canUseImageGeneration =
+    !isFreeTrial && canUseBillingPlanCapability(subscriptionTier, 'image_generation');
+
+  /**
+   * AUDIT-FIX CMP-1/CMP-2/CMP-5: the composer's send options now live in the
+   * chat store, keyed by conversation.
+   *
+   * They were `useState` here, and `WebChatPage` renders this component in the
+   * two opposite branches of an `isEmptyChat ? ... : ...` ternary — so sending
+   * the first message unmounted one instance and mounted the other, resetting
+   * work mode, web search, Deep Research, Run code, Office files, style, image
+   * mode and the selected skill with nothing on screen saying so. A chat
+   * started in AGI Work silently became a plain chat from message 2, and
+   * `applyWorkMode` server-side only ever applied to turn 1.
+   *
+   * Store-backed state survives that unmount/remount, and keying it by
+   * conversation stops the toggles leaking from one chat into the next.
+   */
+  const toggleBucketKey = conversationId ?? PENDING_CONVERSATION_KEY;
+  const storedComposerToggles = useChatStore(
+    (s) => s.composerTogglesByConversation[toggleBucketKey],
+  );
+  const webSearchByDefault = useChatStore((s) => s.webSearchByDefault);
+  const setComposerTogglesInStore = useChatStore((s) => s.setComposerToggles);
+  const setWebSearchByDefault = useChatStore((s) => s.setWebSearchByDefault);
+  // Fallback is memoised (never rebuilt inside the selector) so the subscription
+  // returns a stable reference and cannot loop under useSyncExternalStore.
+  const composerToggles = useMemo<ComposerToggleState>(
+    () =>
+      storedComposerToggles ?? {
+        ...DEFAULT_COMPOSER_TOGGLES,
+        // AUDIT-FIX CMP-4/CMP-12: a conversation with no stored composer state
+        // seeds web search from the durable user preference.
+        webSearchEnabled: webSearchByDefault,
+      },
+    [storedComposerToggles, webSearchByDefault],
+  );
+  const setComposerToggles = useCallback(
+    (updates: Partial<ComposerToggleState>) => {
+      setComposerTogglesInStore(updates, conversationId);
+    },
+    [setComposerTogglesInStore, conversationId],
+  );
+  const {
+    workMode,
+    webSearchEnabled,
+    researchEnabled,
+    codeExecutionEnabled,
+    officeCreationEnabled,
+    imageMode,
+    selectedSkillName,
+  } = composerToggles;
+  const setWorkMode = useCallback(
+    (mode: ComposerWorkMode) => setComposerToggles({ workMode: mode }),
+    [setComposerToggles],
+  );
+  const setImageMode = useCallback(
+    (enabled: boolean) => setComposerToggles({ imageMode: enabled }),
+    [setComposerToggles],
+  );
+  const setSelectedSkillName = useCallback(
+    (name: string | null) => setComposerToggles({ selectedSkillName: name }),
+    [setComposerToggles],
+  );
 
   // "Project or folder" picker state (rendered only when the host passes
   // projectPicker — see the prop doc). The project selection lives in the
@@ -359,17 +522,22 @@ const ChatComposerNewComponent = ({
   const [projectQuery, setProjectQuery] = useState('');
 
   // Entering with a preselected project (sidebar "New chat in project" /
-  // project-page handoff → ?projectId= → host store) lands paid accounts in
-  // AGI Work. Free accounts keep ordinary project-scoped chat; Cowork/AGI Work
-  // remains paid even though Free includes up to five Projects.
+  // project-page handoff → ?projectId= → host store) lands eligible accounts in
+  // AGI Work. Free/basic accounts keep ordinary project-scoped chat; AGI Work
+  // needs the `agi_work` plan capability (AUDIT-FIX CMP-14), which is exactly
+  // what the server enforces.
   const pickerActiveProjectId = projectPicker?.activeProjectId ?? null;
   useEffect(() => {
-    if (isFreeTrial) {
-      setWorkMode('chat');
-    } else if (pickerActiveProjectId) {
+    // The CURRENT mode is read imperatively, never as a dependency: reacting to
+    // `workMode` would make this effect immediately undo a deliberate switch
+    // back to Chat while a project is still selected.
+    const current = useChatStore.getState().getComposerToggles(conversationId).workMode;
+    if (!canUseAgiWork) {
+      if (current !== 'chat') setWorkMode('chat');
+    } else if (pickerActiveProjectId && current !== 'agiwork') {
       setWorkMode('agiwork');
     }
-  }, [isFreeTrial, pickerActiveProjectId]);
+  }, [canUseAgiWork, pickerActiveProjectId, setWorkMode, conversationId]);
 
   // Platform capabilities (PLATFORM axis — does this surface expose the action at
   // all). Sourced from the shared capability matrix via the CapabilityProvider;
@@ -378,15 +546,9 @@ const ChatComposerNewComponent = ({
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
   const canTakeScreenshotCap = useCapability('canTakeScreenshot');
 
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const [researchEnabled, setResearchEnabled] = useState(false);
-  const [codeExecutionEnabled, setCodeExecutionEnabled] = useState(false);
-  const [officeCreationEnabled, setOfficeCreationEnabled] = useState(false);
-  const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
 
-  // Image generation mode state
-  const [imageMode, setImageMode] = useState(false);
+  // Image generation mode state (imageMode itself is per-conversation, above)
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
   const [imageModelId, setImageModelId] = useState<string>(IMAGE_MODEL_DEFAULT);
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
@@ -400,13 +562,31 @@ const ChatComposerNewComponent = ({
   // (e.g. an image to a text-only model, or web search to a no-search model).
   const composerSelectedModelId = useModelStore((s) => s.selectedModelId);
   const setComposerSelectedModelId = useModelStore((s) => s.setSelectedModelId);
-  const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
   const selectedModelMeta = getModelMetadata(composerSelectedModelId);
   const selectedModelCaps = selectedModelMeta?.capabilities;
   const modelSupportsVision = selectedModelCaps?.vision ?? false;
   const modelCanAcceptImages = isAutoModeModelId(composerSelectedModelId) || modelSupportsVision;
-  const hasImageAttachments = attachments.some((file) => file.type.startsWith('image/'));
-  const hasAttachmentConflict = hasImageAttachments && !modelCanAcceptImages;
+  /**
+   * AUDIT-FIX CMP-27: the conflict check used to be `type.startsWith('image/')`
+   * only, while the file input accepts the FULL chat-attachment allowlist. A
+   * PDF therefore got no capability gate at all and failed at the provider.
+   *
+   * Two honest classes: binary attachments (images and PDFs) travel as
+   * provider media/document blocks and need a multimodal model; text and code
+   * files are inlined as text and every model can read them.
+   */
+  const binaryAttachments = attachments.filter(
+    (file) => isChatImageMimeType(file.type) || file.type === 'application/pdf',
+  );
+  const hasImageAttachments = binaryAttachments.some((file) => isChatImageMimeType(file.type));
+  const hasDocumentAttachments = binaryAttachments.some((file) => file.type === 'application/pdf');
+  const hasAttachmentConflict = binaryAttachments.length > 0 && !modelCanAcceptImages;
+  const attachmentConflictKind: 'image' | 'document' | 'mixed' =
+    hasImageAttachments && hasDocumentAttachments
+      ? 'mixed'
+      : hasDocumentAttachments
+        ? 'document'
+        : 'image';
   const compatibleModels = getSelectableModels().filter(
     (model) =>
       model.capabilities.vision &&
@@ -471,22 +651,31 @@ const ChatComposerNewComponent = ({
   // If the user switches to a model that can't search, clear the web-search
   // toggle so it never stays "on" for an unsupported model.
   useEffect(() => {
-    if (webSearchEnabled && !modelSupportsSearch) setWebSearchEnabled(false);
-  }, [webSearchEnabled, modelSupportsSearch]);
+    if (webSearchEnabled && !modelSupportsSearch) setComposerToggles({ webSearchEnabled: false });
+  }, [webSearchEnabled, modelSupportsSearch, setComposerToggles]);
 
   // Clear Research if the model loses research support.
   useEffect(() => {
-    if (researchEnabled && !modelSupportsResearch) setResearchEnabled(false);
-  }, [researchEnabled, modelSupportsResearch]);
+    if (researchEnabled && !modelSupportsResearch) setComposerToggles({ researchEnabled: false });
+  }, [researchEnabled, modelSupportsResearch, setComposerToggles]);
 
   // If the user switches to a model that can't execute code, clear the toggle.
   useEffect(() => {
-    if (codeExecutionEnabled && !modelSupportsCodeExecution) setCodeExecutionEnabled(false);
-  }, [codeExecutionEnabled, modelSupportsCodeExecution]);
+    if (codeExecutionEnabled && !modelSupportsCodeExecution)
+      setComposerToggles({ codeExecutionEnabled: false });
+  }, [codeExecutionEnabled, modelSupportsCodeExecution, setComposerToggles]);
 
   useEffect(() => {
-    if (officeCreationEnabled && !modelSupportsOfficeCreation) setOfficeCreationEnabled(false);
-  }, [officeCreationEnabled, modelSupportsOfficeCreation]);
+    if (officeCreationEnabled && !modelSupportsOfficeCreation)
+      setComposerToggles({ officeCreationEnabled: false });
+  }, [officeCreationEnabled, modelSupportsOfficeCreation, setComposerToggles]);
+
+  // AUDIT-FIX CMP-11: image mode is Pro-only server-side; a downgrade (or a
+  // stale per-conversation flag) must not leave the composer in a mode whose
+  // send is guaranteed to 403.
+  useEffect(() => {
+    if (imageMode && !canUseImageGeneration) setComposerToggles({ imageMode: false });
+  }, [imageMode, canUseImageGeneration, setComposerToggles]);
 
   // Incognito / temporary chat — wired to the live web-chat-store
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -494,15 +683,36 @@ const ChatComposerNewComponent = ({
     const id = s.activeConversationId;
     return id ? (s.conversations.find((c) => c.id === id)?.isTemporary ?? false) : false;
   });
-  const updateConversation = useChatStore((s) => s.updateConversation);
-  const handleIncognitoToggle = useCallback(() => {
-    if (activeConversationId)
-      updateConversation(activeConversationId, { isTemporary: !isIncognito });
-  }, [activeConversationId, isIncognito, updateConversation]);
-  const canToggleIncognito = Boolean(activeConversationId) && !isTurnActive && !disabled;
+  const [isSavingIncognito, setIsSavingIncognito] = useState(false);
+  const handleIncognitoToggle = useCallback(async () => {
+    if (!activeConversationId || !onSetTemporaryChat) return;
+    setIsSavingIncognito(true);
+    try {
+      // AUDIT-FIX CMP-3: the host performs the PATCH and writes the SERVER's
+      // value back into the store, so the checkmark can only appear once the
+      // database actually holds the flag.
+      const saved = await onSetTemporaryChat(!isIncognito);
+      if (!saved) {
+        setLocalNotice(
+          'Could not change temporary chat. This conversation is still being saved normally.',
+        );
+      }
+    } finally {
+      setIsSavingIncognito(false);
+    }
+  }, [activeConversationId, isIncognito, onSetTemporaryChat]);
+  const canToggleIncognito =
+    Boolean(activeConversationId) &&
+    Boolean(onSetTemporaryChat) &&
+    !isTurnActive &&
+    !disabled &&
+    !isSavingIncognito;
 
   // Thinking / effort store
   const responseStyle = useStyleStore((s) => s.style);
+  const responseLength = useStyleStore((s) => s.length);
+  const setResponseStyle = useStyleStore((s) => s.setStyle);
+  const setResponseLength = useStyleStore((s) => s.setLength);
   const activeCustomStyleId = useStyleStore((s) => s.activeCustomStyleId);
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
   const thinkingEffort = useThinkingStore((s) => s.effort);
@@ -581,15 +791,20 @@ const ChatComposerNewComponent = ({
     // draft that reappears when the user returns to this conversation.
     clearDraftContent(conversationId);
     clearAttachments();
-    setSelectedSkill(null);
     // Web search / Deep Research / style are PERSISTENT toggles (claude.ai parity):
     // once on they stay on across sends (checkmark remains in the + menu) until the
     // user turns them off. Do NOT reset them here (the after-send clear) — that made
     // Web search a fire-once flag. They still auto-clear via the capability effects
     // above when the selected model can't support them.
+    //
+    // AUDIT-FIX CMP-1/CMP-2: that intent is now actually honoured — the toggles
+    // live in the chat store keyed by conversation, so the empty→non-empty
+    // remount that used to wipe them no longer touches them. The per-send
+    // resets below are the ones that genuinely belong to a single send: the
+    // skill selection and image mode are one-shot composer modes.
+    setComposerToggles({ selectedSkillName: null, imageMode: false });
     setShowStyleSubmenu(false);
     setLocalNotice(null);
-    setImageMode(false);
     setImageAspectRatio('auto');
     setImageModelId(IMAGE_MODEL_DEFAULT);
     setShowCompatibleModels(false);
@@ -597,12 +812,12 @@ const ChatComposerNewComponent = ({
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [clearAttachments, clearDraftContent, conversationId]);
+  }, [clearAttachments, clearDraftContent, conversationId, setComposerToggles]);
 
   useEffect(() => {
-    if (!isFreeTrial) return;
-    setResearchEnabled(false);
-  }, [isFreeTrial]);
+    if (!isFreeTrial || !researchEnabled) return;
+    setComposerToggles({ researchEnabled: false });
+  }, [isFreeTrial, researchEnabled, setComposerToggles]);
 
   useEffect(() => {
     if (clearSignal === undefined || clearSignal === lastClearSignalRef.current) return;
@@ -637,6 +852,90 @@ const ChatComposerNewComponent = ({
       addChatAttachments(files);
     },
     [addChatAttachments],
+  );
+
+  /**
+   * AUDIT-FIX CMP-15: paste-to-attach. The web composer had no `onPaste`
+   * handler anywhere in its directory, so pasting a screenshot was silently
+   * ignored while drag-and-drop worked — the single most common way people
+   * attach a screenshot. Mirrors the shape already proven in
+   * packages/ui/unified-chat/src/components/ChatInput.tsx.
+   */
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
+
+  /**
+   * AUDIT-FIX CMP-10: capture the screen and attach the frame.
+   *
+   * Same contract as the shared `AttachmentMenu`'s `onScreenshot(file)` path
+   * (packages/ui/unified-chat) — the web composer was the drifted copy that
+   * rendered the row with no handler at all. Render-gated by
+   * `canTakeScreenshot`, so this never runs on a surface without screen
+   * capture; a cancelled picker resolves by rejection and leaves no notice.
+   */
+  const handleTakeScreenshot = useCallback(async () => {
+    setShowOverflowMenu(false);
+    setShowStyleSubmenu(false);
+    setIsCapturingScreenshot(true);
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      await new Promise<void>((resolve) => {
+        video.onloadedmetadata = () => {
+          void video.play();
+          resolve();
+        };
+      });
+      // Let the first frame paint before grabbing it.
+      await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        setLocalNotice('Could not capture the screen on this device.');
+        return;
+      }
+      context.drawImage(video, 0, 0);
+      video.srcObject = null;
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((result) => resolve(result), 'image/png'),
+      );
+      if (!blob) {
+        setLocalNotice('Could not capture the screen on this device.');
+        return;
+      }
+      addChatAttachments([new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' })]);
+    } catch {
+      // User cancelled the picker or denied permission — not an error state.
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop());
+      setIsCapturingScreenshot(false);
+    }
+  }, [addChatAttachments]);
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      if (disabled || trialExhausted) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const pasted: File[] = [];
+      for (let i = 0; i < items.length; i += 1) {
+        const item = items[i];
+        if (!item || item.kind !== 'file') continue;
+        const file = item.getAsFile();
+        if (file) pasted.push(file);
+      }
+      if (pasted.length === 0) return;
+      // Only swallow the event once a real file paste was captured, so pasting
+      // text still inserts text.
+      e.preventDefault();
+      addChatAttachments(pasted);
+    },
+    [addChatAttachments, disabled, trialExhausted],
   );
 
   // Handle droppedFiles prop · same derived-state-from-props pattern as prefillText.
@@ -699,21 +998,30 @@ const ChatComposerNewComponent = ({
     };
   }, []);
 
+  /**
+   * AUDIT-FIX CMP-4/CMP-12: toggling Web search also records the durable
+   * "search by default" preference, so the choice survives reload and seeds
+   * every new conversation. Before this there was no persistence anywhere and
+   * no settings-level preference — no code path by which "search by default"
+   * could take effect at all.
+   */
   const handleWebSearchToggle = useCallback(() => {
-    setWebSearchEnabled((prev) => !prev);
-  }, []);
+    const next = !webSearchEnabled;
+    setComposerToggles({ webSearchEnabled: next });
+    setWebSearchByDefault(next);
+  }, [webSearchEnabled, setComposerToggles, setWebSearchByDefault]);
 
   const handleResearchToggle = useCallback(() => {
-    setResearchEnabled((prev) => !prev);
-  }, []);
+    setComposerToggles({ researchEnabled: !researchEnabled });
+  }, [researchEnabled, setComposerToggles]);
 
   const handleCodeExecutionToggle = useCallback(() => {
-    setCodeExecutionEnabled((prev) => !prev);
-  }, []);
+    setComposerToggles({ codeExecutionEnabled: !codeExecutionEnabled });
+  }, [codeExecutionEnabled, setComposerToggles]);
 
   const handleOfficeCreationToggle = useCallback(() => {
-    setOfficeCreationEnabled((prev) => !prev);
-  }, []);
+    setComposerToggles({ officeCreationEnabled: !officeCreationEnabled });
+  }, [officeCreationEnabled, setComposerToggles]);
 
   const closeMenu = useCallback(() => {
     setShowOverflowMenu(false);
@@ -728,7 +1036,7 @@ const ChatComposerNewComponent = ({
     : null;
   // The folder half of the chip label only exists on working-directory surfaces;
   // on web the cowork folder store is never populated through this control.
-  const pickerFolderName = !isFreeTrial && canUseWorkingDirectory ? folderName : null;
+  const pickerFolderName = canUseAgiWork && canUseWorkingDirectory ? folderName : null;
   const pickerHasSelection = Boolean(activePickerProject || pickerFolderName);
   const pickerLabel = activePickerProject?.name ?? pickerFolderName ?? 'Project or folder';
   const filteredPickerProjects = projectPicker
@@ -829,53 +1137,196 @@ const ChatComposerNewComponent = ({
       const after = message.substring(cursorPos);
       const newMessage = `${before}@${skill.name} ${after}`;
       setMessage(newMessage);
-      setSelectedSkill(skill);
+      setSelectedSkillName(skill.name);
       setShowMentions(false);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [message, mentionStartIndex],
+    [message, mentionStartIndex, setSelectedSkillName],
+  );
+
+  /**
+   * AUDIT-FIX CMP-8/CMP-9: resolve a slash command against what the selected
+   * model and plan can ACTUALLY do, and say so when they can't.
+   *
+   * The previous implementation unconditionally called `setMessage('')` and
+   * then switched on only `search|think|image|code` with no `default` branch —
+   * so a custom command defined in settings did nothing except wipe whatever
+   * the user had typed, and its `template` field was never read by any composer
+   * code. `/think` and `/code` also set flags that the capability effects above
+   * immediately cleared for unsupported models, so the command silently did
+   * nothing at all.
+   */
+  const resolveSlashCommand = useCallback(
+    (commandId: string, argument: string): SlashCommandOutcome => {
+      const custom = customCommands.find((c) => c.id === commandId || c.name === commandId);
+      if (custom) {
+        const template = custom.template.trim();
+        // `{{input}}` lets a template place the typed argument; templates
+        // without it get the argument appended so nothing the user typed is
+        // thrown away.
+        const content = template.includes('{{input}}')
+          ? template.replaceAll('{{input}}', argument)
+          : [template, argument].filter(Boolean).join('\n\n');
+        return { status: 'applied', content, toggles: {} };
+      }
+
+      switch (commandId) {
+        case 'search':
+          if (!modelSupportsSearch) {
+            return {
+              status: 'unavailable',
+              notice:
+                '/search needs a model that can search the web. Switch to Auto or a search-capable model, then try again.',
+            };
+          }
+          return {
+            status: 'applied',
+            content: argument,
+            toggles: { webSearchEnabled: true },
+            persistWebSearchDefault: true,
+          };
+        case 'think':
+          if (!isAutoModeModelId(composerSelectedModelId) && !modelSupportsThinkingCap) {
+            return {
+              status: 'unavailable',
+              notice:
+                '/think needs a model with extended reasoning. Switch to Auto or a reasoning model, then try again.',
+            };
+          }
+          return { status: 'applied', content: argument, toggles: {}, enableThinking: true };
+        case 'image':
+          if (!canUseImageGeneration) {
+            return {
+              status: 'unavailable',
+              notice: 'Image generation is available on Pro and above.',
+            };
+          }
+          return { status: 'applied', content: argument, toggles: { imageMode: true } };
+        case 'code':
+          if (!modelSupportsCodeExecution) {
+            return {
+              status: 'unavailable',
+              notice:
+                '/code needs a model that can run code on this deployment. Switch models, then try again.',
+            };
+          }
+          return { status: 'applied', content: argument, toggles: { codeExecutionEnabled: true } };
+        default:
+          // browser/terminal/database are capability-gated to desktop and never
+          // reach the web menu (filterSlashCommandsByCapability). Anything else
+          // that lands here is unknown — say so instead of wiping the input.
+          return {
+            status: 'unavailable',
+            notice: `"/${commandId}" isn't available on this surface.`,
+          };
+      }
+    },
+    [
+      customCommands,
+      modelSupportsSearch,
+      modelSupportsThinkingCap,
+      modelSupportsCodeExecution,
+      canUseImageGeneration,
+      composerSelectedModelId,
+    ],
+  );
+
+  /** Commit a resolved command's effects. Returns the new message body. */
+  const commitSlashCommand = useCallback(
+    (outcome: Extract<SlashCommandOutcome, { status: 'applied' }>) => {
+      if (Object.keys(outcome.toggles).length > 0) setComposerToggles(outcome.toggles);
+      if (outcome.enableThinking) setThinkingEnabled(true);
+      if (outcome.persistWebSearchDefault) setWebSearchByDefault(true);
+      return outcome.content;
+    },
+    [setComposerToggles, setThinkingEnabled, setWebSearchByDefault],
   );
 
   const handleSlashSelect = useCallback(
     (commandId: string) => {
-      setMessage('');
       setShowSlashMenu(false);
-      switch (commandId) {
-        case 'search':
-          setWebSearchEnabled(true);
-          break;
-        case 'think':
-          setThinkingEnabled(true);
-          break;
-        case 'image':
-          setImageMode(true);
-          break;
-        case 'code':
-          setCodeExecutionEnabled(true);
-          break;
-        // browser/terminal/database are capability-gated to desktop and never
-        // reach the web menu (filterSlashCommandsByCapability), so no case here.
+      const outcome = resolveSlashCommand(commandId, stripSlashCommandToken(messageRef.current));
+      if (outcome.status === 'unavailable') {
+        // AUDIT-FIX CMP-8: a command that will not run must not clear the input.
+        setLocalNotice(outcome.notice);
+        return;
       }
+      setLocalNotice(null);
+      setMessage(commitSlashCommand(outcome));
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [setThinkingEnabled],
+    [resolveSlashCommand, commitSlashCommand],
   );
 
   const handleSkillSelect = useCallback(
     (skillName: string) => {
       const skill = availableSkills.find((candidate) => candidate.name === skillName);
       if (!skill) return;
-      setSelectedSkill(skill);
-      setMessage('');
+      setSelectedSkillName(skill.name);
+      // AUDIT-FIX CMP-8: keep whatever the user already typed after the
+      // command token instead of wiping the input (see handleSlashSelect).
+      setMessage((prev) => stripSlashCommandToken(prev));
       setShowSlashMenu(false);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [availableSkills],
+    [availableSkills, setSelectedSkillName],
   );
+
+  /**
+   * AUDIT-FIX CMP-16: what the NEXT send (immediate or queued) will actually
+   * carry. One list drives the queued-follow-up chip and the send-preview
+   * summary, so they can never describe different tool sets.
+   */
+  const activeToolLabels = useMemo(() => {
+    const labels: string[] = [];
+    if (canUseAgiWork && workMode === 'agiwork') labels.push('AGI Work');
+    if (webSearchEnabled) labels.push('Web search');
+    if (researchEnabled) labels.push('Deep Research');
+    if (codeExecutionEnabled) labels.push('Run code');
+    if (officeCreationEnabled) labels.push('Office files');
+    if (thinkingEnabled) labels.push('Extended thinking');
+    if (selectedSkillName) labels.push(`/${selectedSkillName}`);
+    return labels;
+  }, [
+    canUseAgiWork,
+    workMode,
+    webSearchEnabled,
+    researchEnabled,
+    codeExecutionEnabled,
+    officeCreationEnabled,
+    thinkingEnabled,
+    selectedSkillName,
+  ]);
 
   const handleStop = useCallback(() => {
     onStop?.();
   }, [onStop]);
+
+  /**
+   * AUDIT-FIX CMP-9: a fully typed command (`/search latest AI news`) that the
+   * send path should honour. Only an EXACT match against a universal built-in
+   * or a user-defined command counts — a message that merely begins with a
+   * slash is ordinary text and is sent verbatim.
+   *
+   * The built-in ids come from the canonical registry; commands carrying a
+   * `requiredCapability` are desktop-local and never reachable here.
+   */
+  const pendingSlashCommand = useMemo(() => {
+    const parsed = splitSlashCommand(message);
+    if (!parsed) return null;
+    const token = parsed.token.toLowerCase();
+    const builtIn = BUILT_IN_SLASH_COMMANDS.find(
+      (command) => command.id === token && !command.requiredCapability,
+    );
+    if (builtIn) {
+      return { commandId: builtIn.id, label: builtIn.label, argument: parsed.argument };
+    }
+    const custom = customCommands.find((command) => command.name.toLowerCase() === token);
+    if (custom) {
+      return { commandId: custom.id, label: `/${custom.name}`, argument: parsed.argument };
+    }
+    return null;
+  }, [message, customCommands]);
 
   const handleSubmit = useCallback(() => {
     if (!message.trim() && attachments.length === 0) return;
@@ -886,12 +1337,48 @@ const ChatComposerNewComponent = ({
       return;
     }
 
+    /**
+     * AUDIT-FIX CMP-9: apply a typed command at SEND time.
+     *
+     * `/search latest AI news` is the form the registry itself documents in
+     * every `example`, but the slash menu closed on the first space and nothing
+     * else parsed the line, so the whole string was sent as literal text and
+     * the command never ran. Resolving here means the typed form and the menu
+     * form go through exactly the same capability checks.
+     */
+    let outgoingContent = message;
+    let sendWebSearchEnabled = webSearchEnabled;
+    let sendCodeExecutionEnabled = codeExecutionEnabled;
+    let sendThinkingEnabled = thinkingEnabled;
+    let sendImageMode = imageMode;
+    if (pendingSlashCommand) {
+      const outcome = resolveSlashCommand(
+        pendingSlashCommand.commandId,
+        pendingSlashCommand.argument,
+      );
+      if (outcome.status === 'unavailable') {
+        setLocalNotice(outcome.notice);
+        return;
+      }
+      outgoingContent = commitSlashCommand(outcome);
+      sendWebSearchEnabled = outcome.toggles.webSearchEnabled ?? sendWebSearchEnabled;
+      sendCodeExecutionEnabled = outcome.toggles.codeExecutionEnabled ?? sendCodeExecutionEnabled;
+      sendImageMode = outcome.toggles.imageMode ?? sendImageMode;
+      sendThinkingEnabled = outcome.enableThinking === true || sendThinkingEnabled;
+      if (!outgoingContent.trim() && attachments.length === 0) {
+        // The command was applied (its toggle is now on and visible in the "+"
+        // badge); there is simply nothing to send yet.
+        setMessage(outgoingContent);
+        return;
+      }
+    }
+
     // Image generation mode: delegate entirely to parent via onGenerateImage.
     // Image generation is not part of the streaming chat turn, so it is not
     // queued — it simply waits until the current turn is idle.
-    if (imageMode) {
+    if (sendImageMode) {
       if (isTurnActive) return;
-      const prompt = message.trim();
+      const prompt = outgoingContent.trim();
       if (!prompt) return;
       onGenerateImage?.(prompt, { aspectRatio: imageAspectRatio, modelId: imageModelId });
       clearComposerState();
@@ -899,22 +1386,26 @@ const ChatComposerNewComponent = ({
     }
 
     const sendArgs: Parameters<typeof onSend> = [
-      message,
+      outgoingContent,
       attachments.length > 0 ? attachments : undefined,
-      selectedSkill?.name,
+      selectedSkillName ?? undefined,
       {
-        workMode: isFreeTrial ? 'chat' : workMode,
+        workMode: canUseAgiWork ? workMode : 'chat',
         projectId: pickerActiveProjectId,
-        webSearchEnabled,
+        webSearchEnabled: sendWebSearchEnabled,
         thinkingEnabled:
-          thinkingEnabled &&
+          sendThinkingEnabled &&
           (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
-        codeExecutionEnabled,
+        codeExecutionEnabled: sendCodeExecutionEnabled,
         officeCreationEnabled,
         researchEnabled,
-        styleMode: styleMode !== 'normal' ? styleMode : undefined,
-        styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId) || undefined,
-        skillName: selectedSkill?.name ?? undefined,
+        // AUDIT-FIX CMP-6/CMP-7: ONE style value reaches the server. The old
+        // `styleMode` hint was always dropped in favour of `styleInstruction`
+        // (see useChatStream), so sending it was pure noise; the instruction is
+        // now composed from the single style store plus the new length axis and
+        // is never empty, so out-of-the-box turns finally carry real guidance.
+        styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
+        skillName: selectedSkillName ?? undefined,
       },
     ];
 
@@ -928,7 +1419,10 @@ const ChatComposerNewComponent = ({
       // arguments so the flush can prove it is still delivering to the chat the
       // message was written for.
       pendingQueueRef.current = { conversationId, args: sendArgs };
-      setQueuedPreview(message.trim() || 'Attachment');
+      setQueuedPreview(outgoingContent.trim() || 'Attachment');
+      // AUDIT-FIX CMP-16: publish the queued turn's tools immediately; the sync
+      // effect above only fires on a subsequent toggle change.
+      setQueuedToolsLabel(activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null);
       clearComposerState();
       return;
     }
@@ -940,7 +1434,7 @@ const ChatComposerNewComponent = ({
   }, [
     message,
     attachments,
-    selectedSkill,
+    selectedSkillName,
     isTurnActive,
     disabled,
     hasAttachmentConflict,
@@ -952,8 +1446,11 @@ const ChatComposerNewComponent = ({
     onGenerateImage,
     conversationId,
     workMode,
-    isFreeTrial,
+    canUseAgiWork,
     pickerActiveProjectId,
+    pendingSlashCommand,
+    resolveSlashCommand,
+    commitSlashCommand,
     // web search / research / style toggles MUST be in the dep array: they are
     // read directly in the body, and omitting them (previous eslint-disable)
     // made handleSubmit close over STALE values — toggling "Web search" then
@@ -961,8 +1458,8 @@ const ChatComposerNewComponent = ({
     // never searched and replied "I can't browse the web" (audit DEMO-BLOCKER).
     webSearchEnabled,
     researchEnabled,
-    styleMode,
     responseStyle,
+    responseLength,
     activeCustomStyleId,
     thinkingEnabled,
     composerSelectedModelId,
@@ -971,6 +1468,7 @@ const ChatComposerNewComponent = ({
     officeCreationEnabled,
     onSend,
     clearComposerState,
+    activeToolLabels,
   ]);
 
   /**
@@ -1005,6 +1503,7 @@ const ChatComposerNewComponent = ({
       if (pending) {
         pendingQueueRef.current = null;
         setQueuedPreview(null);
+        setQueuedToolsLabel(null);
         if (pending.conversationId === conversationId) {
           onSend(...pending.args);
         } else {
@@ -1048,7 +1547,52 @@ const ChatComposerNewComponent = ({
   const cancelQueuedMessage = useCallback(() => {
     pendingQueueRef.current = null;
     setQueuedPreview(null);
+    setQueuedToolsLabel(null);
   }, []);
+
+  /**
+   * AUDIT-FIX CMP-16: a queued follow-up is now a first-class message.
+   *
+   * The "+" menu and mic used to be disabled during streaming while the
+   * textarea deliberately stayed enabled for type-ahead, so a queued message
+   * could be written but could not have its tools set or be dictated, and
+   * nothing on screen said which toggles it would carry. The controls are
+   * enabled above; this keeps the queued snapshot in step with them (the
+   * snapshot still exists so a queue flush can never pick up options from a
+   * different conversation) and publishes the resulting tool list.
+   */
+  useEffect(() => {
+    const pending = pendingQueueRef.current;
+    if (!pending) return;
+    const meta = pending.args[3];
+    if (!meta) return;
+    pending.args[3] = {
+      ...meta,
+      workMode: canUseAgiWork ? workMode : 'chat',
+      webSearchEnabled,
+      researchEnabled,
+      codeExecutionEnabled,
+      officeCreationEnabled,
+      thinkingEnabled:
+        thinkingEnabled && (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
+      styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
+    };
+    setQueuedToolsLabel(activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null);
+  }, [
+    activeToolLabels,
+    canUseAgiWork,
+    workMode,
+    webSearchEnabled,
+    researchEnabled,
+    codeExecutionEnabled,
+    officeCreationEnabled,
+    thinkingEnabled,
+    composerSelectedModelId,
+    modelSupportsThinkingCap,
+    responseStyle,
+    responseLength,
+    activeCustomStyleId,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1087,6 +1631,11 @@ const ChatComposerNewComponent = ({
   const hasContent = Boolean(message.trim() || attachments.length > 0);
   const composerDisabled = disabled || trialExhausted;
 
+  // AUDIT-FIX CMP-32: length feedback against the real contract ceiling.
+  const messageLength = message.length;
+  const showCharCounter = messageLength >= COMPOSER_COUNTER_THRESHOLD;
+  const charCounterExceeded = messageLength >= COMPOSER_MAX_CHARS;
+
   /**
    * Derive the SendButton mode. While a turn streams the button always offers
    * 'stop' (Stop stays reachable); a follow-up composed during streaming is
@@ -1106,17 +1655,31 @@ const ChatComposerNewComponent = ({
    * badge, and the accessible name, so those three can never disagree.
    */
   const overflowActiveFlags = [
-    selectedSkill !== null,
+    selectedSkillName !== null,
     webSearchEnabled,
     researchEnabled,
     codeExecutionEnabled,
     officeCreationEnabled,
     thinkingEnabled,
     isIncognito,
-    styleMode !== 'normal',
+    // AUDIT-FIX CMP-6/CMP-7: one style vocabulary, two axes.
+    responseStyle !== 'default' || responseLength !== 'brief',
   ];
   const overflowActiveCount = overflowActiveFlags.filter(Boolean).length;
   const hasOverflowActive = overflowActiveCount > 0;
+
+  // AUDIT-FIX CMP-6/CMP-7: one label for the single style value, both axes.
+  const styleIsCustomised = responseStyle !== 'default' || responseLength !== 'brief';
+  const styleMenuLabel = styleIsCustomised
+    ? [
+        responseStyle === 'custom'
+          ? 'Custom'
+          : (STYLE_OPTIONS.find((option) => option.id === responseStyle)?.label ?? 'Style'),
+        RESPONSE_LENGTH_OPTIONS.find((option) => option.id === responseLength)?.label,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : 'Use style';
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
@@ -1139,6 +1702,12 @@ const ChatComposerNewComponent = ({
           <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1 truncate">
             Queued · sends when the current response finishes: {queuedPreview}
+            {/* AUDIT-FIX CMP-16: say which toggles the queued turn will carry —
+                they are editable while it waits (the "+" menu stays open during
+                streaming), so the user can see and change them. */}
+            {queuedToolsLabel && (
+              <span className="ml-1 text-[var(--chat-text-muted)]">· {queuedToolsLabel}</span>
+            )}
           </span>
           <button
             type="button"
@@ -1168,14 +1737,14 @@ const ChatComposerNewComponent = ({
       )}
 
       {/* Selected Skill Badge */}
-      {selectedSkill && (
+      {selectedSkillName && (
         <div className="mb-2 flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400">
-            /{selectedSkill.name}
+            /{selectedSkillName}
             <button
-              onClick={() => setSelectedSkill(null)}
+              onClick={() => setSelectedSkillName(null)}
               className="rounded-full p-0.5 hover:bg-emerald-500/20"
-              aria-label={`Remove ${selectedSkill.name} skill`}
+              aria-label={`Remove ${selectedSkillName} skill`}
             >
               <X className="h-2.5 w-2.5" />
             </button>
@@ -1218,8 +1787,11 @@ const ChatComposerNewComponent = ({
           className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
         >
           <p className="text-foreground">
-            The selected model can&apos;t read the attached image. Switch to Auto, choose an
-            image-capable model, or remove the image.
+            {attachmentConflictKind === 'image'
+              ? "The selected model can't read the attached image. Switch to Auto, choose an image-capable model, or remove the image."
+              : attachmentConflictKind === 'document'
+                ? "The selected model can't read the attached document. Switch to Auto, choose a document-capable model, or remove the file."
+                : "The selected model can't read the attached image and document. Switch to Auto, choose a multimodal model, or remove the files."}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button
@@ -1252,6 +1824,23 @@ const ChatComposerNewComponent = ({
           </div>
           {showCompatibleModels && (
             <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border bg-popover p-1">
+              {/* AUDIT-FIX CMP-28: an empty bordered box with no message was
+                  rendered when the user's tier has no multimodal model. Say
+                  what happened and offer the only action that helps. */}
+              {compatibleModels.length === 0 && (
+                <div className="px-2 py-2 text-xs text-muted-foreground">
+                  <p>No model on your plan can read this attachment.</p>
+                  {onUpgradeRequest && (
+                    <button
+                      type="button"
+                      onClick={onUpgradeRequest}
+                      className="mt-1 font-medium text-primary underline underline-offset-2"
+                    >
+                      See plans with multimodal models
+                    </button>
+                  )}
+                </div>
+              )}
               {compatibleModels.map((model) => (
                 <button
                   key={model.id}
@@ -1358,6 +1947,7 @@ const ChatComposerNewComponent = ({
               value={message}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder={
@@ -1378,9 +1968,36 @@ const ChatComposerNewComponent = ({
                   : 'min-h-[52px] py-3 text-sm md:text-[15px]',
               )}
               rows={1}
+              maxLength={COMPOSER_MAX_CHARS}
               aria-label="Message input"
+              aria-describedby={showCharCounter ? 'composer-char-counter' : undefined}
             />
+            {/* AUDIT-FIX CMP-32: character budget. Silent before it matters,
+                explicit once the message approaches the contract ceiling. */}
+            {showCharCounter && (
+              <p
+                id="composer-char-counter"
+                role="status"
+                className={cn(
+                  'absolute bottom-0 right-2 z-20 text-[10px] tabular-nums',
+                  charCounterExceeded ? 'text-destructive' : 'text-muted-foreground',
+                )}
+              >
+                {messageLength.toLocaleString()} / {COMPOSER_MAX_CHARS.toLocaleString()} characters
+                {charCounterExceeded ? ' · limit reached' : ''}
+              </p>
+            )}
           </div>
+
+          {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
+              before the user presses Enter. */}
+          {pendingSlashCommand && (
+            <p className="px-2 text-[11px] text-muted-foreground">
+              <span className="font-medium text-foreground">{pendingSlashCommand.label}</span> runs
+              on send
+              {pendingSlashCommand.argument ? ` with: ${pendingSlashCommand.argument}` : ''}
+            </p>
+          )}
 
           {/* Control cluster — row 2, a single non-wrapping line (flex-nowrap). */}
           <div className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-2">
@@ -1394,13 +2011,19 @@ const ChatComposerNewComponent = ({
                     setShowStyleSubmenu(false);
                   }
                 }}
-                disabled={isTurnActive || composerDisabled}
+                // AUDIT-FIX CMP-16: the textarea deliberately stays enabled
+                // while a turn streams so a follow-up can be typed ahead and
+                // queued — but the "+" menu was disabled, so that queued
+                // message could not have its tools set. Only the composer-level
+                // disabled states gate it now; the individual rows inside the
+                // menu keep their own capability gates.
+                disabled={composerDisabled}
                 className={cn(
                   'relative flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                   hasOverflowActive
                     ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
+                  composerDisabled && 'cursor-not-allowed opacity-50',
                 )}
                 aria-label={
                   hasOverflowActive
@@ -1434,7 +2057,7 @@ const ChatComposerNewComponent = ({
                         free composer-row width for the model selector. Keeps
                         work-mode fully switchable on the narrow (mobile)
                         composer instead of dropping the control. */}
-                      {projectPicker && !imageMode && !isFreeTrial && (
+                      {projectPicker && !imageMode && canUseAgiWork && (
                         <div className="sm:hidden">
                           <div className="flex items-center gap-3 rounded-lg px-3 py-2">
                             <span className="flex-1 text-left text-sm">Mode</span>
@@ -1477,14 +2100,30 @@ const ChatComposerNewComponent = ({
                         <span className="flex-1 text-left">Add photos &amp; files</span>
                       </button>
 
-                      {/* 2. Create image */}
+                      {/* 2. Create image.
+
+                        AUDIT-FIX CMP-11: this row had NO tier check in the
+                        composer while /api/media/image/generate rejects
+                        non-Pro with 403 — the user composed a whole prompt and
+                        failed after a round trip, with `onUpgradeRequest`
+                        available and never called. Deep Research one row below
+                        was already gated correctly; this now matches it. */}
                       <button
                         type="button"
                         onClick={() => {
-                          setImageMode(true);
                           closeMenu();
+                          if (!canUseImageGeneration) {
+                            onUpgradeRequest?.();
+                            return;
+                          }
+                          setImageMode(true);
                           setTimeout(() => textareaRef.current?.focus(), 0);
                         }}
+                        title={
+                          canUseImageGeneration
+                            ? undefined
+                            : 'Image generation is available on Pro and above.'
+                        }
                         className={cn(
                           'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
                           imageMode && 'text-primary',
@@ -1497,17 +2136,37 @@ const ChatComposerNewComponent = ({
                           )}
                         />
                         <span className="flex-1 text-left">Create image</span>
+                        {!canUseImageGeneration && (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                            Upgrade
+                          </span>
+                        )}
                       </button>
 
                       {/* 3. Take a screenshot — desktop-only capability. Render-gated
-                        so it is ABSENT (not merely disabled) on web/mobile. */}
+                        so it is ABSENT (not merely disabled) on web/mobile.
+
+                        AUDIT-FIX CMP-10: this rendered an icon and a label with
+                        NO onClick — it did nothing and did not even close the
+                        menu. The shared AttachmentMenu already implements the
+                        real behaviour (capture → attach as a File); this is now
+                        the same contract, driven by the same capability flag. */}
                       {canTakeScreenshotCap && (
                         <button
                           type="button"
-                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                          disabled={isCapturingScreenshot}
+                          onClick={() => {
+                            void handleTakeScreenshot();
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                            isCapturingScreenshot && 'cursor-not-allowed opacity-50',
+                          )}
                         >
                           <Camera className="h-4 w-4" />
-                          <span className="flex-1 text-left">Take a screenshot</span>
+                          <span className="flex-1 text-left">
+                            {isCapturingScreenshot ? 'Capturing…' : 'Take a screenshot'}
+                          </span>
                         </button>
                       )}
 
@@ -1586,18 +2245,16 @@ const ChatComposerNewComponent = ({
                         }}
                         className={cn(
                           'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                          selectedSkill && 'text-primary',
+                          selectedSkillName && 'text-primary',
                         )}
                       >
                         <Sparkles
                           className={cn(
                             'h-4 w-4',
-                            selectedSkill ? 'text-primary' : 'text-muted-foreground',
+                            selectedSkillName ? 'text-primary' : 'text-muted-foreground',
                           )}
                         />
-                        <span className="flex-1 text-left">
-                          {selectedSkill ? selectedSkill.name : 'Skills'}
-                        </span>
+                        <span className="flex-1 text-left">{selectedSkillName ?? 'Skills'}</span>
                         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
 
@@ -1671,11 +2328,17 @@ const ChatComposerNewComponent = ({
                           handleWebSearchToggle();
                           closeMenu();
                         }}
-                        disabled={isTurnActive || disabled || !modelSupportsSearch}
+                        disabled={disabled || !modelSupportsSearch}
+                        // AUDIT-FIX CMP-4/CMP-12: this toggle IS the "search by
+                        // default" preference — the choice is persisted and
+                        // seeds every new conversation. Say so, so the durable
+                        // effect is discoverable rather than hidden.
                         title={
                           !modelSupportsSearch
                             ? "Web search isn't available for this model or Cloud deployment."
-                            : undefined
+                            : webSearchEnabled
+                              ? 'On for this chat, and the default for new chats.'
+                              : 'Off for this chat, and the default for new chats.'
                         }
                       />
 
@@ -1688,7 +2351,7 @@ const ChatComposerNewComponent = ({
                           handleResearchToggle();
                           closeMenu();
                         }}
-                        disabled={isTurnActive || disabled || isFreeTrial || !modelSupportsResearch}
+                        disabled={disabled || isFreeTrial || !modelSupportsResearch}
                         title={
                           isFreeTrial
                             ? 'Upgrade to use Deep Research'
@@ -1707,7 +2370,7 @@ const ChatComposerNewComponent = ({
                           handleCodeExecutionToggle();
                           closeMenu();
                         }}
-                        disabled={isTurnActive || disabled || !modelSupportsCodeExecution}
+                        disabled={disabled || !modelSupportsCodeExecution}
                       />
 
                       {/* 8c. Managed Office creation — server-owned DOCX/PPTX bytes,
@@ -1720,7 +2383,7 @@ const ChatComposerNewComponent = ({
                           handleOfficeCreationToggle();
                           closeMenu();
                         }}
-                        disabled={isTurnActive || disabled || !modelSupportsOfficeCreation}
+                        disabled={disabled || !modelSupportsOfficeCreation}
                         title={
                           !modelSupportsOfficeCreation
                             ? "Office file creation isn't available for this model."
@@ -1743,24 +2406,36 @@ const ChatComposerNewComponent = ({
                           handleThinkingClick();
                           closeMenu();
                         }}
-                        disabled={isTurnActive || disabled || !modelSupportsThinkingCap}
+                        disabled={disabled || !modelSupportsThinkingCap}
                       />
 
-                      {/* 8e. Incognito / temporary chat toggle */}
-                      {activeConversationId && (
+                      {/* 8e. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
+                        render-gated on the host actually providing a persistence
+                        path — an unbacked privacy switch is worse than none. */}
+                      {activeConversationId && onSetTemporaryChat && (
                         <MenuToggleRow
                           icon={EyeOff}
-                          label="Temporary chat"
+                          label={isSavingIncognito ? 'Temporary chat · saving…' : 'Temporary chat'}
                           checked={isIncognito}
                           onToggle={() => {
-                            handleIncognitoToggle();
+                            void handleIncognitoToggle();
                             closeMenu();
                           }}
                           disabled={!canToggleIncognito}
                         />
                       )}
 
-                      {/* 9. Use style -- right flyout */}
+                      {/* 9. Use style -- right flyout.
+
+                        AUDIT-FIX CMP-6/CMP-7: this flyout used to own a THIRD
+                        style vocabulary (`StyleMode`: normal|concise|formal|
+                        explanatory) whose value `handleSubmit` then dropped in
+                        favour of the footer StyleSelector's instruction — so
+                        both controls rendered at once for paid users, each drew
+                        its own checkmark, and only one of them did anything. It
+                        now reads and writes the same `useStyleStore` the footer
+                        control uses, and carries the new length axis, so the
+                        two surfaces are two views of one value. */}
                       <div className="relative">
                         <button
                           type="button"
@@ -1769,37 +2444,35 @@ const ChatComposerNewComponent = ({
                           }}
                           className={cn(
                             'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                            styleMode !== 'normal' && 'text-primary',
+                            styleIsCustomised && 'text-primary',
                           )}
                         >
                           <Wand2
                             className={cn(
                               'h-4 w-4',
-                              styleMode !== 'normal' ? 'text-primary' : 'text-muted-foreground',
+                              styleIsCustomised ? 'text-primary' : 'text-muted-foreground',
                             )}
                           />
-                          <span className="flex-1 text-left">
-                            {styleMode === 'normal'
-                              ? 'Use style'
-                              : (STYLE_OPTIONS.find((s) => s.id === styleMode)?.label ??
-                                'Use style')}
-                          </span>
+                          <span className="flex-1 text-left">{styleMenuLabel}</span>
                           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
 
                         {showStyleSubmenu && (
-                          <div className="absolute left-full top-0 z-50 ml-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+                          <div className="absolute left-full top-0 z-50 ml-1 w-60 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+                            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                              Style
+                            </div>
                             {STYLE_OPTIONS.map((option) => (
                               <button
                                 key={option.id}
                                 type="button"
                                 onClick={() => {
-                                  setStyleMode(option.id);
+                                  setResponseStyle(option.id);
                                   closeMenu();
                                 }}
                                 className={cn(
                                   'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                                  styleMode === option.id
+                                  responseStyle === option.id
                                     ? 'bg-primary/10 text-primary'
                                     : 'hover:bg-muted/60',
                                 )}
@@ -1808,7 +2481,35 @@ const ChatComposerNewComponent = ({
                                 <span className="text-[11px] text-muted-foreground">
                                   {option.description}
                                 </span>
-                                {styleMode === option.id && (
+                                {responseStyle === option.id && (
+                                  <Check className="h-3 w-3 shrink-0 text-primary" />
+                                )}
+                              </button>
+                            ))}
+                            <div className="my-1 border-t border-border/40" />
+                            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                              Length
+                            </div>
+                            {RESPONSE_LENGTH_OPTIONS.map((option) => (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => {
+                                  setResponseLength(option.id);
+                                  closeMenu();
+                                }}
+                                className={cn(
+                                  'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                                  responseLength === option.id
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'hover:bg-muted/60',
+                                )}
+                              >
+                                <span className="flex-1 text-left">{option.label}</span>
+                                <span className="text-[11px] text-muted-foreground">
+                                  {option.desc}
+                                </span>
+                                {responseLength === option.id && (
                                   <Check className="h-3 w-3 shrink-0 text-primary" />
                                 )}
                               </button>
@@ -1829,7 +2530,7 @@ const ChatComposerNewComponent = ({
               threads through send meta → createConversation → server project
               context. Hidden below sm (relocated into the + menu "Mode" row)
               so the nowrap control row never squeezes out Send. */}
-            {projectPicker && !imageMode && !isFreeTrial && (
+            {projectPicker && !imageMode && canUseAgiWork && (
               <div className="hidden shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
                 {(['chat', 'agiwork'] as const).map((mode) => (
                   <button
@@ -1942,9 +2643,13 @@ const ChatComposerNewComponent = ({
                   className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
                   aria-label="Select image model"
                 >
+                  {/* AUDIT-FIX CMP-26: no hardcoded model name. The catalog is
+                      the only source for image models (this file's own header
+                      says so); when it yields none there is nothing to pick and
+                      the honest label says exactly that. */}
                   <span className="max-w-[120px] truncate">
                     {IMAGE_MODELS.find((m) => m.id === imageModelId)?.label ??
-                      'Gemini 3.1 Flash Image'}
+                      'No image model available'}
                   </span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
@@ -1978,6 +2683,9 @@ const ChatComposerNewComponent = ({
 
             {/* Voice input is part of free chat and remains capability-neutral. */}
             <div className="relative shrink-0">
+              {/* AUDIT-FIX CMP-16: dictation follows the textarea, which stays
+                  enabled during streaming for type-ahead. Disabling the mic
+                  meant a queued follow-up could be typed but never dictated. */}
               <VoiceInputButton
                 onTranscript={(text) => {
                   setMessage((prev) => {
@@ -1986,7 +2694,7 @@ const ChatComposerNewComponent = ({
                   });
                   setTimeout(() => textareaRef.current?.focus(), 50);
                 }}
-                disabled={isTurnActive || composerDisabled}
+                disabled={composerDisabled}
               />
             </div>
 
@@ -2007,7 +2715,7 @@ const ChatComposerNewComponent = ({
           type="file"
           multiple
           accept={getAcceptAttribute()}
-          disabled={isTurnActive || composerDisabled}
+          disabled={composerDisabled}
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
@@ -2021,7 +2729,7 @@ const ChatComposerNewComponent = ({
       {/* Project scope row. Paid AGI Work can select a project or local folder;
           Free keeps ordinary project-scoped chat and never exposes the folder/
           Cowork boundary. */}
-      {projectPicker && (workMode === 'agiwork' || isFreeTrial) && !imageMode && (
+      {projectPicker && (workMode === 'agiwork' || !canUseAgiWork) && !imageMode && (
         <div className="relative mt-2 flex items-center gap-2" ref={projectPickerRef}>
           <div
             className={cn(
@@ -2043,7 +2751,7 @@ const ChatComposerNewComponent = ({
                 pickerHasSelection ? 'pr-1' : 'pr-2.5',
                 (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
               )}
-              aria-label={isFreeTrial ? 'Project' : 'Project or folder'}
+              aria-label={canUseAgiWork ? 'Project or folder' : 'Project'}
               aria-expanded={showProjectPicker}
               title={pickerHasSelection ? pickerLabel : undefined}
             >
@@ -2105,7 +2813,7 @@ const ChatComposerNewComponent = ({
                 Render-gated by the capability matrix so web never shows a
                 folder option; canPickFolder only disables when the desktop
                 browser shell lacks the File System Access API. */}
-              {!isFreeTrial && canUseWorkingDirectory && (
+              {canUseAgiWork && canUseWorkingDirectory && (
                 <button
                   type="button"
                   disabled={!canPickFolder}
@@ -2202,7 +2910,10 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.projectPicker?.projects === next.projectPicker?.projects &&
     prev.projectPicker?.activeProjectId === next.projectPicker?.activeProjectId &&
     prev.projectPicker?.onSelectProject === next.projectPicker?.onSelectProject &&
-    prev.projectPicker?.onCreateProject === next.projectPicker?.onCreateProject
+    prev.projectPicker?.onCreateProject === next.projectPicker?.onCreateProject &&
+    // AUDIT-FIX CMP-3: the presence of this handler decides whether the
+    // "Temporary chat" control renders at all, so it must defeat memoisation.
+    prev.onSetTemporaryChat === next.onSetTemporaryChat
   );
 });
 

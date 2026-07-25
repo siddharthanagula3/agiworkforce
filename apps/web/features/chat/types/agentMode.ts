@@ -1,13 +1,8 @@
 /**
- * Agent execution mode · controls how proactively the agent takes actions.
+ * REMOVED (AUDIT-FIX CMP-18/CMP-19).
  *
- * Extracted from `apps/web/components/UnifiedAgenticChat/AgentModeSwitcher.tsx`
- * (now-deleted 36K-LOC monolith) to a single-source-of-truth type file so that
- * `chat-preferences-store.ts` and any future consumer can import it without
- * dragging in the legacy switcher component.
- *
- * - `safe`: every tool call requires user approval
- * - `standard`: read-only tools auto-approve, mutations require approval
- * - `autopilot`: all tools auto-approve (use with caution)
+ * The `AgentMode` union existed solely for `chat-preferences-store.ts`, which
+ * had no callers and has been removed. Contents deleted; the file survives only
+ * because the working tree cannot unlink files.
  */
-export type AgentMode = 'safe' | 'standard' | 'autopilot';
+export {};

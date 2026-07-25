@@ -54,6 +54,11 @@ function toWebConversation(
     isPinned: conversation.pinned,
     isStarred: conversation.starred,
     isArchived: conversation.archived,
+    // AUDIT-FIX CMP-3: this mapper dropped `isTemporary`, so even once the flag
+    // was persisted the UI forgot it on the next load — the store excludes
+    // `conversations` from `partialize`, making the server response the only
+    // source. Carrying it here is what makes the checkmark survive a reload.
+    isTemporary: conversation.isTemporary,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
   };
@@ -94,6 +99,8 @@ interface UseConversationsReturn {
       pinned?: boolean;
       starred?: boolean;
       archived?: boolean;
+      /** AUDIT-FIX CMP-3: temporary-chat privacy flag (persisted server-side). */
+      isTemporary?: boolean;
     },
   ) => Promise<boolean>;
   deleteConversation: (id: string) => Promise<boolean>;
@@ -373,6 +380,8 @@ export function useConversations(): UseConversationsReturn {
         pinned?: boolean;
         starred?: boolean;
         archived?: boolean;
+        /** AUDIT-FIX CMP-3: temporary-chat privacy flag (persisted server-side). */
+        isTemporary?: boolean;
       },
     ): Promise<boolean> => {
       try {
@@ -399,6 +408,10 @@ export function useConversations(): UseConversationsReturn {
           isPinned: data.conversation.pinned ?? false,
           isStarred: data.conversation.starred ?? false,
           isArchived: data.conversation.archived ?? false,
+          // AUDIT-FIX CMP-3: mirror the SERVER's value, not the optimistic one,
+          // so a rejected write can never leave the UI claiming a privacy mode
+          // the database does not have.
+          isTemporary: data.conversation.is_temporary ?? false,
           updatedAt: data.conversation.updated_at,
         });
         if (Object.prototype.hasOwnProperty.call(updates, 'projectId')) {
