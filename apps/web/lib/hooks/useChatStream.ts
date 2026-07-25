@@ -20,6 +20,7 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { logger } from '@shared/lib/logger';
 import {
   getModelMetadataById,
   resolveModelEffort,
@@ -1085,20 +1086,66 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     return { suspended, pendingCalls, runHandle };
   };
 
+  // AUDIT-FIX BUG-4: SSE makes the space after `data:` OPTIONAL, so matching
+  // 'data: ' (and slicing a hardcoded 6) silently dropped every frame from a
+  // provider that emits `data:{...}`. Strip the field name, then at most one
+  // leading space.
+  const collectEventPayloads = (rawEvent: string): string[] => {
+    const dataLines: string[] = [];
+    for (const rawLine of rawEvent.split('\n')) {
+      const line = rawLine.trim();
+      if (!line || !line.startsWith('data:')) continue;
+      const value = line.slice(5);
+      dataLines.push(value.startsWith(' ') ? value.slice(1) : value);
+    }
+    if (dataLines.length <= 1) return dataLines;
+    // AUDIT-FIX BUG-3: multiple `data:` fields in one event belong to a SINGLE
+    // payload joined with '\n' per spec. Our own server
+    // (app/api/llm/v1/chat/completions/lib/stream-transform.ts) instead packs
+    // several independently-valid JSON objects as separate `data:` lines in one
+    // event, which the joined form cannot parse. Try the spec-conformant
+    // payload first, then fall back to per-line payloads, so both framings work.
+    const joined = dataLines.join('\n');
+    try {
+      JSON.parse(joined);
+      return [joined];
+    } catch {
+      return dataLines;
+    }
+  };
+
+  // AUDIT-FIX BUG-5/BUG-6: events are delimited by a BLANK line, and any of
+  // '\n', '\r\n' or a bare '\r' terminates a line. The previous line-only split
+  // on '\n' never advanced against a bare-'\r' server (buffer grew unbounded,
+  // nothing parsed). `flushAll` is set once the reader reports done so a final
+  // frame that was never terminated by a blank line is still processed instead
+  // of being discarded with the buffer.
+  const drainEventPayloads = (flushAll: boolean): string[] => {
+    buffer = buffer.replace(/\r\n|\r/g, '\n');
+    const payloads: string[] = [];
+    let boundary = buffer.indexOf('\n\n');
+    while (boundary !== -1) {
+      const rawEvent = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      payloads.push(...collectEventPayloads(rawEvent));
+      boundary = buffer.indexOf('\n\n');
+    }
+    if (flushAll && buffer.trim()) {
+      payloads.push(...collectEventPayloads(buffer));
+    }
+    if (flushAll) buffer = '';
+    return payloads;
+  };
+
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      // AUDIT-FIX BUG-6: flush the decoder on `done` so a multi-byte character
+      // straddling the last chunk boundary is emitted rather than swallowed.
+      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
 
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
-
-        const data = trimmedLine.slice(6);
+      for (const data of drainEventPayloads(done)) {
         if (data === '[DONE]') {
           flushContentBuffer(true);
           if (inThinkingBlock) {
@@ -1154,8 +1201,19 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }
 
           let chunk: string | null = null;
-          if (!duplicateAgentEnvelope && parsed.choices?.[0]?.delta?.content != null) {
-            chunk = parsed.choices[0].delta.content;
+          const deltaContent = parsed.choices?.[0]?.delta?.content;
+          if (!duplicateAgentEnvelope && typeof deltaContent === 'string') {
+            chunk = deltaContent;
+          } else if (!duplicateAgentEnvelope && deltaContent != null) {
+            // AUDIT-FIX BUG-11: some OpenAI-compatible providers send a
+            // non-string delta.content (e.g. `[]` for an empty delta). It used
+            // to be concatenated straight into the answer, rendering AND
+            // persisting '[object Object]' without throwing, so the surrounding
+            // catch never saw it. Drop it, but log so it stays observable.
+            logger.warn('[useChatStream] Ignoring non-string delta.content', {
+              type: typeof deltaContent,
+              isArray: Array.isArray(deltaContent),
+            });
           } else if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
             chunk = parsed.delta.text;
           }
@@ -1457,6 +1515,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           // Ignore parse errors for incomplete chunks.
         }
       }
+
+      // AUDIT-FIX BUG-6: break AFTER draining, so the residual frame the old
+      // `if (done) break;` threw away is still delivered.
+      if (done) break;
     }
 
     // Stream ended without an explicit [DONE].
@@ -1562,6 +1624,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       }
     }
     throw terminalError;
+  } finally {
+    // AUDIT-FIX BUG-2: cancel the body on EVERY exit path. The research-error
+    // `return` above and the `throw terminalError` both used to leave the
+    // response body locked and the connection open, so the server's
+    // ReadableStream.cancel() -- which settles billing and journals the run as
+    // cancelled -- never fired. releaseLock() is NOT a substitute: it unlocks
+    // the stream while the body stays un-cancelled.
+    await reader.cancel().catch(() => undefined);
   }
 }
 
