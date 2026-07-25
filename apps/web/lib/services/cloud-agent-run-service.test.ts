@@ -5,6 +5,7 @@ vi.mock('server-only', () => ({}));
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
+  APPROVAL_CHECKPOINT_TTL_HOURS,
   appendCloudAgentEvent,
   claimCloudAgentApprovalCheckpoint,
   completeCloudAgentApprovalCheckpoint,
@@ -530,8 +531,8 @@ describe('cloud agent run service', () => {
     expect(claimed.leaseToken).toBe('0190a000-0000-7000-8000-000000000003');
     expect(db.query).toHaveBeenNthCalledWith(
       1,
-      expect.stringMatching(/state = 'pending'[\s\S]*for update/i),
-      [RUN_ROW.id, 'user-1'],
+      expect.stringMatching(/state = 'pending'[\s\S]*created_at >[\s\S]*for update/i),
+      [RUN_ROW.id, 'user-1', APPROVAL_CHECKPOINT_TTL_HOURS],
     );
   });
 
