@@ -62,6 +62,14 @@ function toWebConversation(
 interface UseConversationsReturn {
   conversations: Conversation[];
   activeConversationId: string | null;
+  /**
+   * AUDIT-FIX STR-7/BUG-12: conversation CRUD progress (sidebar list fetch,
+   * create, open). This is deliberately NOT the chat store's `isLoading`
+   * anymore: that flag means "a TURN is in flight" and gates the composer's
+   * Stop button and disabled state. Writing it from a sidebar fetch or a
+   * `loadConversation` was the actual mechanism behind the reported "Stop
+   * button persists when switching chats".
+   */
   isLoading: boolean;
   error: string | null;
   // Pagination: the sidebar list is fetched a page at a time (50 rows) so
@@ -99,7 +107,6 @@ export function useConversations(): UseConversationsReturn {
   const { getAuthHeaders, isLoaded, isSignedIn } = useConversationAuthHeaders();
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
-  const isLoading = useChatStore((state) => state.isLoading);
   const error = useChatStore((state) => state.error);
 
   const setConversations = useChatStore((state) => state.setConversations);
@@ -111,7 +118,6 @@ export function useConversations(): UseConversationsReturn {
     (state) => state.setActiveConversationWithMessages,
   );
   const setMessages = useChatStore((state) => state.setMessages);
-  const setLoading = useChatStore((state) => state.setLoading);
   const setError = useChatStore((state) => state.setError);
 
   // Pagination state for "load more" beyond the first page of conversations.
@@ -119,9 +125,28 @@ export function useConversations(): UseConversationsReturn {
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const nextOffsetRef = useRef(0);
 
+  /**
+   * AUDIT-FIX STR-7/BUG-12: local conversation-CRUD progress. These used to be
+   * written into the chat store's turn-scoped `isLoading`, which
+   * `ChatComposerNew` reads as `isTurnActive` -- so simply listing or opening a
+   * conversation disabled the composer and showed a Stop button for a turn that
+   * did not exist.
+   */
+  const [isFetchingConversations, setIsFetchingConversations] = useState(false);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [isOpeningConversation, setIsOpeningConversation] = useState(false);
+  /**
+   * AUDIT-FIX STR-13: monotonic request token for `loadConversation`. Rapid
+   * A -> B -> C switching used to land whichever response resolved last, with
+   * no check that its id was still the one the user wanted. Same
+   * `cancelled`-flag shape already used for the handoff-preview effect in
+   * WebChatPage.
+   */
+  const loadSequenceRef = useRef(0);
+
   // Fetch the first page of conversations (resets pagination state)
   const fetchConversations = useCallback(async () => {
-    setLoading(true);
+    setIsFetchingConversations(true);
     setError(null);
 
     try {
@@ -146,9 +171,9 @@ export function useConversations(): UseConversationsReturn {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch conversations');
     } finally {
-      setLoading(false);
+      setIsFetchingConversations(false);
     }
-  }, [getAuthHeaders, isLoaded, isSignedIn, setConversations, setLoading, setError]);
+  }, [getAuthHeaders, isLoaded, isSignedIn, setConversations, setError]);
 
   // Fetch the next page and append it to the existing list (deduped by id).
   const loadMoreConversations = useCallback(async () => {
@@ -205,7 +230,7 @@ export function useConversations(): UseConversationsReturn {
       model?: string,
       projectId?: string | null,
     ): Promise<Conversation | null> => {
-      setLoading(true);
+      setIsCreatingConversation(true);
       setError(null);
 
       try {
@@ -237,21 +262,37 @@ export function useConversations(): UseConversationsReturn {
         setError(err instanceof Error ? err.message : 'Failed to create conversation');
         return null;
       } finally {
-        setLoading(false);
+        setIsCreatingConversation(false);
       }
     },
-    [getAuthHeaders, addConversation, setActiveConversation, setMessages, setLoading, setError],
+    [getAuthHeaders, addConversation, setActiveConversation, setMessages, setError],
   );
 
-  // Load a conversation with its messages
+  /**
+   * Load a conversation with its messages.
+   *
+   * Returns `false` ONLY when this request genuinely failed and the caller
+   * should surface it (WebChatPage redirects to /chat on `false`). A request
+   * superseded by a newer `loadConversation` resolves `true`: it is not a
+   * failure, and the newer request owns the outcome -- returning `false` would
+   * bounce the user off the conversation they just opened.
+   */
   const loadConversation = useCallback(
     async (id: string): Promise<boolean> => {
-      setLoading(true);
+      // AUDIT-FIX STR-13: claim this request. Every apply point below re-checks
+      // the token, so a slower A/B response can never land after C.
+      const requestId = (loadSequenceRef.current += 1);
+      const cancelled = () => requestId !== loadSequenceRef.current;
+
+      // AUDIT-FIX STR-7/BUG-12: opening a conversation is NOT a turn -- keep it
+      // out of the chat store's turn-scoped isLoading (see isFetchingConversations).
+      setIsOpeningConversation(true);
       setError(null);
 
       try {
         const headers = await getAuthHeaders();
         const response = await fetch(managedCloudConversationPath(id), { headers });
+        if (cancelled()) return true;
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -259,6 +300,7 @@ export function useConversations(): UseConversationsReturn {
         }
 
         const data = ManagedCloudConversationResponseSchema.parse(await response.json());
+        if (cancelled()) return true;
         const loadedConversation = toWebConversation(data.conversation);
         updateConversationInStore(id, {
           title: loadedConversation.title,
@@ -282,21 +324,40 @@ export function useConversations(): UseConversationsReturn {
           };
         });
 
+        // AUDIT-FIX STR-4/BUG-14: never replace a transcript that is live or
+        // already in memory. This used to overwrite unconditionally, so a
+        // refetch that raced an in-flight turn (the server copy has the user
+        // message but not the still-streaming assistant one) destroyed the
+        // assistant message mid-stream. Both guards mirror
+        // packages/ui/unified-chat/src/components/ChatInterface.tsx: skip while
+        // that conversation is streaming, and short-circuit on a cached
+        // transcript. Conversation metadata above is still refreshed either way.
+        const state = useChatStore.getState();
+        const isStreamingHere = state.streamingConversationIds.includes(id);
+        const cachedMessages = state.messagesByConversation[id] ?? [];
+        if (isStreamingHere || cachedMessages.length > 0) {
+          setActiveConversation(id);
+          return true;
+        }
+
         // Atomically set active conversation and messages to avoid race conditions
         setActiveConversationWithMessages(id, messages);
         return true;
       } catch (err) {
+        // A superseded request's failure belongs to nobody: surfacing it would
+        // put a stale error banner on the conversation the user actually opened.
+        if (cancelled()) return true;
         setError(err instanceof Error ? err.message : 'Failed to load conversation', id);
         return false;
       } finally {
-        setLoading(false);
+        if (!cancelled()) setIsOpeningConversation(false);
       }
     },
     [
       getAuthHeaders,
       updateConversationInStore,
+      setActiveConversation,
       setActiveConversationWithMessages,
-      setLoading,
       setError,
     ],
   );
@@ -390,7 +451,9 @@ export function useConversations(): UseConversationsReturn {
   return {
     conversations,
     activeConversationId,
-    isLoading,
+    // AUDIT-FIX STR-7/BUG-12: conversation-CRUD progress only (see the
+    // UseConversationsReturn doc) -- never the chat store's turn flag.
+    isLoading: isFetchingConversations || isCreatingConversation || isOpeningConversation,
     error,
     hasMoreConversations,
     isLoadingMoreConversations,

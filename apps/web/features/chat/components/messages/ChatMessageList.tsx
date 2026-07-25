@@ -62,6 +62,15 @@ export interface ChatMessageListProps {
    * parent already holds a filtered slice.
    */
   messages: ChatMessage[];
+  /**
+   * AUDIT-FIX STR-20: which conversation these messages belong to. The
+   * component's `userScrolledUp` flag is component state that was never reset
+   * per conversation (and the host does not key this component), so scrolling
+   * up in chat A left chat B opening with auto-scroll silently disabled --
+   * a new reply would stream in below the fold with no indication. Changing
+   * this prop resets the scroll ownership for the newly displayed transcript.
+   */
+  conversationId?: string | null;
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
   /**
@@ -438,6 +447,7 @@ const SCROLL_THRESHOLD_PX = 120;
 
 const ChatMessageListComponent = ({
   messages,
+  conversationId = null,
   isLoading,
   onRegenerate,
   onContinue,
@@ -462,6 +472,19 @@ const ChatMessageListComponent = ({
    * up; re-enabled when they scroll back to the bottom.
    */
   const [userScrolledUp, setUserScrolledUp] = useState(false);
+
+  /**
+   * AUDIT-FIX STR-20: scroll ownership belongs to ONE transcript. Reset it (and
+   * jump to the bottom) whenever a different conversation is displayed, so a
+   * conversation the user has never scrolled in always opens pinned to the
+   * latest message. Without this, `userScrolledUp` leaked across conversations.
+   */
+  const scrolledConversationRef = useRef<string | null>(conversationId);
+  useEffect(() => {
+    if (scrolledConversationRef.current === conversationId) return;
+    scrolledConversationRef.current = conversationId;
+    setUserScrolledUp(false);
+  }, [conversationId]);
 
   // ---------------------------------------------------------------------------
   // Derived state
@@ -787,6 +810,9 @@ const ChatMessageListComponent = ({
  */
 export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
   return (
+    // AUDIT-FIX STR-20: a conversation switch MUST re-render (it resets scroll
+    // ownership); two transcripts of equal length would otherwise compare equal.
+    prev.conversationId === next.conversationId &&
     prev.messages.length === next.messages.length &&
     prev.isLoading === next.isLoading &&
     prev.isUserTyping === next.isUserTyping &&
