@@ -327,6 +327,28 @@ async function handleDelete(request: NextRequest) {
     await evictCustomConnectorCaches(userId, row.id);
   }
 
+  // AUDIT-FIX CON-6: drop the saved per-tool verdicts too. The connector's MCP
+  // serverId is `custom-<short_id>`, which is what the permission rows are
+  // keyed on. Leaving them behind meant a user who deleted a custom connector
+  // and later re-added the SAME server (short_id is stable per user+row, but a
+  // re-added row reuses the connector id namespace) could have an old
+  // "Always allow" silently re-arm. Best-effort: the rows are already
+  // unreachable at this point, so a cleanup failure must not fail the delete.
+  for (const row of deleted) {
+    try {
+      await db.execute(
+        `delete from public.connector_tool_permissions where user_id = $1 and connector_id = $2`,
+        [userId, `custom-${row.short_id}`],
+      );
+    } catch (error) {
+      if (isUndefinedTable(error)) continue;
+      logger.warn(
+        { userId, rowId: row.id, error },
+        'Custom connector tool permissions could not be cleared on delete',
+      );
+    }
+  }
+
   return NextResponse.json({ success: true });
 }
 
