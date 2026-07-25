@@ -18,6 +18,12 @@ import {
 } from '@/lib/releases/github-desktop-releases';
 
 const VALID_PLATFORMS = DESKTOP_RELEASE_PLATFORMS;
+
+// AUDIT-FIX STB-11: `releases.channel` is free-form text with no seeded
+// allowlist, so this validates shape rather than membership — enough to reject
+// non-strings and injection-shaped values without breaking a channel an
+// operator adds later.
+const CHANNEL_SLUG_RE = /^[a-z][a-z0-9-]{0,31}$/;
 type Platform = DesktopReleasePlatform;
 
 interface UpdateCheckRequest {
@@ -134,9 +140,25 @@ async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
 
   const { current_version, platform, channel = 'stable' } = body;
 
+  // AUDIT-FIX STB-11: `channel` was the one field on this route with no type
+  // check and no allowlist, and it flowed straight into a SQL parameter. This
+  // handler is unauthenticated (rate limit only), so it was the only
+  // pre-auth-reachable unvalidated input in the API. An arbitrary string also
+  // silently bypassed the GitHub fallback below, which is gated on
+  // `channel === 'stable'`.
+  if (typeof channel !== 'string' || !CHANNEL_SLUG_RE.test(channel)) {
+    throw createError.validation(
+      'Invalid channel. Expected a short lowercase slug (e.g. "stable", "beta").',
+    );
+  }
+
   // Validate required fields
-  if (!current_version) {
+  if (typeof current_version !== 'string' || !current_version) {
     throw createError.validation('current_version is required');
+  }
+
+  if (typeof platform !== 'string') {
+    throw createError.validation('platform must be a string');
   }
 
   if (!platform) {
@@ -218,6 +240,12 @@ async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse>
   const current_version = url.searchParams.get('version');
   const platform = url.searchParams.get('platform') as Platform | null;
   const channel = url.searchParams.get('channel') || 'stable';
+
+  if (!CHANNEL_SLUG_RE.test(channel)) {
+    throw createError.validation(
+      'Invalid channel. Expected a short lowercase slug (e.g. "stable", "beta").',
+    );
+  }
 
   // Validate required params
   if (!current_version) {
