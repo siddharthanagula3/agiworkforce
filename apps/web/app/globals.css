@@ -994,6 +994,13 @@
 
   .code-block-body {
     @apply bg-gray-900 dark:bg-gray-950 font-mono;
+    /* AUDIT-FIX ART-8: the background is pinned dark in BOTH themes, but no
+       foreground was set - in light mode the text inherited --chat-text-primary
+       (#1a1a1a) for ~1.2:1 contrast, i.e. every fenced code block was invisible.
+       Pin the light foreground to match the pinned background rather than
+       lightening the background (which would break the dark-theme design).
+       Left unset on `code` so the highlight.js theme (ART-9) can colour tokens. */
+    color: #e5e7eb; /* gray-200 on gray-900 - ~13:1 */
     font-size: 13px; /* desktop .code-block-content code: text-[13px] */
     line-height: 1.5;
   }
@@ -7673,4 +7680,17 @@
   [data-design='agi'] .agi-docs-tabnav-right {
     display: none;
   }
+}
+
+/* AUDIT-FIX ART-9: the highlight.js theme imported by unified-chat's
+   MarkdownContent ships CONTAINER styling as well as token colours -
+   `.hljs { background: #0d1117 }` and `pre code.hljs { padding: 1em }` - which
+   paints a second, differently coloured box inside `.code-block-container` and
+   doubles the code padding on top of `.code-block-body pre`'s `p-4`. Keep the
+   theme's token colours, drop its container styling.
+   Deliberately UNLAYERED: the theme stylesheet is unlayered too, and anything
+   inside `@layer components` loses to unlayered rules regardless of specificity. */
+.code-block-body pre code.hljs {
+  background: transparent;
+  padding: 0;
 }
