@@ -27,20 +27,30 @@ export function CapabilitiesSection() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  // AUDIT-FIX PAR-32: a swallowed load failure left the toggles showing
+  // DEFAULT_SETTINGS (both on) under a 'Synced to your account' label, so a
+  // user whose stored preference was memory:false saw it rendered on — and
+  // toggling anything then persisted that wrong baseline. Track the failure.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     fetchPreferenceNamespace<CapabilitiesSettings>(NAMESPACE, DEFAULT_SETTINGS)
       .then((value) => {
-        if (!cancelled) setSettings(value);
+        if (cancelled) return;
+        setSettings(value);
+        setLoadError(null);
       })
-      .catch(() => {
-        // Local defaults remain usable when settings storage is unavailable.
+      .catch((error) => {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : 'Failed to load settings');
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   const persist = useCallback(async (next: CapabilitiesSettings) => {
     setSettings(next);
@@ -79,15 +89,31 @@ export function CapabilitiesSection() {
         <p className="mt-1 text-sm text-muted-foreground">
           Control what AGI can do in your conversations.
         </p>
-        <p className="mt-2 text-xs text-muted-foreground" role="status">
+        {/* AUDIT-FIX PAR-32: report a failed load instead of falling through
+          to 'Synced to your account' while the toggles show local defaults. */}
+        <p
+          className={`mt-2 text-xs ${loadError ? 'text-destructive' : 'text-muted-foreground'}`}
+          role="status"
+        >
           {saving
             ? 'Saving...'
             : saveError
               ? `Save failed: ${saveError}`
-              : savedAt
-                ? 'Saved'
-                : 'Synced to your account'}
+              : loadError
+                ? `Your saved settings could not be loaded: ${loadError}`
+                : savedAt
+                  ? 'Saved'
+                  : 'Synced to your account'}
         </p>
+        {loadError && (
+          <button
+            type="button"
+            onClick={() => setReloadKey((value) => value + 1)}
+            className="mt-2 rounded-md border border-border/60 px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted/60"
+          >
+            Try again
+          </button>
+        )}
       </div>
 
       <section className="space-y-4">
@@ -98,8 +124,11 @@ export function CapabilitiesSection() {
         {row(
           'Memory',
           'Allow AGI to remember details across conversations',
+          // AUDIT-FIX PAR-32: while the stored value is unknown the control
+          // must not be presented as an editable reflection of it.
           <Switch
             checked={settings.memory}
+            disabled={loadError !== null}
             onCheckedChange={(value) => setBoolean('memory', value)}
           />,
         )}
@@ -109,6 +138,7 @@ export function CapabilitiesSection() {
           'Use conversation history to generate better responses',
           <Switch
             checked={settings.generateFromHistory}
+            disabled={loadError !== null}
             onCheckedChange={(value) => setBoolean('generateFromHistory', value)}
           />,
         )}
