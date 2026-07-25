@@ -7,6 +7,7 @@ import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
@@ -72,6 +73,18 @@ function isLikelyAudio(head: Uint8Array): boolean {
 async function handleTranscriptions(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
+
+  // AUDIT-FIX BUG-20: enforce CSRF on this state-changing, credit-spending
+  // endpoint. getClerkAuthUser accepts a browser __session cookie, so without
+  // this a cross-origin POST rode the victim's ambient session and burned their
+  // managed-compute balance. The sibling /api/media/image/generate route has
+  // always had this check — the omission here was an inconsistency, not a design
+  // decision. requireCsrfToken bypasses only on a cryptographically verified
+  // Bearer, so programmatic API callers are unaffected.
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) {
+    return csrfError as NextResponse;
+  }
 
   const rateLimitResponse = await withRateLimit(request, 'audio-transcription');
   if (rateLimitResponse) return rateLimitResponse;
