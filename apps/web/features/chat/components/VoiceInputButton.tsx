@@ -62,8 +62,25 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   const [showTooltip, setShowTooltip] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
-  // Check support once on client
-  const isSupported = typeof window !== 'undefined' && getSpeechRecognitionConstructor() !== null;
+  /**
+   * AUDIT-FIX BUG-30: browser-capability detection MUST NOT happen in the
+   * render path.
+   *
+   * This was `typeof window !== 'undefined' && getSpeechRecognitionConstructor()
+   * !== null`, evaluated during render. On the server the guard is always false,
+   * so the server HTML shipped a disabled mic with the "not supported in this
+   * browser" label — and because React keeps the server's DOM for the first
+   * paint and this value never changed afterwards, the mic stayed PERMANENTLY
+   * disabled in Chrome and Edge, which do support it.
+   *
+   * Optimistic default + post-mount correction: the first client render matches
+   * the server (no hydration mismatch), and the effect immediately downgrades
+   * to the honest unsupported state on browsers that really lack the API.
+   */
+  const [isSupported, setIsSupported] = useState(true);
+  useEffect(() => {
+    setIsSupported(getSpeechRecognitionConstructor() !== null);
+  }, []);
 
   // Clean up on unmount
   useEffect(() => {
@@ -166,7 +183,8 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         aria-label={label}
         aria-pressed={isListening}
         className={cn(
-          'relative h-8 w-8 rounded-full flex items-center justify-center transition-all duration-150',
+          // AUDIT-FIX GOV-38: 44px touch target on phones, compact on pointer viewports.
+          'relative h-11 w-11 touch-manipulation sm:h-8 sm:w-8 rounded-full flex items-center justify-center transition-all duration-150',
           'text-muted-foreground hover:text-foreground hover:bg-muted/60',
           isListening && [
             'bg-red-500/20 text-red-500 hover:bg-red-500/30 hover:text-red-500',

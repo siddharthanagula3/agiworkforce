@@ -55,12 +55,27 @@ export function ThinkingBlock({
   const prevStreamingRef = useRef(isStreaming);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  // prefers-reduced-motion check (evaluated once · SSR safe via null default)
-  const reducedMotion = useRef(
-    typeof window !== 'undefined'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false,
-  );
+  /**
+   * AUDIT-FIX BUG-30: `window.matchMedia(...)` was read inside a `useRef`
+   * initializer, which runs during render — including on the SERVER, where the
+   * guarded fallback made it always `false`. A ref never re-reads, so a reader
+   * with prefers-reduced-motion kept the pulsing clock, the blinking cursor and
+   * the height transition forever.
+   *
+   * State + effect instead: SSR and the first client render both use `false`
+   * (identical markup, no hydration mismatch), the effect then reads the real
+   * preference and subscribes to changes so toggling it in OS settings takes
+   * effect without a reload.
+   */
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(query.matches);
+    const onChange = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
 
   // ── Live timer ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -159,9 +174,7 @@ export function ThinkingBlock({
         <Clock
           className={cn(
             'w-3.5 h-3.5 shrink-0',
-            isStreaming
-              ? cn('text-zinc-400', !reducedMotion.current && 'animate-pulse')
-              : 'text-zinc-500',
+            isStreaming ? cn('text-zinc-400', !reducedMotion && 'animate-pulse') : 'text-zinc-500',
           )}
           aria-hidden="true"
         />
@@ -194,7 +207,7 @@ export function ThinkingBlock({
         <ChevronDown
           className={cn(
             'w-3.5 h-3.5 shrink-0 text-slate-500',
-            !reducedMotion.current && 'transition-transform duration-200',
+            !reducedMotion && 'transition-transform duration-200',
             expanded && 'rotate-180',
           )}
           aria-hidden="true"
@@ -205,9 +218,9 @@ export function ThinkingBlock({
       <div
         role="region"
         aria-labelledby={`thinking-header-${content.slice(0, 8).replace(/\s/g, '')}`}
-        className={cn(!reducedMotion.current && 'transition-all ease-in-out')}
+        className={cn(!reducedMotion && 'transition-all ease-in-out')}
         style={
-          reducedMotion.current
+          reducedMotion
             ? { display: expanded ? undefined : 'none' }
             : {
                 maxHeight: expanded ? '24rem' : '0px',
@@ -231,7 +244,7 @@ export function ThinkingBlock({
                 <span
                   className={cn(
                     'inline-block w-1.5 h-3 bg-zinc-400/60 ml-0.5 align-middle',
-                    !reducedMotion.current && 'animate-pulse',
+                    !reducedMotion && 'animate-pulse',
                   )}
                   aria-hidden="true"
                 />

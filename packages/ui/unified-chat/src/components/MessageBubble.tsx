@@ -639,15 +639,20 @@ export function MessageBubble({
           {message.content}
         </div>
         {/* Hover-only copy (web parity: user actions reveal on hover). Copy is
-            fully self-contained; no other user actions are wired on desktop. */}
-        <div className="flex opacity-0 transition-opacity group-hover:opacity-100">
+            fully self-contained; no other user actions are wired on desktop.
+            AUDIT-FIX GOV-30: `opacity-0 group-hover:opacity-100` had no focus
+            counterpart, so a keyboard user tabbed into a fully transparent
+            button — focus ring included. `group-focus-within` reveals it. */}
+        <div className="flex opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           <Button
             variant="ghost"
             size="icon"
             aria-label={copied ? 'Copied' : 'Copy message'}
             onClick={handleCopy}
             className={cn(
-              'h-7 w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
+              // AUDIT-FIX GOV-38: 44px touch target on phones (28px was below
+              // the minimum), compact on pointer viewports.
+              'h-11 w-11 touch-manipulation sm:h-7 sm:w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
               copied && 'text-[var(--chat-accent-secondary)]',
             )}
           >

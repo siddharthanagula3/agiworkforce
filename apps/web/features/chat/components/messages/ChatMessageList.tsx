@@ -15,8 +15,9 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
+import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 import { MessageBubble } from './MessageBubble';
@@ -149,6 +150,15 @@ export function groupMessages(messages: ChatMessage[]): MessageGroup[] {
  * - "Today" for today's date
  * - "Yesterday" for yesterday's date
  * - "Mar 18" for older dates
+ *
+ * AUDIT-FIX BUG-30: local-time getters and `toLocaleDateString` resolve
+ * against whatever timezone/locale the JS runtime is in. On the server that is
+ * the DEPLOYMENT's timezone, so "Today"/"Yesterday" were computed for the
+ * datacenter rather than the reader. The function itself stays pure (it is
+ * exported and unit-testable); the render path below only calls it after mount
+ * so it always runs in the viewer's own timezone, and the locale argument is
+ * now omitted so the runtime's locale — not a hardcoded en-US — formats the
+ * fallback label.
  */
 export function formatDateDivider(date: Date, now: Date = new Date()): string {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -160,7 +170,7 @@ export function formatDateDivider(date: Date, now: Date = new Date()): string {
   if (startOfDay.getTime() === startOfToday.getTime()) return 'Today';
   if (startOfDay.getTime() === startOfYesterday.getTime()) return 'Yesterday';
 
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 /**
@@ -193,19 +203,29 @@ DateDivider.displayName = 'DateDivider';
 // Scroll-to-bottom button
 // ---------------------------------------------------------------------------
 
-const ScrollToBottomButton = memo(({ onClick }: { onClick: () => void }) => (
-  <motion.button
-    initial={{ opacity: 0, scale: 0.8 }}
-    animate={{ opacity: 1, scale: 1 }}
-    exit={{ opacity: 0, scale: 0.8 }}
-    transition={{ duration: 0.15 }}
-    onClick={onClick}
-    className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-popover/95 shadow-md backdrop-blur-sm transition-colors hover:bg-muted"
-    aria-label="Scroll to bottom"
-  >
-    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-  </motion.button>
-));
+/**
+ * AUDIT-FIX GOV-33: framer-motion writes `opacity`/`transform` as INLINE
+ * styles, which the global `prefers-reduced-motion` reset in globals.css
+ * (`transition-duration: 0.01ms !important`) cannot reach — it only caps CSS
+ * transitions/animations. The preference has to be read in JS and the
+ * animation dropped at the source.
+ */
+const ScrollToBottomButton = memo(({ onClick }: { onClick: () => void }) => {
+  const prefersReducedMotion = useReducedMotion();
+  return (
+    <motion.button
+      initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.8 }}
+      animate={prefersReducedMotion ? { opacity: 1, scale: 1 } : { opacity: 1, scale: 1 }}
+      exit={prefersReducedMotion ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
+      transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.15 }}
+      onClick={onClick}
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-popover/95 shadow-md backdrop-blur-sm transition-colors hover:bg-muted"
+      aria-label="Scroll to bottom"
+    >
+      <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+    </motion.button>
+  );
+});
 ScrollToBottomButton.displayName = 'ScrollToBottomButton';
 
 // ---------------------------------------------------------------------------
@@ -254,10 +274,195 @@ interface MessageRowProps {
 // Per-message row component. Stable callbacks bound via useCallback below so
 // React.memo on MessageBubble actually short-circuits when sibling messages
 // stream or update.
-/** Casts the generic metadata bag to the typed web-surface shape. */
-function getMeta(msg: ChatMessage | undefined): WebChatMessageMetadata | undefined {
-  return msg?.metadata as WebChatMessageMetadata | undefined;
+/**
+ * Casts the generic metadata bag to the store's typed shape.
+ *
+ * AUDIT-FIX STR-17: this used the narrower `WebChatMessageMetadata`, which does
+ * not even declare `agentActivity`, `research`, `generatedFiles` or
+ * `cloudApproval` — so the memo comparators below could not have compared them.
+ * `MessageMetadata` is the shape the store actually writes and MessageBubble
+ * actually reads.
+ */
+type RenderedMessageMetadata = MessageMetadata &
+  Pick<
+    WebChatMessageMetadata,
+    'citations' | 'comparisonOptions' | 'comparisonChoice' | 'videoUrl' | 'tokensUsed'
+  >;
+
+function getMeta(msg: ChatMessage | undefined): RenderedMessageMetadata | undefined {
+  return msg?.metadata as RenderedMessageMetadata | undefined;
 }
+
+/**
+ * AUDIT-FIX STR-17: compares EVERY tool entry, not just index 0 and index -1.
+ *
+ * Sampling the ends of the list meant that with three or more parallel tools
+ * the middle cards never left 'running', and that clicking Approve or Reject —
+ * which flips `approved`/`status` on exactly one entry, usually not an end one
+ * — produced no visual feedback at all until the whole batch resolved and the
+ * length or the last status finally changed.
+ *
+ * Cost is O(tools) per message, bounded by the number of tool calls in a turn
+ * (single digits), against the O(whole metadata bag) JSON serialization this
+ * replaces.
+ */
+function toolEntriesEqual(
+  prev: MessageToolEntry[] | undefined,
+  next: MessageToolEntry[] | undefined,
+): boolean {
+  if (prev === next) return true;
+  if (!prev || !next) return false;
+  if (prev.length !== next.length) return false;
+  for (let index = 0; index < prev.length; index += 1) {
+    const a = prev[index];
+    const b = next[index];
+    if (!a || !b) return false;
+    if (
+      a.id !== b.id ||
+      a.toolCallId !== b.toolCallId ||
+      a.name !== b.name ||
+      a.status !== b.status ||
+      a.approved !== b.approved ||
+      a.requiresApproval !== b.requiresApproval ||
+      a.durationMs !== b.durationMs ||
+      a.args !== b.args ||
+      a.error !== b.error ||
+      a.result !== b.result ||
+      a.statusPhrase !== b.statusPhrase ||
+      a.parallelGroup !== b.parallelGroup
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * AUDIT-FIX STR-17: metadata equality over every field the transcript renders.
+ *
+ * Reference identity is the correct test for the object-valued spines: the
+ * store patches metadata immutably (`{ ...m.metadata, ...patch }`, see
+ * web-chat-store `patchMessageMetadata`) and the activity reducer
+ * (`applyAgentActivityEvent`) returns a NEW state object for every event it
+ * actually applies and the SAME object when it de-duplicates one. So `!==`
+ * means "this field changed" with no traversal and no false negatives.
+ *
+ * Previously missing entirely — each one is a field the user watches move
+ * during a run: `agentActivity` (the AGI Work activity spine, frozen for the
+ * whole run on a tool-only turn), `generatedFiles`, `searchResults` past the
+ * first `isSearching` flip, `codeExecutionResult` past `isExecutingCode`,
+ * `research`, `cloudApproval`, and `isPinned` (the pin badge never appeared).
+ */
+function renderedMetadataEqual(
+  prev: RenderedMessageMetadata | undefined,
+  next: RenderedMessageMetadata | undefined,
+): boolean {
+  if (prev === next) return true;
+  return (
+    prev?.thinkingContent === next?.thinkingContent &&
+    prev?.isThinkingStreaming === next?.isThinkingStreaming &&
+    prev?.thinkingSegments === next?.thinkingSegments &&
+    prev?.thinkingSteps === next?.thinkingSteps &&
+    prev?.reaction === next?.reaction &&
+    prev?.isPinned === next?.isPinned &&
+    prev?.paywall === next?.paywall &&
+    prev?.finishReason === next?.finishReason &&
+    prev?.streamError === next?.streamError &&
+    prev?.agentActivity === next?.agentActivity &&
+    prev?.cloudApproval === next?.cloudApproval &&
+    prev?.research === next?.research &&
+    prev?.generatedFiles === next?.generatedFiles &&
+    prev?.searchResults === next?.searchResults &&
+    prev?.isSearching === next?.isSearching &&
+    prev?.codeExecutionResult === next?.codeExecutionResult &&
+    prev?.isExecutingCode === next?.isExecutingCode &&
+    prev?.citations === next?.citations &&
+    prev?.comparisonOptions === next?.comparisonOptions &&
+    prev?.comparisonChoice === next?.comparisonChoice &&
+    prev?.documentData === next?.documentData &&
+    prev?.artifactManifest === next?.artifactManifest &&
+    prev?.generatedFile === next?.generatedFile &&
+    prev?.computeSession === next?.computeSession &&
+    prev?.imageUrl === next?.imageUrl &&
+    prev?.videoUrl === next?.videoUrl &&
+    prev?.model === next?.model &&
+    prev?.tokensUsed === next?.tokensUsed &&
+    toolEntriesEqual(prev?.tools, next?.tools)
+  );
+}
+
+/**
+ * AUDIT-FIX STR-17: one message-level comparison shared by both memo
+ * comparators in this file, so they can never drift apart again (they already
+ * had — the group comparator omitted `finishReason`/`streamError`, the list
+ * comparator omitted `tools[0].status`).
+ */
+function messageRenderEqual(prevMessage: ChatMessage, nextMessage: ChatMessage): boolean {
+  return (
+    prevMessage.id === nextMessage.id &&
+    prevMessage.content === nextMessage.content &&
+    prevMessage.role === nextMessage.role &&
+    prevMessage.createdAt === nextMessage.createdAt &&
+    prevMessage.isStreaming === nextMessage.isStreaming &&
+    // AUDIT-FIX BUG-28: attachments are rebuilt into a fresh array on every
+    // render by messageBubbleAttachments, so the identity of the array is
+    // useless — compare the descriptors that drive the attachment cards.
+    attachmentsEqual(prevMessage.attachments, nextMessage.attachments) &&
+    renderedMetadataEqual(getMeta(prevMessage), getMeta(nextMessage))
+  );
+}
+
+/**
+ * AUDIT-FIX BUG-28: attachment descriptors, compared field by field.
+ * A finished upload changes only `url` (and often `size`), so an identity or
+ * length check would report "unchanged" and the card would keep rendering the
+ * pending state forever.
+ */
+function attachmentsEqual(
+  prev: ChatMessage['attachments'],
+  next: ChatMessage['attachments'],
+): boolean {
+  if (prev === next) return true;
+  const a = prev ?? [];
+  const b = next ?? [];
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index];
+    const right = b[index];
+    if (!left || !right) return false;
+    if (
+      left.id !== right.id ||
+      left.name !== right.name ||
+      left.type !== right.type ||
+      left.size !== right.size ||
+      left.url !== right.url
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * AUDIT-FIX BUG-27: the fallback used when a message carries no `createdAt`.
+ *
+ * The previous code evaluated `new Date()` inline in the render path. Two
+ * defects fell out of that one expression:
+ *  1. MessageBubble's memo comparator tests
+ *     `prev.timestamp.getTime() === next.timestamp.getTime()`, so for every
+ *     optimistic message (created without `createdAt` — the normal case while
+ *     streaming) the comparator could never return true and React.memo was
+ *     fully defeated for the whole streaming turn;
+ *  2. it is non-deterministic in render, so the server HTML and the client's
+ *     first render disagreed.
+ *
+ * A frozen module-level sentinel fixes both. It is never displayed: the web
+ * MessageBubble uses `timestamp` only to stamp derived artifact metadata
+ * (`toGeneratedFile`, artifact `versions[].timestamp`), never as visible text,
+ * and those paths only run on server-persisted messages, which always have a
+ * real `createdAt`.
+ */
+const UNKNOWN_MESSAGE_TIMESTAMP = new Date(0);
 
 function messageBubbleAttachments(message: ChatMessage) {
   return (message.attachments ?? []).flatMap((attachment) => {
@@ -298,6 +503,16 @@ const MessageRow = ({
 }: MessageRowProps) => {
   const meta = getMeta(message);
   const paywall = meta?.paywall;
+
+  // AUDIT-FIX BUG-27: one Date per message, derived only from persisted data.
+  const timestamp = useMemo(
+    () => (message.createdAt ? new Date(message.createdAt) : UNKNOWN_MESSAGE_TIMESTAMP),
+    [message.createdAt],
+  );
+
+  // AUDIT-FIX BUG-28: a stable attachment array so MessageBubble's comparator
+  // is not handed a brand-new array identity on every parent render.
+  const attachments = useMemo(() => messageBubbleAttachments(message), [message]);
 
   const handleRegenerate = useCallback(
     () => onRegenerate?.(message.id),
@@ -340,9 +555,9 @@ const MessageRow = ({
         id: message.id,
         role: displayRole,
         content: message.content,
-        timestamp: message.createdAt ? new Date(message.createdAt) : new Date(),
+        timestamp,
         isStreaming: message.isStreaming,
-        attachments: messageBubbleAttachments(message),
+        attachments,
         metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
       }}
       onRegenerate={onRegenerate && displayRole === 'assistant' ? handleRegenerate : undefined}
@@ -398,6 +613,9 @@ const MessageGroupRow = memo(
       </div>
     );
   },
+  // AUDIT-FIX STR-17 / BUG-28: every rendered field participates, via the
+  // shared helpers above. `onPin` was also simply missing from this list, so a
+  // surface that swapped its pin handler kept dispatching to the old one.
   (prev, next) => {
     return (
       prev.group.firstId === next.group.firstId &&
@@ -405,29 +623,14 @@ const MessageGroupRow = memo(
       prev.group.messages.every((prevMessage, index) => {
         const nextMessage = next.group.messages[index];
         if (!nextMessage) return false;
-        const prevMeta = getMeta(prevMessage);
-        const nextMeta = getMeta(nextMessage);
-        return (
-          prevMessage.id === nextMessage.id &&
-          prevMessage.content === nextMessage.content &&
-          prevMessage.isStreaming === nextMessage.isStreaming &&
-          prevMeta?.thinkingContent === nextMeta?.thinkingContent &&
-          prevMeta?.isThinkingStreaming === nextMeta?.isThinkingStreaming &&
-          prevMeta?.reaction === nextMeta?.reaction &&
-          prevMeta?.paywall === nextMeta?.paywall &&
-          // Tool timeline: compare length + last entry status so tool-call
-          // cards update visually as each tool starts/completes during streaming.
-          prevMeta?.tools?.length === nextMeta?.tools?.length &&
-          prevMeta?.tools?.[0]?.status === nextMeta?.tools?.[0]?.status &&
-          prevMeta?.tools?.at(-1)?.status === nextMeta?.tools?.at(-1)?.status &&
-          prevMeta?.isSearching === nextMeta?.isSearching &&
-          prevMeta?.isExecutingCode === nextMeta?.isExecutingCode
-        );
+        return messageRenderEqual(prevMessage, nextMessage);
       }) &&
+      prev.isLastGroup === next.isLastGroup &&
       prev.onRegenerate === next.onRegenerate &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
       prev.onReact === next.onReact &&
+      prev.onPin === next.onPin &&
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
       prev.onPaywallDismiss === next.onPaywallDismiss &&
       prev.onRegenerateImage === next.onRegenerateImage &&
@@ -444,6 +647,32 @@ MessageGroupRow.displayName = 'MessageGroupRow';
 // ---------------------------------------------------------------------------
 
 const SCROLL_THRESHOLD_PX = 120;
+
+/**
+ * AUDIT-FIX STR-18: hard bound on how many message groups are mounted.
+ *
+ * `groups.map` rendered the entire transcript — there is no virtualization
+ * anywhere in this surface — so a long conversation mounted thousands of
+ * bubbles, each with its own markdown renderer, and every streaming delta
+ * walked the whole array through the memo comparators. Rendering a window of
+ * the most recent groups bounds both costs; older groups stay one click away
+ * and are never silently dropped (the "Show earlier messages" control below
+ * states exactly how many are hidden).
+ */
+const GROUP_WINDOW_SIZE = 40;
+
+/**
+ * AUDIT-FIX GOV-29: what the live region says when generation starts and when
+ * it finishes. Modelled on `buildAgentActivityAnnouncement` in
+ * packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx — a short
+ * discrete phrase, announced once per state change, never a re-read of the
+ * whole transcript.
+ */
+function buildStreamAnnouncement(message: ChatMessage | undefined): string {
+  if (!message || message.role !== 'assistant') return 'Response complete';
+  const text = message.content.trim();
+  return text ? `Response complete. ${text}` : 'Response complete';
+}
 
 const ChatMessageListComponent = ({
   messages,
@@ -486,11 +715,47 @@ const ChatMessageListComponent = ({
     setUserScrolledUp(false);
   }, [conversationId]);
 
+  /**
+   * AUDIT-FIX BUG-30: date dividers are derived from local-time getters and
+   * `toLocaleDateString`. Rendering them during SSR computes "Today" /
+   * "Yesterday" and the fallback label in the SERVER's timezone and locale for
+   * every viewer on earth — and because React keeps the server DOM for the
+   * first paint, the reader is stuck with the server's answer. Dividers are
+   * therefore mounted only after hydration, where the viewer's own timezone is
+   * the one in effect.
+   */
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => setHasMounted(true), []);
+
+  /** AUDIT-FIX GOV-33: honour prefers-reduced-motion for inline motion styles. */
+  const prefersReducedMotion = useReducedMotion();
+
+  /**
+   * AUDIT-FIX STR-18: how many trailing message groups are mounted. Resets to
+   * one window whenever a different conversation is displayed so switching
+   * chats never carries another transcript's expansion.
+   */
+  const [groupWindow, setGroupWindow] = useState(GROUP_WINDOW_SIZE);
+  useEffect(() => {
+    setGroupWindow(GROUP_WINDOW_SIZE);
+  }, [conversationId]);
+
   // ---------------------------------------------------------------------------
   // Derived state
   // ---------------------------------------------------------------------------
 
   const groups = useMemo(() => groupMessages(messages), [messages]);
+
+  /**
+   * AUDIT-FIX STR-18: the mounted window — the most recent `groupWindow`
+   * groups. `hiddenGroupCount` is surfaced to the user rather than silently
+   * truncating history.
+   */
+  const hiddenGroupCount = Math.max(0, groups.length - groupWindow);
+  const visibleGroups = useMemo(
+    () => (hiddenGroupCount > 0 ? groups.slice(hiddenGroupCount) : groups),
+    [groups, hiddenGroupCount],
+  );
 
   const lastMessage = useMemo(() => messages[messages.length - 1], [messages]);
 
@@ -563,6 +828,47 @@ const ChatMessageListComponent = ({
     bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
   }, []);
 
+  /**
+   * AUDIT-FIX STR-19: coalesce auto-scroll to at most one call per animation
+   * frame.
+   *
+   * The auto-scroll effect is keyed on `${id}-${content.length}`, which changes
+   * on EVERY streamed token. It called smooth `scrollIntoView` each time, on a
+   * container that also carried the CSS `scroll-smooth` class — two smooth
+   * scroll animations restarting dozens of times a second, which is what made
+   * the transcript almost impossible to scroll up in during a response.
+   * Requests are now merged into a single rAF-scheduled scroll and the CSS
+   * `scroll-smooth` class is gone, so `behavior` is decided in one place.
+   */
+  const scrollFrameRef = useRef<number | null>(null);
+  const pendingScrollBehaviorRef = useRef<ScrollBehavior>('smooth');
+
+  const requestScrollToBottom = useCallback(
+    (behavior: ScrollBehavior) => {
+      pendingScrollBehaviorRef.current = behavior;
+      if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+        scrollToBottom(behavior);
+        return;
+      }
+      if (scrollFrameRef.current !== null) return;
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        scrollFrameRef.current = null;
+        scrollToBottom(pendingScrollBehaviorRef.current);
+      });
+    },
+    [scrollToBottom],
+  );
+
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current !== null && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    },
+    [],
+  );
+
   /** Detect when user scrolls away from the bottom. */
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -571,12 +877,49 @@ const ChatMessageListComponent = ({
     setUserScrolledUp(distanceFromBottom > SCROLL_THRESHOLD_PX);
   }, []);
 
-  /** Auto-scroll when new messages/content arrive (respects user scroll). */
+  /**
+   * Auto-scroll when new messages/content arrive (respects user scroll).
+   * AUDIT-FIX STR-19 / GOV-33: token appends and reduced-motion users get a
+   * jump, not an animation; only a genuinely new turn animates.
+   */
+  const isStreamingNow = Boolean(lastMessage?.isStreaming);
   useEffect(() => {
-    if (!userScrolledUp) {
-      scrollToBottom(messages.length === 1 ? 'instant' : 'smooth');
-    }
-  }, [messages.length, lastMessageFingerprint, isLoading, userScrolledUp, scrollToBottom]);
+    if (userScrolledUp) return;
+    const behavior: ScrollBehavior =
+      messages.length === 1 || isStreamingNow || prefersReducedMotion ? 'auto' : 'smooth';
+    requestScrollToBottom(behavior);
+  }, [
+    messages.length,
+    lastMessageFingerprint,
+    isLoading,
+    isStreamingNow,
+    prefersReducedMotion,
+    userScrolledUp,
+    requestScrollToBottom,
+  ]);
+
+  /**
+   * AUDIT-FIX GOV-29: streaming output was never announced. `role="log"
+   * aria-live="polite"` sat on the ENTIRE scroll container, so assistive tech
+   * was handed the whole transcript as one live region — unrelated content got
+   * re-announced on every re-render and the delta itself was lost in it — and
+   * `aria-busy` was never toggled, so nothing marked the start or the end of
+   * generation. The container is now an inert log (`aria-live="off"`, which is
+   * required because `role="log"` implies polite) that reports its busy state,
+   * and a dedicated off-screen region announces the two moments that matter.
+   * This is the pattern AgentActivityTimeline.tsx:479 already uses.
+   */
+  const isGenerating = Boolean(isLoading || lastMessage?.isStreaming);
+  const [streamAnnouncement, setStreamAnnouncement] = useState('');
+  const wasGeneratingRef = useRef(false);
+
+  useEffect(() => {
+    if (wasGeneratingRef.current === isGenerating) return;
+    wasGeneratingRef.current = isGenerating;
+    setStreamAnnouncement(
+      isGenerating ? 'Generating response' : buildStreamAnnouncement(lastMessage),
+    );
+  }, [isGenerating, lastMessage]);
 
   // ---------------------------------------------------------------------------
   // Memoized callbacks
@@ -641,37 +984,66 @@ const ChatMessageListComponent = ({
 
   return (
     <div className={cn('relative flex h-full flex-col', className)} data-testid="chat-message-list">
+      {/* AUDIT-FIX GOV-29: the ONLY live region on this surface. Off-screen,
+          atomic, and carrying one short phrase per generation state change —
+          so a screen reader hears "Generating response" and then the finished
+          answer, instead of the transcript being re-read on every re-render. */}
+      <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {streamAnnouncement}
+      </p>
       <div
         ref={scrollRef}
         role="log"
-        aria-live="polite"
+        // AUDIT-FIX GOV-29: role="log" implies aria-live="polite"; the explicit
+        // "off" is what actually silences the container so the region above is
+        // the single source of announcements. aria-busy marks generation.
+        aria-live="off"
+        aria-busy={isGenerating}
         aria-label="Chat messages"
         onScroll={handleScroll}
-        className="flex h-full flex-col overflow-y-auto scroll-smooth"
+        className="flex h-full flex-col overflow-y-auto"
       >
         {/* Push messages to the bottom when list is short */}
         <div className="flex-1" />
 
         {/* Message groups */}
         <div className="space-y-0.5 pb-2">
-          {groups.map((group, groupIdx) => {
+          {/* AUDIT-FIX STR-18: older groups are windowed out of the DOM, never
+              dropped — this control says exactly how many and mounts the next
+              window on demand. */}
+          {hiddenGroupCount > 0 && (
+            <div className="flex justify-center px-4 pb-2 md:px-12 lg:px-20">
+              <button
+                type="button"
+                onClick={() => setGroupWindow((prev) => prev + GROUP_WINDOW_SIZE)}
+                className="rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                {`Show earlier messages (${hiddenGroupCount} hidden)`}
+              </button>
+            </div>
+          )}
+
+          {visibleGroups.map((group, groupIdx) => {
             const firstMsg = group.messages[0];
             const firstMsgDate = firstMsg?.createdAt ? new Date(firstMsg.createdAt) : undefined;
             const groupDateKey = firstMsgDate ? toDateKey(firstMsgDate) : '';
-            const prevGroup = groupIdx > 0 ? groups[groupIdx - 1] : null;
+            const prevGroup = groupIdx > 0 ? visibleGroups[groupIdx - 1] : null;
             const prevFirstMsg = prevGroup?.messages[0];
             const prevFirstMsgDate = prevFirstMsg?.createdAt
               ? new Date(prevFirstMsg.createdAt)
               : undefined;
             const prevDateKey = prevFirstMsgDate ? toDateKey(prevFirstMsgDate) : '';
-            const showDivider = firstMsgDate && groupDateKey !== prevDateKey;
+            // AUDIT-FIX BUG-30: client-only — see the hasMounted comment above.
+            const showDivider = hasMounted && firstMsgDate && groupDateKey !== prevDateKey;
 
             return (
               <React.Fragment key={group.firstId}>
-                {showDivider && <DateDivider label={formatDateDivider(firstMsgDate)} />}
+                {showDivider && firstMsgDate && (
+                  <DateDivider label={formatDateDivider(firstMsgDate)} />
+                )}
                 <MessageGroupRow
                   group={group}
-                  isLastGroup={groupIdx === groups.length - 1}
+                  isLastGroup={groupIdx === visibleGroups.length - 1}
                   onRegenerate={handleRegenerate}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
@@ -760,10 +1132,11 @@ const ChatMessageListComponent = ({
             {showTypingIndicator && (
               <motion.div
                 key="typing-indicator"
-                initial={{ opacity: 0, y: 4 }}
+                /* AUDIT-FIX GOV-33 */
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.15 }}
+                exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
+                transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
               >
                 <TypingIndicator />
               </motion.div>
@@ -793,7 +1166,9 @@ const ChatMessageListComponent = ({
         {userScrolledUp && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
             <div className="pointer-events-auto">
-              <ScrollToBottomButton onClick={() => scrollToBottom('smooth')} />
+              <ScrollToBottomButton
+                onClick={() => requestScrollToBottom(prefersReducedMotion ? 'auto' : 'smooth')}
+              />
             </div>
           </div>
         )}
@@ -825,30 +1200,14 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.className === next.className &&
     prev.onPaywallUpgrade === next.onPaywallUpgrade &&
     prev.onPaywallDismiss === next.onPaywallDismiss &&
+    prev.onEdit === next.onEdit &&
+    prev.onPin === next.onPin &&
+    // AUDIT-FIX STR-17: the same per-message comparison MessageGroupRow uses,
+    // so the two can never disagree about what "changed" means again.
     prev.messages.every((prevMessage, index) => {
       const nextMessage = next.messages[index];
       if (!nextMessage) return false;
-      const prevMeta = getMeta(prevMessage);
-      const nextMeta = getMeta(nextMessage);
-      return (
-        prevMessage.id === nextMessage.id &&
-        prevMessage.content === nextMessage.content &&
-        prevMessage.isStreaming === nextMessage.isStreaming &&
-        prevMeta?.thinkingContent === nextMeta?.thinkingContent &&
-        prevMeta?.isThinkingStreaming === nextMeta?.isThinkingStreaming &&
-        prevMeta?.reaction === nextMeta?.reaction &&
-        prevMeta?.paywall === nextMeta?.paywall &&
-        // Continue affordance: a finishReason patch can arrive on its own store
-        // update (after the isStreaming flip), so it must invalidate the memo.
-        prevMeta?.finishReason === nextMeta?.finishReason &&
-        // Stream-error notice: same "arrives via its own patch after isStreaming
-        // flips" timing as finishReason above.
-        prevMeta?.streamError === nextMeta?.streamError &&
-        prevMeta?.tools?.length === nextMeta?.tools?.length &&
-        prevMeta?.tools?.at(-1)?.status === nextMeta?.tools?.at(-1)?.status &&
-        prevMeta?.isSearching === nextMeta?.isSearching &&
-        prevMeta?.isExecutingCode === nextMeta?.isExecutingCode
-      );
+      return messageRenderEqual(prevMessage, nextMessage);
     })
   );
 });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   ChevronRight,
   CircleCheck,
@@ -689,6 +689,36 @@ function ToolPermissionQuickPicker({
   );
 }
 
+/**
+ * AUDIT-FIX GOV-29: what the timeline's live region says.
+ *
+ * ToolTimeline had ZERO live-region markup, so a run that is entirely tool
+ * calls — the AGI Work case — was completely silent to assistive tech: no
+ * start, no per-step progress, no approval prompt, no completion. This mirrors
+ * `buildAgentActivityAnnouncement` in
+ * packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx: one short
+ * discrete phrase per state, never a re-read of the step list.
+ */
+function buildToolAnnouncement(tools: ToolEntry[]): string {
+  if (tools.length === 0) return '';
+
+  const awaiting = tools.find((t) => t.status === 'awaiting_approval');
+  if (awaiting) {
+    return `Approval needed: ${humanizeToolName(awaiting.name, awaiting.args, awaiting.parameters)}`;
+  }
+
+  const running = [...tools].reverse().find((t) => t.status === 'running');
+  if (running) {
+    return `Running: ${running.statusPhrase ?? humanizeToolName(running.name, running.args, running.parameters)}`;
+  }
+
+  const failed = tools.filter((t) => t.status === 'failed').length;
+  if (failed > 0) return `${failed} tool ${failed === 1 ? 'call' : 'calls'} failed`;
+
+  if (tools.some((t) => t.status === 'pending')) return 'Tool calls queued';
+  return 'Tool run complete';
+}
+
 function ToolTimeline({
   tools,
   className,
@@ -753,6 +783,16 @@ function ToolTimeline({
     }
   }, [isOpen]);
 
+  /** AUDIT-FIX GOV-29: one short phrase per run state, announced politely. */
+  const announcement = useMemo(() => buildToolAnnouncement(tools), [tools]);
+
+  /**
+   * AUDIT-FIX GOV-33: the tool-list height/opacity animation and the chevron
+   * rotation are framer-motion INLINE styles, out of reach of the global
+   * prefers-reduced-motion reset in globals.css.
+   */
+  const prefersReducedMotion = useReducedMotion();
+
   if (tools.length === 0) return null;
 
   // ── Compact render ────────────────────────────────────────────────────────
@@ -761,6 +801,9 @@ function ToolTimeline({
   if (isCompact && !compactExpanded) {
     return (
       <div className={cn('flex items-center', className)}>
+        <span className="sr-only" aria-live="polite" aria-atomic="true">
+          {announcement}
+        </span>
         <button
           type="button"
           onClick={() => setCompactExpanded(true)}
@@ -779,7 +822,13 @@ function ToolTimeline({
   // Header: action-phrased summary + right-aligned chevron.
   // No Wrench icon. Chevron is right-pointing when closed, down when open.
   return (
-    <div className={cn('', className)}>
+    <div className={cn('', className)} aria-busy={hasRunning || hasAwaiting}>
+      {/* AUDIT-FIX GOV-29: the timeline's only live region — off-screen,
+          atomic, one phrase per state change. */}
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </span>
+
       {/* Compact collapse button · shown when user has expanded from compact mode */}
       {isCompact && compactExpanded && (
         <div className="mb-1">
@@ -810,7 +859,7 @@ function ToolTimeline({
         {/* Chevron at the right end of the header line */}
         <motion.span
           animate={{ rotate: isOpen || (isCompact && compactExpanded) ? 90 : 0 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
           className="shrink-0"
         >
           <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -821,13 +870,17 @@ function ToolTimeline({
       <AnimatePresence initial={false}>
         {(isOpen || (isCompact && compactExpanded)) && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
+            initial={prefersReducedMotion ? false : { height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{
-              height: { duration: 0.2, ease: 'easeInOut' },
-              opacity: { duration: 0.15 },
-            }}
+            exit={prefersReducedMotion ? { height: 'auto', opacity: 1 } : { height: 0, opacity: 0 }}
+            transition={
+              prefersReducedMotion
+                ? { duration: 0 }
+                : {
+                    height: { duration: 0.2, ease: 'easeInOut' },
+                    opacity: { duration: 0.15 },
+                  }
+            }
             className="overflow-hidden"
           >
             {/* Vertical timeline: thin connector line runs along the left edge of icons */}

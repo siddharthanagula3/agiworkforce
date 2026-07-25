@@ -1666,6 +1666,35 @@
   outline: none;
 }
 
+/* AUDIT-FIX GOV-39: safe-area padding utilities.
+   `viewport.viewportFit = 'cover'` (app/layout.tsx) extends the page under the
+   iOS home indicator, so any element pinned to the bottom edge must add
+   `env(safe-area-inset-bottom)` or it renders underneath it. Repo-wide the only
+   existing use of this env var was on a marketing drawer; the chat composer —
+   a `position: sticky; bottom: 0` element on phones — had none, which put the
+   send button under the home indicator.
+
+   `.safe-area-bottom` pads an element's own bottom edge; use it on any sticky
+   or fixed bottom bar. The inset is 0px on every device without a home
+   indicator, so this is inert elsewhere. */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Adds the inset ON TOP of an existing bottom padding (e.g. the composer's
+   `pb-4`), instead of replacing it. */
+.safe-area-bottom-additive {
+  padding-bottom: calc(var(--safe-area-extra-bottom, 1rem) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Desktop/pointer viewports have no home indicator and the composer is not
+   sticky there, so the additive padding is scoped to the sticky breakpoint. */
+@media (min-width: 768px) {
+  .safe-area-bottom-additive {
+    padding-bottom: var(--safe-area-extra-bottom, 1rem);
+  }
+}
+
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   *,

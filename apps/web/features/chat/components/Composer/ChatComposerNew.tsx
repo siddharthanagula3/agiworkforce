@@ -1681,8 +1681,11 @@ const ChatComposerNewComponent = ({
         .join(' · ')
     : 'Use style';
 
+  // AUDIT-FIX GOV-39: safe-area-bottom-additive keeps the send button clear of
+  // the iOS home indicator. layout.tsx sets viewportFit:'cover', which makes a
+  // missing inset worse rather than neutral.
   return (
-    <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
+    <div className="relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
       <DragDropOverlay onDrop={handleFileDrop} />
 
       {localNotice && (

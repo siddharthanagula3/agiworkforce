@@ -17,6 +17,10 @@ vi.mock('framer-motion', () => ({
     ),
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  // AUDIT-FIX GOV-33: ToolTimeline now reads prefers-reduced-motion through
+  // framer-motion (inline motion styles are out of reach of the global CSS
+  // reset). The mock must export it or every render throws.
+  useReducedMotion: () => false,
 }));
 
 // ─── Expand / collapse ────────────────────────────────────────────────────────
