@@ -45,12 +45,19 @@ interface CodeBlock {
 
 /** Extract all fenced code blocks from markdown text. */
 function extractCodeBlocks(content: string): CodeBlock[] {
-  const regex = /```(\w*)\n([\s\S]*?)```/g;
+  // AUDIT-FIX ART-2: line-anchored fences with a permissive info string. The old
+  // `(\w*)\n` form matched no opening fence carrying attributes
+  // (```html title="x"), a hyphen/dot in the tag (```objective-c) or a CRLF line
+  // ending, so the scan resumed at that block's CLOSING fence and paired it AS AN
+  // OPENING one — every later block was then rendered from the wrong offsets.
+  const regex = /^```([^\n`]*)\r?\n([\s\S]*?)^```/gm;
   const blocks: CodeBlock[] = [];
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(content)) !== null) {
-    blocks.push({ lang: (match[1] ?? '').toLowerCase(), code: match[2] ?? '' });
+    // Info strings can carry attributes — only the leading token is the language.
+    const lang = (match[1] ?? '').trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+    blocks.push({ lang, code: match[2] ?? '' });
   }
 
   return blocks;
