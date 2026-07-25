@@ -20,7 +20,19 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
+// GOV-3: route.ts now acquires a per-plan concurrent-turn slot from this module,
+// so the mock must provide it or the handler crashes on an undefined import.
+// Always-admit + no-op release keeps every existing assertion unchanged.
+const admitManagedTurnSlot = () => ({
+  admitted: true,
+  limit: null,
+  active: 0,
+  slot: { release: async () => {} },
+});
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: vi.fn().mockResolvedValue(null),
+  acquireManagedTurnSlot: vi.fn(async () => admitManagedTurnSlot()),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/error-handler', () => ({
   withErrorHandler: <T extends (...args: never[]) => unknown>(handler: T) => handler,
@@ -189,8 +201,11 @@ vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
   findActiveCloudAgentRunForConversation: workflowRouteMocks.findActive,
 }));
 
+// GOV-7: route.ts moved from loadUserConnectorToolDefs (array) to
+// loadUserConnectorToolCatalog ({ tools, dropped, limit }) so per-plan
+// truncation can be reported. The mock name and its resolved shape follow.
 vi.mock('@/lib/user-connector-tools', () => ({
-  loadUserConnectorToolDefs: workflowRouteMocks.loadConnectorTools,
+  loadUserConnectorToolCatalog: workflowRouteMocks.loadConnectorTools,
   makeUserConnectorExecutor: vi.fn(),
 }));
 
@@ -411,7 +426,11 @@ describe('Managed Web AGI Work dispatch', () => {
     }));
     mockGetProviderFromModel.mockReturnValue('minimax');
     workflowRouteMocks.loadMcpTools.mockResolvedValue([]);
-    workflowRouteMocks.loadConnectorTools.mockResolvedValue([]);
+    workflowRouteMocks.loadConnectorTools.mockResolvedValue({
+      tools: [],
+      dropped: [],
+      limit: 32,
+    });
     workflowRouteMocks.createRun.mockResolvedValue({
       id: 'run-durable-1',
       userId: 'user-1',
@@ -432,6 +451,8 @@ describe('Managed Web AGI Work dispatch', () => {
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
     expect(workflowRouteMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
       customConnectorLimit: undefined,
+      // GOV-7: the per-plan ceiling input.
+      planTier: 'max',
     });
     expect(workflowRouteMocks.start).not.toHaveBeenCalled();
   });
@@ -464,7 +485,11 @@ describe('Managed Web conversation run concurrency guard', () => {
     }));
     mockGetProviderFromModel.mockReturnValue('minimax');
     workflowRouteMocks.loadMcpTools.mockResolvedValue([]);
-    workflowRouteMocks.loadConnectorTools.mockResolvedValue([]);
+    workflowRouteMocks.loadConnectorTools.mockResolvedValue({
+      tools: [],
+      dropped: [],
+      limit: 32,
+    });
     workflowRouteMocks.findActive.mockResolvedValue({
       id: 'run-active-1',
       userId: 'user-1',
@@ -526,7 +551,11 @@ describe('Per-model tools capability gate', () => {
     // If the gate were absent, these would be loaded and shipped to sonar,
     // which cannot do function calling — the provider would reject the request.
     workflowRouteMocks.loadMcpTools.mockResolvedValue([{ name: 'op_tool' }]);
-    workflowRouteMocks.loadConnectorTools.mockResolvedValue([{ name: 'gh_tool' }]);
+    workflowRouteMocks.loadConnectorTools.mockResolvedValue({
+      tools: [{ name: 'gh_tool' }],
+      dropped: [],
+      limit: 32,
+    });
 
     // sonar is search-native but capabilities.tools === false in the registry.
     const response = await POST(makeRequest('sonar', undefined, true));

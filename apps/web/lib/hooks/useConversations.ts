@@ -11,11 +11,40 @@ import {
   ManagedCloudConversationResponseSchema,
   ManagedCloudCreateConversationResponseSchema,
   ManagedCloudDeleteConversationResponseSchema,
+  // PER-33: the real runtime validator for loaded message metadata.
+  ManagedCloudMessageMetadataSchema,
   ManagedCloudUpdateConversationRequestSchema,
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationPath,
   normalizeManagedCloudConversation,
 } from '@agiworkforce/cloud-contracts';
+
+/**
+ * PER-33 — validate loaded message metadata instead of asserting it.
+ *
+ * Attachments already had a real runtime validator (`readPersistedAttachments`)
+ * while the metadata object beside them was taken on trust with a bare
+ * `as Message['metadata']`, so a malformed or over-sized row from the API
+ * reached the store and every renderer downstream typed as something it was
+ * not. The wire schema only checks that metadata is a JSON object; this applies
+ * the canonical `ManagedCloudMessageMetadataSchema` (object shape + the size
+ * bound the write path enforces).
+ *
+ * Degrades per message rather than per conversation: a bad row loses its
+ * metadata and keeps its text, instead of failing the whole transcript load.
+ * The single cast below is on a value zod has already validated at runtime —
+ * `MessageMetadata`'s fields are all optional, so the validated
+ * `Record<string, unknown>` is a structurally sound source for it.
+ */
+function readLoadedMessageMetadata(value: unknown): Message['metadata'] {
+  if (value === null || value === undefined) return undefined;
+  const parsed = ManagedCloudMessageMetadataSchema.safeParse(value);
+  if (!parsed.success) {
+    console.warn('[useConversations] dropped malformed message metadata', parsed.error.issues);
+    return undefined;
+  }
+  return parsed.data as Message['metadata'];
+}
 
 const CONVERSATIONS_PAGE_SIZE = 50;
 const PROJECT_CONVERSATIONS_PAGE_SIZE = 100;
@@ -319,7 +348,8 @@ export function useConversations(): UseConversationsReturn {
 
         // Convert API messages to store format
         const messages: Message[] = data.messages.map((m) => {
-          const metadata = (m.metadata ?? undefined) as Message['metadata'];
+          // PER-33: validated, not asserted.
+          const metadata = readLoadedMessageMetadata(m.metadata);
           return {
             id: m.id,
             role: m.role,

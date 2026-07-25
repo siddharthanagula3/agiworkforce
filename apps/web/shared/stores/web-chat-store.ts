@@ -217,6 +217,18 @@ export interface MessageMetadata {
     feature: string;
     requiredTier: string;
     reason?: string;
+    /**
+     * GOV-20 — presentation flags from `classifyManagedQuotaErrorCode`, so a
+     * PAID ceiling (rolling window, billing period, rate limit) renders the
+     * same actionable card free-trial refusals always got. Optional: a slot
+     * persisted before GOV-20 has none, and missing `showUpgradeCta` is read
+     * as true, which is exactly the old behaviour.
+     */
+    showUpgradeCta?: boolean;
+    showResetTime?: boolean;
+    suggestStandardModel?: boolean;
+    /** ISO instant the exhausted window refills, when the server sent one. */
+    resetAt?: string;
   };
   /**
    * How the assistant turn ended, for the Continue Generation affordance.

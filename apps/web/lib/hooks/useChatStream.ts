@@ -49,11 +49,10 @@ import {
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import {
-  buildFreeTrialPaywallSlot,
-  isFreeTrialErrorCode,
-  useFreeTrialStore,
-} from '@/features/chat/stores/freeTrialStore';
+import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
+// GOV-20: one classifier for every managed quota refusal, free or paid.
+import { classifyManagedQuotaErrorCode, getNextUpgradeTier } from '@agiworkforce/types';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   createSendReplayMetadata,
   hasWebSearchSources,
@@ -157,13 +156,49 @@ interface UseChatStreamReturn {
 class ChatApiError extends Error {
   code: string | undefined;
   status: number | undefined;
+  /**
+   * GOV-20 — ISO instant the exhausted window refills, when the response
+   * carried one. Undefined otherwise; the paywall card renders a reset time
+   * only when this is present, so it can never invent one.
+   */
+  resetAt: string | undefined;
 
-  constructor(message: string, options: { code?: string; status?: number } = {}) {
+  constructor(message: string, options: { code?: string; status?: number; resetAt?: string } = {}) {
     super(message);
     this.name = 'ChatApiError';
     this.code = options.code;
     this.status = options.status;
+    this.resetAt = options.resetAt;
   }
+}
+
+/**
+ * GOV-20 — read a reset instant out of an error response, or undefined.
+ *
+ * Accepts the two shapes the managed surface can send: an explicit
+ * `error.reset_at` ISO instant, or a standard `Retry-After` delta in seconds.
+ * Never guesses.
+ */
+function readErrorResetAt(payload: unknown, response: Response): string | undefined {
+  if (payload && typeof payload === 'object') {
+    const body = payload as Record<string, unknown>;
+    const error = body['error'];
+    const candidate =
+      error && typeof error === 'object'
+        ? (error as Record<string, unknown>)['reset_at']
+        : body['reset_at'];
+    if (typeof candidate === 'string' && !Number.isNaN(Date.parse(candidate))) {
+      return new Date(candidate).toISOString();
+    }
+  }
+  const retryAfter = response.headers.get('retry-after');
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return new Date(Date.now() + seconds * 1000).toISOString();
+    }
+  }
+  return undefined;
 }
 
 function readString(value: unknown): string | undefined {
@@ -2007,6 +2042,8 @@ export function useChatStream(): UseChatStreamReturn {
           throw new ChatApiError(message, {
             code,
             status: response.status,
+            // GOV-20
+            resetAt: readErrorResetAt(errorData, response),
           });
         }
 
@@ -2203,7 +2240,12 @@ export function useChatStream(): UseChatStreamReturn {
             errorData,
             `Request failed: ${response.status}`,
           );
-          throw new ChatApiError(errMessage, { code, status: response.status });
+          throw new ChatApiError(errMessage, {
+            code,
+            status: response.status,
+            // GOV-20
+            resetAt: readErrorResetAt(errorData, response),
+          });
         }
 
         await consumeAssistantStream({
@@ -2543,7 +2585,12 @@ export function useResolveToolApproval(
             errorData,
             `Resume failed: ${response.status}`,
           );
-          throw new ChatApiError(message, { code, status: response.status });
+          throw new ChatApiError(message, {
+            code,
+            status: response.status,
+            // GOV-20
+            resetAt: readErrorResetAt(errorData, response),
+          });
         }
 
         const outcome = await consumeAssistantStream({
@@ -2709,10 +2756,25 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
   }
 
   const errorCode = error instanceof ChatApiError ? error.code : undefined;
-  if (isFreeTrialErrorCode(errorCode)) {
+
+  // GOV-20: the inline paywall used to render for exactly three free-trial
+  // literals. Every PAID ceiling — rolling 5-hour, rolling weekly, flagship
+  // weekly, insufficient credits, billing period, rate limit — fell through to
+  // a plain error banner with no upgrade path and no reset time, so the users
+  // most likely to convert were the only ones shown no way forward. One
+  // classifier now owns both, and the required tier is the caller's actual
+  // NEXT tier rather than a hardcoded 'basic'.
+  const quotaBlock = classifyManagedQuotaErrorCode(errorCode);
+  if (quotaBlock) {
     if (errorCode === 'free_trial_token_budget_reached') {
       useFreeTrialStore.getState().markLimitReached();
     }
+    const planTier = useBillingStore.getState().subscription?.tier;
+    // Null on the top self-serve tier / a sales-assisted plan: there is no
+    // self-serve upgrade to offer, so the CTA is suppressed rather than
+    // pointing at a tier that does not exist.
+    const nextTier = getNextUpgradeTier(planTier);
+    const resetAt = error instanceof ChatApiError ? error.resetAt : undefined;
     updateMessage(
       assistantMessageId,
       {
@@ -2720,7 +2782,15 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
         content: '',
         error: false,
         metadata: {
-          paywall: buildFreeTrialPaywallSlot(errorCode, errorMessage),
+          paywall: {
+            feature: quotaBlock.feature,
+            requiredTier: nextTier ?? 'basic',
+            reason: errorMessage || quotaBlock.reason,
+            showUpgradeCta: quotaBlock.showUpgradeCta && nextTier !== null,
+            showResetTime: quotaBlock.showResetTime,
+            suggestStandardModel: quotaBlock.suggestStandardModel,
+            ...(resetAt ? { resetAt } : {}),
+          },
         },
       },
       conversationId,
