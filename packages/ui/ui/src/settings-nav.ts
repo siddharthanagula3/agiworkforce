@@ -161,6 +161,20 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
   },
 ];
 
+/**
+ * Search aliases keyed by nav key, derived from SETTINGS_NAV so the aliases
+ * authored above stay the single source of truth for every surface.
+ *
+ * AUDIT-FIX PAR-16: settings search filtered on visible labels only, so these
+ * keywords were dead data — searching "theme" or "shortcuts" returned nothing.
+ */
+export const SETTINGS_NAV_KEYWORDS: Partial<Record<SettingsNavKey, string[]>> = SETTINGS_NAV.reduce<
+  Partial<Record<SettingsNavKey, string[]>>
+>((map, entry) => {
+  if (entry.keywords && entry.keywords.length > 0) map[entry.key] = entry.keywords;
+  return map;
+}, {});
+
 export interface SettingsNavGroup {
   /** Optional section heading (omitted for the first/default group). */
   label?: string;
@@ -203,6 +217,11 @@ export interface SettingsNavItem {
   key: SettingsNavKey;
   label: string;
   icon: LucideIcon;
+  /**
+   * Optional per-surface search aliases. When omitted, settings search falls
+   * back to SETTINGS_NAV_KEYWORDS for this key (AUDIT-FIX PAR-16).
+   */
+  keywords?: string[];
 }
 
 /** A rendered group: optional heading + its items, in order. */

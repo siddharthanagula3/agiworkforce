@@ -1000,14 +1000,27 @@ const ChatComposerNewComponent = ({
    */
   const sendButtonMode = isTurnActive ? 'stop' : 'send';
 
-  // + button indicator: amber tint when any feature is active
-  const hasOverflowActive =
-    selectedSkill !== null ||
-    webSearchEnabled ||
-    researchEnabled ||
-    codeExecutionEnabled ||
-    officeCreationEnabled ||
-    styleMode !== 'normal';
+  /**
+   * + button indicator.
+   *
+   * AUDIT-FIX CMP-13: extended thinking and temporary chat were missing here,
+   * so the two highest-consequence toggles (one multiplies token spend, the
+   * other claims a privacy mode) were the only ones with no collapsed-state
+   * signal. The count is derived from the same list that drives the tint, the
+   * badge, and the accessible name, so those three can never disagree.
+   */
+  const overflowActiveFlags = [
+    selectedSkill !== null,
+    webSearchEnabled,
+    researchEnabled,
+    codeExecutionEnabled,
+    officeCreationEnabled,
+    thinkingEnabled,
+    isIncognito,
+    styleMode !== 'normal',
+  ];
+  const overflowActiveCount = overflowActiveFlags.filter(Boolean).length;
+  const hasOverflowActive = overflowActiveCount > 0;
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
@@ -1287,16 +1300,32 @@ const ChatComposerNewComponent = ({
                 }}
                 disabled={isTurnActive || composerDisabled}
                 className={cn(
-                  'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
+                  'relative flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                   hasOverflowActive
                     ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                   (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
                 )}
-                aria-label="More options"
+                aria-label={
+                  hasOverflowActive
+                    ? `More options — ${overflowActiveCount} active`
+                    : 'More options'
+                }
+                aria-pressed={hasOverflowActive}
                 aria-expanded={showOverflowMenu}
               >
                 <Plus className="h-5 w-5" />
+                {/* AUDIT-FIX CMP-13: the active state used to be a colour tint
+                  only (WCAG 1.4.1). The count badge repeats it as shape and
+                  text; the label above repeats it for screen readers. */}
+                {hasOverflowActive && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground"
+                  >
+                    {overflowActiveCount}
+                  </span>
+                )}
               </button>
 
               {/* + Menu Popover */}
