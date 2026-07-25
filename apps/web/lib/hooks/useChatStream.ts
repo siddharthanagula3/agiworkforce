@@ -91,6 +91,20 @@ interface SendMessageOptions {
   research?: boolean;
   /** Validated product mode; AGI Work exposes the paid server-owned tool harness. */
   workMode?: CloudWorkMode;
+  /**
+   * AUDIT-FIX STR-22: invoked once the new USER turn is durable -- its row has
+   * been written (or the conversation is temporary, so there is nothing to
+   * write). This is the commit point `sendMessage`'s return value documents,
+   * reported as soon as it happens instead of only when the whole stream ends.
+   *
+   * The edit/regenerate replace flow uses it to delete the REPLACED turn's
+   * server rows at exactly that moment: any earlier and a failed save would
+   * destroy the original; any later (the previous behaviour -- stream end) and a
+   * reload mid-regeneration shows a duplicated user message next to the stale
+   * answer. Errors thrown by the callback are swallowed: it is a notification,
+   * never part of the send's success path.
+   */
+  onTurnCommitted?: () => void;
 }
 
 const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
@@ -112,7 +126,13 @@ interface UseChatStreamReturn {
    * durable rows ONLY after the new one commits (see sendReplacingMessages).
    */
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<boolean>;
-  stopGeneration: () => void;
+  /**
+   * AUDIT-FIX STR-3: stop exactly ONE conversation's turn. Omitting the id
+   * targets the active conversation (a bare user click on the visible Stop
+   * button); a host that can render a Stop control for a conversation other
+   * than the active one MUST pass that conversation's id.
+   */
+  stopGeneration: (conversationId?: string) => void;
   /**
    * Continue Generation (ChatGPT/Claude parity): resume a truncated or
    * user-stopped assistant turn. New tokens APPEND to the same assistant
@@ -303,6 +323,27 @@ function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): v
 }
 
 export { saveMessageToDb, notifyPersistenceFailure, EMPTY_ASSISTANT_CONTENT_PLACEHOLDER };
+
+/**
+ * AUDIT-FIX ROOT-CAUSE: read ONE conversation's transcript. Every read in this
+ * module used to go through `useChatStore.getState().messages`, i.e. whatever
+ * conversation happened to be on screen -- so a turn that outlived the user's
+ * navigation read (and then persisted) a different chat's state. Falls back to
+ * the derived mirror when the bucket has not been created yet, matching the
+ * store's own compatibility fallback so a direct `setState({ messages })` seed
+ * behaves identically.
+ */
+function readConversationMessages(conversationId: string): Message[] {
+  const state = useChatStore.getState();
+  const bucket = state.messagesByConversation[conversationId];
+  if (bucket) return bucket;
+  return state.activeConversationId === conversationId ? state.messages : [];
+}
+
+/** One message inside one conversation's transcript. */
+function findConversationMessage(conversationId: string, messageId: string): Message | undefined {
+  return readConversationMessages(conversationId).find((message) => message.id === messageId);
+}
 
 // ─── Shared SSE-stream types + module-level approval registry ───────────────
 
@@ -563,9 +604,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   // turn already accumulated so the terminal persist (which REPLACES the
   // metadata jsonb wholesale) does not drop earlier search results, code
   // output, generated files, or research state.
-  const liveMessageMetadata = useChatStore
-    .getState()
-    .messages.find((message) => message.id === ctx.assistantMessageId)?.metadata;
+  const liveMessageMetadata = findConversationMessage(
+    conversationId,
+    ctx.assistantMessageId,
+  )?.metadata;
   const seedMetadata = ctx.seedContent !== undefined ? liveMessageMetadata : undefined;
   let currentSearchResults: MessageMetadata['searchResults'] = seedMetadata?.searchResults;
   let currentCodeExecutionResult: MessageMetadata['codeExecutionResult'] =
@@ -610,10 +652,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   // without it, closing a `<thinking>` block erased the accumulated reasoning and
   // the block vanished on completion (and never persisted).
   const patchMessageMeta = (patch: Partial<MessageMetadata>) => {
-    const current = useChatStore
-      .getState()
-      .messages.find((m) => m.id === assistantMessageId)?.metadata;
-    updateMessage(assistantMessageId, { metadata: { ...current, ...patch } });
+    // AUDIT-FIX ROOT-CAUSE: read AND write this turn's own conversation, never
+    // the globally-active one.
+    const current = findConversationMessage(conversationId, assistantMessageId)?.metadata;
+    updateMessage(assistantMessageId, { metadata: { ...current, ...patch } }, conversationId);
   };
 
   const completeLocalStartingActivity = () => {
@@ -643,11 +685,26 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     patchMessageMeta({ cloudAgentRun: { ...currentCloudAgentRun } });
   };
 
+  // AUDIT-FIX STR-9: reasoning is accumulated LOCALLY, exactly like tools,
+  // generatedFiles, searchResults and research. `buildAssistantMetadata` used to
+  // read thinkingContent/thinkingSegments back off the store instead, so when
+  // the message was not in the visible `state.messages` (a background
+  // conversation's turn) the reasoning was silently dropped from the persisted
+  // row. These locals are the source of truth for the terminal persist; the
+  // store writes below remain, but only to drive the live render.
+  let thinkingContent = seedMetadata?.thinkingContent ?? '';
+  let thinkingStartedAt: string | undefined = seedMetadata?.thinkingStartedAt;
+  let thinkingCompletedAt: string | undefined = seedMetadata?.thinkingCompletedAt;
+  const seededThinkingDurationSeconds = seedMetadata?.thinkingDurationSeconds;
+
   // Local ledger of reasoning segments. Published to the store only once a turn
   // has >= 2 blocks (interleaved thinking around tool calls), so single-block
   // turns keep their proven single-`thinkingContent` render + persist path and
-  // this stays a no-op for the common case.
-  const thinkingSegments: NonNullable<MessageMetadata['thinkingSegments']> = [];
+  // this stays a no-op for the common case. Seeded from the resume/continuation
+  // metadata (AUDIT-FIX STR-9) so a continuation cannot drop the segments the
+  // first half of the turn already produced.
+  const thinkingSegments: NonNullable<MessageMetadata['thinkingSegments']> =
+    seedMetadata?.thinkingSegments?.map((segment) => ({ ...segment })) ?? [];
 
   const publishThinkingSegments = () => {
     if (thinkingSegments.length < 2) return;
@@ -656,6 +713,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const openThinkingSegment = () => {
     const startedAt = new Date().toISOString();
+    thinkingStartedAt = startedAt; // AUDIT-FIX STR-9
     thinkingSegments.push({
       id: `${assistantMessageId}-think-${thinkingSegments.length}`,
       content: '',
@@ -668,7 +726,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   };
 
   const appendThinkingText = (text: string) => {
-    appendToThinking(assistantMessageId, text);
+    thinkingContent += text; // AUDIT-FIX STR-9: local accumulator is authoritative
+    appendToThinking(assistantMessageId, text, conversationId);
     const seg = thinkingSegments[thinkingSegments.length - 1];
     if (seg) {
       seg.content += text;
@@ -678,6 +737,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const closeThinkingSegment = () => {
     const completedAt = new Date().toISOString();
+    thinkingCompletedAt = completedAt; // AUDIT-FIX STR-9
     const seg = thinkingSegments[thinkingSegments.length - 1];
     if (seg && seg.isStreaming) {
       seg.isStreaming = false;
@@ -696,6 +756,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     setToolTimeline(
       assistantMessageId,
       toolTimeline.map((tool) => ({ ...tool })),
+      conversationId,
     );
   };
 
@@ -844,35 +905,30 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       metadata.streamError = streamErrorInfo;
     }
     // Persist reasoning so it survives reload (previously dropped — only the answer
-    // was saved). Read the accumulated thinking off the store bag. Always persist
-    // isThinkingStreaming:false and a stable duration so a reloaded turn renders the
-    // collapsed "Thought for Ns" summary, never a stuck live timer.
-    const persisted = useChatStore
-      .getState()
-      .messages.find((m) => m.id === assistantMessageId)?.metadata;
-    if (persisted?.thinkingSegments && persisted.thinkingSegments.length > 0) {
-      metadata.thinkingSegments = persisted.thinkingSegments.map((s) => ({
-        ...s,
-        isStreaming: false,
-      }));
+    // was saved). AUDIT-FIX STR-9: read the accumulated thinking off the LOCAL
+    // accumulators (symmetric with tools / generatedFiles / searchResults /
+    // research above) instead of reading it back off the store's visible message
+    // list — that read returned undefined whenever this turn's conversation was
+    // not the one on screen, silently dropping the reasoning from the saved row.
+    // Always persist isThinkingStreaming:false and a stable duration so a
+    // reloaded turn renders the collapsed "Thought for Ns" summary, never a
+    // stuck live timer.
+    if (thinkingSegments.length > 0) {
+      metadata.thinkingSegments = thinkingSegments.map((s) => ({ ...s, isStreaming: false }));
     }
-    if (persisted?.thinkingContent && persisted.thinkingContent.trim().length > 0) {
-      metadata.thinkingContent = persisted.thinkingContent;
+    if (thinkingContent.trim().length > 0) {
+      metadata.thinkingContent = thinkingContent;
       metadata.isThinkingStreaming = false;
-      if (persisted.thinkingStartedAt) metadata.thinkingStartedAt = persisted.thinkingStartedAt;
-      if (persisted.thinkingCompletedAt) {
-        metadata.thinkingCompletedAt = persisted.thinkingCompletedAt;
+      if (thinkingStartedAt) metadata.thinkingStartedAt = thinkingStartedAt;
+      if (thinkingCompletedAt) {
+        metadata.thinkingCompletedAt = thinkingCompletedAt;
       }
       const duration =
-        persisted.thinkingDurationSeconds ??
-        (persisted.thinkingStartedAt && persisted.thinkingCompletedAt
+        seededThinkingDurationSeconds ??
+        (thinkingStartedAt && thinkingCompletedAt
           ? Math.max(
               0,
-              Math.round(
-                (Date.parse(persisted.thinkingCompletedAt) -
-                  Date.parse(persisted.thinkingStartedAt)) /
-                  1000,
-              ),
+              Math.round((Date.parse(thinkingCompletedAt) - Date.parse(thinkingStartedAt)) / 1000),
             )
           : undefined);
       if (duration !== undefined) metadata.thinkingDurationSeconds = duration;
@@ -885,7 +941,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (metadata) {
       // Temporary chats skip the database write but still need the exact same
       // terminal in-memory state, including clearing a resolved approval.
-      updateMessage(assistantMessageId, { metadata });
+      updateMessage(assistantMessageId, { metadata }, conversationId);
     }
     if (isTemporaryConversation) return;
     // A tool-only turn (connector call, generated file, code execution) can
@@ -927,7 +983,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     )
       .then((saved) => {
         if (saved?.id && saved.id !== assistantMessageId) {
-          updateMessage(assistantMessageId, { id: saved.id });
+          updateMessage(assistantMessageId, { id: saved.id }, conversationId);
         }
       })
       .catch((err) => notifyPersistenceFailure('assistant', err));
@@ -957,7 +1013,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         if (before) {
           fullAssistantContent += before;
           unacknowledgedPublicText += before;
-          appendToMessage(assistantMessageId, before);
+          appendToMessage(assistantMessageId, before, conversationId);
         }
         inThinkingBlock = true;
         openThinkingSegment();
@@ -983,7 +1039,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           } else {
             fullAssistantContent += contentBuffer;
             unacknowledgedPublicText += contentBuffer;
-            appendToMessage(assistantMessageId, contentBuffer);
+            appendToMessage(assistantMessageId, contentBuffer, conversationId);
           }
           contentBuffer = '';
         }
@@ -994,7 +1050,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         } else {
           fullAssistantContent += safe;
           unacknowledgedPublicText += safe;
-          appendToMessage(assistantMessageId, safe);
+          appendToMessage(assistantMessageId, safe, conversationId);
         }
         contentBuffer = contentBuffer.slice(contentBuffer.length - HOLD_BACK);
       }
@@ -1040,7 +1096,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           unacknowledgedPublicText = reconciled.pending;
           if (reconciled.unmatchedIncoming) {
             fullAssistantContent += reconciled.unmatchedIncoming;
-            appendToMessage(assistantMessageId, reconciled.unmatchedIncoming);
+            appendToMessage(assistantMessageId, reconciled.unmatchedIncoming, conversationId);
           }
         }
         if (envelope.event.type === 'stop') {
@@ -1076,8 +1132,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     } else if (followed.run.state !== 'awaiting_input' && followed.run.state !== 'paused') {
       finishRunningTools();
     }
-    setSearching(assistantMessageId, false);
-    setExecutingCode(assistantMessageId, false);
+    setSearching(assistantMessageId, false, conversationId);
+    setExecutingCode(assistantMessageId, false, conversationId);
     if (finishReason) patchMessageMeta({ finishReason });
     completeLocalStartingActivity();
     persistAssistant(fullAssistantContent);
@@ -1153,8 +1209,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             inThinkingBlock = false;
           }
           finishRunningTools();
-          setSearching(assistantMessageId, false);
-          setExecutingCode(assistantMessageId, false);
+          setSearching(assistantMessageId, false, conversationId);
+          setExecutingCode(assistantMessageId, false, conversationId);
           if (finishReason) {
             // Publish before persisting so the Continue affordance (finish_reason
             // 'length'/'max_tokens') renders immediately, not only after reload.
@@ -1265,7 +1321,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                       : 'Research run failed'
                     : undefined,
               };
-              setResearchState(assistantMessageId, { ...currentResearch });
+              setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
             }
           }
 
@@ -1290,9 +1346,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
           if (toolStatus?.status === 'searching' || toolStatus?.status === 'fetching') {
-            setSearching(assistantMessageId, true);
+            setSearching(assistantMessageId, true, conversationId);
           } else if (toolStatus?.status === 'executing') {
-            setExecutingCode(assistantMessageId, true);
+            setExecutingCode(assistantMessageId, true, conversationId);
           }
 
           // Mid-stream provider failure (additive marker — see the
@@ -1381,7 +1437,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               returnCode,
               images: images.length > 0 ? images : undefined,
             };
-            setCodeExecutionResult(assistantMessageId, currentCodeExecutionResult);
+            setCodeExecutionResult(assistantMessageId, currentCodeExecutionResult, conversationId);
             finishTool('code_execution', 'completed');
           }
 
@@ -1397,7 +1453,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               }));
             if (results.length > 0) {
               currentSearchResults = results;
-              setSearchResults(assistantMessageId, results);
+              setSearchResults(assistantMessageId, results, conversationId);
             }
             // url_fetch sources carry tool:'url_fetch' — their timeline entry is
             // driven by mcp_tool_use status events, so don't synthesize a
@@ -1509,7 +1565,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               // 'tool_calls' chunks before the final 'stop'/'length'.
               finishReason = reason;
             }
-            updateMessage(assistantMessageId, { isStreaming: false });
+            updateMessage(assistantMessageId, { isStreaming: false }, conversationId);
           }
         } catch {
           // Ignore parse errors for incomplete chunks.
@@ -1596,7 +1652,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       // Deep Research cancelled mid-run: record the interruption honestly and
       // persist the partial report/sources so the run survives reload.
       currentResearch = { ...currentResearch!, phase: 'interrupted' };
-      setResearchState(assistantMessageId, { ...currentResearch });
+      setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
       finishRunningTools();
       persistAssistant(fullAssistantContent);
     } else if (researchActive && !isAbort) {
@@ -1606,16 +1662,16 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       // would let handleStreamError overwrite the partial with a bare error).
       const errorMessage = getVisibleErrorMessage(terminalError);
       currentResearch = { ...currentResearch!, phase: 'error', error: errorMessage };
-      setResearchState(assistantMessageId, { ...currentResearch });
+      setResearchState(assistantMessageId, { ...currentResearch }, conversationId);
       finishRunningTools('failed', errorMessage);
       if (fullAssistantContent) {
         flushContentBuffer(true);
         const partialContent = `${fullAssistantContent}\n\n${buildAssistantErrorContent(errorMessage)}`;
-        updateMessage(assistantMessageId, {
-          isStreaming: false,
-          content: partialContent,
-          error: true,
-        });
+        updateMessage(
+          assistantMessageId,
+          { isStreaming: false, content: partialContent, error: true },
+          conversationId,
+        );
         persistAssistant(partialContent);
         useChatStore.getState().setError(errorMessage, conversationId);
         stopStreaming(conversationId);
@@ -1640,9 +1696,51 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
  */
 export function useChatStream(): UseChatStreamReturn {
   const { getToken } = useAuth();
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const activeRunRef = useRef<(ManagedCloudAgentRunHandle & { assistantMessageId: string }) | null>(
-    null,
+  /**
+   * AUDIT-FIX STR-2/BUG-16: ONE controller per conversation, not one for the
+   * whole app. Previously a single slot was aborted unconditionally at the top
+   * of every `sendMessage`, with no check that it belonged to the conversation
+   * being sent to — so sending in chat B silently truncated chat A's response
+   * and persisted it as `finishReason:'stopped'`.
+   */
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  /**
+   * AUDIT-FIX STR-2/BUG-16: same, for the durable Cloud run handle. A single
+   * slot meant a second send orphaned the earlier run: it kept executing (and
+   * billing) server-side with no client able to cancel it, because the handle
+   * needed to call `cancelRun` had already been overwritten.
+   */
+  const activeRunsRef = useRef<
+    Map<string, ManagedCloudAgentRunHandle & { assistantMessageId: string }>
+  >(new Map());
+
+  /** Abort (and forget) only the in-flight turn belonging to `conversationId`. */
+  const abortConversation = useCallback((conversationId: string): void => {
+    const controller = abortControllersRef.current.get(conversationId);
+    if (!controller) return;
+    abortControllersRef.current.delete(conversationId);
+    controller.abort();
+  }, []);
+
+  /** Install a fresh controller for `conversationId`, aborting only its own predecessor. */
+  const beginConversationRequest = useCallback(
+    (conversationId: string): AbortController => {
+      abortConversation(conversationId);
+      const controller = new AbortController();
+      abortControllersRef.current.set(conversationId, controller);
+      return controller;
+    },
+    [abortConversation],
+  );
+
+  /** Drop `conversationId`'s controller iff it is still the one we installed. */
+  const endConversationRequest = useCallback(
+    (conversationId: string, controller: AbortController): void => {
+      if (abortControllersRef.current.get(conversationId) === controller) {
+        abortControllersRef.current.delete(conversationId);
+      }
+    },
+    [],
   );
 
   const addMessage = useChatStore((state) => state.addMessage);
@@ -1670,10 +1768,11 @@ export function useChatStream(): UseChatStreamReturn {
 
   // Declared before sendMessage (which auto-resolves connector approvals
   // through this SAME function — see autoResolvePendingApprovals) rather than
-  // after, so it is in scope for sendMessage's closure. Shares
-  // abortControllerRef with sendMessage/continueGeneration/stopGeneration
-  // (Finding 4) so Stop cancels a resume exactly like any other in-flight turn.
-  const resolveToolApproval = useResolveToolApproval(abortControllerRef);
+  // after, so it is in scope for sendMessage's closure. Shares the
+  // per-conversation controller map with sendMessage/continueGeneration/
+  // stopGeneration (Finding 4) so Stop cancels a resume exactly like any other
+  // in-flight turn — and, since AUDIT-FIX STR-2, only for ITS conversation.
+  const resolveToolApproval = useResolveToolApproval(abortControllersRef);
 
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
@@ -1686,10 +1785,9 @@ export function useChatStream(): UseChatStreamReturn {
         return false;
       }
 
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
+      // AUDIT-FIX STR-2/BUG-16: abort ONLY this conversation's own previous
+      // turn. A send in another chat must never cancel this one.
+      const abortController = beginConversationRequest(conversationId);
 
       const model = options.model || selectedModel;
       const sendReplay = createSendReplayMetadata({
@@ -1738,13 +1836,27 @@ export function useChatStream(): UseChatStreamReturn {
         attachments: options.attachments,
         metadata: userMetadata,
       };
-      addMessage(userMessage);
+      // AUDIT-FIX ROOT-CAUSE: append to the TARGET conversation's transcript,
+      // not to whatever is on screen when this resolves.
+      addMessage(userMessage, conversationId);
 
       const isTemporaryConversation = Boolean(
         useChatStore
           .getState()
           .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
       );
+      // AUDIT-FIX STR-22: report the commit point. For a temporary conversation
+      // there is no durable row to wait on, so the turn is committed the moment
+      // it is in the transcript.
+      const reportTurnCommitted = () => {
+        try {
+          options.onTurnCommitted?.();
+        } catch (callbackError) {
+          logger.warn('[useChatStream] onTurnCommitted callback threw', {
+            error: getVisibleErrorMessage(callbackError),
+          });
+        }
+      };
       if (!isTemporaryConversation) {
         saveMessageToDb(
           conversationId,
@@ -1758,10 +1870,13 @@ export function useChatStream(): UseChatStreamReturn {
         )
           .then((saved) => {
             if (saved?.id && saved.id !== userMessageId) {
-              updateMessage(userMessageId, { id: saved.id });
+              updateMessage(userMessageId, { id: saved.id }, conversationId);
             }
+            reportTurnCommitted();
           })
           .catch((err) => notifyPersistenceFailure('user', err));
+      } else {
+        reportTurnCommitted();
       }
 
       const assistantMessageId = crypto.randomUUID();
@@ -1786,13 +1901,20 @@ export function useChatStream(): UseChatStreamReturn {
             }
           : {}),
       };
-      addMessage(assistantMessage);
+      addMessage(assistantMessage, conversationId);
       startStreaming(assistantMessageId, conversationId);
-      setLoading(true);
+      // AUDIT-FIX STR-7/BUG-12: scope the `true` write exactly like every
+      // `false` write. Unscoped, a background turn left `isLoading` stuck true
+      // and disabled the composer in every other conversation.
+      setLoading(true, conversationId);
       setError(null, conversationId);
 
       try {
-        const currentMessages = useChatStore.getState().messages;
+        // AUDIT-FIX BUG-13: build the provider history from the TARGET
+        // conversation. This used to read the globally-active transcript, so a
+        // send explicitly addressed to conversation A was billed against A
+        // while carrying conversation B's messages.
+        const currentMessages = readConversationMessages(conversationId);
 
         const apiMessages: ApiMessage[] = [
           ...currentMessages
@@ -1849,6 +1971,13 @@ export function useChatStream(): UseChatStreamReturn {
             model,
             messages: apiMessages,
             conversation_id: conversationId,
+            // AUDIT-FIX BUG-10/STR-5: send the client-minted assistant message id so
+            // the server can persist the turn under the SAME row the client will
+            // upsert at [DONE]. Without a shared key the two writes cannot collapse
+            // (the messages route upserts `on conflict (id)`), so a server-side
+            // persist would duplicate every assistant message instead of covering
+            // the tab-close case it exists for.
+            assistant_message_id: assistantMessageId,
             stream: true,
             temperature: options.temperature,
             max_tokens: options.maxTokens,
@@ -1866,7 +1995,7 @@ export function useChatStream(): UseChatStreamReturn {
                 : undefined,
             use_prompt_cache: true,
           }),
-          signal: abortControllerRef.current?.signal,
+          signal: abortController.signal,
         });
 
         if (!response.ok) {
@@ -1889,7 +2018,13 @@ export function useChatStream(): UseChatStreamReturn {
           isTemporaryConversation,
           getAuthToken,
           onRunHandle: (handle) => {
-            activeRunRef.current = handle ? { ...handle, assistantMessageId } : null;
+            // AUDIT-FIX STR-2/BUG-16: keyed by conversation so a concurrent
+            // send elsewhere cannot orphan this run's cancel handle.
+            if (handle) {
+              activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
+            } else {
+              activeRunsRef.current.delete(conversationId);
+            }
           },
         });
 
@@ -1926,9 +2061,10 @@ export function useChatStream(): UseChatStreamReturn {
           updateMessage,
         });
       } finally {
-        if (activeRunRef.current?.assistantMessageId === assistantMessageId) {
-          activeRunRef.current = null;
+        if (activeRunsRef.current.get(conversationId)?.assistantMessageId === assistantMessageId) {
+          activeRunsRef.current.delete(conversationId);
         }
+        endConversationRequest(conversationId, abortController);
       }
       // Committed: the new user turn was added (and is persisting) before the stream
       // started, so a mid-stream failure never loses it. The caller may now safely
@@ -1945,6 +2081,8 @@ export function useChatStream(): UseChatStreamReturn {
       setError,
       getToken,
       resolveToolApproval,
+      beginConversationRequest,
+      endConversationRequest,
     ],
   );
 
@@ -1955,8 +2093,9 @@ export function useChatStream(): UseChatStreamReturn {
    * ephemeral user instruction to continue in place (never stored/rendered).
    * consumeAssistantStream is seeded with the existing content + tool timeline
    * so new tokens APPEND to the same bubble and the terminal persist saves the
-   * merged full text. Shares abortControllerRef with sendMessage so
-   * stopGeneration cancels a continuation too.
+   * merged full text. Shares the per-conversation abort-controller map with
+   * sendMessage so stopGeneration cancels a continuation too -- and, since
+   * AUDIT-FIX STR-2, cancels only the conversation it was asked to stop.
    */
   const continueGeneration = useCallback(
     async (assistantMessageId: string) => {
@@ -1966,8 +2105,12 @@ export function useChatStream(): UseChatStreamReturn {
       // background stream for a DIFFERENT conversation must not block
       // continuing generation on the one actually displayed.
       if (conversationId && store.streamingConversationIds.includes(conversationId)) return;
-      const messageIndex = store.messages.findIndex((m) => m.id === assistantMessageId);
-      const message = messageIndex >= 0 ? store.messages[messageIndex] : undefined;
+      // AUDIT-FIX ROOT-CAUSE: read this conversation's own transcript.
+      const conversationMessages = conversationId
+        ? readConversationMessages(conversationId)
+        : store.messages;
+      const messageIndex = conversationMessages.findIndex((m) => m.id === assistantMessageId);
+      const message = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
       // No fake availability: only a truncated/stopped assistant turn with
       // non-empty partial content can continue.
       if (!message || !isMessageContinuable(message)) return;
@@ -1996,14 +2139,12 @@ export function useChatStream(): UseChatStreamReturn {
         return;
       }
 
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
+      // AUDIT-FIX STR-2/BUG-16: cancel only this conversation's own prior turn.
+      const abortController = beginConversationRequest(conversationId);
 
       // Thread: everything up to AND INCLUDING the partial assistant turn,
       // then the ephemeral continue instruction (request-only, never stored).
-      const apiMessages: ApiMessage[] = store.messages
+      const apiMessages: ApiMessage[] = conversationMessages
         .slice(0, messageIndex + 1)
         .map((m) => ({ role: m.role, content: m.content as MessageContent }));
       apiMessages.push({ role: 'user', content: CONTINUE_GENERATION_INSTRUCTION });
@@ -2014,12 +2155,14 @@ export function useChatStream(): UseChatStreamReturn {
 
       // Clear the continuable marker while the continuation streams; it is
       // re-recorded honestly at stream end (re-offered if truncated again).
-      updateMessage(assistantMessageId, {
-        isStreaming: true,
-        metadata: { ...priorMetadata, finishReason: undefined },
-      });
+      updateMessage(
+        assistantMessageId,
+        { isStreaming: true, metadata: { ...priorMetadata, finishReason: undefined } },
+        conversationId,
+      );
       startStreaming(assistantMessageId, conversationId);
-      setLoading(true);
+      // AUDIT-FIX STR-7/BUG-12: scoped, matching every paired `false` write.
+      setLoading(true, conversationId);
       setError(null, conversationId);
 
       try {
@@ -2041,10 +2184,17 @@ export function useChatStream(): UseChatStreamReturn {
             model,
             messages: apiMessages,
             conversation_id: conversationId,
+            // AUDIT-FIX BUG-10/STR-5: send the client-minted assistant message id so
+            // the server can persist the turn under the SAME row the client will
+            // upsert at [DONE]. Without a shared key the two writes cannot collapse
+            // (the messages route upserts `on conflict (id)`), so a server-side
+            // persist would duplicate every assistant message instead of covering
+            // the tab-close case it exists for.
+            assistant_message_id: assistantMessageId,
             stream: true,
             use_prompt_cache: true,
           }),
-          signal: abortControllerRef.current?.signal,
+          signal: abortController.signal,
         });
 
         if (!response.ok) {
@@ -2066,7 +2216,12 @@ export function useChatStream(): UseChatStreamReturn {
           seedContent,
           seedTools,
           onRunHandle: (handle) => {
-            activeRunRef.current = handle ? { ...handle, assistantMessageId } : null;
+            // AUDIT-FIX STR-2/BUG-16: keyed by conversation (see sendMessage).
+            if (handle) {
+              activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
+            } else {
+              activeRunsRef.current.delete(conversationId);
+            }
           },
         });
       } catch (error) {
@@ -2077,7 +2232,7 @@ export function useChatStream(): UseChatStreamReturn {
         if (isAbort) {
           // consumeAssistantStream already flushed + re-marked 'stopped' +
           // persisted the merged partial; just tear down here.
-          updateMessage(assistantMessageId, { isStreaming: false });
+          updateMessage(assistantMessageId, { isStreaming: false }, conversationId);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
           return;
@@ -2091,7 +2246,11 @@ export function useChatStream(): UseChatStreamReturn {
           if (errorCode === 'free_trial_token_budget_reached') {
             useFreeTrialStore.getState().markLimitReached();
           }
-          updateMessage(assistantMessageId, { isStreaming: false, metadata: priorMetadata });
+          updateMessage(
+            assistantMessageId,
+            { isStreaming: false, metadata: priorMetadata },
+            conversationId,
+          );
           setError(errorMessage, conversationId);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
@@ -2102,14 +2261,13 @@ export function useChatStream(): UseChatStreamReturn {
         // has streamed (original partial + any continuation tokens) and append
         // an error note, instead of handleStreamError's replace-with-error.
         const streamedSoFar =
-          useChatStore.getState().messages.find((m) => m.id === assistantMessageId)?.content ??
-          seedContent;
+          findConversationMessage(conversationId, assistantMessageId)?.content ?? seedContent;
         const mergedContent = `${streamedSoFar}\n\n${buildAssistantErrorContent(errorMessage)}`;
-        updateMessage(assistantMessageId, {
-          isStreaming: false,
-          content: mergedContent,
-          error: true,
-        });
+        updateMessage(
+          assistantMessageId,
+          { isStreaming: false, content: mergedContent, error: true },
+          conversationId,
+        );
         setError(errorMessage, conversationId);
         if (!isTemporaryConversation) {
           saveMessageToDb(
@@ -2129,33 +2287,56 @@ export function useChatStream(): UseChatStreamReturn {
         stopStreaming(conversationId);
         setLoading(false, conversationId);
       } finally {
-        if (activeRunRef.current?.assistantMessageId === assistantMessageId) {
-          activeRunRef.current = null;
+        if (activeRunsRef.current.get(conversationId)?.assistantMessageId === assistantMessageId) {
+          activeRunsRef.current.delete(conversationId);
         }
+        endConversationRequest(conversationId, abortController);
       }
     },
-    [selectedModel, updateMessage, startStreaming, stopStreaming, setLoading, setError, getToken],
+    [
+      selectedModel,
+      updateMessage,
+      startStreaming,
+      stopStreaming,
+      setLoading,
+      setError,
+      getToken,
+      beginConversationRequest,
+      endConversationRequest,
+    ],
   );
 
-  const stopGeneration = useCallback(() => {
-    const activeRun = activeRunRef.current;
-    activeRunRef.current = null;
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    if (activeRun) {
-      const client = createManagedCloudAgentRunClient({
-        getAuthToken: getToken,
-        decorateMutationHeaders: addCsrfHeaders,
-      });
-      void client.cancelRun(activeRun.runId).catch(() => {
-        toast.error('Could not stop the Cloud task. Check its activity before retrying.');
-      });
-    }
-    stopStreaming();
-    setLoading(false);
-  }, [getToken, stopStreaming, setLoading]);
+  /**
+   * AUDIT-FIX STR-3: Stop now names its target. The old implementation had two
+   * disagreeing targets — it aborted whatever fetch started most recently
+   * (possibly a different conversation's) while `stopStreaming()` /
+   * `setLoading(false)` resolved against `activeConversationId`. Callers pass
+   * the conversation the Stop button belongs to; omitting it falls back to the
+   * active conversation, which is what a bare user-initiated Stop means.
+   */
+  const stopGeneration = useCallback(
+    (conversationId?: string) => {
+      const targetConversationId = conversationId ?? useChatStore.getState().activeConversationId;
+      if (!targetConversationId) return;
+
+      const activeRun = activeRunsRef.current.get(targetConversationId);
+      activeRunsRef.current.delete(targetConversationId);
+      abortConversation(targetConversationId);
+
+      if (activeRun) {
+        const client = createManagedCloudAgentRunClient({
+          getAuthToken: getToken,
+          decorateMutationHeaders: addCsrfHeaders,
+        });
+        void client.cancelRun(activeRun.runId).catch(() => {
+          toast.error('Could not stop the Cloud task. Check its activity before retrying.');
+        });
+      }
+      stopStreaming(targetConversationId);
+      setLoading(false, targetConversationId);
+    },
+    [getToken, stopStreaming, setLoading, abortConversation],
+  );
 
   return {
     sendMessage,
@@ -2173,18 +2354,21 @@ export function useChatStream(): UseChatStreamReturn {
  * without incurring a re-render on every streaming toggle. useChatStream reuses
  * it so there is a single implementation of the resume flow.
  *
- * `sharedAbortControllerRef` is the SAME ref `sendMessage`/`continueGeneration`
- * use, passed in by the caller rather than owned here. A resume is just
- * another kind of in-flight turn on the conversation, so it must share one
- * abort target with the rest -- previously this hook kept a private
- * `abortRef` that `stopGeneration` never touched, so clicking Stop during a
- * tool-approval resume did nothing (Finding 4).
+ * `sharedAbortControllers` is the SAME per-conversation map
+ * `sendMessage`/`continueGeneration` use, passed in by the caller rather than
+ * owned here. A resume is just another kind of in-flight turn on the
+ * conversation, so it must share one abort target with the rest -- previously
+ * this hook kept a private `abortRef` that `stopGeneration` never touched, so
+ * clicking Stop during a tool-approval resume did nothing (Finding 4).
+ *
+ * AUDIT-FIX STR-2/BUG-16: the shared target is now keyed by conversation, so a
+ * resume cancels (and is cancelled by) only its OWN conversation's turn.
  */
 export function useResolveToolApproval(
-  sharedAbortControllerRef: MutableRefObject<AbortController | null>,
+  sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
 ): UseChatStreamReturn['resolveToolApproval'] {
   const { getToken } = useAuth();
-  const abortRef = sharedAbortControllerRef;
+  const abortControllers = sharedAbortControllers;
 
   return useCallback(
     // Named (not an anonymous arrow) so it can call itself below when a
@@ -2214,19 +2398,21 @@ export function useResolveToolApproval(
       // Persist the selection while the batch remains awaiting input. Keeping
       // requiresApproval=true makes a partially decided batch reconstructable
       // after reload; execution state changes only once every call is decided.
-      updateToolEntry(assistantMessageId, toolCallId, {
-        approved: decision === 'approved',
-        requiresApproval: true,
-      });
+      updateToolEntry(
+        assistantMessageId,
+        toolCallId,
+        { approved: decision === 'approved', requiresApproval: true },
+        turn.conversationId,
+      );
 
-      const selectedMessage = useChatStore
-        .getState()
-        .messages.find((message) => message.id === assistantMessageId);
+      // AUDIT-FIX ROOT-CAUSE: the suspended turn carries its own conversation
+      // id; read and write THAT transcript, not the one currently displayed.
+      const selectedMessage = findConversationMessage(turn.conversationId, assistantMessageId);
       const selectedMetadata: MessageMetadata = {
         ...selectedMessage?.metadata,
         cloudApproval: projectPendingTurn(turn),
       };
-      updateMessage(assistantMessageId, { metadata: selectedMetadata });
+      updateMessage(assistantMessageId, { metadata: selectedMetadata }, turn.conversationId);
 
       const getAuthToken: AuthTokenProvider = async () => {
         const token = await getToken();
@@ -2261,17 +2447,22 @@ export function useResolveToolApproval(
 
       for (const call of turn.calls) {
         const callDecision = turn.decisions.get(call.toolCallId) ?? 'rejected';
-        updateToolEntry(assistantMessageId, call.toolCallId, {
-          approved: callDecision === 'approved',
-          status: callDecision === 'approved' ? 'running' : 'failed',
-          requiresApproval: false,
-          ...(callDecision === 'rejected'
-            ? {
-                error: 'You denied this tool.',
-                result: 'The user denied permission to run this tool.',
-              }
-            : {}),
-        });
+        updateToolEntry(
+          assistantMessageId,
+          call.toolCallId,
+          {
+            approved: callDecision === 'approved',
+            status: callDecision === 'approved' ? 'running' : 'failed',
+            requiresApproval: false,
+            ...(callDecision === 'rejected'
+              ? {
+                  error: 'You denied this tool.',
+                  result: 'The user denied permission to run this tool.',
+                }
+              : {}),
+          },
+          turn.conversationId,
+        );
       }
 
       // Provider so the terminal persist after a long resume continuation uses a
@@ -2282,35 +2473,46 @@ export function useResolveToolApproval(
       } catch {
         turn.resolving = false;
         for (const call of turn.calls) {
-          updateToolEntry(assistantMessageId, call.toolCallId, {
-            approved: turn.decisions.get(call.toolCallId) === 'approved',
-            status: 'awaiting_approval',
-            requiresApproval: true,
-            error: undefined,
-            result: undefined,
-          });
+          updateToolEntry(
+            assistantMessageId,
+            call.toolCallId,
+            {
+              approved: turn.decisions.get(call.toolCallId) === 'approved',
+              status: 'awaiting_approval',
+              requiresApproval: true,
+              error: undefined,
+              result: undefined,
+            },
+            turn.conversationId,
+          );
         }
         setError('Not authenticated', turn.conversationId);
         return;
       }
 
-      if (abortRef.current) {
-        abortRef.current.abort();
+      // AUDIT-FIX STR-2/BUG-16: abort only this conversation's own in-flight
+      // turn before dispatching the resume.
+      const previousController = abortControllers.current.get(turn.conversationId);
+      if (previousController) {
+        abortControllers.current.delete(turn.conversationId);
+        previousController.abort();
       }
-      abortRef.current = new AbortController();
+      const abortController = new AbortController();
+      abortControllers.current.set(turn.conversationId, abortController);
 
       const assistantContent =
-        useChatStore.getState().messages.find((m) => m.id === assistantMessageId)?.content ?? '';
+        findConversationMessage(turn.conversationId, assistantMessageId)?.content ?? '';
       const toolApprovals = turn.calls.map((c) => ({
         tool_call_id: c.toolCallId,
         decision: turn.decisions.get(c.toolCallId) ?? 'rejected',
       }));
 
-      const seedTools = useChatStore.getState().messages.find((m) => m.id === assistantMessageId)
-        ?.metadata?.tools;
+      const seedTools = findConversationMessage(turn.conversationId, assistantMessageId)?.metadata
+        ?.tools;
 
       startStreaming(assistantMessageId, turn.conversationId);
-      setLoading(true);
+      // AUDIT-FIX STR-7/BUG-12: scoped, matching every paired `false` write.
+      setLoading(true, turn.conversationId);
       setError(null, turn.conversationId);
 
       try {
@@ -2332,7 +2534,7 @@ export function useResolveToolApproval(
             run_id: turn.runId,
             tool_approvals: toolApprovals,
           }),
-          signal: abortRef.current?.signal,
+          signal: abortController.signal,
         });
 
         if (!response.ok) {
@@ -2385,15 +2587,20 @@ export function useResolveToolApproval(
           turn.resolving = false;
           for (const call of turn.calls) {
             const callDecision = turn.decisions.get(call.toolCallId);
-            updateToolEntry(assistantMessageId, call.toolCallId, {
-              approved: callDecision === undefined ? undefined : callDecision === 'approved',
-              status: 'awaiting_approval',
-              requiresApproval: true,
-              error: undefined,
-              result: undefined,
-            });
+            updateToolEntry(
+              assistantMessageId,
+              call.toolCallId,
+              {
+                approved: callDecision === undefined ? undefined : callDecision === 'approved',
+                status: 'awaiting_approval',
+                requiresApproval: true,
+                error: undefined,
+                result: undefined,
+              },
+              turn.conversationId,
+            );
           }
-          updateMessage(assistantMessageId, { isStreaming: false });
+          updateMessage(assistantMessageId, { isStreaming: false }, turn.conversationId);
           setError(getVisibleErrorMessage(error), turn.conversationId);
           stopStreaming(turn.conversationId);
           setLoading(false, turn.conversationId);
@@ -2411,9 +2618,16 @@ export function useResolveToolApproval(
           setLoading,
           updateMessage,
         });
+      } finally {
+        // AUDIT-FIX STR-2/BUG-16: release this conversation's slot iff it is
+        // still the controller we installed, so a settled resume cannot leave a
+        // dead controller behind for a later Stop to act on.
+        if (abortControllers.current.get(turn.conversationId) === abortController) {
+          abortControllers.current.delete(turn.conversationId);
+        }
       }
     },
-    [abortRef, getToken],
+    [abortControllers, getToken],
   );
 }
 
@@ -2428,7 +2642,7 @@ interface StreamErrorContext {
   setError: (message: string | null, conversationId?: string) => void;
   stopStreaming: (conversationId?: string) => void;
   setLoading: (loading: boolean, conversationId?: string) => void;
-  updateMessage: (id: string, updates: Partial<Message>) => void;
+  updateMessage: (id: string, updates: Partial<Message>, conversationId?: string) => void;
 }
 
 function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
@@ -2450,25 +2664,28 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
     typeof error === 'object' &&
     error !== null &&
     (error as { name?: unknown }).name === 'AbortError';
-  const currentMessage = useChatStore
-    .getState()
-    .messages.find((message) => message.id === assistantMessageId);
+  // AUDIT-FIX ROOT-CAUSE: read and write the FAILING turn's own conversation.
+  const currentMessage = findConversationMessage(conversationId, assistantMessageId);
   const currentActivity = currentMessage?.metadata?.agentActivity;
   if (isAbort) {
-    updateMessage(assistantMessageId, {
-      isStreaming: false,
-      ...(currentActivity
-        ? {
-            metadata: {
-              ...currentMessage?.metadata,
-              agentActivity: finishAgentActivityLocally(currentActivity, {
-                status: 'cancelled',
-                completedAtMs: Date.now(),
-              }),
-            },
-          }
-        : {}),
-    });
+    updateMessage(
+      assistantMessageId,
+      {
+        isStreaming: false,
+        ...(currentActivity
+          ? {
+              metadata: {
+                ...currentMessage?.metadata,
+                agentActivity: finishAgentActivityLocally(currentActivity, {
+                  status: 'cancelled',
+                  completedAtMs: Date.now(),
+                }),
+              },
+            }
+          : {}),
+      },
+      conversationId,
+    );
     stopStreaming(conversationId);
     setLoading(false, conversationId);
     return;
@@ -2478,8 +2695,7 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
 
   // Mark any in-flight tool cards as failed (a mid-stream error leaves them
   // running otherwise). awaiting_approval cards are left as-is.
-  const failing = useChatStore.getState().messages.find((m) => m.id === assistantMessageId)
-    ?.metadata?.tools;
+  const failing = findConversationMessage(conversationId, assistantMessageId)?.metadata?.tools;
   if (failing && failing.some((t) => t.status === 'pending' || t.status === 'running')) {
     useChatStore.getState().setToolTimeline(
       assistantMessageId,
@@ -2488,6 +2704,7 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
           ? { ...t, status: 'failed' as const, error: errorMessage }
           : { ...t },
       ),
+      conversationId,
     );
   }
 
@@ -2496,14 +2713,18 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
     if (errorCode === 'free_trial_token_budget_reached') {
       useFreeTrialStore.getState().markLimitReached();
     }
-    updateMessage(assistantMessageId, {
-      isStreaming: false,
-      content: '',
-      error: false,
-      metadata: {
-        paywall: buildFreeTrialPaywallSlot(errorCode, errorMessage),
+    updateMessage(
+      assistantMessageId,
+      {
+        isStreaming: false,
+        content: '',
+        error: false,
+        metadata: {
+          paywall: buildFreeTrialPaywallSlot(errorCode, errorMessage),
+        },
       },
-    });
+      conversationId,
+    );
     setError(errorMessage, conversationId);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
@@ -2511,29 +2732,31 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
   }
 
   const errorContent = buildAssistantErrorContent(errorMessage);
-  updateMessage(assistantMessageId, {
-    isStreaming: false,
-    content: errorContent,
-    error: true,
-    ...(currentActivity
-      ? {
-          metadata: {
-            ...currentMessage?.metadata,
-            agentActivity: finishAgentActivityLocally(currentActivity, {
-              status: 'failed',
-              completedAtMs: Date.now(),
-              error: errorMessage,
-            }),
-          },
-        }
-      : {}),
-  });
+  updateMessage(
+    assistantMessageId,
+    {
+      isStreaming: false,
+      content: errorContent,
+      error: true,
+      ...(currentActivity
+        ? {
+            metadata: {
+              ...currentMessage?.metadata,
+              agentActivity: finishAgentActivityLocally(currentActivity, {
+                status: 'failed',
+                completedAtMs: Date.now(),
+                error: errorMessage,
+              }),
+            },
+          }
+        : {}),
+    },
+    conversationId,
+  );
   setError(errorMessage, conversationId);
 
   if (!isTemporaryConversation) {
-    const metadata = useChatStore
-      .getState()
-      .messages.find((message) => message.id === assistantMessageId)?.metadata;
+    const metadata = findConversationMessage(conversationId, assistantMessageId)?.metadata;
     saveMessageToDb(
       conversationId,
       {
@@ -2547,7 +2770,7 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
     )
       .then((saved) => {
         if (saved?.id && saved.id !== assistantMessageId) {
-          updateMessage(assistantMessageId, { id: saved.id });
+          updateMessage(assistantMessageId, { id: saved.id }, conversationId);
         }
       })
       .catch((err) => notifyPersistenceFailure('assistant', err));

@@ -84,6 +84,17 @@ interface ChatComposerProps {
       skillName?: string;
     },
   ) => void | false;
+  /**
+   * Conversation this composer is currently editing for (`null` on the
+   * new-chat surface).
+   *
+   * AUDIT-FIX STR-8/BUG-15: the follow-up queue captures this at queue time, so
+   * a message composed for chat A can never be flushed into chat B by the
+   * `isTurnActive` true->false edge that navigating away produces.
+   * AUDIT-FIX STR-23: the half-typed input is parked under this id and restored
+   * per conversation, instead of following the user into the next chat.
+   */
+  conversationId?: string | null;
   isLoading?: boolean;
   /**
    * True while an SSE stream is actively generating output.
@@ -256,6 +267,7 @@ function MenuToggleRow({
 
 const ChatComposerNewComponent = ({
   onSend,
+  conversationId = null,
   isLoading = false,
   isGenerating = false,
   placeholder = 'Ask anything. Type / for commands',
@@ -277,12 +289,30 @@ const ChatComposerNewComponent = ({
   const isTurnActive = isLoading || isGenerating;
   const [message, setMessage] = useState('');
   const [localNotice, setLocalNotice] = useState<string | null>(null);
+  /**
+   * AUDIT-FIX STR-23: mirror of `message` readable from effects without adding
+   * it to their dependency arrays -- used to park the outgoing conversation's
+   * half-typed text on a conversation switch.
+   */
+  const messageRef = useRef(message);
+  messageRef.current = message;
+  const setDraftContent = useChatStore((state) => state.setDraftContent);
+  const clearDraftContent = useChatStore((state) => state.clearDraftContent);
   // Follow-up queue (claude.ai / ChatGPT parity): a message composed while the
   // current turn is still streaming is captured here and auto-sent when the turn
   // finishes, so the user never has to wait or manually re-send. Snapshotting the
   // exact onSend arguments (incl. the toggle/skill/project meta) at queue time
   // avoids sending with stale options if the user changes a toggle afterward.
-  const pendingQueueRef = useRef<Parameters<typeof onSend> | null>(null);
+  //
+  // AUDIT-FIX STR-8/BUG-15: the snapshot now carries the conversation it was
+  // composed FOR. The flush effect below fires on any isTurnActive true->false
+  // edge -- including the one caused by navigating to another chat -- and used
+  // to call `onSend` with no conversation id, so the host resolved it to
+  // whatever chat had become active and a message written for A was sent into B.
+  const pendingQueueRef = useRef<{
+    conversationId: string | null;
+    args: Parameters<typeof onSend>;
+  } | null>(null);
   const wasLoadingRef = useRef(false);
   const [queuedPreview, setQueuedPreview] = useState<string | null>(null);
   const {
@@ -547,6 +577,9 @@ const ChatComposerNewComponent = ({
 
   const clearComposerState = useCallback(() => {
     setMessage('');
+    // AUDIT-FIX STR-23: a sent/cleared composer must not leave a stale parked
+    // draft that reappears when the user returns to this conversation.
+    clearDraftContent(conversationId);
     clearAttachments();
     setSelectedSkill(null);
     // Web search / Deep Research / style are PERSISTENT toggles (claude.ai parity):
@@ -564,7 +597,7 @@ const ChatComposerNewComponent = ({
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [clearAttachments]);
+  }, [clearAttachments, clearDraftContent, conversationId]);
 
   useEffect(() => {
     if (!isFreeTrial) return;
@@ -891,7 +924,10 @@ const ChatComposerNewComponent = ({
     // server's per-conversation concurrency guard — the client never fires a second
     // concurrent turn; it waits for the first to settle.
     if (isTurnActive) {
-      pendingQueueRef.current = sendArgs;
+      // AUDIT-FIX STR-8/BUG-15: capture the TARGET conversation alongside the
+      // arguments so the flush can prove it is still delivering to the chat the
+      // message was written for.
+      pendingQueueRef.current = { conversationId, args: sendArgs };
       setQueuedPreview(message.trim() || 'Attachment');
       clearComposerState();
       return;
@@ -914,6 +950,7 @@ const ChatComposerNewComponent = ({
     imageAspectRatio,
     imageModelId,
     onGenerateImage,
+    conversationId,
     workMode,
     isFreeTrial,
     pickerActiveProjectId,
@@ -936,18 +973,77 @@ const ChatComposerNewComponent = ({
     clearComposerState,
   ]);
 
+  /**
+   * AUDIT-FIX STR-23: the composer input is per-conversation. Park the outgoing
+   * conversation's half-typed text under its own id and restore the incoming
+   * one's, so a private draft can never follow the user into another chat.
+   * Runs only on an actual conversation change (the ref guard), so it never
+   * fights normal typing.
+   */
+  const draftConversationRef = useRef<string | null>(conversationId);
+  useEffect(() => {
+    if (draftConversationRef.current === conversationId) return;
+    const previousConversationId = draftConversationRef.current;
+    draftConversationRef.current = conversationId;
+    const outgoing = messageRef.current;
+    if (outgoing.trim()) {
+      setDraftContent(outgoing, previousConversationId);
+    } else {
+      clearDraftContent(previousConversationId);
+    }
+    setMessage(useChatStore.getState().getDraftContent(conversationId));
+  }, [conversationId, setDraftContent, clearDraftContent]);
+
   // Flush a queued follow-up when the active turn finishes (true→false).
+  //
+  // Declared AFTER the draft-parking effect above on purpose: navigating away
+  // mid-turn fires both in the same commit, and the discard branch below must
+  // run against the draft the parking effect has already written, not before it.
   useEffect(() => {
     if (wasLoadingRef.current && !isTurnActive) {
       const pending = pendingQueueRef.current;
       if (pending) {
         pendingQueueRef.current = null;
         setQueuedPreview(null);
-        onSend(...pending);
+        if (pending.conversationId === conversationId) {
+          onSend(...pending.args);
+        } else {
+          // AUDIT-FIX STR-8/BUG-15: this edge was produced by navigating away,
+          // not by the queued turn finishing. Sending now would deliver a
+          // message composed for another chat into the one on screen. Park the
+          // text back on ITS conversation's draft (AUDIT-FIX STR-23) and say so
+          // out loud -- silently dropping it would be its own data loss.
+          const [queuedContent, queuedAttachments] = pending.args;
+          const savedAsDraft = typeof queuedContent === 'string' && queuedContent.trim().length > 0;
+          if (savedAsDraft) {
+            // Merge, never overwrite: the draft-parking effect may have just
+            // stored text the user typed after queueing this one.
+            const parked = useChatStore.getState().getDraftContent(pending.conversationId);
+            setDraftContent(
+              parked ? `${queuedContent}\n\n${parked}` : queuedContent,
+              pending.conversationId,
+            );
+          }
+          // Say exactly what happened: attachments are File handles and cannot
+          // be parked in a draft, so claiming "saved" for them would be a lie.
+          setLocalNotice(
+            [
+              'Your queued message was not sent — you switched chats before the reply finished.',
+              savedAsDraft
+                ? 'It was saved as a draft in the original chat.'
+                : 'Nothing was sent anywhere.',
+              queuedAttachments && queuedAttachments.length > 0
+                ? 'Its attachments were not kept — re-attach them to send it.'
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          );
+        }
       }
     }
     wasLoadingRef.current = isTurnActive;
-  }, [isTurnActive, onSend]);
+  }, [isTurnActive, onSend, conversationId, setDraftContent]);
 
   const cancelQueuedMessage = useCallback(() => {
     pendingQueueRef.current = null;
@@ -2084,6 +2180,9 @@ const ChatComposerNewComponent = ({
 export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
   return (
     prev.onSend === next.onSend &&
+    // AUDIT-FIX STR-8/STR-23: a conversation switch MUST re-render -- it swaps
+    // the draft and decides where a queued follow-up may be delivered.
+    prev.conversationId === next.conversationId &&
     prev.isLoading === next.isLoading &&
     prev.isGenerating === next.isGenerating &&
     prev.placeholder === next.placeholder &&

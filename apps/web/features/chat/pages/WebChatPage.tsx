@@ -11,7 +11,7 @@ import {
   persistImageGenerationUserMessage,
   persistImageGenerationAssistantMessage,
 } from '../lib/imageGenerationPersistence';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { useChatStore, selectConversationMessages } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
@@ -151,6 +151,15 @@ type SendMeta = {
   /** Exact server-catalog skill name. */
   skillName?: string;
 };
+
+/**
+ * AUDIT-FIX STR-6: reentrancy key for a send issued before its conversation
+ * exists. All pre-create sends share it, which is exactly right -- two rapid
+ * submits on the empty new-chat surface must not create two conversations --
+ * while a send addressed to a real conversation is keyed by that id and can run
+ * concurrently with any other chat's send.
+ */
+const NEW_CHAT_SEND_GUARD_KEY = '__new_conversation__';
 
 type PendingByokHandoff = {
   sourceConversationId: string;
@@ -380,7 +389,14 @@ export default function WebChatPage() {
   // sendContent, which is declared long before it.
   const pendingEditRollbackRef = useRef<PendingEditRollback | null>(null);
   const sendReplacingMessagesRef = useRef<
-    ((rollbackIds: string[], send: () => Promise<boolean>) => Promise<void>) | null
+    | ((
+        rollbackIds: string[],
+        // AUDIT-FIX STR-22: `send` receives an early-commit callback it must
+        // invoke once the replacement turn is durable, so the replaced turn's
+        // server rows are dropped then -- not at stream end.
+        send: (onTurnCommitted: () => void) => Promise<boolean>,
+      ) => Promise<void>)
+    | null
   >(null);
 
   // First-message send guard (DEMO-BLOCKER FIX). A brand-new-chat send runs
@@ -397,17 +413,37 @@ export default function WebChatPage() {
   // active conversation mid-send. It is a ref (not state) so flipping it never
   // triggers a render; the reconciler reads it at effect-run time.
   //
-  // DOUBLE-SUBMIT GUARD (streaming/approval cluster Finding 7): this ref also
-  // now doubles as sendContent's reentrancy guard, mirroring mobile's
+  // AUDIT-FIX STR-6/STR-26: a COUNT, not a boolean. Three call sites claim this
+  // window (sendContent, handleGenerateImage, handleConfirmHandoff) and they can
+  // overlap; a shared boolean let whichever finished first clear a window still
+  // owned by another, re-opening the exact race this guards. `claimSendWindow`
+  // hands each owner an idempotent release so the count can only be balanced.
+  const activeSendCountRef = useRef(0);
+  const claimSendWindow = useCallback(() => {
+    activeSendCountRef.current += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      activeSendCountRef.current = Math.max(0, activeSendCountRef.current - 1);
+    };
+  }, []);
+
+  // DOUBLE-SUBMIT GUARD (streaming/approval cluster Finding 7): mirrors mobile's
   // ChatInput.tsx `sendPendingRef` -- ChatComposerNew's own `isLoading || disabled`
   // check in handleSubmit only blocks a SECOND click once the store's
   // `isLoading` has round-tripped through a React render, but `sendContent` is
-  // an async function whose body (including the `isSendingRef.current = true`
-  // set below) runs SYNCHRONOUSLY up to its first `await` -- so checking this
-  // ref at the very top closes the double-submit window with zero render
-  // latency, exactly like a synchronous ref check, without needing a second
-  // ref in the composer.
-  const isSendingRef = useRef(false);
+  // an async function whose body runs SYNCHRONOUSLY up to its first `await` --
+  // so a synchronous check at the very top closes the double-submit window with
+  // zero render latency, without needing a second ref in the composer.
+  //
+  // AUDIT-FIX STR-6: keyed PER CONVERSATION. The old single boolean was held for
+  // the ENTIRE stream (`await doSend()` -> `await sendMessage` -> `await
+  // consumeAssistantStream`), so a send in ANY other conversation hit
+  // `if (isSendingRef.current) return;` and vanished -- no error, no toast,
+  // nothing. Scoped, it does what its comment claims (close the reentrancy
+  // window for one conversation) instead of serialising the whole app.
+  const sendingConversationsRef = useRef<Set<string>>(new Set());
 
   // Consume any pending message written by the project-detail composer before
   // navigating here. Reading once on mount prevents the value from surviving
@@ -658,6 +694,11 @@ export default function WebChatPage() {
   // Conversation CRUD
   const {
     conversations,
+    // AUDIT-FIX STR-7/BUG-12: conversation-CRUD progress, now kept SEPARATE from
+    // the store's turn-scoped `isLoading` (which gates the composer and Stop
+    // button). It is still needed here so opening a conversation does not flash
+    // the empty-chat greeting before its transcript arrives.
+    isLoading: isConversationLoading,
     createConversation,
     loadConversation,
     deleteConversation,
@@ -690,7 +731,7 @@ export default function WebChatPage() {
         activeConversationId,
         isStreaming,
         isLoading,
-        isSending: isSendingRef.current,
+        isSending: activeSendCountRef.current > 0,
       })
     ) {
       setActiveConversation(null);
@@ -827,18 +868,27 @@ export default function WebChatPage() {
       } = {},
     ) => {
       // Double-submit guard (Finding 7): bails out synchronously if a send is
-      // already in flight -- see isSendingRef's doc comment above for why this
-      // check, positioned before any `await`, is what actually closes the
-      // reentrancy window (a rapid double Enter/click otherwise fires two
-      // concurrent turns since ChatComposerNew's isLoading-based guard alone
-      // has a render-latency gap).
-      if (isSendingRef.current) return;
+      // already in flight FOR THIS CONVERSATION -- see sendingConversationsRef's
+      // doc comment above for why this check, positioned before any `await`, is
+      // what actually closes the reentrancy window (a rapid double Enter/click
+      // otherwise fires two concurrent turns since ChatComposerNew's
+      // isLoading-based guard alone has a render-latency gap).
+      //
+      // AUDIT-FIX STR-6: the key is the conversation being sent to, so a send in
+      // a DIFFERENT chat is never silently swallowed. A brand-new chat has no id
+      // yet, so pre-create sends share one key -- which is exactly right: two
+      // rapid submits on the empty surface must not create two conversations.
+      const sendGuardKey =
+        options.conversationId || urlConversationId || bareChatSessionId || NEW_CHAT_SEND_GUARD_KEY;
+      if (sendingConversationsRef.current.has(sendGuardKey)) return;
+      sendingConversationsRef.current.add(sendGuardKey);
 
-      // Hold the send guard for the entire flow (set BEFORE createConversation,
-      // which is the first thing to mutate the store's activeConversationId) so
-      // the stale-active reconciler can never null the just-created conversation
-      // during the first-message → navigate window. Cleared in `finally`.
-      isSendingRef.current = true;
+      // Hold the send window for the entire flow (claimed BEFORE
+      // createConversation, which is the first thing to mutate the store's
+      // activeConversationId) so the stale-active reconciler can never null the
+      // just-created conversation during the first-message → navigate window.
+      // Released exactly once in `finally` (AUDIT-FIX STR-26).
+      const releaseSendWindow = claimSendWindow();
       let targetConversationId =
         options.conversationId || urlConversationId || bareChatSessionId || null;
       try {
@@ -876,10 +926,17 @@ export default function WebChatPage() {
           ? await uploadChatAttachments(options.attachments)
           : undefined;
 
-        const doSend = () =>
+        // AUDIT-FIX STR-22: `onTurnCommitted` fires as soon as the replacement
+        // user turn is DURABLE (its row saved), not at stream end. The
+        // edit/regenerate flow uses it to drop the replaced turn's server rows
+        // at that moment instead of holding them for the whole stream -- the
+        // window in which a reload showed a duplicated user message plus the
+        // stale answer.
+        const doSend = (onTurnCommitted?: () => void) =>
           sendMessage(content, {
             model: activeModelId,
             conversationId: convId,
+            onTurnCommitted,
             attachments: resolvedAttachments,
             webSearch: options.meta?.webSearchEnabled,
             // Search implies fetch (ChatGPT/Claude parity): with Search on, the model
@@ -918,7 +975,8 @@ export default function WebChatPage() {
         // Release the guard once the send has fully settled (or bailed). By now
         // `bareChatSessionId`/`urlConversationId` reflect the real conversation,
         // so the reconciler reads a consistent displayed id and never misfires.
-        isSendingRef.current = false;
+        sendingConversationsRef.current.delete(sendGuardKey);
+        releaseSendWindow();
       }
     },
     [
@@ -930,6 +988,7 @@ export default function WebChatPage() {
       activeProjectId,
       router,
       setChatError,
+      claimSendWindow,
     ],
   );
 
@@ -948,25 +1007,32 @@ export default function WebChatPage() {
 
   // Shared paywall/error helper
   const applyImageError = useCallback(
-    (msgId: string, raw: string) => {
+    // AUDIT-FIX ROOT-CAUSE: image generation is a long async turn the user can
+    // navigate away from, so the failure must land on the conversation it was
+    // started in, not on whatever chat is displayed when it fails.
+    (msgId: string, raw: string, conversationId: string) => {
       const isPaywall =
         raw.includes('403') ||
         raw.includes('plan_upgrade_required') ||
         raw.includes('subscription_required');
-      updateMessage(msgId, {
-        isStreaming: false,
-        content: isPaywall ? '' : `Image generation failed: ${raw}`,
-        metadata: isPaywall
-          ? {
-              paywall: {
-                feature: 'image_generation',
-                requiredTier: 'pro',
-                reason:
-                  'Image generation requires a Pro or higher plan. Upgrade to generate images.',
-              },
-            }
-          : undefined,
-      });
+      updateMessage(
+        msgId,
+        {
+          isStreaming: false,
+          content: isPaywall ? '' : `Image generation failed: ${raw}`,
+          metadata: isPaywall
+            ? {
+                paywall: {
+                  feature: 'image_generation',
+                  requiredTier: 'pro',
+                  reason:
+                    'Image generation requires a Pro or higher plan. Upgrade to generate images.',
+                },
+              }
+            : undefined,
+        },
+        conversationId,
+      );
     },
     [updateMessage],
   );
@@ -979,7 +1045,16 @@ export default function WebChatPage() {
       // Same first-message send guard as sendContent: a lazy-created image
       // conversation has the identical createConversation → bareChatSessionId
       // gap that the stale-active reconciler would otherwise misread and clear.
-      isSendingRef.current = true;
+      //
+      // AUDIT-FIX STR-6/STR-26: claim the window with a balanced, idempotent
+      // release (a bare `isSendingRef.current = false` here used to clear a
+      // window still owned by a concurrent sendContent) and take the
+      // reentrancy key for THIS conversation only, so an image generation in
+      // one chat no longer blocks sends in every other chat.
+      const imageGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
+      if (sendingConversationsRef.current.has(imageGuardKey)) return;
+      sendingConversationsRef.current.add(imageGuardKey);
+      const releaseSendWindow = claimSendWindow();
       void (async () => {
         try {
           const { size, provider } = resolveImageParams(options.aspectRatio, options.modelId);
@@ -1020,38 +1095,51 @@ export default function WebChatPage() {
           };
 
           // User message (prompt)
+          // AUDIT-FIX ROOT-CAUSE: every write below names the conversation this
+          // generation belongs to, so switching chats mid-generation can no
+          // longer inject the prompt, the placeholder, or the finished image
+          // into a different transcript.
+          const updateOwnMessage = (id: string, updates: Partial<Message>) =>
+            updateMessage(id, updates, convId);
+
           const userMessageId = crypto.randomUUID();
-          addMessage({
-            id: userMessageId,
-            role: 'user',
-            content: prompt,
-            createdAt: new Date().toISOString(),
-          });
+          addMessage(
+            {
+              id: userMessageId,
+              role: 'user',
+              content: prompt,
+              createdAt: new Date().toISOString(),
+            },
+            convId,
+          );
           if (!isTemporaryConversation) {
             void persistImageGenerationUserMessage({
               conversationId: convId,
               messageId: userMessageId,
               content: prompt,
               getAuthToken,
-              updateMessage,
+              updateMessage: updateOwnMessage,
             });
           }
 
           // Placeholder assistant message while generating (isStreaming = true → state A)
           const assistantMsgId = crypto.randomUUID();
-          addMessage({
-            id: assistantMsgId,
-            role: 'assistant',
-            content: '',
-            isStreaming: true,
-            createdAt: new Date().toISOString(),
-            metadata: {
-              toolType: 'image-generation',
-              imageGenPrompt: prompt,
-              imageGenAspect: options.aspectRatio,
-              imageGenModel: options.modelId,
+          addMessage(
+            {
+              id: assistantMsgId,
+              role: 'assistant',
+              content: '',
+              isStreaming: true,
+              createdAt: new Date().toISOString(),
+              metadata: {
+                toolType: 'image-generation',
+                imageGenPrompt: prompt,
+                imageGenAspect: options.aspectRatio,
+                imageGenModel: options.modelId,
+              },
             },
-          });
+            convId,
+          );
 
           try {
             const imageUrl = await generateImage(prompt, {
@@ -1066,7 +1154,7 @@ export default function WebChatPage() {
               imageGenAspect: options.aspectRatio,
               imageGenModel: options.modelId,
             };
-            updateMessage(assistantMsgId, {
+            updateOwnMessage(assistantMsgId, {
               content: '',
               isStreaming: false,
               metadata: finalMetadata,
@@ -1078,14 +1166,19 @@ export default function WebChatPage() {
                 model: options.modelId,
                 metadata: finalMetadata,
                 getAuthToken,
-                updateMessage,
+                updateMessage: updateOwnMessage,
               });
             }
           } catch (err) {
-            applyImageError(assistantMsgId, err instanceof Error ? err.message : String(err));
+            applyImageError(
+              assistantMsgId,
+              err instanceof Error ? err.message : String(err),
+              convId,
+            );
           }
         } finally {
-          isSendingRef.current = false;
+          sendingConversationsRef.current.delete(imageGuardKey);
+          releaseSendWindow();
         }
       })();
     },
@@ -1102,6 +1195,7 @@ export default function WebChatPage() {
       applyImageError,
       router,
       getToken,
+      claimSendWindow,
     ],
   );
 
@@ -1117,18 +1211,26 @@ export default function WebChatPage() {
       opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
     ): Promise<string> => {
       const { size, provider } = resolveImageParams(opts.aspectRatio, opts.modelId);
+      // AUDIT-FIX ROOT-CAUSE: capture the owning conversation up front; the
+      // regeneration awaits a slow provider call the user can navigate away
+      // from, and every write below must still land on THIS transcript.
+      const ownerConversationId = displayedConversationId;
 
       // Mark as regenerating (state A again)
-      updateMessage(messageId, {
-        isStreaming: true,
-        metadata: {
-          toolType: 'image-generation',
-          imageUrl: undefined,
-          imageGenPrompt: opts.prompt,
-          imageGenAspect: opts.aspectRatio,
-          imageGenModel: opts.modelId,
+      updateMessage(
+        messageId,
+        {
+          isStreaming: true,
+          metadata: {
+            toolType: 'image-generation',
+            imageUrl: undefined,
+            imageGenPrompt: opts.prompt,
+            imageGenAspect: opts.aspectRatio,
+            imageGenModel: opts.modelId,
+          },
         },
-      });
+        ownerConversationId ?? undefined,
+      );
 
       const imageUrl = await generateImage(opts.prompt, { size, provider, model: opts.modelId });
       const finalMetadata: MessageMetadata = {
@@ -1138,16 +1240,20 @@ export default function WebChatPage() {
         imageGenAspect: opts.aspectRatio,
         imageGenModel: opts.modelId,
       };
-      updateMessage(messageId, {
-        isStreaming: false,
-        metadata: finalMetadata,
-      });
+      updateMessage(
+        messageId,
+        {
+          isStreaming: false,
+          metadata: finalMetadata,
+        },
+        ownerConversationId ?? undefined,
+      );
 
       // WEB-IMAGE-CHAT-PERSISTENCE-01: this updates an EXISTING assistant
       // message in place, so persist via the same message id — the route is
       // idempotent on client-supplied id (ON CONFLICT), so this upserts the
       // row saved when the image was first generated instead of duplicating it.
-      const convId = displayedConversationId;
+      const convId = ownerConversationId;
       if (convId) {
         const isTemporaryConversation = isTemporaryConversationById(
           useChatStore.getState().conversations,
@@ -1165,7 +1271,7 @@ export default function WebChatPage() {
             model: opts.modelId,
             metadata: finalMetadata,
             getAuthToken,
-            updateMessage,
+            updateMessage: (id, updates) => updateMessage(id, updates, convId),
           });
         }
       }
@@ -1174,6 +1280,16 @@ export default function WebChatPage() {
     },
     [resolveImageParams, updateMessage, generateImage, displayedConversationId, getToken],
   );
+
+  /**
+   * AUDIT-FIX STR-3: Stop targets the conversation this composer is rendered
+   * for. `stopGeneration()` used to abort whatever request started most
+   * recently -- possibly another conversation's -- while its store teardown
+   * resolved against `activeConversationId`, so the two halves could disagree.
+   */
+  const handleStopGeneration = useCallback(() => {
+    stopGeneration(displayedConversationId ?? undefined);
+  }, [stopGeneration, displayedConversationId]);
 
   const handleSend = useCallback(
     (content: string, attachments?: File[], skillId?: string, meta?: SendMeta): false | void => {
@@ -1298,7 +1414,12 @@ export default function WebChatPage() {
     // Same first-message send guard: the BYOK fork lazily creates a conversation
     // and only commits bareChatSessionId after an async saveSystemMessage, so the
     // stale-active reconciler must not clear the fork during that window.
-    isSendingRef.current = true;
+    //
+    // AUDIT-FIX STR-26: balanced, idempotent release. The previous bare
+    // `isSendingRef.current = false` in the finally below released a window it
+    // did not necessarily own -- the dispatched sendContent had already claimed
+    // its own, and clearing the shared boolean re-opened the reconciler race.
+    const releaseSendWindow = claimSendWindow();
 
     try {
       const fork = await createConversation(
@@ -1324,7 +1445,10 @@ export default function WebChatPage() {
         }),
       });
 
-      addMessage(systemMessage);
+      // AUDIT-FIX ROOT-CAUSE: the handoff system message belongs to the FORK.
+      // `saveSystemMessage` above is awaited, so "whatever is active now" is not
+      // a safe target.
+      addMessage(systemMessage, fork.id);
       setBareChatSessionId(fork.id);
       router.push('/chat');
       setComposerClearSignal((value) => value + 1);
@@ -1342,9 +1466,10 @@ export default function WebChatPage() {
       );
     } finally {
       setIsConfirmingHandoff(false);
-      // The dispatched sendContent (conversationId already set) manages its own
-      // guard from here; the fork's create→navigate window is now closed.
-      isSendingRef.current = false;
+      // The dispatched sendContent (conversationId already set) claimed its own
+      // window synchronously above; the fork's create→navigate window is now
+      // closed, so releasing ONLY this owner's claim is safe.
+      releaseSendWindow();
     }
   }, [
     addMessage,
@@ -1355,6 +1480,7 @@ export default function WebChatPage() {
     router,
     activeModelId,
     sendContent,
+    claimSendWindow,
   ]);
 
   const handleNewChat = useCallback(() => {
@@ -1638,7 +1764,10 @@ export default function WebChatPage() {
             messageId,
             authToken,
           });
-          deleteMessage(messageId);
+          // AUDIT-FIX ROOT-CAUSE: delete from the conversation the row belongs
+          // to; the loop awaits a network call per message and the user can
+          // switch chats in between.
+          deleteMessage(messageId, conversationId);
         }
         return true;
       } catch (error) {
@@ -1682,21 +1811,38 @@ export default function WebChatPage() {
   // the server rows were never touched, so nothing is lost. Worst case degrades from
   // data-loss to at-most-a-duplicate-row-on-reload (reconciled by the server delete).
   const sendReplacingMessages = useCallback(
-    async (rollbackIds: string[], send: () => Promise<boolean>): Promise<void> => {
+    async (
+      rollbackIds: string[],
+      send: (onTurnCommitted: () => void) => Promise<boolean>,
+    ): Promise<void> => {
       const conversationId = displayedConversationId;
       if (!conversationId || rollbackIds.length === 0) {
-        await send();
+        await send(() => {});
         return;
       }
+      // AUDIT-FIX STR-22: fire the durable delete at COMMIT, not at stream end.
+      // Deferring it until `send()` resolved meant the whole regeneration window
+      // had both the old rows and the new user row on the server, so a reload
+      // mid-regeneration showed a duplicated user message and the stale answer.
+      // Idempotent, because runReplacingSend also calls deleteServer on commit.
+      let serverRowsDeleted = false;
+      const deleteReplacedServerRows = () => {
+        if (serverRowsDeleted) return;
+        serverRowsDeleted = true;
+        void deleteServerMessages(conversationId, rollbackIds);
+      };
       await runReplacingSend(
         {
-          snapshot: () => useChatStore.getState().messages,
-          removeLocal: (id) => deleteMessage(id),
-          restore: (messages) => useChatStore.getState().setMessages(messages),
-          deleteServer: (ids) => void deleteServerMessages(conversationId, ids),
+          // AUDIT-FIX STR-22: snapshot/restore THIS conversation's transcript.
+          // Snapshotting the global array meant a restore-on-failure could write
+          // one conversation's messages over another's.
+          snapshot: () => selectConversationMessages(conversationId)(useChatStore.getState()),
+          removeLocal: (id) => deleteMessage(id, conversationId),
+          restore: (messages) => useChatStore.getState().setMessages(messages, conversationId),
+          deleteServer: () => deleteReplacedServerRows(),
         },
         rollbackIds,
-        send,
+        () => send(deleteReplacedServerRows),
       );
     },
     [displayedConversationId, deleteMessage, deleteServerMessages],
@@ -1714,9 +1860,11 @@ export default function WebChatPage() {
   // remove the card from the local store without hitting the API.
   const handlePaywallDismiss = useCallback(
     (id: string) => {
-      deleteMessage(id);
+      // AUDIT-FIX ROOT-CAUSE: a paywall card belongs to the transcript it is
+      // rendered in, not to whatever the store considers active.
+      deleteMessage(id, displayedConversationId ?? undefined);
     },
-    [deleteMessage],
+    [deleteMessage, displayedConversationId],
   );
 
   const handleTypingChange = useCallback((typing: boolean) => {
@@ -1820,12 +1968,17 @@ export default function WebChatPage() {
       // Replace the regenerated turn data-loss-safely: the old rows are deleted only
       // AFTER the resend commits, and the transcript is restored if it bails pre-commit
       // (shared with the edit path — see sendReplacingMessages).
-      await sendReplacingMessages(plan.rollbackIds, () =>
+      // AUDIT-FIX STR-22: forward the early-commit hook so the regenerated
+      // turn's old server rows are dropped the moment the replacement user turn
+      // is durable, not at stream end (which left a reload mid-regeneration
+      // showing a duplicated user message beside the stale answer).
+      await sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
         sendMessage(userMsg.content, {
           model: activeModelId,
           conversationId: displayedConversationId,
           attachments: userMsg.attachments,
           ...replayOptions,
+          onTurnCommitted,
         }),
       );
     },
@@ -1886,13 +2039,21 @@ export default function WebChatPage() {
           patch: { reaction },
           authToken,
         });
-        const current = useChatStore.getState().messages.find((message) => message.id === id);
-        updateMessage(id, {
-          metadata: {
-            ...current?.metadata,
-            reaction,
+        // AUDIT-FIX ROOT-CAUSE: read and write the conversation this reaction
+        // belongs to (the PATCH above is awaited; the user may have moved on).
+        const current = selectConversationMessages(conversationId)(useChatStore.getState()).find(
+          (message) => message.id === id,
+        );
+        updateMessage(
+          id,
+          {
+            metadata: {
+              ...current?.metadata,
+              reaction,
+            },
           },
-        });
+          conversationId,
+        );
       } catch (error) {
         setChatError(
           error instanceof Error ? error.message : 'Failed to update reaction',
@@ -1914,7 +2075,10 @@ export default function WebChatPage() {
         setChatError('Not authenticated', conversationId);
         return;
       }
-      const current = useChatStore.getState().messages.find((message) => message.id === id);
+      // AUDIT-FIX ROOT-CAUSE: scoped to the owning conversation (see handleReactMessage).
+      const current = selectConversationMessages(conversationId)(useChatStore.getState()).find(
+        (message) => message.id === id,
+      );
       const nextPinned = !(current?.metadata as { isPinned?: boolean } | undefined)?.isPinned;
       try {
         await patchConversationMessageMetadata({
@@ -1923,12 +2087,16 @@ export default function WebChatPage() {
           patch: { isPinned: nextPinned },
           authToken,
         });
-        updateMessage(id, {
-          metadata: {
-            ...current?.metadata,
-            isPinned: nextPinned,
+        updateMessage(
+          id,
+          {
+            metadata: {
+              ...current?.metadata,
+              isPinned: nextPinned,
+            },
           },
-        });
+          conversationId,
+        );
       } catch (error) {
         setChatError(
           error instanceof Error ? error.message : 'Failed to pin message',
@@ -1946,7 +2114,12 @@ export default function WebChatPage() {
         : [],
     [displayedMessages, displayedConversationId],
   );
-  const isEmptyChat = !displayedConversationId || (chatMessages.length === 0 && !isLoading);
+  // AUDIT-FIX STR-7/BUG-12: `isLoading` is now strictly "a turn is running", so
+  // the conversation-open fetch has to be consulted explicitly here — otherwise
+  // navigating into a conversation flashes the new-chat greeting until its
+  // messages land.
+  const isEmptyChat =
+    !displayedConversationId || (chatMessages.length === 0 && !isLoading && !isConversationLoading);
 
   // Count distinct research sources across all messages for the toggle badge.
   // Metadata may contain a flat result list or a legacy SearchResponse object.
@@ -2385,7 +2558,8 @@ export default function WebChatPage() {
                 <div className="w-full max-w-[940px]">
                   <ChatComposerNew
                     onSend={handleSend}
-                    onStop={stopGeneration}
+                    conversationId={displayedConversationId}
+                    onStop={handleStopGeneration}
                     isLoading={isLoading}
                     isGenerating={isStreaming}
                     placeholder={t('chat:placeholderEmpty')}
@@ -2414,6 +2588,7 @@ export default function WebChatPage() {
                 <ToolApprovalProvider value={resolveToolApproval}>
                   <ChatMessageList
                     messages={chatMessages}
+                    conversationId={displayedConversationId}
                     isLoading={isLoading && !isStreaming}
                     isUserTyping={isUserTyping}
                     onRegenerate={handleRegenerateMessage}
@@ -2442,7 +2617,8 @@ export default function WebChatPage() {
                 >
                   <ChatComposerNew
                     onSend={handleSend}
-                    onStop={stopGeneration}
+                    conversationId={displayedConversationId}
+                    onStop={handleStopGeneration}
                     isLoading={isLoading}
                     isGenerating={isStreaming}
                     placeholder={t('chat:placeholder')}
