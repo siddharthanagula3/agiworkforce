@@ -20,6 +20,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { verifyTOTPCode, decryptTOTPSecret } from '@/features/settings/services/user-preferences';
+import { readJsonBody } from '@/lib/read-json-body';
 
 interface TwoFactorRow {
   totp_secret_enc: string;
@@ -31,12 +32,20 @@ async function handleVerify2FA(request: NextRequest) {
   if (csrfError) return csrfError as NextResponse;
 
   // Strict rate limiting: brute force on 6-digit codes is trivial without it
-  const rateLimitResponse = await withRateLimit(request, '2fa-verify');
-  if (rateLimitResponse) return rateLimitResponse;
-
+  // AUDIT-FIX GOV-16: key the TOTP attempt limit on the authenticated user, not
+  // the source IP. rateLimitConfigs['2fa-verify'] documents itself as "5 attempts
+  // per 15 minutes per user", but withRateLimit falls back to an IP bucket when
+  // no identifier is passed — so the control failed in both directions: an
+  // attacker rotating source IPs got unlimited 6-digit guesses, while colleagues
+  // behind one corporate NAT locked each other out. The limit now runs after
+  // authentication; there is no pre-auth brute-force surface here because
+  // getClerkAuthUser rejects unauthenticated callers before any code is checked.
   const { userId } = await getClerkAuthUser(request);
 
-  const body = (await request.json()) as { code?: string };
+  const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const body = await readJsonBody<{ code?: string }>(request);
   const code = typeof body.code === 'string' ? body.code.trim() : '';
   if (!code) {
     throw createError.badRequest('code is required');

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { readJsonBody } from '@/lib/read-json-body';
 
 const LogMessageSchema = z.object({
   sessionId: z.string(),
@@ -25,7 +26,7 @@ async function handlePost(request: NextRequest) {
 
   await getClerkAuthUser(request);
 
-  const body = await request.json();
+  const body = await readJsonBody(request);
   const parsed = LogMessageSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
