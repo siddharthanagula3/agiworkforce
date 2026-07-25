@@ -25,6 +25,11 @@ import { startProviderStream } from './lib/adapter-factory';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
 import { createFailoverPlan } from './lib/managed-failover';
+import { withSseHeartbeat } from './lib/sse-heartbeat';
+import {
+  loadConnectorToolPermissions,
+  EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+} from './lib/connector-tool-permissions';
 import type { StreamChunk } from '@agiworkforce/types';
 import { getModelMetadataById } from '@agiworkforce/types';
 import {
@@ -287,6 +292,14 @@ async function handleChatCompletions(request: NextRequest) {
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
       const researchUsage = createObservedProviderUsage();
+      // AUDIT-FIX SYS-21: the research loop can now rotate to a managed-failover
+      // candidate. Track the view that is actually serving so settlement and
+      // attribution price by it, not by the primary that failed.
+      let researchServing: ProcessedRequest = processed;
+      const researchFailover = createFailoverPlan(processed, {
+        signal: request.signal,
+        isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
+      });
       const researchGen = runResearchLoop(
         processed,
         { userId, token },
@@ -294,12 +307,24 @@ async function handleChatCompletions(request: NextRequest) {
           usage: researchUsage,
           isCancellationRequested: () =>
             isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
+          // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
+          // request instead of billing a full research run nobody sees.
+          signal: request.signal,
+          failover: {
+            next: (error) => {
+              const attempt = researchFailover.next(error);
+              if (attempt) researchServing = attempt.processed;
+              return attempt;
+            },
+          },
         },
       );
       const researchStream = buildManagedAgentStream({
         generator: researchGen,
         processed,
         usage: researchUsage,
+        userId,
+        getServingRequest: () => researchServing,
         completionReason: 'research_loop_completed',
         cancellationReason: 'client_cancelled_research_loop',
         runJournal: {
@@ -329,7 +354,12 @@ async function handleChatCompletions(request: NextRequest) {
         researchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
       }
 
-      return new NextResponse(researchStream, { headers: researchHeaders });
+      // AUDIT-FIX BUG-8: the idle heartbeat was applied inside
+      // stream-transform.ts but NOT here -- the research loop goes silent for
+      // whole search rounds, so it is the stream that most needs a keepalive
+      // and was the one without it. Intermediaries and clients idle-timed out
+      // mid-run.
+      return new NextResponse(withSseHeartbeat(researchStream), { headers: researchHeaders });
     }
 
     // Agentic path: load MCP tools (fast -- catalog is cached for 60s).
@@ -351,11 +381,23 @@ async function handleChatCompletions(request: NextRequest) {
     // E2B paths already 4xx for tools:false; this closes the same gap for connectors/MCP.
     const modelSupportsTools =
       getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
+    // AUDIT-FIX CON-1/CON-2: load the user's saved allow/ask/deny verdicts BEFORE
+    // the catalog is built. `deny` tools are dropped from the catalog entirely
+    // (so a Blocked tool is never advertised to the model and stops re-surfacing
+    // an approval card every turn), and the full verdict map is handed to the
+    // tool loop, which enforces it before any execution.
+    const connectorPermissions = modelSupportsTools
+      ? await loadConnectorToolPermissions(
+          processed.managedUsage?.db ?? (await getUserScopedDb(request)).db,
+          userId,
+        )
+      : EMPTY_CONNECTOR_TOOL_PERMISSIONS;
     const [operatorTools, connectorTools] = modelSupportsTools
       ? await Promise.all([
           loadMcpToolDefs(),
           loadUserConnectorToolDefs(userId, {
             customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+            isToolDenied: connectorPermissions.isConnectorToolDenied,
           }),
         ])
       : [[], []];
@@ -388,12 +430,31 @@ async function handleChatCompletions(request: NextRequest) {
         connectorTools.length > 0 ? makeUserConnectorExecutor(userId) : undefined;
       const toolLoopUsage = createObservedProviderUsage();
       let approvalCheckpointSaved = false;
+      // AUDIT-FIX SYS-21: the tool loop can now rotate to a managed-failover
+      // candidate mid-run; keep the serving view for settlement/attribution.
+      let toolLoopServing: ProcessedRequest = processed;
+      const toolLoopFailover = createFailoverPlan(processed, {
+        signal: request.signal,
+        isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
+      });
       const toolLoopGen = runToolLoop(processed, {
         mcpTools,
         approvalMode: loopInputs.approvalMode,
         userId,
         connectorExecutor,
         usage: toolLoopUsage,
+        // AUDIT-FIX CON-1: server-side enforcement of the user's saved verdicts.
+        connectorPermissions,
+        // AUDIT-FIX BUG-1: a client cancel aborts the in-flight provider call
+        // instead of billing a full agentic turn nobody sees.
+        signal: request.signal,
+        failover: {
+          next: (error) => {
+            const attempt = toolLoopFailover.next(error);
+            if (attempt) toolLoopServing = attempt.processed;
+            return attempt;
+          },
+        },
         isCancellationRequested: () =>
           isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
         onApprovalCheckpoint: async (checkpoint) => {
@@ -417,6 +478,8 @@ async function handleChatCompletions(request: NextRequest) {
         generator: toolLoopGen,
         processed,
         usage: toolLoopUsage,
+        userId,
+        getServingRequest: () => toolLoopServing,
         completionReason: 'tool_loop_completed',
         cancellationReason: 'client_cancelled_tool_loop',
         runJournal: { db: runDb, userId, runId: run.id },
@@ -443,7 +506,9 @@ async function handleChatCompletions(request: NextRequest) {
         streamHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
       }
 
-      return new NextResponse(agentStream, { headers: streamHeaders });
+      // AUDIT-FIX BUG-8: same gap as the research branch -- the agentic stream
+      // can sit silent through a 120 s tool call with no keepalive at all.
+      return new NextResponse(withSseHeartbeat(agentStream), { headers: streamHeaders });
     }
 
     // Standard single-turn streaming path (no MCP tools configured).

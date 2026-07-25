@@ -43,6 +43,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
+import type { ToolLoopFailoverPlan } from './tool-loop';
 import {
   toolStatusEvent as loopToolStatusEvent,
   toolResultEvent,
@@ -110,6 +111,17 @@ export interface ResearchLoopOptions {
   usage?: ObservedProviderUsage;
   /** Durable cancellation check evaluated before provider and fetch side effects. */
   isCancellationRequested?: () => Promise<boolean>;
+  /**
+   * AUDIT-FIX BUG-1: the client's AbortSignal. The research loop never received
+   * one, so a client cancel billed a full multi-round research run nobody saw.
+   */
+  signal?: AbortSignal;
+  /**
+   * AUDIT-FIX SYS-21: the caller's managed-failover rotation state (built by
+   * `createFailoverPlan`). Passed in rather than constructed here for the same
+   * import-graph reason as the tool loop. Absent means no rotation.
+   */
+  failover?: ToolLoopFailoverPlan;
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -524,6 +536,11 @@ export async function* runResearchLoop(
     envInt('AGI_RESEARCH_BUDGET_MS', DEFAULT_RESEARCH_BUDGET_MS, 30_000, 10 * 60_000);
   const maxGatherRounds = maxIterations - 1; // the last iteration is always synthesis
 
+  // Managed failover state for this run (AUDIT-FIX SYS-21). The caller's plan
+  // returns null for anything that is not an availability-class failure, so
+  // credential/safety/context errors still fail fast exactly as before.
+  let servingProcessed: ProcessedRequest = processed;
+
   const sources = new SourceAggregator();
   let totalSearches = 0;
   let totalFetches = 0;
@@ -531,8 +548,17 @@ export async function* runResearchLoop(
   const observedUsage = options.usage ?? createObservedProviderUsage();
   let cancellationEmitted = false;
 
+  /**
+   * AUDIT-FIX BUG-1: a plain client abort now stops the run at the next
+   * boundary, in addition to the durable cancellation poll.
+   */
+  async function isCancelled(): Promise<boolean> {
+    if (options.signal?.aborted) return true;
+    return (await options.isCancellationRequested?.()) === true;
+  }
+
   async function* flushCancellationIfRequested(): AsyncGenerator<Uint8Array, boolean> {
-    if (cancellationEmitted || !(await options.isCancellationRequested?.())) return false;
+    if (cancellationEmitted || !(await isCancelled())) return false;
     cancellationEmitted = true;
     yield encoder.encode(
       eventStream.emit({
@@ -601,13 +627,38 @@ export async function* runResearchLoop(
       text: '',
       usage: observedUsage,
     };
-    const stream = await buildToolLoopStream(
-      processed.provider.toLowerCase(),
-      processed,
-      stepRequest,
-      responseModel,
-      stepSink,
-    );
+    // AUDIT-FIX SYS-21 + BUG-1: rotate to the resolver's next managed-failover
+    // candidate when the provider fails on an availability-class error, and
+    // thread the client's AbortSignal into every attempt. The rotation point is
+    // `startProviderStream`'s first-chunk peek inside `buildToolLoopStream`,
+    // which throws before any byte of this turn reaches the client, so a failed
+    // attempt can never leak partial text. Research turns carry the url_fetch
+    // tool definition, so `createFailoverPlan` keeps rotation within the same
+    // provider by construction.
+    let stream: ReadableStream;
+    for (;;) {
+      const attempt = servingProcessed;
+      try {
+        stream = await buildToolLoopStream(
+          attempt.provider.toLowerCase(),
+          attempt,
+          {
+            ...stepRequest,
+            model: attempt.llmRequest.model,
+            effort: attempt.llmRequest.effort,
+            thinking: attempt.llmRequest.thinking,
+          },
+          responseModel,
+          stepSink,
+          options.signal,
+        );
+        break;
+      } catch (error) {
+        const nextAttempt = options.failover?.next(error);
+        if (!nextAttempt) throw error;
+        servingProcessed = nextAttempt.processed;
+      }
+    }
     const gen = collectTurn(stream, sources, forwardContent, (delta) =>
       eventStream.emit({ type: 'text-delta', delta }),
     );

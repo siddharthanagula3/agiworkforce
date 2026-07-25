@@ -97,6 +97,16 @@ import {
   toAgentEventJson,
 } from './agent-event-stream';
 import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
+import {
+  isParallelSafeTool,
+  isSensitiveSourceTool,
+  toolAcceptsUntrustedContent,
+  toolCreatesEgressPath,
+} from './tool-metadata';
+import {
+  EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  type ConnectorToolPermissions,
+} from './connector-tool-permissions';
 import { executeManagedSkillTool } from '@/lib/services/skill-catalog-service';
 import { functionToolName } from './tool-loop-routing';
 import {
@@ -123,6 +133,16 @@ const DEFAULT_AGI_WORK_MAX_STEPS = 100;
  * as restart-safe background execution.
  */
 const DEFAULT_AGI_WORK_MAX_DURATION_MS = 4 * 60_000;
+/**
+ * AUDIT-FIX SYS-26: ordinary chat used to get NO wall-clock budget at all
+ * (`maxDurationMs: undefined`). Ten steps at the 120 s per-tool cap plus ten
+ * provider calls comfortably exceeds `export const maxDuration = 300`, so the
+ * platform SIGKILLed the function -- skipping the generator `finally` that
+ * disposes/pauses the E2B sandbox (which keeps billing) and settles managed
+ * usage. Chat now gets a budget that fits INSIDE the platform limit, with the
+ * same one-minute teardown headroom AGI Work reserves.
+ */
+const DEFAULT_CHAT_MAX_DURATION_MS = 4 * 60_000;
 
 /**
  * Bound accumulation from the (untrusted) provider stream within one step:
@@ -160,32 +180,29 @@ const KEEP_RECENT_TOOL_RESULTS = 6;
 const TRUNCATED_TOOL_RESULT_MARKER =
   '[earlier tool result omitted to keep the conversation within the model context window]';
 
-/** Tools whose names suggest read-only operations: safe to parallelize. */
-const READ_ONLY_TOOL_PREFIXES = [
-  'read_file',
-  'list_directory',
-  'search_files',
-  'get_file_info',
-  'list_allowed_directories',
-  'fetch',
-  'get',
-  'search',
-  'query',
-  'list',
-  'describe',
-];
-
-/** Exported for unit tests (read-only classification is parallel-safety-critical). */
+/**
+ * AUDIT-FIX SYS-25: read-only classification now comes from the declared tool
+ * metadata model (tool-metadata.ts), not from a name-prefix list.
+ *
+ * The old list matched names NO REAL TOOL ON THIS ROUTE HAS. Platform tools are
+ * `web_search` / `url_fetch` / `execute_code` / `write_file` / `create_folder` /
+ * `create_office_file` / `skill`; every MCP and connector tool is qualified as
+ * `mcp__<server>__<tool>`. Neither shape starts with `read_file`, `get`,
+ * `list`, `search`, … so `isReadOnlyTool` returned false for EVERYTHING:
+ * `MAX_PARALLEL_TOOL_CALLS` and `mapWithConcurrency` were dead code and every
+ * tool call serialised behind the 120 s per-call cap.
+ *
+ * Driving it from metadata makes the parallel branch live for the tools that
+ * are genuinely observation-only (search, page fetch, skill lookup, PR-diff
+ * read) while keeping the "mutating tools serialize" guarantee intact: an
+ * UNDECLARED tool is classified as an irreversible write and therefore runs
+ * serially — strictly more conservative than the old prefix guess, which
+ * happily parallelised any remote MCP tool named `get_and_archive`.
+ *
+ * Exported for unit tests (parallel-safety-critical).
+ */
 export function isReadOnlyTool(toolName: string): boolean {
-  if (toolName === SKILL_TOOL_NAME) return true;
-  const lower = toolName.toLowerCase();
-  // Prefix match ONLY. A substring match misclassified mutating tools as
-  // parallel-safe — `budget_transfer` contains "get", `create_playlist`
-  // contains "list", `delete_query` contains "query" — which broke the
-  // "mutating tools serialize" guarantee and raced shared connector/server
-  // state. Prefix match keeps genuine read verbs (get_/list_/search_/query_)
-  // parallel while defaulting unknown/mutating names to serial execution.
-  return READ_ONLY_TOOL_PREFIXES.some((p) => lower.startsWith(p));
+  return isParallelSafeTool(toolName);
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -346,6 +363,37 @@ export interface ToolLoopOptions {
   usage?: ObservedProviderUsage;
   /** Durable cancellation check evaluated before provider and tool side effects. */
   isCancellationRequested?: () => Promise<boolean>;
+  /**
+   * AUDIT-FIX BUG-1: the client's AbortSignal. The tool loop never received
+   * one, so `buildToolLoopStream` handed the adapter a fresh, never-triggered
+   * controller and a client cancel billed a full generation nobody saw. Threaded
+   * into every provider call and checked before each step.
+   */
+  signal?: AbortSignal;
+  /**
+   * AUDIT-FIX CON-1: the user's saved connector tool verdicts. `deny` never
+   * executes, `allow` auto-approves, `ask` uses the approval path. Absent means
+   * "no saved verdicts" — every tool falls back to `approvalMode`.
+   */
+  connectorPermissions?: ConnectorToolPermissions;
+  /**
+   * AUDIT-FIX SYS-21: the caller's managed-failover rotation state (built by
+   * `createFailoverPlan`, lib/managed-failover.ts). Passed IN rather than
+   * constructed here so this module keeps its narrow import graph: the failover
+   * planner reaches into model-tier admission and provider resolution, which the
+   * loop itself has no business depending on. Absent means no rotation, which is
+   * the previous behaviour exactly.
+   */
+  failover?: ToolLoopFailoverPlan;
+}
+
+/**
+ * Minimal view of `createFailoverPlan`'s return value (lib/managed-failover.ts).
+ * `next(error)` returns the next admissible attempt view, or null when rotation
+ * is not permitted (ineligible failure class, aborted, or plan exhausted).
+ */
+export interface ToolLoopFailoverPlan {
+  next: (error: unknown) => { provider: string; processed: ProcessedRequest } | null;
 }
 
 export interface ToolLoopPolicy {
@@ -366,7 +414,8 @@ export function resolveToolLoopPolicy(
   return {
     maxSteps: options.maxSteps ?? (isAgiWork ? DEFAULT_AGI_WORK_MAX_STEPS : DEFAULT_CHAT_MAX_STEPS),
     maxDurationMs:
-      options.maxDurationMs ?? (isAgiWork ? DEFAULT_AGI_WORK_MAX_DURATION_MS : undefined),
+      options.maxDurationMs ??
+      (isAgiWork ? DEFAULT_AGI_WORK_MAX_DURATION_MS : DEFAULT_CHAT_MAX_DURATION_MS),
   };
 }
 
@@ -1357,6 +1406,182 @@ export async function* runToolLoop(
   // Mutable message thread for re-invocations.
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
 
+  // ── Server-side permission + lethal-trifecta state ────────────────────────
+  //
+  // AUDIT-FIX CON-1: the user's saved allow/ask/deny verdicts were persisted in
+  // `connector_tool_permissions` and read by NOTHING on the server — enforcement
+  // lived entirely in the browser, so a hand-rolled POST executed a tool the
+  // user had Blocked. They are now consulted before every execution, on this
+  // loop AND on the /approve resume path below.
+  const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+
+  // AUDIT-FIX CON-19 — lethal-trifecta mitigation.
+  //
+  // The classic prompt-injection escalation needs three things at once:
+  //   U  untrusted content has entered the model context,
+  //   S  a sensitive (private, authenticated) source is reachable,
+  //   E  the call about to run can move bytes out of the trust boundary.
+  // With all three, an injected instruction can read private data and post it
+  // somewhere the attacker controls. When the triple holds we ESCALATE to a
+  // human approval instead of auto-approving.
+  //
+  // THIS IS A MITIGATION, NOT A PROOF. Honest limits:
+  //   - U is raised by tool-fetched third-party content (web pages, search
+  //     results, PR diffs) — in THIS turn, or in a prior turn still present in
+  //     the replayed thread. Content the USER pasted or attached is not counted;
+  //     that is a real injection vector this heuristic does not see.
+  //   - S is derived from the OFFERED catalog, not from what was actually read,
+  //     so it over-triggers (a connector being available counts) rather than
+  //     under-triggers. Deliberate: over-triggering costs a click.
+  //   - E is per-tool metadata, so a tool that exfiltrates through an
+  //     undeclared channel (an MCP server that phones home on a "read") is
+  //     invisible here — which is exactly why an UNDECLARED tool is classified
+  //     as having egress by default.
+  //   - The check gates AUTO-approval only. It cannot stop a user who approves.
+  const sensitiveSourceAvailable =
+    mcpTools.some((def) => isSensitiveSourceTool(def)) ||
+    [...availableTools].some((name) => isSensitiveSourceTool({ qualifiedName: name }));
+  let untrustedContentInContext = messages.some(
+    (message) =>
+      Array.isArray(message.tool_calls) &&
+      parseAssistantToolCalls(message.tool_calls).some((call) =>
+        toolAcceptsUntrustedContent(call.qualifiedName),
+      ),
+  );
+
+  /** Verdict for one pending tool call, before any side effect. */
+  type ToolCallGate = {
+    verdict: 'allow' | 'ask' | 'deny';
+    /** Stable machine reason, used for server logs and escalation telemetry. */
+    reason:
+      | 'blocked_by_user_permission'
+      | 'always_allow'
+      | 'user_requires_approval'
+      | 'manual_approval_mode'
+      | 'auto_approval_mode'
+      | 'lethal_trifecta';
+  };
+
+  function resolveToolCallGate(toolCall: PendingToolCall): ToolCallGate {
+    const saved = connectorPermissions.levelFor(toolCall.qualifiedName);
+    // A Block is absolute: it outranks approval mode, an approving client, and
+    // the model's own insistence.
+    if (saved === 'deny') return { verdict: 'deny', reason: 'blocked_by_user_permission' };
+
+    const trifecta =
+      untrustedContentInContext &&
+      sensitiveSourceAvailable &&
+      toolCreatesEgressPath(toolCall.qualifiedName);
+
+    if (saved === 'allow') {
+      return trifecta
+        ? { verdict: 'ask', reason: 'lethal_trifecta' }
+        : { verdict: 'allow', reason: 'always_allow' };
+    }
+    if (saved === 'ask') return { verdict: 'ask', reason: 'user_requires_approval' };
+    if (approvalMode === 'manual') return { verdict: 'ask', reason: 'manual_approval_mode' };
+    return trifecta
+      ? { verdict: 'ask', reason: 'lethal_trifecta' }
+      : { verdict: 'allow', reason: 'auto_approval_mode' };
+  }
+
+  /** Honest, model-readable explanation for a call the server refused to run. */
+  function blockedToolResultMessage(qualifiedName: string): string {
+    return (
+      `Tool "${qualifiedName}" is blocked by this account's connector permissions and was not ` +
+      'executed. Do not retry it; continue without it or tell the user it is blocked.'
+    );
+  }
+
+  // ── Managed failover for the tool loop (AUDIT-FIX SYS-21) ─────────────────
+  //
+  // `createFailoverPlan` was wired only into route.ts's two SINGLE-TURN
+  // branches; the tool loop and the research loop — the two paths that dominate
+  // paid agentic usage — never rotated at all, so one overloaded upstream
+  // failed the whole turn.
+  //
+  // The rotation point is the same as route.ts's: `startProviderStream`'s
+  // first-chunk peek inside `buildToolLoopStream`, which throws BEFORE any byte
+  // is enqueued for this step. A rotated attempt has therefore delivered
+  // nothing, so no failed-attempt text can leak into the transcript. Because
+  // the loop always carries tool definitions, `createFailoverPlan` restricts
+  // rotation to the SAME provider (provider-native tool shapes cannot transfer)
+  // — a deliberate, documented narrowing, not an oversight.
+  /**
+   * AUDIT-FIX BUG-1: a client disconnect now stops the loop at the next
+   * boundary as well as aborting the in-flight upstream request. Previously the
+   * only cancellation signal was the durable `isCancellationRequested` poll, so
+   * a plain browser abort kept generating (and billing) until the turn ended.
+   */
+  async function shouldStopForCancellation(): Promise<boolean> {
+    if (options.signal?.aborted) return true;
+    return (await options.isCancellationRequested?.()) === true;
+  }
+
+  let servingProcessed: ProcessedRequest = processed;
+
+  async function runProviderStepWithFailover(
+    step: number,
+    stepRequest: ProcessedRequest['llmRequest'],
+  ): Promise<ToolLoopProviderStepResult> {
+    for (;;) {
+      const attemptProcessed = servingProcessed;
+      // Carry the attempt view's model-shaped tuning onto this step's request;
+      // everything else (messages, tools, caps) is the primary's.
+      const attemptRequest: ProcessedRequest['llmRequest'] = {
+        ...stepRequest,
+        model: attemptProcessed.llmRequest.model,
+        effort: attemptProcessed.llmRequest.effort,
+        thinking: attemptProcessed.llmRequest.thinking,
+      };
+      const executeProviderStep = async (): Promise<ToolLoopProviderStepResult> => {
+        const stepUsage = createObservedProviderUsage();
+        const stepSink: ToolLoopStepSink = {
+          thinkingBlocks: [],
+          text: '',
+          usage: stepUsage,
+        };
+        const providerStream = await buildToolLoopStream(
+          attemptProcessed.provider,
+          attemptProcessed,
+          attemptRequest,
+          responseModel,
+          stepSink,
+          // AUDIT-FIX BUG-1: the client's signal, so a cancel actually aborts
+          // the in-flight upstream request instead of billing a full generation
+          // nobody will see.
+          options.signal,
+        );
+        const collected = await collectProviderStream(providerStream);
+        return {
+          ...collected,
+          thinkingBlocks: stepSink.thinkingBlocks,
+          canonicalText: stepSink.text,
+          usage: stepUsage,
+        };
+      };
+      try {
+        return options.providerExecutor
+          ? await options.providerExecutor({
+              operationKey: `provider:${step}`,
+              step,
+              request: attemptRequest,
+              execute: executeProviderStep,
+            })
+          : await executeProviderStep();
+      } catch (err) {
+        // Durable-runtime lease/fatal errors are the caller's to handle and
+        // must never be rotated away.
+        if (options.shouldPropagateExecutionError?.(err)) throw err;
+        const nextAttempt = options.failover?.next(err);
+        if (!nextAttempt) throw err;
+        // The caller's plan already re-checked tier admission, provider
+        // resolution, dispatchability and tool-transfer compatibility.
+        servingProcessed = nextAttempt.processed;
+      }
+    }
+  }
+
   // Cumulative citation sources from url_fetch calls across ALL steps.
   // Re-emitted in full whenever a new source lands so client positions stay stable.
   const fetchedSources: FetchedSource[] = [];
@@ -1630,6 +1855,12 @@ export async function* runToolLoop(
     let sourcesAdded = false;
     let searchSourcesAdded = false;
     for (const { tc, content, isError, source, sources, generatedFiles } of results) {
+      // AUDIT-FIX CON-19: a SUCCESSFUL call to a tool that returns third-party
+      // content has just put attacker-authorable text into the model context.
+      // Raise the `U` term for every later call in this turn.
+      if (!isError && toolAcceptsUntrustedContent(tc.qualifiedName)) {
+        untrustedContentInContext = true;
+      }
       yield encoder.encode(
         toolStatusEvent(tc.qualifiedName, isError ? 'failed' : 'completed', responseModel),
       );
@@ -1734,7 +1965,7 @@ export async function* runToolLoop(
   }
 
   try {
-    if (await options.isCancellationRequested?.()) {
+    if (await shouldStopForCancellation()) {
       yield* flushTerminal('cancelled');
       return;
     }
@@ -1840,7 +2071,24 @@ export async function* runToolLoop(
             }),
           );
         }
-        if (decision === 'approved' && isToolOffered(p.qualifiedName, mcpTools, availableTools)) {
+        if (decision === 'approved' && connectorPermissions.isDenied(p.qualifiedName)) {
+          // AUDIT-FIX CON-1: the resume path used to trust the client's decision
+          // alone, so POSTing {decision:"approved"} executed a tool the user had
+          // Blocked. A stored Block is re-checked here, after the checkpoint has
+          // been claimed and before any side effect.
+          logger.warn(
+            { tool: p.qualifiedName, requestId: processed.requestId },
+            '[tool-loop] approval rejected: tool is blocked by the user permission store',
+          );
+          const content = blockedToolResultMessage(p.qualifiedName);
+          yield encoder.encode(
+            toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
+          );
+          messages.push({ role: 'tool', content, tool_call_id: p.id });
+        } else if (
+          decision === 'approved' &&
+          isToolOffered(p.qualifiedName, mcpTools, availableTools)
+        ) {
           toRun.push(p);
         } else if (decision === 'approved') {
           // Approved but the tool is not in the offered catalog (hallucinated /
@@ -1862,7 +2110,7 @@ export async function* runToolLoop(
       }
 
       if (toRun.length > 0) {
-        if (await options.isCancellationRequested?.()) {
+        if (await shouldStopForCancellation()) {
           yield* flushTerminal('cancelled');
           return;
         }
@@ -1874,7 +2122,7 @@ export async function* runToolLoop(
 
     let step = Math.max(0, Math.trunc(options.initialCompletedSteps ?? 0));
     while (step < maxSteps) {
-      if (await options.isCancellationRequested?.()) {
+      if (await shouldStopForCancellation()) {
         yield* flushTerminal('cancelled');
         return;
       }
@@ -2025,36 +2273,7 @@ export async function* runToolLoop(
       }
       let providerStep: ToolLoopProviderStepResult;
       try {
-        const executeProviderStep = async (): Promise<ToolLoopProviderStepResult> => {
-          const stepUsage = createObservedProviderUsage();
-          const stepSink: ToolLoopStepSink = {
-            thinkingBlocks: [],
-            text: '',
-            usage: stepUsage,
-          };
-          const providerStream = await buildToolLoopStream(
-            processed.provider,
-            processed,
-            stepRequest,
-            responseModel,
-            stepSink,
-          );
-          const collected = await collectProviderStream(providerStream);
-          return {
-            ...collected,
-            thinkingBlocks: stepSink.thinkingBlocks,
-            canonicalText: stepSink.text,
-            usage: stepUsage,
-          };
-        };
-        providerStep = options.providerExecutor
-          ? await options.providerExecutor({
-              operationKey: `provider:${step}`,
-              step,
-              request: stepRequest,
-              execute: executeProviderStep,
-            })
-          : await executeProviderStep();
+        providerStep = await runProviderStepWithFailover(step, stepRequest);
         mergeObservedUsage(observedUsage, providerStep.usage);
         for (const ref of providerStep.generatedFileRefs ?? []) {
           if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
@@ -2064,7 +2283,15 @@ export async function* runToolLoop(
         const msg = err instanceof Error ? err.message : String(err);
         const classified = classifyError(err);
         logger.error(
-          { provider: processed.provider, step, error: msg },
+          {
+            // The SERVING provider/model: after a managed-failover rotation
+            // (SYS-21) this is the attempt that actually failed last, not the
+            // primary the request started on.
+            provider: servingProcessed.provider,
+            model: servingProcessed.chatRequest.model,
+            step,
+            error: msg,
+          },
           '[tool-loop] provider call failed',
         );
         if (showWorkPhases) {
@@ -2077,12 +2304,14 @@ export async function* runToolLoop(
             }),
           );
         }
-        yield encoder.encode(
-          sseData({
-            choices: [{ delta: { content: `\n\nError: ${msg}` }, index: 0 }],
-            model: responseModel,
-          }),
-        );
+        // AUDIT-FIX SYS-20: this used to emit `\n\nError: ${msg}` as an assistant
+        // CONTENT delta, so a raw upstream message ("Anthropic API error (500):
+        // {\"type\":\"error\"...}") rendered inside the chat bubble as if the model
+        // had said it — and was then persisted into the transcript by the
+        // client's save. The failure now travels ONLY on the structured channels
+        // below: the canonical `error` agent event and the `x_stream_error`
+        // delta, both of which every pinned consumer already reads
+        // (hasStreamError()). `msg` stays in the server log line above.
         yield encoder.encode(
           eventStream.emit({
             type: 'error',
@@ -2153,7 +2382,7 @@ export async function* runToolLoop(
         yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: publicTextTail }));
       }
 
-      if (await options.isCancellationRequested?.()) {
+      if (await shouldStopForCancellation()) {
         yield* flushTerminal('cancelled');
         return;
       }
@@ -2193,13 +2422,86 @@ export async function* runToolLoop(
       }
       messages.push(assistantMessage);
 
-      // In manual approval mode, emit an approval request for each tool and
-      // stop the stream -- the client resumes via the approve endpoint.
-      // In auto mode, execute immediately.
-      if (approvalMode === 'manual') {
+      // ── Per-call server-side gate (CON-1, CON-19) ───────────────────────
+      //
+      // This used to be one all-or-nothing branch on `approvalMode`: manual
+      // suspended EVERY call, auto executed EVERY call, and the user's saved
+      // allow/ask/deny verdicts were never consulted at all. Now each call is
+      // resolved independently:
+      //   deny  -> never executed; an honest error result goes back to the model
+      //   allow -> executed immediately, even in manual mode (that is what
+      //            "Always allow" means), unless the lethal-trifecta check
+      //            escalates it
+      //   ask   -> the existing checkpoint + approval-card path
+      // Denials and auto-allowed executions are applied BEFORE any suspend, so
+      // their results are inside the checkpoint the resume replays; otherwise an
+      // auto-allowed call would come back as "undecided" and be denied.
+      const gatedCalls = pendingToolCalls.map((tc) => ({ tc, gate: resolveToolCallGate(tc) }));
+      const blockedCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'deny');
+      const approvalCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'ask');
+      const autoRunCalls = gatedCalls
+        .filter((entry) => entry.gate.verdict === 'allow')
+        .map((entry) => entry.tc);
+
+      for (const { tc } of blockedCalls) {
+        logger.warn(
+          { tool: tc.qualifiedName, requestId: processed.requestId },
+          '[tool-loop] tool call blocked by the user permission store',
+        );
+        const content = blockedToolResultMessage(tc.qualifiedName);
+        const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);
+        // Emit a matched start/end pair: the canonical activity stream (and the
+        // client timeline built from it) pairs tool-execution-end with its
+        // start, so a bare end would render an orphaned card.
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'tool-execution-start',
+            toolCallId: tc.id,
+            name: tc.qualifiedName,
+            category: blockedCategory,
+            summary: canonicalToolSummary(
+              tc.qualifiedName,
+              blockedCategory,
+              tc.args,
+              offeredServerLabel(tc.qualifiedName, mcpTools),
+            ),
+            input: toAgentEventJson(tc.args),
+          }),
+        );
+        yield encoder.encode(
+          toolResultEvent(tc.id, tc.qualifiedName, content, true, responseModel),
+        );
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'tool-execution-end',
+            toolCallId: tc.id,
+            name: tc.qualifiedName,
+            output: toAgentEventJson(content),
+            isError: true,
+            elapsedMs: 0,
+          }),
+        );
+        messages.push({ role: 'tool', content, tool_call_id: tc.id });
+      }
+
+      if (autoRunCalls.length > 0) {
+        yield* runAndStreamToolCalls(autoRunCalls);
+      }
+
+      if (approvalCalls.length > 0) {
+        const escalated = approvalCalls.filter((entry) => entry.gate.reason === 'lethal_trifecta');
+        if (escalated.length > 0) {
+          logger.warn(
+            {
+              requestId: processed.requestId,
+              tools: escalated.map((entry) => entry.tc.qualifiedName),
+            },
+            '[tool-loop] lethal-trifecta escalation: untrusted content + sensitive source + egress path; requiring approval',
+          );
+        }
         const approvalChunks: Uint8Array[] = [];
         const approvalEvents: AgentEventEnvelope[] = [];
-        for (const tc of pendingToolCalls) {
+        for (const { tc } of approvalCalls) {
           approvalChunks.push(
             encoder.encode(
               toolApprovalRequestEvent(tc.id, tc.qualifiedName, tc.args, responseModel),
@@ -2244,7 +2546,7 @@ export async function* runToolLoop(
           completedSteps: step,
           events: approvalEvents,
           messages: messages.map((message) => ({ ...message })),
-          pendingToolCalls: pendingToolCalls.map((call) => ({
+          pendingToolCalls: approvalCalls.map(({ tc: call }) => ({
             ...call,
             args: { ...call.args },
           })),
@@ -2257,9 +2559,8 @@ export async function* runToolLoop(
         return;
       }
 
-      // Auto mode: execute tools (shared with the resume preamble so both paths
-      // run identical execution + guard logic).
-      yield* runAndStreamToolCalls(pendingToolCalls);
+      // Every call was resolved without suspending (allowed and/or blocked):
+      // fall through to the next provider step with the completed thread.
 
       // Continue to next step.
     }
