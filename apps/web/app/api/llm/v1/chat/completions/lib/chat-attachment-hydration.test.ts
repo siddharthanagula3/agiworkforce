@@ -3,11 +3,11 @@ import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-att
 
 const mocks = vi.hoisted(() => ({
   getMediaAssetById: vi.fn(),
-  getObject: vi.fn(),
+  readStoredMedia: vi.fn(),
 }));
 
 vi.mock('@/lib/server/media-assets', () => ({ getMediaAssetById: mocks.getMediaAssetById }));
-vi.mock('@/lib/server/object-storage', () => ({ getObject: mocks.getObject }));
+vi.mock('@/lib/server/media-storage', () => ({ readStoredMedia: mocks.readStoredMedia }));
 
 describe('hydrateChatAttachments', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -25,7 +25,7 @@ describe('hydrateChatAttachments', () => {
       metadata: { filename: 'brief.pdf' },
       deletedAt: null,
     });
-    mocks.getObject.mockResolvedValue({
+    mocks.readStoredMedia.mockResolvedValue({
       data: Buffer.from('%PDF'),
       contentType: 'application/pdf',
     });
@@ -81,7 +81,7 @@ describe('hydrateChatAttachments', () => {
       text: '[attachment unavailable \u2014 it was deleted from your Library]',
     });
     expect(messages[0]?.content[0]).toEqual({ type: 'text', text: 'Summarize this' });
-    expect(mocks.getObject).not.toHaveBeenCalled();
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
 
   it('degrades an attachment whose asset row no longer exists', async () => {
@@ -98,7 +98,7 @@ describe('hydrateChatAttachments', () => {
     expect(messages[0]?.content).toEqual([
       { type: 'text', text: '[attachment unavailable \u2014 it was deleted from your Library]' },
     ]);
-    expect(mocks.getObject).not.toHaveBeenCalled();
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
 
   it('fails closed before reading storage for an asset owned by another user', async () => {
@@ -126,6 +126,6 @@ describe('hydrateChatAttachments', () => {
         code: 'attachment_not_found',
       }),
     );
-    expect(mocks.getObject).not.toHaveBeenCalled();
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
 });

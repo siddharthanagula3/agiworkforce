@@ -61,6 +61,9 @@ interface ChatState {
   conversations: Conversation[];
   messagesByConversation: Record<string, ChatMessage[]>;
   activeConversationId: string | null;
+  /** In-flight turns keyed by origin conversation. Ephemeral; never persisted. */
+  streamingConversationIds: Record<string, true>;
+  /** Backward-compatible aggregate: true when any conversation is streaming. */
   isStreaming: boolean;
   streamingContent: string;
   streamingReasoning: string;
@@ -94,8 +97,8 @@ interface ChatState {
   ) => void;
   appendToStreamingContent: (content: string) => void;
   appendToStreamingReasoning: (reasoning: string) => void;
-  startStreaming: () => void;
-  stopStreaming: () => void;
+  startStreaming: (conversationId?: string | null) => void;
+  stopStreaming: (conversationId?: string | null) => void;
   setMessages: (conversationId: string, messages: ChatMessage[]) => void;
   setSearchQuery: (query: string) => void;
   setDraftContent: (content: string, conversationId?: string | null) => void;
@@ -105,12 +108,6 @@ interface ChatState {
   archiveConversation: (id: string) => void;
   getGroupedConversations: () => Record<string, Conversation[]>;
   setActiveMode: (mode: ActiveMode) => void;
-  /**
-   * UI-WEBSEARCH-TOGGLE-01: direct, honest control of the web-search toggle.
-   * The composer reads + writes this so the menu reflects the REAL send state
-   * (default OFF — the user must explicitly enable web search).
-   */
-  setWebSearchEnabled: (enabled: boolean) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -119,6 +116,7 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       messagesByConversation: {},
       activeConversationId: null,
+      streamingConversationIds: {},
       isStreaming: false,
       streamingContent: '',
       streamingReasoning: '',
@@ -127,7 +125,10 @@ export const useChatStore = create<ChatState>()(
       draftContent: '',
       draftsByConversation: {},
       activeMode: null,
-      webSearchEnabled: false,
+      // Automatic intent only. The send pipeline still clamps this against
+      // the active runtime/model/deployment so "on" never invents capability
+      // or crosses a Local/BYOK trust boundary.
+      webSearchEnabled: true,
 
       setActiveConversation: (id) =>
         set((state) => {
@@ -153,6 +154,8 @@ export const useChatStore = create<ChatState>()(
           state.conversations = state.conversations.filter((c) => c.id !== id);
           delete state.messagesByConversation[id];
           delete state.draftsByConversation[composerDraftKey(id)];
+          delete state.streamingConversationIds[id];
+          state.isStreaming = Object.keys(state.streamingConversationIds).length > 0;
           if (state.activeConversationId === id) {
             state.activeConversationId = null;
             state.draftContent = state.draftsByConversation[composerDraftKey(null)] ?? '';
@@ -205,6 +208,7 @@ export const useChatStore = create<ChatState>()(
             state.searchQuery = '';
             state.searchResults = [];
             state.isStreaming = false;
+            state.streamingConversationIds = {};
             state.streamingContent = '';
             state.streamingReasoning = '';
           }
@@ -251,10 +255,24 @@ export const useChatStore = create<ChatState>()(
           state.streamingReasoning += reasoning;
         }),
 
-      startStreaming: () =>
-        set({ isStreaming: true, streamingContent: '', streamingReasoning: '' }),
+      startStreaming: (conversationId) =>
+        set((state) => {
+          if (conversationId) state.streamingConversationIds[conversationId] = true;
+          state.isStreaming = true;
+          state.streamingContent = '';
+          state.streamingReasoning = '';
+        }),
 
-      stopStreaming: () => set({ isStreaming: false }),
+      stopStreaming: (conversationId) =>
+        set((state) => {
+          if (conversationId) {
+            delete state.streamingConversationIds[conversationId];
+            state.isStreaming = Object.keys(state.streamingConversationIds).length > 0;
+          } else {
+            state.streamingConversationIds = {};
+            state.isStreaming = false;
+          }
+        }),
 
       setMessages: (conversationId, messages) =>
         set((state) => {
@@ -302,13 +320,7 @@ export const useChatStore = create<ChatState>()(
           }
         }),
 
-      setActiveMode: (mode) =>
-        set({
-          activeMode: mode,
-          webSearchEnabled: mode === 'web',
-        }),
-
-      setWebSearchEnabled: (enabled) => set({ webSearchEnabled: enabled }),
+      setActiveMode: (mode) => set({ activeMode: mode }),
 
       pinConversation: (id, pinned) =>
         set((state) => {
@@ -353,9 +365,10 @@ export const useChatStore = create<ChatState>()(
       name: 'agi-web-chat',
       // v2: rename `messages` -> `messagesByConversation` and
       // `currentConversationId` -> `activeConversationId` to match desktop.
-      // The migrate() function below transforms v1-shaped persisted state
-      // on load; new persists go out as v2.
-      version: 2,
+      // v3: Web search becomes automatic rather than a user preference.
+      // The migrate() function below transforms old state on load; new
+      // persists intentionally omit the automatic intent flag.
+      version: 3,
       storage: createJSONStorage(() =>
         typeof window === 'undefined' ? noopStorage : window.localStorage,
       ),
@@ -377,6 +390,12 @@ export const useChatStore = create<ChatState>()(
             state['activeConversationId'] = state['currentConversationId'];
             delete state['currentConversationId'];
           }
+        }
+        if (version < 3) {
+          // Older builds could persist the now-removed menu toggle as false.
+          // Automatic search is the product default; actual execution remains
+          // capability- and trust-clamped at send time in useChat.
+          state['webSearchEnabled'] = true;
         }
         return state as unknown as ChatState;
       },

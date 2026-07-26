@@ -61,8 +61,8 @@ const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof v
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-adapter-001',
-    chatRequest: { model: 'claude-opus-4-8', messages: [], stream: true } as any,
-    requestedModel: 'claude-opus-4-8',
+    chatRequest: { model: 'claude-opus-5', messages: [], stream: true } as any,
+    requestedModel: 'claude-opus-5',
     provider: 'anthropic',
     estimatedCostCents: 5,
     quotaWarningHeader: null,
@@ -174,9 +174,9 @@ describe('buildAdapterStreamResponse · wire bytes', () => {
 
     expect(text).toBe(
       [
-        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'claude-opus-4-8' })}`,
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'claude-opus-5' })}`,
         '',
-        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'claude-opus-4-8' })}`,
+        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'claude-opus-5' })}`,
         '',
         'data: [DONE]',
         '',
@@ -204,7 +204,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockCalculateCost).toHaveBeenCalledWith('anthropic', 'claude-opus-4-8', {
+    expect(mockCalculateCost).toHaveBeenCalledWith('anthropic', 'claude-opus-5', {
       promptTokens: 120,
       completionTokens: 80,
       totalTokens: 200,
@@ -285,7 +285,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       },
       outcome: 'completed',
       provider: 'anthropic',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       usage: expect.objectContaining({
         promptTokens: 100,
         completionTokens: 50,
@@ -323,7 +323,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
 
     expect(mockRecordModelUsage).toHaveBeenCalledWith(
       'user-005',
-      'claude-opus-4-8',
+      'claude-opus-5',
       expect.objectContaining({
         inputTokens: 500,
         outputTokens: 42,

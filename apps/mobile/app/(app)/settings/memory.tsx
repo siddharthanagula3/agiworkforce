@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { View, Pressable, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,6 +10,13 @@ import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { useAuthStore } from '@/src/features/auth/store';
+import {
+  accountScopedUiStateKey,
+  captureAccountScopedUiState,
+  isAccountScopedUiStateCurrent,
+  type AccountScopedUiState,
+} from '@/src/features/auth/services/accountScopedUiState';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -27,6 +34,7 @@ export default function MemoryScreen() {
   const colors = useThemeColors();
   const { scope } = useLocalSearchParams<{ scope?: string }>();
   const currentIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
   // The memory store's read/write path follows the CURRENT chat mode toggle
   // (trust-boundary requirement — chat-time retrieval must match the active
   // conversation's mode). When the user navigates here via a Local- or
@@ -53,12 +61,47 @@ export default function MemoryScreen() {
     togglePin,
     setSearchQuery,
     clearError,
+    resetVisibleState,
   } = useMemoryStore();
+  const screenScopeKey = accountScopedUiStateKey(
+    captureAccountScopedUiState(currentIsCloud ? 'cloud' : 'local'),
+  );
+  const activeScopeRef = useRef<AccountScopedUiState | null>(null);
+  const activeScopeKeyRef = useRef<string | null>(null);
+  const editorScopeRef = useRef<AccountScopedUiState | null>(null);
 
-  // Fetch on mount
+  // useMemoryStore is a mode-aware presentation facade over physically
+  // separate Local/Cloud stores. Clear that facade and every open editor before
+  // paint when the displayed scope changes; a Clerk switch while Local keeps
+  // the same `local` key and therefore preserves device-owned state.
+  useLayoutEffect(() => {
+    const nextScope = captureAccountScopedUiState(currentIsCloud ? 'cloud' : 'local');
+    const nextKey = accountScopedUiStateKey(nextScope);
+    if (activeScopeKeyRef.current !== nextKey) {
+      resetVisibleState();
+      setSearchText('');
+      setActiveFilter('All');
+      setEditingMemory(null);
+      setAddSheetOpen(false);
+      editorScopeRef.current = null;
+    }
+    activeScopeRef.current = nextScope;
+    activeScopeKeyRef.current = nextKey;
+  }, [clerkUserId, currentIsCloud, resetVisibleState]);
+
+  const isScopeCurrent = useCallback((captured = activeScopeRef.current) => {
+    return isAccountScopedUiStateCurrent(
+      captured,
+      useChatAppModeStore.getState().appMode === 'cloud' ? 'cloud' : 'local',
+    );
+  }, []);
+
+  // Fetch on mount and whenever the actual owner/scope changes. The store also
+  // guards its async completion, so a slow Local read cannot overwrite Cloud.
   useEffect(() => {
-    fetchMemories();
-  }, [fetchMemories]);
+    if (screenScopeKey === 'unavailable') return;
+    void fetchMemories();
+  }, [fetchMemories, screenScopeKey]);
 
   // Auto-clear error after 5 seconds
   useEffect(() => {
@@ -80,26 +123,30 @@ export default function MemoryScreen() {
   // Handlers
   const handleSearchChange = useCallback(
     (text: string) => {
+      if (!isScopeCurrent()) return;
       setSearchText(text);
       setSearchQuery(text);
     },
-    [setSearchQuery],
+    [isScopeCurrent, setSearchQuery],
   );
 
   const handleClearSearch = useCallback(() => {
+    if (!isScopeCurrent()) return;
     setSearchText('');
     setSearchQuery('');
-  }, [setSearchQuery]);
+  }, [isScopeCurrent, setSearchQuery]);
 
   const handleRefresh = useCallback(() => {
-    fetchMemories();
-  }, [fetchMemories]);
+    if (!isScopeCurrent()) return;
+    void fetchMemories();
+  }, [fetchMemories, isScopeCurrent]);
 
   const handleTogglePin = useCallback(
     (id: string) => {
-      togglePin(id);
+      if (!isScopeCurrent()) return;
+      void togglePin(id);
     },
-    [togglePin],
+    [isScopeCurrent, togglePin],
   );
 
   const handleImportPress = useCallback(() => {
@@ -107,39 +154,53 @@ export default function MemoryScreen() {
   }, [router]);
 
   const handleAddPress = useCallback(() => {
+    const actionScope = activeScopeRef.current;
+    if (!isScopeCurrent(actionScope)) return;
+    editorScopeRef.current = actionScope;
     setEditingMemory(null);
     setAddSheetOpen(true);
-  }, []);
+  }, [isScopeCurrent]);
 
-  const handleEdit = useCallback((memory: MemoryEntry) => {
-    setEditingMemory(memory);
-    setAddSheetOpen(true);
-  }, []);
+  const handleEdit = useCallback(
+    (memory: MemoryEntry) => {
+      const actionScope = activeScopeRef.current;
+      if (!isScopeCurrent(actionScope)) return;
+      editorScopeRef.current = actionScope;
+      setEditingMemory(memory);
+      setAddSheetOpen(true);
+    },
+    [isScopeCurrent],
+  );
 
   const handleCloseEditor = useCallback(() => {
+    editorScopeRef.current = null;
     setAddSheetOpen(false);
     setEditingMemory(null);
   }, []);
 
   const handleDelete = useCallback(
     (id: string) => {
-      deleteMemory(id);
+      const actionScope = editorScopeRef.current ?? activeScopeRef.current;
+      if (!isScopeCurrent(actionScope)) return;
+      void deleteMemory(id);
     },
-    [deleteMemory],
+    [deleteMemory, isScopeCurrent],
   );
 
   const handleSave = useCallback(
     (content: string, _category?: string) => {
-      addMemory(content);
+      if (!isScopeCurrent(editorScopeRef.current)) return;
+      void addMemory(content);
     },
-    [addMemory],
+    [addMemory, isScopeCurrent],
   );
 
   const handleUpdate = useCallback(
     (id: string, content: string) => {
-      updateMemory(id, content);
+      if (!isScopeCurrent(editorScopeRef.current)) return;
+      void updateMemory(id, content);
     },
-    [updateMemory],
+    [isScopeCurrent, updateMemory],
   );
 
   // Render helpers

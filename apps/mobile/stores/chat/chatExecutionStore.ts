@@ -73,7 +73,11 @@ import {
   mobileExecutionProfileFor,
 } from '@/src/features/chat/utils/sessionLabeling';
 import type { ChatMessage, MessageAttachment, ConversationSummary, ToolCall } from '@/types/chat';
-import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
+import {
+  canUseBillingPlanCapability,
+  getModelMetadataById,
+  isAutoModeModelId,
+} from '@agiworkforce/types';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import type { GeneratedFile, GeneratedFileKind } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
@@ -85,6 +89,11 @@ import { getConversationMessageStore } from './conversationRepository';
 import { useChatCloudMessageStore } from './chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
+import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 /** Paywall error state captured when the API returns a tier-cap paywall response. */
 export interface PaywallErrorState {
@@ -161,6 +170,10 @@ interface ExecutionState {
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
 const streamingConversations = new Set<string>();
+/** Streaming conversations whose bytes and callbacks belong to Managed Cloud. */
+const cloudStreamingConversations = new Set<string>();
+/** Invalidated synchronously on account teardown, including auth-disabled test/dev turns. */
+let cloudExecutionGeneration = 0;
 /** Server-owned Cloud run currently projected into each streaming conversation. */
 const activeCloudRuns = new Map<string, ManagedCloudAgentRunReference>();
 
@@ -232,6 +245,39 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
 export function __resetPendingApprovalTurnsForTests(): void {
   pendingApprovalTurns.clear();
   activeCloudRuns.clear();
+  cloudStreamingConversations.clear();
+}
+
+/**
+ * Abort only Managed Cloud execution state during sign-out/account switch.
+ * Local model streams are device-owned and deliberately continue untouched.
+ *
+ * Generation is incremented before aborting so synchronous abort callbacks
+ * cannot project account-A deltas/errors back into stores that teardown is
+ * clearing for account B.
+ */
+export function clearCloudExecutionState(): void {
+  cloudExecutionGeneration += 1;
+  const cloudConversationIds = Array.from(cloudStreamingConversations);
+  for (const conversationId of cloudConversationIds) {
+    cloudStreamingConversations.delete(conversationId);
+    streamingConversations.delete(conversationId);
+    activeCloudRuns.delete(conversationId);
+    cancelledBeforeStream.delete(conversationId);
+    thinkingStartTimes.delete(conversationId);
+    thinkingEndTimes.delete(conversationId);
+    lastDeltaTimes.delete(conversationId);
+    const controller = abortControllers.get(conversationId);
+    abortControllers.delete(conversationId);
+    controller?.abort();
+  }
+  pendingApprovalTurns.clear();
+  useChatExecutionStore.setState({
+    ...streamingFlags(),
+    ...(streamingConversations.size === 0
+      ? { streamingContent: '', streamingReasoning: '', paywallError: null, error: null }
+      : {}),
+  });
 }
 
 /** Reactive streaming flags derived from the module-level set — spread into
@@ -709,6 +755,7 @@ function captureArtifactsFromMessage(
   conversationId: string,
   conversationTitle: string,
   createdAt: string,
+  provenance: MobileArtifactProvenance,
 ): void {
   try {
     /* eslint-disable @typescript-eslint/no-require-imports */
@@ -722,6 +769,7 @@ function captureArtifactsFromMessage(
       createdAt,
       conversationTitle,
       _artifactThemeColors,
+      provenance,
     );
     if (mobileArtifacts.length > 0) {
       useArtifactStore.getState().addArtifacts(mobileArtifacts);
@@ -793,20 +841,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       ? executionModeForConversation(conversation)
       : executionModeForModel(requestedModel);
     const provider = providerForExecutionMode(executionMode);
-    if (__DEV__) {
-      // W5 stage-2 session labeling — additive, dev/test-only (see
-      // src/features/chat/utils/sessionLabeling.ts module doc). Does not
-      // change routing, persistence, or any value used below; only asserts
-      // this conversation's AppSession/ExecutionProfile are internally
-      // consistent and agree with the real Local/Cloud trust boundary.
-      labelMobileSession({
-        id: conversationId,
-        ownerUserId: useAuthStore.getState().user?.id ?? 'unknown-mobile-user',
-        executionMode,
-      });
-      mobileExecutionProfileFor(executionMode);
-    }
     const shouldUseLocalRuntime = executionMode === 'local' && isSelectableModelId(requestedModel);
+    // Boundary mismatches are independent of Cloud authentication. Report the
+    // actionable mode error before requiring an account epoch so a Local-model
+    // send in a Cloud-owned thread cannot be misdiagnosed as merely signed out.
     if (executionMode === 'local' && isCloudModel) {
       set({
         error: 'This is a Local Mode chat. Start a separate AGI Cloud chat to use Cloud models.',
@@ -823,7 +861,43 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return false;
     }
-
+    const cloudAccountEpoch = executionMode === 'cloud' ? captureCloudAccountEpoch() : null;
+    let artifactProvenance: MobileArtifactProvenance;
+    if (executionMode === 'local') {
+      artifactProvenance = { scope: 'local' };
+    } else {
+      if (cloudAccountEpoch === null) {
+        set({
+          error: 'Sign in to use AGI Cloud.',
+          paywallError: null,
+          ...streamingFlags(),
+        });
+        return false;
+      }
+      artifactProvenance = {
+        scope: 'cloud',
+        ownerId: cloudAccountEpoch.ownerId,
+      };
+    }
+    const turnCloudExecutionGeneration = cloudExecutionGeneration;
+    const isTurnAccountCurrent = () =>
+      executionMode !== 'cloud' ||
+      (turnCloudExecutionGeneration === cloudExecutionGeneration &&
+        isCloudAccountEpochCurrent(cloudAccountEpoch));
+    if (__DEV__) {
+      // W5 stage-2 session labeling — additive, dev/test-only (see
+      // src/features/chat/utils/sessionLabeling.ts module doc). Does not
+      // change routing, persistence, or any value used below; only asserts
+      // this conversation's AppSession/ExecutionProfile are internally
+      // consistent and agree with the real Local/Cloud trust boundary.
+      labelMobileSession({
+        id: conversationId,
+        ownerUserId:
+          artifactProvenance.scope === 'cloud' ? artifactProvenance.ownerId : 'local-device',
+        executionMode,
+      });
+      mobileExecutionProfileFor(executionMode);
+    }
     let executionModel = requestedModel;
     let routingReason: string | undefined;
     // C1: Cloud auth gate — checked before invite/paywall gates so "sign in"
@@ -915,6 +989,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           { cancelable: true, onDismiss: () => resolve(false) },
         );
       });
+      if (!isTurnAccountCurrent()) return false;
 
       if (!userConsented) {
         // User declined — send message without attachments (or abort).
@@ -934,6 +1009,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             uploadWithRetry({ uri: a.uri, name: a.fileName, type: a.mimeType }, a.fileName),
           ),
         );
+        if (!isTurnAccountCurrent()) return false;
         const successful = uploadResults
           .map((result, i) => ({ result, attachment: attachments[i]! }))
           .filter((x) => x.result !== null);
@@ -1066,11 +1142,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     let messageContent = content;
     if (localFileUploads.length > 0) {
       const documentContext = await buildAttachedDocumentContext(localFileUploads);
+      if (!isTurnAccountCurrent()) return false;
       messageContent = [...documentContext, content].filter(Boolean).join('\n\n');
     }
 
     if (shouldUseLocalRuntime && localImageUploads.length > 0) {
       const imageContext = await buildLocalImageOcrContext(localImageUploads);
+      if (!isTurnAccountCurrent()) return false;
       messageContent = [messageContent, ...imageContext].filter(Boolean).join('\n\n');
     }
 
@@ -1131,6 +1209,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // + order ([persona, memory]); any failure here must never block a chat turn.
     try {
       const memFacts = await retrieveMemoryContext(content, 5);
+      if (!isTurnAccountCurrent()) return false;
       const personalization =
         executionMode === 'cloud'
           ? useCloudSettingsStore.getState().personalization
@@ -1143,6 +1222,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     } catch {
       // Non-fatal: memory/personalization injection must never block a chat turn.
     }
+    if (!isTurnAccountCurrent()) return false;
 
     // Learn from this turn (LOCAL mode only): extract durable facts from the user's
     // message and persist new ones (deduped) into the on-device SQLite memory.
@@ -1225,6 +1305,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     abortControllers.set(conversationId, controller);
     streamingConversations.add(conversationId);
+    if (executionMode === 'cloud') {
+      cloudStreamingConversations.add(conversationId);
+    }
     // Seed the delta clock at stream start so the foreground stall check never
     // aborts a stream that simply hasn't produced its first token yet.
     lastDeltaTimes.set(conversationId, Date.now());
@@ -1366,6 +1449,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           conversationId,
           localConvTitle,
           new Date().toISOString(),
+          artifactProvenance,
         );
 
         currentMsgStore.setState((s) => ({
@@ -1403,19 +1487,22 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // onDone so `resolveToolApproval` can rebuild the resume request.
       const turnPendingApprovals: PendingApprovalCall[] = [];
 
-      // Per-turn web search: when the user has the web-search feature enabled
-      // (AddToChatSheet toggle, gated by FEATURES.webSearch), ask the server to
-      // inject its built-in web_search tool. The server streams results back as
-      // x_search_results deltas, which the tool-call accumulator already renders.
+      // Ambient web search: there is no per-turn toggle in the composer.
+      // Automatically offer search when the selected Cloud model or the
+      // configured generic backend can execute it; capability metadata still
+      // clamps the request so unsupported models never receive a cosmetic flag.
+      // The server streams results back as x_search_results deltas, which the
+      // tool-call accumulator already renders.
       const executionModelMetadata = getModelMetadataById(executionModel);
+      const entitlementState = useTierStore.getState();
       const webSearchEnabled =
         FEATURES.webSearch &&
-        useChatViewStore.getState().features.webSearch &&
+        entitlementState.grantedCapabilities.includes('canUseWebSearch') &&
         isWebSearchAvailable({
           provider: executionModelMetadata?.provider,
           modelSupportsNativeSearch: executionModelMetadata?.capabilities.search,
           modelSupportsTools: executionModelMetadata?.capabilities.tools,
-          genericBackendConfigured: useTierStore.getState().genericWebSearchAvailable,
+          genericBackendConfigured: entitlementState.genericWebSearchAvailable,
         });
 
       // Deep Research: multi-turn cited synthesis. Re-verified per-send (not just
@@ -1431,7 +1518,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         useChatViewStore.getState().features.research &&
         executionModelMetadata?.capabilities?.research === true &&
         executionModelMetadata?.capabilities?.search === true &&
-        useTierStore.getState().tier !== 'free';
+        entitlementState.grantedCapabilities.includes('canUseDeepResearch');
 
       // Per-turn code execution: mirrors webSearchEnabled above, with two extra
       // honesty checks so the toggle is never cosmetic — re-verified here (not
@@ -1443,13 +1530,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const codeExecutionEnabled =
         FEATURES.codeExecution &&
         executionModelMetadata?.capabilities?.codeExecution === true &&
-        useTierStore.getState().codeExecutionAvailable &&
+        entitlementState.codeExecutionAvailable &&
+        entitlementState.grantedCapabilities.includes('canUseCloudExecution') &&
         useChatViewStore.getState().features.codeExecution;
       const requestedWorkMode = useChatViewStore.getState().workMode;
       // The server is authoritative, but do not replay a persisted paid mode
       // after a cached subscription downgrade. This keeps the Free UI and wire
       // request aligned while the server still enforces the entitlement.
-      const workMode = useTierStore.getState().tier === 'free' ? 'chat' : requestedWorkMode;
+      const workMode = canUseBillingPlanCapability(entitlementState.tier, 'agi_work')
+        ? requestedWorkMode
+        : 'chat';
 
       // Raw content accumulator for cloud streams — separate from streamingContent
       // (which must hold only display-clean text). The server intentionally emits
@@ -1531,6 +1621,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         },
         {
           onRunReference: (reference) => {
+            if (!isTurnAccountCurrent() || controller.signal.aborted) return;
             cloudAgentRun = {
               ...reference,
               lastSequence: Math.max(
@@ -1563,7 +1654,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             // and composer got stuck permanently in the "still generating" state.
             // Every other delta-handling callback in this file already guards on
             // this; this one didn't.
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || !isTurnAccountCurrent()) return;
 
             const state = get();
             lastDeltaTimes.set(conversationId, Date.now());
@@ -1725,6 +1816,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           },
 
           onDone: () => {
+            if (!isTurnAccountCurrent()) return;
             const startedAt = thinkingStartTimes.get(conversationId);
             const endedAt = thinkingEndTimes.get(conversationId) ?? Date.now();
             const thinkingDuration = startedAt
@@ -1766,6 +1858,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               conversationId,
               convTitle,
               completedAt,
+              artifactProvenance,
             );
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
@@ -1796,6 +1889,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
+            cloudStreamingConversations.delete(conversationId);
             activeCloudRuns.delete(conversationId);
 
             currentMsgStore.setState((s) => ({
@@ -1844,9 +1938,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           },
 
           onError: (error: Error) => {
+            if (!isTurnAccountCurrent()) return;
             thinkingStartTimes.delete(conversationId);
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
+            cloudStreamingConversations.delete(conversationId);
             activeCloudRuns.delete(conversationId);
 
             const currentMsgStore = getConversationMessageStore(conversationId);
@@ -1956,8 +2052,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       thinkingStartTimes.delete(conversationId);
       abortControllers.delete(conversationId);
       streamingConversations.delete(conversationId);
+      cloudStreamingConversations.delete(conversationId);
       activeCloudRuns.delete(conversationId);
 
+      if (!isTurnAccountCurrent()) return true;
       if (controller.signal.aborted) {
         set({ ...streamingFlags() });
         return true;
@@ -2082,28 +2180,31 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         abortControllers.delete(conversationId);
       }
       streamingConversations.delete(conversationId);
-      const sweepStore = getConversationMessageStore(conversationId);
-      const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
-      if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
-        const completedAtMs = Date.now();
-        const settledMessages = sweepMsgs.map((m) =>
-          m.id === assistantMessageId && m.isStreaming
-            ? settleMessageAgentActivity(
-                { ...m, isStreaming: false },
-                controller.signal.aborted ? 'cancelled' : 'failed',
-                completedAtMs,
-                controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
-              )
-            : m,
-        );
-        sweepStore.setState((s) => ({
-          messages: {
-            ...s.messages,
-            [conversationId]: settledMessages,
-          },
-        }));
-        if (executionMode === 'cloud') {
-          pushCloudAssistantUpdate(conversationId, settledMessages, assistantMessageId);
+      cloudStreamingConversations.delete(conversationId);
+      if (isTurnAccountCurrent()) {
+        const sweepStore = getConversationMessageStore(conversationId);
+        const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
+        if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
+          const completedAtMs = Date.now();
+          const settledMessages = sweepMsgs.map((m) =>
+            m.id === assistantMessageId && m.isStreaming
+              ? settleMessageAgentActivity(
+                  { ...m, isStreaming: false },
+                  controller.signal.aborted ? 'cancelled' : 'failed',
+                  completedAtMs,
+                  controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
+                )
+              : m,
+          );
+          sweepStore.setState((s) => ({
+            messages: {
+              ...s.messages,
+              [conversationId]: settledMessages,
+            },
+          }));
+          if (executionMode === 'cloud') {
+            pushCloudAssistantUpdate(conversationId, settledMessages, assistantMessageId);
+          }
         }
       }
       set({ ...streamingFlags() });
@@ -2111,6 +2212,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   },
 
   resolveToolApproval: async (conversationId, assistantMessageId, toolCallId, decision) => {
+    const approvalAccountEpoch = captureCloudAccountEpoch();
+    if (approvalAccountEpoch === null) {
+      set({
+        error: 'Sign in to resume this AGI Cloud task.',
+        paywallError: null,
+        ...streamingFlags(),
+      });
+      return;
+    }
+    const approvalArtifactProvenance: MobileArtifactProvenance = {
+      scope: 'cloud',
+      ownerId: approvalAccountEpoch.ownerId,
+    };
+    const approvalExecutionGeneration = cloudExecutionGeneration;
+    const isApprovalAccountCurrent = () =>
+      approvalExecutionGeneration === cloudExecutionGeneration &&
+      isCloudAccountEpochCurrent(approvalAccountEpoch);
     if (!isApprovalTurnLive(assistantMessageId)) return;
     const turn = pendingApprovalTurns.get(assistantMessageId);
     if (!turn || turn.resolving) return;
@@ -2184,6 +2302,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const controller = new AbortController();
     abortControllers.set(conversationId, controller);
     streamingConversations.add(conversationId);
+    cloudStreamingConversations.add(conversationId);
     lastDeltaTimes.set(conversationId, Date.now());
     set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '', error: null });
 
@@ -2239,7 +2358,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         },
         {
           onDelta: (delta: StreamDelta) => {
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || !isApprovalAccountCurrent()) return;
             lastDeltaTimes.set(conversationId, Date.now());
 
             if (delta.x_agent_event) {
@@ -2319,6 +2438,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           },
 
           onDone: () => {
+            if (!isApprovalAccountCurrent()) return;
             const finalToolCalls = toolCallList(toolAcc);
             const innerMsgStore = getConversationMessageStore(conversationId);
             const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
@@ -2343,6 +2463,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               conversationId,
               convTitle,
               completedAt,
+              approvalArtifactProvenance,
             );
 
             const hasTurnMetadata =
@@ -2378,6 +2499,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
+            cloudStreamingConversations.delete(conversationId);
 
             innerMsgStore.setState((s) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
@@ -2413,9 +2535,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           },
 
           onError: (error: Error) => {
+            if (!isApprovalAccountCurrent()) return;
             turn.resolving = false;
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
+            cloudStreamingConversations.delete(conversationId);
 
             if (__DEV__) {
               console.warn(
@@ -2466,9 +2590,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // routes every failure through onError above), so this branch is not
       // expected to run in practice — kept for structural parity with
       // sendMessage's stuck-composer guarantee.
-      if (__DEV__) {
+      if (__DEV__ && isApprovalAccountCurrent()) {
         console.warn('[chat-stream] resolveToolApproval unexpected throw:', caughtErr);
       }
+      if (!isApprovalAccountCurrent()) return;
       turn.resolving = false;
       turn.decisions.clear();
       if (!controller.signal.aborted) {
@@ -2506,27 +2631,30 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         abortControllers.delete(conversationId);
       }
       streamingConversations.delete(conversationId);
-      const sweepStore = getConversationMessageStore(conversationId);
-      const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
-      if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
-        const completedAtMs = Date.now();
-        const settledMessages = sweepMsgs.map((m) =>
-          m.id === assistantMessageId && m.isStreaming
-            ? settleMessageAgentActivity(
-                { ...m, isStreaming: false },
-                controller.signal.aborted ? 'cancelled' : 'failed',
-                completedAtMs,
-                controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
-              )
-            : m,
-        );
-        sweepStore.setState((s) => ({
-          messages: {
-            ...s.messages,
-            [conversationId]: settledMessages,
-          },
-        }));
-        pushCloudAssistantUpdate(conversationId, settledMessages, assistantMessageId);
+      cloudStreamingConversations.delete(conversationId);
+      if (isApprovalAccountCurrent()) {
+        const sweepStore = getConversationMessageStore(conversationId);
+        const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
+        if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
+          const completedAtMs = Date.now();
+          const settledMessages = sweepMsgs.map((m) =>
+            m.id === assistantMessageId && m.isStreaming
+              ? settleMessageAgentActivity(
+                  { ...m, isStreaming: false },
+                  controller.signal.aborted ? 'cancelled' : 'failed',
+                  completedAtMs,
+                  controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
+                )
+              : m,
+          );
+          sweepStore.setState((s) => ({
+            messages: {
+              ...s.messages,
+              [conversationId]: settledMessages,
+            },
+          }));
+          pushCloudAssistantUpdate(conversationId, settledMessages, assistantMessageId);
+        }
       }
       set({ ...streamingFlags() });
     }

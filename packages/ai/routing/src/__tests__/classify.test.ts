@@ -888,20 +888,21 @@ describe('estimateTokens — provider multipliers', () => {
     expect(estimateTokens('a'.repeat(38), 'gpt-5.6-sol')).toBe(10);
   });
 
-  it('uses catalog tokenizer drift for the canonical Opus model', () => {
-    const metadata = getModelMetadataById('claude-opus-4.8');
+  it('uses the standard Claude estimate for Opus 5 when no drift is declared', () => {
+    const metadata = getModelMetadataById('claude-opus-5');
     expect(metadata).not.toBeNull();
 
     const expected = Math.ceil(100 * (1 / 3.5) * tokenizerDriftFactor(metadata!.id));
     expect(estimateTokens('a'.repeat(100), metadata!.id)).toBe(expected);
+    expect(tokenizerDriftFactor(metadata!.id)).toBe(1);
   });
 
-  it('uses the same catalog metadata for a provider API model id', () => {
-    const metadata = getModelMetadataById('claude-opus-4-8');
+  it('uses the same catalog metadata for the Opus provider ID', () => {
+    const metadata = getModelMetadataById('claude-opus-5');
     expect(metadata).not.toBeNull();
 
     const expected = Math.ceil(100 * (1 / 3.5) * tokenizerDriftFactor(metadata!.id));
-    expect(estimateTokens('a'.repeat(100), 'claude-opus-4-8')).toBe(expected);
+    expect(estimateTokens('a'.repeat(100), 'claude-opus-5')).toBe(expected);
   });
 
   it('uses regular Claude tokenizer for non-opus claude (claude-sonnet-4.6)', () => {
@@ -909,8 +910,8 @@ describe('estimateTokens — provider multipliers', () => {
     expect(estimateTokens('a'.repeat(35), 'claude-sonnet-4.6')).toBe(10);
   });
 
-  it('catalog drift makes claude-opus-4.8 heavier than the regular Claude rate', () => {
-    expect(estimateTokens('a'.repeat(35), 'claude-opus-4.8')).toBeGreaterThan(
+  it('does not invent tokenizer inflation for claude-opus-5', () => {
+    expect(estimateTokens('a'.repeat(35), 'claude-opus-5')).toBe(
       estimateTokens('a'.repeat(35), 'claude-sonnet-4.6'),
     );
   });
@@ -940,11 +941,11 @@ describe('estimateTokens — provider multipliers', () => {
     expect(estimateTokens('a')).toBe(1);
   });
 
-  it('Opus inflation makes opus heavier than other Claude models', () => {
+  it('keeps Opus and other Claude estimates equal without catalog drift metadata', () => {
     const txt = 'a'.repeat(1000);
-    const opus = estimateTokens(txt, 'claude-opus-4.8');
+    const opus = estimateTokens(txt, 'claude-opus-5');
     const sonnet = estimateTokens(txt, 'claude-sonnet-4.6');
-    expect(opus).toBeGreaterThan(sonnet);
+    expect(opus).toBe(sonnet);
   });
 
   it('Gemini is the lightest tokenizer per char', () => {

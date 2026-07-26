@@ -1,0 +1,5 @@
+{
+  "route": "/projects",
+  "pageErrors": [],
+  "consoleErrors": ["[ERROR] [SettingsQuery] Settings error: User not authenticated"]
+}

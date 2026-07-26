@@ -59,5 +59,5 @@ Claude Code's VS Code extension and Codex IDE extension offer AI commit messages
 - Running `git` through a shell or forwarding attacker-controlled args (regresses PR-3B / F-12); auto-committing without user confirmation; appending machine co-author trailers.
 - Claiming AI commit messages, PR review, or merge-conflict resolution are shipped — they are 🔭; only cite ✅ with a real path.
 - Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`), routes, env vars, or command names.
-- Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups — use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise. 🟡 Note: `package.json:contributes.configuration` still lists a `agiWorkforce.tier` enum with `hobby`/`pro_plus`; that reconciliation is a separate tracked task.
+- Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups; the extension manifest exposes only current access modes.
 - Referencing Supabase (fully migrated to Clerk + Neon + Stripe); treating a real Git conflict as a patch hunk because both use `<<<<<<<` markers.

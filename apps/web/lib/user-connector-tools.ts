@@ -69,6 +69,7 @@ import {
   getInstallationAccessToken,
   getPrDiff,
   isGitHubAppConfigured,
+  isGitHubInstallationLinkingAvailable,
   postIssueComment,
   postPrReview,
 } from '@/lib/github-app';
@@ -123,9 +124,8 @@ export interface UserConnectorToolCatalog {
  * where refusing to cap at all would be the unsafe answer.
  */
 function resolveConnectorToolLimit(planTier: string | null | undefined): number | null {
-  const planLimit = getPlanMaxConnectorTools(planTier);
-  if (planLimit !== null) return planLimit;
-  return getBillingPlanProductLimits(planTier) ? null : MAX_CONNECTOR_TOOLS_PER_USER;
+  if (!getBillingPlanProductLimits(planTier)) return MAX_CONNECTOR_TOOLS_PER_USER;
+  return getPlanMaxConnectorTools(planTier);
 }
 
 /** serverId reserved for the first-party GitHub built-in connector. */
@@ -246,7 +246,7 @@ export async function getUserGithubInstallations(
   // first use), so a usable installation is any row PLUS mintable app creds —
   // requiring a cached token here would deadlock fresh installs out of ever
   // being offered.
-  if (!isGitHubAppConfigured()) return [];
+  if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) return [];
   const db = getNeonDb();
   let rows: GithubInstallationRow[];
   try {
@@ -254,6 +254,7 @@ export async function getUserGithubInstallations(
       `select installation_id, account_login
          from github_installations
         where user_id = $1
+          and ownership_verified_at is not null
         order by created_at asc`,
       [userId],
     );

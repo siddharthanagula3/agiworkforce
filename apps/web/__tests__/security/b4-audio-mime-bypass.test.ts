@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 /**
  * B4: audio transcriptions MIME / magic-bytes validation.
  *

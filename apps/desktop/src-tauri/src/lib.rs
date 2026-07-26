@@ -251,6 +251,13 @@ pub fn run() {
                 data_dir: app_data_dir.clone(),
             });
 
+            let db_path = app_data_dir.join("agiworkforce.db");
+            let startup_recovery = crate::sys::startup_recovery::StartupRecoveryState::new(
+                app_data_dir.clone(),
+                db_path.clone(),
+            );
+            app.manage(startup_recovery.clone());
+
             // B1: BYOK encrypted key vault (tauri-plugin-stronghold v2.3.1, MIT/Apache-2.0).
             // Salt persisted to $APPDATA/stronghold.salt; snapshot to $APPDATA/keys.stronghold.
             // Password-hash = Argon2id (32-byte, persistent salt via kdf feature).
@@ -279,54 +286,96 @@ pub fn run() {
                 tracing::info!("Native messaging manifest installed/updated");
             }
 
-            let db_path = app_data_dir.join("agiworkforce.db");
             tracing::info!("Database path: {:?}", db_path);
 
-            // Derive the database encryption key from machine identity.
-            // This uses PBKDF2 with machine-specific salt to produce a
-            // deterministic 32-byte key unique to this machine.
-            let db_encryption_key = {
-                use crate::sys::security::{derive_key, KeyPurpose};
-                derive_key(KeyPurpose::DatabaseEncryption)
+            let database_key_store =
+                match crate::data::db::key_management::OsDatabaseKeyStore::for_bundle_identifier(
+                    &app.config().identifier,
+                ) {
+                    Ok(store) => store,
+                    Err(error) => {
+                        tracing::error!(
+                            "Failed to configure bundle-scoped database key storage: {error}"
+                        );
+                        startup_recovery.record(
+                            crate::sys::startup_recovery::StartupRecoveryInfo::from_database_error(
+                                &error,
+                            ),
+                        );
+                        crate::sys::startup_recovery::show_recovery_window(app.handle());
+                        return Ok(());
+                    }
+                };
+
+            // New installations use a random key held by the operating
+            // system's secure storage. Existing machine-derived databases are
+            // probed read-only and adopted only after SQLCipher proves a
+            // candidate key. No startup path guesses, rekeys, or replaces
+            // unrecognized ciphertext.
+            let stable_database = match crate::data::db::key_management::open_main_database(
+                &db_path,
+                &database_key_store,
+                &crate::sys::security::machine_key::legacy_database_key_candidates(),
+            ) {
+                Ok(database) => database,
+                Err(error) => {
+                    tracing::error!(
+                        "Failed to open the encrypted main database safely: {error}"
+                    );
+                    startup_recovery.record(
+                        crate::sys::startup_recovery::StartupRecoveryInfo::from_database_error(
+                            &error,
+                        ),
+                    );
+                    crate::sys::startup_recovery::show_recovery_window(app.handle());
+                    return Ok(());
+                }
             };
-
-            let db_path_str = db_path.to_string_lossy().to_string();
-
-            // Open the database with encryption. Fail hard if encryption
-            // cannot be established — silently falling back to plaintext
-            // would violate the security contract and risk data exposure.
-            let conn = crate::data::db::encryption::open_or_migrate_encrypted_connection(
-                &db_path_str,
-                &db_encryption_key,
-            )
-            .map_err(|enc_err| {
-                tracing::error!(
-                    "Failed to open database with encryption: {}. \
-                     Refusing to fall back to unencrypted mode.",
-                    enc_err
-                );
-                anyhow::anyhow!(
-                    "Database encryption initialization failed: {}. \
-                     Cannot start without encrypted database.",
-                    enc_err
+            tracing::info!(
+                "Database opened with SQLCipher encryption (key source: {:?})",
+                stable_database.key_origin
+            );
+            let main_database_access = stable_database.access.clone();
+            if let Err(error) =
+                crate::data::db::key_management::register_main_database_access(
+                    main_database_access.clone(),
                 )
-            })?;
-            tracing::info!("Database opened with SQLCipher encryption");
+            {
+                tracing::error!("Failed to register main-database access: {error}");
+                startup_recovery.record(
+                    crate::sys::startup_recovery::StartupRecoveryInfo::database_initialization(),
+                );
+                crate::sys::startup_recovery::show_recovery_window(app.handle());
+                return Ok(());
+            }
+            app.manage(main_database_access.clone());
+            let conn = stable_database.connection;
 
             // Configure SQLite for better performance and reliability.
             // These PRAGMAs must come after the encryption key PRAGMA.
-            conn.execute_batch("
+            if let Err(error) = conn.execute_batch("
                 PRAGMA busy_timeout = 5000;
                 PRAGMA journal_mode = WAL;
                 PRAGMA synchronous = NORMAL;
                 PRAGMA foreign_keys = ON;
                 PRAGMA cache_size = -64000;
-            ").context("Failed to set database pragmas")?;
+            ") {
+                tracing::error!("Failed to configure the encrypted main database: {error}");
+                startup_recovery.record(
+                    crate::sys::startup_recovery::StartupRecoveryInfo::database_initialization(),
+                );
+                crate::sys::startup_recovery::show_recovery_window(app.handle());
+                return Ok(());
+            }
 
             if let Err(e) = migrations::run_migrations(&conn) {
                 tracing::error!("Failed to run migrations: {}", e);
 
-                return Err(anyhow::anyhow!("Failed to run migrations: {}", e).into());
+                startup_recovery.record(
+                    crate::sys::startup_recovery::StartupRecoveryInfo::database_initialization(),
+                );
+                crate::sys::startup_recovery::show_recovery_window(app.handle());
+                return Ok(());
             }
 
             tracing::info!("Database initialized at {:?}", db_path);
@@ -465,10 +514,9 @@ pub fn run() {
 
             app.manage(SettingsState::new());
 
-            let settings_conn = crate::data::db::encryption::open_encrypted_connection(
-                &db_path.to_string_lossy(),
-                &db_encryption_key,
-            ).map_err(|e| anyhow::anyhow!("Failed to open settings database: {}", e))?;
+            let settings_conn = main_database_access
+                .open_connection()
+                .map_err(|e| anyhow::anyhow!("Failed to open settings database: {}", e))?;
             let settings_service = SettingsService::new(Arc::new(Mutex::new(settings_conn)))
                 .context("Failed to initialize settings service")?;
             app.manage(SettingsServiceState::new(settings_service));
@@ -482,10 +530,7 @@ pub fn run() {
             app.manage(CloudState::new());
 
             let calendar_state = CalendarState::new();
-            match crate::data::db::encryption::open_encrypted_connection(
-                &db_path.to_string_lossy(),
-                &db_encryption_key,
-            ) {
+            match main_database_access.open_connection() {
                 Ok(calendar_conn) => match load_persisted_calendar_accounts(&calendar_conn) {
                     Ok(accounts) => {
                         let mut restored = 0usize;
@@ -513,10 +558,7 @@ pub fn run() {
 
             // Gmail OAuth state for handling Gmail OAuth 2.0 flows
             let gmail_oauth_state = GmailOAuthState::new();
-            match crate::data::db::encryption::open_encrypted_connection(
-                &db_path.to_string_lossy(),
-                &db_encryption_key,
-            ) {
+            match main_database_access.open_connection() {
                 Ok(gmail_conn) => {
                     match crate::sys::commands::gmail_oauth::load_persisted_gmail_accounts(&gmail_conn) {
                         Ok(accounts) => {
@@ -898,10 +940,9 @@ pub fn run() {
                 }
             }
 
-            let cache_conn = crate::data::db::encryption::open_encrypted_connection(
-                &db_path.to_string_lossy(),
-                &db_encryption_key,
-            ).map_err(|e| anyhow::anyhow!("Failed to open database for codebase cache: {}", e))?;
+            let cache_conn = main_database_access
+                .open_connection()
+                .map_err(|e| anyhow::anyhow!("Failed to open database for codebase cache: {}", e))?;
             let codebase_cache = crate::data::cache::CodebaseCache::new(Arc::new(Mutex::new(cache_conn)))
                     .context("Failed to initialize codebase cache")?;
             app.manage(crate::sys::commands::cache::CodebaseCacheState(Arc::new(codebase_cache)));
@@ -911,21 +952,20 @@ pub fn run() {
 
             app.manage(BillingStateWrapper::new());
 
-            let workflow_engine_state = WorkflowEngineState::new(db_path.to_string_lossy().to_string());
+            let workflow_engine_state =
+                WorkflowEngineState::new_main_database(main_database_access.clone());
             app.manage(workflow_engine_state);
 
-            let marketplace_conn = crate::data::db::encryption::open_encrypted_connection(
-                &db_path.to_string_lossy(),
-                &db_encryption_key,
-            ).map_err(|e| anyhow::anyhow!("Failed to open database for marketplace: {}", e))?;
+            let marketplace_conn = main_database_access
+                .open_connection()
+                .map_err(|e| anyhow::anyhow!("Failed to open database for marketplace: {}", e))?;
             app.manage(crate::sys::commands::marketplace::MarketplaceState {
                     db: Arc::new(Mutex::new(marketplace_conn)),
                 });
 
-            let template_conn = crate::data::db::encryption::open_encrypted_connection(
-                &db_path.to_string_lossy(),
-                &db_encryption_key,
-            ).map_err(|e| anyhow::anyhow!("Failed to open database for template manager: {}", e))?;
+            let template_conn = main_database_access.open_connection().map_err(|e| {
+                anyhow::anyhow!("Failed to open database for template manager: {}", e)
+            })?;
             let template_db = Arc::new(Mutex::new(template_conn));
             let template_manager = crate::sys::commands::templates::initialize_template_manager(template_db)
                 .map_err(|e| anyhow::anyhow!("Failed to initialize template manager: {}", e))?;
@@ -934,10 +974,9 @@ pub fn run() {
             });
 
             let presence_db = Arc::new(tokio::sync::Mutex::new(
-                crate::data::db::encryption::open_encrypted_connection(
-                    &db_path.to_string_lossy(),
-                    &db_encryption_key,
-                ).map_err(|e| anyhow::anyhow!("Failed to open database for presence: {}", e))?,
+                main_database_access
+                    .open_connection()
+                    .map_err(|e| anyhow::anyhow!("Failed to open database for presence: {}", e))?,
             ));
             let presence_manager = Arc::new(crate::integrations::realtime::PresenceManager::new(presence_db));
             // Allow overriding the WebSocket port via environment variable for custom deployments
@@ -1020,10 +1059,9 @@ pub fn run() {
                 realtime_token_shared,
             ));
             let metrics_db = Arc::new(Mutex::new(
-                crate::data::db::encryption::open_encrypted_connection(
-                    &db_path.to_string_lossy(),
-                    &db_encryption_key,
-                ).map_err(|e| anyhow::anyhow!("Failed to open database for metrics: {}", e))?,
+                main_database_access
+                    .open_connection()
+                    .map_err(|e| anyhow::anyhow!("Failed to open database for metrics: {}", e))?,
             ));
             let metrics_collector = Arc::new(
                 crate::data::metrics::RealtimeMetricsCollector::new(metrics_db.clone(), realtime_server.clone()),
@@ -1071,10 +1109,9 @@ pub fn run() {
             app.manage(crate::sys::commands::NotificationCenterState::new());
 
             let task_db_conn = Arc::new(Mutex::new(
-                crate::data::db::encryption::open_encrypted_connection(
-                    &db_path.to_string_lossy(),
-                    &db_encryption_key,
-                ).map_err(|e| anyhow::anyhow!("Failed to open database for task manager: {}", e))?,
+                main_database_access.open_connection().map_err(|e| {
+                    anyhow::anyhow!("Failed to open database for task manager: {}", e)
+                })?,
             ));
             let task_manager = Arc::new(crate::features::tasks::TaskManager::new(
                 task_db_conn,
@@ -1194,6 +1231,13 @@ pub fn run() {
         //   3. Add crate::sys::commands::<fn_name>, here
         //   4. Run: bash apps/desktop/check-wiring.sh
         .invoke_handler(tauri::generate_handler![
+            // Fail-closed local-database recovery commands. These are
+            // available even when normal application state cannot initialize.
+            crate::sys::startup_recovery::startup_get_recovery_state,
+            crate::sys::startup_recovery::startup_retry,
+            crate::sys::startup_recovery::startup_open_data_folder,
+            crate::sys::startup_recovery::startup_export_diagnostics,
+            crate::sys::startup_recovery::startup_quit,
 
             crate::sys::commands::agi_submit_goal,
             crate::sys::commands::agi_submit_goal_parallel,
@@ -1619,7 +1663,6 @@ pub fn run() {
             crate::sys::account::fetch_user_profile,
             crate::sys::account::oauth_refresh,
             crate::sys::account::fetch_credit_balance,
-            crate::sys::account::report_llm_usage,
             crate::sys::account::account_store_api_base_url,
             crate::sys::account::account_store_access_token,
             crate::sys::account::account_store_refresh_token,

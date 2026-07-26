@@ -21,7 +21,7 @@ import settingsService, {
 } from '../services/user-preferences';
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
-import { requireProviderDefaultModel } from '@agiworkforce/types';
+import { requireProviderDefaultModel, type BillingPlanTier } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 
@@ -560,24 +560,72 @@ export interface OrganizationSettings {
   id: string;
   name: string;
   slug: string;
-  logoUrl: string | null;
-  description: string | null;
-  website: string | null;
-  billingEmail: string | null;
-  plan: 'free' | 'team' | 'enterprise';
+  plan: BillingPlanTier;
   memberCount: number;
-  maxMembers: number;
+  /** Unknown until licensed seat quantity is persisted by billing. */
+  maxMembers: number | null;
   createdAt: string;
   updatedAt: string;
-  settings: {
-    allowMemberInvites: boolean;
-    requireEmailVerification: boolean;
-    defaultRole: 'member' | 'admin' | 'viewer';
-    allowedDomains: string[];
-    enforceSSO: boolean;
-    auditLogRetention: number;
-    dataRetention: number;
-  };
+  currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
+}
+
+export interface OrganizationAccess {
+  plan: BillingPlanTier;
+  canManageTeam: boolean;
+  maxMembers: number | null;
+}
+
+export interface OrganizationOverview {
+  organization: OrganizationSettings | null;
+  access: OrganizationAccess;
+}
+
+interface ApiErrorEnvelope {
+  error?: string | { message?: string };
+}
+
+async function readApiError(response: Response): Promise<string> {
+  const fallback = `HTTP ${response.status}`;
+  const body = (await response.json().catch(() => null)) as ApiErrorEnvelope | null;
+  if (typeof body?.error === 'string' && body.error.trim()) {
+    return body.error;
+  }
+  if (
+    body?.error &&
+    typeof body.error === 'object' &&
+    typeof body.error.message === 'string' &&
+    body.error.message.trim()
+  ) {
+    return body.error.message;
+  }
+  return fallback;
+}
+
+async function fetchOrganizationOverview(): Promise<OrganizationOverview> {
+  const token = await getAuthToken();
+  if (!token) throw new Error('User not authenticated');
+
+  const response = await fetch('/api/settings/organization', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
+  }
+
+  return (await response.json()) as OrganizationOverview;
+}
+
+export function useOrganizationOverview(): UseQueryResult<OrganizationOverview, Error> {
+  return useQuery<OrganizationOverview, Error>({
+    queryKey: ['settings', 'organization', 'current'],
+    queryFn: fetchOrganizationOverview,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    meta: {
+      errorMessage: 'Failed to load organization settings',
+    },
+  });
 }
 
 /**
@@ -590,27 +638,61 @@ export function useOrganizationSettings(
   organizationId?: string,
 ): UseQueryResult<OrganizationSettings | null, Error> {
   void organizationId; // reserved for future org-switcher; route returns current user's org
-  return useQuery<OrganizationSettings | null, Error>({
-    queryKey: ['settings', 'organization', organizationId ?? 'current'],
-    queryFn: async (): Promise<OrganizationSettings | null> => {
-      const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
-
-      const res = await fetch('/api/settings/organization', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      const json = (await res.json()) as { organization: OrganizationSettings | null };
-      return json.organization;
-    },
+  return useQuery<OrganizationOverview, Error, OrganizationSettings | null>({
+    queryKey: ['settings', 'organization', 'current'],
+    queryFn: fetchOrganizationOverview,
+    select: (overview) => overview.organization,
     staleTime: 10 * 60 * 1000, // 10 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
     meta: {
       errorMessage: 'Failed to load organization settings',
+    },
+  });
+}
+
+export interface CreateOrganizationInput {
+  name: string;
+  slug: string;
+}
+
+export function useCreateOrganization(): UseMutationResult<
+  OrganizationSettings,
+  Error,
+  CreateOrganizationInput
+> {
+  const queryClient = useQueryClient();
+
+  return useMutation<OrganizationSettings, Error, CreateOrganizationInput>({
+    mutationFn: async (input) => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const csrfToken = await getCsrfToken();
+
+      const response = await fetch('/api/settings/organization', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify(input),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readApiError(response));
+      }
+
+      const body = (await response.json()) as { organization?: OrganizationSettings };
+      if (!body.organization) throw new Error('Invalid response from server');
+      return body.organization;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
+      toast.success('Workspace created');
+    },
+    onError: (error) => {
+      logger.error('Failed to create workspace:', error);
+      toast.error(error.message || 'Failed to create workspace');
     },
   });
 }
@@ -621,24 +703,24 @@ export function useOrganizationSettings(
  * @returns UseMutationResult for updating organization settings
  */
 export function useUpdateOrganizationSettings(): UseMutationResult<
-  Partial<OrganizationSettings>,
+  OrganizationSettings,
   Error,
-  { organizationId: string; updates: Partial<OrganizationSettings> }
+  { organizationId: string; updates: Partial<Pick<OrganizationSettings, 'name' | 'slug'>> }
 > {
   const queryClient: QueryClient = useQueryClient();
 
   return useMutation<
-    Partial<OrganizationSettings>,
+    OrganizationSettings,
     Error,
-    { organizationId: string; updates: Partial<OrganizationSettings> }
+    { organizationId: string; updates: Partial<Pick<OrganizationSettings, 'name' | 'slug'>> }
   >({
-    mutationFn: async ({ updates }): Promise<Partial<OrganizationSettings>> => {
+    mutationFn: async ({ updates }): Promise<OrganizationSettings> => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
 
       const csrfToken = await getCsrfToken();
 
-      const res = await fetch('/api/settings/organization', {
+      const response = await fetch('/api/settings/organization', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -648,18 +730,16 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
         body: JSON.stringify(updates),
       });
 
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error ?? `HTTP ${res.status}`);
+      if (!response.ok) {
+        throw new Error(await readApiError(response));
       }
 
-      const json = (await res.json()) as { organization: Partial<OrganizationSettings> };
-      return json.organization ?? updates;
+      const body = (await response.json()) as { organization?: OrganizationSettings };
+      if (!body.organization) throw new Error('Invalid response from server');
+      return body.organization;
     },
-    onSuccess: (_, { organizationId }) => {
-      queryClient.invalidateQueries({
-        queryKey: ['settings', 'organization', organizationId],
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
       toast.success('Organization settings updated');
     },
     onError: (error: Error) => {
@@ -684,11 +764,12 @@ export interface TeamMember {
   name: string;
   avatarUrl: string | null;
   role: 'owner' | 'admin' | 'member' | 'viewer';
-  status: 'active' | 'pending' | 'suspended';
-  invitedAt: string | null;
+  status: 'active';
+  provisionedAt: string | null;
   joinedAt: string | null;
   lastActiveAt: string | null;
   permissions: string[];
+  isCurrentUser: boolean;
 }
 
 /**
@@ -712,7 +793,7 @@ export function useTeamMembers(
       });
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        throw new Error(await readApiError(res));
       }
 
       const json = (await res.json()) as { members: TeamMember[] };
@@ -728,9 +809,10 @@ export function useTeamMembers(
 }
 
 /**
- * Invite team member mutation
+ * Add an existing AGI account to the team.
  *
- * @returns UseMutationResult for inviting a team member
+ * The legacy hook name is retained for compatibility; this does not send an
+ * invitation email and the server rejects unknown account addresses.
  */
 export function useInviteTeamMember(): UseMutationResult<
   TeamMember,
@@ -769,8 +851,7 @@ export function useInviteTeamMember(): UseMutationResult<
       });
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error ?? `HTTP ${res.status}`);
+        throw new Error(await readApiError(res));
       }
 
       const json = (await res.json()) as { member: TeamMember };
@@ -781,11 +862,12 @@ export function useInviteTeamMember(): UseMutationResult<
       queryClient.invalidateQueries({
         queryKey: ['settings', 'team', organizationId],
       });
-      toast.success('Invitation sent successfully');
+      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
+      toast.success('Team member added');
     },
     onError: (error: Error) => {
-      logger.error('Failed to invite team member:', error);
-      toast.error(error.message || 'Failed to send invitation');
+      logger.error('Failed to add team member:', error);
+      toast.error(error.message || 'Failed to add team member');
     },
   });
 }
@@ -823,14 +905,14 @@ export function useRemoveTeamMember(): UseMutationResult<
       });
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error ?? `HTTP ${res.status}`);
+        throw new Error(await readApiError(res));
       }
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({
         queryKey: ['settings', 'team', organizationId],
       });
+      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
       toast.success('Team member removed');
     },
     onError: (error: Error) => {
@@ -881,14 +963,14 @@ export function useUpdateTeamMemberRole(): UseMutationResult<
       });
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error ?? `HTTP ${res.status}`);
+        throw new Error(await readApiError(res));
       }
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({
         queryKey: ['settings', 'team', organizationId],
       });
+      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
       toast.success('Member role updated');
     },
     onError: (error: Error) => {

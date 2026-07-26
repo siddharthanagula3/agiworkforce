@@ -140,7 +140,8 @@ interface ScheduleRunHistoryProps {
 export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHistoryProps) {
   const fetchRuns = useScheduleStore((s) => s.fetchRuns);
   const getRuns = useScheduleStore((s) => s.getRuns);
-  const loading = useScheduleStore((s) => s.loading);
+  const loading = useScheduleStore((s) => s.runsLoadingBySchedule[scheduleId] ?? false);
+  const error = useScheduleStore((s) => s.runsErrorBySchedule[scheduleId] ?? null);
 
   const allRuns = getRuns(scheduleId);
   const runs = allRuns.slice(0, maxRuns);
@@ -174,7 +175,21 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
       </View>
 
       {/* Runs or empty state */}
-      {runs.length === 0 ? (
+      {loading && runs.length === 0 ? (
+        <View className="py-3 items-center">
+          <ActivityIndicator size="small" color={colors.textMuted} />
+          <Text className="text-[12px] text-white/30 mt-2">Loading runs…</Text>
+        </View>
+      ) : error && runs.length === 0 ? (
+        <Pressable
+          onPress={handleRefresh}
+          className="py-3 items-center"
+          accessibilityRole="button"
+          accessibilityLabel="Retry run history"
+        >
+          <Text className="text-[12px] text-red-400">Run history unavailable. Try again.</Text>
+        </Pressable>
+      ) : runs.length === 0 ? (
         <View className="py-3 items-center">
           <Text className="text-[12px] text-white/30">No runs yet</Text>
         </View>

@@ -9,8 +9,8 @@ import { WebSettingsModal } from './WebSettingsModal';
  *     rows (GET /api/connectors) and GitHub App installations
  *     (GET /api/github/installations) — github cannot have a user_connectors
  *     row, the installation IS its real signal;
- *   - no catalog Connect buttons anywhere (POST /api/connectors 501s every
- *     non-local catalog connector, so a Connect button would be a dead control);
+ *   - catalog Connect buttons render only for ids the server reports as
+ *     available; preview-only rows stay in the Browse directory;
  *   - custom remote MCP connectors use their real persisted
  *     POST /api/connectors/custom flow;
  *   - local-only (exclusive) connectors never render on web.
@@ -29,6 +29,7 @@ vi.mock('@/lib/client/csrf', () => ({
 // test is adapter-driven inside the shared shell, so stub the rest.
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
 vi.mock('../sections/AccountSection', () => ({ AccountSection: () => null }));
+vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team settings content</div> }));
 vi.mock('../sections/SecuritySection', () => ({ SecuritySection: () => null }));
 vi.mock('../sections/PrivacySection', () => ({ PrivacySection: () => null }));
 vi.mock('../sections/BillingSection', () => ({ BillingSection: () => null }));
@@ -93,12 +94,16 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     stubFetch(); // available: [] — nothing connectable
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    await screen.findByRole('table');
-    // No connector is in `available`, so a Connect button would be dead.
-    expect(screen.queryByRole('button', { name: /^Connect / })).toBeNull();
-    // Honest status labels instead.
-    expect(screen.getAllByText('Not yet available on web').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
+    await screen.findByText('Connect your first tool');
+    // The generic custom-MCP action is real, but no branded connector is
+    // offered unless the server advertises it as available.
+    expect(screen.getByRole('button', { name: 'Connect remote MCP server' })).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByPlaceholderText('Search connectors...')).toBeNull();
+    // Preview-only rows stay in Browse rather than becoming dead operational
+    // rows in the primary settings pane.
+    expect(screen.queryByText('Notion')).toBeNull();
+    expect(screen.queryByText('Coming soon')).toBeNull();
     // Local-only (exclusive) connectors cannot run on the cloud web server.
     expect(screen.queryByText('Local Filesystem')).toBeNull();
     expect(screen.queryByText('Terminal / Shell')).toBeNull();
@@ -116,20 +121,22 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     );
   });
 
-  it('persists custom connectors through the real custom MCP endpoint', async () => {
+  it('persists custom connectors and their optional bearer token through the real custom MCP endpoint', async () => {
     const fetchMock = stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
-    await screen.findByRole('table');
+    await screen.findByText('Connect your first tool');
 
     // Open Add > Add custom connector, fill valid values, submit.
     const { fireEvent } = await import('@testing-library/react');
-    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect remote MCP server' }));
     fireEvent.change(screen.getByPlaceholderText('My connector'), {
       target: { value: 'My MCP' },
     });
     fireEvent.change(screen.getByPlaceholderText('https://example.com/mcp'), {
       target: { value: 'https://mcp.example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Token is encrypted before storage'), {
+      target: { value: 'secret-token' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
@@ -143,7 +150,11 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
             'Content-Type': 'application/json',
             'x-csrf-token': 'csrf-token',
           },
-          body: JSON.stringify({ name: 'My MCP', url: 'https://mcp.example.com' }),
+          body: JSON.stringify({
+            name: 'My MCP',
+            url: 'https://mcp.example.com',
+            authToken: 'secret-token',
+          }),
         }),
       ),
     );
@@ -162,7 +173,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    await screen.findByRole('table');
+    await screen.findByText('Connect your first tool');
     const { fireEvent } = await import('@testing-library/react');
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
@@ -189,5 +200,12 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="reflect" />);
 
     expect(screen.getByText('Reflect settings content')).toBeTruthy();
+  });
+
+  it('renders the Team administration section from the shared settings nav', () => {
+    stubFetch();
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="team" />);
+
+    expect(screen.getByText('Team settings content')).toBeTruthy();
   });
 });

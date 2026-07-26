@@ -23,6 +23,7 @@ const THEME = {
   agentThinking: '#a855f7',
   agentActive: '#3b82f6',
 };
+const LOCAL_PROVENANCE = { scope: 'local' } as const;
 
 describe('uuid v5 bundling in RN/Jest (no react-native-get-random-values required)', () => {
   it('deriveArtifacts runs and returns deterministic ids', () => {
@@ -74,6 +75,7 @@ describe('deriveAndMapToMobileArtifacts — delegation + mapping', () => {
       '2026-06-21T00:00:00.000Z',
       'Test conversation',
       THEME,
+      LOCAL_PROVENANCE,
     );
 
     expect(result).toHaveLength(1);
@@ -100,6 +102,7 @@ describe('deriveAndMapToMobileArtifacts — delegation + mapping', () => {
       '2026-06-21T00:00:00.000Z',
       'Chat',
       THEME,
+      LOCAL_PROVENANCE,
     );
     const b = deriveAndMapToMobileArtifacts(
       PYTHON_BLOCK,
@@ -108,6 +111,7 @@ describe('deriveAndMapToMobileArtifacts — delegation + mapping', () => {
       '2026-06-21T00:00:00.000Z',
       'Chat',
       THEME,
+      LOCAL_PROVENANCE,
     );
     expect(a[0]!.id).toBe(b[0]!.id);
   });
@@ -121,6 +125,7 @@ describe('deriveAndMapToMobileArtifacts — delegation + mapping', () => {
       '2026-06-21T00:00:00.000Z',
       'Chat',
       THEME,
+      LOCAL_PROVENANCE,
     );
     // language should be undefined (gallery falls back to kind label), not 'text'
     if (result.length > 0) {
@@ -136,6 +141,7 @@ describe('deriveAndMapToMobileArtifacts — delegation + mapping', () => {
       '2026-06-21T00:00:00.000Z',
       'Chat',
       THEME,
+      LOCAL_PROVENANCE,
     );
     expect(result).toHaveLength(2);
     expect(result[0]!.id).not.toBe(result[1]!.id);
@@ -149,6 +155,7 @@ describe('deriveAndMapToMobileArtifacts — delegation + mapping', () => {
       '2026-06-21T00:00:00.000Z',
       'Chat',
       THEME,
+      LOCAL_PROVENANCE,
     );
     expect(result).toHaveLength(0);
   });

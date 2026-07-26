@@ -32,12 +32,14 @@
  */
 import { api } from './api';
 import { managedCloudProjects } from './managedCloudProjects';
+import { agiNativeColors } from '@agiworkforce/design-tokens';
 import type { ProjectSyncPushItem } from '@agiworkforce/cloud-contracts';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore, type DirtyMessageRef } from '@/stores/chat/cloudSyncStateStore';
-import { useArtifactStore } from '@/src/features/artifacts/store';
+import { generatedImageToMobileArtifact, useArtifactStore } from '@/src/features/artifacts/store';
+import { getDurableGeneratedImagePath } from '@/src/features/image/services/imagegen';
 import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/cloudMemoryStore';
 import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
@@ -46,6 +48,12 @@ import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useSettingsSyncStateStore } from '@/stores/settings/settingsSyncStateStore';
 import { toCloudSettings, applyCloudSettings, type CloudSettings } from './cloudSettingsMapping';
 import type { ChatMessage } from '@/types/chat';
+import {
+  assertCloudAccountEpochCurrent,
+  captureCloudAccountEpoch,
+  isStaleCloudAccountOperation,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 // Wire shapes + pure apply/cursor logic come from the shared cloud contracts
 // and sync-apply modules (@agiworkforce/sync) — the same schemas the web
 // routes' contract tests enforce server-side, and the same apply rules
@@ -106,7 +114,11 @@ const PULL_PAGE_GUARD = 50;
  */
 export function isManagedSyncEnabled(): boolean {
   try {
-    return FEATURES.cloudChat === true && useChatAppModeStore.getState().appMode === 'cloud';
+    return (
+      FEATURES.cloudChat === true &&
+      useChatAppModeStore.getState().appMode === 'cloud' &&
+      captureCloudAccountEpoch() !== null
+    );
   } catch {
     return false;
   }
@@ -177,6 +189,54 @@ function messageContentToString(content: unknown): string {
  */
 function messageMetadataForSync(message: ChatMessage): Record<string, unknown> | null {
   const base = message.metadata ? { ...message.metadata } : {};
+  const candidateImageUrl =
+    typeof message.imageUrl === 'string'
+      ? message.imageUrl
+      : typeof base['imageUrl'] === 'string'
+        ? base['imageUrl']
+        : undefined;
+  const durableImagePath =
+    message.imageGenPersisted === false
+      ? null
+      : getDurableGeneratedImagePath(
+          candidateImageUrl === undefined ? undefined : { url: candidateImageUrl },
+        );
+
+  // Image metadata crosses the device boundary only as a validated,
+  // owner-scoped `/api/files/<uuid>` identity. Remove any legacy provider URL
+  // or inline payload before rebuilding the bounded projection below.
+  delete base['imageUrl'];
+  delete base['imageGenPrompt'];
+  delete base['imageGenModel'];
+  delete base['revisedPrompt'];
+  if (base['toolType'] === 'image-generation') delete base['toolType'];
+
+  if (durableImagePath) {
+    base['toolType'] = 'image-generation';
+    base['imageUrl'] = durableImagePath;
+    const prompt =
+      typeof message.imageGenPrompt === 'string'
+        ? message.imageGenPrompt
+        : typeof message.metadata?.['imageGenPrompt'] === 'string'
+          ? message.metadata['imageGenPrompt']
+          : undefined;
+    const model =
+      typeof message.model === 'string'
+        ? message.model
+        : typeof message.metadata?.['imageGenModel'] === 'string'
+          ? message.metadata['imageGenModel']
+          : undefined;
+    const revisedPrompt =
+      typeof message.revisedPrompt === 'string'
+        ? message.revisedPrompt
+        : typeof message.metadata?.['revisedPrompt'] === 'string'
+          ? message.metadata['revisedPrompt']
+          : undefined;
+    if (prompt) base['imageGenPrompt'] = prompt.slice(0, 4_000);
+    if (model) base['imageGenModel'] = model.slice(0, 200);
+    if (revisedPrompt) base['revisedPrompt'] = revisedPrompt.slice(0, 4_000);
+  }
+
   const runReference = ManagedCloudAgentRunReferenceSchema.safeParse(base.cloudAgentRun);
   const calls = (message.toolCalls ?? [])
     .filter(
@@ -205,6 +265,58 @@ function messageMetadataForSync(message: ChatMessage): Record<string, unknown> |
   }
 
   return Object.keys(base).length > 0 ? base : null;
+}
+
+function hydrateGeneratedImageFields(
+  metadata: Record<string, unknown> | null | undefined,
+): Pick<
+  ChatMessage,
+  | 'type'
+  | 'imageUrl'
+  | 'imageGenPersisted'
+  | 'imageGenPrompt'
+  | 'revisedPrompt'
+  | 'isGeneratingImage'
+  | 'imageGenStatus'
+  | 'imageGenProgress'
+  | 'imageGenError'
+> {
+  const rawImageUrl = metadata?.['imageUrl'];
+  const imageUrl =
+    metadata?.['toolType'] === 'image-generation' && typeof rawImageUrl === 'string'
+      ? getDurableGeneratedImagePath({ url: rawImageUrl })
+      : null;
+  if (!imageUrl) {
+    return {
+      type: undefined,
+      imageUrl: undefined,
+      imageGenPersisted: undefined,
+      imageGenPrompt: undefined,
+      revisedPrompt: undefined,
+      isGeneratingImage: undefined,
+      imageGenStatus: undefined,
+      imageGenProgress: undefined,
+      imageGenError: undefined,
+    };
+  }
+
+  return {
+    type: 'image',
+    imageUrl,
+    imageGenPersisted: true,
+    imageGenPrompt:
+      typeof metadata?.['imageGenPrompt'] === 'string'
+        ? metadata['imageGenPrompt'].slice(0, 4_000)
+        : undefined,
+    revisedPrompt:
+      typeof metadata?.['revisedPrompt'] === 'string'
+        ? metadata['revisedPrompt'].slice(0, 4_000)
+        : undefined,
+    isGeneratingImage: false,
+    imageGenStatus: 'completed',
+    imageGenProgress: 100,
+    imageGenError: undefined,
+  };
 }
 
 function hydrateApprovalToolCalls(
@@ -298,6 +410,7 @@ const messagePort: MessageStorePort = {
     const chatMessages = records.map((record) => {
       const existing = existingById.get(record.id);
       const toolCalls = hydrateApprovalToolCalls(existing, record.metadata);
+      const generatedImage = hydrateGeneratedImageFields(record.metadata);
       return {
         ...(existing ?? {}),
         id: record.id,
@@ -309,9 +422,40 @@ const messagePort: MessageStorePort = {
         metadata: record.metadata ?? undefined,
         serverVersion: record.serverVersion,
         ...(toolCalls ? { toolCalls } : {}),
+        ...generatedImage,
       } as ChatMessage;
     });
     useChatCloudMessageStore.getState().setCloudMessages(conversationId, chatMessages);
+    const conversationTitle =
+      useChatCloudMessageStore
+        .getState()
+        .conversations.find((conversation) => conversation.id === conversationId)?.title ??
+      'AGI Cloud';
+    const artifactOwner = captureCloudAccountEpoch();
+    const generatedImages = artifactOwner
+      ? chatMessages.flatMap((message) => {
+          const imagePath =
+            message.type === 'image' && message.imageGenPersisted === true && message.imageUrl
+              ? getDurableGeneratedImagePath({ url: message.imageUrl })
+              : null;
+          return imagePath
+            ? [
+                generatedImageToMobileArtifact({
+                  messageId: message.id,
+                  imagePath,
+                  prompt: message.imageGenPrompt ?? message.revisedPrompt,
+                  createdAt: message.createdAt,
+                  conversationTitle,
+                  provenance: { scope: 'cloud', ownerId: artifactOwner.ownerId },
+                  accentColor: agiNativeColors.dark.terraCotta,
+                }),
+              ]
+            : [];
+        })
+      : [];
+    if (generatedImages.length > 0) {
+      useArtifactStore.getState().addArtifacts(generatedImages);
+    }
   },
 };
 
@@ -336,17 +480,17 @@ function applyMessageDeltas(deltas: MessageWireDelta[]): void {
 
 // ── Pull ────────────────────────────────────────────────────────────────────────
 
-async function pull(): Promise<void> {
+async function pull(account: CloudAccountEpoch): Promise<void> {
   let cursor = useCloudSyncStateStore.getState().cursor;
   for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
-    const res = ChatSyncPullResponseSchema.parse(
-      await api.get<unknown>(`${SYNC_PATH}?since=${encodeURIComponent(cursor)}`),
-    );
+    const raw = await api.get<unknown>(`${SYNC_PATH}?since=${encodeURIComponent(cursor)}`);
+    assertCloudAccountEpochCurrent(account);
+    const res = ChatSyncPullResponseSchema.parse(raw);
     applyConversationDeltas(res.conversations);
     applyMessageDeltas(res.messages);
     // Artifacts (0039): mobile is a PULLER — apply pulled cloud artifacts via the shared
     // state-sync logic. Kept in a separate store slice; the gallery merges on render.
-    useArtifactStore.getState().applyCloudArtifactDeltas(res.artifacts);
+    useArtifactStore.getState().applyCloudArtifactDeltas(res.artifacts, account.ownerId);
     // Trust the server's SAFE cursor. The two tables paginate independently and
     // share one version sequence, so taking the max of per-row server_versions
     // overshoots the lagging table's frontier and skips rows that fall in the gap
@@ -359,7 +503,7 @@ async function pull(): Promise<void> {
 
 // ── Push ────────────────────────────────────────────────────────────────────────
 
-async function push(): Promise<void> {
+async function push(account: CloudAccountEpoch): Promise<void> {
   const { dirtyConversationIds, dirtyMessages } = useCloudSyncStateStore.getState();
   if (dirtyConversationIds.length === 0 && dirtyMessages.length === 0) return;
 
@@ -405,9 +549,13 @@ async function push(): Promise<void> {
   const resolvedConversationIds = new Set<string>();
   const resolvedMessageIds = new Set<string>();
   if (conversations.length > 0 || messages.length > 0) {
-    const res = ChatSyncPushResponseSchema.parse(
-      await api.post<unknown>(SYNC_PATH, { protocolVersion: 2, conversations, messages }),
-    );
+    const raw = await api.post<unknown>(SYNC_PATH, {
+      protocolVersion: 2,
+      conversations,
+      messages,
+    });
+    assertCloudAccountEpochCurrent(account);
+    const res = ChatSyncPushResponseSchema.parse(raw);
     for (const applied of res.applied.conversations) {
       const sent = sentConversationById.get(applied.id);
       const latest = conversationPort.get(applied.id);
@@ -474,12 +622,12 @@ async function push(): Promise<void> {
 
 // ── Memory pull ────────────────────────────────────────────────────────────────
 
-async function pullMemory(): Promise<void> {
+async function pullMemory(account: CloudAccountEpoch): Promise<void> {
   let cursor = useMemorySyncStateStore.getState().memoryCursor;
   for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
-    const res = MemorySyncPullResponseSchema.parse(
-      await api.get<unknown>(`${MEMORY_SYNC_PATH}?since=${encodeURIComponent(cursor)}`),
-    );
+    const raw = await api.get<unknown>(`${MEMORY_SYNC_PATH}?since=${encodeURIComponent(cursor)}`);
+    assertCloudAccountEpochCurrent(account);
+    const res = MemorySyncPullResponseSchema.parse(raw);
     const memories = res.memories;
     if (memories.length > 0) {
       // Map wire snake_case → client camelCase, then upsert/tombstone by id —
@@ -498,7 +646,7 @@ async function pullMemory(): Promise<void> {
 
 // ── Memory push ────────────────────────────────────────────────────────────────
 
-async function pushMemory(): Promise<void> {
+async function pushMemory(account: CloudAccountEpoch): Promise<void> {
   const { dirtyMemoryIds } = useMemorySyncStateStore.getState();
   if (dirtyMemoryIds.length === 0) return;
 
@@ -525,9 +673,12 @@ async function pushMemory(): Promise<void> {
   const ackedIds = new Set<string>();
   const resolvedIds = new Set<string>();
   if (payload.length > 0) {
-    const res = MemorySyncPushResponseSchema.parse(
-      await api.post<unknown>(MEMORY_SYNC_PATH, { protocolVersion: 2, memories: payload }),
-    );
+    const raw = await api.post<unknown>(MEMORY_SYNC_PATH, {
+      protocolVersion: 2,
+      memories: payload,
+    });
+    assertCloudAccountEpochCurrent(account);
+    const res = MemorySyncPushResponseSchema.parse(raw);
     for (const applied of res.applied) {
       ackedIds.add(applied.id);
       const sent = entryById.get(applied.id);
@@ -581,10 +732,11 @@ async function pushMemory(): Promise<void> {
 
 // ── Project pull ───────────────────────────────────────────────────────────────
 
-async function pullProjects(): Promise<void> {
+async function pullProjects(account: CloudAccountEpoch): Promise<void> {
   let cursor = useProjectSyncStateStore.getState().projectCursor;
   for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
     const res = await managedCloudProjects.pullProjects(cursor);
+    assertCloudAccountEpochCurrent(account);
     const items = res.projects;
     if (items.length > 0) {
       // Map wire snake_case → client camelCase via the shared mapping (projects.ts).
@@ -619,7 +771,7 @@ async function pullProjects(): Promise<void> {
 
 // ── Project push ───────────────────────────────────────────────────────────────
 
-async function pushProjects(): Promise<void> {
+async function pushProjects(account: CloudAccountEpoch): Promise<void> {
   const { dirtyProjectIds } = useProjectSyncStateStore.getState();
   if (dirtyProjectIds.length === 0) return;
 
@@ -657,6 +809,7 @@ async function pushProjects(): Promise<void> {
   const resolvedConflictIds = new Set<string>();
   if (payload.length > 0) {
     const res = await managedCloudProjects.pushProjects({ projects: payload });
+    assertCloudAccountEpochCurrent(account);
     for (const applied of res.applied) {
       ackedIds.add(applied.id);
       const sent = projectById.get(applied.id);
@@ -754,7 +907,7 @@ function parseSettingsSnapshot(serialized: string): CloudSafeSettings {
   }
 }
 
-async function pushSettings(): Promise<CloudSettings> {
+async function pushSettings(account: CloudAccountEpoch): Promise<CloudSettings> {
   const storeSnapshot = useCloudSettingsStore.getState();
   const { settingsUpdatedAt } = storeSnapshot;
   const current = toCloudSettings(storeSnapshot);
@@ -774,12 +927,12 @@ async function pushSettings(): Promise<CloudSettings> {
     current as CloudSafeSettings,
   );
 
-  const res = SettingsSyncPushResponseSchema.parse(
-    await api.post<unknown>(
-      MANAGED_CLOUD_SETTINGS_SYNC_PATH,
-      SettingsSyncPushRequestSchema.parse({ settings: outgoing, baseVersion }),
-    ),
+  const raw = await api.post<unknown>(
+    MANAGED_CLOUD_SETTINGS_SYNC_PATH,
+    SettingsSyncPushRequestSchema.parse({ settings: outgoing, baseVersion }),
   );
+  assertCloudAccountEpochCurrent(account);
+  const res = SettingsSyncPushResponseSchema.parse(raw);
 
   // Only an accepted compare-and-swap owns the returned revision. On conflict,
   // retain the old cursor so the following pull can retrieve the server winner.
@@ -807,13 +960,16 @@ async function pushSettings(): Promise<CloudSettings> {
  * snapshot so the next pushSettings() call does not re-push what was just pulled
  * (which would create an infinite churn loop).
  */
-async function pullSettings(localRequestBase: CloudSettings): Promise<void> {
+async function pullSettings(
+  localRequestBase: CloudSettings,
+  account: CloudAccountEpoch,
+): Promise<void> {
   const cursor = useSettingsSyncStateStore.getState().settingsCursor;
-  const res = SettingsSyncPullResponseSchema.parse(
-    await api.get<unknown>(
-      `${MANAGED_CLOUD_SETTINGS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`,
-    ),
+  const raw = await api.get<unknown>(
+    `${MANAGED_CLOUD_SETTINGS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`,
   );
+  assertCloudAccountEpochCurrent(account);
+  const res = SettingsSyncPullResponseSchema.parse(raw);
 
   const pulledSettings = res.settings;
   const advancedCursor = selectNextCursor(cursor, res.cursor);
@@ -849,7 +1005,7 @@ async function pullSettings(localRequestBase: CloudSettings): Promise<void> {
 
 // ── Public API ──────────────────────────────────────────────────────────────────
 
-let syncing = false;
+let syncingAccountKey: string | null = null;
 
 /**
  * Push local changes, then pull deltas. No-op (and zero network I/O) unless managed
@@ -862,38 +1018,43 @@ export async function syncNow(): Promise<void> {
   // before any network I/O. The api client's guardedFetch is an independent
   // fail-closed backstop that refuses egress in Local mode regardless.
   if (!isManagedSyncEnabled()) return;
-  if (syncing) return;
-  syncing = true;
+  const account = captureCloudAccountEpoch();
+  if (!account) return;
+  const accountKey = `${account.ownerId}:${account.epoch}`;
+  if (syncingAccountKey === accountKey) return;
+  syncingAccountKey = accountKey;
   useCloudSyncStateStore.getState().setStatus('syncing');
   try {
     // Chat sync: push dirty conversations/messages, then pull deltas.
-    await push();
-    await pull();
+    await push(account);
+    await pull(account);
     // Memory sync: push dirty cloud memories, then pull deltas.
     // Runs after chat so the gating check above covers both. Uses its own
     // cursor (memorySyncStateStore) — independent from the chat cursor.
-    await pushMemory();
-    await pullMemory();
+    await pushMemory(account);
+    await pullMemory(account);
     // Project sync: push dirty cloud projects, then pull deltas.
     // Runs after memory so the single isManagedSyncEnabled() gate covers all
     // three. Uses its own cursor (projectSyncStateStore) — independent from
     // both the chat cursor and the memory cursor.
-    await pushProjects();
-    await pullProjects();
+    await pushProjects(account);
+    await pullProjects(account);
     // Settings sync: push cloud-safe preferences if changed, then pull.
     // Runs LAST (most sensitive — allowlist-gated). Uses its own cursor
     // (settingsSyncStateStore) — independent from all other cursors.
     // Push uses snapshot-diff dirty detection (no per-setter hooks needed).
-    const settingsRequestBase = await pushSettings();
-    await pullSettings(settingsRequestBase);
+    const settingsRequestBase = await pushSettings(account);
+    await pullSettings(settingsRequestBase, account);
+    assertCloudAccountEpochCurrent(account);
     useCloudSyncStateStore.getState().setStatus('idle');
     useCloudSyncStateStore.setState({ lastSyncAt: Date.now() });
   } catch (err) {
+    if (isStaleCloudAccountOperation(err)) return;
     useCloudSyncStateStore
       .getState()
       .setStatus('error', err instanceof Error ? err.message : String(err));
   } finally {
-    syncing = false;
+    if (syncingAccountKey === accountKey) syncingAccountKey = null;
   }
 }
 

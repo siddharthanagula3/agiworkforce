@@ -7,7 +7,6 @@ import {
   Camera,
   Image as ImageIcon,
   FileText,
-  Globe,
   Paintbrush,
   Telescope,
   FolderPlus,
@@ -20,8 +19,7 @@ import {
   Bot,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { getModelMetadataById } from '@agiworkforce/types';
-import { isWebSearchAvailable } from '@agiworkforce/search';
+import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
@@ -68,20 +66,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const setWorkMode = useChatStore((s) => s.setWorkMode);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const tier = useTierStore((s) => s.tier);
+  const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedModelMetadata = getModelMetadataById(selectedModel);
-  const genericWebSearchAvailable = useTierStore((s) => s.genericWebSearchAvailable);
-  // Local keeps its existing intrinsic model gate. Cloud additionally admits
-  // tools-capable models through the real deployment-backed generic fallback.
-  const selectedModelSupportsSearch =
-    appMode === 'cloud'
-      ? isWebSearchAvailable({
-          provider: selectedModelMetadata?.provider,
-          modelSupportsNativeSearch: selectedModelMetadata?.capabilities.search,
-          modelSupportsTools: selectedModelMetadata?.capabilities.tools,
-          genericBackendConfigured: genericWebSearchAvailable,
-        })
-      : (selectedModelMetadata?.capabilities.search ?? false);
   // Code execution: same "don't promise a no-op" reasoning as web search,
   // plus two extra checks since running code is higher-risk than searching —
   // the toggle only appears in Cloud mode, for a model whose catalog entry
@@ -106,14 +93,17 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     appMode === 'cloud' &&
     selectedModelMetadata?.capabilities?.research === true &&
     selectedModelMetadata?.capabilities?.search === true &&
-    !['free', 'local-only', 'byok'].includes(tier);
+    grantedCapabilities.includes('canUseDeepResearch');
   // Image generation runs only through the Managed Cloud media route, so the
   // toggle is Cloud-only (previously it also rendered in Local mode, where it
   // could do nothing).
-  const showImageGenToggle = FEATURES.imageGen && appMode === 'cloud';
-  // UI hint only; the API remains authoritative. Basic and every higher paid
-  // Cloud plan may request AGI Work, while Free/Local/BYOK cannot.
-  const canUseAgiWork = !['free', 'local-only', 'byok'].includes(tier);
+  const showImageGenToggle =
+    FEATURES.imageGen &&
+    appMode === 'cloud' &&
+    grantedCapabilities.includes('canUseImages') &&
+    canUseBillingPlanCapability(tier, 'image_generation');
+  const canUseAgiWork = canUseBillingPlanCapability(tier, 'agi_work');
+  const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
 
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projects = useProjectStore((s) => s.projects);
@@ -156,15 +146,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     haptic();
     onOpenStyleSelector();
   }, [haptic, onOpenStyleSelector]);
-
-  const handleWebSearchToggle = useCallback(
-    (enabled: boolean) => {
-      if (!FEATURES.webSearch) return;
-      haptic();
-      setFeature('webSearch', enabled);
-    },
-    [haptic, setFeature],
-  );
 
   const handleCodeExecutionToggle = useCallback(
     (enabled: boolean) => {
@@ -357,29 +338,16 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             />
           </View>
 
-          {appMode === 'cloud' ? (
-            canUseAgiWork ? (
-              <CapabilityRow
-                icon={<Bot size={18} color={themeColors.teal} />}
-                label="AGI Work"
-                description="Search, run code, and use tools for longer tasks"
-                enabled={workMode === 'agiwork'}
-                onToggle={handleWorkModeToggle}
-                textColor={themeColors.textPrimary}
-                mutedColor={themeColors.textMuted}
-              />
-            ) : (
-              <CapabilityRow
-                icon={<Bot size={18} color={themeColors.textMuted} />}
-                label="AGI Work"
-                description="Search, run code, and use tools for longer tasks"
-                enabled={false}
-                status="Paid"
-                onStatusPress={onOpenCloudAccess}
-                textColor={themeColors.textPrimary}
-                mutedColor={themeColors.textMuted}
-              />
-            )
+          {appMode === 'cloud' && canUseAgiWork ? (
+            <CapabilityRow
+              icon={<Bot size={18} color={themeColors.teal} />}
+              label="AGI Work"
+              description="Search, run code, and use tools for longer tasks"
+              enabled={workMode === 'agiwork'}
+              onToggle={handleWorkModeToggle}
+              textColor={themeColors.textPrimary}
+              mutedColor={themeColors.textMuted}
+            />
           ) : null}
         </View>
 
@@ -387,23 +355,11 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
         {/* Section 3: Tool availability */}
-        {(FEATURES.webSearch && selectedModelSupportsSearch) ||
-        showResearchToggle ||
+        {showResearchToggle ||
         showCodeExecutionToggle ||
         showImageGenToggle ||
         FEATURES.computerUse ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
-            {FEATURES.webSearch && selectedModelSupportsSearch ? (
-              <CapabilityRow
-                icon={<Globe size={18} color={themeColors.teal} />}
-                label="Web search"
-                description="Search current web results when needed"
-                enabled={features.webSearch}
-                onToggle={handleWebSearchToggle}
-                textColor={themeColors.textPrimary}
-                mutedColor={themeColors.textMuted}
-              />
-            ) : null}
             {showResearchToggle ? (
               <CapabilityRow
                 icon={<Telescope size={18} color={themeColors.teal} />}
@@ -453,8 +409,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         ) : null}
 
         {/* Divider */}
-        {(FEATURES.webSearch && selectedModelSupportsSearch) ||
-        showResearchToggle ||
+        {showResearchToggle ||
         showCodeExecutionToggle ||
         showImageGenToggle ||
         FEATURES.computerUse ? (
@@ -485,7 +440,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             mutedColor={themeColors.textMuted}
             onPress={handleOpenStyleSelector}
           />
-          {appMode === 'cloud' && FEATURES.connectors ? (
+          {appMode === 'cloud' && FEATURES.connectors && canUseConnectors ? (
             <ConfigLink
               icon={<Link size={18} color={themeColors.textMuted} />}
               label="Connectors"

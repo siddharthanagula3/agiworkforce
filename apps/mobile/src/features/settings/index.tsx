@@ -3,6 +3,7 @@ import { Alert, View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
+import { useUser } from '@clerk/expo';
 import {
   Baby,
   Bell,
@@ -30,9 +31,10 @@ import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { canUseBillingPlanCapability, getBillingPlanPricing } from '@agiworkforce/types';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useThemeColors, cardRadius } from '@/src/ui/theme';
@@ -166,7 +168,7 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
 
 function ProfileHeader({ onPress }: { onPress: () => void }) {
   const colors = useThemeColors();
-  const user = useAuthStore((s) => s.user);
+  const { user: clerkUser } = useUser();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const isCloudMode = appMode === 'cloud';
@@ -174,15 +176,17 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
   const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
   const personalization = isCloudMode ? cloudPersonalization : localPersonalization;
   const displayName = isCloudMode
-    ? 'AGI Cloud'
-    : personalization.nickname ||
+    ? personalization.nickname ||
       personalization.fullName ||
-      user?.user_metadata?.full_name ||
-      user?.user_metadata?.name ||
-      user?.email?.split('@')[0] ||
-      'Local profile';
+      clerkUser?.fullName ||
+      clerkUser?.firstName ||
+      clerkUser?.username ||
+      clerkUser?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
+      'AGI Cloud'
+    : personalization.nickname || personalization.fullName || 'Local profile';
   const subtitle = isCloudMode
-    ? user?.email || (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
+    ? clerkUser?.primaryEmailAddress?.emailAddress ||
+      (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
     : personalization.occupation || 'Local mode active';
   const initial = displayName.charAt(0).toUpperCase();
 
@@ -254,10 +258,14 @@ export default function SettingsTabScreen() {
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
   const selectedModel = useModelStore((s) => s.selectedModel);
   const subscriptionTier = useTierStore((s) => s.tier);
-  const user = useAuthStore((s) => s.user);
+  const billingTier = useTierStore((s) => s.billingTier);
+  const { user: clerkUser } = useUser();
   const signOut = useAuthStore((s) => s.signOut);
-  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+  const canManageWorkspace =
+    isClerkSignedIn && canUseBillingPlanCapability(subscriptionTier, 'team_admin');
 
   const push = useCallback(
     (path: string) => () => router.push(path as Parameters<typeof router.push>[0]),
@@ -267,19 +275,20 @@ export default function SettingsTabScreen() {
     router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
-  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default — the
-  // signed-in entitlement IS the gate, no invite/waitlist. Matches the sign-in route
-  // used by chat.tsx / chat/[id].tsx / models.tsx (fix 0fe0598c3).
-  const openCloudAccess = useCallback(() => {
-    if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
-      return;
-    }
-    Alert.alert(
-      'AGI Cloud access',
-      'AGI Cloud is unlocked on this device. Local Mode stays separate from Cloud account features.',
-    );
-  }, [cloudUnlocked, router]);
+  // Every account-backed Cloud row shares one auth boundary. During Clerk's
+  // short pending window taps are ignored; once resolved, signed-out users go
+  // to login and signed-in users reach the requested real screen.
+  const openCloudRoute = useCallback(
+    (path: string) => () => {
+      if (!isClerkLoaded) return;
+      if (!isClerkSignedIn) {
+        router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+        return;
+      }
+      router.push(path as Parameters<typeof router.push>[0]);
+    },
+    [isClerkLoaded, isClerkSignedIn, router],
+  );
 
   const handleSignOut = useCallback(() => {
     Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
@@ -288,7 +297,8 @@ export default function SettingsTabScreen() {
     ]);
   }, [signOut]);
 
-  const cloudAccessTag = cloudUnlocked ? 'Cloud' : 'Sign in';
+  const cloudAccessTag = !isClerkLoaded ? 'Checking' : isClerkSignedIn ? 'Cloud' : 'Sign in';
+  const accountValue = !isClerkLoaded ? 'Checking…' : isClerkSignedIn ? undefined : 'Sign in';
 
   const sections = useMemo<SettingsSection[]>(
     () => [
@@ -299,22 +309,39 @@ export default function SettingsTabScreen() {
             key: 'account-email',
             label: 'Email',
             icon: UserRound,
-            value: user?.email ?? (cloudUnlocked ? 'Signed in' : 'Sign in'),
-            onPress: cloudUnlocked ? push('/(app)/settings/cloud-account') : openCloudAccess,
+            value:
+              clerkUser?.primaryEmailAddress?.emailAddress ??
+              (isClerkLoaded ? (isClerkSignedIn ? 'Signed in' : 'Sign in') : 'Checking…'),
+            onPress: openCloudRoute('/(app)/settings/cloud-account'),
           },
           {
             key: 'account-subscription',
             label: 'Subscription',
             icon: CreditCard,
-            value: getBillingPlanPricing(subscriptionTier).label,
-            onPress: push('/(app)/settings/cloud-billing'),
+            value: accountValue ?? getBillingPlanPricing(billingTier).label,
+            onPress: openCloudRoute('/(app)/settings/cloud-billing'),
           },
-          {
-            key: 'account-restore',
-            label: 'Restore purchases',
-            icon: RotateCcw,
-            onPress: push('/(app)/settings/cloud-billing'),
-          },
+          ...(FEATURES.iap
+            ? [
+                {
+                  key: 'account-restore',
+                  label: 'Restore purchases',
+                  icon: RotateCcw,
+                  onPress: push('/(app)/settings/cloud-billing'),
+                },
+              ]
+            : []),
+          ...(canManageWorkspace
+            ? [
+                {
+                  key: 'workspace-admin',
+                  label: 'Workspace administration',
+                  icon: UserRound,
+                  value: 'Web',
+                  onPress: () => void openExternalUrl('https://agiworkforce.com/settings/team'),
+                },
+              ]
+            : []),
         ],
       },
       {
@@ -408,9 +435,7 @@ export default function SettingsTabScreen() {
             icon: Sparkles,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: cloudUnlocked
-              ? push('/(app)/settings/personalization?scope=cloud')
-              : openCloudAccess,
+            onPress: openCloudRoute('/(app)/settings/personalization?scope=cloud'),
           },
           {
             key: 'cloud-memory',
@@ -418,7 +443,7 @@ export default function SettingsTabScreen() {
             icon: Brain,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: cloudUnlocked ? push('/(app)/settings/memory?scope=cloud') : openCloudAccess,
+            onPress: openCloudRoute('/(app)/settings/memory?scope=cloud'),
           },
           {
             key: 'cloud-data-controls',
@@ -426,41 +451,45 @@ export default function SettingsTabScreen() {
             icon: Database,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: cloudUnlocked ? push('/(app)/settings/data-controls') : openCloudAccess,
+            onPress: openCloudRoute('/(app)/settings/data-controls'),
           },
           {
             key: 'privacy',
             label: 'Privacy',
             icon: Shield,
+            tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: push('/(app)/settings/cloud-privacy'),
+            onPress: openCloudRoute('/(app)/settings/cloud-privacy'),
           },
           {
             key: 'billing',
             label: 'Billing',
             icon: CreditCard,
+            tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: push('/(app)/settings/cloud-billing'),
+            onPress: openCloudRoute('/(app)/settings/cloud-billing'),
           },
           {
             key: 'usage',
             label: 'Usage',
             icon: Database,
+            tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: push('/(app)/settings/cloud-usage'),
+            onPress: openCloudRoute('/(app)/settings/cloud-usage'),
           },
           {
             key: 'connectors',
             label: 'Connectors',
             icon: Link2,
+            tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: push('/(app)/settings/cloud-connectors'),
+            onPress: openCloudRoute('/(app)/settings/cloud-connectors'),
           },
           // MOB-6: Skills and Plugins settings entries removed — the screens were
           // never built and only opened a cloud gate (a dead-end). Per "implement
           // or remove dead-ends", they are removed until a real mobile Skills /
           // Plugins management surface exists.
-          ...(user
+          ...(clerkUser
             ? [
                 {
                   key: 'logout',
@@ -506,17 +535,21 @@ export default function SettingsTabScreen() {
     ],
     [
       accentColor,
+      accountValue,
       appVersion,
       cloudAccessTag,
-      cloudUnlocked,
+      canManageWorkspace,
       handleSignOut,
-      openCloudAccess,
+      isClerkLoaded,
+      isClerkSignedIn,
+      openCloudRoute,
       push,
       router,
       selectedModel,
       subscriptionTier,
       themeMode,
-      user,
+      billingTier,
+      clerkUser,
     ],
   );
 

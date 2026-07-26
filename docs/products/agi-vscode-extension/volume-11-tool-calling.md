@@ -53,8 +53,8 @@ Web search is not executed by the extension. 🔭 Planned.
 
 Model Context Protocol is flagged and bridge-routed, no in-extension client. 🟡 Partial.
 
-- `agiWorkforce.mcp.enabled` exists and defaults **false** (`package.json`; `Config.mcpEnabled()`). When enabled without the bridge, the extension warns that MCP requires it (`src/core/advancedFeatures.ts`), and the chat participant injects a system-prompt hint to use MCP tools "when the backend exposes them" (`src/features/chat-participant/chatParticipant.ts`).
-- **Gap:** the extension hosts no MCP client of its own; MCP tools are expected via the desktop bridge (`ws://127.0.0.1:8787/ws`, token-authed, `src/features/desktop-bridge/desktopBridge.ts`). A first-class in-extension MCP client with per-server allowlists and per-tool approval is 🔭 Planned. Any MCP tool that writes files or runs commands must inherit native permission gates.
+- `agiWorkforce.mcp.enabled` defaults **false** and applies to legacy cloud-backed editor utilities plus the optional Desktop bridge. It does not control developer-session MCP: the app-server discovers and executes those integrations from CLI/runtime configuration and reports loading/ready/unavailable events to `@agi` and the sidebar.
+- **Boundary:** the extension hosts no MCP client of its own; the app-server owns developer-session MCP discovery, execution, and approvals. A first-class in-extension server manager/resource browser is planned. Any MCP tool that writes files or runs commands must inherit runtime permission gates.
 
 ## Permission Requests
 
@@ -73,7 +73,7 @@ The approval spine is multi-layered. ✅ Built (`package.json`, `desktopBridge.t
 - `apps/extension-vscode/src/utils/pathSafety.ts` — containment + sensitive-file denylist.
 - `apps/extension-vscode/src/providers/terminalProvider.ts` — terminal run/capture/suggest + validation.
 - `apps/extension-vscode/src/core/commandSetup.ts` — `agi.git.status/diff/commit`.
-- `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts` — MCP/bridge prompt hints.
+- `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts` — runtime MCP status rendering.
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — bridge transport, auth, allowlists.
 - `apps/extension-vscode/src/core/advancedFeatures.ts` — MCP/bridge flag validation.
 - `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts` — tool-call chip rendering.
@@ -89,7 +89,7 @@ Production-ready when: file read/edit is containment- and denylist-safe with rev
 - [ ] Build: `pnpm --filter agi-workforce typecheck` and `pnpm --filter agi-workforce test` green.
 - [ ] Trust: no Local tool call is silently routed to BYOK/Cloud; provider label + trust mode shown at approval time; agent writes blocked in untrusted workspaces.
 - [ ] Security: path traversal + sensitive-file reads refused; terminal allowlist/metachar/Unicode guards enforced; git via argv; bridge inbound allowlisted + rate-limited.
-- [ ] 🟡 Reconcile the stale `agiWorkforce.tier` enum (`hobby`/`pro_plus` in `package.json`) to the canon ladder (Free / Basic / Pro / Max / Enterprise) — tracked separately.
+- [x] Extension access-mode enum preserves every canonical plan value; retired aliases are normalization inputs only.
 
 ## Anti-patterns
 

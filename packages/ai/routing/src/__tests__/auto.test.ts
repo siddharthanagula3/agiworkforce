@@ -50,7 +50,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-4.8',
+      modelKey: 'claude-opus-5',
       requestedProfile: 'premium',
       effectiveProfile: 'premium',
     });
@@ -143,7 +143,7 @@ describe('resolveAutoRoute', () => {
       estimatedOutputTokens: 1000,
     });
 
-    expect(result).toMatchObject({ status: 'selected', modelKey: 'claude-opus-4.8' });
+    expect(result).toMatchObject({ status: 'selected', modelKey: 'claude-opus-5' });
   });
 
   it('clamps premium Auto to the tier maximum profile', () => {
@@ -173,7 +173,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-4.8',
+      modelKey: 'claude-opus-5',
       effectiveProfile: 'premium',
       fallbacks: [
         {
@@ -454,7 +454,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-4.8',
+      modelKey: 'claude-opus-5',
       effectiveProfile: 'premium',
     });
   });
@@ -470,7 +470,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-4.8',
+      modelKey: 'claude-opus-5',
       harnessId: 'anthropic/messages',
     });
   });
@@ -519,6 +519,22 @@ describe('resolveAutoRoute', () => {
       status: 'selected',
       modelKey: 'gemini-3.6-flash',
       harnessId: 'google/generate-content',
+    });
+  });
+
+  it('admits AGI Work when the Web runtime executes platform tool discovery', () => {
+    const result = resolveAutoRoute({
+      selection: 'minimax-m3',
+      taskType: 'agentic',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+    });
+
+    expect(result).toMatchObject({
+      status: 'selected',
+      modelKey: 'minimax-m3',
+      harnessId: 'minimax/chat-completions',
     });
   });
 
@@ -621,7 +637,7 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-4.8',
+      modelKey: 'claude-opus-5',
       effectiveProfile: 'premium',
     });
   });
@@ -682,7 +698,7 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
       capabilityDocument: sessionDocument(),
       capabilityRequirements: [{ capabilityId: 'canUseDeepResearch', strength: 'optional' }],
     });
-    expect(deniedOptional).toMatchObject({ status: 'selected', modelKey: 'claude-opus-4.8' });
+    expect(deniedOptional).toMatchObject({ status: 'selected', modelKey: 'claude-opus-5' });
 
     const optionalWithoutDocument = resolveAutoRoute({
       selection: 'auto-premium',
@@ -693,7 +709,7 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
     });
     expect(optionalWithoutDocument).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-4.8',
+      modelKey: 'claude-opus-5',
     });
   });
 });

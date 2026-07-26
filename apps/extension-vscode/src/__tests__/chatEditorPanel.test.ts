@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import { activate } from '../extension';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
+import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -55,12 +56,16 @@ function makeMockContext(): vscode.ExtensionContext {
 describe('agi-workforce.openChatInEditor', () => {
   let handlers: Map<string, (...args: unknown[]) => unknown>;
   let panelCreations: Array<{ viewType: string; title: string }>;
+  let webviewMessageHandler: ((message: unknown) => Promise<void>) | undefined;
+  let panelPostMessage: ReturnType<typeof vi.fn>;
   let originalRegister: typeof vscode.commands.registerCommand;
   let originalCreatePanel: typeof vscode.window.createWebviewPanel;
 
   beforeEach(() => {
     handlers = new Map();
     panelCreations = [];
+    webviewMessageHandler = undefined;
+    panelPostMessage = vi.fn().mockResolvedValue(true);
 
     originalRegister = vscode.commands.registerCommand;
     originalCreatePanel = vscode.window.createWebviewPanel;
@@ -76,8 +81,11 @@ describe('agi-workforce.openChatInEditor', () => {
       webview: {
         options: {},
         html: '',
-        postMessage: vi.fn().mockResolvedValue(true),
-        onDidReceiveMessage: vi.fn().mockReturnValue({ dispose: () => undefined }),
+        postMessage: panelPostMessage,
+        onDidReceiveMessage: vi.fn((handler: (message: unknown) => Promise<void>) => {
+          webviewMessageHandler = handler;
+          return { dispose: () => undefined };
+        }),
         cspSource: 'vscode-resource:',
         asWebviewUri: vi.fn((uri: vscode.Uri) => uri),
       },
@@ -162,5 +170,32 @@ describe('agi-workforce.openChatInEditor', () => {
     // Both sidebar and chat-editor panel commands should be registered
     expect(handlers.has('agi-workforce.openChatInEditor')).toBe(true);
     expect(handlers.has('agi-workforce.chat')).toBe(true);
+  });
+
+  it('routes Apply from the editor panel through the live diff provider', async () => {
+    const showDiff = vi.spyOn(DiffDecorationProvider.prototype, 'showDiff').mockReturnValue({
+      id: 'diff-editor-1',
+    } as ReturnType<DiffDecorationProvider['showDiff']>);
+    const selection = new vscode.Selection(0, 0, 0, 1);
+    vscode.window.activeTextEditor = {
+      selection,
+      document: {
+        uri: vscode.Uri.file('/mock/workspace/src/app.ts'),
+        getText: vi.fn().mockReturnValue('x'),
+      },
+    } as unknown as vscode.TextEditor;
+
+    handlers.get('agi-workforce.openChatInEditor')!();
+    expect(webviewMessageHandler).toBeDefined();
+    await webviewMessageHandler!({
+      type: 'proposeDiff',
+      payload: { code: 'const x = 1;', language: 'typescript' },
+    });
+
+    expect(showDiff).toHaveBeenCalledOnce();
+    expect(panelPostMessage).toHaveBeenCalledWith({
+      type: 'diffProposed',
+      payload: { sessionId: 'diff-editor-1', filePath: 'src/app.ts' },
+    });
   });
 });

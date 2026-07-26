@@ -28,9 +28,8 @@ Current leaf packages:
 - `anthropic`
 - `deepseek`
 - `google`
-- `groq`
 - `lmstudio`
-- `mistral`
+- `minimax`
 - `moonshot`
 - `ollama`
 - `openai`

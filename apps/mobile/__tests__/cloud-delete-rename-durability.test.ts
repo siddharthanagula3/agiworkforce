@@ -39,6 +39,7 @@ import { applyConversationDeltas } from '../services/cloudSyncEngine';
 import type { ChatMessage, ConversationSummary } from '../types/chat';
 
 const mockDelete = api.delete as jest.MockedFunction<typeof api.delete>;
+const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPut = api.put as jest.MockedFunction<typeof api.put>;
 const T = '2026-06-20T00:00:00.000Z';
 
@@ -172,18 +173,16 @@ describe('cloud conversation rename durability', () => {
 
     // A successful push clears the dirty flag.
     useCloudSyncStateStore.getState().clearDirty(['c1'], []);
-    useChatCloudMessageStore
-      .getState()
-      .setCloudConversations([
-        {
-          id: 'c1',
-          title: 'Server-Renamed',
-          createdAt: T,
-          updatedAt: T,
-          messageCount: 0,
-          pinned: false,
-        },
-      ]);
+    useChatCloudMessageStore.getState().setCloudConversations([
+      {
+        id: 'c1',
+        title: 'Server-Renamed',
+        createdAt: T,
+        updatedAt: T,
+        messageCount: 0,
+        pinned: false,
+      },
+    ]);
 
     expect(convTitle('c1')).toBe('Server-Renamed');
   });
@@ -192,15 +191,21 @@ describe('cloud conversation rename durability', () => {
     seedCloud('c1', 'Old');
     useChatCloudMessageStore.getState().patchCloudConversation('c1', { serverVersion: '7' });
 
-    useChatCloudMessageStore
-      .getState()
-      .setCloudConversations([
-        { id: 'c1', title: 'Fresh list', createdAt: T, updatedAt: T, messageCount: 0, pinned: false },
-      ]);
+    useChatCloudMessageStore.getState().setCloudConversations([
+      {
+        id: 'c1',
+        title: 'Fresh list',
+        createdAt: T,
+        updatedAt: T,
+        messageCount: 0,
+        pinned: false,
+      },
+    ]);
 
     expect(
-      useChatCloudMessageStore.getState().conversations.find((conversation) => conversation.id === 'c1')
-        ?.serverVersion,
+      useChatCloudMessageStore
+        .getState()
+        .conversations.find((conversation) => conversation.id === 'c1')?.serverVersion,
     ).toBe('7');
   });
 
@@ -229,6 +234,63 @@ describe('cloud conversation rename durability', () => {
   });
 });
 
+describe('cloud conversation message-load durability', () => {
+  it('does not let a stale initial read erase a turn committed while the request is in flight', async () => {
+    seedCloud('c1');
+    let resolveRead!: (value: unknown) => void;
+    mockGet.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }) as never,
+    );
+
+    const loadPromise = useChatMessageStore.getState().loadMessages('c1');
+    await Promise.resolve();
+
+    const optimisticMessages: ChatMessage[] = [
+      {
+        id: 'm-user',
+        conversationId: 'c1',
+        role: 'user',
+        content: 'Hello from Mobile',
+        createdAt: '2026-06-20T00:00:01.000Z',
+      },
+      {
+        id: 'm-assistant',
+        conversationId: 'c1',
+        role: 'assistant',
+        content: 'Streaming reply',
+        createdAt: '2026-06-20T00:00:02.000Z',
+        isStreaming: true,
+      },
+    ];
+    useChatCloudMessageStore.getState().setCloudMessages('c1', optimisticMessages);
+    useCloudSyncStateStore.getState().markMessageDirty('c1', 'm-user');
+
+    resolveRead({
+      conversation: {
+        id: 'c1',
+        title: 'Chat c1',
+        model: null,
+        project_id: null,
+        pinned: false,
+        starred: false,
+        archived: false,
+        is_temporary: false,
+        created_at: T,
+        updated_at: T,
+      },
+      messages: [],
+      total: 0,
+      hasMore: false,
+    });
+    await loadPromise;
+
+    expect(useChatCloudMessageStore.getState().messages['c1']).toEqual(optimisticMessages);
+  });
+});
+
 describe('cloud sync payload persistence', () => {
   function persistedCloudState(): {
     conversations: ConversationSummary[];
@@ -246,8 +308,9 @@ describe('cloud sync payload persistence', () => {
     for (let index = 0; index <= 200; index += 1) seedCloud(`c-${index}`);
     useCloudSyncStateStore.getState().markConversationDirty('c-0');
 
-    expect(persistedCloudState().conversations.some((conversation) => conversation.id === 'c-0'))
-      .toBe(true);
+    expect(
+      persistedCloudState().conversations.some((conversation) => conversation.id === 'c-0'),
+    ).toBe(true);
   });
 
   it('persists a dirty message even when it falls outside the clean per-chat cap', () => {

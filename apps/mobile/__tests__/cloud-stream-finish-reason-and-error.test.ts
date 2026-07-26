@@ -61,6 +61,11 @@ jest.mock('../storage/installedModels', () => ({
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
@@ -69,12 +74,17 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 import { streamChat, type StreamCallbacks } from '../services/streaming';
-import { useChatExecutionStore } from '../stores/chat/chatExecutionStore';
+import { clearCloudExecutionState, useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 
@@ -83,9 +93,12 @@ const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('cloud-stream-test-user');
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {} });
+  useChatExecutionStore.setState({ error: null, paywallError: null });
   useChatAppModeStore.getState().setAppMode('local'); // onDone's auto-sync no-ops while asserting
   useChatCloudMessageStore.getState().addCloudConversation({
     id: CONV_ID,
@@ -105,6 +118,51 @@ function lastAssistantMessage() {
 }
 
 describe('cloud send: finish_reason capture', () => {
+  it('fails closed before starting an ownerless Cloud stream', async () => {
+    invalidateCloudAccount();
+
+    const accepted = await useChatExecutionStore
+      .getState()
+      .sendMessage(CONV_ID, 'must never leave this device ownerless', CLOUD_MODEL);
+
+    expect(accepted).toBe(false);
+    expect(mockStreamChat).not.toHaveBeenCalled();
+    expect(useChatCloudMessageStore.getState().messages[CONV_ID]).toEqual([]);
+    expect(useChatExecutionStore.getState().error).toBe('Sign in to use AGI Cloud.');
+  });
+
+  it('cannot repopulate a cleared account after Cloud execution teardown', async () => {
+    let streamStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      streamStarted = resolve;
+    });
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks, signal) => {
+      streamStarted();
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()));
+      // Model a transport that delivers already-buffered callbacks after abort.
+      callbacks.onDelta({ content: 'account-a-private-response' });
+      callbacks.onDone();
+    });
+
+    const send = useChatExecutionStore
+      .getState()
+      .sendMessage(CONV_ID, 'account A private prompt', CLOUD_MODEL);
+    await started;
+
+    clearCloudExecutionState();
+    useChatCloudMessageStore.getState().clearCloudData();
+    await send;
+
+    expect(useChatCloudMessageStore.getState()).toMatchObject({
+      conversations: [],
+      messages: {},
+    });
+    expect(useChatExecutionStore.getState()).toMatchObject({
+      isStreaming: false,
+      streamingConversationIds: [],
+    });
+  });
+
   it('persists the LAST finish_reason seen (server tool loops emit intermediate values first)', async () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onDelta({ content: 'partial' });

@@ -11,8 +11,9 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { OrganizationMemberRow, ProfileRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { requireTeamAdminAccess } from './team-admin-access';
 
-const InviteSchema = z.object({
+const AddMemberSchema = z.object({
   organizationId: z.string().uuid('organizationId must be a UUID'),
   email: z.string().email('Invalid email address'),
   role: z.enum(['owner', 'admin', 'member', 'viewer']).default('member'),
@@ -24,7 +25,7 @@ type MemberWithProfile = OrganizationMemberRow & {
   avatar_url: string | null;
 };
 
-function formatMember(row: MemberWithProfile) {
+function formatMember(row: MemberWithProfile, currentUserId: string) {
   return {
     id: `${row.organization_id}:${row.user_id}`,
     userId: row.user_id,
@@ -34,10 +35,11 @@ function formatMember(row: MemberWithProfile) {
     avatarUrl: row.avatar_url ?? null,
     role: row.role,
     status: 'active' as const,
-    invitedAt: row.provisioned_at ?? null,
+    provisionedAt: row.provisioned_at ?? null,
     joinedAt: row.joined_at,
     lastActiveAt: null,
     permissions: [],
+    isCurrentUser: row.user_id === currentUserId,
   };
 }
 
@@ -84,15 +86,17 @@ async function handleList(request: NextRequest) {
     [organizationId],
   );
 
-  return NextResponse.json({ members: members.map(formatMember) });
+  return NextResponse.json({ members: members.map((member) => formatMember(member, userId)) });
 }
 
 /**
  * POST /api/settings/team
- * Invite a new member to the organization by email.
- * Inserts a pending membership row; actual email delivery is a separate concern.
+ * Add an existing AGI account to the organization by email.
+ *
+ * There is no invitation persistence or email delivery system in this repo,
+ * so unknown addresses fail with an actionable message and create no row.
  */
-async function handleInvite(request: NextRequest) {
+async function handleAddMember(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-team-invite');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -102,106 +106,111 @@ async function handleInvite(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
 
   const body = await request.json().catch(() => ({}));
-  const parsed = InviteSchema.safeParse(body);
+  const parsed = AddMemberSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
   const { organizationId, email, role } = parsed.data;
 
   const db = getNeonDb();
+  const access = await requireTeamAdminAccess(db, userId);
 
-  // Only owners and admins may invite.
-  const [requesterMembership] = await db.query<OrganizationMemberRow>(
-    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-     from public.organization_members
-     where organization_id = $1 and user_id = $2
-     limit 1`,
-    [organizationId, userId],
-  );
-
-  if (!requesterMembership) {
-    throw createError.forbidden('You are not a member of this organization');
-  }
-
-  if (!['owner', 'admin'].includes(requesterMembership.role)) {
-    throw createError.forbidden('Only owners and admins can invite members');
-  }
-
-  // Look up the target user by email in profiles.
-  const [targetProfile] = await db.query<
-    Pick<ProfileRow, 'id' | 'email' | 'display_name' | 'avatar_url'>
-  >(
-    `select id, email, display_name, avatar_url
-     from public.profiles
-     where email = $1
-     limit 1`,
-    [email],
-  );
-
-  if (!targetProfile) {
-    // Return a pending-invite placeholder; real invitation flow (email) is external.
-    logger.info(
-      { userId, organizationId, email },
-      'Team invite for unknown user · email not found in profiles',
+  const member = await db.transaction(async (tx) => {
+    // Serialize membership mutations so a future persisted seat limit and
+    // ownership rules remain race-safe.
+    await tx.query(
+      `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
+      [organizationId],
     );
-    return NextResponse.json(
-      {
-        member: {
-          id: `pending:${organizationId}:${email}`,
-          userId: null,
-          organizationId,
-          email,
-          name: email,
-          avatarUrl: null,
-          role,
-          status: 'pending',
-          invitedAt: new Date().toISOString(),
-          joinedAt: null,
-          lastActiveAt: null,
-          permissions: [],
-        },
-        message: 'Invitation queued · user will receive an email when the invite system is active',
-      },
-      { status: 202 },
+
+    const [requesterMembership] = await tx.query<OrganizationMemberRow>(
+      `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+       from public.organization_members
+       where organization_id = $1 and user_id = $2
+       limit 1`,
+      [organizationId, userId],
     );
-  }
 
-  // Check if already a member.
-  const [existing] = await db.query<OrganizationMemberRow>(
-    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-     from public.organization_members
-     where organization_id = $1 and user_id = $2
-     limit 1`,
-    [organizationId, targetProfile.id],
-  );
+    if (!requesterMembership) {
+      throw createError.forbidden('You are not a member of this organization');
+    }
+    if (!['owner', 'admin'].includes(requesterMembership.role)) {
+      throw createError.forbidden('Only owners and admins can add team members');
+    }
+    if (role === 'owner' && requesterMembership.role !== 'owner') {
+      throw createError.forbidden('Only owners can add another owner');
+    }
 
-  if (existing) {
-    throw createError.conflict('This user is already a member of the organization');
-  }
+    const [targetProfile] = await tx.query<
+      Pick<ProfileRow, 'id' | 'email' | 'display_name' | 'avatar_url'>
+    >(
+      `select id, email, display_name, avatar_url
+       from public.profiles
+       where lower(email) = lower($1)
+       limit 1`,
+      [email],
+    );
 
-  const [newMember] = await db.query<MemberWithProfile>(
-    `insert into public.organization_members
-       (organization_id, user_id, role, provisioning_source, provisioned_at, joined_at)
-     values ($1, $2, $3, 'invite', now(), now())
-     returning
-       organization_id, user_id, role, provisioning_source, provisioned_at, joined_at,
-       $4::text as email, $5::text as display_name, null::text as avatar_url`,
-    [
-      organizationId,
-      targetProfile.id,
-      role,
-      targetProfile.email ?? email,
-      targetProfile.display_name ?? email,
-    ],
-  );
+    if (!targetProfile) {
+      throw createError.validation(
+        'No AGI account uses that email. Ask them to create an AGI account, then try again. No invitation was sent.',
+      );
+    }
 
-  logger.info({ userId, organizationId, targetUserId: targetProfile.id }, 'Team member invited');
+    const [existing] = await tx.query<OrganizationMemberRow>(
+      `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+       from public.organization_members
+       where organization_id = $1 and user_id = $2
+       limit 1`,
+      [organizationId, targetProfile.id],
+    );
 
-  return NextResponse.json({ member: newMember ? formatMember(newMember) : null }, { status: 201 });
+    if (existing) {
+      throw createError.conflict('This user is already a member of the organization');
+    }
+
+    if (access.maxMembers !== null) {
+      const [countRow] = await tx.query<{ member_count: string }>(
+        `select count(*)::text as member_count
+         from public.organization_members
+         where organization_id = $1`,
+        [organizationId],
+      );
+      if (Number.parseInt(countRow?.member_count ?? '0', 10) >= access.maxMembers) {
+        throw createError.conflict('This organization has reached its licensed member limit');
+      }
+    }
+
+    const [created] = await tx.query<MemberWithProfile>(
+      `insert into public.organization_members
+         (organization_id, user_id, role, provisioning_source, provisioned_at, joined_at)
+       values ($1, $2, $3, 'manual', now(), now())
+       returning
+         organization_id, user_id, role, provisioning_source, provisioned_at, joined_at,
+         $4::text as email, $5::text as display_name, $6::text as avatar_url`,
+      [
+        organizationId,
+        targetProfile.id,
+        role,
+        targetProfile.email ?? email,
+        targetProfile.display_name ?? targetProfile.email ?? email,
+        targetProfile.avatar_url,
+      ],
+    );
+
+    if (!created) {
+      throw createError.conflict('The team member could not be added');
+    }
+    return created;
+  });
+
+  logger.info({ userId, organizationId, targetUserId: member.user_id }, 'Team member added');
+
+  return NextResponse.json({ member: formatMember(member, userId) }, { status: 201 });
 }
 
 export const GET = withErrorHandler(handleList);
-export const POST = withErrorHandler(handleInvite);
+export const POST = withErrorHandler(handleAddMember);
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

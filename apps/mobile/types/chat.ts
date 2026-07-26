@@ -135,11 +135,13 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   type?: MessageType;
   /** URL of a generated image */
   imageUrl?: string;
+  /** Whether imageUrl is backed by the durable owner-scoped Cloud media route. */
+  imageGenPersisted?: boolean;
   /** Revised prompt returned by the image generation model */
   revisedPrompt?: string;
   /** Whether an image is currently being generated for this message */
   isGeneratingImage?: boolean;
-  /** Image generation progress (0–100) */
+  /** Real server-reported image generation progress (0–100), when available. */
   imageGenProgress?: number;
   /** Image generation status */
   imageGenStatus?: 'pending' | 'generating' | 'completed' | 'failed';

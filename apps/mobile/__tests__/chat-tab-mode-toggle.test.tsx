@@ -10,6 +10,12 @@ const mockBeginImageGeneration = jest.fn(() => 'assistant-msg-1');
 const mockCompleteImageGeneration = jest.fn();
 const mockFailImageGeneration = jest.fn();
 let mockChatInputOnSend: ((text: string) => void) | undefined;
+let mockChatFeatures = { imageGen: true };
+const mockCloudAccountStorage = new Map<string, string>();
+let mockChatInputDraftProvenance:
+  | { scope: 'local' }
+  | { scope: 'cloud'; ownerId: string }
+  | undefined;
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -40,6 +46,7 @@ jest.mock('@/stores/chatStore', () => ({
       deleteMessage: jest.fn(),
       setPaywallError: jest.fn(),
       clearError: jest.fn(),
+      features: mockChatFeatures,
     }),
 }));
 
@@ -50,6 +57,7 @@ jest.mock('@/hooks/useNetworkStatus', () => ({
 jest.mock('@/src/features/image/services/imagegen', () => ({
   generateImage: jest.fn(),
   getGeneratedImageUri: jest.fn(),
+  getDurableGeneratedImagePath: jest.fn(() => null),
 }));
 
 jest.mock('@/src/navigation/openNearestDrawer', () => ({
@@ -61,11 +69,15 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
   const { View } = require('react-native');
   return {
     ChatInput: React.forwardRef(function MockChatInput(
-      props: { onSend?: (text: string) => void },
+      props: {
+        onSend?: (text: string) => void;
+        draftProvenance?: { scope: 'local' } | { scope: 'cloud'; ownerId: string };
+      },
       ref: React.Ref<unknown>,
     ) {
       React.useImperativeHandle(ref, () => ({ addAttachments: jest.fn() }));
       mockChatInputOnSend = props.onSend;
+      mockChatInputDraftProvenance = props.draftProvenance;
       return <View testID="chat-input" />;
     }),
   };
@@ -150,6 +162,15 @@ jest.mock('@/lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn((key: string) => mockCloudAccountStorage.get(key)),
+    set: jest.fn((key: string, value: string) => {
+      mockCloudAccountStorage.set(key, value);
+    }),
+    delete: jest.fn((key: string) => {
+      mockCloudAccountStorage.delete(key);
+    }),
+  },
 }));
 
 import ChatTabScreen from '../app/(app)/(tabs)/chat';
@@ -157,8 +178,13 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useAuthStore } from '../src/features/auth/store';
 import { DEFAULT_LOCAL_MODEL_ID } from '../src/features/model-picker/service';
 import { generateImage, getGeneratedImageUri } from '../src/features/image/services/imagegen';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockGenerateImage = generateImage as jest.Mock;
 const mockGetGeneratedImageUri = getGeneratedImageUri as jest.Mock;
@@ -166,9 +192,19 @@ const mockGetGeneratedImageUri = getGeneratedImageUri as jest.Mock;
 describe('Chat tab mode toggle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCloudAccountStorage.clear();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('mobile-image-test-user');
     mockChatInputOnSend = undefined;
+    mockChatInputDraftProvenance = undefined;
+    mockChatFeatures = { imageGen: true };
     useChatAppModeStore.setState({ appMode: 'local' });
-    useTierStore.setState({ tier: 'pro' });
+    useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
+    useAuthStore.setState({
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: 'mobile-image-test-user',
+    });
     useModelStore.setState({
       selectedModel: DEFAULT_LOCAL_MODEL_ID,
       selectedProvider: 'local',
@@ -214,6 +250,21 @@ describe('Chat tab mode toggle', () => {
     expect(queryByTestId('project-selector-bar')).toBeTruthy();
     // No sign-in redirect needed since cloud is already unlocked.
     expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
+  });
+
+  it('binds the new-chat draft to Local or the signed-in Cloud owner', () => {
+    const localScreen = render(<ChatTabScreen />);
+    expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
+    localScreen.unmount();
+
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    render(<ChatTabScreen />);
+
+    expect(mockChatInputDraftProvenance).toEqual({
+      scope: 'cloud',
+      ownerId: 'mobile-image-test-user',
+    });
   });
 
   it('keeps a registry Auto profile selected inside the Cloud boundary', async () => {
@@ -358,5 +409,62 @@ describe('Chat tab mode toggle', () => {
       prompt: 'Create an image of a blue observatory on Mars',
       model: expect.any(String),
     });
+  });
+
+  it.each([
+    '/image a red circle on a white background',
+    'Create an image of a blue observatory on Mars',
+  ])('does not generate for %s when Image is disabled', async (message) => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    mockChatFeatures = { imageGen: false };
+
+    render(<ChatTabScreen />);
+    await mockChatInputOnSend?.(message);
+
+    expect(mockCreateConversation).not.toHaveBeenCalled();
+    expect(mockBeginImageGeneration).not.toHaveBeenCalled();
+    expect(mockGenerateImage).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'a signed-out session',
+      () =>
+        useAuthStore.setState({
+          isClerkLoaded: true,
+          isClerkSignedIn: false,
+          clerkUserId: null,
+        }),
+    ],
+    ['a denied image capability', () => useTierStore.setState({ grantedCapabilities: [] })],
+    ['an ineligible tier', () => useTierStore.setState({ tier: 'free' })],
+  ])('does not run /image for %s', async (_label, denyImageGeneration) => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    denyImageGeneration();
+
+    render(<ChatTabScreen />);
+    await mockChatInputOnSend?.('/image a secure enterprise diagram');
+
+    expect(mockCreateConversation).not.toHaveBeenCalled();
+    expect(mockBeginImageGeneration).not.toHaveBeenCalled();
+    expect(mockGenerateImage).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to ordinary chat for an ineligible natural-language image request', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'free' });
+
+    render(<ChatTabScreen />);
+    await mockChatInputOnSend?.('Create an image of a secure enterprise architecture');
+
+    expect(mockCreateConversation).not.toHaveBeenCalled();
+    expect(mockBeginImageGeneration).not.toHaveBeenCalled();
+    expect(mockGenerateImage).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 });

@@ -85,7 +85,9 @@ import {
   FREE_TRIAL_MODEL,
   FREE_TRIAL_GATEWAY,
   FREE_TRIAL_ENDPOINT,
+  MANAGED_APPROVAL_ENDPOINT,
   MANAGED_MODELS_ENDPOINT,
+  MANAGED_USAGE_ENDPOINT,
   MANAGED_CHAT_MAX_INPUT_CHARS,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_SSE_FRAME_CHARS,
@@ -94,6 +96,7 @@ import {
   clearAuthToken,
   getManagedModelAccess,
   streamFreeChat,
+  streamManagedChatApproval,
   createMultimodalUserContent,
   type FreeTrialMessage,
   type FreeTrialChunk,
@@ -216,16 +219,44 @@ describe('getManagedModelAccess', () => {
     } as unknown as Response;
   }
 
+  function activeUsageResponse(
+    overrides: Partial<{
+      plan_tier: string;
+      subscription_status: string;
+      usage_percentage: number;
+      has_usage_remaining: boolean;
+    }> = {},
+  ): Response {
+    return accessResponse({
+      plan_tier: 'pro',
+      usage_percentage: 0,
+      usage_reset_at: '2026-08-01T00:00:00.000Z',
+      has_usage_remaining: true,
+      period_start: '2026-07-01T00:00:00.000Z',
+      period_end: '2026-08-01T00:00:00.000Z',
+      subscription_status: 'active',
+      session_usage_percentage: 0,
+      session_reset_at: null,
+      weekly_usage_percentage: 0,
+      weekly_reset_at: null,
+      flagship_weekly_usage_percentage: 0,
+      flagship_weekly_reset_at: null,
+      ...overrides,
+    });
+  }
+
   it('uses the bearer credential and forwards cancellation to the model owner', async () => {
     const controller = new AbortController();
-    fetchMock.mockResolvedValueOnce(
-      accessResponse({
-        data: [{ id: 'model-a' }],
-        x_agi_workforce: { user_tier: 'pro', allowed_auto_modes: ['auto'] },
-      }),
-    );
+    fetchMock
+      .mockResolvedValueOnce(
+        accessResponse({
+          data: [{ id: 'model-a' }],
+          x_agi_workforce: { user_tier: 'pro', allowed_auto_modes: ['auto'] },
+        }),
+      )
+      .mockResolvedValueOnce(activeUsageResponse());
 
-    await expect(getManagedModelAccess('session-token', controller.signal)).resolves.toEqual({
+    await expect(getManagedModelAccess('session-token', controller.signal)).resolves.toMatchObject({
       subscriptionTier: 'pro',
       modelIds: ['model-a'],
       allowedAutoModes: ['auto'],
@@ -240,24 +271,102 @@ describe('getManagedModelAccess', () => {
     );
   });
 
-  it('normalizes duplicates and caps untrusted server arrays', async () => {
-    fetchMock.mockResolvedValueOnce(
-      accessResponse({
-        data: [
-          { id: ' model-a ' },
-          { id: 'model-a' },
-          ...Array.from({ length: 250 }, (_, index) => ({ id: `model-${index}` })),
-        ],
-        x_agi_workforce: {
-          user_tier: 'pro',
-          allowed_auto_modes: [
-            ' auto ',
-            'auto',
-            ...Array.from({ length: 100 }, (_, index) => `mode-${index}`),
-          ],
-        },
+  it('hydrates the canonical Team plan and active status from the usage owner', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        accessResponse({
+          data: [{ id: 'model-a' }],
+          x_agi_workforce: { user_tier: 'pro', allowed_auto_modes: ['auto'] },
+        }),
+      )
+      .mockResolvedValueOnce(
+        accessResponse({
+          plan_tier: 'team',
+          usage_percentage: 37,
+          usage_reset_at: '2026-08-01T00:00:00.000Z',
+          has_usage_remaining: true,
+          period_start: '2026-07-01T00:00:00.000Z',
+          period_end: '2026-08-01T00:00:00.000Z',
+          subscription_status: 'active',
+          session_usage_percentage: 12,
+          session_reset_at: '2026-07-26T20:00:00.000Z',
+          weekly_usage_percentage: 21,
+          weekly_reset_at: '2026-07-31T20:00:00.000Z',
+          flagship_weekly_usage_percentage: 5,
+          flagship_weekly_reset_at: '2026-07-31T20:00:00.000Z',
+        }),
+      );
+
+    await expect(getManagedModelAccess('session-token')).resolves.toMatchObject({
+      subscriptionTier: 'team',
+      subscriptionStatus: 'active',
+      usagePercentage: 37,
+      usageResetAt: '2026-08-01T00:00:00.000Z',
+      hasUsageRemaining: true,
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      MANAGED_USAGE_ENDPOINT,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({ Authorization: 'Bearer session-token' }),
       }),
     );
+  });
+
+  it('fails closed to Free when a retained paid plan is no longer entitled', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        accessResponse({
+          data: [{ id: 'model-a' }],
+          x_agi_workforce: { user_tier: 'pro', allowed_auto_modes: ['auto'] },
+        }),
+      )
+      .mockResolvedValueOnce(
+        accessResponse({
+          plan_tier: 'pro',
+          usage_percentage: 100,
+          usage_reset_at: null,
+          has_usage_remaining: false,
+          period_start: null,
+          period_end: null,
+          subscription_status: 'canceled',
+          session_usage_percentage: 100,
+          session_reset_at: null,
+          weekly_usage_percentage: 100,
+          weekly_reset_at: null,
+          flagship_weekly_usage_percentage: 100,
+          flagship_weekly_reset_at: null,
+        }),
+      );
+
+    await expect(getManagedModelAccess('session-token')).resolves.toMatchObject({
+      subscriptionTier: 'free',
+      accountPlanTier: 'pro',
+      subscriptionStatus: 'canceled',
+    });
+  });
+
+  it('normalizes duplicates and caps untrusted server arrays', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        accessResponse({
+          data: [
+            { id: ' model-a ' },
+            { id: 'model-a' },
+            ...Array.from({ length: 250 }, (_, index) => ({ id: `model-${index}` })),
+          ],
+          x_agi_workforce: {
+            user_tier: 'pro',
+            allowed_auto_modes: [
+              ' auto ',
+              'auto',
+              ...Array.from({ length: 100 }, (_, index) => `mode-${index}`),
+            ],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(activeUsageResponse());
 
     const access = await getManagedModelAccess('session-token');
     expect(access.modelIds).toHaveLength(200);
@@ -270,26 +379,30 @@ describe('getManagedModelAccess', () => {
     await expect(getManagedModelAccess('   ')).rejects.toThrow('Authentication is required');
     expect(fetchMock).not.toHaveBeenCalled();
 
-    fetchMock.mockResolvedValueOnce(accessResponse({}, 401));
+    fetchMock
+      .mockResolvedValueOnce(accessResponse({}, 401))
+      .mockResolvedValueOnce(accessResponse({}, 401));
     await expect(getManagedModelAccess('expired')).rejects.toThrow('Authentication is required');
 
-    fetchMock.mockResolvedValueOnce(
-      accessResponse({
-        data: [{ id: '' }],
-        x_agi_workforce: { user_tier: '', allowed_auto_modes: [] },
-      }),
-    );
+    fetchMock
+      .mockResolvedValueOnce(
+        accessResponse({
+          data: [{ id: '' }],
+          x_agi_workforce: { user_tier: '', allowed_auto_modes: [] },
+        }),
+      )
+      .mockResolvedValueOnce(activeUsageResponse());
     await expect(getManagedModelAccess('token')).rejects.toThrow('Invalid model-access response');
   });
 
   it('propagates an abort without retrying or converting it into admission', async () => {
     const controller = new AbortController();
     const abort = new DOMException('Aborted', 'AbortError');
-    fetchMock.mockRejectedValueOnce(abort);
+    fetchMock.mockRejectedValue(abort);
     controller.abort();
 
     await expect(getManagedModelAccess('token', controller.signal)).rejects.toBe(abort);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1129,5 +1242,64 @@ describe('streamFreeChat — model routing', () => {
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks.filter((chunk) => chunk.type === 'done')).toHaveLength(1);
     expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
+  });
+});
+
+describe('streamManagedChatApproval', () => {
+  const runId = '11111111-1111-4111-8111-111111111111';
+
+  it('posts only the durable run id and explicit decisions to the approval endpoint', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'continued' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+
+    const chunks = await collectChunks(
+      streamManagedChatApproval(runId, [{ tool_call_id: 'call-1', decision: 'approved' }], 'token'),
+    );
+
+    const [url, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(MANAGED_APPROVAL_ENDPOINT);
+    expect(JSON.parse(fetchOpts.body as string)).toEqual({
+      run_id: runId,
+      tool_approvals: [{ tool_call_id: 'call-1', decision: 'approved' }],
+    });
+    expect(chunks).toContainEqual({ type: 'text', text: 'continued' });
+    expect(chunks.at(-1)).toEqual({ type: 'done' });
+  });
+
+  it('rejects malformed decisions before network access', async () => {
+    const chunks = await collectChunks(
+      streamManagedChatApproval(runId, [{ tool_call_id: '', decision: 'approved' }], 'token'),
+    );
+
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'protocol_error' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the bounded server-owned approval error', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(
+        409,
+        JSON.stringify({
+          error: {
+            message: 'This approval is already being resumed.',
+            type: 'invalid_request_error',
+            code: 'tool_approval_invalid',
+          },
+        }),
+      ),
+    );
+
+    const chunks = await collectChunks(
+      streamManagedChatApproval(runId, [{ tool_call_id: 'call-1', decision: 'rejected' }], 'token'),
+    );
+
+    expect(chunks[0]).toMatchObject({
+      type: 'error',
+      code: 'server_error',
+      message: 'This approval is already being resumed.',
+    });
   });
 });

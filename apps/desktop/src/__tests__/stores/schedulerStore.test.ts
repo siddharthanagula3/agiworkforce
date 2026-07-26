@@ -30,13 +30,17 @@ vi.mock('sonner', () => ({
 }));
 
 // Import after mocking to get the store wired to the mocked invoke
-import { useSchedulerStore } from '../../stores/schedulerStore';
+import {
+  getScheduleSummary,
+  inferTaskInterval,
+  useSchedulerStore,
+} from '../../stores/schedulerStore';
 
 describe('schedulerStore — Tauri command wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset store state
-    useSchedulerStore.setState({ jobs: [], isLoading: false, error: null });
+    useSchedulerStore.setState({ jobs: [], tasks: [], isLoading: false, error: null });
   });
 
   it('addJob invokes scheduler_add_job (not scheduler_create_job or other variants)', async () => {
@@ -86,6 +90,49 @@ describe('schedulerStore — Tauri command wiring', () => {
     await useSchedulerStore.getState().listJobs();
 
     expect(mockInvoke).toHaveBeenCalledWith('scheduler_list_jobs');
+  });
+
+  it('maps the native six-field weekly cron schedule without labeling it daily', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      {
+        id: 'weekly-memory',
+        name: 'memory_weekly_decay',
+        schedule: '0 0 4 * * 1',
+        actionType: 'script',
+        actionData: {},
+        status: 'active',
+        createdAt: '2026-07-25T00:00:00.000Z',
+        updatedAt: '2026-07-25T00:00:00.000Z',
+        lastRun: null,
+        nextRun: null,
+        runCount: 0,
+        failureCount: 0,
+        description: null,
+      },
+    ]);
+
+    await useSchedulerStore.getState().fetchTasks();
+
+    const schedule = useSchedulerStore.getState().tasks[0]?.schedule;
+    expect(schedule).toEqual({
+      type: 'recurring',
+      interval: 'weekly',
+      cronExpression: '0 0 4 * * 1',
+    });
+    expect(schedule && getScheduleSummary(schedule)).toBe('Every week');
+  });
+
+  it.each([
+    ['0 0 * * * *', 'hourly'],
+    ['0 0 3 * * *', 'daily'],
+    ['0 0 4 * * 1', 'weekly'],
+    ['0 0 4 1 * *', 'monthly'],
+    ['0 9 * * *', 'daily'],
+    ['15 9 * * 2', 'weekly'],
+    ['0 9 1 * *', 'monthly'],
+    ['not a cron expression', 'custom'],
+  ] as const)('infers %s as %s', (cronExpression, expectedInterval) => {
+    expect(inferTaskInterval(cronExpression)).toBe(expectedInterval);
   });
 
   it('getNextRuns invokes scheduler_get_next_runs with a limit parameter', async () => {

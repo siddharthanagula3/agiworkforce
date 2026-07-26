@@ -66,6 +66,7 @@ import SchedulesScreen from '../app/(app)/schedules';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useScheduleStore } from '../src/features/schedules/store';
+import { useTierStore } from '../src/features/billing/store';
 
 describe('Schedules screen Cloud boundary', () => {
   beforeEach(() => {
@@ -73,6 +74,7 @@ describe('Schedules screen Cloud boundary', () => {
     mockFetchSchedules.mockResolvedValue(undefined);
     useChatAppModeStore.setState({ appMode: 'local' });
     useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'basic' });
     useScheduleStore.setState({
       schedules: [],
       runs: {},
@@ -136,5 +138,26 @@ describe('Schedules screen Cloud boundary', () => {
 
     expect(getByText('No Schedules')).toBeTruthy();
     await waitFor(() => expect(mockFetchSchedules).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not contact Cloud when a signed-out session has stale Cloud mode state', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: false });
+
+    const { getByLabelText } = render(<SchedulesScreen />);
+
+    expect(getByLabelText('Sign in to AGI Cloud')).toBeTruthy();
+    expect(mockFetchSchedules).not.toHaveBeenCalled();
+  });
+
+  it('sends Free users to plan options instead of advertising an unavailable task', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useTierStore.setState({ tier: 'free' });
+
+    const { getByLabelText, queryByLabelText } = render(<SchedulesScreen />);
+
+    expect(queryByLabelText('Quick schedule')).toBeNull();
+    fireEvent.press(getByLabelText('View plans for scheduled tasks'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
   });
 });

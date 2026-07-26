@@ -2386,15 +2386,9 @@ pub async fn run_main() -> Result<()> {
         let tier = tier_resolution
             .cached
             .as_ref()
-            .map(|cached| match cached.tier {
-                tier_cache::UserTier::Free => "free",
-                tier_cache::UserTier::Pro => "pro",
-                tier_cache::UserTier::Max => "max",
-                tier_cache::UserTier::Enterprise => "enterprise",
-                // BYOK is not a server entitlement. Managed routing must fail
-                // closed to the Free policy until the account tier is proven.
-                tier_cache::UserTier::Byok => "free",
-            })
+            // BYOK is not a server entitlement. The shared mapping fails it
+            // closed to the Free policy until an account tier is proven.
+            .map(|cached| cached.tier.managed_auto_routing_tier())
             .unwrap_or("free");
         // AUTO-ROUTER-MIGRATION-01 (CLI clause): classify the launch prompt
         // through the canonical taxonomy instead of hardcoding Coding.

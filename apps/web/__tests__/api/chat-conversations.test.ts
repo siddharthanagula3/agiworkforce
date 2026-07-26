@@ -139,6 +139,30 @@ describe('Chat Conversations API', () => {
         expect(data.conversations[1].project_id).toBe('proj-1');
       });
 
+      it('returns owner-scoped non-temporary history totals when requested', async () => {
+        mockQuery
+          .mockResolvedValueOnce(mockConversations)
+          .mockResolvedValueOnce([{ conversation_count: '195', message_count: '842' }]);
+
+        const request = new NextRequest(
+          'http://localhost/api/chat/conversations?includeHistoryStats=1',
+          { headers: { Authorization: 'Bearer valid-token' } },
+        );
+        const response = await GET(request);
+
+        expect(response.status).toBe(200);
+        await expect(response.json()).resolves.toMatchObject({
+          historyStats: { conversationCount: 195, messageCount: 842 },
+        });
+        expect(mockQuery).toHaveBeenNthCalledWith(
+          2,
+          expect.stringMatching(
+            /where user_id = \$1[\s\S]*deleted_at is null[\s\S]*is_temporary = false/,
+          ),
+          ['user-123'],
+        );
+      });
+
       it('should select project_id for project-aware sidebar actions', async () => {
         mockQuery.mockResolvedValueOnce(mockConversations);
 

@@ -101,6 +101,38 @@ export type CreateTaskInput = Omit<
 // Task helper utilities (formerly in scheduledTaskStore)
 // ============================================================================
 
+/**
+ * Infer the recurring interval represented by a cron expression.
+ *
+ * The native scheduler uses six fields (seconds first), while a few older UI
+ * entry points still produce five-field cron expressions. Accept both so the
+ * Scheduled view never silently labels an unknown backend schedule as daily.
+ */
+export function inferTaskInterval(cronExpression: string): TaskInterval {
+  const fields = cronExpression.trim().split(/\s+/);
+  const normalizedFields = fields.length === 6 ? fields.slice(1) : fields;
+  if (normalizedFields.length !== 5) return 'custom';
+
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = normalizedFields;
+  if (!minute || !hour || !dayOfMonth || !month || !dayOfWeek) return 'custom';
+
+  if (hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    return 'hourly';
+  }
+  if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') return 'daily';
+  if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') return 'weekly';
+  if (dayOfMonth !== '*' && month === '*' && dayOfWeek === '*') return 'monthly';
+  return 'custom';
+}
+
+export function taskScheduleFromCronExpression(cronExpression: string): TaskSchedule {
+  return {
+    type: 'recurring',
+    interval: inferTaskInterval(cronExpression),
+    cronExpression,
+  };
+}
+
 /** Compute the next run timestamp from a schedule (client-side approximation). */
 function computeNextRunAt(schedule: TaskSchedule): number | null {
   const now = Date.now();
@@ -680,10 +712,7 @@ export const useSchedulerStore = create<SchedulerState>()(
               name: job.name,
               description: job.description ?? '',
               prompt: ((job.actionData as Record<string, unknown>)?.['prompt'] as string) ?? '',
-              schedule: {
-                type: 'recurring' as const,
-                cronExpression: job.schedule,
-              },
+              schedule: taskScheduleFromCronExpression(job.schedule),
               status: job.status as TaskStatus,
               lastRunAt: job.lastExecutedAt
                 ? new Date(job.lastExecutedAt).getTime()

@@ -6,6 +6,36 @@ sourced from repo code with file:line citations, verified against docs/current/ 
 
 ---
 
+## 2026-07-25 current-tree addendum
+
+This file is dated research, so the original 2026-07-11 observations remain
+below rather than being silently rewritten. The following later changes
+supersede the most consequential stale claims:
+
+- Desktop Cloud is no longer confirmed-dead code. The Tauri composition root
+  now admits Cloud mode through the account boundary and selects
+  `CloudRuntime`; it uses the shared Web chat/persistence services while
+  Local/BYOK remain isolated on `TauriRuntime`.
+- GitHub setup now requires an ownership proof after installation. Production
+  needs `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`, `GITHUB_APP_SLUG`,
+  `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`,
+  `GITHUB_TOKEN_ENCRYPTION_KEY`, the GitHub App setup URL, and its OAuth
+  callback URL. Apply migration `0072` before enabling the flow; it deliberately
+  does not trust/backfill legacy installations.
+- `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` is production-critical and must be 64
+  hexadecimal characters. Custom MCP Connect accepts an optional bearer token,
+  which is encrypted server-side and forwarded by Web/Desktop Cloud without
+  exposing it in connector reads.
+- The 2026-07-11 connector catalog counts are not an availability guarantee.
+  GitHub and custom MCP are the only Web connector families with real Connect
+  paths in the current tree; other catalog rows remain Coming soon until their
+  provider OAuth/backend exists.
+- Team administration now has one real owner-scoped workspace and existing-user
+  role management. SSO, SCIM, tenant-wide RLS, invitation delivery, seat
+  licensing, and multi-organization creation remain unbuilt.
+
+---
+
 ## 1. Shared packages map
 
 Format: package | purpose | imported by (web / desktop / mobile, rough file counts) | key exports.
@@ -67,7 +97,7 @@ Naming trap: `apps/web/shared/stores/model-store.ts` looks cross-app ("shared") 
 
 `packages/types/src/models.json` (3641 lines) top-level: `providers` (20 provider configs), `models` (59 model entries, includes 4 `auto*` virtual models + chat + image + video + audio), `tierAllowedModels` (`{economy, pro_additions, flagship_additions}`), `modelPresets` (per-provider `{value,label}` lists used to build UI pickers), `providersInOrder`.
 
-`tierAllowedModels.economy` = 10 models: `gpt-5-nano`, `gpt-4.1-nano`, `gemini-3.5-flash-lite`, `gpt-5.4-mini`, `deepseek-v4-flash`, `claude-haiku-4.5`, `qwen-3.5-plus`, `kimi-k2.6`, `glm-5.2`, `sonar`. `pro_additions` = 7 (`claude-sonnet-4.6`, `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `deepseek-v4-pro`, `qwen-max`, `sonar-deep-research`, `gpt-5.5`). `flagship_additions` = 2 (`claude-opus-4.8`, `grok-4.3`). Every model in `economy` also carries a per-model `tierPolicy.minTier: "free"` field in `models.json` itself (e.g. `gpt-5-nano` at the top of the entry), but `model-catalog.ts:192-198` documents this per-model field as **INERT** — "Nothing derives `tierAllowedModels` from this yet — it is future GA-wave data. `tierAllowedModels` remains the SSOT."
+The roster captured here is a historical 2026-07-11 snapshot and is superseded by the generated registry. At that time `flagship_additions` included the then-current Opus flagship and Grok entry. Always read the present `tierAllowedModels` and routing policy from `packages/ai/model-registry`; do not copy this dated list into code.
 
 **Two parallel, non-overlapping gating systems live in `model-catalog.ts` — both real, gating different features, easy to conflate:**
 

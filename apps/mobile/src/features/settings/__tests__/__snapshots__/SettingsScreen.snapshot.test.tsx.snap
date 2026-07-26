@@ -314,87 +314,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="Subscription. Free"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#aaa"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-CreditCard"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flex": 1,
-                  "fontSize": 15,
-                }
-              }
-            >
-              Subscription
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#777",
-                  "fontSize": 13,
-                  "maxWidth": 130,
-                }
-              }
-            >
-              Free
-            </Text>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityLabel="Restore purchases"
+            accessibilityLabel="Subscription. Sign in"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -441,7 +361,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               color="#aaa"
               size={19}
               strokeWidth={1.8}
-              testID="icon-RotateCcw"
+              testID="icon-CreditCard"
             />
             <Text
               numberOfLines={1}
@@ -453,7 +373,19 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
                 }
               }
             >
-              Restore purchases
+              Subscription
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#777",
+                  "fontSize": 13,
+                  "maxWidth": 130,
+                }
+              }
+            >
+              Sign in
             </Text>
             <View
               color="#777"
@@ -1615,7 +1547,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="Privacy"
+            accessibilityLabel="Privacy. Sign in"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1677,13 +1609,37 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               Privacy
             </Text>
             <View
+              style={
+                {
+                  "backgroundColor": "#f59e0b14",
+                  "borderColor": "#f59e0b2D",
+                  "borderRadius": 999,
+                  "borderWidth": 1,
+                  "paddingHorizontal": 8,
+                  "paddingVertical": 2,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#f59e0b",
+                    "fontSize": 10,
+                    "fontWeight": "700",
+                  }
+                }
+              >
+                Sign in
+              </Text>
+            </View>
+            <View
               color="#777"
               size={17}
               testID="icon-ChevronRight"
             />
           </View>
           <View
-            accessibilityLabel="Billing"
+            accessibilityLabel="Billing. Sign in"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1745,13 +1701,37 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               Billing
             </Text>
             <View
+              style={
+                {
+                  "backgroundColor": "#f59e0b14",
+                  "borderColor": "#f59e0b2D",
+                  "borderRadius": 999,
+                  "borderWidth": 1,
+                  "paddingHorizontal": 8,
+                  "paddingVertical": 2,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#f59e0b",
+                    "fontSize": 10,
+                    "fontWeight": "700",
+                  }
+                }
+              >
+                Sign in
+              </Text>
+            </View>
+            <View
               color="#777"
               size={17}
               testID="icon-ChevronRight"
             />
           </View>
           <View
-            accessibilityLabel="Usage"
+            accessibilityLabel="Usage. Sign in"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1813,13 +1793,37 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               Usage
             </Text>
             <View
+              style={
+                {
+                  "backgroundColor": "#f59e0b14",
+                  "borderColor": "#f59e0b2D",
+                  "borderRadius": 999,
+                  "borderWidth": 1,
+                  "paddingHorizontal": 8,
+                  "paddingVertical": 2,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#f59e0b",
+                    "fontSize": 10,
+                    "fontWeight": "700",
+                  }
+                }
+              >
+                Sign in
+              </Text>
+            </View>
+            <View
               color="#777"
               size={17}
               testID="icon-ChevronRight"
             />
           </View>
           <View
-            accessibilityLabel="Connectors"
+            accessibilityLabel="Connectors. Sign in"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1880,6 +1884,30 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             >
               Connectors
             </Text>
+            <View
+              style={
+                {
+                  "backgroundColor": "#f59e0b14",
+                  "borderColor": "#f59e0b2D",
+                  "borderRadius": 999,
+                  "borderWidth": 1,
+                  "paddingHorizontal": 8,
+                  "paddingVertical": 2,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#f59e0b",
+                    "fontSize": 10,
+                    "fontWeight": "700",
+                  }
+                }
+              >
+                Sign in
+              </Text>
+            </View>
             <View
               color="#777"
               size={17}

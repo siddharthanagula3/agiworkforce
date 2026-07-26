@@ -16,7 +16,7 @@ The governing rule everywhere below: **Cloud is a distinct trust boundary**. Loc
 
 ✅ Built — `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/services/authSession.ts`.
 
-The cloud backend is **Clerk** (identity/session), **Neon Postgres** (the delta-sync store of record), and **Stripe** (billing). Never reference Supabase. Mobile is a thin client: the Clerk session JWT (`@clerk/expo`, cached in `expo-secure-store`) is bridged to non-React callers as a `Bearer` token (`apps/mobile/services/authSession.ts`) and every cloud call routes through `api` → `guardedFetch`. Requirements: (1) all cloud reads/writes carry a fresh Clerk token; (2) no cloud call executes in Local mode; (3) IDs are client-generated UUIDv7 (time-ordered, collision-free) so push/pull are idempotent; (4) model selection reads only `packages/contracts/types/src/models.json` (e.g. `claude-opus-4.8`, `gpt-5.5`) — never a hardcoded ID.
+The cloud backend is **Clerk** (identity/session), **Neon Postgres** (the delta-sync store of record), and **Stripe** (billing). Never reference Supabase. Mobile is a thin client: the Clerk session JWT (`@clerk/expo`, cached in `expo-secure-store`) is bridged to non-React callers as a `Bearer` token (`apps/mobile/services/authSession.ts`) and every cloud call routes through `api` → `guardedFetch`. Requirements: (1) all cloud reads/writes carry a fresh Clerk token; (2) no cloud call executes in Local mode; (3) IDs are client-generated UUIDv7 (time-ordered, collision-free) so push/pull are idempotent; (4) model selection reads only `packages/contracts/types/src/models.json` (e.g. `claude-opus-5`, `gpt-5.5`) — never a hardcoded ID.
 
 ## Conversation Synchronization
 

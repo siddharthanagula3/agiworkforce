@@ -6,6 +6,7 @@ jest.mock('../src/features/chat/components/MathBlock', () => ({
 }));
 
 import { renderMarkdownContent } from '../src/features/chat/components/MessageContentRenderer';
+import { syntaxTokenColor } from '../src/features/chat/utils/syntaxHighlight';
 import { lightColors } from '../src/ui/theme';
 
 describe('MessageContentRenderer', () => {
@@ -123,9 +124,9 @@ describe('MessageContentRenderer', () => {
       <View>{renderMarkdownContent('```js\nconst x = 42; // note\n```', lightColors)}</View>,
     );
 
-    expect(getByText('const')).toHaveStyle({ color: lightColors.purple });
-    expect(getByText('42')).toHaveStyle({ color: lightColors.agentWarning });
-    expect(getByText('// note')).toHaveStyle({ color: lightColors.textMuted });
+    expect(getByText('const')).toHaveStyle({ color: syntaxTokenColor('keyword', lightColors) });
+    expect(getByText('42')).toHaveStyle({ color: syntaxTokenColor('number', lightColors) });
+    expect(getByText('// note')).toHaveStyle({ color: syntaxTokenColor('comment', lightColors) });
   });
 
   it('renders unknown-language code blocks as plain monospace text', () => {

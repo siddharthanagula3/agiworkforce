@@ -17,8 +17,10 @@ import {
 import {
   createManagedCloudChatClient,
   createManagedCloudAgentRunClient,
+  ManagedMediaImageGenerationRequestSchema,
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
+  type ManagedMediaImageProvider,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudConversation,
@@ -328,6 +330,15 @@ export interface CloudModelsResponse {
   lastUpdated?: string;
 }
 
+export interface CloudGeneratedImage {
+  /** Media-library asset id parsed from the authenticated file URL. */
+  id: string;
+  /** Authenticated, same-cloud-origin `/api/files/{id}` URL. */
+  uri: string;
+  provider: ManagedMediaImageProvider;
+  model: string;
+}
+
 /**
  * Fetches the canonical public model catalog for the embedded Cloud shell.
  * Catalog membership is not an entitlement claim; execution remains
@@ -377,6 +388,94 @@ export async function getCloudModels(): Promise<CloudModelInfo[]> {
       `Failed to fetch cloud models: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+}
+
+/**
+ * Generates one durable image through the same managed-media endpoint used by
+ * Web. Desktop deliberately rejects inline base64 fallbacks: they cannot
+ * survive a reload and must never be persisted into chat metadata.
+ */
+export async function generateCloudImage(input: {
+  prompt: string;
+  provider: ManagedMediaImageProvider;
+  model: string;
+  idempotencyKey: string;
+  signal?: AbortSignal;
+}): Promise<CloudGeneratedImage> {
+  const request = ManagedMediaImageGenerationRequestSchema.parse({
+    prompt: input.prompt,
+    provider: input.provider,
+    model: input.model,
+    size: '1024x1024',
+    n: 1,
+    quality: 'standard',
+  });
+  const headers = await getAuthHeaders();
+  headers['Idempotency-Key'] = input.idempotencyKey;
+
+  const response = await cloudFetch(`${CLOUD_API_BASE_URL}/api/media/image/generate`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+    signal: input.signal,
+    credentials: 'include',
+  });
+  if (!response.ok) throw await readCloudResponseError(response);
+
+  const payload: unknown = await response.json();
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('AGI Cloud returned an invalid image-generation response.');
+  }
+  const record = payload as Record<string, unknown>;
+  if (record['success'] !== true) {
+    const message =
+      typeof record['error'] === 'string'
+        ? record['error']
+        : 'AGI Cloud could not generate the image.';
+    throw new Error(message);
+  }
+  if (record['persisted'] !== true) {
+    throw new Error(
+      'The image provider returned an inline result, but durable Cloud media storage is not configured.',
+    );
+  }
+
+  const images = Array.isArray(record['images']) ? record['images'] : [];
+  const first = images[0];
+  const rawUri =
+    first && typeof first === 'object' && !Array.isArray(first)
+      ? (first as Record<string, unknown>)['url']
+      : undefined;
+  if (typeof rawUri !== 'string' || !rawUri.trim()) {
+    throw new Error('AGI Cloud generated an image but returned no durable file URL.');
+  }
+
+  const fallbackOrigin = globalThis.location?.origin || 'http://localhost';
+  const cloudOrigin = new URL(CLOUD_API_BASE_URL || fallbackOrigin);
+  const resolved = new URL(rawUri, cloudOrigin);
+  const fileMatch = /^\/api\/files\/([^/]+)$/.exec(resolved.pathname);
+  if (resolved.origin !== cloudOrigin.origin || !fileMatch?.[1]) {
+    throw new Error('AGI Cloud returned an invalid image file URL.');
+  }
+
+  const provider = record['provider'];
+  const model = record['model'];
+  if (
+    (provider !== 'google' && provider !== 'openai' && provider !== 'stability') ||
+    typeof model !== 'string' ||
+    !model.trim()
+  ) {
+    throw new Error('AGI Cloud returned incomplete image provenance.');
+  }
+
+  return {
+    id: decodeURIComponent(fileMatch[1]),
+    uri: CLOUD_API_BASE_URL
+      ? resolved.toString()
+      : `${resolved.pathname}${resolved.search}${resolved.hash}`,
+    provider,
+    model,
+  };
 }
 
 // ============================================================================
@@ -446,7 +545,7 @@ export async function sendCloudMessage(
     conversation_id: conversationId,
     stream: true,
     ...(webSearch || requestOptions?.research ? { web_search: true, web_fetch: true } : {}),
-    ...(thinkingEnabled ? { thinking_mode: true } : {}),
+    ...(typeof thinkingEnabled === 'boolean' ? { thinking_mode: thinkingEnabled } : {}),
     ...(codeExecution ? { code_execution: true } : {}),
     ...(requestOptions?.research ? { research: true } : {}),
     ...(requestOptions?.workMode ? { work_mode: requestOptions.workMode } : {}),

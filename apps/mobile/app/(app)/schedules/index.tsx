@@ -20,6 +20,8 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
+import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 
 export default function SchedulesScreen() {
   const router = useRouter();
@@ -27,7 +29,10 @@ export default function SchedulesScreen() {
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const tier = useTierStore((s) => s.tier);
   const isCloudMode = appMode === 'cloud';
+  const scheduledTaskLimit = getPlanMaxScheduledTasks(tier);
+  const canCreateSchedule = scheduledTaskLimit === null || scheduledTaskLimit > 0;
 
   const { schedules, loading, error, fetchSchedules, toggleSchedule, deleteSchedule, clearError } =
     useScheduleStore();
@@ -36,25 +41,29 @@ export default function SchedulesScreen() {
 
   // Initial fetch
   useEffect(() => {
-    if (FEATURES.schedules && isCloudMode) void fetchSchedules();
-  }, [fetchSchedules, isCloudMode]);
+    if (FEATURES.schedules && isCloudMode && cloudUnlocked) void fetchSchedules();
+  }, [cloudUnlocked, fetchSchedules, isCloudMode]);
 
   const handleRefresh = useCallback(async () => {
-    if (!FEATURES.schedules || !isCloudMode) return;
+    if (!FEATURES.schedules || !isCloudMode || !cloudUnlocked) return;
     setRefreshing(true);
     try {
       await fetchSchedules();
     } finally {
       setRefreshing(false);
     }
-  }, [fetchSchedules, isCloudMode]);
+  }, [cloudUnlocked, fetchSchedules, isCloudMode]);
 
   const handleCreate = useCallback(() => {
+    if (!canCreateSchedule) {
+      router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+      return;
+    }
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     router.push({ pathname: '/(app)/schedules/create' as const });
-  }, [hapticsEnabled, router]);
+  }, [canCreateSchedule, hapticsEnabled, router]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -78,9 +87,14 @@ export default function SchedulesScreen() {
 
   const handleToggle = useCallback(
     (id: string) => {
+      const schedule = schedules.find((item) => item.id === id);
+      if (schedule && !schedule.isActive && !canCreateSchedule) {
+        router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        return;
+      }
       toggleSchedule(id);
     },
-    [toggleSchedule],
+    [canCreateSchedule, router, schedules, toggleSchedule],
   );
 
   const handleDelete = useCallback(
@@ -103,7 +117,7 @@ export default function SchedulesScreen() {
   );
 
   if (!FEATURES.schedules) return <FeatureUnavailable feature="Scheduled tasks" />;
-  if (!isCloudMode) {
+  if (!isCloudMode || !cloudUnlocked) {
     return (
       <CloudSchedulesGate
         signedIn={cloudUnlocked}
@@ -117,7 +131,10 @@ export default function SchedulesScreen() {
   if (loading && schedules.length === 0) {
     return (
       <SafeAreaView className="flex-1 bg-surface-base">
-        <Header onBackPress={handleBack} onCreatePress={handleCreate} />
+        <Header
+          onBackPress={handleBack}
+          onCreatePress={canCreateSchedule ? handleCreate : undefined}
+        />
         <View className="px-4 gap-3 mt-2">
           {[0, 1, 2].map((i) => (
             <View
@@ -142,12 +159,30 @@ export default function SchedulesScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
       {/* Header */}
-      <Header onBackPress={handleBack} onCreatePress={handleCreate} />
+      <Header
+        onBackPress={handleBack}
+        onCreatePress={canCreateSchedule ? handleCreate : undefined}
+      />
 
       {/* Quick schedule button */}
-      <View className="px-4 mb-3">
-        <QuickSchedule onCreated={handleRefresh} />
-      </View>
+      {canCreateSchedule ? (
+        <View className="px-4 mb-3">
+          <QuickSchedule onCreated={handleRefresh} />
+        </View>
+      ) : (
+        <Pressable
+          onPress={handleCreate}
+          className="mx-4 mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3"
+          accessibilityRole="button"
+          accessibilityLabel="View plans for scheduled tasks"
+        >
+          <Text className="text-sm font-medium text-amber-300">Scheduled tasks require Basic</Text>
+          <Text className="mt-1 text-xs leading-4 text-white/50">
+            Upgrade to run unattended Cloud work. Existing tasks remain visible so you can pause or
+            delete them.
+          </Text>
+        </Pressable>
+      )}
 
       {/* Error banner */}
       {error && (
@@ -161,7 +196,7 @@ export default function SchedulesScreen() {
 
       {/* Schedule list or empty state */}
       {schedules.length === 0 ? (
-        <EmptyState onCreatePress={handleCreate} />
+        <EmptyState onCreatePress={handleCreate} canCreateSchedule={canCreateSchedule} />
       ) : (
         <FlatList
           data={schedules}
@@ -189,7 +224,7 @@ export default function SchedulesScreen() {
       )}
 
       {/* FAB */}
-      {schedules.length > 0 && (
+      {schedules.length > 0 && canCreateSchedule && (
         <Pressable
           onPress={handleCreate}
           className="absolute bottom-6 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg active:opacity-80"
@@ -211,7 +246,7 @@ function Header({
   onCreatePress,
 }: {
   onBackPress: () => void;
-  onCreatePress: () => void;
+  onCreatePress?: () => void;
 }) {
   return (
     <View className="flex-row items-center px-3 h-12">
@@ -226,13 +261,15 @@ function Header({
       <Text variant="subheading" className="ml-2 flex-1">
         Schedules
       </Text>
-      <Pressable
-        onPress={onCreatePress}
-        className="p-2 rounded-lg active:bg-white/5"
-        accessibilityLabel="Create schedule"
-      >
-        <Plus size={20} color={colors.teal} />
-      </Pressable>
+      {onCreatePress ? (
+        <Pressable
+          onPress={onCreatePress}
+          className="p-2 rounded-lg active:bg-white/5"
+          accessibilityLabel="Create schedule"
+        >
+          <Plus size={20} color={colors.teal} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -241,7 +278,13 @@ function Header({
 // Empty State
 // ---------------------------------------------------------------------------
 
-function EmptyState({ onCreatePress }: { onCreatePress: () => void }) {
+function EmptyState({
+  onCreatePress,
+  canCreateSchedule,
+}: {
+  onCreatePress: () => void;
+  canCreateSchedule: boolean;
+}) {
   return (
     <Animated.View
       entering={FadeIn.duration(300)}
@@ -255,14 +298,16 @@ function EmptyState({ onCreatePress }: { onCreatePress: () => void }) {
       </View>
 
       <Text variant="heading" className="text-center mb-2">
-        No Schedules
+        {canCreateSchedule ? 'No Schedules' : 'Scheduled tasks require Basic'}
       </Text>
       <Text className="text-white/50 text-center text-sm mb-8 leading-5">
-        Create recurring AI tasks that run on a schedule from your phone.
+        {canCreateSchedule
+          ? 'Create recurring AI tasks that run during the daily AGI Cloud scheduling window.'
+          : 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'}
       </Text>
 
       <Button
-        title="Create Schedule"
+        title={canCreateSchedule ? 'Create Schedule' : 'View Plans'}
         variant="primary"
         size="lg"
         onPress={onCreatePress}

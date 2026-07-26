@@ -23,7 +23,9 @@ describe('VS Code AGI Cloud device authorization', () => {
 
     const result = await requestDeviceAuthorization('https://agiworkforce.com', post);
 
-    expect(post).toHaveBeenCalledWith('https://agiworkforce.com/api/auth/device/code', {});
+    expect(post).toHaveBeenCalledWith('https://agiworkforce.com/api/auth/device/code', {
+      surface: 'vscode',
+    });
     expect(result.userCode).toBe('ABCD-2345');
     expect(result.verificationUrl).toBe('https://agiworkforce.com/auth/device?user_code=ABCD-2345');
     expect(result.pollIntervalMs).toBe(5_000);

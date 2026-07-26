@@ -8,12 +8,7 @@
  */
 
 import * as vscode from 'vscode';
-import {
-  formatPrivacyModeLabel,
-  isFreePlan,
-  type UsageMeter,
-  type UIPlanTier,
-} from '@agiworkforce/types';
+import { formatPrivacyModeLabel, type UsageMeter, type UIPlanTier } from '@agiworkforce/types';
 import { fetchTierInfo, type TierInfo } from '../utils/api';
 
 // ─── Local-provider detection ─────────────────────────────────────────────────
@@ -23,9 +18,13 @@ const LOCAL_PREFIXES = ['ollama/', 'lmstudio/', 'lms/', 'local/'];
 const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'local',
   'byok',
+  'free',
   'basic',
   'pro',
   'max',
+  'max_15x',
+  'team',
+  'enterprise',
 ]);
 
 function isLocalModel(modelId: string): boolean {
@@ -50,7 +49,7 @@ function coercePlanTier(raw: string | undefined): UIPlanTier | undefined {
 
 function buildManagedMeter(tierInfo: TierInfo): UsageMeter | null {
   const tier = coercePlanTier(tierInfo.tier);
-  if (tier === undefined || isFreePlan(tier)) return null;
+  if (tier === undefined || tier === 'local' || tier === 'byok') return null;
 
   // Percentage-only contract: the server never returns exact token/cent counts,
   // so the meter carries a 0-1 remaining fraction derived from usage_percentage

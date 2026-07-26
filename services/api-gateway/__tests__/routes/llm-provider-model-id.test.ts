@@ -65,7 +65,11 @@ vi.mock('../../src/lib/neonClients', () => ({
         ? {
             select: () => ({
               eq: () => ({
-                maybeSingle: () => Promise.resolve({ data: { plan_tier: 'max' }, error: null }),
+                maybeSingle: () =>
+                  Promise.resolve({
+                    data: { plan_tier: 'max', status: 'active' },
+                    error: null,
+                  }),
               }),
             }),
           }
@@ -383,7 +387,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: false,
       });
@@ -398,16 +402,16 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: false,
       });
 
     expect(response.status).toBe(200);
-    expect(state.capturedRequest?.model).toBe('claude-opus-4-8');
+    expect(state.capturedRequest?.model).toBe('claude-opus-5');
     expect(state.capturedSignal).toBeInstanceOf(AbortSignal);
     expect(state.buildCalls).toEqual(['anthropic']);
-    expect(response.body.model).toBe('claude-opus-4.8');
+    expect(response.body.model).toBe('claude-opus-5');
     expect(state.billingEvents).toEqual([
       'reserve',
       'provider-started',
@@ -420,7 +424,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     );
     expect(state.usageRows).toContainEqual(
       expect.objectContaining({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         provider: 'anthropic',
         event_type: 'llm_completion',
         prompt_tokens: 2,
@@ -439,7 +443,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
       .post('/api/llm/v1/chat/completions')
       .set('Idempotency-Key', 'test-turn-12345678')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: false,
       });
@@ -455,7 +459,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
       });
 
@@ -474,7 +478,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
       });
 
@@ -489,7 +493,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -509,7 +513,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -528,7 +532,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const outbound = request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -555,7 +559,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -575,7 +579,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -599,7 +603,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const outbound = request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -623,7 +627,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const outbound = request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -647,7 +651,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -672,7 +676,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -700,7 +704,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -729,7 +733,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -748,7 +752,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
       });
@@ -772,7 +776,7 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     const response = await request(createApp())
       .post('/api/llm/v1/chat/completions')
       .send({
-        model: 'claude-opus-4.8',
+        model: 'claude-opus-5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: false,
       });

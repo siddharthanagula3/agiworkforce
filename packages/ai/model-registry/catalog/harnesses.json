@@ -263,7 +263,7 @@
           "implementation": "implemented"
         },
         "toolDiscovery": {
-          "implementation": "partial"
+          "implementation": "implemented"
         },
         "memory": {
           "implementation": "partial"

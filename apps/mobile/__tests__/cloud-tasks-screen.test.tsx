@@ -1,10 +1,19 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockListRuns = jest.fn();
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({
@@ -45,12 +54,22 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
-import TasksScreen from '../app/(app)/agents';
+import TasksScreen, { TASK_POLL_INTERVAL_MS } from '../app/(app)/agents';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatStore } from '../stores/chatStore';
+import { useAuthStore } from '../src/features/auth/store';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const RUN = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -70,8 +89,30 @@ const RUN = {
 };
 
 describe('Mobile Cloud tasks screen', () => {
+  let appStateListener: ((state: AppStateStatus) => void) | undefined;
+  const removeAppStateListener = jest.fn();
+
+  beforeAll(() => {
+    Object.defineProperty(AppState, 'currentState', {
+      configurable: true,
+      value: 'active',
+    });
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      appStateListener = listener;
+      return { remove: removeAppStateListener };
+    });
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('user-1');
+    useAuthStore.setState({
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: 'user-1',
+    });
+    appStateListener = undefined;
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useWaitlistStore.setState({ cloudUnlocked: true });
     useChatStore.setState({
@@ -87,6 +128,10 @@ describe('Mobile Cloud tasks screen', () => {
       ],
     } as never);
     mockListRuns.mockResolvedValue({ runs: [RUN], nextCursor: null });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('loads real active Cloud runs and opens the owning conversation', async () => {
@@ -105,6 +150,24 @@ describe('Mobile Cloud tasks screen', () => {
       pathname: '/(app)/chat/[id]',
       params: { id: 'conversation-1' },
     });
+  });
+
+  it('does not render an account-A task response after switching to account B', async () => {
+    const accountAResponse = deferred<{ runs: Array<typeof RUN>; nextCursor: null }>();
+    mockListRuns
+      .mockReturnValueOnce(accountAResponse.promise)
+      .mockResolvedValueOnce({ runs: [], nextCursor: null });
+    const screen = render(<TasksScreen />);
+    await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      activateCloudAccount('user-2');
+      useAuthStore.setState({ clerkUserId: 'user-2' });
+    });
+    accountAResponse.resolve({ runs: [RUN], nextCursor: null });
+
+    await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('Audit the launch checklist')).toBeNull();
   });
 
   it('uses semantic filters backed by the server state query', async () => {
@@ -136,5 +199,71 @@ describe('Mobile Cloud tasks screen', () => {
     fireEvent.press(getByLabelText('Retry loading tasks'));
 
     await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not contact Cloud when a signed-out session has stale Cloud mode state', () => {
+    useWaitlistStore.setState({ cloudUnlocked: false });
+
+    const { getByText } = render(<TasksScreen />);
+
+    expect(getByText('Tasks run in AGI Cloud')).toBeTruthy();
+    expect(mockListRuns).not.toHaveBeenCalled();
+  });
+
+  it('loads the next cursor page without duplicating runs', async () => {
+    const nextRun = {
+      ...RUN,
+      id: '22222222-2222-4222-8222-222222222222',
+      requestId: 'request-2',
+      conversationId: null,
+      workMode: 'research',
+      state: 'running',
+    };
+    mockListRuns
+      .mockResolvedValueOnce({ runs: [RUN], nextCursor: 'cursor-2' })
+      .mockResolvedValueOnce({ runs: [RUN, nextRun], nextCursor: null });
+
+    const { getByLabelText, getAllByText } = render(<TasksScreen />);
+    await waitFor(() => expect(getByLabelText('Load more tasks')).toBeTruthy());
+
+    fireEvent.press(getByLabelText('Load more tasks'));
+
+    await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(2));
+    expect(mockListRuns).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: 'cursor-2', limit: 25 }),
+    );
+    expect(getAllByText('Awaiting input')).toHaveLength(1);
+  });
+
+  it('polls only while mounted in foreground Cloud mode and removes runs that leave Active', async () => {
+    jest.useFakeTimers();
+    mockListRuns
+      .mockResolvedValueOnce({ runs: [RUN], nextCursor: null })
+      .mockResolvedValueOnce({ runs: [], nextCursor: null });
+
+    const screen = render(<TasksScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockListRuns).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(TASK_POLL_INTERVAL_MS);
+      await Promise.resolve();
+    });
+
+    expect(mockListRuns).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('No active Cloud tasks')).toBeTruthy();
+    const pollingSignal = mockListRuns.mock.calls[1]?.[0]?.signal as AbortSignal;
+
+    act(() => appStateListener?.('background'));
+    expect(pollingSignal.aborted).toBe(true);
+    await act(async () => {
+      jest.advanceTimersByTime(TASK_POLL_INTERVAL_MS * 2);
+      await Promise.resolve();
+    });
+    expect(mockListRuns).toHaveBeenCalledTimes(2);
+
+    screen.unmount();
   });
 });

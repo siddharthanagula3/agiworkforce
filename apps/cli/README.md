@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: CLI lead
-Last updated: 2026-05-20
+Last updated: 2026-07-25
 Kind: app
 Criticality: high
 
@@ -15,7 +15,7 @@ The terminal-native AI coding agent that doesn't surprise you.
 ```
 $ agi
                     ┌──────────────────── ▮ in 1.2k · out 0 · $0.011 · ctx 4% ┐
- AGI Workforce v1.7.1 │ claude-sonnet-4-6 │ anthropic │  main │ 4% ctx
+ AGI Workforce v1.7.1 │ claude-sonnet-5 │ anthropic │  main │ 4% ctx
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -83,8 +83,7 @@ ignored — the native handler always wins.
 
 Top-right of the TUI shows running tokens-in / out / cache / `$` and context %.
 Color-shifts grey → orange (≥70 % ctx) → red (≥90 % ctx). Pricing comes from
-`models.json` (era-correct: GPT-5.4, Claude 4.6, Gemini 3.1, Grok 4) — never
-hardcoded.
+the shared `models.json` catalog — never hardcoded.
 
 ```bash
 agi        # interactive TUI; HUD lives top-right
@@ -109,14 +108,14 @@ network, 5xx, or stream-disconnect, the next model takes over — provider
 auto-switched, banner flashed, JSON event emitted.
 
 ```bash
-agi -m claude-opus-4.8,gpt-5.5,llama3.1:8b "refactor main.rs"
+agi -m claude-opus-5,gpt-5.6-terra,llama3.1:8b "refactor main.rs"
 ```
 
 Pair with `--demo` to see the rotation fire deterministically:
 
 ```bash
-agi --demo --json-events exec -m claude-sonnet-4-6,gpt-5.5 "hi"
-# → {"event":"fallback_triggered","from":"claude-sonnet-4-6","to":"gpt-5.5","reason":"api_rate_limit"}
+agi --demo --json-events exec -m claude-sonnet-5,gpt-5.6-terra "hi"
+# → {"event":"fallback_triggered","from":"claude-sonnet-5","to":"gpt-5.6-terra","reason":"api_rate_limit"}
 ```
 
 ### 4. Session replay / fork
@@ -201,10 +200,10 @@ override system, privacy, approval, or tool-safety policy.
 
 ```
 agi --demo --json-events exec \
-  -m claude-sonnet-4-6,gpt-5.5 "refactor main.rs"
+  -m claude-sonnet-5,gpt-5.6-terra "refactor main.rs"
 # 1. spawning + ready_for_prompt events
 # 2. demo synthesizes 429
-# 3. ↘ Falling back: claude-sonnet-4-6 → gpt-5.5 (api_rate_limit)
+# 3. ↘ Falling back: claude-sonnet-5 → gpt-5.6-terra (api_rate_limit)
 # 4. fallback_triggered JSON event
 # 5. fresh model answers
 # 6. turn_usage + finished events
@@ -225,6 +224,13 @@ Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 `models`, `plugin`, `sync`, `marketplace`, and `ecosystem`. Managed-cloud
 models use the normal model/session path after the explicit privacy handoff;
 there is no separate cloud-task command.
+
+Managed Cloud on CLI is a Pro, Max 5x, Max 15x, Team, or Enterprise benefit.
+The signed-in account keeps its exact purchased tier label; Auto routing maps
+Team to the Pro roster and Max 15x to the Max roster. Free, Basic, expired, and
+unpaid accounts fail closed on this developer surface. Billing, Team
+administration, connector setup, and Enterprise sales live in the Web control
+plane so every AGI client consumes one account and policy source.
 
 ```bash
 agi doctor

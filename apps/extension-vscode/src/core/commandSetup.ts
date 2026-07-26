@@ -11,6 +11,7 @@ import {
   ConversationTreeProvider,
   ConversationTreeItem,
   ContextPanelProvider,
+  validateWorkspaceContextFile,
 } from '../features/trees';
 import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
 import {
@@ -27,13 +28,18 @@ import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { getDesktopBridge } from '../features/desktop-bridge';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
-import { resolveTier } from '../integrations/tierResolver';
+import {
+  clearAccountTierCache,
+  refreshAccountTierCache,
+  resolveTier,
+} from '../integrations/tierResolver';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import { getActiveWorkspaceFolder } from '../platform/workspaceFolders';
 import { getApiKey, getAccountToken, setApiKey, clearApiKey, fetchTierInfo } from '../utils/api';
 import { signInToAgiCloud, signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
+import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
 import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
@@ -130,13 +136,18 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
   context.subscriptions.push(
     // ── context panel commands ──────────────────────────────────────────────────
-    register('agi-workforce.addToContext', (uri?: vscode.Uri) => {
+    register('agi-workforce.addToContext', async (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (target === undefined) {
         vscode.window.showWarningMessage('AGI Workforce: No file to add to context.');
         return;
       }
-      contextPanelProvider.addFile(target);
+      const result = await validateWorkspaceContextFile(target);
+      if (!result.ok) {
+        vscode.window.showWarningMessage(`AGI Workforce: ${result.message}`);
+        return;
+      }
+      contextPanelProvider.addFile(result.uri);
     }),
 
     register('agi-workforce.removeFromContext', (uri?: vscode.Uri) => {
@@ -239,6 +250,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         context,
         localRuntimes,
         conversationTreeProvider,
+        diffDecorationProvider,
       );
     }),
 
@@ -249,6 +261,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         context,
         localRuntimes,
         conversationTreeProvider,
+        diffDecorationProvider,
       );
     }),
 
@@ -323,6 +336,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       // service used by the CLI.
       const ok = await signInToAgiCloud(context.secrets);
       if (ok) {
+        await refreshAccountTierCache(context);
         sidebarProvider.pushAccountStatus();
         await vscode.commands.executeCommand('agi-workforce.chat');
       }
@@ -330,6 +344,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.signOut', async () => {
       await signOutOfAgiCloud(context.secrets);
+      await clearAccountTierCache(context);
       sidebarProvider.pushAccountStatus();
     }),
 
@@ -400,6 +415,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (picked === undefined || picked.modelId === undefined) return;
 
       const tier = await resolveTier(context);
+      if (picked.disabled === true) {
+        const choice = await vscode.window.showInformationMessage(
+          'This model is not available for your current plan or provider setup.',
+          'View plans',
+          'Cancel',
+        );
+        if (choice === 'View plans') {
+          await vscode.env.openExternal(vscode.Uri.parse('https://agiworkforce.com/pricing'));
+        }
+        return;
+      }
       const guardResult = guardProviderSwitch(currentModel, picked.modelId, tier);
       if (guardResult === 'upgrade-required') {
         const choice = await vscode.window.showInformationMessage(
@@ -820,7 +846,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const currentModel = normalizeConfiguredModelId(Config.model());
       const currentMode = Config.agentMode();
       const currentEffort = Config.agentEffort();
-      const currentThinking = Config.agentThinking();
 
       function cap(s: string): string {
         return s.charAt(0).toUpperCase() + s.slice(1);
@@ -832,7 +857,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'clear'
         | 'switch-model'
         | 'effort'
-        | 'thinking'
         | 'mode'
         | 'account';
       type ActionSheetItem = vscode.QuickPickItem & { action?: ActionSheetAction };
@@ -865,11 +889,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           action: 'effort',
         },
         {
-          label: `$(lightbulb) Thinking: ${currentThinking ? 'On' : 'Off'}`,
-          description: 'Extended thinking — model shows reasoning before responding',
-          action: 'thinking',
-        },
-        {
           label: `$(robot) Mode: ${cap(currentMode)}`,
           description: 'Set agent operating mode',
           action: 'mode',
@@ -893,8 +912,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         case 'attach-file': {
           const uris = await vscode.window.showOpenDialog({
             canSelectMany: true,
+            canSelectFiles: true,
+            canSelectFolders: false,
             openLabel: 'Add to Context',
-            title: 'AGI Workforce — Attach File to Context',
+            title: 'AGI Workforce — Attach Workspace Files to Context',
           });
           if (uris !== undefined && uris.length > 0) {
             for (const uri of uris) {
@@ -990,16 +1011,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
               `AGI Workforce agent mode set to: ${cap(selectedMode)}`,
             );
           }
-          break;
-        }
-        case 'thinking': {
-          const newThinking = !Config.agentThinking();
-          await vscode.workspace
-            .getConfiguration('agiWorkforce')
-            .update('agent.thinking', newThinking, vscode.ConfigurationTarget.Global);
-          vscode.window.showInformationMessage(
-            `AGI Workforce thinking ${newThinking ? 'enabled' : 'disabled'}.`,
-          );
           break;
         }
         case 'account':
@@ -1229,7 +1240,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const text = await vscode.window.showInputBox({
         title: 'AGI Workforce — Add Memory Fact',
         prompt:
-          'A short statement the assistant should remember about you. Stored locally on this device.',
+          'A short fact included with future developer turns. Stored locally; sent only to the model/provider you choose for that turn.',
         placeHolder: 'Example: I prefer Python over JavaScript for data work.',
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -1254,7 +1265,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const newText = await vscode.window.showInputBox({
         title: 'AGI Workforce — Edit Memory Fact',
         value: item.fact.text,
-        prompt: 'Update this memory fact (stored locally on this device)',
+        prompt:
+          'Update this locally stored fact. It is included only with turns sent to your selected model/provider.',
         ignoreFocusOut: true,
         validateInput: (value) => {
           const trimmed = value.trim();
@@ -1331,8 +1343,19 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const tierInfo = await fetchTierInfo(context.secrets);
       const tier =
         tierInfo?.tier ?? context.globalState.get<string>('tierStatus.cachedTier') ?? 'local';
+      const subscriptionNeedsAttention = Boolean(
+        tierInfo?.accountPlanTier && !isEntitledSubscriptionStatus(tierInfo.subscriptionStatus),
+      );
 
-      type AccountAction = 'sign-in' | 'sign-out' | 'settings' | 'reset-counter';
+      type AccountAction =
+        | 'sign-in'
+        | 'sign-out'
+        | 'settings'
+        | 'reset-counter'
+        | 'manage-usage'
+        | 'manage-billing'
+        | 'connectors'
+        | 'teams';
       type AccountItem = vscode.QuickPickItem & { action?: AccountAction };
       const items: AccountItem[] = [
         { label: 'Session usage', kind: vscode.QuickPickItemKind.Separator },
@@ -1369,6 +1392,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
       }
 
+      if (tierInfo?.accountPlanTier && subscriptionNeedsAttention) {
+        items.push({
+          label: `$(warning) ${tierInfo.accountPlanTier} subscription: ${(tierInfo.subscriptionStatus ?? 'inactive').replace('_', ' ')}`,
+          description: 'Paid Cloud capabilities are paused until billing is resolved',
+        });
+      }
+
       items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
       if (accountToken) {
         items.push({
@@ -1380,6 +1410,23 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: 'Remove this editor session',
           action: 'sign-out',
         });
+        items.push({
+          label: '$(graph) Manage Cloud usage on Web',
+          description: 'Plan usage, reset windows, and billing details',
+          action: 'manage-usage',
+        });
+        if (subscriptionNeedsAttention) {
+          items.push({
+            label: '$(credit-card) Manage billing',
+            description: 'Restore paid Cloud access on Web',
+            action: 'manage-billing',
+          });
+        }
+        items.push({
+          label: '$(plug) Manage Cloud connectors on Web',
+          description: "Cloud connectors do not replace this workspace's local MCP configuration",
+          action: 'connectors',
+        });
       } else {
         items.push({
           label: '$(cloud) Sign in to AGI Cloud',
@@ -1387,6 +1434,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           action: 'sign-in',
         });
       }
+      items.push({
+        label:
+          tier === 'team' || tier === 'enterprise'
+            ? '$(organization) Manage Team workspace on Web'
+            : '$(organization) Explore Team & Enterprise',
+        description:
+          tier === 'team' || tier === 'enterprise'
+            ? 'Members, roles, and organization settings'
+            : 'Business plans and deployment options',
+        action: 'teams',
+      });
       items.push({
         label: '$(settings-gear) AGI settings',
         description: 'Models, providers, runtime, tools, and permissions',
@@ -1409,6 +1467,24 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         await vscode.commands.executeCommand('agi-workforce.signOut');
       } else if (pick?.action === 'settings') {
         await vscode.commands.executeCommand('workbench.action.openSettings', 'agiWorkforce');
+      } else if (pick?.action === 'manage-usage') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/settings/usage?from=vscode-extension'),
+        );
+      } else if (pick?.action === 'manage-billing') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/settings/billing?from=vscode-extension'),
+        );
+      } else if (pick?.action === 'connectors') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/connectors?from=vscode-extension'),
+        );
+      } else if (pick?.action === 'teams') {
+        const teamsPath =
+          tier === 'team' || tier === 'enterprise'
+            ? 'https://agiworkforce.com/settings/team?from=vscode-extension'
+            : 'https://agiworkforce.com/teams?from=vscode-extension';
+        await vscode.env.openExternal(vscode.Uri.parse(teamsPath));
       } else if (pick?.action === 'reset-counter') {
         counter.reset();
         vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');
@@ -1421,11 +1497,18 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.mentionFileFromProject', async () => {
       const uris = await vscode.window.showOpenDialog({
         canSelectMany: false,
+        canSelectFiles: true,
+        canSelectFolders: false,
         openLabel: 'Mention in Chat',
         title: 'AGI Workforce — Mention File from Project',
       });
       if (uris === undefined || uris.length === 0 || uris[0] === undefined) return;
-      const relPath = vscode.workspace.asRelativePath(uris[0]);
+      const result = await validateWorkspaceContextFile(uris[0]);
+      if (!result.ok) {
+        vscode.window.showWarningMessage(`AGI Workforce: ${result.message}`);
+        return;
+      }
+      const relPath = vscode.workspace.asRelativePath(result.uri);
       const query = `@agi #file:${relPath} `;
       try {
         await vscode.commands.executeCommand('workbench.action.chat.open', { query });

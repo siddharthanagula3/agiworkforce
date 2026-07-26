@@ -14,11 +14,12 @@
  * call-time `require()` means the crash only becomes reachable once this
  * hook actually runs, which only happens when FEATURES.iap is true.
  */
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
 import type {
   useIAP as UseIAP,
   deepLinkToSubscriptions as DeepLinkToSubscriptions,
+  getAvailablePurchases as GetAvailablePurchases,
   Purchase,
   PurchaseError,
 } from 'react-native-iap';
@@ -27,10 +28,18 @@ import { api } from '@/services/api';
 import { getAllIapSkus, getIapProductId, resolveTierFromSku } from './iapProducts';
 import type { PurchasableTier } from './iapProducts';
 import { useIapStore } from './iapStore';
+import { useTierStore } from './store';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 function loadReactNativeIap(): {
   useIAP: typeof UseIAP;
   deepLinkToSubscriptions: typeof DeepLinkToSubscriptions;
+  getAvailablePurchases: typeof GetAvailablePurchases;
 } {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('react-native-iap');
@@ -78,45 +87,83 @@ export interface UseIapPurchaseFlowResult {
   manageSubscription: () => Promise<void>;
 }
 
+interface PurchaseAttempt {
+  account: CloudAccountEpoch;
+  productId: string;
+}
+
+function purchaseAttemptId(purchase: Purchase): string | null {
+  if ('appAccountToken' in purchase && purchase.appAccountToken) {
+    return purchase.appAccountToken;
+  }
+  if ('obfuscatedAccountIdAndroid' in purchase && purchase.obfuscatedAccountIdAndroid) {
+    return purchase.obfuscatedAccountIdAndroid;
+  }
+  return null;
+}
+
 export function useIapPurchaseFlow(): UseIapPurchaseFlowResult {
   const startPurchase = useIapStore((s) => s.startPurchase);
   const markVerifying = useIapStore((s) => s.markVerifying);
   const markSuccess = useIapStore((s) => s.markSuccess);
   const markError = useIapStore((s) => s.markError);
   const setStatus = useIapStore((s) => s.setStatus);
+  const purchaseAttemptsRef = useRef(new Map<string, PurchaseAttempt>());
 
   // Loaded on first render of whatever component calls this hook — see the
   // module-header comment for why this can't be a top-level import.
-  const { useIAP, deepLinkToSubscriptions } = loadReactNativeIap();
+  const { useIAP, deepLinkToSubscriptions, getAvailablePurchases } = loadReactNativeIap();
 
-  const {
-    connected,
-    requestPurchase,
-    restorePurchases,
-    finishTransaction,
-    fetchProducts,
-    availablePurchases,
-  } = useIAP({
-    onPurchaseSuccess: (nativePurchase: Purchase) => {
-      void (async () => {
-        markVerifying();
-        try {
-          await reportPurchaseToServer(nativePurchase);
-          // Only finalize with the store after the server confirms the
-          // receipt is valid and the tier is activated — finishing first
-          // would let a failed-verification purchase silently vanish from
-          // the StoreKit/Play queue with no server record.
-          await finishTransaction({ purchase: nativePurchase, isConsumable: false });
-          markSuccess();
-        } catch (err) {
-          markError(err instanceof Error ? err.message : 'Purchase verification failed');
+  const { connected, requestPurchase, restorePurchases, finishTransaction, fetchProducts } = useIAP(
+    {
+      onPurchaseSuccess: (nativePurchase: Purchase) => {
+        const attemptId = purchaseAttemptId(nativePurchase);
+        const attempt = attemptId ? purchaseAttemptsRef.current.get(attemptId) : undefined;
+        if (
+          !attemptId ||
+          !attempt ||
+          attempt.productId !== nativePurchase.productId ||
+          !isCloudAccountEpochCurrent(attempt.account)
+        ) {
+          if (attemptId) purchaseAttemptsRef.current.delete(attemptId);
+          return;
         }
-      })();
+        void (async () => {
+          markVerifying();
+          try {
+            await reportPurchaseToServer(nativePurchase);
+            if (!isCloudAccountEpochCurrent(attempt.account)) return;
+            // Only finalize with the store after the server confirms the
+            // receipt is valid and the tier is activated — finishing first
+            // would let a failed-verification purchase silently vanish from
+            // the StoreKit/Play queue with no server record.
+            await finishTransaction({ purchase: nativePurchase, isConsumable: false });
+            if (!isCloudAccountEpochCurrent(attempt.account)) return;
+            await useTierStore.getState().refreshTier();
+            if (!isCloudAccountEpochCurrent(attempt.account)) return;
+            markSuccess();
+          } catch (err) {
+            if (!isCloudAccountEpochCurrent(attempt.account)) return;
+            markError(err instanceof Error ? err.message : 'Purchase verification failed');
+          } finally {
+            purchaseAttemptsRef.current.delete(attemptId);
+          }
+        })();
+      },
+      onPurchaseError: (error: PurchaseError) => {
+        const matchingAttempts = Array.from(purchaseAttemptsRef.current.entries()).filter(
+          ([, attempt]) => !error.productId || attempt.productId === error.productId,
+        );
+        // PurchaseError has no account token. Fail closed when more than one
+        // attempt could match (for example, account A and B bought the same SKU).
+        if (matchingAttempts.length !== 1) return;
+        const [attemptId, attempt] = matchingAttempts[0]!;
+        if (!isCloudAccountEpochCurrent(attempt.account)) return;
+        markError(error.message);
+        purchaseAttemptsRef.current.delete(attemptId);
+      },
     },
-    onPurchaseError: (error: PurchaseError) => {
-      markError(error.message);
-    },
-  });
+  );
 
   // Prefetch product/subscription metadata once connected so `products`/
   // `subscriptions` state inside `useIAP` is populated for price display.
@@ -129,53 +176,76 @@ export function useIapPurchaseFlow(): UseIapPurchaseFlowResult {
 
   const purchase = useCallback(
     async (tier: PurchasableTier, interval: BillingInterval) => {
+      const purchaseOwner = captureCloudAccountEpoch();
+      if (!purchaseOwner) {
+        markError('Sign in to AGI Cloud before starting a subscription purchase.');
+        return;
+      }
       const sku = getIapProductId(tier, interval, IAP_PLATFORM);
       if (!sku) {
         markError(`iap: no product configured for ${tier}/${interval} on ${IAP_PLATFORM}`);
         return;
       }
+      const attemptId = uuidv7();
+      purchaseAttemptsRef.current.set(attemptId, { account: purchaseOwner, productId: sku });
       startPurchase(tier, interval);
       try {
         if (IAP_PLATFORM === 'ios') {
           await requestPurchase({
             type: 'subs',
-            request: { apple: { sku } },
+            request: { apple: { sku, appAccountToken: attemptId } },
           });
         } else {
           await requestPurchase({
             type: 'subs',
-            request: { google: { skus: [sku] } },
+            request: { google: { skus: [sku], obfuscatedAccountId: attemptId } },
           });
         }
       } catch (err) {
-        markError(err instanceof Error ? err.message : 'Purchase request failed');
+        if (isCloudAccountEpochCurrent(purchaseOwner)) {
+          markError(err instanceof Error ? err.message : 'Purchase request failed');
+        }
+        purchaseAttemptsRef.current.delete(attemptId);
       }
     },
     [requestPurchase, startPurchase, markError],
   );
 
   const restore = useCallback(async () => {
+    const restoreOwner = captureCloudAccountEpoch();
+    if (!restoreOwner) {
+      markError('Sign in to AGI Cloud before restoring subscription purchases.');
+      return;
+    }
     setStatus('restoring');
     try {
       await restorePurchases();
-      // `restorePurchases` populates the hook's reactive `availablePurchases`
-      // state (it doesn't return the list directly) — reconcile each one with
-      // the server so a restore on a new device re-activates the right tier.
-      // One purchase failing verification shouldn't block the others.
+      if (!isCloudAccountEpochCurrent(restoreOwner)) return;
+      // The hook's restore method populates reactive state and returns void.
+      // Reading `availablePurchases` here would use this callback's pre-restore
+      // render closure. Query the root API for the actual immutable result
+      // after StoreKit/Play sync, then reconcile it with the server.
+      const restoredPurchases = await getAvailablePurchases();
+      if (!isCloudAccountEpochCurrent(restoreOwner)) return;
       const results = await Promise.allSettled(
-        availablePurchases.map((p) => reportPurchaseToServer(p)),
+        restoredPurchases.map((purchase) => reportPurchaseToServer(purchase)),
       );
+      if (!isCloudAccountEpochCurrent(restoreOwner)) return;
       const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (failure) {
         throw failure.reason instanceof Error
           ? failure.reason
           : new Error('One or more restored purchases failed verification');
       }
+      await useTierStore.getState().refreshTier();
+      if (!isCloudAccountEpochCurrent(restoreOwner)) return;
       markSuccess();
     } catch (err) {
-      markError(err instanceof Error ? err.message : 'Restore purchases failed');
+      if (isCloudAccountEpochCurrent(restoreOwner)) {
+        markError(err instanceof Error ? err.message : 'Restore purchases failed');
+      }
     }
-  }, [restorePurchases, availablePurchases, setStatus, markSuccess, markError]);
+  }, [restorePurchases, getAvailablePurchases, setStatus, markSuccess, markError]);
 
   const manageSubscription = useCallback(async () => {
     await deepLinkToSubscriptions();

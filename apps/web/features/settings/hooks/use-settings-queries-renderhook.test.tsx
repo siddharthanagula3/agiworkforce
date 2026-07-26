@@ -20,7 +20,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@shared/lib/get-auth-token', () => ({
@@ -90,7 +90,9 @@ function makeResponse(body: unknown, status = 200) {
 
 async function setupMocks() {
   const { getAuthToken } = await import('@shared/lib/get-auth-token');
+  const { getCsrfToken } = await import('@/lib/client/csrf');
   vi.mocked(getAuthToken).mockResolvedValue('test-auth-token');
+  vi.mocked(getCsrfToken).mockResolvedValue('test-csrf-token');
 }
 
 /** Create a fresh QueryClient with retries disabled for predictable tests. */
@@ -178,6 +180,74 @@ describe('useOrganizationSettings · renderHook (GET /api/settings/organization)
 
     expect(result.current.data).toBeUndefined();
     expect(result.current.error).toBeTruthy();
+  });
+});
+
+describe('team administration mutations · renderHook', () => {
+  beforeEach(async () => {
+    fetchMock.mockReset();
+    await setupMocks();
+  });
+
+  it('creates a workspace through the real POST endpoint', async () => {
+    const organization = {
+      id: 'org-1',
+      name: 'Demo Team',
+      slug: 'demo-team',
+      plan: 'team',
+      memberCount: 1,
+      maxMembers: null,
+      createdAt: '2026-07-25T00:00:00Z',
+      updatedAt: '2026-07-25T00:00:00Z',
+      currentUserRole: 'owner',
+    };
+    fetchMock.mockResolvedValue(makeResponse({ organization }, 201));
+
+    const { useCreateOrganization } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useCreateOrganization(), { wrapper: makeWrapper() });
+
+    act(() => result.current.mutate({ name: 'Demo Team', slug: 'demo-team' }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/settings/organization',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-csrf-token': 'test-csrf-token' }),
+        body: JSON.stringify({ name: 'Demo Team', slug: 'demo-team' }),
+      }),
+    );
+    expect(result.current.data).toEqual(organization);
+  });
+
+  it('preserves the actionable nested API message when an account email is unknown', async () => {
+    fetchMock.mockResolvedValue(
+      makeResponse(
+        {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message:
+              'No AGI account uses that email. Ask them to create an AGI account, then try again. No invitation was sent.',
+          },
+        },
+        400,
+      ),
+    );
+
+    const { useInviteTeamMember } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useInviteTeamMember(), { wrapper: makeWrapper() });
+
+    act(() =>
+      result.current.mutate({
+        organizationId: 'org-1',
+        email: 'unknown@example.com',
+        role: 'member',
+      }),
+    );
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(result.current.error?.message).toMatch(/create an AGI account/i);
+    expect(result.current.error?.message).toMatch(/No invitation was sent/i);
   });
 });
 

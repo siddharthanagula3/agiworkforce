@@ -114,6 +114,28 @@ describe('MessageBubble', () => {
       expect(screen.getByText('I can help')).toBeInTheDocument();
     });
 
+    it('uses the image provider progress card without a duplicate Thinking indicator', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            metadata: {
+              toolType: 'image-generation',
+              imageGenPrompt: 'Draw a star',
+              imageGenAspect: '16:9',
+              imageGenModel: 'gpt-image-2',
+            },
+          })}
+        />,
+      );
+
+      expect(screen.getByLabelText('Generating image')).toBeInTheDocument();
+      expect(screen.getByText(/waiting for the image provider/i)).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).toBeNull();
+    });
+
     it('renders assistant tool activity in the compact timeline', async () => {
       const msg = makeMessage({
         role: 'assistant',
@@ -700,6 +722,71 @@ describe('MessageBubble', () => {
       expect(img.getAttribute('src')).toBe('/api/files/gf-1');
       fireEvent.click(screen.getByRole('button', { name: /view chart\.png full size/i }));
       expect(screen.getByRole('dialog', { name: /image preview/i })).toBeTruthy();
+    });
+
+    it('projects an image generated file into the artifact panel without a duplicate inline card', async () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            id: 'message-image-file',
+            role: 'assistant',
+            content: 'Here is your chart.',
+            metadata: { generatedFiles: [genFile()] },
+          })}
+        />,
+      );
+
+      await waitFor(() =>
+        expect(
+          useArtifactsStore
+            .getState()
+            .getConversationArtifacts('conv-generated-files')
+            .find((artifact) => artifact.id === 'genfile-gf-1'),
+        ).toMatchObject({
+          type: 'image',
+          language: 'png',
+          title: 'chart.png',
+          content: '/api/files/gf-1',
+          messageId: 'message-image-file',
+        }),
+      );
+      expect(screen.queryByRole('button', { name: /open artifact: chart\.png/i })).toBeNull();
+    });
+
+    it('projects a persisted image-generation result into the artifact panel', async () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            id: 'message-generated-image',
+            role: 'assistant',
+            content: '',
+            metadata: {
+              toolType: 'image-generation',
+              imageUrl: '/api/files/generated-image',
+              imageGenPrompt: 'A crystal robot beside a lake',
+              imageGenModel: 'gpt-image-2',
+            },
+          })}
+        />,
+      );
+
+      await waitFor(() =>
+        expect(
+          useArtifactsStore
+            .getState()
+            .getConversationArtifacts('conv-generated-files')
+            .find((artifact) => artifact.id === 'generated-image-message-generated-image'),
+        ).toMatchObject({
+          type: 'image',
+          language: 'png',
+          title: 'A crystal robot beside a lake',
+          content: '/api/files/generated-image',
+          messageId: 'message-generated-image',
+        }),
+      );
+      expect(
+        screen.queryByRole('button', { name: /open artifact: a crystal robot beside a lake/i }),
+      ).toBeNull();
     });
 
     it('renders a PDF generated file as an artifact card (PDF viewer path)', () => {

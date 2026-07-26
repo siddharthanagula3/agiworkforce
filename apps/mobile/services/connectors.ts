@@ -1,10 +1,8 @@
 /**
  * Connectors service — thin client over the web app's /api/connectors route.
  *
- * GET    /api/connectors                     → list the user's active connections
- * POST   /api/connectors {connectorId}       → returns 501 for OAuth providers
- *                                              (server-side OAuth flows are not
- *                                              implemented yet — tracked gap)
+ * GET    /api/connectors                     → active rows + deployment availability
+ * POST   /api/connectors {connectorId}       → enable an operator-mapped provider
  * DELETE /api/connectors?connectorId=<id>    → soft-disconnect
  *
  * Auth is the standard Bearer JWT from services/api.ts (Bearer requests bypass
@@ -32,22 +30,74 @@ export interface ConnectedConnector {
   authType: string;
   connectedAt: string;
   updatedAt: string;
+  source: 'user' | 'github-app' | 'custom';
+  /** Server-owned display name for custom MCP rows. */
+  name?: string;
 }
 
-interface ListConnectorsResponse {
+export interface ConnectorDirectory {
   connectors: ConnectedConnector[];
+  /** Providers this deployment can connect right now. */
+  available: string[];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseConnectedConnector(value: unknown): ConnectedConnector {
+  if (!isRecord(value)) throw new Error('Invalid connectors response');
+  const source = value['source'];
+  if (source !== 'user' && source !== 'github-app' && source !== 'custom') {
+    throw new Error('Invalid connectors response');
+  }
+  for (const field of ['id', 'connectorId', 'authType', 'connectedAt', 'updatedAt'] as const) {
+    if (typeof value[field] !== 'string') throw new Error('Invalid connectors response');
+  }
+  if (value['name'] !== undefined && typeof value['name'] !== 'string') {
+    throw new Error('Invalid connectors response');
+  }
+  const id = value['id'] as string;
+  const connectorId = value['connectorId'] as string;
+  const authType = value['authType'] as string;
+  const connectedAt = value['connectedAt'] as string;
+  const updatedAt = value['updatedAt'] as string;
+  return {
+    id,
+    connectorId,
+    authType,
+    connectedAt,
+    updatedAt,
+    source,
+    ...(typeof value['name'] === 'string' ? { name: value['name'] } : {}),
+  };
+}
+
+export async function fetchConnectorDirectory(): Promise<ConnectorDirectory> {
+  const response = await api.get<unknown>('/api/connectors');
+  if (
+    !isRecord(response) ||
+    !Array.isArray(response['connectors']) ||
+    !Array.isArray(response['available']) ||
+    !response['available'].every((id) => typeof id === 'string')
+  ) {
+    throw new Error('Invalid connectors response');
+  }
+  return {
+    connectors: response['connectors'].map(parseConnectedConnector),
+    available: [...new Set(response['available'] as string[])],
+  };
+}
+
+/** Compatibility helper for callers that only need the connected rows. */
 export async function listConnectedConnectors(): Promise<ConnectedConnector[]> {
-  const response = await api.get<ListConnectorsResponse>('/api/connectors');
-  return response.connectors ?? [];
+  return (await fetchConnectorDirectory()).connectors;
 }
 
 /**
- * Attempt to connect a provider. For OAuth providers the server currently
- * responds 501 ("authorization is not implemented for this provider"), which
- * surfaces here as a thrown Error with the server's message — callers show
- * honest not-yet-available copy instead of faking a connection.
+ * Connect a provider the server advertised in `available`. The native directory
+ * never calls this for an unavailable catalog row; GitHub uses its separately
+ * verified installation flow.
  */
 export async function connectConnector(connectorId: string): Promise<void> {
   await api.post('/api/connectors', { connectorId });

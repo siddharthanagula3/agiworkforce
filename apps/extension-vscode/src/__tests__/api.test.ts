@@ -13,6 +13,7 @@ import {
   getAccountAuthState,
   getAccountToken,
   getApiKey,
+  parseTierInfoResponse,
   setAccountToken,
   setApiKey,
   clearApiKey,
@@ -108,6 +109,40 @@ describe('AGI Cloud account session expiry', () => {
 
     await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
     await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+  });
+});
+
+describe('AGI Cloud subscription hydration', () => {
+  it('preserves an active Team plan from the canonical usage response', () => {
+    expect(
+      parseTierInfoResponse({
+        plan_tier: 'team',
+        subscription_status: 'active',
+        usage_percentage: 37,
+        usage_reset_at: '2026-08-01T00:00:00.000Z',
+      }),
+    ).toEqual({
+      tier: 'team',
+      subscriptionStatus: 'active',
+      usagePercentage: 37,
+      resetsAt: '2026-08-01T00:00:00.000Z',
+    });
+  });
+
+  it('downgrades a retained paid plan when its subscription is no longer entitled', () => {
+    expect(
+      parseTierInfoResponse({
+        plan_tier: 'enterprise',
+        subscription_status: 'past_due',
+        usage_percentage: 82,
+        usage_reset_at: null,
+      }),
+    ).toEqual({
+      tier: 'free',
+      accountPlanTier: 'enterprise',
+      subscriptionStatus: 'past_due',
+      usagePercentage: 82,
+    });
   });
 });
 

@@ -103,7 +103,7 @@ The current-model agent completed current roster, generation, routing, and live 
 Current officially/live-verified primary roster includes:
 
 - OpenAI: GPT-5.6 Sol, Terra, Luna.
-- Anthropic: Fable 5, Opus 4.8, Sonnet 5, Haiku 4.5.
+- Anthropic (roster amended 2026-07-25): Fable 5, Opus 5, Sonnet 5, Haiku 4.5.
 
 Implemented:
 

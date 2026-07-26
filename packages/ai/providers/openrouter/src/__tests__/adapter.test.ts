@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { createOpenRouterAdapter } from '../index';
+import { createOpenRouterAdapter, OPENROUTER_MODEL_CATALOG } from '../index';
 
 describe('createOpenRouterAdapter', () => {
   it('returns adapter with id="open_router" and label="OpenRouter"', () => {
@@ -29,10 +29,7 @@ describe('createOpenRouterAdapter', () => {
   it('returns the curated catalog when skipDiscovery is true', async () => {
     const adapter = createOpenRouterAdapter({ apiKey: 'test-key', skipDiscovery: true });
     const models = await adapter.catalog();
-    expect(models.length).toBeGreaterThan(0);
-    for (const m of models) {
-      expect(m.provider).toBe('open_router');
-    }
+    expect(models).toEqual(OPENROUTER_MODEL_CATALOG);
   });
 
   it('constructs with default attribution headers', () => {

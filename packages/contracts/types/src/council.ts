@@ -23,7 +23,7 @@
  * @example
  * ```typescript
  * const vote: ModelVote = {
- *   modelId: 'claude-opus-4.8',
+ *   modelId: 'claude-opus-5',
  *   provider: 'anthropic',
  *   response: 'The optimal approach is to use a B+ tree index...',
  *   confidence: 0.92,
@@ -80,7 +80,7 @@ export interface ModelVote {
  *   query: 'What database indexing strategy should we use for this schema?',
  *   context: 'We have a PostgreSQL database with 50M rows...',
  *   models: [
- *     { modelId: 'claude-opus-4.8', provider: 'anthropic' },
+ *     { modelId: 'claude-opus-5', provider: 'anthropic' },
  *     { modelId: 'gpt-5.6-sol', provider: 'openai' },
  *     { modelId: 'gemini-3.1-pro-preview', provider: 'google' },
  *   ],

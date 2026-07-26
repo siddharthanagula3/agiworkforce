@@ -2,7 +2,11 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { generateGitHubInstallState, getGitHubAppInstallUrl } from '@/lib/github-app';
+import {
+  generateGitHubInstallState,
+  getGitHubAppInstallUrl,
+  isGitHubInstallationLinkingAvailable,
+} from '@/lib/github-app';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
 
@@ -25,6 +29,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirectTo', '/connectors');
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (!isGitHubInstallationLinkingAvailable()) {
+    return NextResponse.redirect(
+      new URL('/connectors?github=ownership_proof_required', request.url),
+    );
   }
 
   const installUrl = getGitHubAppInstallUrl();

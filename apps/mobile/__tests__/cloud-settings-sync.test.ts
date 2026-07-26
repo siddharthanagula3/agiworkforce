@@ -62,6 +62,10 @@ import { useSettingsSyncStateStore } from '../stores/settings/settingsSyncStateS
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { syncNow } from '../services/cloudSyncEngine';
 import { toCloudSettings } from '../services/cloudSettingsMapping';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
@@ -102,6 +106,8 @@ function deferred<T>() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('settings-sync-test-user');
 
   // Reset all sync state stores.
   useCloudSyncStateStore.getState().reset();

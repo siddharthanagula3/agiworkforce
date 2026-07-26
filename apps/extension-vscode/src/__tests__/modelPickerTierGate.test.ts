@@ -16,6 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { canAccessModelForSubscriptionTier, getCoreManualModelOptions } from '@agiworkforce/types';
 import {
   MODEL_LOCKED_HINT,
   buildGroupedQuickPickItems,
@@ -23,8 +24,15 @@ import {
   isModelReachableForTier,
 } from '../features/model-picker/modelConstants';
 
-/** A model that requires a paid managed-cloud tier. */
-const CLOUD_MODEL = 'claude-opus-4.8';
+const catalogModels = getCoreManualModelOptions();
+const CLOUD_MODEL =
+  catalogModels.find(
+    (model) =>
+      canAccessModelForSubscriptionTier(model.id, 'max') &&
+      !canAccessModelForSubscriptionTier(model.id, 'pro'),
+  )?.id ?? '';
+const BASIC_MODEL =
+  catalogModels.find((model) => canAccessModelForSubscriptionTier(model.id, 'basic'))?.id ?? '';
 
 describe('isModelReachableForTier', () => {
   it('treats an unresolved tier as reachable (pre-gate behaviour preserved)', () => {
@@ -35,15 +43,17 @@ describe('isModelReachableForTier', () => {
     expect(isModelReachableForTier(CLOUD_MODEL, 'local')).toBe(false);
   });
 
-  it('denies managed-cloud models on the byok tier', () => {
-    // byok normalizes to `free` in the shared catalog gate: a BYOK user reaches
-    // providers through `agi login <provider>` at the app-server, not through
-    // the managed-cloud roster.
-    expect(isModelReachableForTier(CLOUD_MODEL, 'byok')).toBe(false);
+  it('allows catalog models in BYOK mode for app-server provider admission', () => {
+    expect(isModelReachableForTier(CLOUD_MODEL, 'byok')).toBe(true);
   });
 
   it('denies managed-cloud models when signed out entirely', () => {
     expect(isModelReachableForTier(CLOUD_MODEL, 'free')).toBe(false);
+  });
+
+  it('denies managed developer models on Basic', () => {
+    expect(BASIC_MODEL).not.toBe('');
+    expect(isModelReachableForTier(BASIC_MODEL, 'basic')).toBe(false);
   });
 
   it('allows a flagship model on max', () => {
@@ -65,6 +75,7 @@ describe('buildGroupedQuickPickItems — tier gating', () => {
 
     expect(cloudRow).toBeDefined();
     expect(cloudRow?.description).toContain(MODEL_LOCKED_HINT);
+    expect(cloudRow?.disabled).toBe(true);
   });
 
   it('does not mark reachable models on max', () => {
@@ -73,6 +84,7 @@ describe('buildGroupedQuickPickItems — tier gating', () => {
 
     expect(cloudRow).toBeDefined();
     expect(cloudRow?.description).not.toContain(MODEL_LOCKED_HINT);
+    expect(cloudRow?.disabled).toBe(false);
   });
 
   it('gates the shared self-routing Auto option too', () => {
@@ -81,6 +93,7 @@ describe('buildGroupedQuickPickItems — tier gating', () => {
 
     expect(auto).toBeDefined();
     expect(auto?.description).toContain(MODEL_LOCKED_HINT);
+    expect(auto?.disabled).toBe(true);
   });
 
   it('leaves every row unmarked when no tier is supplied', () => {

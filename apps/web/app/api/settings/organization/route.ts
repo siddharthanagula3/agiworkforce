@@ -11,6 +11,21 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { OrganizationRow, OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import {
+  getTeamAdminAccess,
+  requireTeamAdminAccess,
+  type TeamAdminAccess,
+} from '@/app/api/settings/team/team-admin-access';
+
+const CreateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(60)
+    .regex(/^[a-z0-9-]+$/, 'Slug must contain only lowercase letters, numbers, and hyphens'),
+});
 
 const PatchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -36,31 +51,29 @@ const PatchSchema = z.object({
     .optional(),
 });
 
+const UNSUPPORTED_PATCH_FIELDS = [
+  'description',
+  'website',
+  'billingEmail',
+  'settings',
+] as const satisfies readonly (keyof z.infer<typeof PatchSchema>)[];
+
 type OrgWithCount = OrganizationRow & { member_count: string };
 
-function buildOrgResponse(org: OrgWithCount, memberRow: OrganizationMemberRow | undefined) {
+function buildOrgResponse(
+  org: OrgWithCount,
+  memberRow: OrganizationMemberRow | undefined,
+  access: TeamAdminAccess,
+) {
   return {
     id: org.id,
     name: org.name,
     slug: org.slug,
-    logoUrl: null,
-    description: null,
-    website: null,
-    billingEmail: null,
-    plan: 'free' as const,
+    plan: access.plan,
     memberCount: parseInt(org.member_count, 10),
-    maxMembers: 5,
+    maxMembers: access.maxMembers,
     createdAt: org.created_at,
     updatedAt: org.updated_at,
-    settings: {
-      allowMemberInvites: true,
-      requireEmailVerification: false,
-      defaultRole: 'member' as const,
-      allowedDomains: [] as string[],
-      enforceSSO: false,
-      auditLogRetention: 90,
-      dataRetention: 365,
-    },
     currentUserRole: memberRow?.role ?? 'member',
   };
 }
@@ -75,6 +88,7 @@ async function handleGet(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
+  const access = await getTeamAdminAccess(db, userId);
 
   // Find the organization the user is a member of.
   const [membership] = await db.query<OrganizationMemberRow>(
@@ -87,7 +101,7 @@ async function handleGet(request: NextRequest) {
   );
 
   if (!membership) {
-    return NextResponse.json({ organization: null });
+    return NextResponse.json({ organization: null, access });
   }
 
   const [org] = await db.query<OrgWithCount>(
@@ -101,10 +115,111 @@ async function handleGet(request: NextRequest) {
   );
 
   if (!org) {
-    return NextResponse.json({ organization: null });
+    return NextResponse.json({ organization: null, access });
   }
 
-  return NextResponse.json({ organization: buildOrgResponse(org, membership) });
+  return NextResponse.json({
+    organization: buildOrgResponse(org, membership, access),
+    access,
+  });
+}
+
+/**
+ * POST /api/settings/organization
+ * Provision the current Team/Enterprise user into their one supported
+ * organization and atomically make them its owner.
+ */
+async function handleCreate(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const { userId } = await getClerkAuthUser(request);
+  const body = await request.json().catch(() => ({}));
+  const parsed = CreateSchema.safeParse(body);
+  if (!parsed.success) {
+    throw createError.validation('Invalid request body', parsed.error.issues);
+  }
+
+  const db = getNeonDb();
+  const access = await requireTeamAdminAccess(db, userId);
+
+  try {
+    const organization = await db.transaction(async (tx) => {
+      // Serialize provisioning by user so concurrent create requests cannot
+      // both pass the single-organization membership check.
+      await tx.query(
+        `select pg_advisory_xact_lock(hashtextextended('agi:organization-owner:' || $1, 0))`,
+        [userId],
+      );
+
+      const [existingMembership] = await tx.query<OrganizationMemberRow>(
+        `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+         from public.organization_members
+         where user_id = $1
+         order by joined_at asc
+         limit 1`,
+        [userId],
+      );
+
+      if (existingMembership) {
+        throw createError.conflict('You already belong to an organization');
+      }
+
+      const [created] = await tx.query<OrganizationRow>(
+        `insert into public.organizations (name, slug, created_by)
+         values ($1, $2, $3)
+         returning id, name, slug, created_by, created_at, updated_at`,
+        [parsed.data.name, parsed.data.slug, userId],
+      );
+
+      if (!created) {
+        throw createError.conflict('The organization could not be created');
+      }
+
+      await tx.execute(
+        `insert into public.organization_members
+           (organization_id, user_id, role, provisioning_source, provisioned_at, joined_at)
+         values ($1, $2, $3, 'manual', now(), now())`,
+        [created.id, userId, 'owner'],
+      );
+
+      return created;
+    });
+
+    logger.info({ userId, orgId: organization.id }, 'Organization created');
+
+    return NextResponse.json(
+      {
+        organization: buildOrgResponse(
+          { ...organization, member_count: '1' },
+          {
+            organization_id: organization.id,
+            user_id: userId,
+            role: 'owner',
+            provisioning_source: 'manual',
+            provisioned_at: organization.created_at,
+            joined_at: organization.created_at,
+          },
+          access,
+        ),
+        access,
+      },
+      { status: 201 },
+    );
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code)
+        : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+    if (code === '23505' || message.toLowerCase().includes('unique')) {
+      throw createError.conflict('That organization slug is already taken');
+    }
+    throw error;
+  }
 }
 
 /**
@@ -120,6 +235,7 @@ async function handlePatch(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
+  const access = await requireTeamAdminAccess(db, userId);
 
   // Verify the user has an admin/owner role.
   const [membership] = await db.query<OrganizationMemberRow>(
@@ -146,6 +262,19 @@ async function handlePatch(request: NextRequest) {
   }
 
   const updates = parsed.data;
+  const unsupportedFields = UNSUPPORTED_PATCH_FIELDS.filter(
+    (field) => updates[field] !== undefined,
+  );
+  if (unsupportedFields.length > 0) {
+    throw createError.validation(
+      'These organization settings are not available yet and were not saved',
+      { unsupportedFields },
+    );
+  }
+  if (updates.name === undefined && updates.slug === undefined) {
+    throw createError.validation('Provide an organization name or slug to update');
+  }
+
   const setClauses: string[] = ['updated_at = now()'];
   const params: unknown[] = [membership.organization_id];
 
@@ -184,11 +313,13 @@ async function handlePatch(request: NextRequest) {
   );
 
   return NextResponse.json({
-    organization: updatedOrg ? buildOrgResponse(updatedOrg, membership) : null,
+    organization: updatedOrg ? buildOrgResponse(updatedOrg, membership, access) : null,
+    access,
   });
 }
 
 export const GET = withErrorHandler(handleGet);
+export const POST = withErrorHandler(handleCreate);
 export const PATCH = withErrorHandler(handlePatch);
 
 export async function OPTIONS(request: NextRequest) {

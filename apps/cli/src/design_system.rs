@@ -442,9 +442,9 @@ mod tests {
             capability_for_model("claude-sonnet-5"),
             CapabilityTier::Balanced
         );
-        // opus-4.8 → apiModelId=claude-opus-4-8, qualityTier=best → MostCapable
+        // opus-5 → apiModelId=claude-opus-5, qualityTier=best → MostCapable
         assert_eq!(
-            capability_for_model("claude-opus-4-8"),
+            capability_for_model("claude-opus-5"),
             CapabilityTier::MostCapable
         );
         // default fallback for models not in the shared catalog (e.g. local Ollama)

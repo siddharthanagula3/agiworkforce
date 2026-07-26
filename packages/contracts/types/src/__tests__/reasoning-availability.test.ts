@@ -44,16 +44,20 @@ describe('per-model reasoning capability', () => {
     expect(r.supportedEfforts).not.toContain('minimal');
   });
 
-  it('exposes the Anthropic Opus 4.8 effort set (adds max) via adaptive+output_config.effort', () => {
-    const r = getModelReasoning('claude-opus-4.8');
+  it('exposes the Anthropic Opus 5 effort set (adds max) via adaptive+output_config.effort', () => {
+    const r = getModelReasoning('claude-opus-5');
     expect(r.control).toBe('effort_levels');
     expect(r.supportedEfforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     expect(r.request?.api).toBe('messages');
     expect(r.request?.effortPath).toBe('output_config.effort');
+    expect(r.thinkingDefault).toBe('adaptive');
+    expect(r.supportsManualThinking).toBe(false);
+    expect(r.maxEffortWhenThinkingDisabled).toBe('high');
+    expect(r.rejectsSamplingParameters).toBe(true);
   });
 
-  it('resolves Opus reasoning via the apiModelId too (route may pass either id)', () => {
-    expect(getModelMetadataById('claude-opus-4-8')?.reasoning?.control).toBe('effort_levels');
+  it('resolves Opus reasoning through its canonical provider ID', () => {
+    expect(getModelMetadataById('claude-opus-5')?.reasoning?.control).toBe('effort_levels');
   });
 
   it('marks Haiku 4.5 as thinking-capable with classic thinking_budget control', () => {

@@ -15,7 +15,7 @@ This manifest is the canonical architecture description. It separates **Current*
 
 ## 1. Platform shape (Current)
 
-A polyglot monorepo: **pnpm workspace** (`apps/*`, `packages/*`, `packages/ai/providers/*`, `services/*`) + **Cargo workspace** (`apps/desktop/src-tauri`, `apps/cli`, `crates/*`). Node 22, Rust edition 2021.
+A polyglot monorepo: **pnpm workspace** (`apps/*`, `packages/*`, `packages/ai/providers/*`, `services/*`) + **Cargo workspace** (`apps/desktop/src-tauri`, `apps/cli`, `crates/*`). Node 24 LTS, Rust edition 2021.
 
 - **Surfaces** (`apps/`): web, desktop, mobile, cli, extension (Chrome), extension-vscode, sandbox. (`AGI-SURF-0001`.)
 - **Shared TypeScript** (`packages/`, 21): contracts (`types`), suite spine (`unified-chat`), provider adapters (`providers/*`), `provider-protocol`, `provider-runtime`, `routing`, `mcp`, `browser-tool`, `local-llm`, `compliance`, `runtime`, `data-layer`, `ui`, `stores`, `skills`, `api`, etc.

@@ -25,7 +25,16 @@ let _storage: MMKV | null = null;
 // AUDIT-FIX: MMKV-RACE — drain queue once encrypted storage is ready so
 // stores using `skipHydration` can rehydrate from real persisted state
 // rather than racing default values against the first post-init setItem.
-let readyCallbacks: Array<() => void> = [];
+type MmkvReadyCallback = () => void | Promise<void>;
+let readyCallbacks: MmkvReadyCallback[] = [];
+
+function observeReadyCallback(result: void | Promise<void>): void {
+  if (result && typeof result.catch === 'function') {
+    result.catch((err) => {
+      console.warn('[mmkv] whenMmkvReady async callback rejected:', err);
+    });
+  }
+}
 
 /**
  * Register a callback to fire as soon as encrypted MMKV is open. Fires
@@ -33,9 +42,17 @@ let readyCallbacks: Array<() => void> = [];
  * that opted into `skipHydration: true` to trigger `useStore.persist.rehydrate()`
  * at the right moment.
  */
-export function whenMmkvReady(cb: () => void): void {
+export function whenMmkvReady(cb: MmkvReadyCallback): void {
   if (_storage) {
-    cb();
+    try {
+      // Preserve the existing synchronous-callback contract for callers that
+      // only need to read/write the now-open MMKV instance. Async callbacks
+      // registered after initialization are still observed so a rejected
+      // rehydrate cannot become an unhandled promise rejection.
+      observeReadyCallback(cb());
+    } catch (err) {
+      console.warn('[mmkv] whenMmkvReady callback threw:', err);
+    }
     return;
   }
   readyCallbacks.push(cb);
@@ -119,15 +136,23 @@ export async function initMmkvEncryption(): Promise<void> {
 
   // AUDIT-FIX: MMKV-RACE — drain pending readiness callbacks so stores
   // configured with `skipHydration: true` can now call rehydrate().
+  //
+  // Await each callback in registration order. Zustand rehydration can be
+  // asynchronous even with a synchronous storage adapter (middleware hooks
+  // may return promises). Reporting MMKV ready before those promises settle
+  // allowed Clerk's account-owner check and teardown to run first, after which
+  // a late account-A rehydrate could repopulate data under account B.
+  // Sequential draining also guarantees a teardown callback registered after
+  // the stores runs after every earlier store has finished rehydrating.
   const queued = readyCallbacks;
   readyCallbacks = [];
-  queued.forEach((cb) => {
+  for (const cb of queued) {
     try {
-      cb();
+      await cb();
     } catch (err) {
       console.warn('[mmkv] whenMmkvReady callback threw:', err);
     }
-  });
+  }
 }
 
 /**
@@ -193,7 +218,7 @@ export function rehydrateWhenMmkvReady(store: RehydratableStore, storeName: stri
     try {
       const result = store.persist.rehydrate();
       if (result && typeof (result as Promise<void>).catch === 'function') {
-        (result as Promise<void>).catch((err) => {
+        return (result as Promise<void>).catch((err) => {
           console.warn(`[mmkv] ${storeName} async rehydrate failed:`, err);
         });
       }

@@ -1,4 +1,4 @@
--- 0070: make the account-deletion grace window real.
+-- 0071: make the account-deletion grace window real.
 --
 -- PER-24. `DELETE /api/user/delete-account` writes
 -- `profiles.deletion_requested_at` / `profiles.deletion_scheduled_for` and

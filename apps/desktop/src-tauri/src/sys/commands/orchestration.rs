@@ -30,6 +30,22 @@ impl WorkflowEngineState {
         }
     }
 
+    pub fn new_main_database(access: crate::data::db::key_management::MainDatabaseAccess) -> Self {
+        let engine = Arc::new(WorkflowEngine::new_main_database(access));
+        let executor = Arc::new(WorkflowExecutor::new(Arc::clone(&engine)));
+        let scheduler = Arc::new(WorkflowScheduler::new(
+            Arc::clone(&engine),
+            Arc::clone(&executor),
+        ));
+        scheduler.start();
+
+        Self {
+            engine,
+            executor,
+            scheduler,
+        }
+    }
+
     pub fn new_with_tools(
         db_path: String,
         tool_executor: Option<Arc<crate::core::mcp::tool_executor::McpToolExecutor>>,

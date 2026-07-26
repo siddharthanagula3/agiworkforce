@@ -1,8 +1,8 @@
 # AGI VS Code Extension — Volume 26 — Error Codes
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`, `apps/extension-vscode/src/features/cloud-bridge/{friendlyError.ts,types.ts}`, `apps/extension-vscode/src/integrations/providerStreamClient.ts`, `apps/extension-vscode/src/core/subsystemHealth.ts`, `apps/extension-vscode/src/integrations/patchEngine.ts`, and `docs/surfaces/vscode-extension.md`.
 
@@ -16,27 +16,27 @@ Today the codebase surfaces errors as **typed discriminated unions** and **human
 
 Managed-Cloud sign-in uses a browser device-authorization loop that polls `/api/device/poll` and maps HTTP status to a typed `PollResult` — `approved` / `pending` / `denied` / `rejected` — where `404` = pending (code not created yet or expired), and `403`/`410` = a hard device rejection ✅ (`apps/extension-vscode/src/features/account-auth/deviceAuth.ts`). Timeout after `MAX_POLLS` and user cancellation resolve to a non-fatal "sign-in timed out / denied" notice ✅.
 
-Invite/cloud-unlock failures use a closed enum mapped to user strings — `invalid_code`, `expired`, `fully_redeemed`, `already_redeemed_by_user`, `anon_signin_failed`, `account_auth_not_wired`, `rpc_error` ✅ (`src/features/cloud-bridge/{types.ts,friendlyError.ts}`). Never pattern-match error prose; always switch on the typed code.
+Legacy invite/cloud-unlock types remain in the compatibility module, but the public-alpha command no longer presents that gate: `agi-workforce.openInviteCodeModal` routes directly to device sign-in. New call sites must not revive invite-only Cloud messaging.
 
 Requirements: every auth error maps to exactly one typed code; `403`/`410` never retry (hard rejection); `404` and network faults degrade to `pending` and keep polling within the outer timeout; BYOK key-missing and Cloud not-signed-in are **distinct** codes, never collapsed. The mapping of these typed states to stable `AGI-VSC-AUTH-*` numbers is 🔭 Planned.
 
 ## Provider
 
-Provider/inference errors flow through the streaming client as a `StreamChunk` of `{ type: 'error'; code?; message; retryable? }`, followed by a `{ type: 'stop'; reason: 'error' }` frame; non-OK HTTP yields `Upstream error <status>` with `retryable: true` when `status >= 500` ✅ (`src/integrations/providerStreamClient.ts`). The provider-stream path itself is gated: the `agiWorkforce.useProviderStream` setting notes it "Requires AGI account web auth, which is not wired in the VS Code extension yet" — so its full error surface is 🟡 Partial (`apps/extension-vscode/package.json`).
+Cloud-utility provider errors flow through the streaming client as a `StreamChunk` error followed by a terminal error stop; non-OK HTTP marks 5xx as retryable. `chatCompletion` is wired to this path when the default-off `agiWorkforce.useProviderStream` setting is enabled, and the helper requires the device-flow account token. Missing auth and unsupported model providers fail with stable `AgiWorkforceApiError` codes and actionable guidance. Developer-session errors are owned by the app-server and surfaced by `@agi`/sidebar without silently changing providers.
 
 Requirements: `401`/`403` (auth/entitlement) are non-retryable and route to a sign-in or plan-status action, never a silent provider swap; `429` (rate/quota) is retryable with backoff and surfaces the tier; `5xx` is retryable; provider-side model-unavailable maps to a "select model" recovery. Model IDs in any error copy come only from `packages/contracts/types/src/models.json` — never hardcode one. The stable `AGI-VSC-PROV-*` numbering is 🔭 Planned.
 
 ## Extension
 
-Extension-host errors cover activation, command dispatch, and workspace-trust gating. Under an untrusted workspace, `restrictedConfigurations` (`apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, `agent.autoApply`, `autoApplyFixes`, `telemetryEndpoint`, `tier`) cannot be overridden and Agent-mode file writes are disabled until trust is granted ✅ (`apps/extension-vscode/package.json` → `capabilities.untrustedWorkspaces`). Attempting a restricted action in that state must raise a distinct "workspace not trusted" error, not a generic failure.
+Extension-host errors cover activation, command dispatch, and workspace-trust gating. Under an untrusted workspace, `restrictedConfigurations` (`apiEndpoint`, `gatewayUrl`, `cliPath`, `autoApplyFixes`, `telemetryEndpoint`, `tier`) cannot be overridden and Agent-mode file writes are disabled until trust is granted (`apps/extension-vscode/package.json`). Attempting a restricted action in that state must raise a distinct “workspace not trusted” error, not a generic failure.
 
-Requirements: unknown/disabled command invocations from the bridge are blocked and logged, not executed (`ALLOWED_BRIDGE_COMMANDS`) ✅; command handlers surface actionable notifications rather than throwing to the host; subsystem probes report structured health via `agi-workforce.showSubsystemHealth` ✅ (`src/core/subsystemHealth.ts`). Note a config gap 🟡: `agiWorkforce.tier` still enumerates removed tiers (`hobby`, `pro_plus`) that contradict the canon ladder (Free / Basic / Pro / Max / Enterprise) — tracked reconciliation, not this volume's fix. `AGI-VSC-EXT-*` numbering is 🔭 Planned.
+Requirements: unknown/disabled command invocations from the bridge are blocked and logged, not executed (`ALLOWED_BRIDGE_COMMANDS`); command handlers surface actionable notifications rather than throwing to the host; subsystem probes report structured health via `agi-workforce.showSubsystemHealth`. The extension preserves all canonical plan values instead of collapsing managed tiers into BYOK. `AGI-VSC-EXT-*` numbering remains planned.
 
 ## Runtime
 
-Runtime errors are the shared desktop-bridge fabric: `ws://127.0.0.1:8787/ws` authenticated with the `~/.agiworkforce/bridge-token` (mode `0600`) ✅ (`src/features/desktop-bridge/desktopBridge.ts`). Grounded failure states: missing/unsafe-permission token (group/world-readable → refused, actionable warning) ✅; `BridgeStatus` of `disconnected`/`connecting`/`connected`/`error` with a status-bar indicator ✅; a 5s handshake timeout that closes and reschedules if `auth_ok` never arrives ✅; a 30s health loop that demotes a stalled `connected` socket to `error` ✅; malformed inbound frames dropped via Zod (`parseBridgeInbound`) ✅; and a graceful `BridgeResponse { ok:false, error }` when a command is sent while not connected or is an unsupported type ✅. A per-command rate limit (30/min/key) drops floods ✅.
+Developer-session runtime failures come from `LocalRuntimeClient`: missing/outdated `agi` binaries, protocol mismatch, process exit, malformed JSON-RPC, and turn errors surface visibly. The sidebar has a dedicated “Local runtime needs setup” state; `@agi` returns an explicit runtime-unavailable error. The optional Desktop bridge has its own authenticated lifecycle and degrades independently.
 
-Requirements: bridge-down is a **degradation**, never a crash — local operations stay available; every runtime error carries a status transition and a Reconnect affordance. The TCP transport is a known weakness (same-user local processes); the socket/named-pipe migration is 🔭 Planned per the in-file PR-4A note. `AGI-VSC-RT-*` numbering is 🔭 Planned.
+Requirements: app-server failure is actionable rather than a hang, and bridge-down is a **degradation**, never a crash. The TCP bridge transport remains a same-user weakness; socket/named-pipe migration and stable `AGI-VSC-RT-*` numbering are planned.
 
 ## Workspace
 
@@ -55,6 +55,7 @@ Requirements: path-traversal and out-of-workspace writes always fail closed; a f
 ## Repository map
 
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — bridge status, token, handshake, rate-limit, frame validation.
+- `apps/extension-vscode/src/integrations/localRuntimeClient.ts` — app-server lifecycle and protocol errors.
 - `apps/extension-vscode/src/features/account-auth/deviceAuth.ts` — device sign-in poll results and HTTP mapping.
 - `apps/extension-vscode/src/features/cloud-bridge/{friendlyError.ts,types.ts}` — invite/cloud error enum + friendly strings.
 - `apps/extension-vscode/src/integrations/providerStreamClient.ts` — provider stream error/stop chunks.
@@ -72,7 +73,7 @@ Production-ready when every user-visible failure maps to exactly one typed code,
 
 - [ ] Build/behavior: `pnpm --filter agi-workforce typecheck` and `pnpm --filter agi-workforce test` green; error paths covered by tests (`__tests__/{desktopBridge,security,trust-boundary}.test.ts`).
 - [ ] Trust: no error path routes Local→BYOK or Local→Cloud silently; provider label and trust mode shown on every provider error.
-- [ ] Security: token permission checks fail closed; out-of-workspace/path-traversal writes blocked; error copy never prints tokens, keys, or full payloads; removed tiers (`hobby`, `pro_plus`) flagged for reconciliation, not shipped as valid.
+- [ ] Security: token permission checks fail closed; out-of-workspace/path-traversal writes blocked; error copy never prints tokens, keys, or full payloads; removed tiers never ship as valid selections.
 
 ## Anti-patterns
 

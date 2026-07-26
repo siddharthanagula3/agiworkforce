@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // test-model-catalog-integrity-md.mjs
 //
-// Exercises the .md/.mdx scanning added to check-model-catalog-integrity.mjs.
-// The test FAILS (exits non-zero) if the guard does not detect bare `gpt-5.4`
-// in a synthetic .md file placed under apps/cli/ — which would mean the .md
-// extension to the guard is missing or broken.
+// Exercises the Markdown scan and retired-Opus whole-repository scan in
+// check-model-catalog-integrity.mjs. The test FAILS (exits non-zero) if the
+// guard misses synthetic stale references in live TypeScript, repo docs, or a
+// test directory.
 //
 // Run from repo root: node scripts/test-model-catalog-integrity-md.mjs
 
@@ -16,6 +16,9 @@ import process from 'node:process';
 const root = process.cwd();
 const GUARD = path.join(root, 'scripts/check-model-catalog-integrity.mjs');
 const FIXTURE = path.join(root, 'apps/cli/test-fixture-stale-model-id.md');
+const LABEL_FIXTURE = path.join(root, 'apps/cli/test-fixture-stale-model-label.ts');
+const DOC_LABEL_FIXTURE = path.join(root, 'docs/test-fixture-retired-opus-label.md');
+const TEST_LABEL_FIXTURE = path.join(root, 'apps/cli/tests/test-fixture-retired-opus-label.ts');
 
 // Run the guard and return { exitCode, stdout, stderr }.
 function runGuard() {
@@ -97,12 +100,44 @@ try {
     'guard skips HTML comment lines in .md (no false positive for fixture)',
     !outComment.includes(FIXTURE_REL),
   );
+
+  // Test 4: a removed Opus generation written as a human-readable label in
+  // live TypeScript must be rejected too. Construct the label from fragments
+  // so this regression test does not itself retain the retired model name.
+  const removedOpusLabel = ['Claude', 'Opus', ['4', '8'].join('.')].join(' ');
+  fs.writeFileSync(LABEL_FIXTURE, `export const modelLabel = '${removedOpusLabel}';\n`);
+  const { output: outLabel } = runGuard();
+  assert(
+    'guard rejects retired human-readable Opus labels in live TypeScript',
+    outLabel.includes(path.relative(root, LABEL_FIXTURE).replace(/\\/g, '/')),
+  );
+
+  // Test 5: the specifically removed predecessor must not survive in any
+  // documentation tree, including the repo-level docs/ tree that the live-code
+  // scan intentionally excludes because it contains historical references.
+  fs.writeFileSync(DOC_LABEL_FIXTURE, `# ${removedOpusLabel}\n`);
+  const { output: outDocLabel } = runGuard();
+  assert(
+    'guard rejects the specifically removed Opus predecessor in repo documentation',
+    outDocLabel.includes(path.relative(root, DOC_LABEL_FIXTURE).replace(/\\/g, '/')),
+  );
+
+  // Test 6: regression fixtures are part of the explicit removal request too;
+  // test directories must not be skipped by the whole-repository retirement scan.
+  fs.writeFileSync(TEST_LABEL_FIXTURE, `export const modelLabel = '${removedOpusLabel}';\n`);
+  const { output: outTestLabel } = runGuard();
+  assert(
+    'guard rejects the specifically removed Opus predecessor in test directories',
+    outTestLabel.includes(path.relative(root, TEST_LABEL_FIXTURE).replace(/\\/g, '/')),
+  );
 } finally {
   // Always clean up the fixture file.
-  try {
-    fs.unlinkSync(FIXTURE);
-  } catch {
-    // ignore
+  for (const fixture of [FIXTURE, LABEL_FIXTURE, DOC_LABEL_FIXTURE, TEST_LABEL_FIXTURE]) {
+    try {
+      fs.unlinkSync(fixture);
+    } catch {
+      // ignore
+    }
   }
 }
 

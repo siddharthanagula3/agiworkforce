@@ -1,7 +1,7 @@
 /**
  * Catalog SSOT regression: ANTHROPIC_MODEL_CATALOG must derive from
  * `models.json` and surface every Anthropic-provider entry, including the
- * latest Opus generation (claude-opus-4.x etc.). Earlier versions were
+ * latest Opus generation (`claude-opus-*`). Earlier implementations were
  * hardcoded and lagged models.json by a generation — see
  * `rule-models-json.md` (NEVER hardcode model IDs). The assertions stay
  * version-agnostic so they don't re-break on the next Opus bump.

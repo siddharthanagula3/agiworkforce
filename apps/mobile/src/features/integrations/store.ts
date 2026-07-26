@@ -26,6 +26,10 @@ import {
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import type { MessagingPlatformId } from '@/src/features/integrations/components/PlatformCard';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 // ---------------------------------------------------------------------------
 // Platform integration types
@@ -153,9 +157,11 @@ export const useIntegrationStore = create<IntegrationState>()(
       },
 
       connectPlatform: async (platformId, config = {}) => {
+        const accountEpoch = captureCloudAccountEpoch();
         set({ platformsLoading: true, error: null });
         try {
           await connectMessagingPlatform(platformId, config);
+          if (!isCloudAccountEpochCurrent(accountEpoch)) return;
           set((state) => ({
             platforms: state.platforms.map((p) =>
               p.id === platformId
@@ -169,19 +175,24 @@ export const useIntegrationStore = create<IntegrationState>()(
             ),
           }));
         } catch (err) {
+          if (!isCloudAccountEpochCurrent(accountEpoch)) return;
           set({
             error: err instanceof Error ? err.message : 'Failed to connect platform',
           });
           throw err;
         } finally {
-          set({ platformsLoading: false });
+          if (isCloudAccountEpochCurrent(accountEpoch)) {
+            set({ platformsLoading: false });
+          }
         }
       },
 
       disconnectPlatform: async (platformId) => {
+        const accountEpoch = captureCloudAccountEpoch();
         set({ platformsLoading: true, error: null });
         try {
           await disconnectMessagingPlatform(platformId);
+          if (!isCloudAccountEpochCurrent(accountEpoch)) return;
           set((state) => ({
             platforms: state.platforms.map((p) =>
               p.id === platformId
@@ -197,11 +208,14 @@ export const useIntegrationStore = create<IntegrationState>()(
             ),
           }));
         } catch (err) {
+          if (!isCloudAccountEpochCurrent(accountEpoch)) return;
           set({
             error: err instanceof Error ? err.message : 'Failed to disconnect platform',
           });
         } finally {
-          set({ platformsLoading: false });
+          if (isCloudAccountEpochCurrent(accountEpoch)) {
+            set({ platformsLoading: false });
+          }
         }
       },
 
@@ -265,7 +279,8 @@ export const useIntegrationStore = create<IntegrationState>()(
 
       clearError: () => set({ error: null }),
 
-      clearPlatformConnections: () => set({ platforms: DEFAULT_PLATFORMS, error: null }),
+      clearPlatformConnections: () =>
+        set({ platforms: DEFAULT_PLATFORMS, platformsLoading: false, error: null }),
     }),
     {
       name: 'integration-store',

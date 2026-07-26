@@ -62,16 +62,10 @@ const DEFAULT_PROVIDERS: ProviderEntry[] = [
     family: 'deepseek',
   },
   {
-    id: 'mistral',
-    label: 'Mistral',
-    pingUrl: 'https://api.mistral.ai/v1/models',
-    family: 'mistral',
-  },
-  {
-    id: 'groq',
-    label: 'Groq',
-    pingUrl: 'https://api.groq.com/openai/v1/models',
-    family: 'inference',
+    id: 'minimax',
+    label: 'MiniMax',
+    pingUrl: 'https://api.minimax.io/v1/models',
+    family: 'minimax',
   },
   {
     id: 'perplexity',
@@ -100,8 +94,7 @@ const PROVIDER_HEALTH_ALLOWED_HOSTS = new Set<string>([
   'api.openai.com',
   'generativelanguage.googleapis.com',
   'api.x.ai',
-  'api.mistral.ai',
-  'api.groq.com',
+  'api.minimax.io',
   'api.deepseek.com',
   'api.perplexity.ai',
   // Operator-controlled internal endpoints.
@@ -176,13 +169,11 @@ const PROVIDERS: ProviderEntry[] = resolveProviders();
  * Order matters — first available alternative wins.
  */
 const FALLBACK_MAP: Record<string, string[]> = {
-  openai: ['anthropic', 'google', 'mistral', 'groq'],
+  openai: ['anthropic', 'google'],
   anthropic: ['openai', 'google', 'deepseek'],
-  google: ['openai', 'anthropic', 'mistral'],
+  google: ['openai', 'anthropic'],
   xai: ['openai', 'anthropic', 'deepseek'],
-  deepseek: ['openai', 'mistral', 'groq'],
-  mistral: ['openai', 'anthropic', 'groq'],
-  groq: ['mistral', 'openai', 'deepseek'],
+  deepseek: ['openai'],
   perplexity: ['google', 'openai'],
 };
 

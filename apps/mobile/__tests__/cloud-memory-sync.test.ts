@@ -20,6 +20,11 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
 jest.mock('../services/api', () => ({
@@ -52,6 +57,10 @@ import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { syncNow, markMemoryForSync } from '../services/cloudSyncEngine';
 import { useMemoryStore } from '../src/features/memory/store';
 import { insertMemoryFact, togglePinMemoryFact } from '../storage/memory';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
@@ -120,6 +129,8 @@ function seedCloudMemory(id: string, content = 'test', isDeleted = false) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('memory-sync-test-user');
   useCloudSyncStateStore.getState().reset();
   useCloudMemoryStore.getState().clearCloudMemoryData();
   useMemorySyncStateStore.getState().resetMemorySync();

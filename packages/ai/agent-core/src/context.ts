@@ -220,7 +220,7 @@ function summaryMessage(
   summary: string,
 ): AgentContextMessage {
   const first = prefix[0]?.id ?? 'start';
-  const last = prefix.at(-1)?.id ?? 'end';
+  const last = prefix[prefix.length - 1]?.id ?? 'end';
   return {
     id: `compaction-summary:${first}:${last}`,
     role: 'assistant',

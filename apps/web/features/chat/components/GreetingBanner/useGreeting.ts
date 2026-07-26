@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 
 interface GreetingResult {
   headline: string;
@@ -67,7 +68,8 @@ function getTimeBand(hour: number): TimeBand {
 }
 
 export function useGreeting(): GreetingResult {
-  const { user } = useAuthStore();
+  const { user: compatibilityUser } = useAuthStore();
+  const canonicalUser = useBillingStore((state) => state.user);
 
   // PER-2: this used to read `localStorage['agi.profile.preferredName']` and
   // give it precedence — a key NOTHING in the repository ever wrote, so the
@@ -77,7 +79,11 @@ export function useGreeting(): GreetingResult {
   // General writes it to the `general` settings namespace, GET /api/me
   // resolves it, and the auth store carries it. Falls back to the full display
   // name when the user has not set a preferred one.
-  const userName = user?.preferredName ?? user?.name;
+  const userName =
+    canonicalUser?.profile?.preferred_name ||
+    canonicalUser?.name ||
+    compatibilityUser?.preferredName ||
+    compatibilityUser?.name;
 
   // Memoize: greeting only changes when user name changes (time band is stable per page load)
   const [snapshot] = React.useState(() => {

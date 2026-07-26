@@ -40,6 +40,7 @@
 import type {
   ChatRuntime,
   CloudApprovalTurnProjection,
+  GeneratedFileEntry,
   SendMessageOptions,
   StreamCallback,
   StreamEvent,
@@ -59,11 +60,17 @@ import {
   chatAttachmentAcceptAttribute,
   isSupportedChatAttachment,
 } from '@agiworkforce/cloud-contracts';
+import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { classifyTaskLocally } from '@agiworkforce/routing';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
-import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
+import {
+  createManagedChatIdempotencyKey,
+  createManagedMediaIdempotencyKey,
+} from '@agiworkforce/utils';
 import {
   createDesktopCloudAgentRunClient,
+  generateCloudImage,
   sendCloudMessage,
   CLOUD_API_BASE_URL,
 } from '../api/cloudApi';
@@ -132,6 +139,24 @@ function stopReasonToFinishReason(reason: AgentEventEnvelope['event']): string |
   return 'stop';
 }
 
+function managedImageSelection(): {
+  model: string;
+  provider: 'google' | 'openai' | 'stability';
+} {
+  const model = getRoutingSlotModel('image_generation');
+  const metadata = getModelMetadataById(model);
+  const provider =
+    metadata?.provider === 'managed_cloud'
+      ? 'stability'
+      : metadata?.provider === 'google' || metadata?.provider === 'openai'
+        ? metadata.provider
+        : null;
+  if (!metadata || metadata.modelType !== 'image' || !provider) {
+    throw new Error('Managed Cloud image generation is not configured for Desktop.');
+  }
+  return { model: metadata.id, provider };
+}
+
 // ---------------------------------------------------------------------------
 // Mapping helpers — the DCL-1/DCL-2 client's normalized DTOs -> ChatRuntime DTOs
 // ---------------------------------------------------------------------------
@@ -185,6 +210,18 @@ export class CloudRuntime implements ChatRuntime {
   /** The managed cloud wire forwards the exact `research` request field. */
   readonly supportsResearch = true;
 
+  /** Managed Cloud has a dedicated durable image-generation dispatch. */
+  readonly supportsImageGeneration = true;
+
+  /** Desktop Cloud does not yet implement the managed async video endpoint. */
+  readonly supportsVideoGeneration = false;
+
+  /** Desktop Cloud does not expose the native Local computer-use boundary. */
+  readonly supportsComputerUse = false;
+
+  /** Independent Cloud requests are keyed and cancellable per conversation. */
+  readonly supportsConcurrentTurns = true;
+
   /** Managed search uses the Cloud route's native-or-generic capability gate. */
   readonly supportsManagedWebSearch = true;
 
@@ -211,6 +248,10 @@ export class CloudRuntime implements ChatRuntime {
     for (const cb of this._streamCallbacks) {
       cb(event);
     }
+  }
+
+  private emitForConversation(conversationId: string, event: StreamEvent): void {
+    this.emit({ ...event, conversationId });
   }
 
   private requireBoundary(): CloudConversationBoundary {
@@ -310,7 +351,10 @@ export class CloudRuntime implements ChatRuntime {
       this.assertBoundary(boundary);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.emit({ type: 'error', error: `Could not save the Cloud reply: ${message}` });
+      this.emitForConversation(conversationId, {
+        type: 'error',
+        error: `Could not save the Cloud reply: ${message}`,
+      });
       throw err;
     }
   }
@@ -364,6 +408,130 @@ export class CloudRuntime implements ChatRuntime {
 
     turn.sink.onEvent(payload);
     if (envelope) this.updateRunReference(turn, { lastSequence: envelope.sequence });
+  }
+
+  /**
+   * Media models use `/api/media/image/generate`, not a text-chat adapter.
+   * Web intercepts the same natural-language intent before chat completion;
+   * Desktop does it here at the runtime boundary so quick actions and typed
+   * prompts cannot fall into the chat route's intentional media-dispatch 422.
+   */
+  private async sendManagedImageTurn(
+    conversationId: string,
+    prompt: string,
+    userMessageId: string,
+    controller: AbortController,
+  ): Promise<void> {
+    const selection = managedImageSelection();
+    const assistantMessageId = uuidv7();
+    const toolCallId = uuidv7();
+    const toolName = 'media_generate_image';
+    const args = { prompt };
+    const startedAt = Date.now();
+
+    this.emitForConversation(conversationId, {
+      type: 'tool_call',
+      toolCall: { id: toolCallId, name: toolName, args },
+    });
+
+    let generated: Awaited<ReturnType<typeof generateCloudImage>>;
+    try {
+      generated = await generateCloudImage({
+        prompt,
+        provider: selection.provider,
+        model: selection.model,
+        idempotencyKey: createManagedMediaIdempotencyKey({
+          surface: 'desktop',
+          operation: 'image',
+          operationId: userMessageId,
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const message = error instanceof Error ? error.message : String(error);
+      const failedToolCall = {
+        id: toolCallId,
+        name: toolName,
+        args,
+        status: 'failed' as const,
+        error: message,
+      };
+      this.emitForConversation(conversationId, {
+        type: 'tool_result',
+        toolCallId,
+        error: message,
+        durationMs: Date.now() - startedAt,
+      });
+      try {
+        await this.persistAssistantTurn(
+          conversationId,
+          assistantMessageId,
+          '',
+          selection.model,
+          undefined,
+          undefined,
+          undefined,
+          failedMessageProjection({ toolCalls: [failedToolCall] }, message),
+        );
+      } catch {
+        // persistAssistantTurn already emitted the scoped persistence failure.
+      }
+      this.emitForConversation(conversationId, { type: 'error', error: message });
+      return;
+    }
+
+    if (controller.signal.aborted) return;
+
+    const file: GeneratedFileEntry = {
+      id: generated.id,
+      fileName: `generated-image-${generated.id.slice(0, 8)}.png`,
+      mimeType: 'image/png',
+      uri: generated.uri,
+      // The media endpoint does not expose byte size. Zero means unknown here;
+      // the authenticated file response remains authoritative at preview time.
+      byteCount: 0,
+      kind: 'image',
+      surface: 'file',
+      previewable: true,
+    };
+    const resultLabel = `Generated with ${generated.provider} (${generated.model})`;
+    const completedToolCall = {
+      id: toolCallId,
+      name: toolName,
+      args,
+      status: 'completed' as const,
+      result: resultLabel,
+    };
+    this.emitForConversation(conversationId, {
+      type: 'tool_result',
+      toolCallId,
+      result: resultLabel,
+      durationMs: Date.now() - startedAt,
+    });
+    this.emitForConversation(conversationId, { type: 'generated_files', files: [file] });
+
+    try {
+      await this.persistAssistantTurn(
+        conversationId,
+        assistantMessageId,
+        '',
+        selection.model,
+        undefined,
+        undefined,
+        undefined,
+        {
+          finishReason: 'stop',
+          toolCalls: [completedToolCall],
+          generatedFiles: [file],
+        },
+      );
+    } catch {
+      // The persistence helper emitted an actionable error and the UI must not
+      // receive `done`, which could imply this result is durable.
+      return;
+    }
+    this.emitForConversation(conversationId, { type: 'done', finishReason: 'stop' });
   }
 
   private async replayDurableRun(conversationId: string, turn: ActiveCloudTurn): Promise<void> {
@@ -440,7 +608,7 @@ export class CloudRuntime implements ChatRuntime {
         toPersistedCloudApprovalProjection(this._approvals.getTurnProjection(conversationId)),
         projection,
       );
-      this.emit({
+      this.emitForConversation(conversationId, {
         type: 'done',
         ...(replayFinishReason ? { finishReason: replayFinishReason } : {}),
       });
@@ -466,7 +634,10 @@ export class CloudRuntime implements ChatRuntime {
         undefined,
         failedMessageProjection(projection, failureMessage),
       );
-      this.emit({ type: 'error', error: `${failureMessage} Please retry.` });
+      this.emitForConversation(conversationId, {
+        type: 'error',
+        error: `${failureMessage} Please retry.`,
+      });
       return;
     }
     if (
@@ -494,7 +665,7 @@ export class CloudRuntime implements ChatRuntime {
         undefined,
         failedMessageProjection(projection, failureMessage),
       );
-      this.emit({
+      this.emitForConversation(conversationId, {
         type: 'error',
         error: `${failureMessage} Please retry.`,
       });
@@ -510,7 +681,7 @@ export class CloudRuntime implements ChatRuntime {
       undefined,
       projection,
     );
-    this.emit({
+    this.emitForConversation(conversationId, {
       type: 'done',
       ...(replayFinishReason ? { finishReason: replayFinishReason } : {}),
     });
@@ -571,7 +742,7 @@ export class CloudRuntime implements ChatRuntime {
         });
         this.assertBoundary(boundary);
       } catch (err) {
-        this.emit({
+        this.emitForConversation(conversationId, {
           type: 'error',
           error: err instanceof Error ? err.message : String(err),
         });
@@ -585,7 +756,23 @@ export class CloudRuntime implements ChatRuntime {
       options.signal.addEventListener('abort', () => controller.abort());
     }
 
-    const sink = createCloudStreamDeltaSink((event) => this.emit(event), CLOUD_API_BASE_URL);
+    const shouldGenerateImage =
+      !isContinuation &&
+      uploadedAttachments.length === 0 &&
+      classifyTaskLocally(content, []).type === 'image_generation';
+    if (shouldGenerateImage) {
+      try {
+        await this.sendManagedImageTurn(conversationId, content, userMessageId, controller);
+      } finally {
+        this._abortControllers.delete(conversationId);
+      }
+      return;
+    }
+
+    const sink = createCloudStreamDeltaSink(
+      (event) => this.emitForConversation(conversationId, event),
+      CLOUD_API_BASE_URL,
+    );
     const assistantMessageId = options?.continuationMessageId ?? uuidv7();
     const continuationPrefix =
       isContinuation &&
@@ -693,7 +880,7 @@ export class CloudRuntime implements ChatRuntime {
                 undefined,
                 failedMessageProjection(projection, failureMessage),
               );
-              this.emit({
+              this.emitForConversation(conversationId, {
                 type: 'error',
                 error: `${failureMessage} Please retry.`,
               });
@@ -714,7 +901,7 @@ export class CloudRuntime implements ChatRuntime {
           }
           const finishReason = sink.getFinishReason();
           const streamError = sink.getStreamError();
-          this.emit({
+          this.emitForConversation(conversationId, {
             type: 'done',
             ...(finishReason ? { finishReason } : {}),
             ...(streamError ? { streamError } : {}),
@@ -748,7 +935,7 @@ export class CloudRuntime implements ChatRuntime {
                   undefined,
                   failedMessageProjection(sink.getMessageProjection(), message),
                 ).catch((persistenceError: unknown) => {
-                  this.emit({
+                  this.emitForConversation(conversationId, {
                     type: 'error',
                     error: `The Cloud task failed and its failure state could not be saved: ${
                       persistenceError instanceof Error
@@ -757,7 +944,7 @@ export class CloudRuntime implements ChatRuntime {
                     }`,
                   });
                 });
-                this.emit({ type: 'error', error: message });
+                this.emitForConversation(conversationId, { type: 'error', error: message });
               },
             );
             return;
@@ -781,7 +968,7 @@ export class CloudRuntime implements ChatRuntime {
             undefined,
             failedMessageProjection(sink.getMessageProjection(), err.message),
           ).catch((persistenceError: unknown) => {
-            this.emit({
+            this.emitForConversation(conversationId, {
               type: 'error',
               error: `The Cloud task failed and its failure state could not be saved: ${
                 persistenceError instanceof Error
@@ -790,7 +977,7 @@ export class CloudRuntime implements ChatRuntime {
               }`,
             });
           });
-          this.emit({ type: 'error', error: err.message });
+          this.emitForConversation(conversationId, { type: 'error', error: err.message });
         },
         controller.signal,
         (payload) => this.onLiveEvent(activeTurn, payload),
@@ -819,7 +1006,11 @@ export class CloudRuntime implements ChatRuntime {
               }
             : undefined;
           if (handle) {
-            this.emit({ type: 'agent_run', runId: handle.runId, runPath: handle.runPath });
+            this.emitForConversation(conversationId, {
+              type: 'agent_run',
+              runId: handle.runId,
+              runPath: handle.runPath,
+            });
           }
         },
       );
@@ -847,7 +1038,7 @@ export class CloudRuntime implements ChatRuntime {
             undefined,
             failedMessageProjection(sink.getMessageProjection(), message),
           );
-          this.emit({ type: 'error', error: message });
+          this.emitForConversation(conversationId, { type: 'error', error: message });
         }
       }
     } finally {
@@ -872,9 +1063,9 @@ export class CloudRuntime implements ChatRuntime {
         conversationId,
         toolCallId,
         decision,
-        (event) => this.emit(event),
+        (event) => this.emitForConversation(conversationId, event),
         CLOUD_API_BASE_URL,
-        (err) => this.emit({ type: 'error', error: err.message }),
+        (err) => this.emitForConversation(conversationId, { type: 'error', error: err.message }),
         controller.signal,
       );
       this.assertBoundary(boundary);
@@ -922,13 +1113,13 @@ export class CloudRuntime implements ChatRuntime {
             : outcome.messageProjection,
         );
         if (emptyTerminal) {
-          this.emit({
+          this.emitForConversation(conversationId, {
             type: 'error',
             error: `${failureMessage} Please retry.`,
           });
           return;
         }
-        this.emit({
+        this.emitForConversation(conversationId, {
           type: 'done',
           ...(outcome.finishReason ? { finishReason: outcome.finishReason } : {}),
           ...(outcome.streamError ? { streamError: outcome.streamError } : {}),
@@ -961,7 +1152,7 @@ export class CloudRuntime implements ChatRuntime {
         void createDesktopCloudAgentRunClient()
           .cancelRun(activeTurn.runReference.runId)
           .catch((err: unknown) => {
-            this.emit({
+            this.emitForConversation(conversationId, {
               type: 'error',
               error: `Could not stop the Cloud task: ${
                 err instanceof Error ? err.message : String(err)
@@ -988,7 +1179,7 @@ export class CloudRuntime implements ChatRuntime {
           finishReason: 'stopped',
         },
       ).catch((persistenceError: unknown) => {
-        this.emit({
+        this.emitForConversation(conversationId, {
           type: 'error',
           error: `The Cloud task stopped, but its stopped state could not be saved: ${
             persistenceError instanceof Error ? persistenceError.message : String(persistenceError)

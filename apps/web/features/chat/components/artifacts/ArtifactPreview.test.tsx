@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { SharedArtifact } from '@agiworkforce/types';
 import { ArtifactPreview, type ArtifactData } from './ArtifactPreview';
 
 // The renderable-artifact path drags in the cross-origin sandbox iframe; these
@@ -13,6 +14,17 @@ function pdfArtifact(overrides: Partial<ArtifactData> = {}): ArtifactData {
     language: 'pdf',
     title: 'Trip.pdf',
     content: '',
+    ...overrides,
+  };
+}
+
+function imageArtifact(overrides: Partial<ArtifactData> = {}): ArtifactData {
+  return {
+    id: 'image-1',
+    type: 'image',
+    language: 'png',
+    title: 'Launch visual',
+    content: '/api/files/generated-image',
     ...overrides,
   };
 }
@@ -160,6 +172,27 @@ describe('ArtifactPreview · PDF viewer', () => {
     );
   });
 
+  it('shows the generated artifact version even before any edits exist', () => {
+    const artifact = pdfArtifact();
+    const initialVersion: SharedArtifact = {
+      id: artifact.id,
+      type: 'document',
+      language: 'pdf',
+      title: 'Trip.pdf',
+      content: artifact.content,
+      version: 1,
+      createdAt: '2026-07-25T00:00:00.000Z',
+    };
+
+    render(
+      <ArtifactPreview variant="panel" artifact={artifact} versionHistory={[initialVersion]} />,
+    );
+
+    expect(screen.getByTestId('artifact-version-chip')).toHaveTextContent('v1/1');
+    expect(screen.getByRole('button', { name: 'Previous version' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next version' })).toBeDisabled();
+  });
+
   it('REJECTS a cross-origin storage url on a generated file (fallback, no off-origin iframe)', () => {
     render(
       <ArtifactPreview
@@ -186,5 +219,29 @@ describe('ArtifactPreview · PDF viewer', () => {
     );
     expect(screen.getByTestId('artifact-pdf-fallback')).toBeTruthy();
     expect(screen.queryByTitle('Trip.pdf')).toBeNull();
+  });
+});
+
+describe('ArtifactPreview · generated image viewer', () => {
+  it('renders the generated image as the panel preview with a direct download action', () => {
+    render(<ArtifactPreview variant="panel" artifact={imageArtifact()} />);
+
+    const image = screen.getByRole('img', { name: 'Launch visual' }) as HTMLImageElement;
+    expect(image.getAttribute('src')).toBe('/api/files/generated-image');
+    expect(image.getAttribute('referrerpolicy')).toBe('no-referrer');
+    expect(screen.getByRole('button', { name: 'Download image' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy artifact' })).toBeNull();
+  });
+
+  it('rejects a non-image executable URL instead of handing it to the browser', () => {
+    render(
+      <ArtifactPreview
+        variant="panel"
+        artifact={imageArtifact({ content: 'javascript:alert(document.domain)' })}
+      />,
+    );
+
+    expect(screen.queryByRole('img', { name: 'Launch visual' })).toBeNull();
+    expect(screen.getByText('Image preview unavailable')).toBeInTheDocument();
   });
 });

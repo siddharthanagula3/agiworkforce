@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -18,6 +18,7 @@ import {
   Code2,
   Copy,
   FileText,
+  ImageIcon,
   Menu,
   Share2,
   Sparkles,
@@ -28,8 +29,15 @@ import { Badge } from '@/components/ui/badge';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useThemeColors } from '@/src/ui/theme';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
-import { useArtifactStore, accentColorForKind } from './store';
+import { useArtifactStore, accentColorForKind, mergeMobileArtifactsForGallery } from './store';
 import type { MobileArtifact, MobileArtifactKind } from './types';
+import { GeneratedImage } from '@/src/features/chat/components/GeneratedImage';
+import { useAuthStore } from '@/src/features/auth/store';
+import {
+  captureAccountScopedUiState,
+  isAccountScopedUiStateOwned,
+  type AccountScopedUiState,
+} from '@/src/features/auth/services/accountScopedUiState';
 
 interface ArtifactsGalleryScreenProps {
   initialLoading?: boolean;
@@ -50,6 +58,7 @@ const KIND_BADGE: Record<MobileArtifactKind, BadgeTone> = {
   chart: 'yellow',
   research: 'purple',
   document: 'gray',
+  image: 'terra-cotta',
 };
 
 const KIND_ICON: Record<MobileArtifactKind, typeof FileText> = {
@@ -57,6 +66,7 @@ const KIND_ICON: Record<MobileArtifactKind, typeof FileText> = {
   chart: BarChart3,
   research: BookOpen,
   document: FileText,
+  image: ImageIcon,
 };
 
 function badgeLabel(artifact: MobileArtifact): string {
@@ -73,20 +83,36 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const [selectedArtifact, setSelectedArtifact] = useState<MobileArtifact | null>(null);
+  const selectedArtifactScopeRef = useRef<AccountScopedUiState | null>(null);
   const [isLoading] = useState(initialLoading);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
   // Live artifact list from the persistent store — user-created artifacts, newest first.
   const storedArtifacts = useArtifactStore((s) => s.artifacts);
+  const cloudArtifacts = useArtifactStore((s) => s.cloudArtifacts);
+  const cloudArtifactsOwnerId = useArtifactStore((s) => s.cloudArtifactsOwnerId);
 
-  // Re-derive accentColor from the current theme so cards respect light/dark mode,
-  // even if the color was stored under the opposite palette.
-  const userArtifacts = useMemo(
+  // The selected object outlives the store row that produced it. Close an
+  // account-owned preview before paint when Clerk tears down/switches owners;
+  // Local previews remain device-owned and survive Cloud account changes.
+  useLayoutEffect(() => {
+    if (!selectedArtifact) return;
+    if (isAccountScopedUiStateOwned(selectedArtifactScopeRef.current)) return;
+    selectedArtifactScopeRef.current = null;
+    setSelectedArtifact(null);
+  }, [clerkUserId, cloudArtifactsOwnerId, selectedArtifact]);
+
+  // Reconcile the pulled Cloud overlay by canonical id/tombstone, then
+  // re-derive colors so every card follows the active theme.
+  const galleryArtifacts = useMemo(
     () =>
-      storedArtifacts.map((a) => ({
-        ...a,
-        accentColor: accentColorForKind(a.kind, c),
-      })),
-    [storedArtifacts, c],
+      mergeMobileArtifactsForGallery(storedArtifacts, cloudArtifacts, c, cloudArtifactsOwnerId).map(
+        (a) => ({
+          ...a,
+          accentColor: accentColorForKind(a.kind, c),
+        }),
+      ),
+    [cloudArtifacts, cloudArtifactsOwnerId, storedArtifacts, c],
   );
 
   const openDrawer = useCallback(() => {
@@ -109,17 +135,37 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
 
   const keyExtractor = useCallback((item: MobileArtifact) => item.id, []);
 
+  const handleOpenArtifact = useCallback((artifact: MobileArtifact) => {
+    const provenance = artifact.provenance;
+    if (!provenance) return;
+    const scope = captureAccountScopedUiState(provenance.scope);
+    if (!scope) return;
+    if (
+      scope.scope === 'cloud' &&
+      (provenance.scope !== 'cloud' || scope.account.ownerId !== provenance.ownerId)
+    ) {
+      return;
+    }
+    selectedArtifactScopeRef.current = scope;
+    setSelectedArtifact(artifact);
+  }, []);
+
+  const handleCloseArtifact = useCallback(() => {
+    selectedArtifactScopeRef.current = null;
+    setSelectedArtifact(null);
+  }, []);
+
   const renderItem = useCallback(
     ({ item, index }: { item: MobileArtifact; index: number }) => (
       <ArtifactCard
         artifact={item}
         width={cardWidth}
-        onPress={setSelectedArtifact}
+        onPress={handleOpenArtifact}
         // Right-column cards get left margin to match the gap
         style={index % NUM_COLUMNS !== 0 ? { marginLeft: CARD_GAP } : undefined}
       />
     ),
-    [cardWidth],
+    [cardWidth, handleOpenArtifact],
   );
 
   return (
@@ -162,7 +208,7 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
         </ScrollView>
       ) : (
         <FlatList
-          data={userArtifacts}
+          data={galleryArtifacts}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           numColumns={NUM_COLUMNS}
@@ -173,7 +219,7 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
         />
       )}
 
-      <ArtifactPreviewModal artifact={selectedArtifact} onClose={() => setSelectedArtifact(null)} />
+      <ArtifactPreviewModal artifact={selectedArtifact} onClose={handleCloseArtifact} />
     </SafeAreaView>
   );
 }
@@ -217,6 +263,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
   const c = useThemeColors();
   const previewHeight = Math.max(120, Math.round(width * 0.72));
   const isCode = artifact.kind === 'code';
+  const isImage = artifact.kind === 'image';
   const KindIcon = KIND_ICON[artifact.kind];
 
   return (
@@ -244,27 +291,43 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
         </View>
 
         {/* Code / text preview area */}
-        <View
-          className="absolute inset-0 justify-end px-3 pb-3 pt-10"
-          style={{ backgroundColor: c.surfaceHover }}
-        >
-          {artifact.previewLines.slice(0, 5).map((line, index) => (
+        {isImage ? (
+          <View
+            className="absolute inset-0 items-center justify-end px-3 pb-3"
+            style={{ backgroundColor: c.surfaceHover }}
+          >
+            <ImageIcon size={30} color={artifact.accentColor} />
             <Text
-              key={`${artifact.id}-${index}`}
-              className="text-[10px] leading-[14px]"
-              numberOfLines={1}
-              style={{
-                color: index === 0 ? artifact.accentColor : c.textSecondary,
-                fontFamily: isCode
-                  ? Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-                  : undefined,
-                opacity: index === 0 ? 1 : Math.max(0.35, 1 - index * 0.18),
-              }}
+              className="text-[10px] leading-[14px] mt-2"
+              numberOfLines={2}
+              style={{ color: c.textSecondary, textAlign: 'center' }}
             >
-              {line}
+              {artifact.previewLines[0] ?? 'Generated image'}
             </Text>
-          ))}
-        </View>
+          </View>
+        ) : (
+          <View
+            className="absolute inset-0 justify-end px-3 pb-3 pt-10"
+            style={{ backgroundColor: c.surfaceHover }}
+          >
+            {artifact.previewLines.slice(0, 5).map((line, index) => (
+              <Text
+                key={`${artifact.id}-${index}`}
+                className="text-[10px] leading-[14px]"
+                numberOfLines={1}
+                style={{
+                  color: index === 0 ? artifact.accentColor : c.textSecondary,
+                  fontFamily: isCode
+                    ? Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+                    : undefined,
+                  opacity: index === 0 ? 1 : Math.max(0.35, 1 - index * 0.18),
+                }}
+              >
+                {line}
+              </Text>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Title */}
@@ -440,13 +503,21 @@ function ArtifactPreviewModal({
             </Text>
           </View>
 
-          <Text
-            testID="artifact-preview-content"
-            className="text-[18px] leading-[30px]"
-            style={{ color: c.textPrimary }}
-          >
-            {artifact.content}
-          </Text>
+          {artifact.kind === 'image' ? (
+            <GeneratedImage
+              imageUrl={artifact.content}
+              revisedPrompt={artifact.previewLines[0]}
+              width={Math.min(420, Math.max(240, 320))}
+            />
+          ) : (
+            <Text
+              testID="artifact-preview-content"
+              className="text-[18px] leading-[30px]"
+              style={{ color: c.textPrimary }}
+            >
+              {artifact.content}
+            </Text>
+          )}
         </ScrollView>
       </View>
     </Modal>

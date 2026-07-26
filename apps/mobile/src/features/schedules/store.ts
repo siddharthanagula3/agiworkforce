@@ -9,6 +9,11 @@ import {
   toggleSchedule as apiToggleSchedule,
   fetchScheduleRuns as apiFetchRuns,
 } from './service';
+import { isMobileScheduleRecurrenceSupported } from './policy';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,6 +65,8 @@ interface ScheduleState {
   schedules: Schedule[];
   /** Runs keyed by scheduleId to avoid data loss on schedule switch */
   runsBySchedule: Record<string, ScheduleRun[]>;
+  runsLoadingBySchedule: Record<string, boolean>;
+  runsErrorBySchedule: Record<string, string | null>;
   loading: boolean;
   error: string | null;
 
@@ -71,6 +78,8 @@ interface ScheduleState {
   fetchRuns: (scheduleId: string) => Promise<void>;
   getRuns: (scheduleId: string) => ScheduleRun[];
   clearError: () => void;
+  /** Clear every Clerk-account schedule cache on sign-out/account switch. */
+  clearAccountSchedules: () => void;
 }
 
 export const useScheduleStore = create<ScheduleState>()(
@@ -78,61 +87,77 @@ export const useScheduleStore = create<ScheduleState>()(
     (set, get) => ({
       schedules: [],
       runsBySchedule: {},
+      runsLoadingBySchedule: {},
+      runsErrorBySchedule: {},
       loading: false,
       error: null,
 
       fetchSchedules: async () => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
         set({ loading: true, error: null });
         try {
           const schedules = await apiFetchSchedules();
+          if (!isCloudAccountEpochCurrent(account)) return;
           set({ schedules });
         } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to fetch schedules:', error);
           set({
             error: error instanceof Error ? error.message : 'Failed to load schedules',
           });
         } finally {
-          set({ loading: false });
+          if (isCloudAccountEpochCurrent(account)) set({ loading: false });
         }
       },
 
       createSchedule: async (data) => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
         set({ loading: true, error: null });
         try {
           const schedule = await apiCreateSchedule(data);
+          if (!isCloudAccountEpochCurrent(account)) return;
           set((state) => ({
             schedules: [schedule, ...state.schedules],
           }));
         } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to create schedule:', error);
           set({
             error: error instanceof Error ? error.message : 'Failed to create schedule',
           });
           throw error;
         } finally {
-          set({ loading: false });
+          if (isCloudAccountEpochCurrent(account)) set({ loading: false });
         }
       },
 
       updateSchedule: async (id, data) => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
         set({ loading: true, error: null });
         try {
           const updated = await apiUpdateSchedule(id, data);
+          if (!isCloudAccountEpochCurrent(account)) return;
           set((state) => ({
             schedules: state.schedules.map((s) => (s.id === id ? updated : s)),
           }));
         } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to update schedule:', error);
           set({
             error: error instanceof Error ? error.message : 'Failed to update schedule',
           });
           throw error;
         } finally {
-          set({ loading: false });
+          if (isCloudAccountEpochCurrent(account)) set({ loading: false });
         }
       },
 
       deleteSchedule: async (id) => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
         // Optimistic removal
         const prev = get().schedules;
         set((state) => ({
@@ -141,7 +166,9 @@ export const useScheduleStore = create<ScheduleState>()(
 
         try {
           await apiDeleteSchedule(id);
+          if (!isCloudAccountEpochCurrent(account)) return;
         } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to delete schedule:', error);
           // Revert on failure
           set({ schedules: prev });
@@ -152,10 +179,18 @@ export const useScheduleStore = create<ScheduleState>()(
       },
 
       toggleSchedule: async (id) => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
         const schedule = get().schedules.find((s) => s.id === id);
         if (!schedule) return;
 
         const newActive = !schedule.isActive;
+        if (newActive && !isMobileScheduleRecurrenceSupported(schedule.recurrence)) {
+          set({
+            error: 'Choose Once, Daily, Weekly, or Monthly before activating this legacy schedule.',
+          });
+          return;
+        }
 
         // Optimistic update
         set((state) => ({
@@ -164,7 +199,9 @@ export const useScheduleStore = create<ScheduleState>()(
 
         try {
           await apiToggleSchedule(id, newActive);
+          if (!isCloudAccountEpochCurrent(account)) return;
         } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to toggle schedule:', error);
           // Revert on failure
           set((state) => ({
@@ -179,9 +216,21 @@ export const useScheduleStore = create<ScheduleState>()(
       },
 
       fetchRuns: async (scheduleId) => {
-        set({ loading: true, error: null });
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
+        set((state) => ({
+          runsLoadingBySchedule: {
+            ...state.runsLoadingBySchedule,
+            [scheduleId]: true,
+          },
+          runsErrorBySchedule: {
+            ...state.runsErrorBySchedule,
+            [scheduleId]: null,
+          },
+        }));
         try {
           const runs = await apiFetchRuns(scheduleId);
+          if (!isCloudAccountEpochCurrent(account)) return;
           set((state) => {
             const updated = { ...state.runsBySchedule, [scheduleId]: runs };
             // Evict runs for deleted schedules to prevent unbounded growth
@@ -192,12 +241,23 @@ export const useScheduleStore = create<ScheduleState>()(
             return { runsBySchedule: updated };
           });
         } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to fetch schedule runs:', error);
-          set({
-            error: error instanceof Error ? error.message : 'Failed to load run history',
-          });
+          set((state) => ({
+            runsErrorBySchedule: {
+              ...state.runsErrorBySchedule,
+              [scheduleId]: error instanceof Error ? error.message : 'Failed to load run history',
+            },
+          }));
         } finally {
-          set({ loading: false });
+          if (isCloudAccountEpochCurrent(account)) {
+            set((state) => ({
+              runsLoadingBySchedule: {
+                ...state.runsLoadingBySchedule,
+                [scheduleId]: false,
+              },
+            }));
+          }
         }
       },
 
@@ -207,6 +267,17 @@ export const useScheduleStore = create<ScheduleState>()(
 
       clearError: () => {
         set({ error: null });
+      },
+
+      clearAccountSchedules: () => {
+        set({
+          schedules: [],
+          runsBySchedule: {},
+          runsLoadingBySchedule: {},
+          runsErrorBySchedule: {},
+          loading: false,
+          error: null,
+        });
       },
     }),
     {

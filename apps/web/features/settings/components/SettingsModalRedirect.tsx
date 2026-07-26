@@ -9,8 +9,10 @@
  * This keeps routes deep-linkable while keeping the modal-first UX.
  */
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
+import { getGitHubCallbackNotice } from '@/features/connectors/lib/github-callback-notice';
 import { useSettingsModal } from './SettingsModalProvider';
 
 interface SettingsModalRedirectProps {
@@ -23,11 +25,23 @@ interface SettingsModalRedirectProps {
 export function SettingsModalRedirect({ section, returnTo = '/chat' }: SettingsModalRedirectProps) {
   const { openSettings } = useSettingsModal();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const handledGitHubStatus = useRef<string | null>(null);
 
   useEffect(() => {
+    const githubStatus = section === 'connectors' ? searchParams.get('github') : null;
+    if (githubStatus && handledGitHubStatus.current !== githubStatus) {
+      handledGitHubStatus.current = githubStatus;
+      const notice = getGitHubCallbackNotice(githubStatus);
+      if (notice?.kind === 'success') {
+        toast.success(notice.message);
+      } else if (notice) {
+        toast.error(notice.message);
+      }
+    }
     openSettings(section);
     router.replace(returnTo);
-  }, [openSettings, router, returnTo, section]);
+  }, [openSettings, router, returnTo, searchParams, section]);
 
   // Render nothing — the modal opens globally via the provider
   return null;

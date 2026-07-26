@@ -6,13 +6,14 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getMediaAssetById } from '@/lib/server/media-assets';
-import { getObject, isObjectStorageConfigured } from '@/lib/server/object-storage';
+import { isMediaStorageConfigured, readStoredMedia } from '@/lib/server/media-storage';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 /**
  * GET /api/files/[id] — authenticated, owner-scoped, same-origin byte serving
  * for generated files (code-interpreter outputs, generated images, CSVs, PDFs)
- * persisted in `media_assets` + R2.
+ * persisted in `media_assets` plus R2 in production or local development
+ * media storage.
  *
  * Why this exists: the chat renderers deliberately gate what they will render
  * inline — the PDF viewer accepts only `data:application/pdf`, same-origin
@@ -80,13 +81,13 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
     );
   }
 
-  if (!isObjectStorageConfigured() || !asset.storagePathname) {
+  if (!isMediaStorageConfigured() || !asset.storagePathname) {
     // No byte source we can proxy — honest 404 rather than a redirect to a
     // cross-origin URL the renderer gates would reject anyway.
     throw createError.notFound('File bytes are not available');
   }
 
-  const object = await getObject(asset.storagePathname);
+  const object = await readStoredMedia(asset.storagePathname);
   if (!object) {
     throw createError.notFound('File bytes are not available');
   }

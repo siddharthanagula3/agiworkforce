@@ -22,7 +22,6 @@ import { AgentControl } from './AgentControl';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
-import { isWebSearchAvailable } from '@agiworkforce/search';
 import type { WritingStyle } from '../lib/writingStyle';
 import type { ChatAttachmentPolicy } from '../lib/runtime';
 import {
@@ -112,6 +111,14 @@ export interface ChatInputProps {
   onClearFolder?: () => void;
   /** Chat | AGI Work toggle + "Project or folder" picker. See the type doc. */
   projectPicker?: ChatInputProjectPicker;
+  /**
+   * Account entitlement for the managed AGI Work mode. False preserves
+   * ordinary project-scoped chat while withholding the mode the server would
+   * reject. Defaults true for Local/BYOK hosts that already own their runtime.
+   */
+  canUseAgiWork?: boolean;
+  /** Active-conversation generation state supplied by a concurrent-capable host. */
+  isStreamingOverride?: boolean;
   hasMessages: boolean;
   className?: string;
   /**
@@ -139,8 +146,6 @@ export interface ChatInputProps {
   supportsCodeExecution?: boolean;
   /** Whether the active runtime can transport managed Research requests. */
   supportsResearch?: boolean;
-  /** Whether this runtime sends Web search through Managed Cloud. */
-  supportsManagedWebSearch?: boolean;
   /** Runtime-specific limits layered over the suite-wide local attachment policy. */
   attachmentPolicy?: ChatAttachmentPolicy;
 }
@@ -156,6 +161,8 @@ export function ChatInput({
   currentFolderLabel = null,
   onClearFolder,
   projectPicker,
+  canUseAgiWork = true,
+  isStreamingOverride,
   hasMessages,
   className,
   disabled = false,
@@ -164,11 +171,11 @@ export function ChatInput({
   projectId,
   supportsCodeExecution = false,
   supportsResearch = false,
-  supportsManagedWebSearch = false,
   attachmentPolicy,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isStreaming = useChatStore((s) => s.isStreaming);
+  const aggregateIsStreaming = useChatStore((s) => s.isStreaming);
+  const isStreaming = isStreamingOverride ?? aggregateIsStreaming;
   const draftContent = useChatStore((s) => s.draftContent);
   const setDraftContent = useChatStore((s) => s.setDraftContent);
   const clearDraftContent = useChatStore((s) => s.clearDraftContent);
@@ -179,11 +186,6 @@ export function ChatInput({
   const [isDragOver, setIsDragOver] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  // UI-WEBSEARCH-TOGGLE-01: read + write the REAL chatStore web-search state (not
-  // a local useState that diverged from the send path). Default is OFF (chatStore
-  // `webSearchEnabled: false`) — the user must explicitly enable web search.
-  const webSearchEnabled = useChatStore((s) => s.webSearchEnabled);
-  const setWebSearchEnabled = useChatStore((s) => s.setWebSearchEnabled);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [activeStyle, setActiveStyle] = useState<WritingStyle | null>(null);
 
@@ -203,14 +205,14 @@ export function ChatInput({
   // membership; otherwise reopening a project chat silently sends
   // `work_mode: "chat"` until the user toggles AGI Work again.
   useEffect(() => {
-    setWorkMode(activeProjectId ? 'agiwork' : 'chat');
-  }, [activeProjectId, conversationId]);
+    setWorkMode(canUseAgiWork && activeProjectId ? 'agiwork' : 'chat');
+  }, [activeProjectId, canUseAgiWork, conversationId]);
 
   // Entering with a preselected project (sidebar "New chat in project") lands
   // the composer in AGI Work mode so the scoping is visible, never silent.
   useEffect(() => {
-    if (activeProjectId) setWorkMode('agiwork');
-  }, [activeProjectId]);
+    if (canUseAgiWork && activeProjectId) setWorkMode('agiwork');
+  }, [activeProjectId, canUseAgiWork]);
 
   // Mutual exclusion, folder side: a NEWLY chosen folder (host dialog resolves
   // asynchronously → currentFolderLabel transitions) displaces the project.
@@ -240,8 +242,12 @@ export function ChatInput({
   const activePickerProject = projectPicker
     ? (projectPicker.projects.find((p) => p.id === activeProjectId) ?? null)
     : null;
-  const scopeHasSelection = Boolean(activePickerProject || currentFolderLabel);
-  const scopeLabel = activePickerProject?.name ?? currentFolderLabel ?? 'Project or folder';
+  const entitledFolderLabel = canUseAgiWork ? currentFolderLabel : null;
+  const scopeHasSelection = Boolean(activePickerProject || entitledFolderLabel);
+  const scopeLabel =
+    activePickerProject?.name ??
+    entitledFolderLabel ??
+    (canUseAgiWork ? 'Project or folder' : 'Project');
   const filteredPickerProjects = projectPicker
     ? projectPicker.projects.filter((p) =>
         p.name.toLowerCase().includes(projectQuery.trim().toLowerCase()),
@@ -300,24 +306,6 @@ export function ChatInput({
   // concrete IDs are non-empty, so cloud auto-routing stays enabled; only '' means
   // there is nothing to send to. Block send so a message can't silently no-op.
   const noModelSelected = selectedModelId.trim() === '';
-
-  const genericWebSearchDeploymentEnabled = useSettingsStore(
-    (s) => s.genericWebSearchDeploymentEnabled,
-  );
-  const selectedModelMetadata = getModelMetadataById(selectedModelId);
-  const webSearchAvailable =
-    !supportsManagedWebSearch ||
-    isWebSearchAvailable({
-      provider: modelProviderId,
-      modelSupportsNativeSearch:
-        selectedModelMetadata?.capabilities.search ?? modelProviderId === 'managed_cloud',
-      modelSupportsTools: selectedModelMetadata?.capabilities.tools ?? selectedModel?.supportsTools,
-      genericBackendConfigured: genericWebSearchDeploymentEnabled,
-    });
-
-  useEffect(() => {
-    if (webSearchEnabled && !webSearchAvailable) setWebSearchEnabled(false);
-  }, [setWebSearchEnabled, webSearchAvailable, webSearchEnabled]);
 
   // A mode/runtime switch must not leave a hidden Research selection armed.
   // The send path also gates on `supportsResearch`, but clearing here prevents
@@ -551,7 +539,7 @@ export function ChatInput({
       // Hosts feeding the picker get the scope stamped into the send; the
       // signature stays unchanged for hosts that don't (mobile).
       onSend(content, agentMode, effort, attachments, research, activeStyle ?? undefined, {
-        workMode,
+        workMode: canUseAgiWork ? workMode : 'chat',
         projectId: activeProjectId,
       });
     } else if (activeStyle) {
@@ -579,6 +567,7 @@ export function ChatInput({
     supportsResearch,
     activeStyle,
     projectPicker,
+    canUseAgiWork,
     workMode,
     activeProjectId,
   ]);
@@ -724,9 +713,6 @@ export function ChatInput({
                   onSelectFolder={onSelectFolder}
                   onRecordSkill={onRecordSkill}
                   currentFolderLabel={currentFolderLabel}
-                  webSearchEnabled={webSearchEnabled}
-                  onWebSearchToggle={() => setWebSearchEnabled(!webSearchEnabled)}
-                  webSearchAvailable={webSearchAvailable}
                   researchEnabled={researchEnabled}
                   onResearchToggle={() => setResearchEnabled((v) => !v)}
                   supportsResearch={supportsResearch}
@@ -766,7 +752,7 @@ export function ChatInput({
               {/* Work-mode segmented toggle (Chat | AGI Work) — web parity,
                   sitting immediately right of "+". Rendered only when the host
                   feeds projectPicker. */}
-              {projectPicker && (
+              {projectPicker && canUseAgiWork && (
                 <div
                   role="group"
                   aria-label="Composer mode"
@@ -859,7 +845,7 @@ export function ChatInput({
           Rendered only in AGI Work mode with host-provided project data; the
           local-folder action appears only when the host feeds the folder seam
           (desktop, privacy-gated by the host). */}
-      {projectPicker && workMode === 'agiwork' && (
+      {projectPicker && (workMode === 'agiwork' || !canUseAgiWork) && (
         <div className="relative mt-2 flex items-center gap-2" ref={scopePickerRef}>
           <div
             className={cn(
@@ -881,11 +867,11 @@ export function ChatInput({
                 scopeHasSelection ? 'pr-1' : 'pr-2.5',
                 disabled && 'cursor-not-allowed opacity-50',
               )}
-              aria-label="Project or folder"
+              aria-label={canUseAgiWork ? 'Project or folder' : 'Project'}
               aria-expanded={scopePickerOpen}
               title={scopeHasSelection ? scopeLabel : undefined}
             >
-              {currentFolderLabel ? (
+              {entitledFolderLabel ? (
                 <FolderOpen className="h-3.5 w-3.5 shrink-0" />
               ) : (
                 <Folder className="h-3.5 w-3.5 shrink-0" />
@@ -898,7 +884,9 @@ export function ChatInput({
                 type="button"
                 onClick={handleClearScopeSelection}
                 className="mr-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
-                aria-label="Clear project or folder selection"
+                aria-label={
+                  canUseAgiWork ? 'Clear project or folder selection' : 'Clear project selection'
+                }
               >
                 <X className="h-3 w-3" />
               </button>
@@ -956,7 +944,7 @@ export function ChatInput({
 
               {/* Local folder — rendered only when the host feeds the folder
                   seam (desktop-only + privacy-gated at the host). */}
-              {onSelectFolder && (
+              {canUseAgiWork && onSelectFolder && (
                 <>
                   <div className="my-1 border-t border-[var(--chat-border)]" />
                   <button
@@ -966,7 +954,7 @@ export function ChatInput({
                   >
                     <FolderOpen className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]" />
                     <span className="flex-1 text-left">
-                      {currentFolderLabel ? 'Choose a different folder' : 'Choose a local folder'}
+                      {entitledFolderLabel ? 'Choose a different folder' : 'Choose a local folder'}
                     </span>
                   </button>
                 </>

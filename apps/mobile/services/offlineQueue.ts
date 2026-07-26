@@ -17,7 +17,14 @@
  *  - Entries exceeding MAX_RETRY_COUNT are dropped and onFailure is called.
  */
 
-import { storage } from '@/lib/mmkv';
+import { storage, whenMmkvReady } from '@/lib/mmkv';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+
+export type OfflineQueueProvenance = { scope: 'local' } | { scope: 'cloud'; ownerId: string };
 
 export interface QueuedMessage {
   /** Unique queue entry ID (distinct from the chat message ID) */
@@ -32,6 +39,8 @@ export interface QueuedMessage {
   queuedAt: string;
   /** Number of times this entry has been attempted */
   retryCount: number;
+  /** Local/device scope or the Clerk account that owns a Cloud retry. */
+  provenance: OfflineQueueProvenance;
   /** Called after a successful send */
   onSuccess?: () => void;
   /** Called after the entry is dropped (max retries exceeded or permanent error) */
@@ -61,6 +70,7 @@ interface PersistedQueueEntry {
   model: string;
   queuedAt: string;
   retryCount: number;
+  provenance: OfflineQueueProvenance;
 }
 
 /** Compute backoff delay for a given retry count (0-based). */
@@ -84,8 +94,40 @@ function isPersistedQueueEntry(value: unknown): value is PersistedQueueEntry {
     typeof entry.retryCount === 'number' &&
     Number.isInteger(entry.retryCount) &&
     entry.retryCount >= 0 &&
-    entry.retryCount <= MAX_RETRY_COUNT
+    entry.retryCount <= MAX_RETRY_COUNT &&
+    isOfflineQueueProvenance(entry.provenance)
   );
+}
+
+function normalizedOwnerId(ownerId: unknown): string | null {
+  return typeof ownerId === 'string' && ownerId.trim().length > 0 ? ownerId.trim() : null;
+}
+
+function isOfflineQueueProvenance(value: unknown): value is OfflineQueueProvenance {
+  if (!value || typeof value !== 'object') return false;
+  const provenance = value as Record<string, unknown>;
+  if (provenance.scope === 'local') return true;
+  return provenance.scope === 'cloud' && normalizedOwnerId(provenance.ownerId) !== null;
+}
+
+function requireOfflineQueueProvenance(provenance: OfflineQueueProvenance): OfflineQueueProvenance {
+  if (!isOfflineQueueProvenance(provenance)) {
+    throw new Error('Offline queue entries require Local scope or a non-empty Cloud owner id');
+  }
+  if (provenance.scope === 'local') return { scope: 'local' };
+
+  const account = captureCloudAccountEpoch();
+  const ownerId = provenance.ownerId.trim();
+  if (!account || account.ownerId !== ownerId) {
+    throw new Error('Cannot queue a Cloud prompt for an inactive account');
+  }
+  return { scope: 'cloud', ownerId };
+}
+
+function hasSameProvenance(left: OfflineQueueProvenance, right: OfflineQueueProvenance): boolean {
+  if (left.scope !== right.scope) return false;
+  if (left.scope === 'local') return true;
+  return left.ownerId === (right as { scope: 'cloud'; ownerId: string }).ownerId;
 }
 
 class OfflineMessageQueue {
@@ -119,13 +161,14 @@ class OfflineMessageQueue {
     this.notify();
     try {
       const entries: PersistedQueueEntry[] = this.queue.map(
-        ({ id, conversationId, content, model, queuedAt, retryCount }) => ({
+        ({ id, conversationId, content, model, queuedAt, retryCount, provenance }) => ({
           id,
           conversationId,
           content,
           model,
           queuedAt,
           retryCount,
+          provenance,
         }),
       );
       storage.set(QUEUE_STORAGE_KEY, JSON.stringify(entries));
@@ -179,7 +222,10 @@ class OfflineMessageQueue {
   ): QueuedMessage {
     // Guard: do not double-enqueue the exact same content for the same conversation
     const duplicate = this.queue.find(
-      (q) => q.conversationId === msg.conversationId && q.content === msg.content,
+      (q) =>
+        q.conversationId === msg.conversationId &&
+        q.content === msg.content &&
+        hasSameProvenance(q.provenance, msg.provenance),
     );
     if (duplicate) return duplicate;
 
@@ -197,6 +243,7 @@ class OfflineMessageQueue {
 
     const entry: QueuedMessage = {
       ...msg,
+      provenance: requireOfflineQueueProvenance(msg.provenance),
       id: `qmsg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       queuedAt: new Date().toISOString(),
       retryCount: 0,
@@ -247,14 +294,37 @@ class OfflineMessageQueue {
 
     this._isProcessing = true;
 
-    // Process from front of live queue — new enqueue() calls during drain are
+    // Process from live queue state — new enqueue() calls during drain are
     // picked up immediately (no stale snapshot).
     while (this.queue.length > 0) {
-      const entry = this.queue[0]!;
+      // Purge stale/wrong-owner Cloud prompts regardless of the visible mode.
+      // They must never wait around to be adopted by another account.
+      const unsafeCloudEntry = this.queue.find((queued) => {
+        if (queued.provenance.scope !== 'cloud') return false;
+        const currentAccount = captureCloudAccountEpoch();
+        return !currentAccount || currentAccount.ownerId !== queued.provenance.ownerId;
+      });
+      if (unsafeCloudEntry) {
+        this.dropEntry(
+          unsafeCloudEntry,
+          new Error('Queued Cloud prompt belongs to a different or expired account'),
+        );
+        continue;
+      }
+
+      // A reconnect listener is shared by both modes. Only replay entries that
+      // match the current trust boundary; retain the other mode's rows.
+      const currentMode = useChatAppModeStore.getState().appMode;
+      const entry = this.queue.find((queued) => queued.provenance.scope === currentMode);
       if (!entry) break;
+      const account = entry.provenance.scope === 'cloud' ? captureCloudAccountEpoch() : null;
 
       try {
         await sendFn(entry);
+        if (entry.provenance.scope === 'cloud' && !isCloudAccountEpochCurrent(account)) {
+          this.dropEntry(entry, new Error('Cloud account changed while replaying queued prompt'));
+          continue;
+        }
         // Success — remove from queue, persist, and fire success callback
         this.queue = this.queue.filter((q) => q.id !== entry.id);
         this.persistToStorage();
@@ -265,6 +335,14 @@ class OfflineMessageQueue {
         }
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
+        if (!this.queue.some((queued) => queued.id === entry.id)) {
+          // Account teardown can remove a row while sendFn is awaiting I/O.
+          continue;
+        }
+        if (entry.provenance.scope === 'cloud' && !isCloudAccountEpochCurrent(account)) {
+          this.dropEntry(entry, new Error('Cloud account changed while replaying queued prompt'));
+          continue;
+        }
         entry.retryCount += 1;
 
         if (entry.retryCount >= MAX_RETRY_COUNT) {
@@ -307,8 +385,49 @@ class OfflineMessageQueue {
     this._isProcessing = false;
     this.persistToStorage();
   }
+
+  /**
+   * Remove Cloud and legacy/malformed queue entries without touching provably
+   * Local device work. Used for Clerk sign-out and direct account switching.
+   */
+  clearAccountScopedEntries(): void {
+    const retained: QueuedMessage[] = [];
+    const removed: QueuedMessage[] = [];
+    for (const entry of this.queue) {
+      if (isOfflineQueueProvenance(entry.provenance) && entry.provenance.scope === 'local') {
+        retained.push(entry);
+      } else {
+        removed.push(entry);
+      }
+    }
+    this.queue = retained;
+    for (const entry of removed) {
+      try {
+        entry.onFailure?.(new Error('Cloud account queue cleared'));
+      } catch {
+        // Ignore callback failures while crossing an account boundary.
+      }
+    }
+    this.persistToStorage();
+  }
+
+  private dropEntry(entry: QueuedMessage, error: Error): void {
+    this.queue = this.queue.filter((queued) => queued.id !== entry.id);
+    this.persistToStorage();
+    try {
+      entry.onFailure?.(error);
+    } catch {
+      // A callback error must never keep an unsafe queue entry alive.
+    }
+  }
 }
 
 export const offlineQueue = new OfflineMessageQueue();
-// Restore any persisted queue entries from the previous session
-offlineQueue.restoreFromStorage();
+// Encrypted MMKV opens asynchronously. A module-import restore would read the
+// pre-init no-op proxy and permanently miss persisted queue entries.
+whenMmkvReady(() => offlineQueue.restoreFromStorage());
+
+/** Central account-teardown entry point. Local queue entries are preserved. */
+export function clearAccountScopedOfflineQueue(): void {
+  offlineQueue.clearAccountScopedEntries();
+}

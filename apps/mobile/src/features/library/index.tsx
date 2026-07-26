@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, View, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,10 +12,21 @@ import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
-import { useArtifactStore, accentColorForKind } from '@/src/features/artifacts/store';
+import {
+  useArtifactStore,
+  accentColorForKind,
+  mergeMobileArtifactsForGallery,
+} from '@/src/features/artifacts/store';
 import type { MobileArtifact } from '@/src/features/artifacts/types';
 import { ImageFullScreen } from '@/src/features/chat/components/ImageFullScreen';
 import { collectGeneratedImages, type LibraryImage } from './collectGeneratedImages';
+import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
+import { useAuthStore } from '@/src/features/auth/store';
+import {
+  captureAccountScopedUiState,
+  isAccountScopedUiStateOwned,
+  type AccountScopedUiState,
+} from '@/src/features/auth/services/accountScopedUiState';
 
 const NUM_COLUMNS = 2;
 const CARD_GAP = 14;
@@ -33,13 +44,27 @@ export function LibraryScreen() {
   const { width } = useWindowDimensions();
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [previewImage, setPreviewImage] = useState<LibraryImage | null>(null);
+  const previewImageScopeRef = useRef<AccountScopedUiState | null>(null);
 
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const localConversations = useChatStore((s) => s.conversations);
   const localMessages = useChatStore((s) => s.messages);
   const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
   const cloudMessages = useChatCloudMessageStore((s) => s.messages);
   const storedArtifacts = useArtifactStore((s) => s.artifacts);
+  const cloudArtifacts = useArtifactStore((s) => s.cloudArtifacts);
+  const cloudArtifactsOwnerId = useArtifactStore((s) => s.cloudArtifactsOwnerId);
+
+  // ImageFullScreen keeps its own image object after the backing message cache
+  // is cleared. Bind that object to the account epoch captured at open time so
+  // account A's generated image cannot remain visible for account B.
+  useLayoutEffect(() => {
+    if (!previewImage) return;
+    if (isAccountScopedUiStateOwned(previewImageScopeRef.current)) return;
+    previewImageScopeRef.current = null;
+    setPreviewImage(null);
+  }, [clerkUserId, cloudMessages, previewImage]);
 
   const generatedImages = useMemo(() => {
     if (appMode === 'cloud') {
@@ -54,8 +79,15 @@ export function LibraryScreen() {
   // Artifacts are not currently mode-split on mobile (see useArtifactStore) —
   // Library mirrors the same set the Artifacts gallery screen shows today.
   const artifacts = useMemo(
-    () => storedArtifacts.map((a) => ({ ...a, accentColor: accentColorForKind(a.kind, c) })),
-    [storedArtifacts, c],
+    () =>
+      mergeMobileArtifactsForGallery(storedArtifacts, cloudArtifacts, c, cloudArtifactsOwnerId)
+        // Generated images already render as first-class image cards above.
+        .filter((artifact) => artifact.kind !== 'image')
+        .map((a) => ({
+          ...a,
+          accentColor: accentColorForKind(a.kind, c),
+        })),
+    [cloudArtifacts, cloudArtifactsOwnerId, storedArtifacts, c],
   );
 
   const items = useMemo<LibraryItem[]>(() => {
@@ -79,6 +111,21 @@ export function LibraryScreen() {
 
   const keyExtractor = useCallback((item: LibraryItem) => `${item.kind}-${item.id}`, []);
 
+  const handleOpenImage = useCallback(
+    (image: LibraryImage) => {
+      const scope = captureAccountScopedUiState(appMode);
+      if (!scope) return;
+      previewImageScopeRef.current = scope;
+      setPreviewImage(image);
+    },
+    [appMode],
+  );
+
+  const handleCloseImage = useCallback(() => {
+    previewImageScopeRef.current = null;
+    setPreviewImage(null);
+  }, []);
+
   const renderItem = useCallback(
     ({ item, index }: { item: LibraryItem; index: number }) => {
       const style = index % NUM_COLUMNS !== 0 ? { marginLeft: CARD_GAP } : undefined;
@@ -88,13 +135,13 @@ export function LibraryScreen() {
             image={item.image}
             width={cardWidth}
             style={style}
-            onPress={() => setPreviewImage(item.image)}
+            onPress={() => handleOpenImage(item.image)}
           />
         );
       }
       return <LibraryArtifactCard artifact={item.artifact} width={cardWidth} style={style} />;
     },
-    [cardWidth],
+    [cardWidth, handleOpenImage],
   );
 
   return (
@@ -157,7 +204,7 @@ export function LibraryScreen() {
         imageUrl={previewImage?.imageUrl ?? null}
         prompt={previewImage?.prompt}
         visible={previewImage !== null}
-        onClose={() => setPreviewImage(null)}
+        onClose={handleCloseImage}
       />
     </SafeAreaView>
   );
@@ -232,6 +279,7 @@ function LibraryImageCard({
 }) {
   const c = useThemeColors();
   const height = Math.max(120, Math.round(width * 0.9));
+  const { source, status } = useGeneratedImageSource(image.imageUrl, false);
   return (
     <Pressable
       testID={`library-image-card-${image.id}`}
@@ -249,14 +297,34 @@ function LibraryImageCard({
           <ImageIcon size={12} color={c.terraCotta} />
           <Badge label="Image" color="terra-cotta" />
         </View>
-        <Image
-          source={{ uri: image.imageUrl }}
-          style={{ width, height }}
-          contentFit="cover"
-          transition={150}
-          cachePolicy="memory-disk"
-          accessibilityLabel={image.prompt ?? 'Generated image'}
-        />
+        {status === 'ready' && source ? (
+          <Image
+            source={source}
+            style={{ width, height }}
+            contentFit="cover"
+            transition={150}
+            cachePolicy="memory"
+            accessibilityLabel={image.prompt ?? 'Generated image'}
+          />
+        ) : (
+          <View
+            style={{
+              width,
+              height,
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+            }}
+          >
+            <Text style={{ color: c.textMuted, fontSize: 12, textAlign: 'center' }}>
+              {status === 'signed-out'
+                ? 'Sign in to view'
+                : status === 'authorizing'
+                  ? 'Loading image…'
+                  : 'Image unavailable'}
+            </Text>
+          </View>
+        )}
       </View>
       <Text className="text-[13px] mt-2" style={{ color: c.textMuted }} numberOfLines={1}>
         {image.sourceLabel}

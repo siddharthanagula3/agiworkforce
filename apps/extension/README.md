@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Extension lead
-Last updated: 2026-07-15
+Last updated: 2026-07-26
 Kind: app
 Criticality: high
 
@@ -14,7 +14,7 @@ Criticality: high
 
 - Chrome extension users.
 - Desktop app through explicit, reviewed native context handoff and browser mechanics.
-- Future browser-task and connector flows.
+- Web account, usage, connector, and Team settings through explicit browser handoffs.
 
 ## Public API / Exports
 
@@ -87,6 +87,20 @@ The build reads the public values documented in `.env.example`:
 
 Production packages require a live Clerk key and all three origins/key values.
 The package script fails closed when they are absent or malformed.
+
+## Cloud Account Contract
+
+Chrome authenticates with Clerk's Chrome Extension Native API and the configured
+Sync Host. It does not use the VS Code device-authorization flow and there is no
+`/connect/chrome` route.
+
+After sign-in, the side panel hydrates the user's name and email from the active
+Clerk session, model and Auto admission from `/api/llm/v1/models`, and canonical
+plan, subscription status, and percentage-only usage from `/api/usage`. Paid
+Chrome capabilities fail closed when the subscription is not active or
+trialing. Account actions open the existing Web usage, billing, connector, and
+Team surfaces; Cloud connectors do not become browser-page tools inside the
+extension.
 
 ## Security, Privacy, Data Boundaries
 

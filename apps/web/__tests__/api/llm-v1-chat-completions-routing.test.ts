@@ -513,15 +513,19 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
     expect(mockCheckAvailable).not.toHaveBeenCalled();
   });
 
-  it('fails closed when the Web runtime profile has not implemented a required harness feature', async () => {
+  it('admits AGI Work after the Web runtime implements platform tool discovery', async () => {
     const request = makeRequest('Use autonomous agents and discover the best available tools');
     const response = await POST(request);
 
-    expect(response.status).toBe(422);
+    expect(response.status, await response.clone().text()).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: 'model_route_unavailable' },
+      x_agi_workforce: {
+        routing: {
+          task_type: 'agentic',
+        },
+      },
     });
-    expect(mockCheckAvailable).not.toHaveBeenCalled();
+    expect(mockCheckAvailable).toHaveBeenCalledOnce();
   });
 
   it('classifies image message parts as multimodal before resolving Auto', async () => {

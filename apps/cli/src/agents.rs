@@ -1197,7 +1197,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let agent = AgentDefinition {
             name: "model-override-agent".to_string(),
             description: "Test".to_string(),
-            model: Some("claude-opus-4-8".to_string()),
+            model: Some("claude-opus-5".to_string()),
             tools: None,
             disallowed_tools: None,
             max_turns: None,
@@ -1208,6 +1208,6 @@ You are a research specialist. Your job is to analyze topics deeply."#;
 
         agent.apply_to_session(&mut session);
         assert_ne!(session.model, initial_model);
-        assert_eq!(session.model, "claude-opus-4-8");
+        assert_eq!(session.model, "claude-opus-5");
     }
 }

@@ -20,7 +20,8 @@ import {
 } from '../features/model-picker/modelConstants';
 import { getTokenCounter } from '../data/tokenCounter';
 import { TierInfoSchema } from '../protocol/apiResponses';
-import type { AccountAuthState } from '@agiworkforce/types';
+import { effectivePlanTier, type AccountAuthState } from '@agiworkforce/types';
+import { Config } from '../platform/config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -765,7 +766,10 @@ export async function chatCompletion(
     };
 
     const tokens: string[] = [];
-    streamChatCompletion(
+    const streamCompletion = Config.useProviderStream()
+      ? streamChatCompletionViaProvider
+      : streamChatCompletion;
+    streamCompletion(
       secrets,
       messages,
       {
@@ -782,11 +786,37 @@ export async function chatCompletion(
 // ─── Tier info ────────────────────────────────────────────────────────────────
 
 export interface TierInfo {
+  /** Effective tier after subscription-status enforcement. */
   tier: string;
+  /** Recorded plan when it differs from the effective tier. */
+  accountPlanTier?: string;
+  subscriptionStatus?: string;
   /** Plan usage this period as a 0-100 percentage (canonical /api/usage). */
   usagePercentage?: number;
   /** ISO reset timestamp for the current usage window, when returned. */
   resetsAt?: string;
+}
+
+/** Validate and project the canonical `/api/usage` response into editor state. */
+export function parseTierInfoResponse(raw: unknown): TierInfo | undefined {
+  const parsed = TierInfoSchema.safeParse(raw);
+  if (!parsed.success) return undefined;
+
+  const effectiveTier = effectivePlanTier(parsed.data.plan_tier, parsed.data.subscription_status);
+  const tierInfo: TierInfo = {
+    tier: effectiveTier,
+    subscriptionStatus: parsed.data.subscription_status,
+  };
+  if (effectiveTier !== parsed.data.plan_tier) {
+    tierInfo.accountPlanTier = parsed.data.plan_tier;
+  }
+  if (typeof parsed.data.usage_percentage === 'number') {
+    tierInfo.usagePercentage = parsed.data.usage_percentage;
+  }
+  if (typeof parsed.data.usage_reset_at === 'string') {
+    tierInfo.resetsAt = parsed.data.usage_reset_at;
+  }
+  return tierInfo;
 }
 
 /**
@@ -838,17 +868,10 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
           // Runtime-validate the percentage usage response. A malformed upstream
           // response resolves to undefined rather than silently overwriting
           // global tier state with garbage.
-          const parsed = TierInfoSchema.safeParse(raw);
-          if (!parsed.success) {
+          const tierInfo = parseTierInfoResponse(raw);
+          if (tierInfo === undefined) {
             resolve(undefined);
             return;
-          }
-          const tierInfo: TierInfo = { tier: parsed.data.plan_tier };
-          if (typeof parsed.data.usage_percentage === 'number') {
-            tierInfo.usagePercentage = parsed.data.usage_percentage;
-          }
-          if (typeof parsed.data.usage_reset_at === 'string') {
-            tierInfo.resetsAt = parsed.data.usage_reset_at;
           }
           resolve(tierInfo);
         } catch {
@@ -915,6 +938,9 @@ export async function streamChatCompletionViaProvider(
   const cancelListener = cancellationToken.onCancellationRequested(() => abortController.abort());
 
   try {
+    if (cancellationToken.isCancellationRequested) {
+      throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
+    }
     for await (const chunk of streamFromProvider({
       gatewayUrl: getGatewayUrl(),
       providerId: providerId as 'anthropic' | 'openai' | 'ollama' | 'google',
@@ -922,7 +948,9 @@ export async function streamChatCompletionViaProvider(
       request: { model, messages },
       signal: abortController.signal,
     })) {
-      if (cancellationToken.isCancellationRequested) break;
+      if (cancellationToken.isCancellationRequested) {
+        throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
+      }
       switch (chunk.type) {
         case 'text-delta':
           callbacks.onToken(chunk.delta);
@@ -948,7 +976,15 @@ export async function streamChatCompletionViaProvider(
           break;
       }
     }
+    if (cancellationToken.isCancellationRequested) {
+      throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
+    }
     callbacks.onDone();
+  } catch (error) {
+    if (cancellationToken.isCancellationRequested) {
+      throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
+    }
+    throw error;
   } finally {
     cancelListener.dispose();
   }

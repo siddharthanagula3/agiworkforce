@@ -448,6 +448,41 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(props?.['projectPicker']).toBeTruthy();
   });
 
+  it('projects Cloud AGI Work and image affordances from the hydrated account tier', () => {
+    useAppModeStore.setState({ mode: 'cloud' });
+    useUnifiedAuthStore.setState({
+      plan: 'basic',
+      planDisplayName: 'Basic',
+    });
+
+    const view = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+    expect(unifiedChatMock.chatInterfaceProps.at(-1)?.['canUseAgiWork']).toBe(false);
+    expect(
+      (
+        unifiedChatMock.chatInterfaceProps.at(-1)?.['quickChipAvailability'] as
+          | { image?: boolean }
+          | undefined
+      )?.image,
+    ).toBe(false);
+
+    act(() => {
+      useUnifiedAuthStore.setState({
+        plan: 'pro',
+        planDisplayName: 'Pro',
+      });
+    });
+    view.rerender(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    expect(unifiedChatMock.chatInterfaceProps.at(-1)?.['canUseAgiWork']).toBe(true);
+    expect(
+      (
+        unifiedChatMock.chatInterfaceProps.at(-1)?.['quickChipAvailability'] as
+          | { image?: boolean }
+          | undefined
+      )?.image,
+    ).toBe(true);
+  });
+
   it('scopes the active conversation through the existing project seam when the picker selects', async () => {
     useProjectStore.setState({
       projects: [seedPickerProject('p1', 'Apollo')],

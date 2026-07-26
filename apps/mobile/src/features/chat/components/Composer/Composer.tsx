@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import { type TaskChipType } from '@/src/features/chat/components/TaskChips';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
+import type { DraftProvenance } from '@/src/features/chat/draftStore';
 
 interface ComposerProps {
   /** May return (a promise of) a boolean — `false` means the send was
@@ -34,6 +35,8 @@ interface ComposerProps {
   initialText?: string;
   /** Per-conversation draft key, forwarded to the composer for draft restore. */
   draftKey?: string;
+  /** Explicit Local/Cloud owner for the persisted conversation draft. */
+  draftProvenance?: DraftProvenance;
 }
 
 export function Composer({
@@ -53,6 +56,7 @@ export function Composer({
   isThreadActive,
   initialText,
   draftKey,
+  draftProvenance,
 }: ComposerProps) {
   const [activeChip, setActiveChip] = useState<TaskChipType | null>(null);
 
@@ -88,6 +92,7 @@ export function Composer({
         isThreadActive={isThreadActive ?? !showChips}
         initialText={initialText}
         draftKey={draftKey}
+        draftProvenance={draftProvenance}
       />
     </View>
   );

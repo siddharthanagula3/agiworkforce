@@ -10,6 +10,7 @@ pub mod permissions;
 pub mod power;
 pub mod prompt_enhancement;
 pub mod security;
+pub mod startup_recovery;
 pub mod telemetry;
 pub mod test_utils;
 pub mod utils;

@@ -6,14 +6,11 @@ import {
   X,
   Clock,
   Paperclip,
-  Globe,
   Sparkles,
-  Wand2,
   ChevronRight,
   ChevronDown,
   Check,
   Camera,
-  Brain,
   EyeOff,
   ImagePlus,
   Image as ImageIcon,
@@ -25,6 +22,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useBillingStore } from '@shared/stores/web-auth-store';
+import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
 import { BUILT_IN_SLASH_COMMANDS } from '@features/chat/commands/slash-command-registry';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
@@ -52,25 +50,21 @@ import {
   isAutoModeModelId,
 } from '@shared/config/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
-import {
-  useStyleStore,
-  getStyleInstruction,
-  RESPONSE_LENGTH_OPTIONS,
-  type PresetStyle,
-} from '@features/chat/stores/style-store';
+import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
-  EFFORT_LABEL,
   canUseBillingPlanCapability,
   getModels,
-  resolveModelEffort,
   type CloudWorkMode,
+  type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-search-support';
-import { useCapability } from '@agiworkforce/unified-chat';
+import { SendPreview, useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
+import { ComposerFeedbackDialog } from './ComposerFeedbackDialog';
 
 /**
  * AUDIT-FIX CMP-32: the composer had no `maxLength`, no character counter and
@@ -85,6 +79,11 @@ const COMPOSER_COUNTER_THRESHOLD = Math.floor(COMPOSER_MAX_CHARS * 0.75);
 
 /** Composer work mode — claude.ai Chat/Cowork parity ("AGI Work" here). */
 export type ComposerWorkMode = CloudWorkMode;
+
+const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
+  chat: 'Chat — quick questions and conversation',
+  agiwork: 'AGI Work — multi-step tasks with tools, files, and reviewable deliverables',
+};
 
 interface ChatComposerProps {
   onSend: (
@@ -160,6 +159,12 @@ interface ChatComposerProps {
    * presentation. PLAN.md section 5: "Add per-file privacy labels".
    */
   attachmentPrivacyShortLabel?: string;
+  /**
+   * Compact, on-demand outbound-route disclosure shown below the input. This
+   * preserves the Local/BYOK/Managed trust boundary without a persistent banner
+   * above the textarea.
+   */
+  sendPreviewPresentation?: SendPreviewPresentation;
   /** Opens the upgrade plan dialog from locked model/usage upgrade affordances. */
   onUpgradeRequest?: () => void;
   /**
@@ -209,24 +214,6 @@ export interface ComposerProjectPicker {
   onSelectProject: (projectId: string | null) => void;
   onCreateProject: () => void;
 }
-
-/**
- * AUDIT-FIX CMP-6/CMP-7: the composer-local `StyleMode`
- * (normal|concise|formal|explanatory) is gone. It was a THIRD style vocabulary
- * alongside the footer StyleSelector's `PresetStyle` and unified-chat's
- * `WritingStyle`; both web controls rendered simultaneously for paid users with
- * independent checkmarks, and `handleSubmit` forwarded the resolved
- * `styleInstruction` while dropping `styleMode` on the floor. The "+" menu
- * flyout below now reads and writes the SAME `useStyleStore` the footer control
- * uses, so the two surfaces are two views of one value.
- */
-const STYLE_OPTIONS: ReadonlyArray<{ id: PresetStyle; label: string; description: string }> = [
-  { id: 'default', label: 'Default', description: 'Direct, no filler' },
-  { id: 'concise', label: 'Concise', description: 'Short and to the point' },
-  { id: 'detailed', label: 'Detailed', description: 'Thorough with examples' },
-  { id: 'technical', label: 'Technical', description: 'Precise, code-forward' },
-  { id: 'creative', label: 'Creative', description: 'Expressive and vivid' },
-];
 
 // ---------------------------------------------------------------------------
 // Image mode types and constants
@@ -313,8 +300,6 @@ type SlashCommandOutcome =
       toggles: Partial<ComposerToggleState>;
       /** Extended thinking lives in its own store, so it is reported separately. */
       enableThinking?: boolean;
-      /** True when the command also makes web search the durable default. */
-      persistWebSearchDefault?: boolean;
     };
 
 /** Toggle row used in the + menu for connected send options. */
@@ -368,6 +353,7 @@ const ChatComposerNewComponent = ({
   clearSignal,
   emptyState = false,
   attachmentPrivacyShortLabel,
+  sendPreviewPresentation,
   onUpgradeRequest,
   freeTrial,
   onGenerateImage,
@@ -449,9 +435,13 @@ const ChatComposerNewComponent = ({
    * so the user composed a whole prompt and failed after a round trip.
    */
   const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
-  const canUseAgiWork = !isFreeTrial && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
+  const billingPolicyReady = useBillingStore(isBillingPolicyReady);
+  const canUseAgiWork =
+    billingPolicyReady && !isFreeTrial && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
   const canUseImageGeneration =
-    !isFreeTrial && canUseBillingPlanCapability(subscriptionTier, 'image_generation');
+    billingPolicyReady &&
+    !isFreeTrial &&
+    canUseBillingPlanCapability(subscriptionTier, 'image_generation');
 
   /**
    * AUDIT-FIX CMP-1/CMP-2/CMP-5: the composer's send options now live in the
@@ -460,7 +450,7 @@ const ChatComposerNewComponent = ({
    * They were `useState` here, and `WebChatPage` renders this component in the
    * two opposite branches of an `isEmptyChat ? ... : ...` ternary — so sending
    * the first message unmounted one instance and mounted the other, resetting
-   * work mode, web search, Deep Research, Run code, Office files, style, image
+   * work mode, Deep Research, Run code, Office files, style, image
    * mode and the selected skill with nothing on screen saying so. A chat
    * started in AGI Work silently became a plain chat from message 2, and
    * `applyWorkMode` server-side only ever applied to turn 1.
@@ -472,20 +462,12 @@ const ChatComposerNewComponent = ({
   const storedComposerToggles = useChatStore(
     (s) => s.composerTogglesByConversation[toggleBucketKey],
   );
-  const webSearchByDefault = useChatStore((s) => s.webSearchByDefault);
   const setComposerTogglesInStore = useChatStore((s) => s.setComposerToggles);
-  const setWebSearchByDefault = useChatStore((s) => s.setWebSearchByDefault);
   // Fallback is memoised (never rebuilt inside the selector) so the subscription
   // returns a stable reference and cannot loop under useSyncExternalStore.
   const composerToggles = useMemo<ComposerToggleState>(
-    () =>
-      storedComposerToggles ?? {
-        ...DEFAULT_COMPOSER_TOGGLES,
-        // AUDIT-FIX CMP-4/CMP-12: a conversation with no stored composer state
-        // seeds web search from the durable user preference.
-        webSearchEnabled: webSearchByDefault,
-      },
-    [storedComposerToggles, webSearchByDefault],
+    () => storedComposerToggles ?? { ...DEFAULT_COMPOSER_TOGGLES },
+    [storedComposerToggles],
   );
   const setComposerToggles = useCallback(
     (updates: Partial<ComposerToggleState>) => {
@@ -528,6 +510,7 @@ const ChatComposerNewComponent = ({
   // what the server enforces.
   const pickerActiveProjectId = projectPicker?.activeProjectId ?? null;
   useEffect(() => {
+    if (!billingPolicyReady) return;
     // The CURRENT mode is read imperatively, never as a dependency: reacting to
     // `workMode` would make this effect immediately undo a deliberate switch
     // back to Chat while a project is still selected.
@@ -537,7 +520,7 @@ const ChatComposerNewComponent = ({
     } else if (pickerActiveProjectId && current !== 'agiwork') {
       setWorkMode('agiwork');
     }
-  }, [canUseAgiWork, pickerActiveProjectId, setWorkMode, conversationId]);
+  }, [billingPolicyReady, canUseAgiWork, pickerActiveProjectId, setWorkMode, conversationId]);
 
   // Platform capabilities (PLATFORM axis — does this surface expose the action at
   // all). Sourced from the shared capability matrix via the CapabilityProvider;
@@ -545,8 +528,6 @@ const ChatComposerNewComponent = ({
   // RENDERING (absent on web), composing with the model/tier gates below.
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
   const canTakeScreenshotCap = useCapability('canTakeScreenshot');
-
-  const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
 
   // Image generation mode state (imageMode itself is per-conversation, above)
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
@@ -562,6 +543,7 @@ const ChatComposerNewComponent = ({
   // (e.g. an image to a text-only model, or web search to a no-search model).
   const composerSelectedModelId = useModelStore((s) => s.selectedModelId);
   const setComposerSelectedModelId = useModelStore((s) => s.setSelectedModelId);
+  const isAutoSelected = isAutoModeModelId(composerSelectedModelId);
   const selectedModelMeta = getModelMetadata(composerSelectedModelId);
   const selectedModelCaps = selectedModelMeta?.capabilities;
   const modelSupportsVision = selectedModelCaps?.vision ?? false;
@@ -602,12 +584,18 @@ const ChatComposerNewComponent = ({
   const genericWebSearchConfigured = useBillingStore(
     (s) => s.featureFlags?.generic_web_search ?? false,
   );
-  const modelSupportsSearch = isWebSearchAvailable({
-    provider: selectedModelMeta?.provider,
-    modelSupportsNativeSearch: selectedModelCaps?.search,
-    modelSupportsTools: selectedModelCaps?.tools,
-    genericBackendConfigured: genericWebSearchConfigured,
-  });
+  // Auto is a routing alias, not a catalog model, so it has no provider or
+  // capability row until the server resolves the turn. The configured generic
+  // backend is the route-independent guarantee that every Auto candidate can
+  // still receive the platform web_search tool.
+  const modelSupportsSearch = isAutoModeModelId(composerSelectedModelId)
+    ? genericWebSearchConfigured
+    : isWebSearchAvailable({
+        provider: selectedModelMeta?.provider,
+        modelSupportsNativeSearch: selectedModelCaps?.search,
+        modelSupportsTools: selectedModelCaps?.tools,
+        genericBackendConfigured: genericWebSearchConfigured,
+      });
   // Deep Research is its own capability field in models.json, distinct from
   // plain web search. Current Claude Haiku 4.5, for example, has
   // search:true/research:false, so the two controls cannot share one flag.
@@ -615,7 +603,8 @@ const ChatComposerNewComponent = ({
   // search-only models and wrongly blocks it for research-only models.
   // Deep Research forces web_search on server-side (applyResearchMode), so it needs
   // the same provider search path — gate it the same way to avoid a cosmetic toggle.
-  const modelSupportsResearch = (selectedModelCaps?.research ?? false) && providerCanWebSearch;
+  const modelSupportsResearch =
+    isAutoSelected || ((selectedModelCaps?.research ?? false) && providerCanWebSearch);
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
   // Same both-signals rule as web search above: the catalog capability is
   // necessary but not sufficient. Native-tier providers (anthropic/google/
@@ -644,38 +633,47 @@ const ChatComposerNewComponent = ({
   // open-weight model (kimi-k3/deepseek/qwen/glm, codeExecution:false) gets an honest
   // Run-code toggle when E2B is live, never a cosmetic dead control.
   const modelSupportsCodeExecution =
+    isAutoSelected ||
     ((selectedModelCaps?.codeExecution ?? false) && providerHasNativeCodeExecution) ||
     ((selectedModelCaps?.tools ?? false) && deploymentCodeExecution);
-  const modelSupportsOfficeCreation = selectedModelCaps?.tools ?? false;
+  const modelSupportsOfficeCreation = isAutoSelected || (selectedModelCaps?.tools ?? false);
 
-  // If the user switches to a model that can't search, clear the web-search
-  // toggle so it never stays "on" for an unsupported model.
+  // Managed Web search is ambient (ChatGPT automatic-search behavior). Keep it
+  // on whenever the selected model/deployment has an honest search path, and
+  // turn it off only when no such path exists.
   useEffect(() => {
-    if (webSearchEnabled && !modelSupportsSearch) setComposerToggles({ webSearchEnabled: false });
-  }, [webSearchEnabled, modelSupportsSearch, setComposerToggles]);
+    if (!billingPolicyReady) return;
+    if (webSearchEnabled !== modelSupportsSearch) {
+      setComposerToggles({ webSearchEnabled: modelSupportsSearch });
+    }
+  }, [billingPolicyReady, webSearchEnabled, modelSupportsSearch, setComposerToggles]);
 
   // Clear Research if the model loses research support.
   useEffect(() => {
+    if (!billingPolicyReady) return;
     if (researchEnabled && !modelSupportsResearch) setComposerToggles({ researchEnabled: false });
-  }, [researchEnabled, modelSupportsResearch, setComposerToggles]);
+  }, [billingPolicyReady, researchEnabled, modelSupportsResearch, setComposerToggles]);
 
   // If the user switches to a model that can't execute code, clear the toggle.
   useEffect(() => {
+    if (!billingPolicyReady) return;
     if (codeExecutionEnabled && !modelSupportsCodeExecution)
       setComposerToggles({ codeExecutionEnabled: false });
-  }, [codeExecutionEnabled, modelSupportsCodeExecution, setComposerToggles]);
+  }, [billingPolicyReady, codeExecutionEnabled, modelSupportsCodeExecution, setComposerToggles]);
 
   useEffect(() => {
+    if (!billingPolicyReady) return;
     if (officeCreationEnabled && !modelSupportsOfficeCreation)
       setComposerToggles({ officeCreationEnabled: false });
-  }, [officeCreationEnabled, modelSupportsOfficeCreation, setComposerToggles]);
+  }, [billingPolicyReady, officeCreationEnabled, modelSupportsOfficeCreation, setComposerToggles]);
 
   // AUDIT-FIX CMP-11: image mode is Pro-only server-side; a downgrade (or a
   // stale per-conversation flag) must not leave the composer in a mode whose
   // send is guaranteed to 403.
   useEffect(() => {
+    if (!billingPolicyReady) return;
     if (imageMode && !canUseImageGeneration) setComposerToggles({ imageMode: false });
-  }, [imageMode, canUseImageGeneration, setComposerToggles]);
+  }, [billingPolicyReady, imageMode, canUseImageGeneration, setComposerToggles]);
 
   // Incognito / temporary chat — wired to the live web-chat-store
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -711,22 +709,9 @@ const ChatComposerNewComponent = ({
   // Thinking / effort store
   const responseStyle = useStyleStore((s) => s.style);
   const responseLength = useStyleStore((s) => s.length);
-  const setResponseStyle = useStyleStore((s) => s.setStyle);
-  const setResponseLength = useStyleStore((s) => s.setLength);
   const activeCustomStyleId = useStyleStore((s) => s.activeCustomStyleId);
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
-  const thinkingEffort = useThinkingStore((s) => s.effort);
-  const selectedModelEffort = resolveModelEffort(composerSelectedModelId, thinkingEffort);
-  const setThinkingEffort = useThinkingStore((s) => s.setEffort);
   const setThinkingEnabled = useThinkingStore((s) => s.setEnabled);
-  const thinkingCycle = useThinkingStore((s) => s.cycleEffort);
-  const handleThinkingClick = useCallback(() => {
-    if (!thinkingEnabled) {
-      setThinkingEffort('low');
-    } else {
-      thinkingCycle();
-    }
-  }, [thinkingEnabled, setThinkingEffort, thinkingCycle]);
 
   // Thinking is persisted across model switches. Clear that preference when the
   // newly selected explicit model cannot reason, otherwise the next request is
@@ -791,11 +776,9 @@ const ChatComposerNewComponent = ({
     // draft that reappears when the user returns to this conversation.
     clearDraftContent(conversationId);
     clearAttachments();
-    // Web search / Deep Research / style are PERSISTENT toggles (claude.ai parity):
-    // once on they stay on across sends (checkmark remains in the + menu) until the
-    // user turns them off. Do NOT reset them here (the after-send clear) — that made
-    // Web search a fire-once flag. They still auto-clear via the capability effects
-    // above when the selected model can't support them.
+    // Deep Research and style are persistent options. Managed Web search is an
+    // ambient capability and is re-derived from the selected model/deployment.
+    // Do not reset those values in the after-send clear.
     //
     // AUDIT-FIX CMP-1/CMP-2: that intent is now actually honoured — the toggles
     // live in the chat store keyed by conversation, so the empty→non-empty
@@ -803,7 +786,6 @@ const ChatComposerNewComponent = ({
     // resets below are the ones that genuinely belong to a single send: the
     // skill selection and image mode are one-shot composer modes.
     setComposerToggles({ selectedSkillName: null, imageMode: false });
-    setShowStyleSubmenu(false);
     setLocalNotice(null);
     setImageAspectRatio('auto');
     setImageModelId(IMAGE_MODEL_DEFAULT);
@@ -874,7 +856,6 @@ const ChatComposerNewComponent = ({
    */
   const handleTakeScreenshot = useCallback(async () => {
     setShowOverflowMenu(false);
-    setShowStyleSubmenu(false);
     setIsCapturingScreenshot(true);
     let stream: MediaStream | null = null;
     try {
@@ -971,7 +952,6 @@ const ChatComposerNewComponent = ({
     function handleClickOutside(e: MouseEvent) {
       if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
         setShowOverflowMenu(false);
-        setShowStyleSubmenu(false);
       }
       if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
         setShowMentions(false);
@@ -986,7 +966,6 @@ const ChatComposerNewComponent = ({
     function handleEscapeKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
       setShowOverflowMenu(false);
-      setShowStyleSubmenu(false);
       setShowMentions(false);
       setShowProjectPicker(false);
     }
@@ -997,19 +976,6 @@ const ChatComposerNewComponent = ({
       document.removeEventListener('keydown', handleEscapeKey);
     };
   }, []);
-
-  /**
-   * AUDIT-FIX CMP-4/CMP-12: toggling Web search also records the durable
-   * "search by default" preference, so the choice survives reload and seeds
-   * every new conversation. Before this there was no persistence anywhere and
-   * no settings-level preference — no code path by which "search by default"
-   * could take effect at all.
-   */
-  const handleWebSearchToggle = useCallback(() => {
-    const next = !webSearchEnabled;
-    setComposerToggles({ webSearchEnabled: next });
-    setWebSearchByDefault(next);
-  }, [webSearchEnabled, setComposerToggles, setWebSearchByDefault]);
 
   const handleResearchToggle = useCallback(() => {
     setComposerToggles({ researchEnabled: !researchEnabled });
@@ -1025,7 +991,6 @@ const ChatComposerNewComponent = ({
 
   const closeMenu = useCallback(() => {
     setShowOverflowMenu(false);
-    setShowStyleSubmenu(false);
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -1088,7 +1053,7 @@ const ChatComposerNewComponent = ({
         closeProjectPicker();
       }
     },
-    [projectPicker, clearFolder, closeProjectPicker],
+    [setWorkMode, projectPicker, clearFolder, closeProjectPicker],
   );
 
   // Handle input change: detect @mention and /command.
@@ -1183,7 +1148,6 @@ const ChatComposerNewComponent = ({
             status: 'applied',
             content: argument,
             toggles: { webSearchEnabled: true },
-            persistWebSearchDefault: true,
           };
         case 'think':
           if (!isAutoModeModelId(composerSelectedModelId) && !modelSupportsThinkingCap) {
@@ -1236,10 +1200,9 @@ const ChatComposerNewComponent = ({
     (outcome: Extract<SlashCommandOutcome, { status: 'applied' }>) => {
       if (Object.keys(outcome.toggles).length > 0) setComposerToggles(outcome.toggles);
       if (outcome.enableThinking) setThinkingEnabled(true);
-      if (outcome.persistWebSearchDefault) setWebSearchByDefault(true);
       return outcome.content;
     },
-    [setComposerToggles, setThinkingEnabled, setWebSearchByDefault],
+    [setComposerToggles, setThinkingEnabled],
   );
 
   const handleSlashSelect = useCallback(
@@ -1451,11 +1414,9 @@ const ChatComposerNewComponent = ({
     pendingSlashCommand,
     resolveSlashCommand,
     commitSlashCommand,
-    // web search / research / style toggles MUST be in the dep array: they are
-    // read directly in the body, and omitting them (previous eslint-disable)
-    // made handleSubmit close over STALE values — toggling "Web search" then
-    // sending without another keystroke sent web_search:false, so the model
-    // never searched and replied "I can't browse the web" (audit DEMO-BLOCKER).
+    // Ambient search plus research/style settings are read directly in the
+    // body; keeping them here prevents the send callback from closing over a
+    // stale capability projection.
     webSearchEnabled,
     researchEnabled,
     responseStyle,
@@ -1648,44 +1609,37 @@ const ChatComposerNewComponent = ({
   /**
    * + button indicator.
    *
-   * AUDIT-FIX CMP-13: extended thinking and temporary chat were missing here,
-   * so the two highest-consequence toggles (one multiplies token spend, the
-   * other claims a privacy mode) were the only ones with no collapsed-state
-   * signal. The count is derived from the same list that drives the tint, the
-   * badge, and the accessible name, so those three can never disagree.
+   * The count is derived from the same explicit options that remain in this
+   * menu, so the tint, badge, accessible name, and row checkmarks cannot
+   * disagree. Automatic search and model-owned reasoning deliberately do not
+   * count here because neither is a + menu setting.
    */
-  const overflowActiveFlags = [
-    selectedSkillName !== null,
-    webSearchEnabled,
-    researchEnabled,
-    codeExecutionEnabled,
-    officeCreationEnabled,
-    thinkingEnabled,
-    isIncognito,
-    // AUDIT-FIX CMP-6/CMP-7: one style vocabulary, two axes.
-    responseStyle !== 'default' || responseLength !== 'brief',
-  ];
-  const overflowActiveCount = overflowActiveFlags.filter(Boolean).length;
+  const overflowActiveOptions: Array<{ label: string; Icon: React.ElementType }> = [];
+  if (selectedSkillName) {
+    overflowActiveOptions.push({ label: `Skill: ${selectedSkillName}`, Icon: Sparkles });
+  }
+  if (researchEnabled) {
+    overflowActiveOptions.push({ label: 'Deep Research', Icon: Telescope });
+  }
+  if (codeExecutionEnabled) {
+    overflowActiveOptions.push({ label: 'Run code', Icon: Terminal });
+  }
+  if (officeCreationEnabled) {
+    overflowActiveOptions.push({ label: 'Office files', Icon: FileText });
+  }
+  if (isIncognito) {
+    overflowActiveOptions.push({ label: 'Temporary chat', Icon: EyeOff });
+  }
+  const overflowActiveCount = overflowActiveOptions.length;
   const hasOverflowActive = overflowActiveCount > 0;
-
-  // AUDIT-FIX CMP-6/CMP-7: one label for the single style value, both axes.
-  const styleIsCustomised = responseStyle !== 'default' || responseLength !== 'brief';
-  const styleMenuLabel = styleIsCustomised
-    ? [
-        responseStyle === 'custom'
-          ? 'Custom'
-          : (STYLE_OPTIONS.find((option) => option.id === responseStyle)?.label ?? 'Style'),
-        RESPONSE_LENGTH_OPTIONS.find((option) => option.id === responseLength)?.label,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : 'Use style';
+  const primaryOverflowActive = overflowActiveOptions[0];
+  const PrimaryOverflowIcon = primaryOverflowActive?.Icon;
 
   // AUDIT-FIX GOV-39: safe-area-bottom-additive keeps the send button clear of
   // the iOS home indicator. layout.tsx sets viewportFit:'cover', which makes a
   // missing inset worse rather than neutral.
   return (
-    <div className="relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
+    <div className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
       <DragDropOverlay onDrop={handleFileDrop} />
 
       {localNotice && (
@@ -2010,9 +1964,6 @@ const ChatComposerNewComponent = ({
                 onClick={() => {
                   const next = !showOverflowMenu;
                   setShowOverflowMenu(next);
-                  if (!next) {
-                    setShowStyleSubmenu(false);
-                  }
                 }}
                 // AUDIT-FIX CMP-16: the textarea deliberately stays enabled
                 // while a turn streams so a follow-up can be typed ahead and
@@ -2061,7 +2012,7 @@ const ChatComposerNewComponent = ({
                         work-mode fully switchable on the narrow (mobile)
                         composer instead of dropping the control. */}
                       {projectPicker && !imageMode && canUseAgiWork && (
-                        <div className="sm:hidden">
+                        <div className="chat-composer-mode-in-menu sm:hidden">
                           <div className="flex items-center gap-3 rounded-lg px-3 py-2">
                             <span className="flex-1 text-left text-sm">Mode</span>
                             <div className="flex items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
@@ -2072,6 +2023,7 @@ const ChatComposerNewComponent = ({
                                   onClick={() => handleWorkModeChange(mode)}
                                   disabled={isTurnActive || composerDisabled}
                                   aria-pressed={workMode === mode}
+                                  title={WORK_MODE_TITLES[mode]}
                                   className={cn(
                                     'flex h-7 items-center rounded-full px-3 transition-colors',
                                     workMode === mode
@@ -2322,30 +2274,7 @@ const ChatComposerNewComponent = ({
                       {/* Divider */}
                       <div className="my-1 border-t border-border/30" />
 
-                      {/* 8. Web search toggle */}
-                      <MenuToggleRow
-                        icon={Globe}
-                        label="Web search"
-                        checked={webSearchEnabled}
-                        onToggle={() => {
-                          handleWebSearchToggle();
-                          closeMenu();
-                        }}
-                        disabled={disabled || !modelSupportsSearch}
-                        // AUDIT-FIX CMP-4/CMP-12: this toggle IS the "search by
-                        // default" preference — the choice is persisted and
-                        // seeds every new conversation. Say so, so the durable
-                        // effect is discoverable rather than hidden.
-                        title={
-                          !modelSupportsSearch
-                            ? "Web search isn't available for this model or Cloud deployment."
-                            : webSearchEnabled
-                              ? 'On for this chat, and the default for new chats.'
-                              : 'Off for this chat, and the default for new chats.'
-                        }
-                      />
-
-                      {/* 8a. Deep Research toggle */}
+                      {/* 8. Deep Research toggle */}
                       <MenuToggleRow
                         icon={Telescope}
                         label="Deep Research"
@@ -2364,7 +2293,7 @@ const ChatComposerNewComponent = ({
                         }
                       />
 
-                      {/* 8b. Code execution toggle */}
+                      {/* 8a. Code execution toggle */}
                       <MenuToggleRow
                         icon={Terminal}
                         label="Run code"
@@ -2376,7 +2305,7 @@ const ChatComposerNewComponent = ({
                         disabled={disabled || !modelSupportsCodeExecution}
                       />
 
-                      {/* 8c. Managed Office creation — server-owned DOCX/PPTX bytes,
+                      {/* 8b. Managed Office creation — server-owned DOCX/PPTX bytes,
                         persisted through the same generated-file pipeline as sandbox output. */}
                       <MenuToggleRow
                         icon={FileText}
@@ -2394,25 +2323,7 @@ const ChatComposerNewComponent = ({
                         }
                       />
 
-                      {/* 8d. Extended thinking — enables thinking effort. Cycling the
-                        effort level lives in the model picker; here it's a simple
-                        on affordance so the control is not lost from the input row. */}
-                      <MenuToggleRow
-                        icon={Brain}
-                        label={
-                          thinkingEnabled && selectedModelEffort
-                            ? `Extended thinking · ${EFFORT_LABEL[selectedModelEffort]}`
-                            : 'Extended thinking'
-                        }
-                        checked={thinkingEnabled}
-                        onToggle={() => {
-                          handleThinkingClick();
-                          closeMenu();
-                        }}
-                        disabled={disabled || !modelSupportsThinkingCap}
-                      />
-
-                      {/* 8e. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
+                      {/* 8c. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
                         render-gated on the host actually providing a persistence
                         path — an unbacked privacy switch is worse than none. */}
                       {activeConversationId && onSetTemporaryChat && (
@@ -2427,104 +2338,32 @@ const ChatComposerNewComponent = ({
                           disabled={!canToggleIncognito}
                         />
                       )}
-
-                      {/* 9. Use style -- right flyout.
-
-                        AUDIT-FIX CMP-6/CMP-7: this flyout used to own a THIRD
-                        style vocabulary (`StyleMode`: normal|concise|formal|
-                        explanatory) whose value `handleSubmit` then dropped in
-                        favour of the footer StyleSelector's instruction — so
-                        both controls rendered at once for paid users, each drew
-                        its own checkmark, and only one of them did anything. It
-                        now reads and writes the same `useStyleStore` the footer
-                        control uses, and carries the new length axis, so the
-                        two surfaces are two views of one value. */}
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowStyleSubmenu((prev) => !prev);
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                            styleIsCustomised && 'text-primary',
-                          )}
-                        >
-                          <Wand2
-                            className={cn(
-                              'h-4 w-4',
-                              styleIsCustomised ? 'text-primary' : 'text-muted-foreground',
-                            )}
-                          />
-                          <span className="flex-1 text-left">{styleMenuLabel}</span>
-                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-
-                        {showStyleSubmenu && (
-                          <div className="absolute left-full top-0 z-50 ml-1 w-60 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                              Style
-                            </div>
-                            {STYLE_OPTIONS.map((option) => (
-                              <button
-                                key={option.id}
-                                type="button"
-                                onClick={() => {
-                                  setResponseStyle(option.id);
-                                  closeMenu();
-                                }}
-                                className={cn(
-                                  'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                                  responseStyle === option.id
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'hover:bg-muted/60',
-                                )}
-                              >
-                                <span className="flex-1 text-left">{option.label}</span>
-                                <span className="text-[11px] text-muted-foreground">
-                                  {option.description}
-                                </span>
-                                {responseStyle === option.id && (
-                                  <Check className="h-3 w-3 shrink-0 text-primary" />
-                                )}
-                              </button>
-                            ))}
-                            <div className="my-1 border-t border-border/40" />
-                            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                              Length
-                            </div>
-                            {RESPONSE_LENGTH_OPTIONS.map((option) => (
-                              <button
-                                key={option.id}
-                                type="button"
-                                onClick={() => {
-                                  setResponseLength(option.id);
-                                  closeMenu();
-                                }}
-                                className={cn(
-                                  'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                                  responseLength === option.id
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'hover:bg-muted/60',
-                                )}
-                              >
-                                <span className="flex-1 text-left">{option.label}</span>
-                                <span className="text-[11px] text-muted-foreground">
-                                  {option.desc}
-                                </span>
-                                {responseLength === option.id && (
-                                  <Check className="h-3 w-3 shrink-0 text-primary" />
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
                     </>
                   }
                 </div>
               )}
             </div>
+
+            {primaryOverflowActive && PrimaryOverflowIcon && (
+              <div
+                role="status"
+                aria-label={`Active options: ${overflowActiveOptions
+                  .map((option) => option.label)
+                  .join(', ')}`}
+                title={overflowActiveOptions.map((option) => option.label).join(', ')}
+                className="flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2 text-[11px] font-medium text-[var(--chat-accent-primary)]"
+              >
+                <PrimaryOverflowIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden max-w-24 truncate sm:inline">
+                  {primaryOverflowActive.label}
+                </span>
+                {overflowActiveCount > 1 && (
+                  <span aria-hidden="true" className="shrink-0 tabular-nums">
+                    +{overflowActiveCount - 1}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Work-mode segmented toggle (Chat | AGI Work) — claude.ai
               Chat/Cowork parity, sitting immediately right of "+" (reference:
@@ -2534,7 +2373,7 @@ const ChatComposerNewComponent = ({
               context. Hidden below sm (relocated into the + menu "Mode" row)
               so the nowrap control row never squeezes out Send. */}
             {projectPicker && !imageMode && canUseAgiWork && (
-              <div className="hidden shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
+              <div className="chat-composer-mode-inline hidden shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
                 {(['chat', 'agiwork'] as const).map((mode) => (
                   <button
                     key={mode}
@@ -2542,6 +2381,7 @@ const ChatComposerNewComponent = ({
                     onClick={() => handleWorkModeChange(mode)}
                     disabled={isTurnActive || composerDisabled}
                     aria-pressed={workMode === mode}
+                    title={WORK_MODE_TITLES[mode]}
                     className={cn(
                       'flex h-7 items-center rounded-full px-3 transition-colors',
                       workMode === mode
@@ -2863,12 +2703,30 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* Disclaimer · sits below the composer (outside the pill), ChatGPT/Claude-
-          style. No persistent keyboard-send hint is shown (matches claude.ai; founder
-          directive) — plain-Enter/Cmd+Enter send is handled in the textarea keydown. */}
-      <p className="mt-2 text-center text-[11px] text-muted-foreground">
-        AGI can make mistakes. Check important info.
-      </p>
+      {/* Compact route disclosure + disclaimer · both sit below the composer
+          instead of consuming a full banner above the textarea. The destination
+          remains visible before send and expands to the complete payload/tool
+          explanation only when requested. */}
+      <div className="mt-2 flex min-h-5 flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-[11px] text-muted-foreground">
+        {sendPreviewPresentation ? (
+          <>
+            <SendPreview presentation={sendPreviewPresentation} variant="compact" />
+            <span aria-hidden="true">·</span>
+          </>
+        ) : null}
+        <span>AGI can make mistakes. Check important info.</span>
+        <span aria-hidden="true">·</span>
+        <Link
+          href="/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Privacy
+        </Link>
+        <span aria-hidden="true">·</span>
+        <ComposerFeedbackDialog conversationId={conversationId} />
+      </div>
     </div>
   );
 };
@@ -2878,10 +2736,10 @@ const ChatComposerNewComponent = ({
  *
  * + menu matches Claude's structure:
  *   Add files/photos; Skills / Connectors / Plugins entries that open the
- *   settings modal at their pane (no inline lists); Web search toggle;
- *   Use style flyout.
+ *   settings modal at their pane (no inline lists); Use style flyout.
  *
- * Removed from + menu: Focus Mode, Agent Mode, Tools group, Browse Directory.
+ * Removed from + menu: Focus Mode, Agent Mode, Tools group, Browse Directory,
+ * automatic Web search, and reasoning effort (owned by the model picker).
  * Work mode returned as the BACKED (Chat | AGI Work) segmented toggle plus the
  * below-composer "Project or folder" picker (projectPicker prop): the host
  * supplies real projects, the selection threads through send meta into
@@ -2907,6 +2765,7 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.clearSignal === next.clearSignal &&
     prev.emptyState === next.emptyState &&
     prev.attachmentPrivacyShortLabel === next.attachmentPrivacyShortLabel &&
+    prev.sendPreviewPresentation === next.sendPreviewPresentation &&
     prev.onUpgradeRequest === next.onUpgradeRequest &&
     prev.freeTrial?.enabled === next.freeTrial?.enabled &&
     prev.freeTrial?.limitReached === next.freeTrial?.limitReached &&

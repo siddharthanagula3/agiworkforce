@@ -7,6 +7,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAuthStore } from './authentication-store';
 import type { AuthUser } from '@shared/services/authentication-manager';
 
+const logoutStoreMocks = vi.hoisted(() => ({
+  workforceReset: vi.fn(),
+  missionReset: vi.fn(),
+  stopMissionCleanupInterval: vi.fn(),
+  notificationClearAll: vi.fn(),
+  artifactReset: vi.fn(),
+}));
+
 // Mock the auth service
 vi.mock('@shared/services/authentication-manager', () => ({
   authService: {
@@ -32,30 +40,50 @@ vi.mock('@shared/lib/logger', () => ({
 
 // Mock other stores that are cleaned up on logout
 vi.mock('./workforce-store', () => ({
-  useWorkforceStore: {
-    getState: vi.fn(() => ({ reset: vi.fn() })),
-  },
+  useWorkforceStore: Object.assign(vi.fn(), {
+    getState: vi.fn(() => ({ reset: logoutStoreMocks.workforceReset })),
+  }),
   cleanupWorkforceSubscription: vi.fn(),
 }));
 
 vi.mock('./mission-control-store', () => ({
-  useMissionStore: {
-    getState: vi.fn(() => ({ reset: vi.fn() })),
-  },
-  stopMissionCleanupInterval: vi.fn(),
+  useMissionStore: Object.assign(vi.fn(), {
+    getState: vi.fn(() => ({ reset: logoutStoreMocks.missionReset })),
+  }),
+  stopMissionCleanupInterval: logoutStoreMocks.stopMissionCleanupInterval,
 }));
 
 vi.mock('./notification-store', () => ({
-  useNotificationStore: {
-    getState: vi.fn(() => ({ clearAll: vi.fn() })),
-  },
+  useNotificationStore: Object.assign(vi.fn(), {
+    getState: vi.fn(() => ({ clearAll: logoutStoreMocks.notificationClearAll })),
+  }),
 }));
 
 vi.mock('./artifact-store', () => ({
-  useArtifactStore: {
-    getState: vi.fn(() => ({ clearAllArtifacts: vi.fn() })),
-  },
+  useArtifactStore: Object.assign(vi.fn(), {
+    getState: vi.fn(() => ({ reset: logoutStoreMocks.artifactReset })),
+  }),
 }));
+
+// The cleanup registry deliberately imports every user-scoped store. Those
+// modules are not collaborators of this unit test, and loading their real
+// feature trees made the first logout assertion depend on transform speed.
+vi.mock('./layout-store', () => ({}));
+vi.mock('./user-profile-store', () => ({}));
+vi.mock('./web-chat-store', () => ({}));
+vi.mock('./web-settings-store', () => ({}));
+vi.mock('./media-store', () => ({}));
+vi.mock('./model-store', () => ({}));
+vi.mock('./thinking-store', () => ({}));
+vi.mock('./tool-store', () => ({}));
+vi.mock('./agent-metrics-store', () => ({}));
+vi.mock('./company-hub-store', () => ({}));
+vi.mock('@/features/chat/stores/artifacts-store', () => ({}));
+vi.mock('@/features/chat/stores/voice-input-store', () => ({}));
+vi.mock('@/features/chat/stores/style-store', () => ({}));
+vi.mock('@/features/plugins/stores/plugin-store', () => ({}));
+vi.mock('@/features/connectors/stores/tool-permissions-store', () => ({}));
+vi.mock('@agiworkforce/unified-chat', () => ({}));
 
 // Mock localStorage
 const localStorageMock = {
@@ -307,7 +335,6 @@ describe('Authentication Store', () => {
       // (notification-store here) must not block the others.
       const { useNotificationStore } = await import('./notification-store');
       const { cleanupWorkforceSubscription } = await import('./workforce-store');
-      const { stopMissionCleanupInterval } = await import('./mission-control-store');
       const { logger } = await import('@shared/lib/logger');
 
       vi.mocked(useNotificationStore.getState).mockImplementationOnce(() => {
@@ -318,7 +345,8 @@ describe('Authentication Store', () => {
       await useAuthStore.getState().logout();
 
       expect(cleanupWorkforceSubscription).toHaveBeenCalled();
-      expect(stopMissionCleanupInterval).toHaveBeenCalled();
+      expect(logoutStoreMocks.missionReset).toHaveBeenCalled();
+      expect(logoutStoreMocks.stopMissionCleanupInterval).toHaveBeenCalled();
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining('notification-store'),
         expect.any(Error),

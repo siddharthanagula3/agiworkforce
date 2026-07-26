@@ -105,6 +105,10 @@ jest.mock('../src/features/billing/iapStore', () => ({
     selector({ status: 'idle', errorMessage: null }),
 }));
 
+jest.mock('../lib/safeOpenURL', () => ({
+  openExternalUrl: jest.fn().mockResolvedValue(true),
+}));
+
 // Mutable FEATURES object so individual tests can flip `iap` without
 // jest.resetModules() (which would load a second copy of React and break
 // hooks inside the same test file).
@@ -118,6 +122,7 @@ jest.mock('../lib/v1FeatureFlags', () => ({
 
 import { PaywallBottomSheet } from '../src/features/chat/components/PaywallBottomSheet';
 import { FEATURES } from '../lib/v1FeatureFlags';
+import { openExternalUrl } from '../lib/safeOpenURL';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -148,6 +153,15 @@ describe('PaywallBottomSheet rendering', () => {
   it('renders the feature description text', () => {
     const { getByText } = render(<PaywallBottomSheet {...defaultProps} />);
     expect(getByText(/Higher token limits/i)).toBeTruthy();
+  });
+
+  it('uses the current Claude family paywall key and label', () => {
+    const { getByText, queryByText } = render(
+      <PaywallBottomSheet {...defaultProps} feature="opus_5" requiredTier="pro" />,
+    );
+
+    expect(getByText(/Opus 5 access requires the Pro plan/i)).toBeTruthy();
+    expect(queryByText(/Opus 4\\.7/i)).toBeNull();
   });
 
   it('renders the reason text when provided', () => {
@@ -183,6 +197,31 @@ describe('PaywallBottomSheet rendering', () => {
     const { getByText, queryByTestId } = render(<PaywallBottomSheet {...defaultProps} />);
     expect(getByText(/Upgrades aren't available in the app yet/i)).toBeTruthy();
     expect(queryByTestId('paywall-upgrade-button')).toBeNull();
+  });
+
+  it.each(['team', 'enterprise'] as const)(
+    'offers canonical %s prospects a strict Contact Sales handoff',
+    (requiredTier) => {
+      const { getByText, queryByText } = render(
+        <PaywallBottomSheet {...defaultProps} requiredTier={requiredTier} />,
+      );
+
+      fireEvent.press(getByText('Contact Sales'));
+
+      expect(openExternalUrl).toHaveBeenCalledWith(
+        `https://agiworkforce.com/contact-sales?plan=${requiredTier}`,
+      );
+      expect(queryByText(/Upgrades aren't available in the app yet/i)).toBeNull();
+    },
+  );
+
+  it('does not create a sales handoff for an unknown tier', () => {
+    const { queryByText } = render(
+      <PaywallBottomSheet {...defaultProps} requiredTier="future-unverified-tier" />,
+    );
+
+    expect(queryByText('Contact Sales')).toBeNull();
+    expect(openExternalUrl).not.toHaveBeenCalled();
   });
 });
 

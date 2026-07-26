@@ -1,5 +1,6 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
+import { useUser } from '@clerk/expo';
 
 // useUser requires a ClerkProvider in real usage. In tests we stub it out to
 // avoid needing the full provider tree. Return null user (not signed in) by
@@ -10,10 +11,11 @@ jest.mock('@clerk/expo', () => ({
 
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
+const mockPush = jest.fn();
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({
-    push: jest.fn(),
+    push: mockPush,
     replace: mockReplace,
     canGoBack: jest.fn().mockReturnValue(false),
     back: mockBack,
@@ -85,9 +87,15 @@ import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatStore } from '../stores/chatStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
+import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 
 function resetStores() {
+  jest.mocked(useUser).mockReturnValue({
+    user: null,
+    isLoaded: true,
+    isSignedIn: false,
+  } as ReturnType<typeof useUser>);
   useChatAppModeStore.setState({ appMode: 'local' });
   // ProfileScreen reads personalization from useLocalSettingsStore in local mode.
   useLocalSettingsStore.setState({
@@ -102,6 +110,20 @@ function resetStores() {
       headersLists: 50,
       emoji: 50,
     },
+  });
+  useCloudSettingsStore.setState({
+    personalization: {
+      fullName: '',
+      nickname: '',
+      occupation: '',
+      instructions: '',
+      style: 'default',
+      warmth: 50,
+      enthusiasm: 50,
+      headersLists: 50,
+      emoji: 50,
+    },
+    settingsUpdatedAt: null,
   });
   useAuthStore.setState({
     session: null,
@@ -127,7 +149,7 @@ function resetStores() {
     currentConversationId: null,
   });
   // Cloud conversations live in the cloud store — clear it between tests.
-  useChatCloudMessageStore.setState({ conversations: [], messages: {} });
+  useChatCloudMessageStore.setState({ conversations: [], messages: {}, historyStats: null });
 }
 
 describe('Profile mode boundary', () => {
@@ -176,5 +198,61 @@ describe('Profile mode boundary', () => {
     expect(queryByText('Founder')).toBeNull();
     expect(queryByText('Local settings')).toBeNull();
     expect(queryByText('4')).toBeNull();
+  });
+
+  it('uses server-authoritative Cloud totals instead of paginated conversation rows', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useChatCloudMessageStore.setState({
+      conversations: [
+        {
+          id: 'cloud-chat',
+          title: 'Only loaded page row',
+          createdAt: '2026-06-12T00:00:00.000Z',
+          updatedAt: '2026-06-12T00:00:00.000Z',
+          messageCount: 0,
+          pinned: false,
+          executionMode: 'cloud',
+          provider: 'cloud_managed',
+        },
+      ],
+      messages: {},
+      historyStats: { conversationCount: 195, messageCount: 842 },
+    });
+
+    const { getByText } = render(<ProfileScreen />);
+
+    expect(getByText('195')).toBeTruthy();
+    expect(getByText('842')).toBeTruthy();
+  });
+
+  it('shows the live Clerk name and email on the first Cloud render', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkSignedIn: true });
+    jest.mocked(useUser).mockReturnValue({
+      user: {
+        fullName: 'Siddhartha Demo',
+        firstName: 'Siddhartha',
+        username: null,
+        primaryEmailAddress: { emailAddress: 'demo@agiworkforce.com' },
+      },
+      isLoaded: true,
+      isSignedIn: true,
+    } as unknown as ReturnType<typeof useUser>);
+
+    const { getByText } = render(<ProfileScreen />);
+
+    expect(getByText('Siddhartha Demo')).toBeTruthy();
+    expect(getByText('demo@agiworkforce.com')).toBeTruthy();
+    expect(getByText('AGI Cloud')).toBeTruthy();
+  });
+
+  it('keeps subscription management inside the truthful native billing screen', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkSignedIn: true });
+
+    const { getByText } = render(<ProfileScreen />);
+    fireEvent.press(getByText('Subscription'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
   });
 });

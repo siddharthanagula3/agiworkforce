@@ -15,10 +15,10 @@
  *   2. Fingerprint match  : the value the ext stores equals the value the
  *                            desktop returns (no truncation, no derivation
  *                            divergence vs `requestPairing` fallback)
- *   3. Idempotent re-pair : repeated POST /pair calls do NOT double-fire from
- *                            the ext side (state guards), and on the desktop
- *                            side the call ROTATES the token (verified by the
- *                            fact that the ext picks up the new token + fp).
+ *   3. Authorized manifest: the extension first bootstraps a token, then uses
+ *                            it to authorize its ID and stores the rotated token.
+ *   4. Idempotent re-pair : concurrent UI requests do not start a second
+ *                            two-request handshake.
  *
  * The desktop responder is mocked via fetch so this test ships in the
  * extension's vitest suite and runs without spawning a Tauri sidecar.
@@ -78,9 +78,8 @@ const chromeMock = {
 // ── Desktop /pair responder simulation ────────────────────────────────────────
 
 /**
- * Mimics `handle_http_pair` in websocket_server.rs: every POST /pair returns a
- * fresh 64-hex-char token and an 8-char fingerprint (the first 8 chars of the
- * token). Call counter is exposed so tests can assert idempotent re-requests.
+ * Mimics `handle_http_pair` in websocket_server.rs: the first POST bootstraps a
+ * token and the second presents it while authorizing the extension ID.
  */
 function makeDesktopPairResponder() {
   let callCount = 0;
@@ -96,6 +95,17 @@ function makeDesktopPairResponder() {
         json: async () => ({}),
       };
     }
+    const body = JSON.parse(String(init.body ?? '{}')) as { extensionId?: string };
+    const headers = (init.headers ?? {}) as Record<string, string>;
+    if (body.extensionId && headers['X-Bridge-Token'] !== lastIssuedToken) {
+      return {
+        ok: false,
+        status: 401,
+        text: async () => 'Unauthorized manifest install',
+        json: async () => ({}),
+      };
+    }
+
     callCount++;
     // Deterministic 32-byte token so tests can pin equality across the joint
     const seed = `desktop-token-${callCount.toString().padStart(2, '0')}-${'x'.repeat(40)}`;
@@ -106,7 +116,11 @@ function makeDesktopPairResponder() {
     return {
       ok: true,
       status: 200,
-      json: async () => ({ token, fingerprint }),
+      json: async () => ({
+        token,
+        fingerprint,
+        nativeHostManifestInstalled: Boolean(body.extensionId),
+      }),
       text: async () => '',
     };
   });
@@ -243,7 +257,7 @@ describe('e2e pairing flow — idempotent re-requests', () => {
     // Release and complete the first
     releaseFetch!();
     expect((await first).phase).toBe('paired');
-    expect(desktop.callCount).toBe(1);
+    expect(desktop.callCount).toBe(2);
   });
 
   it('returns PAIRED short-circuit when already paired (no second fetch)', async () => {
@@ -269,7 +283,7 @@ describe('e2e pairing flow — idempotent re-requests', () => {
     await requestPairing();
     const firstToken = sessionStore['agi_bridge_token'] as string;
     expect(firstToken).toBe(desktop.lastIssuedToken);
-    expect(desktop.callCount).toBe(1);
+    expect(desktop.callCount).toBe(2);
 
     // Unpair and re-pair
     await unpair();
@@ -279,7 +293,7 @@ describe('e2e pairing flow — idempotent re-requests', () => {
     const secondToken = sessionStore['agi_bridge_token'] as string;
 
     // Desktop ROTATES the token on each /pair (matches handle_http_pair).
-    expect(desktop.callCount).toBe(2);
+    expect(desktop.callCount).toBe(4);
     expect(secondToken).not.toBe(firstToken);
     expect(secondToken).toBe(desktop.lastIssuedToken);
   });

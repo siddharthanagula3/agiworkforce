@@ -201,7 +201,20 @@ mod tests {
     }
 
     #[test]
-    fn managed_cloud_auto_fails_closed_while_desktop_cloud_profile_is_unwired() {
+    fn managed_cloud_auto_uses_the_implemented_desktop_cloud_profile() {
+        let profile = agiworkforce_model_registry::runtime_profile("desktop/cloud-chat")
+            .expect("generated model registry must parse")
+            .expect("desktop/cloud-chat must exist");
+        assert_eq!(
+            profile.status, "implemented",
+            "Managed Cloud must fail closed unless the Desktop runtime profile is implemented"
+        );
+        assert_eq!(profile.trust_mode, TrustMode::ManagedCloud);
+        assert!(
+            !profile.allowed_harness_ids.is_empty(),
+            "An implemented Desktop cloud profile must expose at least one executable harness"
+        );
+
         let router = router_with_all_providers();
         let request = LLMRequest {
             messages: vec![crate::core::llm::ChatMessage {
@@ -229,8 +242,14 @@ mod tests {
 
         let candidates = router.candidates(&request, &preferences);
         assert!(
-            candidates.is_empty(),
-            "Desktop managed cloud must remain unavailable until desktop/cloud-chat is wired"
+            !candidates.is_empty(),
+            "Implemented desktop/cloud-chat must provide an Auto route"
+        );
+        assert!(
+            candidates
+                .iter()
+                .all(|candidate| candidate.provider == Provider::ManagedCloud),
+            "Managed Cloud Auto must not cross into Local or BYOK providers"
         );
     }
 
@@ -854,7 +873,7 @@ mod tests {
             Provider::Anthropic
         );
         assert_eq!(
-            router.infer_provider_from_model("claude-opus-4.8"),
+            router.infer_provider_from_model("claude-opus-5"),
             Provider::Anthropic
         );
         assert_eq!(
@@ -1196,11 +1215,11 @@ mod tests {
     fn test_intelligent_routing_selected_model_priority() {
         let router = router_with_all_providers();
         let context =
-            intelligent_context("pro", Some("coding"), Some("chat"), Some("claude-opus-4-8"));
+            intelligent_context("pro", Some("coding"), Some("chat"), Some("claude-opus-5"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
         // The dashed apiModelId alias canonicalizes to the catalog id.
-        assert_eq!(suggestion.model, "claude-opus-4.8");
+        assert_eq!(suggestion.model, "claude-opus-5");
     }
 
     #[test]

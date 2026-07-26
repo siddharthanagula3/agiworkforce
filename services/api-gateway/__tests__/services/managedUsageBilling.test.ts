@@ -22,7 +22,7 @@ function rpcClient(results: RpcResult[]) {
 }
 
 const requestBody = {
-  model: 'claude-opus-4.8',
+  model: 'claude-opus-5',
   messages: [{ role: 'user', content: 'Build a release plan' }],
   stream: true,
   max_tokens: 512,
@@ -44,19 +44,19 @@ describe('managed usage request identity', () => {
 
   it('uses canonical JSON so object-key order does not change the request fingerprint', () => {
     const first = fingerprintManagedUsageRequest({
-      model: 'claude-opus-4.8',
+      model: 'claude-opus-5',
       stream: true,
       messages: [{ content: 'hello', role: 'user' }],
     });
     const reordered = fingerprintManagedUsageRequest({
       messages: [{ role: 'user', content: 'hello' }],
       stream: true,
-      model: 'claude-opus-4.8',
+      model: 'claude-opus-5',
     });
     const changed = fingerprintManagedUsageRequest({
       messages: [{ role: 'user', content: 'different' }],
       stream: true,
-      model: 'claude-opus-4.8',
+      model: 'claude-opus-5',
     });
 
     expect(first).toMatch(/^[a-f0-9]{64}$/);
@@ -72,16 +72,16 @@ describe('managed usage registry-driven cost accounting', () => {
   });
 
   it('prices cache reads and writes from canonical usage without double-counting input', () => {
-    const uncached = calculateManagedUsageCostCents('claude-opus-4.8', {
+    const uncached = calculateManagedUsageCostCents('claude-opus-5', {
       inputTokens: 1_000_000,
       outputTokens: 0,
     });
-    const cached = calculateManagedUsageCostCents('claude-opus-4.8', {
+    const cached = calculateManagedUsageCostCents('claude-opus-5', {
       inputTokens: 0,
       outputTokens: 0,
       cacheReadTokens: 1_000_000,
     });
-    const cacheWrite = calculateManagedUsageCostCents('claude-opus-4.8', {
+    const cacheWrite = calculateManagedUsageCostCents('claude-opus-5', {
       inputTokens: 0,
       outputTokens: 0,
       cacheWriteTokens: 1_000_000,
@@ -159,8 +159,8 @@ describe('managed usage Sonnet 5 standard pricing', () => {
   it('leaves a model with no promo_expires_at unaffected by the date parameter', () => {
     const usage = { inputTokens: 1_000_000, outputTokens: 0 };
     expect(
-      calculateManagedUsageCostCents('claude-opus-4.8', usage, BEFORE_RETIRED_PROMO_CUTOFF),
-    ).toBe(calculateManagedUsageCostCents('claude-opus-4.8', usage, AFTER_RETIRED_PROMO_CUTOFF));
+      calculateManagedUsageCostCents('claude-opus-5', usage, BEFORE_RETIRED_PROMO_CUTOFF),
+    ).toBe(calculateManagedUsageCostCents('claude-opus-5', usage, AFTER_RETIRED_PROMO_CUTOFF));
   });
 
   it('estimates the same standard price regardless of the retired cutoff', () => {
@@ -244,7 +244,7 @@ describe('managed usage durable lifecycle client', () => {
         p_user_id: 'user-1',
         p_idempotency_key: 'turn_12345678',
         p_provider: 'anthropic',
-        p_model: 'claude-opus-4.8',
+        p_model: 'claude-opus-5',
         p_lease_token: 'lease-1',
       }),
     );
@@ -342,7 +342,7 @@ describe('managed usage durable lifecycle client', () => {
     const result = await finalizeManagedUsage({
       ...identity,
       outcome: 'completed',
-      model: 'claude-opus-4.8',
+      model: 'claude-opus-5',
       usage: { inputTokens: 100_000, outputTokens: 20_000 },
     });
     await markManagedUsageClientDelivered(identity);
@@ -385,7 +385,7 @@ describe('managed usage durable lifecycle client', () => {
       requestHash: 'a'.repeat(64),
       leaseToken: 'lease-1',
       outcome: 'failed',
-      model: 'claude-opus-4.8',
+      model: 'claude-opus-5',
     });
 
     expect(rpc).toHaveBeenCalledWith(

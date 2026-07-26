@@ -49,6 +49,24 @@ describe('ChatInput draft ownership', () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
+  it('uses the active-conversation streaming override instead of showing Stop for another chat', () => {
+    useChatStore.setState({ isStreaming: true });
+
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        onStop={vi.fn()}
+        onModelSelectorClick={vi.fn()}
+        hasMessages={false}
+        conversationId="conv-2"
+        isStreamingOverride={false}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Send message (Enter)' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop generation' })).toBeNull();
+  });
+
   it('does not carry an unsent draft into a newly selected conversation', () => {
     const { textarea } = renderComposer();
     fireEvent.change(textarea, { target: { value: 'Keep this draft in the old chat' } });

@@ -16,7 +16,7 @@
  * Round-8 autonomous suite-transformation slice, 2026-05-21.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ChevronDown, ChevronUp, Cloud, HardDrive, KeyRound, Lock } from 'lucide-react';
 import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
@@ -25,26 +25,53 @@ export interface SendPreviewProps {
   presentation: SendPreviewPresentation;
   /** Initial expanded state for the details block; defaults to collapsed. */
   defaultExpanded?: boolean;
+  /**
+   * `card` is the full trust-boundary explainer. `compact` keeps the
+   * destination visible beside a composer without permanently occupying a
+   * banner row; the complete explanation remains available on demand.
+   */
+  variant?: 'card' | 'compact';
   /** Optional class for host-layout integration. */
   className?: string;
 }
 
-function DestinationIcon({ presentation }: { presentation: SendPreviewPresentation }) {
+function DestinationIcon({
+  presentation,
+  compact = false,
+}: {
+  presentation: SendPreviewPresentation;
+  compact?: boolean;
+}) {
+  const sizeClass = compact ? 'h-3 w-3' : 'h-4 w-4';
   if (presentation.staysLocal) {
-    return <HardDrive className="h-4 w-4 text-emerald-400" aria-hidden />;
+    return <HardDrive className={cn(sizeClass, 'text-emerald-400')} aria-hidden />;
   }
   if (presentation.providerMode === 'DirectByok') {
-    return <KeyRound className="h-4 w-4 text-amber-300" aria-hidden />;
+    return <KeyRound className={cn(sizeClass, 'text-amber-300')} aria-hidden />;
   }
-  return <Cloud className="h-4 w-4 text-sky-300" aria-hidden />;
+  return <Cloud className={cn(sizeClass, 'text-sky-300')} aria-hidden />;
+}
+
+function compactDestinationLabel(presentation: SendPreviewPresentation): string {
+  if (presentation.staysLocal) return 'Local';
+  if (presentation.providerMode === 'DirectByok') {
+    return presentation.destinationLabel.replace(/^Sent to\s+/i, '') || 'BYOK';
+  }
+  return 'Managed cloud';
 }
 
 export function SendPreview({
   presentation,
   defaultExpanded = false,
+  variant = 'card',
   className,
 }: SendPreviewProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const generatedDetailsId = useId();
+  // Preserve the long-standing stable card id (and its snapshot contract).
+  // Compact disclosures may coexist across embedded surfaces, so those use a
+  // React-generated id to keep their popover relationship unique.
+  const detailsId = variant === 'compact' ? generatedDetailsId : 'send-preview-details';
   const detailsAvailable = Boolean(
     presentation.bodyCharLabel ||
     presentation.attachmentLabel ||
@@ -59,6 +86,84 @@ export function SendPreview({
     : presentation.providerMode === 'DirectByok'
       ? 'border-amber-500/30 bg-amber-500/5'
       : 'border-sky-500/30 bg-sky-500/5';
+
+  if (variant === 'compact') {
+    return (
+      <span
+        data-testid="send-preview"
+        data-provider-mode={presentation.providerMode}
+        data-stays-local={presentation.staysLocal ? 'true' : 'false'}
+        className={cn('relative inline-flex shrink-0', className)}
+      >
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          aria-expanded={expanded}
+          aria-controls={detailsId}
+          aria-label={`${presentation.destinationLabel}. ${expanded ? 'Hide' : 'Show'} send details`}
+          title={presentation.destinationLabel}
+          className="inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-overlay)] hover:text-[var(--chat-text-secondary)]"
+        >
+          <DestinationIcon presentation={presentation} compact />
+          <span>{compactDestinationLabel(presentation)}</span>
+          {expanded ? (
+            <ChevronDown className="h-2.5 w-2.5 rotate-180" aria-hidden />
+          ) : (
+            <ChevronDown className="h-2.5 w-2.5" aria-hidden />
+          )}
+        </button>
+
+        {expanded ? (
+          <div
+            id={detailsId}
+            data-testid="send-preview-details"
+            className={cn(
+              'absolute bottom-full left-1/2 z-50 mb-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2',
+              'rounded-[var(--chat-radius-md)] border p-3 text-left shadow-xl backdrop-blur-xl',
+              'bg-[var(--chat-surface-overlay)]',
+              accentClass,
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <DestinationIcon presentation={presentation} />
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--chat-text-primary)]">
+                {presentation.destinationLabel}
+              </span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]">
+                <Lock className="h-3 w-3" aria-hidden />
+                {presentation.privacyShortLabel}
+              </span>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-[var(--chat-text-secondary)]">
+              {presentation.bannerCopy}
+            </p>
+            {detailsAvailable ? (
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-[var(--chat-text-secondary)]">
+                {presentation.bodyCharLabel ? (
+                  <DetailRow term="Message" definition={presentation.bodyCharLabel} />
+                ) : null}
+                {presentation.attachmentLabel ? (
+                  <DetailRow term="Attachments" definition={presentation.attachmentLabel} />
+                ) : null}
+                {presentation.systemPromptLabel ? (
+                  <DetailRow term="System prompt" definition={presentation.systemPromptLabel} />
+                ) : null}
+                {presentation.contextLabel ? (
+                  <DetailRow term="Context budget" definition={presentation.contextLabel} />
+                ) : null}
+                {presentation.toolsLabel ? (
+                  <DetailRow term="Tools" definition={presentation.toolsLabel} />
+                ) : null}
+                {presentation.sourceSessionLabel ? (
+                  <DetailRow term="Source session" definition={presentation.sourceSessionLabel} />
+                ) : null}
+              </dl>
+            ) : null}
+          </div>
+        ) : null}
+      </span>
+    );
+  }
 
   return (
     <div
@@ -94,7 +199,7 @@ export function SendPreview({
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
           aria-expanded={expanded}
-          aria-controls="send-preview-details"
+          aria-controls={detailsId}
           className="inline-flex items-center gap-1 self-start text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
         >
           {expanded ? (
@@ -112,7 +217,7 @@ export function SendPreview({
       ) : null}
       {expanded && detailsAvailable ? (
         <dl
-          id="send-preview-details"
+          id={detailsId}
           data-testid="send-preview-details"
           className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-[var(--chat-text-secondary)]"
         >

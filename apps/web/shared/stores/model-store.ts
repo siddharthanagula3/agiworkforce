@@ -267,11 +267,19 @@ export const useModelStore = create<ModelState>()(
       }),
       migrate: (persistedState: unknown) => {
         const state = (persistedState as Partial<PersistedModelState>) ?? {};
-        const selectedModelId =
+        const normalizedModelId =
           normalizeModelId(state.selectedModelId) ?? state.selectedModelId ?? DEFAULT_MODEL_ID;
+        const selectedModelId = AVAILABLE_MODELS.some(
+          (model) => model.id === normalizedModelId && model.availability !== 'coming_soon',
+        )
+          ? normalizedModelId
+          : DEFAULT_MODEL_ID;
         return {
           selectedModelId,
-          selectedProvider: state.selectedProvider ?? resolveProvider(selectedModelId),
+          selectedProvider:
+            selectedModelId === normalizedModelId
+              ? (state.selectedProvider ?? resolveProvider(selectedModelId))
+              : resolveProvider(selectedModelId),
         };
       },
     },

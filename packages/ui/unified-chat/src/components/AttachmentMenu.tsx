@@ -11,7 +11,6 @@ import {
   Sparkles,
   Plug,
   BookOpen,
-  Globe,
   Terminal,
   Paintbrush,
   ChevronRight,
@@ -51,11 +50,6 @@ export interface AttachmentMenuProps {
   onAddFromGoogleDrive?: () => void;
   /** Real host-owned GitHub file/repository picker. Omitted when unavailable. */
   onAddFromGitHub?: () => void;
-  /** Whether Web search is currently toggled on */
-  webSearchEnabled: boolean;
-  onWebSearchToggle: () => void;
-  /** Whether the selected model and active runtime can execute Web search now. */
-  webSearchAvailable?: boolean;
   /** Whether Research mode is currently toggled on */
   researchEnabled: boolean;
   onResearchToggle: () => void;
@@ -178,9 +172,6 @@ export function AttachmentMenu({
   onAddToProject,
   onAddFromGoogleDrive,
   onAddFromGitHub,
-  webSearchEnabled,
-  onWebSearchToggle,
-  webSearchAvailable = true,
   researchEnabled,
   onResearchToggle,
   supportsResearch = false,
@@ -390,18 +381,6 @@ export function AttachmentMenu({
               onClick={onResearchToggle}
             />
           )}
-          <MenuItem
-            icon={<Globe size={15} />}
-            label="Web search"
-            checked={webSearchEnabled}
-            disabled={!webSearchAvailable}
-            title={
-              !webSearchAvailable
-                ? "Web search isn't available for this model or Cloud deployment"
-                : undefined
-            }
-            onClick={onWebSearchToggle}
-          />
           {/* Omitted entirely when the host has no code-execution transport
               at all (e.g. a local/Tauri runtime) — disabled-but-visible when
               present but unavailable for the current model/provider/

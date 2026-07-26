@@ -17,9 +17,9 @@ interface SettingsState {
   // AUDIT-FIX CMP-13: `webSearchEnabled` (default true) used to live here as
   // well as on `chatStore` (default false). Two persisted booleans with the
   // same name and opposite defaults in one package; only the chatStore one was
-  // ever read (ChatInput renders it, useChat sends it), so this one was a
+  // ever read (useChat sends the chatStore's automatic intent), so this one was a
   // permanently-wrong second answer to "is web search on?". Deleted -- read
-  // `useChatStore(s => s.webSearchEnabled)`.
+  // `useChatStore.getState().webSearchEnabled`.
   artifactsEnabled: boolean;
   inlineVisualizationsEnabled: boolean;
   /** User's "Run code" composer preference. Off by default (web parity) — forwarded as a send-time request only when also currently available (see `codeExecutionDeploymentEnabled` + `isCodeExecutionAvailable`). */

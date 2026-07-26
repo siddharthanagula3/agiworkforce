@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { isValidIanaTimeZone } from '@agiworkforce/types';
+
 /**
  * Base system preamble: identity, current date, and a truthful inventory of the
  * tools actually attached to THIS request.
@@ -74,8 +76,35 @@ export function extractToolNames(tools: unknown[] | undefined): string[] {
 export interface CapabilityPreambleInput {
   /** The fully-resolved tool array for this request — after every gate. */
   tools: unknown[] | undefined;
+  /** Validated browser-reported IANA time zone; never an authoritative clock. */
+  timeZone?: string;
   /** Injected for determinism in tests. */
   now?: Date;
+}
+
+function formatLocalInstant(now: Date, timeZone: string | undefined): string | null {
+  if (!timeZone || !isValidIanaTimeZone(timeZone)) return null;
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value;
+  const year = read('year');
+  const month = read('month');
+  const day = read('day');
+  const hour = read('hour');
+  const minute = read('minute');
+  const second = read('second');
+  if (!year || !month || !day || !hour || !minute || !second) return null;
+  return `${year}-${month}-${day} ${hour}:${minute}:${second} (${timeZone})`;
 }
 
 /**
@@ -84,14 +113,28 @@ export interface CapabilityPreambleInput {
  */
 export function buildCapabilityPreamble(input: CapabilityPreambleInput): string | null {
   const now = input.now ?? new Date();
-  const today = now.toISOString().slice(0, 10);
+  const currentUtcTimestamp = now.toISOString();
+  const browserLocalInstant = formatLocalInstant(now, input.timeZone);
   const toolNames = extractToolNames(input.tools);
+  const hasSearch = toolNames.includes('web_search');
+  const hasFileCreation = toolNames.some((name) =>
+    ['execute_code', 'write_file', 'create_folder', 'create_office_file'].includes(name),
+  );
 
-  const sections: string[] = [
-    'You are AGI Workforce, an AI assistant.',
-    `Today's date is ${today}. Your training data has a cutoff, so treat anything ` +
-      'time-sensitive as potentially stale and verify it before stating it as current.',
-  ];
+  const timeContext =
+    `The current UTC date and time is ${currentUtcTimestamp}. ` +
+    (browserLocalInstant
+      ? `The user's browser reports ${input.timeZone}; at this same instant its local ` +
+        `date and time is ${browserLocalInstant}. Use that local calendar date for ` +
+        '"today" unless the user specifies a different place or time zone. '
+      : '') +
+    `When the user asks for ` +
+    '"today", a date, or a time in a named place or time zone, derive that place\'s ' +
+    'local calendar date and time from this instant; never reuse the UTC calendar date ' +
+    'as though it were local. Your training data has a cutoff, so treat anything ' +
+    'time-sensitive as potentially stale and verify it before stating it as current.';
+
+  const sections: string[] = ['You are AGI Workforce, an AI assistant.', timeContext];
 
   if (toolNames.length > 0) {
     const described = toolNames.map((name) => {
@@ -107,6 +150,25 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
         'when the corresponding tool is listed above. Do not claim a capability that is not ' +
         'listed — if you cannot do something, say so plainly and say why.',
     );
+
+    if (hasSearch) {
+      sections.push(
+        'Web search is already enabled. For current, changing, niche, or uncertain facts, ' +
+          'search before answering and cite the sources you used. The user does not need to ' +
+          'ask you to enable search or select a search mode first.',
+      );
+    }
+
+    if (hasFileCreation) {
+      sections.push(
+        'When the user asks for a downloadable file or a finished deliverable, create the ' +
+          'actual file with the available sandbox/file tools instead of pasting a mockup or ' +
+          'only explaining how to make it. Files created or changed through these tools are ' +
+          'collected after the turn and attached as downloads; supported visual and document ' +
+          'formats also appear in the Artifacts panel. Briefly name the completed files in ' +
+          'your final answer. Do not claim that you cannot attach files when these tools are listed.',
+      );
+    }
   } else {
     sections.push(
       'No tools are available on this turn: you cannot browse the web, run code, or read ' +

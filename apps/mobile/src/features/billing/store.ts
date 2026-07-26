@@ -17,13 +17,24 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
-import { normalizeBillingPlanTier } from '@agiworkforce/types';
+import { effectivePlanTier, normalizeBillingPlanTier } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 interface TierState {
-  /** Current subscription tier, normalised via `normalizeBillingPlanTier`. */
+  /**
+   * Effective entitlement tier. This is status-gated and is the only tier
+   * feature/model/tool gates may consume.
+   */
   tier: BillingPlanTier;
+  /** Raw recorded plan, for truthful billing/account copy only. */
+  billingTier: BillingPlanTier;
+  /** Raw billing lifecycle status returned by `/api/me`. */
+  billingStatus: string;
   /** True while a tier refresh network call is in flight. */
   isRefreshing: boolean;
   /** ISO timestamp of the last successful refresh, or null if never refreshed. */
@@ -45,6 +56,10 @@ interface TierState {
    * false until `/api/me` has been validated.
    */
   genericWebSearchAvailable: boolean;
+  /** Server-authoritative capability ids for this account + Mobile surface. */
+  grantedCapabilities: string[];
+  /** Version/hash of the cached capability document. */
+  capabilityHandshakeVersion: string | null;
   /**
    * Provider id of the first model used in the current conversation (e.g.
    * 'anthropic', 'openai').  Set to null when no conversation is active or
@@ -57,6 +72,8 @@ interface TierState {
   refreshTier: () => Promise<void>;
   /** Override tier locally (e.g. optimistic post-upgrade update). */
   setTier: (tier: BillingPlanTier) => void;
+  /** Clear all account-scoped plan, capability, and provider state on sign-out. */
+  clearAccountEntitlements: () => void;
   /**
    * Record the provider of the current conversation's first message.
    * Call this when the user sends the first message in a thread.
@@ -73,10 +90,14 @@ export const useTierStore = create<TierState>()(
   persist(
     (set, get) => ({
       tier: 'free',
+      billingTier: 'free',
+      billingStatus: 'none',
       isRefreshing: false,
       lastRefreshedAt: null,
       codeExecutionAvailable: false,
       genericWebSearchAvailable: false,
+      grantedCapabilities: [],
+      capabilityHandshakeVersion: null,
       currentConversationProvider: null,
 
       refreshTier: async () => {
@@ -90,6 +111,8 @@ export const useTierStore = create<TierState>()(
         // `app/_layout.tsx` already gate on `isClerkSignedIn`.
         // js-early-exit: skip if already refreshing
         if (get().isRefreshing) return;
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
 
         set({ isRefreshing: true });
         try {
@@ -97,15 +120,28 @@ export const useTierStore = create<TierState>()(
           // a mismatch throws into the catch below (cached tier kept, warning
           // logged) instead of silently reading a drifted shape. This replaced
           // a private interface that wrongly assumed a nested `user` envelope.
-          const data = parseMeResponse(await api.get<unknown>('/api/me'));
-          const tier = normalizeBillingPlanTier(data.plan.tier ?? null);
+          const response = await api.get<unknown>('/api/me?surface=mobile');
+          if (!isCloudAccountEpochCurrent(account)) return;
+          const data = parseMeResponse(response);
+          const billingTier = normalizeBillingPlanTier(data.plan.tier ?? null);
+          const tier = normalizeBillingPlanTier(
+            effectivePlanTier(data.plan.tier ?? null, data.plan.status),
+          );
+          const grantedCapabilities = data.capability_handshake?.granted ?? [];
           set({
             tier,
+            billingTier,
+            billingStatus: data.plan.status,
             lastRefreshedAt: new Date().toISOString(),
-            codeExecutionAvailable: data.feature_flags.code_execution ?? false,
+            codeExecutionAvailable:
+              (data.feature_flags.code_execution ?? false) &&
+              grantedCapabilities.includes('canUseCloudExecution'),
             genericWebSearchAvailable: data.feature_flags.generic_web_search ?? false,
+            grantedCapabilities,
+            capabilityHandshakeVersion: data.capability_handshake?.version ?? null,
           });
         } catch (err) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           // Network failure or auth error — keep the cached tier, don't clear it.
           // The paywall path on the server is the authoritative gate; the client
           // tier is an optimistic hint only. Still log it: a fully silent catch
@@ -113,12 +149,27 @@ export const useTierStore = create<TierState>()(
           // an unexplained permanent "Free" plan with zero diagnostic trail.
           console.warn('[tierStore] refreshTier failed (keeping cached tier):', err);
         } finally {
-          set({ isRefreshing: false });
+          if (isCloudAccountEpochCurrent(account)) set({ isRefreshing: false });
         }
       },
 
       setTier: (tier) => {
-        set({ tier });
+        set({ tier, billingTier: tier });
+      },
+
+      clearAccountEntitlements: () => {
+        set({
+          tier: 'free',
+          billingTier: 'free',
+          billingStatus: 'none',
+          isRefreshing: false,
+          lastRefreshedAt: null,
+          codeExecutionAvailable: false,
+          genericWebSearchAvailable: false,
+          grantedCapabilities: [],
+          capabilityHandshakeVersion: null,
+          currentConversationProvider: null,
+        });
       },
 
       setCurrentConversationProvider: (provider) => {
@@ -135,7 +186,13 @@ export const useTierStore = create<TierState>()(
       // scoped and must reset on cold start rather than rehydrate from disk.
       partialize: (state) => ({
         tier: state.tier,
+        billingTier: state.billingTier,
+        billingStatus: state.billingStatus,
         lastRefreshedAt: state.lastRefreshedAt,
+        codeExecutionAvailable: state.codeExecutionAvailable,
+        genericWebSearchAvailable: state.genericWebSearchAvailable,
+        grantedCapabilities: state.grantedCapabilities,
+        capabilityHandshakeVersion: state.capabilityHandshakeVersion,
       }),
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[tierStore] Hydration failed:', error);

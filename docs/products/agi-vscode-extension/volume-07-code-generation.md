@@ -10,7 +10,7 @@ Authority: `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/pro
 
 This volume specifies how the AGI VS Code Extension turns intent into code inside the editor: generating new code, editing and refactoring existing code, coordinated multi-file changes, and generating tests, documentation, and scaffolding. It is the IDE-native developer surface and is **workspace-scoped**.
 
-All three trust modes apply — **Local**, **BYOK** (permitted here; Desktop/CLI/VS Code only), and **Managed Cloud** — chosen explicitly with a visible provider/model label; the extension never silently promotes a Local edit to BYOK or Cloud. Generation never sends editor context into Web/Mobile/Desktop app-chat history: any handoff to app chat is explicit and redacted (per `apps/extension-vscode/AGENTS.md`). Two workspace-trust rails bound every write: `restrictedConfigurations` in `package.json` (agent auto-apply, endpoints, system prompt cannot be overridden by an untrusted workspace) and forced diff-preview when the workspace is untrusted (`runInlineCommand.ts`). Model selection resolves through the shared catalog adapter (`modelConstants.ts` → `packages/contracts/types/src/models.json`); the `auto-economy` default in `package.json` is a routing alias, not a model ID, and no model ID is hardcoded in this volume.
+All three trust modes apply — **Local**, **BYOK** (permitted here; Desktop/CLI/VS Code only), and **Managed Cloud** — chosen explicitly with visible host/provider labels. Generation never sends editor context into consumer app-chat history. Workspace Trust restricts endpoints, CLI path, auto-apply, telemetry endpoint, and tier overrides and forces diff review for untrusted workspaces. Model selection resolves through the shared catalog adapter; the default `auto` value is a routing alias, not a model ID.
 
 ## Generate
 
@@ -75,5 +75,5 @@ Production-ready when generation and editing across all seven required domains r
 - Silently routing a Local generation to BYOK or Managed Cloud, or hiding the resolved provider/model label.
 - Auto-syncing generated code or editor context into Web/Mobile/Desktop app chat.
 - Hardcoding or inventing a model ID instead of reading `packages/contracts/types/src/models.json`.
-- Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups in generation gating — the `agiWorkforce.tier` enum in `package.json` still lists `hobby`/`pro_plus`; treat that as a 🟡 reconciliation gap (separate tracked task), not the pricing model. Use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.
+- Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups in generation gating; the manifest exposes only current extension access modes.
 - Referencing Supabase (fully migrated to Clerk + Neon + Stripe) or claiming a scaffolding/test-repair loop as shipped without a repo path.

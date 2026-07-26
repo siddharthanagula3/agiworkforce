@@ -133,7 +133,8 @@ impl DirectApiProvider {
         match self.provider {
             Provider::Anthropic => builder
                 .header("x-api-key", &self.api_key)
-                .header("anthropic-version", "2023-06-01"),
+                .header("anthropic-version", "2023-06-01")
+                .header("anthropic-beta", "computer-use-2025-11-24"),
             // Google uses x-goog-api-key header (avoids leaking key in URL/logs)
             Provider::Google => builder.header("x-goog-api-key", &self.api_key),
             // Azure uses api-key header (not Bearer auth)
@@ -769,6 +770,21 @@ mod tests {
         let p = DirectApiProvider::new(Provider::Anthropic, "key".to_string(), None)
             .expect("should create");
         assert_eq!(p.chat_endpoint(), "https://api.anthropic.com/v1/messages");
+    }
+
+    #[test]
+    fn anthropic_apply_auth_sends_current_computer_use_beta() {
+        let p = DirectApiProvider::new(Provider::Anthropic, "key".to_string(), None)
+            .expect("should create");
+        let builder = reqwest::Client::new().post("https://api.anthropic.com/v1/messages");
+        let request = p.apply_auth(builder).build().expect("request should build");
+        assert_eq!(
+            request
+                .headers()
+                .get("anthropic-beta")
+                .and_then(|value| value.to_str().ok()),
+            Some("computer-use-2025-11-24")
+        );
     }
 
     #[test]

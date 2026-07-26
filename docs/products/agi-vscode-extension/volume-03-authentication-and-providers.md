@@ -1,8 +1,8 @@
 # AGI VS Code Extension — Volume 03 — Authentication & Providers
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: `AGENTS.md`, `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`. Grounded in real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/utils/api.ts`, `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`, `apps/extension-vscode/src/core/commandSetup.ts`, `apps/extension-vscode/src/data/usageMeter.ts`, `apps/extension-vscode/src/integrations/providerStreamClient.ts`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `packages/contracts/types/src/models.json`.
 
@@ -24,7 +24,7 @@ Sign-in uses a secretless RFC-8628-style device flow ✅ (`apps/extension-vscode
 
 ### Subscription Verification
 
-After sign-in the extension resolves the plan from the account/server: `fetchTierInfo(secrets)` calls the tier endpoint with the bearer token and caches the result 🟡 (`apps/extension-vscode/src/utils/api.ts`; `tierStatus.cachedTier` in `globalState` at `apps/extension-vscode/src/extension.ts`). Commands `agi-workforce.showTierStatus` and `agi-workforce.showAccountUsage` render it. **Gap:** the `agiWorkforce.tier` override enum and `usageMeter.ts` still encode the removed `hobby`/`pro_plus` tiers, which contradict the canon ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise). Reconciling `packages/contracts/types/src/billing-catalog.ts` and these enums to the founder pricing model is a separate tracked task (🟡). Plans and model-by-plan gating are always verified server-side; there is no checkout inside the extension.
+After sign-in the extension resolves the plan from the account/server: `fetchTierInfo(secrets)` calls the canonical percentage-only usage endpoint with the bearer token and caches the result (`apps/extension-vscode/src/utils/api.ts`; `tierStatus.cachedTier` in `globalState` at `apps/extension-vscode/src/extension.ts`). Commands `agi-workforce.showTierStatus` and `agi-workforce.showAccountUsage` render it. The extension override and usage meter preserve `local`, `byok`, `free`, `basic`, `pro`, `team`, `max`, `max_15x`, and `enterprise`; legacy `hobby`/`pro_plus` server values are normalized but are not shown as selectable tiers. The model picker disables plans' unreachable rows, and command/webview handlers reject forged locked selections; the server remains authoritative. There is no checkout inside the extension.
 
 ### Usage Limits
 
@@ -38,25 +38,25 @@ BYOK keys are stored in `SecretStorage` via `setApiKey`/`getApiKey`/`clearApiKey
 
 ### Provider Configuration
 
-Provider routing is configured by `agiWorkforce.providerStreamProvider` (enum includes `auto`, `anthropic`, `openai`, `google`, `ollama`, `ollama-cloud`, `xai`, `deepseek`, `perplexity`, `qwen`, `moonshot`, `zhipu`, `lmstudio`, `custom`) plus `agiWorkforce.gatewayUrl` 🟡 (`apps/extension-vscode/package.json`). The provider-stream client currently wires only `anthropic | openai | ollama | google` (`apps/extension-vscode/src/integrations/providerStreamClient.ts`), and `streamChatCompletionViaProvider` throws "not available in the VS Code extension yet" — account-gated provider streaming is 🔭. Model IDs come only from `packages/contracts/types/src/models.json`; the extension must not hardcode or invent them.
+Provider selection follows the selected catalog model; the removed `agiWorkforce.providerStreamProvider` selector can no longer create invalid model/provider pairs. `agiWorkforce.useProviderStream` opts cloud-backed editor utilities into the account-authenticated `/api/v1/providers/:id/stream` path for supported providers (`anthropic | openai | ollama | google`). `chatCompletion` actually branches to this path, `streamChatCompletionViaProvider` reads the device-flow account token from SecretStorage, and unsupported provider/model combinations fail visibly. This setting does not affect the local `@agi`, sidebar, or editor developer sessions, which are owned by the app-server. Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ### Multiple Providers
 
-The model picker (`agi-workforce.selectModel`, `apps/extension-vscode/src/features/model-picker/`) is auto-balanced across the provider catalog and marks local providers with a home glyph 🟡. In-thread multi-provider switching with per-provider BYOK keys and a visible provider label on every response is 🔭. Any Local→BYOK or Local→Cloud transition must be an explicit fork (context selection, secret scan, payload preview, consent, visible provider label) — never automatic.
+The model picker (`agi-workforce.selectModel`, `apps/extension-vscode/src/features/model-picker/`) reads the governed provider catalog, marks local providers with a home glyph, and resolves plain `auto` per task and tier. The sidebar labels the Local host plus the resolved provider or “Auto routing.” A catalog-model change that stays on the same provider preserves the runtime thread. A provider-boundary change starts a new thread, does not forward the earlier transcript, and emits a visible session notice. Any future feature that forwards existing Local context to BYOK or Cloud must add the full context-selection, secret-scan, payload-preview, and consent ceremony first.
 
 ### Environment Variables
 
-Endpoint/gateway overrides are configurable but hardened: `apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, and `tier` are in `capabilities.untrustedWorkspaces.restrictedConfigurations` and cannot be overridden by an untrusted workspace ✅ (`apps/extension-vscode/package.json`). Importing provider keys from shell environment variables (e.g. an `ANTHROPIC_API_KEY` already exported in the host) is 🔭 — the extension reads keys from SecretStorage, not `process.env`. The desktop bridge token is file-based at `~/.agiworkforce/bridge-token` (0600) ✅ (`apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`), not an env var.
+Endpoint/gateway overrides are configurable but hardened: `apiEndpoint`, `gatewayUrl`, `cliPath`, `autoApplyFixes`, `telemetryEndpoint`, and `tier` are in `capabilities.untrustedWorkspaces.restrictedConfigurations` and cannot be overridden by an untrusted workspace (`apps/extension-vscode/package.json`). The manifest no longer claims nonexistent `systemPrompt` or `agent.autoApply` settings. Importing provider keys from shell environment variables is not supported; credentials come from SecretStorage. The desktop bridge token is file-based at `~/.agiworkforce/bridge-token` (0600), not an environment variable.
 
 ## Local Models
 
 ### Ollama
 
-Ollama and Ollama-Cloud are recognized as providers in configuration and detected as local (`ollama/` prefix → `unbounded`) 🟡 (`package.json`, `apps/extension-vscode/src/data/usageMeter.ts`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts`). Direct on-device connection to a running Ollama daemon from the extension is 🔭: no local endpoint client (e.g. `127.0.0.1:11434`) exists in extension source; local access is designed to route through the gateway/provider-stream path, which is not yet wired.
+Ollama models are detected as local (`ollama/` prefix → `unbounded`) and are discovered through the workspace app-server's `model/list` response. The extension does not open a separate direct `127.0.0.1:11434` connection; the local runtime owns provider configuration, health, and inference. The account-authenticated provider-stream transport is a separate cloud-utility path and is never used as an implicit local fallback.
 
 ### LM Studio
 
-LM Studio (`lmstudio`) is likewise a recognized provider with local classification (`lmstudio/`, `lms/` prefixes) 🟡 (same paths). Direct connection to an LM Studio OpenAI-compatible local server is 🔭.
+LM Studio is likewise classified as local (`lmstudio/`, `lms/` prefixes) and is discovered through the app-server. A separate extension-owned LM Studio HTTP client is intentionally not required for developer sessions.
 
 ### llama.cpp
 
@@ -64,7 +64,7 @@ LM Studio (`lmstudio`) is likewise a recognized provider with local classificati
 
 ### Model Discovery
 
-Static catalog discovery ✅: the model picker enumerates models from `packages/contracts/types/src/models.json` and lets the user pick per session. **Live** local-endpoint discovery (querying a running Ollama/LM Studio server for installed models, e.g. `/api/tags`, and merging them into the picker) is 🔭. Requirement: discovered local models must be tagged Local and never counted against Managed quota.
+Managed/manual models come from `packages/contracts/types/src/models.json`. The sidebar also calls the app-server's `model/list` method and merges installed Ollama/LM Studio models into its picker. Discovered local rows are labeled Local, remain within the workspace-scoped runtime, and are not counted against Managed quota.
 
 ## Repository map
 
@@ -87,7 +87,7 @@ Claude Code and Codex IDE extensions authenticate to a single first-party accoun
 Production-ready when sign-in/out, tier verification, BYOK key storage, and at least one live local backend all work with visible trust labels and no plaintext secret leakage.
 
 - [ ] **Build:** `pnpm --filter agi-workforce typecheck` and `pnpm --filter agi-workforce test` pass; sign-in device flow and `fetchTierInfo` covered by tests.
-- [ ] **Trust:** active mode (Local/BYOK/Managed) is always visible; Local is never auto-routed to BYOK/Cloud; Local→BYOK is an explicit consented fork; tier enums reconciled to canon pricing (Free/Basic/Pro/Max/Enterprise; no `hobby`/`pro_plus`).
+- [ ] **Trust:** active host/provider is visible; Local is never auto-routed to BYOK/Cloud; prior transcript context is not forwarded across a provider-boundary reset; the extension tier enum contains only current access modes.
 - [ ] **Security:** all tokens/keys in SecretStorage only; endpoint overrides blocked in untrusted workspaces; no key read from `process.env` without explicit consent; no secret in logs.
 
 ## Anti-patterns
@@ -97,5 +97,5 @@ Production-ready when sign-in/out, tier verification, BYOK key storage, and at l
 - Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (`Plus`, `pro_plus`, `Hobby`) or inventing INR prices for Pro/Max; adding credit top-ups.
 - Referencing Supabase or renaming `proxy.ts` to `middleware.ts` on the web side.
-- Claiming Ollama/LM Studio/llama.cpp or account-gated provider streaming as shipped without a wired local/gateway client.
+- Claiming llama.cpp as shipped, or claiming direct extension-owned Ollama/LM Studio HTTP clients; local discovery and inference are app-server-owned.
 - Auto-syncing IDE workspace context into Web/Mobile/Desktop app chat history.

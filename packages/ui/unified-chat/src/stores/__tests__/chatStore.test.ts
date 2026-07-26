@@ -51,6 +51,7 @@ function resetStore() {
     conversations: [],
     messagesByConversation: {},
     activeConversationId: null,
+    streamingConversationIds: {},
     isStreaming: false,
     streamingContent: '',
     streamingReasoning: '',
@@ -247,6 +248,20 @@ describe('useChatStore — streaming', () => {
     expect(state.isStreaming).toBe(false);
     // Content is preserved so callers can read the final accumulated value
     expect(state.streamingContent).toBe('partial');
+  });
+
+  it('keeps the aggregate streaming state until every conversation settles', () => {
+    const store = useChatStore.getState();
+    store.startStreaming('conv-a');
+    store.startStreaming('conv-b');
+
+    store.stopStreaming('conv-b');
+    expect(useChatStore.getState().streamingConversationIds).toEqual({ 'conv-a': true });
+    expect(useChatStore.getState().isStreaming).toBe(true);
+
+    store.stopStreaming('conv-a');
+    expect(useChatStore.getState().streamingConversationIds).toEqual({});
+    expect(useChatStore.getState().isStreaming).toBe(false);
   });
 });
 
@@ -494,20 +509,43 @@ describe('useChatStore — persist v1 -> v2 migration', () => {
   });
 });
 
-// UI-WEBSEARCH-TOGGLE-01 (founder decision): web search defaults OFF and is
-// controlled honestly through the store, so the composer toggle actually affects
-// the send path (useChat reads store.webSearchEnabled). Previously the composer
-// held a divergent local useState(true) that never reached the send.
-describe('web search toggle (UI-WEBSEARCH-TOGGLE-01)', () => {
-  it('the store default is OFF — the user must explicitly enable web search', () => {
-    expect(useChatStore.getInitialState().webSearchEnabled).toBe(false);
+describe('automatic Web search intent', () => {
+  it('defaults on so every eligible turn can search without a composer toggle', () => {
+    expect(useChatStore.getInitialState().webSearchEnabled).toBe(true);
   });
 
-  it('setWebSearchEnabled controls the real state the send path reads', () => {
-    useChatStore.setState({ webSearchEnabled: false });
-    useChatStore.getState().setWebSearchEnabled(true);
+  it('is not disabled when the user changes or clears the active mode', () => {
+    useChatStore.setState({ webSearchEnabled: true, activeMode: null });
+    useChatStore.getState().setActiveMode('code');
     expect(useChatStore.getState().webSearchEnabled).toBe(true);
-    useChatStore.getState().setWebSearchEnabled(false);
-    expect(useChatStore.getState().webSearchEnabled).toBe(false);
+    useChatStore.getState().setActiveMode(null);
+    expect(useChatStore.getState().webSearchEnabled).toBe(true);
+  });
+
+  it('migrates stale persisted false values to automatic search intent', async () => {
+    const options = useChatStore.persist.getOptions();
+    expect(options.version).toBe(3);
+
+    const migrated = await options.migrate?.(
+      {
+        conversations: [],
+        messagesByConversation: {},
+        activeConversationId: null,
+        webSearchEnabled: false,
+      } as never,
+      2,
+    );
+
+    expect(migrated).toMatchObject({ webSearchEnabled: true });
+  });
+
+  it('does not persist an obsolete user-controlled search preference', () => {
+    const partialize = useChatStore.persist.getOptions().partialize;
+    const persisted = partialize?.({
+      ...useChatStore.getState(),
+      webSearchEnabled: false,
+    });
+
+    expect(persisted).not.toHaveProperty('webSearchEnabled');
   });
 });

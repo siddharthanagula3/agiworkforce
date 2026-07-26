@@ -484,7 +484,7 @@ mod tests {
         let dir = tmp.path();
 
         let ctx = test_ctx();
-        let mut session = AgentSession::new("claude-opus-4-8", &ctx, None);
+        let mut session = AgentSession::new("claude-opus-5", &ctx, None);
         session
             .messages
             .push(Message::text("user", "What is Rust?"));
@@ -499,7 +499,7 @@ mod tests {
         let loaded = load_conversation_in_dir(&id, dir).unwrap();
 
         assert_eq!(loaded.id, id);
-        assert_eq!(loaded.model, "claude-opus-4-8");
+        assert_eq!(loaded.model, "claude-opus-5");
         assert_eq!(loaded.total_input_tokens, 10);
         assert_eq!(loaded.total_output_tokens, 25);
         // system + user + assistant = 3 messages
@@ -624,7 +624,7 @@ mod tests {
     #[test]
     fn test_export_as_json_basic() {
         let ctx = test_ctx();
-        let mut session = AgentSession::new("claude-opus-4-8", &ctx, None);
+        let mut session = AgentSession::new("claude-opus-5", &ctx, None);
         session.messages.push(Message::text("user", "Hello"));
         session
             .messages
@@ -636,7 +636,7 @@ mod tests {
         let json_str = export_as_json(&session).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
-        assert_eq!(parsed["model"], "claude-opus-4-8");
+        assert_eq!(parsed["model"], "claude-opus-5");
         assert_eq!(parsed["total_input_tokens"], 10);
         assert_eq!(parsed["total_output_tokens"], 20);
         assert_eq!(parsed["turn_count"], 1);

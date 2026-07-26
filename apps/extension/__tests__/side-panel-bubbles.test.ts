@@ -1,6 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import { buildBubbleWithTools, buildToolCallEl } from '../src/features/side-panel/bubbles';
-import type { SidePanelChatMessage } from '../src/features/side-panel/chat-state';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  buildBubbleWithTools,
+  buildToolCallEl,
+  resolveManagedArtifactUrl,
+} from '../src/features/side-panel/bubbles';
+import {
+  applyCanonicalAgentEvent,
+  type SidePanelChatMessage,
+} from '../src/features/side-panel/chat-state';
 
 function msg(overrides: Partial<SidePanelChatMessage> = {}): SidePanelChatMessage {
   return { id: 'm1', role: 'user', content: 'hello world', timestamp: 0, ...overrides };
@@ -26,6 +33,90 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
     // The tool fence must surface the tool name/summary as visible UI, not raw text.
     expect(node.textContent).toContain('bash');
     expect(node.textContent).not.toContain('[TOOL:bash:success]');
+  });
+
+  it('renders a generated artifact as an authenticated AGI open/download action', () => {
+    const messages: SidePanelChatMessage[] = [];
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-1', {
+      schemaVersion: 3,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'artifact-produced',
+        artifactId: 'artifact-1',
+        name: 'report.pdf',
+        mimeType: 'application/pdf',
+        uri: '/api/files/asset-1',
+      },
+    });
+
+    const node = buildBubbleWithTools(assistant);
+    const link = node.querySelector<HTMLAnchorElement>('.sp-agent-artifact-link');
+    expect(link?.textContent).toContain('Open or download');
+    expect(link?.href).toBe('https://agiworkforce.com/api/files/asset-1');
+  });
+
+  it('renders an honest unavailable state for a non-web artifact URI', () => {
+    const messages: SidePanelChatMessage[] = [];
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-2', {
+      schemaVersion: 3,
+      sessionId: 'session-1',
+      turnId: 'turn-2',
+      sequence: 1,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'artifact-produced',
+        artifactId: 'artifact-2',
+        name: 'draft.txt',
+        mimeType: 'text/plain',
+        uri: 'managed://files/draft.txt',
+      },
+    });
+
+    const node = buildBubbleWithTools(assistant);
+    expect(node.querySelector('.sp-agent-artifact-link')).toBeNull();
+    expect(node.textContent).toContain('Download unavailable in Chrome');
+  });
+
+  it('renders actionable approve and decline controls for a managed tool boundary', () => {
+    const messages: SidePanelChatMessage[] = [];
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-3', {
+      schemaVersion: 3,
+      sessionId: 'session-1',
+      turnId: 'turn-3',
+      sequence: 1,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'approval-requested',
+        approvalId: 'approval-1',
+        toolCallId: 'call-1',
+        name: 'create_calendar_event',
+        category: 'connector',
+        summary: 'Create a calendar event',
+        input: { title: 'Demo' },
+        riskLevel: 'medium',
+      },
+    });
+    const resolve = vi.fn();
+
+    const node = buildBubbleWithTools(assistant, { onResolveApproval: resolve });
+    node.querySelector<HTMLButtonElement>('[aria-label="Approve create_calendar_event"]')?.click();
+    node.querySelector<HTMLButtonElement>('[aria-label="Decline create_calendar_event"]')?.click();
+
+    expect(resolve).toHaveBeenNthCalledWith(1, 'call-1', 'approved');
+    expect(resolve).toHaveBeenNthCalledWith(2, 'call-1', 'rejected');
+  });
+});
+
+describe('resolveManagedArtifactUrl', () => {
+  it('allows HTTPS payload URLs and rejects non-web schemes', () => {
+    expect(resolveManagedArtifactUrl('https://downloads.example.com/report.pdf')).toBe(
+      'https://downloads.example.com/report.pdf',
+    );
+    expect(resolveManagedArtifactUrl('javascript:alert(1)')).toBeNull();
+    expect(resolveManagedArtifactUrl('http://downloads.example.com/report.pdf')).toBeNull();
   });
 });
 

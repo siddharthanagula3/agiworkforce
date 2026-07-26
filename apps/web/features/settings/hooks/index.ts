@@ -16,7 +16,9 @@ export {
   useChangePassword,
   useToggle2FA,
   // Organization hooks
+  useOrganizationOverview,
   useOrganizationSettings,
+  useCreateOrganization,
   useUpdateOrganizationSettings,
   // Team hooks
   useTeamMembers,
@@ -36,6 +38,9 @@ export {
   type ChangePasswordParams,
   type AllSettingsData,
   type OrganizationSettings,
+  type OrganizationAccess,
+  type OrganizationOverview,
+  type CreateOrganizationInput,
   type TeamMember,
   type UserActivity,
   type AuditLogEntry,

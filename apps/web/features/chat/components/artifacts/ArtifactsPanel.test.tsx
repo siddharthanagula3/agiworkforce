@@ -118,6 +118,9 @@ describe('ArtifactsPanel · live artifact streaming', () => {
     render(<ArtifactsPanel />);
     expect(screen.queryByTestId('streaming-artifact')).not.toBeInTheDocument();
     expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
+    expect(
+      screen.getByText('Renderable code and generated files will appear here'),
+    ).toBeInTheDocument();
   });
 
   it('shows when cloud artifact sync failed and is retrying', () => {

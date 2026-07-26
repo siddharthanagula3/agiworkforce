@@ -173,6 +173,7 @@ describe('POST /api/mobile/iap/verify', () => {
       );
 
       expect(res.status).toBe(200);
+      expect(mockRequireCurrentUserId).toHaveBeenCalledWith(expect.any(Request));
       const json = await res.json();
       expect(json).toMatchObject({ success: true, planTier: 'pro', status: 'active' });
 

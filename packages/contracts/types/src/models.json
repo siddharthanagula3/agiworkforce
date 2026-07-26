@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-22",
+  "lastUpdated": "2026-07-25",
   "verificationLog": [
+    {
+      "date": "2026-07-25",
+      "verifiedBy": "official-anthropic-opus-5-docs",
+      "status": "CORRECTION",
+      "notes": "Replaced the prior Opus generation with Claude Opus 5 under AGI's latest-family-only policy. Official Anthropic documentation confirms the claude-opus-5 API ID, 1M context, 128K synchronous output, May 2026 knowledge cutoff, $5/M input and $25/M output pricing, adaptive thinking by default, low/medium/high/xhigh/max effort, disabled-thinking limited to low/medium/high effort, sampling-parameter restrictions, 512-token prompt-cache minimum, native web-fetch unavailability, and current computer-use tool contract. Sources retrieved 2026-07-25 from platform.claude.com model overview, model comparison, extended thinking, effort, prompt caching, web fetch, and computer use documentation."
+    },
     {
       "date": "2026-07-22",
       "verifiedBy": "founder-directive-and-official-google-model-thinking-pricing-docs",
@@ -54,7 +60,7 @@
       "date": "2026-07-15",
       "verifiedBy": "official-openai-anthropic-current-roster-live-probes",
       "status": "CORRECTION",
-      "notes": "Corrected the current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirm exact IDs, 1,050,000 context, 922,000 maximum input, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. Anthropic model metadata and minimal Messages requests returned HTTP 200 for claude-fable-5, claude-opus-4-8, claude-sonnet-5, and claude-haiku-4-5; official model, effort, and pricing pages confirm context/output limits, reasoning controls, and 5-minute/1-hour prompt-cache rates. The product catalog uses the founder-selected standard Sonnet 5 prices rather than temporary promotional pricing. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
+      "notes": "Corrected the then-current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirm exact IDs, 1,050,000 context, 922,000 maximum input, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. Anthropic probes covered Fable 5, the then-current Opus generation, Sonnet 5, and Haiku 4.5; the 2026-07-25 verification entry supersedes the Opus portion of this historical note. The product catalog uses the founder-selected standard Sonnet 5 prices rather than temporary promotional pricing. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
     },
     {
       "date": "2026-07-15",
@@ -780,10 +786,10 @@
       },
       "tierPolicy": { "minTier": "max" }
     },
-    "claude-opus-4.8": {
-      "id": "claude-opus-4.8",
-      "apiModelId": "claude-opus-4-8",
-      "name": "Claude 4.8 Opus",
+    "claude-opus-5": {
+      "id": "claude-opus-5",
+      "apiModelId": "claude-opus-5",
+      "name": "Claude Opus 5",
       "provider": "anthropic",
       "modelType": "reasoning",
       "variantPartner": "claude-sonnet-5",
@@ -812,20 +818,21 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
-      "released": "May 28, 2026",
+      "released": "July 24, 2026",
       "deprecation_date": null,
-      "tokenizer_drift_factor": 0.35,
-      "tokenizer_drift_range": { "min": 1, "max": 1.35, "unit": "multiplier-vs-baseline" },
-      "tokenizer_drift_warning": "Claude Opus 4.8 inherits the Opus 4.7 tokenizer baseline (re-baselined 2026-04): the same input text can yield 1.0x to 1.35x tokens vs prior Claude families (Sonnet 4.6, Opus <=4.6). Re-baseline cost + latency budgets; cached prompts from earlier models may overshoot the context window. See packages/ai/routing/src/three-tier-router.ts ESTIMATE_INFLATION.",
       "maxInputTokens": 1000000,
       "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2026-01",
+      "knowledgeCutoff": "2026-05",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
         "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
         "defaultEffort": "high",
         "canDisableThinking": true,
+        "thinkingDefault": "adaptive",
+        "supportsManualThinking": false,
+        "maxEffortWhenThinkingDisabled": "high",
+        "rejectsSamplingParameters": true,
         "request": {
           "api": "messages",
           "effortPath": "output_config.effort",
@@ -833,7 +840,9 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "max" }
+      "tierPolicy": { "minTier": "max" },
+      "promptCacheMinimumTokens": 512,
+      "providerCompatibility": { "nativeWebFetch": false }
     },
     "claude-sonnet-5": {
       "id": "claude-sonnet-5",
@@ -841,7 +850,7 @@
       "name": "Claude Sonnet 5",
       "provider": "anthropic",
       "modelType": "code",
-      "variantPartner": "claude-opus-4.8",
+      "variantPartner": "claude-opus-5",
       "contextWindow": 1000000,
       "inputCost": 3,
       "outputCost": 15,
@@ -2006,7 +2015,7 @@
       "glm-5.2",
       "kimi-k3"
     ],
-    "flagship_additions": ["gpt-5.6-sol", "claude-fable-5", "claude-opus-4.8", "grok-4.5"]
+    "flagship_additions": ["gpt-5.6-sol", "claude-fable-5", "claude-opus-5", "grok-4.5"]
   },
   "providersInOrder": [
     "managed_cloud",

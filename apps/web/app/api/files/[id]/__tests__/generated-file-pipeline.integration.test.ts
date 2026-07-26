@@ -65,6 +65,10 @@ vi.mock('@/lib/server/media-storage', async () => {
   const { randomUUID: uuid } = await import('crypto');
   return {
     isMediaStorageConfigured: () => true,
+    readStoredMedia: async (key: string) => {
+      const entry = objectStore.get(key);
+      return entry ? { data: entry.data, contentType: entry.contentType } : null;
+    },
     storeMedia: async (p: { userId: string; kind: string; data: Buffer; contentType: string }) => {
       const pathname = `media/${p.kind}/${p.userId}/${uuid()}`;
       objectStore.set(pathname, { data: Buffer.from(p.data), contentType: p.contentType });
@@ -108,14 +112,6 @@ vi.mock('@/lib/server/media-assets', async () => {
   };
 });
 
-vi.mock('@/lib/server/object-storage', () => ({
-  isObjectStorageConfigured: () => true,
-  getObject: async (key: string) => {
-    const entry = objectStore.get(key);
-    return entry ? { data: entry.data, contentType: entry.contentType } : null;
-  },
-}));
-
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-gen' })),
 }));
@@ -128,8 +124,8 @@ import type { StreamChunk } from '@agiworkforce/types';
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-genfile-001',
-    chatRequest: { model: 'claude-opus-4-8', messages: [], stream: true },
-    requestedModel: 'claude-opus-4-8',
+    chatRequest: { model: 'claude-opus-5', messages: [], stream: true },
+    requestedModel: 'claude-opus-5',
     provider: 'anthropic',
     estimatedCostCents: 5,
     quotaWarningHeader: null,

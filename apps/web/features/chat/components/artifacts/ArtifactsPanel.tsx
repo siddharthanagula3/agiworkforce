@@ -57,7 +57,7 @@ function EmptyState() {
       <div>
         <p className="text-sm font-medium text-foreground">No artifacts yet</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Code blocks from AI responses will appear here
+          Renderable code and generated files will appear here
         </p>
       </div>
     </div>

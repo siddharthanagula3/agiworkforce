@@ -25,7 +25,7 @@ function buildParams(model: string): OpenAIChatCompletionCreateParams {
 
 describe('applyOpenRouterAnthropicCacheControl', () => {
   it('wraps the system message in a cache_control block for anthropic/* routes (default short/5m)', () => {
-    const params = buildParams('anthropic/claude-opus-4.8');
+    const params = buildParams('anthropic/example-model');
     applyOpenRouterAnthropicCacheControl(params, 'short');
     const system = params.messages.find((m) => m.role === 'system' || m.role === 'developer');
     expect(system).toBeDefined();
@@ -36,7 +36,7 @@ describe('applyOpenRouterAnthropicCacheControl', () => {
   });
 
   it('uses ttl: "1h" for long retention', () => {
-    const params = buildParams('anthropic/claude-opus-4.8');
+    const params = buildParams('anthropic/example-model');
     applyOpenRouterAnthropicCacheControl(params, 'long');
     const system = params.messages.find((m) => m.role === 'system' || m.role === 'developer');
     const content = (system as unknown as { content: unknown }).content as Array<{
@@ -46,7 +46,7 @@ describe('applyOpenRouterAnthropicCacheControl', () => {
   });
 
   it('does not mutate the system message when retention is "none"', () => {
-    const params = buildParams('anthropic/claude-opus-4.8');
+    const params = buildParams('anthropic/example-model');
     const before = JSON.stringify(params.messages);
     applyOpenRouterAnthropicCacheControl(params, 'none');
     expect(JSON.stringify(params.messages)).toBe(before);
@@ -61,7 +61,7 @@ describe('applyOpenRouterAnthropicCacheControl', () => {
 
   it('is a no-op when there is no system message', () => {
     const params: OpenAIChatCompletionCreateParams = {
-      model: 'anthropic/claude-opus-4.8',
+      model: 'anthropic/example-model',
       messages: [{ role: 'user', content: 'hi' }],
       stream: true,
     };

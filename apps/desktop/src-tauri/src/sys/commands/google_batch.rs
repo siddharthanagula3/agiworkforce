@@ -61,8 +61,8 @@ fn get_timestamp() -> String {
 /// input/output prices only, so cache price is zero until the catalog has an
 /// explicit Google cache field.
 fn get_model_pricing(model: &str) -> (f64, f64, f64) {
-    use crate::core::llm::Provider;
     use crate::core::llm::models_config::get_pricing;
+    use crate::core::llm::Provider;
 
     let pricing = get_pricing(&Provider::Google, model);
     match pricing {

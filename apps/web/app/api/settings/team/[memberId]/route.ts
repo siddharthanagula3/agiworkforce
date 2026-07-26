@@ -11,6 +11,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { requireTeamAdminAccess } from '../team-admin-access';
 
 // memberId param format: "<organizationId>:<userId>" · matches the composite
 // key shape returned by the team list route so the caller does not need to
@@ -51,6 +52,28 @@ async function requireAdminAccess(
   return row;
 }
 
+async function requireAnotherOwnerBeforeDemotion(
+  db: ReturnType<typeof getNeonDb>,
+  organizationId: string,
+  target: Pick<OrganizationMemberRow, 'role'>,
+  nextRole: OrganizationMemberRow['role'] | null,
+): Promise<void> {
+  if (target.role !== 'owner' || nextRole === 'owner') {
+    return;
+  }
+
+  const [countRow] = await db.query<{ owner_count: string }>(
+    `select count(*)::text as owner_count
+     from public.organization_members
+     where organization_id = $1 and role = 'owner'`,
+    [organizationId],
+  );
+
+  if (Number.parseInt(countRow?.owner_count ?? '0', 10) <= 1) {
+    throw createError.conflict('Assign another owner before removing or changing the last owner');
+  }
+}
+
 /**
  * DELETE /api/settings/team/[memberId]
  * Remove a member from the organization.
@@ -71,35 +94,46 @@ async function handleRemove(
   const { organizationId, userId: targetUserId } = parseMemberId(memberId);
 
   const db = getNeonDb();
-  const requester = await requireAdminAccess(db, organizationId, requesterId);
+  await requireTeamAdminAccess(db, requesterId);
 
-  // Prevent self-removal via this endpoint · use a separate leave flow.
-  if (targetUserId === requesterId) {
-    throw createError.validation('You cannot remove yourself. Use the leave organization flow.');
-  }
+  await db.transaction(async (tx) => {
+    await tx.query(
+      `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
+      [organizationId],
+    );
 
-  // Owners cannot be removed by admins.
-  const [targetRow] = await db.query<OrganizationMemberRow>(
-    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-     from public.organization_members
-     where organization_id = $1 and user_id = $2
-     limit 1`,
-    [organizationId, targetUserId],
-  );
+    const requester = await requireAdminAccess(tx, organizationId, requesterId);
 
-  if (!targetRow) {
-    throw createError.notFound('Member not found in this organization');
-  }
+    // Prevent self-removal via this endpoint · use a separate leave flow.
+    if (targetUserId === requesterId) {
+      throw createError.validation('You cannot remove yourself. Use the leave organization flow.');
+    }
 
-  if (targetRow.role === 'owner' && requester.role !== 'owner') {
-    throw createError.forbidden('Only owners can remove other owners');
-  }
+    // Owners cannot be removed by admins.
+    const [targetRow] = await tx.query<OrganizationMemberRow>(
+      `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+       from public.organization_members
+       where organization_id = $1 and user_id = $2
+       limit 1`,
+      [organizationId, targetUserId],
+    );
 
-  await db.execute(
-    `delete from public.organization_members
-     where organization_id = $1 and user_id = $2`,
-    [organizationId, targetUserId],
-  );
+    if (!targetRow) {
+      throw createError.notFound('Member not found in this organization');
+    }
+
+    if (targetRow.role === 'owner' && requester.role !== 'owner') {
+      throw createError.forbidden('Only owners can remove other owners');
+    }
+
+    await requireAnotherOwnerBeforeDemotion(tx, organizationId, targetRow, null);
+
+    await tx.execute(
+      `delete from public.organization_members
+       where organization_id = $1 and user_id = $2`,
+      [organizationId, targetUserId],
+    );
+  });
 
   logger.info({ requesterId, organizationId, targetUserId }, 'Team member removed');
 
@@ -133,35 +167,46 @@ async function handleUpdateRole(
   const { role: newRole } = parsed.data;
 
   const db = getNeonDb();
-  const requester = await requireAdminAccess(db, organizationId, requesterId);
+  await requireTeamAdminAccess(db, requesterId);
 
-  // Only owners can assign the owner role.
-  if (newRole === 'owner' && requester.role !== 'owner') {
-    throw createError.forbidden('Only owners can assign the owner role');
-  }
+  await db.transaction(async (tx) => {
+    await tx.query(
+      `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
+      [organizationId],
+    );
 
-  const [targetRow] = await db.query<OrganizationMemberRow>(
-    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-     from public.organization_members
-     where organization_id = $1 and user_id = $2
-     limit 1`,
-    [organizationId, targetUserId],
-  );
+    const requester = await requireAdminAccess(tx, organizationId, requesterId);
 
-  if (!targetRow) {
-    throw createError.notFound('Member not found in this organization');
-  }
+    // Only owners can assign the owner role.
+    if (newRole === 'owner' && requester.role !== 'owner') {
+      throw createError.forbidden('Only owners can assign the owner role');
+    }
 
-  if (targetRow.role === 'owner' && requester.role !== 'owner') {
-    throw createError.forbidden('Only owners can change the role of another owner');
-  }
+    const [targetRow] = await tx.query<OrganizationMemberRow>(
+      `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+       from public.organization_members
+       where organization_id = $1 and user_id = $2
+       limit 1`,
+      [organizationId, targetUserId],
+    );
 
-  await db.execute(
-    `update public.organization_members
-     set role = $1
-     where organization_id = $2 and user_id = $3`,
-    [newRole, organizationId, targetUserId],
-  );
+    if (!targetRow) {
+      throw createError.notFound('Member not found in this organization');
+    }
+
+    if (targetRow.role === 'owner' && requester.role !== 'owner') {
+      throw createError.forbidden('Only owners can change the role of another owner');
+    }
+
+    await requireAnotherOwnerBeforeDemotion(tx, organizationId, targetRow, newRole);
+
+    await tx.execute(
+      `update public.organization_members
+       set role = $1
+       where organization_id = $2 and user_id = $3`,
+      [newRole, organizationId, targetUserId],
+    );
+  });
 
   logger.info({ requesterId, organizationId, targetUserId, newRole }, 'Team member role updated');
 

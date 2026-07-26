@@ -1,8 +1,8 @@
 # AGI VS Code Extension — Volume 19 — Performance
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, the nearest surface rules `apps/extension-vscode/AGENTS.md`, and `docs/surfaces/vscode-extension.md`. Real code cited: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/extension.ts`, `apps/extension-vscode/src/core/subsystemHealth.ts`, `apps/extension-vscode/src/data/workspaceIndexer.ts`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts`, `apps/extension-vscode/src/features/inline-completions/inlineCompletionProvider.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`.
 
@@ -30,7 +30,7 @@ Testable requirements: the initial scan never exceeds the file cap; index writes
 
 ## Streaming
 
-Chat responses stream token-by-token into VS Code's native `ChatResponseStream`; the participant writes each fragment via `stream.markdown()` as it arrives rather than buffering a full completion (`src/features/chat-participant/chatParticipant.ts`). Streaming is on by default (`agiWorkforce.streamingEnabled`, default `true` in `package.json`) and honors the request `CancellationToken`, so a cancelled or superseded turn stops consuming tokens. When the AGI backend is unavailable, the participant falls back to the VS Code built-in Language Model API and streams that response with the same `for await` fragment loop (`streamVscodeLmFallback`). ✅ Built.
+Developer-session responses stream as app-server turn events. `@agi` writes text deltas to `ChatResponseStream`; the sidebar/editor update the active assistant message incrementally. Cancellation interrupts the runtime turn, and switching to another conversation does not leave a global Stop state behind. No implicit VS Code-LM fallback is shipped.
 
 Inline completions have their own latency budget: requests are debounced (`agiWorkforce.inlineCompletions.debounceMs`, default 300ms), bounded by `maxLength` (default 500 chars), served from a bounded LRU keyed by document/line/column/context to avoid re-requesting on cursor jitter, and cancelled via the provider's `CancellationToken` (`src/features/inline-completions/inlineCompletionProvider.ts`, `package.json`). ✅ Built.
 
@@ -47,7 +47,8 @@ Planned (🔭): `.gitignore`- and `files.exclude`-aware traversal, per-root shar
 - `apps/extension-vscode/src/extension.ts` — activation entry, lifecycle orchestration.
 - `apps/extension-vscode/src/core/subsystemHealth.ts` — `runBoot` isolation + health reporting.
 - `apps/extension-vscode/src/data/workspaceIndexer.ts` — capped, incremental workspace index.
-- `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts` — streaming chat + `vscode.lm` fallback.
+- `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts` — app-server streaming into native Chat.
+- `apps/extension-vscode/src/integrations/localRuntimeClient.ts` — runtime process, turn events, cancellation.
 - `apps/extension-vscode/src/features/inline-completions/inlineCompletionProvider.ts` — debounced, LRU-cached completions.
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — backoff reconnect, health loop, rate limiting.
 - `apps/extension-vscode/package.json` — `activationEvents`, streaming/completion/indexing settings.

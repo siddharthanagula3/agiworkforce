@@ -1,8 +1,8 @@
 # AGI VS Code Extension — Volume 22 — Local Storage
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/data/conversationStore.ts`, `apps/extension-vscode/src/data/checkpointManager.ts`, `apps/extension-vscode/src/data/workspaceIndexer.ts`, `apps/extension-vscode/src/data/sendQueue.ts`, `apps/extension-vscode/src/memory/memoryStore.ts`, `apps/extension-vscode/src/platform/config.ts`, `apps/extension-vscode/src/utils/api.ts`, `apps/extension-vscode/src/core/telemetry.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`, `apps/extension-vscode/src/integrations/tierResolver.ts`.
 
@@ -17,7 +17,7 @@ All persistence therefore rides on VS Code's own storage primitives — `Extensi
 There is **no SQLite/embedded database and no app-chat schema**. "Session state" is a set of JSON records in VS Code state stores, each with an explicit key and prune cap:
 
 - Conversations: `globalState` key `agiWorkforce.conversations`, capped at 50 (oldest pruned). ✅ Built — `apps/extension-vscode/src/data/conversationStore.ts`.
-- Memory facts: `globalState` key `agiWorkforce.memoryFacts`, device-scoped and **never synced** (VS Code is not a synced chat surface). ✅ Built — `apps/extension-vscode/src/memory/memoryStore.ts` (see the "persisted in globalState ONLY" contract in `src/core/commandSetup.ts`).
+- Memory facts: `globalState` key `agiWorkforce.memoryFacts`, device-scoped and **never synced**. A bounded, trust-tag-escaped summary is included as user-role untrusted context in future sidebar, editor, and `@agi` turns. ✅ Built — `apps/extension-vscode/src/memory/memoryStore.ts`.
 - Checkpoint metadata: `globalState` key `agiWorkforce.checkpoints`, capped at 20. ✅ Built — `apps/extension-vscode/src/data/checkpointManager.ts`.
 - Sessions history browsing: command `agi-workforce.showSessionsHistory` reads the above. ✅ Built — `apps/extension-vscode/package.json`.
 
@@ -27,11 +27,11 @@ Requirements: every record store MUST declare a stable key, a bounded size, and 
 
 User configuration is the `agiWorkforce.*` settings tree, declared in `package.json` (`contributes.configuration`) and read through typed accessors so defaults live in one place. ✅ Built — `apps/extension-vscode/src/platform/config.ts` (mirrors `package.json` defaults).
 
-Workspace-trust gating is mandatory: in untrusted workspaces the endpoint/gateway/CLI-path/system-prompt/auto-apply/telemetry/tier keys cannot be overridden by workspace settings, and agent file writes are disabled until trust is granted. ✅ Built — `capabilities.untrustedWorkspaces.restrictedConfigurations` in `apps/extension-vscode/package.json`; trust-restricted accessors read `inspect().globalValue` only (`src/utils/api.ts`, `getCloudApiEndpoint`/`getGatewayUrl`).
+Workspace-trust gating is mandatory: in untrusted workspaces the endpoint, gateway, CLI path, auto-apply, telemetry endpoint, and tier keys cannot be overridden by workspace settings, and agent file writes are disabled until trust is granted. ✅ Built — `capabilities.untrustedWorkspaces.restrictedConfigurations` in `apps/extension-vscode/package.json`; trust-restricted accessors read `inspect().globalValue` only.
 
-Requirements: sensitive keys (`apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, `agent.autoApply`, `telemetryEndpoint`, `tier`) MUST refuse workspace-scoped overrides when the workspace is untrusted. The default model MUST be a resolver alias (`agiWorkforce.model` default `auto-economy`), never a hardcoded catalog model ID — real IDs resolve only from `packages/contracts/types/src/models.json`.
+Requirements: sensitive keys (`apiEndpoint`, `gatewayUrl`, `cliPath`, `autoApplyFixes`, `telemetryEndpoint`, `tier`) MUST refuse workspace-scoped overrides when the workspace is untrusted. The default model MUST be the routing alias `auto`, never a hardcoded catalog model ID; real IDs resolve only from `packages/contracts/types/src/models.json`.
 
-🟡 Partial gap: the `agiWorkforce.tier` enum still encodes removed tiers (`hobby`, `pro_plus`) in `apps/extension-vscode/package.json`. Per canon the tier ladder is Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise; this reconciliation is a separate tracked task (`packages/contracts/types/src/billing-catalog.ts`).
+The extension access-mode enum is `local`, `byok`, `free`, `basic`, `pro`, `team`, `max`, `max_15x`, and `enterprise`. Legacy `hobby` and `pro_plus` values are accepted only as normalization inputs for previously persisted/server state; they are not selectable settings.
 
 ## Workspace Cache
 
@@ -50,10 +50,10 @@ Provider credentials never touch settings JSON or plaintext files — they use V
 - BYOK / API key: SecretStorage key `agiWorkforce.apiKey`. ✅ Built — `apps/extension-vscode/src/utils/api.ts` (`getApiKey`/`setApiKey`/`clearApiKey`).
 - Managed-Cloud account token: SecretStorage key `agiWorkforce.accountToken`. ✅ Built — `apps/extension-vscode/src/utils/api.ts`.
 - Device salt (for anonymized device identity): `globalState` key `agiWorkforce.deviceSalt`. ✅ Built — `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`.
-- Provider/model selection: `agiWorkforce.providerStreamProvider` (enum: `auto`, `anthropic`, `openai`, `google`, `ollama`, `ollama-cloud`, `xai`, `deepseek`, `perplexity`, `qwen`, `moonshot`, `zhipu`, `lmstudio`, `custom`) and `agiWorkforce.model`. ✅ Built — `apps/extension-vscode/package.json`.
+- Provider/model selection: `agiWorkforce.model`; cloud-utility provider streaming infers the provider from that catalog model rather than persisting a second selector. ✅ Built.
 - Resolved tier cache: `globalState` key `tierStatus.cachedTier`. ✅ Built — `apps/extension-vscode/src/integrations/tierResolver.ts`, `src/extension.ts`.
 
-Requirements: secrets MUST live only in SecretStorage; the three trust modes MUST stay separate; switching a Local session to a BYOK/Cloud provider MUST be an explicit fork with a visible provider label and consent — never silent (see `src/integrations/providerSwitchGuard.ts`). The desktop-bridge token is not stored by the extension: it is read from `~/.agiworkforce/bridge-token` (0600) written by Desktop. ✅ Built — `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` (migration target: Unix domain socket / named pipe).
+Requirements: secrets MUST live only in SecretStorage and the three trust modes MUST stay separate. A provider-boundary selection starts a new runtime thread, does not forward the earlier transcript, and emits a visible session notice. Any future feature that forwards existing Local context MUST add the complete preview/consent ceremony. `providerSwitchGuard.ts` enforces plan eligibility for cross-provider selection, but every provider change still starts a fresh runtime session and does not authorize transcript egress. The desktop-bridge token is not stored by the extension: it is read from `~/.agiworkforce/bridge-token` (0600) written by Desktop.
 
 ## Runtime Logs
 

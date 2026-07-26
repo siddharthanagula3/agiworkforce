@@ -136,6 +136,7 @@ function installFetch(events: unknown[], opts: { hang?: boolean } = {}) {
 function seedConversation() {
   useChatStore.setState({
     messages: [],
+    messagesByConversation: { 'conv-1': [] },
     activeConversationId: 'conv-1',
     conversations: [
       {

@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '@clerk/nextjs';
+import { useAuth, useClerk, useUser } from '@clerk/nextjs';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
-import { useChatStream, ToolApprovalProvider } from '@/lib/hooks/useChatStream';
+import { ToolApprovalProvider } from '@/lib/hooks/useChatStream';
+import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
 // GOV-19: remaining managed quota, shared with Settings > Usage.
 import { getWorstUsagePercent, useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
@@ -21,7 +22,10 @@ import {
 import {
   useChatStore,
   selectConversationMessages,
+  selectIsConversationLoading,
+  selectIsConversationStreaming,
   PENDING_CONVERSATION_KEY,
+  DEFAULT_COMPOSER_TOGGLES,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -29,11 +33,13 @@ import { useModelStore } from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { useBillingStore } from '@shared/stores/web-auth-store';
+import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { getBestAutoModeForTier } from '@shared/config/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
   getBillingPlanPricing,
   summarizeSendPreview,
+  type BillingPlanTier,
   type CloudWorkMode,
   type ProviderMode,
   type SendPreviewPresentation,
@@ -68,7 +74,6 @@ import {
   type SidebarNavItem,
   type SidebarProject,
 } from '@agiworkforce/ui';
-import { useClerk } from '@clerk/nextjs';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 import {
@@ -127,7 +132,7 @@ import {
 import { runReplacingSend } from '../lib/replacingSend';
 import { isStaleActiveConversation } from '../lib/staleActiveConversation';
 import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
-import { LocalByokHandoffDialog, SendPreview, type ChatMessage } from '@agiworkforce/unified-chat';
+import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
 import { useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
@@ -181,6 +186,68 @@ type PendingByokHandoff = {
   meta?: SendMeta;
   candidates: WebHandoffContextCandidate[];
 };
+
+interface ChatAccountIdentity {
+  id: string;
+  email?: string;
+  name?: string;
+}
+
+/**
+ * `/api/me` is the canonical identity source. Keep the compatibility auth
+ * store only as a short-lived fallback while it finishes hydrating, never as
+ * the preferred source for the account footer or checkout metadata.
+ */
+export function resolveChatAccountUser(
+  canonicalUser: ChatAccountIdentity | null,
+  compatibilityUser: ChatAccountIdentity | null,
+  clerkUser: ChatAccountIdentity | null = null,
+): ChatAccountIdentity | null {
+  return canonicalUser ?? compatibilityUser ?? clerkUser;
+}
+
+export function resolveChatAccountDisplay(
+  user: ChatAccountIdentity | null,
+  subscriptionTier: BillingPlanTier | null | undefined,
+  billingPolicyReady: boolean,
+): {
+  displayName: string;
+  userInitial: string;
+  tierLabel: string | null;
+  showFreeUpgrade: boolean;
+  isLoading: boolean;
+} {
+  const displayName = user?.name || user?.email?.split('@')[0];
+
+  if (!billingPolicyReady) {
+    if (displayName) {
+      return {
+        displayName,
+        userInitial: displayName.charAt(0).toUpperCase(),
+        tierLabel: null,
+        showFreeUpgrade: false,
+        isLoading: false,
+      };
+    }
+    return {
+      displayName: 'Loading account',
+      userInitial: '…',
+      tierLabel: null,
+      showFreeUpgrade: false,
+      isLoading: true,
+    };
+  }
+
+  const settledDisplayName = displayName || 'User';
+  const tier = subscriptionTier ?? 'free';
+  return {
+    displayName: settledDisplayName,
+    userInitial: settledDisplayName.charAt(0).toUpperCase(),
+    tierLabel: getBillingPlanPricing(tier).label,
+    showFreeUpgrade: tier === 'free',
+    isLoading: false,
+  };
+}
 
 export function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
@@ -370,8 +437,13 @@ export default function WebChatPage() {
   const availableModels = useModelStore((s) => s.availableModels);
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
-  const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
-  const isWebsiteFreeTrial = subscriptionTier === 'free';
+  const billingSubscription = useBillingStore((s) => s.subscription);
+  const billingPolicyReady = useBillingStore(isBillingPolicyReady);
+  const subscriptionTier = billingSubscription?.tier ?? 'free';
+  // Never temporarily downgrade a signed-in paid user while /api/me is still
+  // hydrating. That race used to replace a persisted Auto/paid selection with
+  // the Free workhorse, so the model unexpectedly changed after reload.
+  const isWebsiteFreeTrial = billingPolicyReady && subscriptionTier === 'free';
   const freeTrialModelId = getBestAutoModeForTier('free');
   const activeModelId =
     isWebsiteFreeTrial && !FREE_TRIAL_MODELS.includes(selectedModelId)
@@ -499,7 +571,25 @@ export default function WebChatPage() {
 
   // Web-specific hooks for the sidebar footer slot.
   const { signOut: clerkSignOut } = useClerk();
-  const { user, logout } = useAuthStore();
+  const { user: clerkUser } = useUser();
+  const { user: compatibilityUser, logout } = useAuthStore();
+  const canonicalUser = useBillingStore((s) => s.user);
+  const clerkAccountUser = useMemo<ChatAccountIdentity | null>(() => {
+    if (!clerkUser) return null;
+    const name =
+      clerkUser.fullName ||
+      [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') ||
+      clerkUser.username ||
+      undefined;
+    const email =
+      clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
+    return {
+      id: clerkUser.id,
+      ...(name ? { name } : {}),
+      ...(email ? { email } : {}),
+    };
+  }, [clerkUser]);
+  const user = resolveChatAccountUser(canonicalUser, compatibilityUser, clerkAccountUser);
   const subscription = useBillingStore((s) => s.subscription);
   // Skills, Plugins, and Connectors live in the Settings modal (single home).
   const { openSettings } = useSettingsModal();
@@ -572,9 +662,19 @@ export default function WebChatPage() {
     };
   }, []);
 
+  /**
+   * Route ownership must win immediately, before the async conversation loader
+   * updates `activeConversationId`. Otherwise the first render after selecting
+   * chat B still reflects chat A's loading/streaming state and briefly shows
+   * A's Stop button in B's composer.
+   */
+  const displayedConversationId = urlConversationId ?? bareChatSessionId;
+
   // Streaming send + store state
-  const { sendMessage, stopGeneration, continueGeneration, isStreaming, resolveToolApproval } =
-    useChatStream();
+  const { sendMessage, stopGeneration, continueGeneration, resolveToolApproval } =
+    useChatStreamRuntime();
+  const isStreaming = useChatStore(selectIsConversationStreaming(displayedConversationId));
+  const isLoading = useChatStore(selectIsConversationLoading(displayedConversationId));
 
   // Notification banner: appears after 3s of streaming if the user hasn't
   // already granted/denied the Notification permission in this session.
@@ -703,25 +803,18 @@ export default function WebChatPage() {
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
-  const isLoading = useChatStore((s) => s.isLoading);
   const chatError = useChatStore((s) => s.error);
   const setChatError = useChatStore((s) => s.setError);
 
   /**
-   * SendPreview presentation · privacy-disclosure card rendered above the
-   * composer so users always see where the next turn is going (local device,
-   * BYOK provider host, or AGI managed gateway) before they send.
-   *
-   * AUDIT-FIX CMP-17: this summary was computed on every render and only
-   * `.privacyShortLabel` was ever consumed — `<SendPreview>` was exported from
-   * the package with ZERO render sites while a comment at the composer call
-   * site claimed the disclosure was docked. It is rendered below now, and it is
-   * fed the REAL active tool list (read from the same per-conversation composer
-   * state the composer writes, so the two can never disagree) — making it the
-   * only UI that answers "which tools are active for this send".
+   * SendPreview presentation · outbound-route disclosure rendered as a compact
+   * control below the composer. It stays visible before send without occupying
+   * a banner row, and expands on demand to show the real active tool list.
    */
   const composerToggles = useChatStore(
-    (s) => s.composerTogglesByConversation[displayedConversationId ?? PENDING_CONVERSATION_KEY],
+    (s) =>
+      s.composerTogglesByConversation[displayedConversationId ?? PENDING_CONVERSATION_KEY] ??
+      DEFAULT_COMPOSER_TOGGLES,
   );
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
   const sendPreviewToolNames = useMemo(() => {
@@ -762,8 +855,6 @@ export default function WebChatPage() {
     updateConversation,
     setActiveConversation,
   } = useConversations();
-
-  const displayedConversationId = urlConversationId ?? bareChatSessionId;
 
   // A pending edit rollback is valid only for the conversation it began in and
   // only until the next send. Switching conversations abandons it (the messages
@@ -2366,26 +2457,25 @@ export default function WebChatPage() {
     [openSettings, router],
   );
 
-  // Billing tier label for the user profile footer.
-  const tierLabel = useMemo(
-    () => getBillingPlanPricing(subscription?.tier ?? 'free').label,
-    [subscription?.tier],
-  );
-
   const handleLogout = useCallback(async () => {
     await logout();
     await clerkSignOut({ redirectUrl: '/login' });
   }, [clerkSignOut, logout]);
 
-  const displayName = user?.name || user?.email?.split('@')[0] || 'User';
-  const userInitial = displayName.charAt(0).toUpperCase();
   const currentTier = subscription?.tier ?? 'free';
+  const {
+    displayName,
+    userInitial,
+    tierLabel,
+    showFreeUpgrade,
+    isLoading: isAccountLoading,
+  } = resolveChatAccountDisplay(user, subscription?.tier, billingPolicyReady);
 
   // footerSlot: web-specific account menu + free-plan nudge.
   const sidebarFooterSlot = (
     <div className="w-full">
       {/* Free plan nudge */}
-      {currentTier === 'free' && (
+      {showFreeUpgrade && (
         <div className="px-3 pb-2">
           <div className="flex items-center justify-between rounded-full bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground">
             <span>Free plan</span>
@@ -2405,7 +2495,9 @@ export default function WebChatPage() {
           <button
             type="button"
             aria-label={`Account menu for ${displayName}`}
-            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-busy={isAccountLoading}
+            disabled={isAccountLoading}
+            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-wait disabled:opacity-70"
           >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {userInitial}
@@ -2423,7 +2515,7 @@ export default function WebChatPage() {
                   </span>
                 ) : null}
               </div>
-              {user?.email && (
+              {!isAccountLoading && user?.email && (
                 <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
               )}
             </div>
@@ -2434,7 +2526,7 @@ export default function WebChatPage() {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
-          {user?.email && (
+          {!isAccountLoading && user?.email && (
             <>
               <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
                 {user.email}
@@ -2694,9 +2786,6 @@ export default function WebChatPage() {
               <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center gap-6 px-6">
                 <GreetingBanner onSendMessage={setComposerPrefill} />
                 <div className="w-full max-w-[940px]">
-                  {/* AUDIT-FIX CMP-17: the send-destination + active-tools
-                      disclosure, docked above the composer on both surfaces. */}
-                  <SendPreview presentation={sendPreviewPresentation} className="mb-2" />
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}
@@ -2710,6 +2799,7 @@ export default function WebChatPage() {
                     clearSignal={composerClearSignal}
                     emptyState
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                    sendPreviewPresentation={sendPreviewPresentation}
                     onUpgradeRequest={handleOpenUpgradeDialog}
                     onGenerateImage={handleGenerateImage}
                     projectPicker={composerProjectPicker}
@@ -2747,14 +2837,9 @@ export default function WebChatPage() {
                 </ToolApprovalProvider>
               </div>
 
-              {/* Composer + Send Preview disclosure · docked in normal flow (not
-                  absolute) so the banner/composer can never float over and overlap
-                  the follow-up suggestions or message content.
-
-                  AUDIT-FIX CMP-17: the "Send Preview disclosure" this comment
-                  claimed was docked here did not exist — `<SendPreview>` had
-                  zero render sites. It is rendered below, and it is the only UI
-                  that answers "which tools are active for this send".
+              {/* Composer + compact Send Preview disclosure. The disclosure is
+                  inside the composer footer so it cannot overlap suggestions or
+                  message content and no longer consumes a banner row.
 
                   AUDIT-FIX CMP-1: `projectPicker` used to be passed ONLY to the
                   empty-state composer in the other branch of this ternary, so
@@ -2771,7 +2856,6 @@ export default function WebChatPage() {
                     effectiveSidebarCollapsed ? 'max-w-4xl' : '',
                   )}
                 >
-                  <SendPreview presentation={sendPreviewPresentation} className="mb-2" />
                   <ChatComposerNew
                     onSend={handleSend}
                     conversationId={displayedConversationId}
@@ -2784,6 +2868,7 @@ export default function WebChatPage() {
                     onTypingChange={handleTypingChange}
                     clearSignal={composerClearSignal}
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                    sendPreviewPresentation={sendPreviewPresentation}
                     onUpgradeRequest={handleOpenUpgradeDialog}
                     onGenerateImage={handleGenerateImage}
                     projectPicker={composerProjectPicker}

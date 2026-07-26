@@ -2,7 +2,7 @@
 
 Status: Draft spec
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/cli/AGENTS.md`, `docs/cli/COMMAND_SURFACE.md`. Grounded in real CLI source: `apps/cli/src/config.rs`, `apps/cli/src/permissions.rs`, `apps/cli/src/exec_policy.rs`, `apps/cli/src/cli_options.rs`, `apps/cli/src/agent/mod.rs`, and `apps/cli/src/lib.rs`. Model IDs come only from `packages/contracts/types/src/models.json`.
 
@@ -28,7 +28,7 @@ Each provider is a `[providers.<name>]` table with `api_key_env` and optional `b
 
 ## Model Selection — from the catalog
 
-The default model is derived from `packages/contracts/types/src/models.json` through `model_catalog::default_model()` (verified: resolves to `claude-opus-4-8`) — never hardcoded in `config.rs` (✅ Built). Selection settings live in `[default]`: `model`, `provider`, `fallback_chain` (ordered failover), `fast_model`, `review_model`, and `cloud_model`. `agi models list | status | scan | set` manage the catalog and local inventory (Volume 03), and mid-session `switch_model()` re-detects the provider and re-adopts the correct privacy mode, refusing unknown IDs (✅ Built, `agent/mod.rs`). Requirement: any configured model ID must exist in the catalog or in discovered local models; an unknown hosted ID fails closed rather than defaulting to a provider guess.
+The default model is derived from `packages/contracts/types/src/models.json` through `model_catalog::default_model()` (currently the Anthropic `complex_reasoning` route, `claude-fable-5`) — never hardcoded in `config.rs` (✅ Built). Selection settings live in `[default]`: `model`, `provider`, `fallback_chain` (ordered failover), `fast_model`, `review_model`, and `cloud_model`. `agi models list | status | scan | set` manage the catalog and local inventory (Volume 03), and mid-session `switch_model()` re-detects the provider and re-adopts the correct privacy mode, refusing unknown IDs (✅ Built, `agent/mod.rs`). Requirement: any configured model ID must exist in the catalog or in discovered local models; an unknown hosted ID fails closed rather than defaulting to a provider guess.
 
 ## Default Settings
 

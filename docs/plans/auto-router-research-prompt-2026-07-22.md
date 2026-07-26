@@ -28,32 +28,32 @@ Today the product exposes **three** Auto choices — `Auto Economy`, `Auto Balan
 
 Pricing = USD /1M tokens (input/output), cache = cached-input /1M. tier = minimum subscription tier.
 
-| id                     | provider   | tier  | type       | key caps                                | ctx   | in/out $      | cache $ |
-| ---------------------- | ---------- | ----- | ---------- | --------------------------------------- | ----- | ------------- | ------- |
-| gemini-3.5-flash-lite  | google     | free  | multimodal | tools,vision,search,codeExec,thinking   | 1M    | 0.30 / 2.50   | 0.03    |
-| qwen-3.5-flash         | qwen       | free  | multimodal | tools,vision,reason                     | 1M    | 0.029 / 0.287 | 0.0058  |
-| qwen-3.7-plus          | qwen       | free  | multimodal | tools,vision,reason                     | 1M    | 0.4 / 1.6     | 0.08    |
-| deepseek-v4-flash      | deepseek   | free  | code       | tools,vision,reason                     | 1M    | 0.14 / 0.28   | 0.0028  |
-| glm-5.2                | zhipu      | free  | reasoning  | tools,reason,codeExec                   | 1M    | 1.4 / 4.4     | 0.26    |
-| gpt-5.6-luna           | openai     | basic | reasoning  | tools,vision,reason,search              | 1.05M | 1 / 6         | 0.1     |
-| claude-haiku-4.5       | anthropic  | pro   | chat       | tools,vision,reason,search              | 200k  | 1 / 5         | 0.1     |
-| gpt-5.6-terra          | openai     | pro   | reasoning  | tools,vision,reason,search              | 1.05M | 2.5 / 15      | 0.25    |
-| gemini-3.5-flash       | google     | pro   | multimodal | tools,vision,reason,search,codeExec     | 1M    | 1.5 / 9       | 0.15    |
-| claude-sonnet-5        | anthropic  | pro   | code       | tools,vision,reason,codeExec,cu,agentic | 1M    | 3 / 15        | 0.3     |
-| qwen-max               | qwen       | pro   | reasoning  | tools,reason,codeExec                   | 1M    | 1.2 / 6       | —       |
-| kimi-k3                | moonshot   | pro   | multimodal | tools,vision,reason,agentic             | 1.05M | 3 / 15        | 0.3     |
-| gemini-3.1-pro-preview | google     | pro   | reasoning  | tools,vision,reason,search,codeExec     | 2M    | 2 / 12        | 0.2     |
-| sonar-deep-research    | perplexity | pro   | search     | reason,search                           | 128k  | 2 / 8         | —       |
-| gpt-5.6-sol            | openai     | max   | reasoning  | tools,vision,reason,search              | 1.05M | 5 / 30        | 0.5     |
-| claude-opus-4.8        | anthropic  | max   | reasoning  | tools,vision,reason,codeExec,cu,agentic | 1M    | 5 / 25        | 0.5     |
-| grok-4.5               | xai        | max   | reasoning  | tools,vision,reason,vidGen,codeExec     | 500k  | 2 / 6         | —       |
-| gemini-3.1-flash-image | google     | —     | image      | imgGen                                  | —     | 0.039 / 0     | —       |
-| gpt-image-2            | openai     | —     | image      | imgGen                                  | —     | 8 / 30        | —       |
-| veo-3.1                | google     | —     | video      | vidGen                                  | —     | — / 750       | —       |
-| sonar                  | perplexity | free  | search     | search                                  | 128k  | 1 / 1         | —       |
-| gemini-embedding-2     | google     | —     | embedding  | embeddings                              | 8k    | 0.2 / 0       | —       |
-| gpt-4o-transcribe      | openai     | —     | stt        | speech-to-text                          | —     | 0.006 / 0     | —       |
-| tts-1-hd               | openai     | —     | tts        | text-to-speech                          | —     | 30 / 0        | —       |
+| id                                 | provider   | tier  | type       | key caps                                | ctx   | in/out $      | cache $ |
+| ---------------------------------- | ---------- | ----- | ---------- | --------------------------------------- | ----- | ------------- | ------- |
+| gemini-3.5-flash-lite              | google     | free  | multimodal | tools,vision,search,codeExec,thinking   | 1M    | 0.30 / 2.50   | 0.03    |
+| qwen-3.5-flash                     | qwen       | free  | multimodal | tools,vision,reason                     | 1M    | 0.029 / 0.287 | 0.0058  |
+| qwen-3.7-plus                      | qwen       | free  | multimodal | tools,vision,reason                     | 1M    | 0.4 / 1.6     | 0.08    |
+| deepseek-v4-flash                  | deepseek   | free  | code       | tools,vision,reason                     | 1M    | 0.14 / 0.28   | 0.0028  |
+| glm-5.2                            | zhipu      | free  | reasoning  | tools,reason,codeExec                   | 1M    | 1.4 / 4.4     | 0.26    |
+| gpt-5.6-luna                       | openai     | basic | reasoning  | tools,vision,reason,search              | 1.05M | 1 / 6         | 0.1     |
+| claude-haiku-4.5                   | anthropic  | pro   | chat       | tools,vision,reason,search              | 200k  | 1 / 5         | 0.1     |
+| gpt-5.6-terra                      | openai     | pro   | reasoning  | tools,vision,reason,search              | 1.05M | 2.5 / 15      | 0.25    |
+| gemini-3.5-flash                   | google     | pro   | multimodal | tools,vision,reason,search,codeExec     | 1M    | 1.5 / 9       | 0.15    |
+| claude-sonnet-5                    | anthropic  | pro   | code       | tools,vision,reason,codeExec,cu,agentic | 1M    | 3 / 15        | 0.3     |
+| qwen-max                           | qwen       | pro   | reasoning  | tools,reason,codeExec                   | 1M    | 1.2 / 6       | —       |
+| kimi-k3                            | moonshot   | pro   | multimodal | tools,vision,reason,agentic             | 1.05M | 3 / 15        | 0.3     |
+| gemini-3.1-pro-preview             | google     | pro   | reasoning  | tools,vision,reason,search,codeExec     | 2M    | 2 / 12        | 0.2     |
+| sonar-deep-research                | perplexity | pro   | search     | reason,search                           | 128k  | 2 / 8         | —       |
+| gpt-5.6-sol                        | openai     | max   | reasoning  | tools,vision,reason,search              | 1.05M | 5 / 30        | 0.5     |
+| claude-opus-5 (amended 2026-07-25) | anthropic  | max   | reasoning  | tools,vision,reason,codeExec,cu,agentic | 1M    | 5 / 25        | 0.5     |
+| grok-4.5                           | xai        | max   | reasoning  | tools,vision,reason,vidGen,codeExec     | 500k  | 2 / 6         | —       |
+| gemini-3.1-flash-image             | google     | —     | image      | imgGen                                  | —     | 0.039 / 0     | —       |
+| gpt-image-2                        | openai     | —     | image      | imgGen                                  | —     | 8 / 30        | —       |
+| veo-3.1                            | google     | —     | video      | vidGen                                  | —     | — / 750       | —       |
+| sonar                              | perplexity | free  | search     | search                                  | 128k  | 1 / 1         | —       |
+| gemini-embedding-2                 | google     | —     | embedding  | embeddings                              | 8k    | 0.2 / 0       | —       |
+| gpt-4o-transcribe                  | openai     | —     | stt        | speech-to-text                          | —     | 0.006 / 0     | —       |
+| tts-1-hd                           | openai     | —     | tts        | text-to-speech                          | —     | 30 / 0        | —       |
 
 Notes: many models support **prompt/context caching** (cache column); several open-weight models (qwen/deepseek/glm) are far cheaper than flagships; only some providers expose **native web search** (OpenAI/Anthropic/Google/Perplexity/gemini-flash-lite). Image/video/speech are separate model families. The product is **open-weight-first** (prefer cheaper open models when quality suffices) and must **never hard-depend on one model** (every route needs fallbacks).
 

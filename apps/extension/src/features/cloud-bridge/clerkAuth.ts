@@ -43,6 +43,12 @@ const syncHost = parseClerkOrigin(configuredSyncHost);
 type CreateClerkClient = (typeof import('@clerk/chrome-extension/client'))['createClerkClient'];
 type ClerkClient = Awaited<ReturnType<CreateClerkClient>>;
 
+export interface ClerkAccountProfile {
+  displayName: string | null;
+  email: string | null;
+  initials: string;
+}
+
 let createClientFactory: Promise<CreateClerkClient> | null = null;
 
 async function getCreateClientFactory(): Promise<CreateClerkClient> {
@@ -125,6 +131,34 @@ export async function getFreshClerkToken(): Promise<string | null> {
     ? await getBackgroundClient()
     : await getForegroundClient();
   return clerk.session ? await clerk.session.getToken() : null;
+}
+
+function compactInitials(displayName: string | null, email: string | null): string {
+  const words = displayName?.split(/\s+/).filter(Boolean) ?? [];
+  const initials =
+    words.length > 1
+      ? `${words[0]?.[0] ?? ''}${words[words.length - 1]?.[0] ?? ''}`
+      : (words[0]?.slice(0, 2) ?? email?.slice(0, 2) ?? 'A');
+  return initials.toUpperCase();
+}
+
+/** Hydrate the visible account identity from the same foreground Clerk session. */
+export async function getClerkAccountProfile(): Promise<ClerkAccountProfile | null> {
+  if (!isClerkExtensionAuthConfigured()) return null;
+  const clerk = await getForegroundClient();
+  const user = clerk.user;
+  if (!user) return null;
+
+  const displayName =
+    user.fullName?.trim() ||
+    [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+    null;
+  const email = user.primaryEmailAddress?.emailAddress?.trim() || null;
+  return {
+    displayName,
+    email,
+    initials: compactInitials(displayName, email),
+  };
 }
 
 export async function openClerkSignIn(): Promise<void> {

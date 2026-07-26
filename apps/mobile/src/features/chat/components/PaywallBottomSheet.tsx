@@ -44,6 +44,7 @@ import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import { isPurchasableTier, type PurchasableTier } from '@/src/features/billing/iapProducts';
 import { useIapPurchaseFlow } from '@/src/features/billing/useIapPurchaseFlow';
 import { useIapStore } from '@/src/features/billing/iapStore';
+import { openExternalUrl } from '@/lib/safeOpenURL';
 
 // ---------------------------------------------------------------------------
 // Static lookup tables — module-level so they are never recreated on render.
@@ -63,7 +64,7 @@ const TIER_LABELS: Record<string, string> = {
 const FEATURE_LABELS: Record<string, string> = {
   general_upgrade: 'More features',
   video_generation: 'Video generation',
-  opus_4_7: 'Opus 4.7 access',
+  opus_5: 'Opus 5 access',
   gpt_5_5: 'GPT-5.5 access',
   computer_use: 'Computer use',
   deep_research: 'Deep research',
@@ -184,6 +185,12 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
     // informational (no-CTA) branch below rather than a dead button.
     const purchasableTier = normalizeBillingPlanTier(requiredTier);
     const canPurchaseInApp = FEATURES.iap && isPurchasableTier(purchasableTier);
+    // Sales handoff is intentionally exact, not normalize-and-guess: an
+    // unrecognised future tier must fail closed rather than becoming an
+    // external-navigation CTA. The destination is a fixed HTTPS AGI origin and
+    // still passes through the strict safeOpenURL allowlist.
+    const salesTier =
+      requiredTier === 'team' || requiredTier === 'enterprise' ? requiredTier : null;
 
     const handleSheetChange = useCallback(
       (index: number) => {
@@ -315,7 +322,19 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
           ) : null}
 
           {/* CTAs */}
-          {canPurchaseInApp ? (
+          {salesTier ? (
+            <Button
+              title="Contact Sales"
+              variant="primary"
+              size="md"
+              onPress={() =>
+                void openExternalUrl(
+                  `https://agiworkforce.com/contact-sales?plan=${encodeURIComponent(salesTier)}`,
+                )
+              }
+              accessibilityLabel={`Contact Sales for ${TIER_LABELS[salesTier]}`}
+            />
+          ) : canPurchaseInApp ? (
             <IapUpgradeButton
               tier={purchasableTier as PurchasableTier}
               tierLabel={tierLabel}

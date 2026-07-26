@@ -65,7 +65,10 @@ vi.mock('../../src/lib/neonClients', () => ({
             select: () => ({
               eq: () => ({
                 maybeSingle: () =>
-                  Promise.resolve({ data: { plan_tier: state.planTier }, error: null }),
+                  Promise.resolve({
+                    data: { plan_tier: state.planTier, status: 'active' },
+                    error: null,
+                  }),
               }),
             }),
           }
@@ -212,10 +215,10 @@ function eventModels(events: unknown[]): string[] {
   ];
 }
 
-// Catalog anchors (see llm.test.ts tier-ladder pins): claude-opus-4.8 and
+// Catalog anchors (see llm.test.ts tier-ladder pins): claude-opus-5 and
 // gpt-5.6-sol are flagship (Max/Enterprise only); claude-sonnet-5 and
 // gemini-3.6-flash are pro_additions on distinct providers.
-const PRIMARY_FLAGSHIP = 'claude-opus-4.8'; // anthropic
+const PRIMARY_FLAGSHIP = 'claude-opus-5'; // anthropic
 const FALLBACK_FLAGSHIP = 'gpt-5.6-sol'; // openai
 const PRIMARY_PRO = 'claude-sonnet-5'; // anthropic
 const FALLBACK_PRO = 'gemini-3.6-flash'; // google

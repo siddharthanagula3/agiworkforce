@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
   Pressable,
@@ -69,15 +69,26 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
-import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
+import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useAuthStore } from '@/src/features/auth/store';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import type { ChatMessage } from '@/types/chat';
+import {
+  captureAccountScopedUiState,
+  isAccountScopedUiStateCurrent,
+  type AccountScopedUiState,
+} from '@/src/features/auth/services/accountScopedUiState';
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 const EMPTY_CHAT_MESSAGES: ChatMessage[] = [];
+
+interface ConversationUiActionScope {
+  conversationId: string;
+  ownership: AccountScopedUiState;
+}
 
 /**
  * Chat conversation screen.
@@ -106,7 +117,15 @@ export default function ChatScreen() {
       items: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
     ) => void;
   } | null>(null);
+  const [renameModalVisible, setRenameModalVisible] = useState(false);
+  const [renameText, setRenameText] = useState('');
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
+  const quotedMessageScopeRef = useRef<ConversationUiActionScope | null>(null);
+  const renameScopeRef = useRef<ConversationUiActionScope | null>(null);
+  const currentConversationScopeRef = useRef<{
+    conversationId: string;
+    scope: 'local' | 'cloud';
+  } | null>(null);
   const [modeSwitchState, setModeSwitchState] = useState<{
     visible: boolean;
     fromMode: AppMode;
@@ -148,9 +167,13 @@ export default function ChatScreen() {
   const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
   const failImageGeneration = useChatStore((s) => s.failImageGeneration);
   const markConversationRead = useChatStore((s) => s.markConversationRead);
+  const imageGenerationEnabled = useChatStore((s) => s.features.imageGen);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const subscriptionTier = useTierStore((s) => s.tier);
+  const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const approveRequest = useAgentStore((s) => s.approveRequest);
@@ -162,6 +185,52 @@ export default function ChatScreen() {
   const conversationExecutionMode = conversation
     ? executionModeForConversation(conversation)
     : executionModeForSelection(selectedModel, appMode);
+
+  const isConversationActionCurrent = useCallback(
+    (action: ConversationUiActionScope | null | undefined) => {
+      const current = currentConversationScopeRef.current;
+      return Boolean(
+        action &&
+        current &&
+        action.conversationId === current.conversationId &&
+        isAccountScopedUiStateCurrent(action.ownership, current.scope),
+      );
+    },
+    [],
+  );
+
+  const captureConversationAction = useCallback((): ConversationUiActionScope | null => {
+    if (!id) return null;
+    const ownership = captureAccountScopedUiState(conversationExecutionMode);
+    return ownership ? { conversationId: id, ownership } : null;
+  }, [conversationExecutionMode, id]);
+
+  // Expo Router can retain this screen while Clerk switches accounts. Clear
+  // message-derived transient state before paint if its captured conversation
+  // or Cloud epoch no longer matches. Local quotes/rename drafts remain
+  // device-owned across a Cloud account switch.
+  useLayoutEffect(() => {
+    currentConversationScopeRef.current = {
+      conversationId: id,
+      scope: conversationExecutionMode,
+    };
+    if (quotedMessage && !isConversationActionCurrent(quotedMessageScopeRef.current)) {
+      quotedMessageScopeRef.current = null;
+      setQuotedMessage(null);
+    }
+    if (renameModalVisible && !isConversationActionCurrent(renameScopeRef.current)) {
+      renameScopeRef.current = null;
+      setRenameModalVisible(false);
+      setRenameText('');
+    }
+  }, [
+    clerkUserId,
+    conversationExecutionMode,
+    id,
+    isConversationActionCurrent,
+    quotedMessage,
+    renameModalVisible,
+  ]);
 
   // Set current conversation and load messages on mount
   useEffect(() => {
@@ -244,76 +313,55 @@ export default function ChatScreen() {
       // dismissed only after the point of no return below — a send blocked by
       // a pre-flight gate must not consume the quote context.
       let finalText = text;
-      if (quotedMessage) {
+      const currentQuote =
+        quotedMessage && isConversationActionCurrent(quotedMessageScopeRef.current)
+          ? quotedMessage
+          : null;
+      if (quotedMessage && !currentQuote) {
+        quotedMessageScopeRef.current = null;
+        setQuotedMessage(null);
+      }
+      if (currentQuote) {
         const quoteLabel =
-          quotedMessage.role === 'user' ? 'You' : (quotedMessage.model ?? 'Assistant');
+          currentQuote.role === 'user' ? 'You' : (currentQuote.model ?? 'Assistant');
         const quotePreview =
-          quotedMessage.content.length > 150
-            ? quotedMessage.content.slice(0, 150).trim() + '...'
-            : quotedMessage.content;
+          currentQuote.content.length > 150
+            ? currentQuote.content.slice(0, 150).trim() + '...'
+            : currentQuote.content;
         finalText = `> ${quoteLabel}: ${quotePreview}\n\n${text}`;
       }
 
       const trimmedInput = text.trim();
-      const cloudDispatch =
-        conversationExecutionMode === 'cloud' && !attachments?.length
-          ? resolveMobileCloudDispatch({
-              selection: selectedModel,
-              message: trimmedInput,
-              subscriptionTier,
-            })
-          : null;
-      const slashImageRequest = trimmedInput.startsWith('/image');
-      // The "Image generation" toggle governs natural-language auto-routing to the
-      // media route: when the user turns it OFF, a message the classifier thinks is
-      // an image request is NOT silently routed to image generation (they can still
-      // force it with /image). Default ON preserves the prior auto-routing. This
-      // makes the toggle a real control rather than a dead one.
-      const imageGenEnabled = useChatStore.getState().features.imageGen;
-      const routedImageRequest =
-        imageGenEnabled &&
-        cloudDispatch?.status === 'selected' &&
-        cloudDispatch.dispatch === 'media';
+      const imageRequest = resolveMobileImageGenerationRequest({
+        executionMode: conversationExecutionMode,
+        text: trimmedInput,
+        selection: selectedModel,
+        subscriptionTier,
+        hasAttachments: Boolean(attachments?.length),
+        globalImageGenerationEnabled: FEATURES.imageGen,
+        imageGenerationEnabled,
+        isClerkSignedIn,
+        ownerId: clerkUserId,
+        grantedCapabilities,
+        isOnline,
+      });
 
       // Image output is dispatched through the canonical media route for both
       // slash commands and natural language. Local conversations never call
       // the Managed Cloud resolver.
-      if (slashImageRequest || routedImageRequest) {
-        const prompt = slashImageRequest
-          ? trimmedInput.slice('/image'.length).trim()
-          : trimmedInput;
-        if (!prompt) {
-          Alert.alert('Add an image prompt', 'Type what you want AGI to create after /image.');
-          return false;
-        }
-        if (conversationExecutionMode !== 'cloud') {
-          Alert.alert(
-            'Image generation uses AGI Cloud',
-            'Start an AGI Cloud chat to generate images. Local Mode can attach and inspect images without uploading them.',
-          );
-          return false;
-        }
-        if (!FEATURES.imageGen) {
-          Alert.alert(
-            'Image generation uses AGI Cloud',
-            'You can attach and inspect local images now. Image generation is available with Cloud access.',
-          );
-          return false;
-        }
-        if (!isOnline) {
-          Alert.alert(
-            'Network connection required',
-            'Image generation needs AGI Cloud. Connect to the internet and try again.',
-          );
-          return false;
-        }
-
+      if (imageRequest.status === 'blocked') {
+        Alert.alert(imageRequest.alert.title, imageRequest.alert.message);
+        return false;
+      }
+      if (imageRequest.status === 'ready') {
+        quotedMessageScopeRef.current = null;
         setQuotedMessage(null);
         const imageTurn = runImageGenerationTurn({
           conversationId: id,
           displayText: finalText,
-          prompt,
-          model: cloudDispatch?.status === 'selected' ? cloudDispatch.modelKey : selectedModel,
+          prompt: imageRequest.prompt,
+          model: imageRequest.model,
+          ownerId: imageRequest.ownerId,
           begin: beginImageGeneration,
           complete: completeImageGeneration,
           fail: failImageGeneration,
@@ -336,20 +384,40 @@ export default function ChatScreen() {
         return true;
       }
 
-      // When offline, enqueue and show an optimistic queued message bubble
-      if (!isOnline) {
+      // Local inference is intentionally network-independent. Only an owned
+      // Managed Cloud turn enters the reconnect queue.
+      if (!isOnline && conversationExecutionMode === 'cloud') {
+        if (!clerkUserId) {
+          Alert.alert(
+            'Sign in to queue this message',
+            'AGI Cloud messages are tied to your account and cannot be queued without an active session.',
+          );
+          return false;
+        }
+        quotedMessageScopeRef.current = null;
         setQuotedMessage(null);
-        const entry = offlineQueue.enqueue({
-          conversationId: id,
-          content: finalText,
-          model: selectedModel,
-        });
+        let entry;
+        try {
+          entry = offlineQueue.enqueue({
+            conversationId: id,
+            content: finalText,
+            model: selectedModel,
+            provenance: { scope: 'cloud', ownerId: clerkUserId },
+          });
+        } catch {
+          Alert.alert(
+            'Account changed',
+            'This Cloud message was not queued because the active account changed. Please try again.',
+          );
+          return false;
+        }
         enqueueOfflineMessage(id, finalText, selectedModel, entry.id);
         return true;
       }
 
       const sendOptions = mode ? TASK_CHIP_SEND_CONTEXT[mode] : undefined;
 
+      quotedMessageScopeRef.current = null;
       setQuotedMessage(null);
       // Voice / hands-free (awaitCompletion) must wait for the FULL reply so it can
       // read it aloud and re-arm the mic — resolve on stream completion (sendMessage's
@@ -387,6 +455,9 @@ export default function ChatScreen() {
       conversationExecutionMode,
       selectedModel,
       subscriptionTier,
+      grantedCapabilities,
+      imageGenerationEnabled,
+      isClerkSignedIn,
       sendMessage,
       beginImageGeneration,
       completeImageGeneration,
@@ -396,7 +467,9 @@ export default function ChatScreen() {
       setSendError,
       stopSpeaking,
       quotedMessage,
+      isConversationActionCurrent,
       isOnline,
+      clerkUserId,
       enqueueOfflineMessage,
     ],
   );
@@ -410,7 +483,7 @@ export default function ChatScreen() {
       // Use the canonical classifier, which consults the FULL managed-cloud catalog
       // (cloudModelSourceMap). The old path used getModelById, whose map only holds
       // local models + ONE "preview" cloud model per provider — so every non-preview
-      // cloud model (e.g. Claude Opus 4.8, GPT-5.5, Grok 4.3) fell through to 'local'
+      // cloud model (e.g. Claude Opus 5, GPT-5.5, Grok 4.3) fell through to 'local'
       // and wrongly triggered a "Switch from AGI Cloud to Local Mode" prompt when
       // selected inside a Cloud chat. executionModeForModel classifies them as 'cloud'.
       return executionModeForSelection(modelId, conversationExecutionMode);
@@ -604,8 +677,6 @@ export default function ChatScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
-  const [renameModalVisible, setRenameModalVisible] = useState(false);
-  const [renameText, setRenameText] = useState('');
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const handleTapCloudMode = useCallback(() => {
     // Fail closed: no cloud model wired → stay Local rather than dangle a dead toggle.
@@ -652,11 +723,18 @@ export default function ChatScreen() {
     openNearestDrawer(navigation);
   }, [navigation]);
 
-  const handleQuoteReply = useCallback((message: ChatMessage) => {
-    setQuotedMessage(message);
-  }, []);
+  const handleQuoteReply = useCallback(
+    (message: ChatMessage) => {
+      const actionScope = captureConversationAction();
+      if (!actionScope || !isConversationActionCurrent(actionScope)) return;
+      quotedMessageScopeRef.current = actionScope;
+      setQuotedMessage(message);
+    },
+    [captureConversationAction, isConversationActionCurrent],
+  );
 
   const handleDismissQuote = useCallback(() => {
+    quotedMessageScopeRef.current = null;
     setQuotedMessage(null);
   }, []);
 
@@ -748,9 +826,21 @@ export default function ChatScreen() {
     (messageId: string) => {
       if (!id) return;
       stopSpeaking();
+      const messageIndex = conversationMessages.findIndex((message) => message.id === messageId);
+      const target = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
+      if (
+        target?.role === 'assistant' &&
+        (target.type === 'image' || target.imageGenStatus === 'failed')
+      ) {
+        const original = conversationMessages[messageIndex - 1];
+        if (original?.role === 'user') {
+          void Promise.resolve(handleSend(original.content));
+          return;
+        }
+      }
       retryMessage(id, messageId);
     },
-    [id, retryMessage, stopSpeaking],
+    [conversationMessages, handleSend, id, retryMessage, stopSpeaking],
   );
 
   const handleEditMessage = useCallback(
@@ -779,7 +869,15 @@ export default function ChatScreen() {
     }
   }, [router, stopSpeaking]);
 
+  const closeRenameModal = useCallback(() => {
+    renameScopeRef.current = null;
+    setRenameModalVisible(false);
+    setRenameText('');
+  }, []);
+
   const handleMenuPress = useCallback(() => {
+    const actionScope = captureConversationAction();
+    if (!actionScope || !isConversationActionCurrent(actionScope)) return;
     const options = ['Share', 'Rename', 'Delete', 'Cancel'];
     const destructiveIndex = 2;
     const cancelIndex = 3;
@@ -793,13 +891,15 @@ export default function ChatScreen() {
         },
         (buttonIndex) => {
           if (buttonIndex === 0) {
+            if (!isConversationActionCurrent(actionScope)) return;
             setExportSheetVisible(true);
           } else if (buttonIndex === 1 && id) {
+            if (!isConversationActionCurrent(actionScope)) return;
             Alert.prompt(
               'Rename Conversation',
               'Enter a new title:',
               (newTitle) => {
-                if (newTitle?.trim()) {
+                if (newTitle?.trim() && isConversationActionCurrent(actionScope)) {
                   renameConversation(id, newTitle.trim());
                 }
               },
@@ -807,12 +907,14 @@ export default function ChatScreen() {
               title,
             );
           } else if (buttonIndex === 2 && id) {
+            if (!isConversationActionCurrent(actionScope)) return;
             Alert.alert('Delete Conversation', 'This cannot be undone.', [
               { text: 'Cancel', style: 'cancel' },
               {
                 text: 'Delete',
                 style: 'destructive',
                 onPress: () => {
+                  if (!isConversationActionCurrent(actionScope)) return;
                   deleteConversation(id);
                   handleBack();
                 },
@@ -823,10 +925,18 @@ export default function ChatScreen() {
       );
     } else {
       Alert.alert('Conversation', undefined, [
-        { text: 'Share', onPress: () => setExportSheetVisible(true) },
+        {
+          text: 'Share',
+          onPress: () => {
+            if (!isConversationActionCurrent(actionScope)) return;
+            setExportSheetVisible(true);
+          },
+        },
         {
           text: 'Rename',
           onPress: () => {
+            if (!isConversationActionCurrent(actionScope)) return;
+            renameScopeRef.current = actionScope;
             setRenameText(title);
             setRenameModalVisible(true);
           },
@@ -835,7 +945,7 @@ export default function ChatScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            if (!id) return;
+            if (!id || !isConversationActionCurrent(actionScope)) return;
             deleteConversation(id);
             handleBack();
           },
@@ -843,7 +953,15 @@ export default function ChatScreen() {
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
-  }, [id, title, renameConversation, deleteConversation, handleBack]);
+  }, [
+    captureConversationAction,
+    deleteConversation,
+    handleBack,
+    id,
+    isConversationActionCurrent,
+    renameConversation,
+    title,
+  ]);
 
   if (!id) {
     return (
@@ -984,7 +1102,7 @@ export default function ChatScreen() {
         </View>
 
         {/* Offline banner */}
-        {!isOnline && (
+        {!isOnline && conversationExecutionMode === 'cloud' && (
           <View
             style={{
               flexDirection: 'row',
@@ -1061,12 +1179,19 @@ export default function ChatScreen() {
           onOpenExport={handleOpenExport}
           onOpenAddToChat={handleOpenAddToChat}
           onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
-          isOnline={isOnline}
+          isOnline={conversationExecutionMode === 'local' || isOnline}
           queueSize={queueSize}
           attachRef={chatInputAttachRef}
           showChips={conversationMessages.length === 0}
           initialText={initialPrompt || undefined}
           draftKey={id}
+          draftProvenance={
+            conversationExecutionMode === 'local'
+              ? { scope: 'local' }
+              : clerkUserId
+                ? { scope: 'cloud', ownerId: clerkUserId }
+                : undefined
+          }
         />
 
         {/* Add to Chat bottom sheet */}
@@ -1130,7 +1255,7 @@ export default function ChatScreen() {
           visible={renameModalVisible}
           transparent
           animationType="fade"
-          onRequestClose={() => setRenameModalVisible(false)}
+          onRequestClose={closeRenameModal}
         >
           <Pressable
             style={{
@@ -1140,7 +1265,7 @@ export default function ChatScreen() {
               justifyContent: 'center',
               padding: 24,
             }}
-            onPress={() => setRenameModalVisible(false)}
+            onPress={closeRenameModal}
           >
             <Pressable
               style={{
@@ -1184,7 +1309,7 @@ export default function ChatScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16 }}>
                 <Pressable
                   style={{ padding: 8 }}
-                  onPress={() => setRenameModalVisible(false)}
+                  onPress={closeRenameModal}
                   accessibilityRole="button"
                   accessibilityLabel="Cancel rename"
                 >
@@ -1193,11 +1318,16 @@ export default function ChatScreen() {
                 <Pressable
                   style={{ padding: 8 }}
                   onPress={() => {
+                    const actionScope = renameScopeRef.current;
+                    if (!isConversationActionCurrent(actionScope)) {
+                      closeRenameModal();
+                      return;
+                    }
                     const trimmed = renameText.trim();
                     if (trimmed && id) {
                       renameConversation(id, trimmed);
                     }
-                    setRenameModalVisible(false);
+                    closeRenameModal();
                   }}
                   accessibilityRole="button"
                   accessibilityLabel="Submit rename"

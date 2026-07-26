@@ -27,7 +27,7 @@ export const ANTHROPIC_THINKING_BUDGET: Readonly<
 // NOTE: `effortToProviderParams()` and `GEMINI_THINKING_BUDGET` were removed
 // 2026-07-10 (reasoning-effort-capability wave). They were DEAD (grep-confirmed:
 // zero callers) AND wrong per the live matrix: the helper emitted Anthropic
-// `thinking:{type:"enabled",budget_tokens}` — which now 400s on Opus 4.8 — and
+// `thinking:{type:"enabled",budget_tokens}` — which now 400s on Opus 5 — and
 // capped OpenAI at a fixed set with no per-model `supportedEfforts`. The correct,
 // live path is per-model `reasoning.control` + request-processor.ts +
 // openai-reasoning-effort.ts. The remaining exports here (`Effort`, `EFFORT_LABEL`,

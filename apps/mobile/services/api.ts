@@ -16,7 +16,14 @@ import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } fr
 // PUT in uploadFile(), which targets the storage provider rather than our cloud
 // and is only reachable after the guarded presign call has already succeeded.
 import { guardedFetch } from '@/lib/egressGuard';
-import { getInfoAsync, uploadAsync, FileSystemUploadType } from 'expo-file-system/legacy';
+import { invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
+import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
+import {
+  createUploadTask,
+  getInfoAsync,
+  FileSystemUploadType,
+  type UploadTask,
+} from 'expo-file-system/legacy';
 import {
   MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
@@ -40,7 +47,7 @@ import {
 export class ApiPaywallError extends Error {
   /** Which feature is gated (e.g. 'token_cap', 'image_quota', 'video_generation'). */
   readonly feature: string;
-  /** Minimum tier required to use the feature (e.g. 'hobby', 'pro', 'pro_plus', 'max'). */
+  /** Minimum tier required to use the feature (e.g. 'basic', 'pro', 'max_15x'). */
   readonly requiredTier: string;
   /** Human-readable description from the server (e.g. '10/10 images used this month'). */
   readonly reason: string;
@@ -72,8 +79,41 @@ export class ApiPaywallError extends Error {
 let _refreshing: Promise<boolean> | null = null;
 let _refreshFailures = 0;
 let _refreshBackoffUntil = 0;
+let _accountGeneration = 0;
+const _activeAccountUploads = new Set<UploadTask>();
 const MAX_REFRESH_FAILURES = 3;
 const REFRESH_TIMEOUT_MS = 10_000;
+
+class StaleApiAccountOperationError extends Error {
+  constructor() {
+    super('Cloud account changed while this API request was in flight');
+    this.name = 'StaleApiAccountOperationError';
+  }
+}
+
+function assertApiAccountGeneration(generation: number): void {
+  if (generation !== _accountGeneration) {
+    throw new StaleApiAccountOperationError();
+  }
+}
+
+/**
+ * Invalidate request/refresh work that captured credentials for the previous
+ * Clerk user. Account teardown calls this synchronously before the next
+ * account can issue requests.
+ */
+export function resetApiAccountState(): void {
+  _accountGeneration += 1;
+  for (const upload of _activeAccountUploads) {
+    void upload.cancelAsync().catch((error) => {
+      if (__DEV__) console.warn('[api] Failed to cancel stale account upload:', error);
+    });
+  }
+  _activeAccountUploads.clear();
+  _refreshing = null;
+  _refreshFailures = 0;
+  _refreshBackoffUntil = 0;
+}
 
 async function tryRefreshToken(): Promise<boolean> {
   if (_refreshing) return _refreshing;
@@ -82,13 +122,15 @@ async function tryRefreshToken(): Promise<boolean> {
     return false;
   }
 
-  _refreshing = (async () => {
+  const generation = _accountGeneration;
+  const operation = (async () => {
     try {
       const refreshPromise = refreshAuthSession();
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Token refresh timed out')), REFRESH_TIMEOUT_MS),
       );
       const refreshed = await Promise.race([refreshPromise, timeoutPromise]);
+      if (generation !== _accountGeneration) return false;
       if (refreshed) {
         _refreshFailures = 0;
         _refreshBackoffUntil = 0;
@@ -98,15 +140,19 @@ async function tryRefreshToken(): Promise<boolean> {
       _refreshBackoffUntil = Date.now() + Math.min(2 ** _refreshFailures * 1000, 60_000);
       return false;
     } catch {
+      if (generation !== _accountGeneration) return false;
       _refreshFailures++;
       _refreshBackoffUntil = Date.now() + Math.min(2 ** _refreshFailures * 1000, 60_000);
       return false;
     } finally {
-      _refreshing = null;
+      if (generation === _accountGeneration) {
+        _refreshing = null;
+      }
     }
   })();
 
-  return _refreshing;
+  _refreshing = operation;
+  return operation;
 }
 
 /**
@@ -116,6 +162,12 @@ async function tryRefreshToken(): Promise<boolean> {
  * clearing auth tokens does not close the data channel.
  */
 function handleUnrecoverableAuth(): void {
+  // Fail closed immediately. Waiting for Clerk's async signed-out emission
+  // leaves the rejected account's cached conversations, entitlements, and
+  // in-flight callbacks visible long enough to leak into a subsequent login.
+  invalidateCloudAccount();
+  clearLocalCloudAccountState();
+
   // v1 local-only: no auth UI exists, so prompting the user to "sign in
   // again" would dead-end on a redirect-stub login. Silently clear the
   // session and let the local-mode app shell render; cloud-only callers
@@ -170,11 +222,13 @@ async function request<T>(
   init: RequestInit = {},
   options: RequestOptions = {},
 ): Promise<T> {
+  const accountGeneration = _accountGeneration;
   const headers = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     ...(await getAuthHeaders()),
   };
+  assertApiAccountGeneration(accountGeneration);
   const controller = new AbortController();
   const timeout = options.timeout ?? TIMEOUTS.DEFAULT;
 
@@ -192,10 +246,12 @@ async function request<T>(
         ? combineAbortSignals([options.signal, controller.signal])
         : controller.signal,
     });
+    assertApiAccountGeneration(accountGeneration);
 
     if (response.status === 401 && !options._skipAuthRetry) {
       // Attempt token refresh once, then retry the request
       const refreshed = await tryRefreshToken();
+      assertApiAccountGeneration(accountGeneration);
       if (refreshed) {
         return request<T>(path, init, { ...options, _skipAuthRetry: true });
       }
@@ -211,6 +267,7 @@ async function request<T>(
     // can catch ApiPaywallError separately from generic network errors.
     if (response.status === 429) {
       const bodyText = await response.text();
+      assertApiAccountGeneration(accountGeneration);
       let parsed: Record<string, unknown> | null = null;
       try {
         parsed = JSON.parse(bodyText) as Record<string, unknown>;
@@ -221,7 +278,7 @@ async function request<T>(
       if (parsed && parsed.kind === 'paywall') {
         throw new ApiPaywallError(
           typeof parsed.feature === 'string' ? parsed.feature : 'token_cap',
-          typeof parsed.requiredTier === 'string' ? parsed.requiredTier : 'hobby',
+          typeof parsed.requiredTier === 'string' ? parsed.requiredTier : 'basic',
           typeof parsed.reason === 'string' ? parsed.reason : '',
         );
       }
@@ -237,6 +294,7 @@ async function request<T>(
 
     if (!response.ok) {
       const body = await response.text();
+      assertApiAccountGeneration(accountGeneration);
 
       // Some routes (e.g. image generation) gate on plan tier with a 403 and
       // an object-shaped `{ error: { code: 'plan_upgrade_required', ... } }`
@@ -292,7 +350,9 @@ async function request<T>(
       );
     }
 
-    return (await response.json()) as T;
+    const result = (await response.json()) as T;
+    assertApiAccountGeneration(accountGeneration);
+    return result;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -386,6 +446,7 @@ export const api = {
     file: UploadFileInput,
     options?: RequestOptions,
   ): Promise<UploadFileResult> => {
+    const accountGeneration = _accountGeneration;
     const mimeType = resolveChatAttachmentMimeType(file.name, file.type);
     if (!mimeType) {
       throw new Error(
@@ -394,6 +455,7 @@ export const api = {
     }
 
     const info = await getInfoAsync(file.uri);
+    assertApiAccountGeneration(accountGeneration);
     if (!info.exists || info.isDirectory) {
       throw new Error(`"${file.name}" could not be read from this device.`);
     }
@@ -406,6 +468,7 @@ export const api = {
     }
 
     const token = await getAuthToken();
+    assertApiAccountGeneration(accountGeneration);
     const controller = new AbortController();
     const timeout = options?.timeout ?? TIMEOUTS.UPLOAD;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -434,9 +497,11 @@ export const api = {
           signal,
         },
       );
+      assertApiAccountGeneration(accountGeneration);
 
       if (presignResponse.status === 401 && !options?._skipAuthRetry) {
         const refreshed = await tryRefreshToken();
+        assertApiAccountGeneration(accountGeneration);
         if (refreshed) {
           return api.uploadFile(file, { ...options, _skipAuthRetry: true });
         }
@@ -450,16 +515,48 @@ export const api = {
       const presign = ManagedCloudChatAttachmentPresignResponseSchema.parse(
         await presignResponse.json(),
       );
+      assertApiAccountGeneration(accountGeneration);
+      const uploadUrl = new URL(presign.uploadUrl);
+      if (
+        uploadUrl.protocol !== 'https:' ||
+        uploadUrl.username !== '' ||
+        uploadUrl.password !== ''
+      ) {
+        throw new Error(`Refusing an insecure upload destination for "${file.name}".`);
+      }
 
       // ---- Step 2: direct-to-storage PUT ----------------------------------
       // expo-file-system streams the file from disk instead of materialising a
       // 12 MiB base64 string in the JS heap. This host is the storage provider,
       // never our cloud, and is only reachable after step 1 cleared the guard.
-      const putResult = await uploadAsync(presign.uploadUrl, file.uri, {
+      const uploadTask = createUploadTask(uploadUrl.toString(), file.uri, {
         httpMethod: 'PUT',
         uploadType: FileSystemUploadType.BINARY_CONTENT,
         headers: presign.uploadHeaders,
       });
+      _activeAccountUploads.add(uploadTask);
+      const cancelUpload = () => {
+        void uploadTask.cancelAsync().catch((error) => {
+          if (__DEV__) console.warn('[api] Failed to cancel attachment upload:', error);
+        });
+      };
+      signal.addEventListener('abort', cancelUpload, { once: true });
+      let putResult;
+      try {
+        putResult = await uploadTask.uploadAsync();
+      } finally {
+        signal.removeEventListener('abort', cancelUpload);
+        _activeAccountUploads.delete(uploadTask);
+      }
+      assertApiAccountGeneration(accountGeneration);
+      if (!putResult) {
+        if (signal.aborted) {
+          const abortError = new Error('Attachment upload aborted');
+          abortError.name = 'AbortError';
+          throw abortError;
+        }
+        throw new Error(`Upload of "${file.name}" was cancelled. Please try again.`);
+      }
       if (putResult.status < 200 || putResult.status >= 300) {
         throw new Error(
           `Upload of "${file.name}" to storage failed (HTTP ${putResult.status}). Please try again.`,
@@ -486,6 +583,7 @@ export const api = {
           signal,
         },
       );
+      assertApiAccountGeneration(accountGeneration);
       if (!completeResponse.ok) {
         throw new Error(await uploadErrorMessage(completeResponse, file.name));
       }
@@ -493,6 +591,7 @@ export const api = {
       const { attachment } = ManagedCloudChatAttachmentCompleteResponseSchema.parse(
         await completeResponse.json(),
       );
+      assertApiAccountGeneration(accountGeneration);
       return {
         id: attachment.id,
         url: attachment.url,

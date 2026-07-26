@@ -1,8 +1,8 @@
 # AGI VS Code Extension — Volume 15 — Inference Providers
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: `AGENTS.md` (root) and `apps/extension-vscode/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `docs/surfaces/vscode-extension.md`; and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/core/commandSetup.ts`, `packages/ai/providers/`, `packages/contracts/types/src/models.json`.
 
@@ -10,7 +10,7 @@ Authority: `AGENTS.md` (root) and `apps/extension-vscode/AGENTS.md`; `docs/curre
 
 This volume defines how the AGI VS Code extension reaches inference: through the AGI Managed-Cloud subscription, through user-supplied keys (BYOK), and through local runtimes. VS Code is a full trust surface — **Local + BYOK + Managed Cloud** — but each mode is a distinct trust boundary with an explicit, visibly-labeled selection. The extension is workspace-scoped: there is **no automatic app-chat sync**, and any handoff to app chat is explicit and redacted (Volume-cross-ref: sync/trust volumes).
 
-The model picker never hardcodes model IDs. `modelConstants.ts` derives every option from the shared catalog in `packages/contracts/types/src/models.json` via `@agiworkforce/types` helpers (`getCoreManualModelOptions`, `getModelMetadataById`, `getModelContextLimits`, `getModelCostRates`) ✅ (`apps/extension-vscode/src/features/model-picker/modelConstants.ts`). The provider client set lives in `packages/ai/providers/` (`anthropic`, `openai`, `google`, `xai`, `deepseek`, `perplexity`, `ollama`, `lmstudio`) ✅. Providers not present as a client package or in the extension's `providerStreamProvider` enum are **🔭 Planned** here, not shipped.
+The model picker never hardcodes model IDs. `modelConstants.ts` derives every managed option from the shared catalog in `packages/contracts/types/src/models.json` via `@agiworkforce/types` helpers (`getCoreManualModelOptions`, `getModelMetadataById`, `getModelContextLimits`, `getModelCostRates`) ✅. The workspace app-server supplies installed local models through `model/list`. There is no independent provider selector: provider-stream utilities infer the provider from the selected catalog model, while developer-session inference remains app-server-owned.
 
 ## AGI subscription (Managed Cloud): included models
 
@@ -24,7 +24,7 @@ The Managed-Cloud subscription ladder is the canon ladder — used everywhere, n
 | Max        | $100 and $200 | (INR TBD) | Two power tiers (usage/limits/models). |
 | Enterprise | custom        | custom    | Org controls, SSO, seats, contracts.   |
 
-Local and BYOK are **free access modes**, not plans. Included models per plan are resolved from the catalog and plan gating — the extension surfaces them through the model picker, which reads catalog tier metadata (`getPickerModelTier`, auto-tiers `auto-economy`/`auto-balanced`/`auto-premium`) 🟡 (`modelConstants.ts`; per-plan entitlement gating is catalog/server-driven and not fully enforced in-extension). Managed Cloud is public alpha, open by default for signed-in users; sign-in uses device auth ✅ (`apps/extension-vscode/src/features/account-auth/deviceAuth.ts`).
+Local and BYOK are **free access modes**, not plans. BYOK catalog rows remain selectable because the app-server performs provider/key admission; Local mode exposes only CLI-discovered local models. Managed developer access starts at Pro, so Local, Free, and Basic do not receive a fake managed-model selection. Pro/Max model admission is resolved from the shared catalog: the picker disables unreachable Auto/manual rows, and both command and webview handlers reject forged locked selections. Plain `auto` is classified from each developer turn and resolved within the active BYOK or managed tier. The server remains authoritative. Managed Cloud is public alpha, open by default for signed-in users; sign-in uses device auth.
 
 ### Usage
 
@@ -32,55 +32,55 @@ Metered usage is the model; **no credit top-ups** (policy). The extension expose
 
 ### Billing
 
-Billing is **Stripe on the web account** (`agiworkforce.com/pricing`); the extension performs **no in-editor checkout** — it reads the resolved plan and links out. 🟡 Gap: `agiWorkforce.tier` in `package.json` still encodes retired tiers (`hobby`, `pro_plus`) and `agi-workforce.openInviteCodeModal` ("Unlock Cloud Features") is a stale invite/waitlist gate; both contradict the canon ladder and the open-by-default alpha and must be reconciled with `packages/contracts/types/src/billing-catalog.ts` (separate tracked task).
+Billing is **Stripe on the web account** (`agiworkforce.com/pricing`); the extension performs **no in-editor checkout**. The extension tier override preserves `local`, `byok`, `free`, `basic`, `pro`, `team`, `max`, `max_15x`, and `enterprise`. The compatibility command id `agi-workforce.openInviteCodeModal` is labeled “Sign In to AGI Cloud” and directly starts device sign-in; it is not an invite/waitlist gate.
 
 ## BYOK (Desktop / CLI / VS Code only)
 
-BYOK is sanctioned on VS Code. A single API key is stored in VS Code SecretStorage via `agi-workforce.setApiKey` / `clearApiKey` (`getApiKey`/`setApiKey` from `src/utils/api.ts`) ✅ (`apps/extension-vscode/src/core/commandSetup.ts`). The multi-provider `provider-stream` path (`agiWorkforce.useProviderStream`, `agiWorkforce.gatewayUrl`, `agiWorkforce.providerStreamProvider`) exists but its config note states AGI account web auth "is not wired in the VS Code extension yet" 🟡 (`package.json`). The required Local→BYOK **fork ceremony** — context selection, secret scan, payload preview, consent, visible provider label — is **🔭 Planned**; do not route Local content to a provider key without it.
+BYOK is sanctioned on VS Code. A legacy gateway API key is stored in VS Code SecretStorage via `agi-workforce.setApiKey` / `clearApiKey`. `agiWorkforce.useProviderStream` is a separate, opt-in account-authenticated transport for cloud-backed editor utilities; `chatCompletion` is wired to it and the provider is inferred from the selected model. It does not reroute local `@agi`, sidebar, or editor sessions. The sidebar labels the Local host and provider/Auto routing; a provider-boundary selection starts a new thread, does not forward the earlier transcript, and emits a visible session notice. Any future feature that forwards existing Local context must implement the complete context-selection, secret-scan, payload-preview, and consent ceremony first.
 
 ### OpenAI
 
-🟡 Catalog `gpt-*`/`o*` rows + `packages/ai/providers/openai` client + `providerStreamProvider: "openai"` (auto-inferred from `gpt-*` prefix). Direct-key BYOK fork not yet wired.
+✅ Catalog `gpt-*`/`o*` rows route through the app-server for developer sessions. The opt-in cloud-utility provider stream supports OpenAI and infers it from the selected model. A direct per-provider key vault remains planned.
 
 ### Anthropic
 
-🟡 Catalog `claude-*` rows + `packages/ai/providers/anthropic` + enum `"anthropic"` (auto from `claude-*`). Extended-thinking axis via `agiWorkforce.agent.thinking`/`agent.effort`. Fork ceremony 🔭.
+✅ Catalog `claude-*` rows route through the app-server; the opt-in cloud-utility provider stream supports Anthropic. `agent.effort` applies to developer sessions. `agent.thinking` is explicitly scoped to legacy cloud-backed editor utilities.
 
 ### Google
 
-🟡 Catalog `gemini-*` rows + `packages/ai/providers/google` + enum `"google"` (auto from `gemini-*`). Fork ceremony 🔭.
+✅ Catalog `gemini-*` rows route through the app-server; the opt-in cloud-utility provider stream supports Google.
 
 ### xAI
 
-🟡 Catalog `grok-*` rows + `packages/ai/providers/xai` + enum `"xai"`. Fork ceremony 🔭.
+🟡 Catalog `grok-*` rows are available to the app-server subject to plan/provider configuration. The optional editor-utility provider stream does not support xAI and fails visibly instead of silently changing providers.
 
 ### OpenRouter
 
-🔭 A registry entry exists (`open_router`) in `packages/contracts/types/src/models.json`, but there is no `packages/ai/providers/openrouter` client and no `providerStreamProvider` enum value in the extension. Planned aggregator BYOK.
+🔭 A registry entry exists (`open_router`) in `packages/contracts/types/src/models.json`, but the optional extension editor-utility stream has no OpenRouter adapter. Planned aggregator BYOK.
 
 ### Groq
 
-🔭 Registry entry `groq` exists in `models.json`, but no client package and no extension enum value. Planned.
+🔭 Registry entry `groq` exists in `models.json`, but the optional extension editor-utility stream has no Groq adapter.
 
 ### Together
 
-🔭 Registry entry `together` exists in `models.json`, but no client package and no extension enum value. Planned.
+🔭 Registry entry `together` exists in `models.json`, but the optional extension editor-utility stream has no Together adapter.
 
 ### DeepSeek
 
-🟡 Catalog rows + `packages/ai/providers/deepseek` + enum `"deepseek"`. Fork ceremony 🔭.
+🟡 Catalog rows are available to the app-server subject to plan/provider configuration. The optional extension editor-utility stream has no DeepSeek adapter.
 
 ## Local (on-device runtime)
 
-Local runs on-device and is never silently routed to BYOK or Cloud. The catalog gates any `requiresEnvironment` model through `evaluateModelEnvironment`; today `environmentAvailability()` is a Phase-A stub returning `{ configured: false }`, so local-runtime availability is not yet detected in-extension 🟡 (`modelConstants.ts`). Local inference can also be reached indirectly through the authenticated desktop bridge (`ws://127.0.0.1:8787/ws`, token `~/.agiworkforce/bridge-token` 0600) ✅ (`apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`).
+Local runs on-device and is never silently routed to BYOK or Cloud. The workspace app-server owns inference and returns installed local models through `model/list`; the sidebar merges them into the catalog picker with Local labels. Static catalog rows that declare `requiresEnvironment` remain fail-closed until a real environment-availability signal exists. The optional Desktop bridge (`ws://127.0.0.1:8787/ws`, token `~/.agiworkforce/bridge-token` 0600) is a separate explicit integration.
 
 ### Ollama
 
-🟡 `packages/ai/providers/ollama` client + enum `"ollama"`/`"ollama-cloud"`. Runtime detection/model-list in-extension not wired (Phase-A stub). Non-catalog local engine IDs stay grounded in `packages/ai/providers/ollama`, not re-listed here.
+✅ The app-server discovers installed Ollama models and owns their inference. The extension classifies `ollama/` IDs as local and unmetered; it does not maintain a duplicate direct Ollama HTTP client.
 
 ### LM Studio
 
-🟡 `packages/ai/providers/lmstudio` client + enum `"lmstudio"`. In-extension endpoint discovery/health not yet wired.
+✅ The app-server discovers installed LM Studio models and owns their inference. The extension classifies `lmstudio/` and `lms/` IDs as local and unmetered.
 
 ### llama.cpp
 
@@ -88,7 +88,7 @@ Local runs on-device and is never silently routed to BYOK or Cloud. The catalog 
 
 ## Repository map
 
-- `apps/extension-vscode/package.json` — provider/model settings, `providerStreamProvider` enum, tier enum, commands.
+- `apps/extension-vscode/package.json` — provider/model transport settings, tier enum, commands.
 - `apps/extension-vscode/src/features/model-picker/` — catalog-driven picker (`modelConstants.ts`, `modelMetrics.ts`, `index.ts`).
 - `apps/extension-vscode/src/core/commandSetup.ts`, `src/utils/api.ts` — key storage, sign-in, tier/usage fetch.
 - `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`, `src/features/cloud-bridge/` — cloud auth + (stale) invite modal.
@@ -106,7 +106,7 @@ Production-ready when: the picker only ever shows catalog-derived IDs; the activ
 
 - [ ] Build: model picker sourced entirely from `models.json`; no hardcoded model IDs; `pnpm --filter agi-workforce test` green.
 - [ ] Trust: Local / BYOK / Managed selection is explicit and labeled; Local→BYOK fork (context selection, secret scan, payload preview, consent) enforced before any provider-key call.
-- [ ] Security/billing: BYOK keys in SecretStorage only; no in-editor checkout; `agiWorkforce.tier` enum + invite modal reconciled to canon ladder (Free/Basic/Pro/Max/Enterprise).
+- [ ] Security/billing: credentials in SecretStorage only; no in-editor checkout; extension tier enum contains only current access modes; legacy invite command routes to sign-in.
 
 ## Anti-patterns
 

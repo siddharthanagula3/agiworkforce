@@ -290,7 +290,7 @@
         "modelKey": "claude-sonnet-5"
       },
       "flagship_coding": {
-        "modelKey": "claude-opus-4.8"
+        "modelKey": "claude-opus-5"
       },
       "reasoning_premium": {
         "modelKey": "deepseek-v4-flash"
@@ -305,13 +305,13 @@
         "modelKey": "claude-sonnet-5"
       },
       "creative_writing_premium": {
-        "modelKey": "claude-opus-4.8"
+        "modelKey": "claude-opus-5"
       },
       "creative_balanced": {
         "modelKey": "claude-sonnet-5"
       },
       "creative_premium": {
-        "modelKey": "claude-opus-4.8"
+        "modelKey": "claude-opus-5"
       },
       "vision_fast": {
         "modelKey": "gemini-3.5-flash-lite"
@@ -341,7 +341,7 @@
         "modelKey": "claude-sonnet-5"
       },
       "computer_use_premium": {
-        "modelKey": "claude-opus-4.8"
+        "modelKey": "claude-opus-5"
       },
       "image_generation": {
         "modelKey": "gemini-3.1-flash-image"
@@ -374,7 +374,7 @@
         "modelKey": "gemini-3.1-pro-preview"
       },
       "flagship_coding_pro_plus": {
-        "modelKey": "claude-opus-4.8"
+        "modelKey": "claude-opus-5"
       },
       "flagship_general_pro_plus": {
         "modelKey": "gpt-5.6-sol"

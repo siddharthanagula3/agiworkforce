@@ -30,7 +30,7 @@ Cloud/Local stance shapes _what_ ships when: Local/BYOK features are capital-eff
 
 ## Competitor notes
 
-Incumbents ship cadence as a weapon (`strategy/01`: Opus 4.6→4.7→4.8 plus the Fable line in ~one quarter) and run **continuous app-store/marketplace review-compliance** across iOS, Android, Chrome Web Store, VS Code Marketplace, JetBrains, and cloud marketplaces. AGI cannot match model cadence and should not try; AGI's release discipline competes on **trust + honesty** instead — gated claims, provable boundaries, serial surfaces done well. Don't fight incumbent strengths (frontier models, distribution); attack the structural weakness (data sovereignty) on a sequence you can actually execute (`strategy/07` §5).
+Incumbents ship rapid model-family cadence as a weapon (`strategy/01`) and run **continuous app-store/marketplace review-compliance** across iOS, Android, Chrome Web Store, VS Code Marketplace, JetBrains, and cloud marketplaces. AGI cannot match model cadence and should not try; AGI's release discipline competes on **trust + honesty** instead — gated claims, provable boundaries, serial surfaces done well. Don't fight incumbent strengths (frontier models, distribution); attack the structural weakness (data sovereignty) on a sequence you can actually execute (`strategy/07` §5).
 
 ## Checklists
 

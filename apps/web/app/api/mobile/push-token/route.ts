@@ -46,15 +46,19 @@ const PushTokenSchema = z.object({
 });
 
 async function handlePushToken(request: NextRequest) {
-  // Bearer-authenticated requests (the mobile app) are bypassed inside
-  // requireCsrfToken; cookie-auth callers still need a valid token.
-  const csrfResponse = await requireCsrfToken(request);
-  if (csrfResponse) return csrfResponse;
-
   const rateLimitResponse = await withRateLimit(request, 'mobile-push-token');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
+  // Authenticate the exact request before making the CSRF decision. Mobile
+  // sends a Clerk Bearer token; calling requireCurrentUserId() without the
+  // request incorrectly selected cookie-only auth and rejected valid devices.
+  const userId = await requireCurrentUserId(request);
+
+  // Bearer-authenticated requests (the mobile app) are bypassed inside
+  // requireCsrfToken after cryptographic verification; cookie-auth callers
+  // remain bound to the already-resolved user id.
+  const csrfResponse = await requireCsrfToken(request, userId);
+  if (csrfResponse) return csrfResponse;
 
   const body = await request.json().catch(() => null);
   const parsed = PushTokenSchema.safeParse(body);
@@ -102,13 +106,13 @@ const DeleteTokenSchema = z.object({
 });
 
 async function handleDeletePushToken(request: NextRequest) {
-  const csrfResponse = await requireCsrfToken(request);
-  if (csrfResponse) return csrfResponse;
-
   const rateLimitResponse = await withRateLimit(request, 'mobile-push-token');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
+  const userId = await requireCurrentUserId(request);
+
+  const csrfResponse = await requireCsrfToken(request, userId);
+  if (csrfResponse) return csrfResponse;
 
   const deviceId = new URL(request.url).searchParams.get('deviceId');
   const parsed = DeleteTokenSchema.safeParse({ deviceId });

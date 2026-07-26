@@ -663,7 +663,7 @@ export const MessageBubble = memo(function MessageBubble({
             {isAssistant && message.isGeneratingImage && (
               <ImageGenProgress
                 prompt={message.imageGenPrompt ?? message.content ?? 'Generating image…'}
-                progress={message.imageGenProgress ?? 0}
+                progress={message.imageGenProgress}
                 status={message.imageGenStatus ?? 'generating'}
                 estimatedTime={message.imageGenEstimatedTime}
                 errorMessage={message.imageGenError}
@@ -676,9 +676,52 @@ export const MessageBubble = memo(function MessageBubble({
                 imageUrl={message.imageUrl}
                 revisedPrompt={message.revisedPrompt}
                 width={imageWidth}
+                allowEphemeral={message.imageGenPersisted === false}
                 onPress={() => handleImagePress(message.imageUrl!)}
               />
             )}
+
+            {isAssistant &&
+            message.imageGenPersisted === false &&
+            typeof message.imageGenError === 'string' ? (
+              <Pressable
+                onPress={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+                disabled={!onRetryMessage}
+                accessibilityRole={onRetryMessage ? 'button' : 'text'}
+                accessibilityLabel={
+                  onRetryMessage
+                    ? 'Generated image was not saved. Retry image generation.'
+                    : 'Generated image was not saved.'
+                }
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: themeColors.dangerSurface,
+                  borderWidth: 1,
+                  borderColor: themeColors.dangerBorder,
+                  borderRadius: radii.md,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  marginTop: 4,
+                }}
+              >
+                <AlertCircle size={13} color={themeColors.agentError} />
+                <Text style={{ flex: 1, fontSize: 12, color: themeColors.textSecondary }}>
+                  Image shown for this session only. It was not saved to your library.
+                </Text>
+                {onRetryMessage ? (
+                  <>
+                    <RefreshCw size={12} color={themeColors.agentError} />
+                    <Text
+                      style={{ fontSize: 12, fontWeight: '600', color: themeColors.agentError }}
+                    >
+                      Retry
+                    </Text>
+                  </>
+                ) : null}
+              </Pressable>
+            ) : null}
 
             {/* Citations: chips for 1-3, collapsible card for 4+ */}
             {isAssistant && message.citations && message.citations.length > 0 ? (
@@ -857,7 +900,9 @@ export const MessageBubble = memo(function MessageBubble({
       {/* Full-screen image viewer */}
       <ImageFullScreen
         imageUrl={fullScreenImageUrl}
+        prompt={message.imageGenPrompt ?? message.revisedPrompt}
         visible={fullScreenImageUrl !== null}
+        allowEphemeral={message.imageGenPersisted === false}
         onClose={handleCloseFullScreenImage}
       />
 

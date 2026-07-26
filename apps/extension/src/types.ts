@@ -1,6 +1,9 @@
 import type { RoutingTaskType } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
-import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
+import type {
+  ManagedCloudAgentRunReference,
+  ToolApprovalDecisionWire,
+} from '@agiworkforce/cloud-contracts';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 export type NativeMessageType =
@@ -33,6 +36,7 @@ export type NativeMessageType =
   | 'CHAT_MESSAGE'
   | 'CANCEL_STREAM'
   | 'RESUME_CHAT_RUN'
+  | 'RESOLVE_CHAT_APPROVAL'
   | 'OPEN_SIDE_PANEL'
   | 'OPEN_IN_DESKTOP'
   | 'GET_COOKIES'
@@ -77,16 +81,13 @@ export type NativeMessageType =
   | 'ADD_MEMORY'
   | 'UPDATE_MEMORY'
   | 'DELETE_MEMORY'
-  | 'GET_ACTION_MODE'
-  | 'SET_ACTION_MODE'
   | 'GET_QUICK_MODE'
-  | 'SET_QUICK_MODE'
-  | 'PERMISSION_RESPONSE';
+  | 'SET_QUICK_MODE';
 
 /** Internal-only messages between extension contexts — NOT sent to native host. */
-export type InternalMessageType = 'CHAT_CHUNK' | 'PAYWALL_HIT' | 'PERMISSION_REQUIRED';
+export type InternalMessageType = 'CHAT_CHUNK' | 'PAYWALL_HIT';
 
-export type InternalMessage = ChatChunkMessage | PaywallHitMessage | PermissionRequiredMessage;
+export type InternalMessage = ChatChunkMessage | PaywallHitMessage;
 
 // Base message structure
 export interface BaseMessage {
@@ -520,6 +521,14 @@ export interface ResumeChatRunMessage extends BaseMessage {
   alreadyVisibleText: string;
 }
 
+export interface ResolveChatApprovalMessage extends BaseMessage {
+  type: 'RESOLVE_CHAT_APPROVAL';
+  clientInstanceId: string;
+  id: string;
+  cloudRun: ManagedCloudAgentRunReference;
+  toolApprovals: ToolApprovalDecisionWire[];
+}
+
 // Chat chunk — sent from background to side panel as streaming response arrives
 export interface ChatChunkMessage {
   type: 'CHAT_CHUNK';
@@ -937,24 +946,6 @@ export interface ScheduledTaskResponse {
   error?: string;
 }
 
-/** Autonomy mode: 'ask' requires per-action confirmation; 'act' executes without prompting. */
-export type ActionMode = 'ask' | 'act';
-
-export interface GetActionModeMessage extends BaseMessage {
-  type: 'GET_ACTION_MODE';
-}
-
-export interface SetActionModeMessage extends BaseMessage {
-  type: 'SET_ACTION_MODE';
-  mode: ActionMode;
-}
-
-export interface GetActionModeResponse {
-  success: boolean;
-  mode?: ActionMode;
-  error?: string;
-}
-
 /** Quick mode: when true, the next turn uses the admitted Auto Economy routing profile. */
 export interface GetQuickModeMessage extends BaseMessage {
   type: 'GET_QUICK_MODE';
@@ -969,21 +960,6 @@ export interface GetQuickModeResponse {
   success: boolean;
   enabled?: boolean;
   error?: string;
-}
-
-/** Sent from background → side panel when mode='ask' and an action targets a new domain. */
-export interface PermissionRequiredMessage {
-  type: 'PERMISSION_REQUIRED';
-  requestId: string;
-  domain: string;
-  actionDescription: string;
-}
-
-/** Sent from side panel → background in response to a PERMISSION_REQUIRED prompt. */
-export interface PermissionResponseMessage extends BaseMessage {
-  type: 'PERMISSION_RESPONSE';
-  requestId: string;
-  decision: 'allow' | 'deny' | 'always';
 }
 
 /**
@@ -1044,6 +1020,7 @@ export type ExtensionMessage =
   | ChatMessageMessage
   | CancelStreamMessage
   | ResumeChatRunMessage
+  | ResolveChatApprovalMessage
   | OpenSidePanelMessage
   | OpenInDesktopMessage
   | GetCookiesMessage
@@ -1084,11 +1061,8 @@ export type ExtensionMessage =
   | ListScheduledTasksMessage
   | UpdateScheduledTaskMessage
   | DeleteScheduledTaskMessage
-  | GetActionModeMessage
-  | SetActionModeMessage
   | GetQuickModeMessage
   | SetQuickModeMessage
-  | PermissionResponseMessage
   | RunAutofillMessage
   | StartComputerUseMessage
   | ApproveContextHandoffMessage
@@ -1131,7 +1105,6 @@ export type ExtensionResponse =
   | ClearConsoleLogsResponse
   | ShortcutResponse
   | ScheduledTaskResponse
-  | GetActionModeResponse
   | GetQuickModeResponse
   | ContextHandoffResponse;
 

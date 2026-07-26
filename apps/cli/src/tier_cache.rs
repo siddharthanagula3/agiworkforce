@@ -6,12 +6,12 @@
 //! network call.
 //!
 //! ## Tier model
-//! Canonical `ProductTier` (from `packages/contracts/types/src/model-catalog.ts`):
-//!   `free` | `pro` | `max` | `enterprise`
+//! Canonical billing tiers (from `packages/contracts/types/src/billing-catalog.ts`):
+//!   `free` | `basic` | `pro` | `max` | `max_15x` | `team` | `enterprise`
 //! The CLI also tracks `byok` for Local/BYOK sessions (not a server-side tier).
-//! Subscription is a flat model — NO token caps, NO credits, NO usage cents.
-//! The single source of truth for tier strings is `normalizeProductTier` in
-//! `packages/contracts/types/src/model-catalog.ts`: team→Pro, else unknown→Free (fail-closed).
+//! Customer-facing tier identity stays exact here. Model routing may group
+//! Team with Pro and Max 15x with Max, but account/status UI must not relabel
+//! what the customer purchased.
 //!
 //! ## Flow
 //! 1. Check `~/.agiworkforce/cache/tier.toml` — if present and < 1 h old, return cached tier.
@@ -56,19 +56,21 @@ const DEFAULT_API_BASE: &str = "https://agiworkforce.com";
 
 /// User's current subscription tier as returned by the AGI Workforce API.
 ///
-/// Mirrors the canonical `ProductTier` union in `packages/contracts/types/src/model-catalog.ts`:
-///   `free` | `pro` | `max` | `enterprise`
+/// Mirrors the managed tiers in `packages/contracts/types/src/billing-catalog.ts`:
+///   `free` | `basic` | `pro` | `max` | `max_15x` | `team` | `enterprise`
 /// Plus `Byok` which is a CLI-side classification for Local/BYOK sessions (no server tier).
-///
-/// Keep in sync with `normalizeProductTier` in `packages/contracts/types/src/model-catalog.ts`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum UserTier {
     #[default]
     Free,
+    Basic,
     Pro,
     Max,
+    #[serde(rename = "max_15x")]
+    Max15x,
+    Team,
     Enterprise,
     /// BYOK / Local mode — tier enforcement is the user's responsibility.
     Byok,
@@ -78,7 +80,7 @@ impl UserTier {
     /// Returns the economy-bucket model ID that the CLI should default to when
     /// no explicit `--model` is specified for this tier.
     ///
-    /// All managed tiers (Free/Pro/Max/Enterprise) default to the economy workhorse
+    /// All managed tiers default to the economy workhorse
     /// (first `tierAllowedModels.economy` entry in models.json).  The economy default
     /// is the safest choice for a CLI where the user hasn't pinned a model; it does NOT
     /// restrict which models the user can select via `--model`.
@@ -86,9 +88,13 @@ impl UserTier {
     /// BYOK → `None` (no managed-cloud default; callers must require `--model`).
     pub fn default_model_id(&self) -> Option<&'static str> {
         match self {
-            UserTier::Free | UserTier::Pro | UserTier::Max | UserTier::Enterprise => {
-                Some(crate::model_catalog::economy_default_model())
-            }
+            UserTier::Free
+            | UserTier::Basic
+            | UserTier::Pro
+            | UserTier::Max
+            | UserTier::Max15x
+            | UserTier::Team
+            | UserTier::Enterprise => Some(crate::model_catalog::economy_default_model()),
             UserTier::Byok => None,
         }
     }
@@ -97,10 +103,27 @@ impl UserTier {
     pub fn label(&self) -> &'static str {
         match self {
             UserTier::Free => "Free",
+            UserTier::Basic => "Basic",
             UserTier::Pro => "Pro",
-            UserTier::Max => "Max",
+            UserTier::Max => "Max 5x",
+            UserTier::Max15x => "Max 15x",
+            UserTier::Team => "Team",
             UserTier::Enterprise => "Enterprise",
             UserTier::Byok => "BYOK",
+        }
+    }
+
+    /// Canonical bucket used by the shared managed-cloud Auto router.
+    ///
+    /// This deliberately does not change the customer-facing tier identity:
+    /// Team receives the Pro model roster, Max 15x receives the Max roster,
+    /// and tiers without managed developer-surface access fail closed.
+    pub fn managed_auto_routing_tier(&self) -> &'static str {
+        match self {
+            UserTier::Free | UserTier::Basic | UserTier::Byok => "free",
+            UserTier::Pro | UserTier::Team => "pro",
+            UserTier::Max | UserTier::Max15x => "max",
+            UserTier::Enterprise => "enterprise",
         }
     }
 }
@@ -190,7 +213,8 @@ struct MeApiResponse {
 
 #[derive(Debug, Deserialize)]
 struct MePlan {
-    /// e.g. `"free"`, `"pro"`, `"max"`, `"enterprise"`, `"team"`.
+    /// e.g. `"free"`, `"basic"`, `"pro"`, `"max"`, `"max_15x"`,
+    /// `"team"`, `"enterprise"`.
     tier: Option<String>,
 }
 
@@ -270,14 +294,17 @@ pub fn resolve_agi_api_base(raw: &str) -> Option<String> {
 
 /// Numeric rank for reconcile logic: higher rank = higher privilege.
 /// Byok is orthogonal (not a managed tier), ranked 0.
-/// Enterprise is ranked >= Max.
+/// Team shares Pro's model-access rank. Max 15x has Max model access but keeps
+/// its higher customer-facing usage tier.
 fn tier_rank(t: &UserTier) -> u8 {
     match t {
         UserTier::Byok => 0,
         UserTier::Free => 1,
-        UserTier::Pro => 2,
-        UserTier::Max => 3,
-        UserTier::Enterprise => 4,
+        UserTier::Basic => 2,
+        UserTier::Pro | UserTier::Team => 3,
+        UserTier::Max => 4,
+        UserTier::Max15x => 5,
+        UserTier::Enterprise => 6,
     }
 }
 
@@ -468,13 +495,8 @@ async fn fetch_tier_from_api(url: &str, jwt: &str) -> Result<MeApiResponse, Fetc
 
 /// Map a server-returned tier string to `UserTier`.
 ///
-/// Mirrors `normalizeProductTier` in `packages/contracts/types/src/model-catalog.ts`:
-///   "free"             → `Free`
-///   "pro" | "team"     → `Pro`   (Clerk "team" plan normalizes to Pro)
-///   "max"              → `Max`
-///   "enterprise"       → `Enterprise`
-///   "byok" | "local"   → `Byok`  (CLI-only, never emitted by the server)
-///   <unknown>          → `None`  (callers should treat as fail-closed Free)
+/// Keeps every canonical billing tier distinct for customer-facing status.
+/// Model-routing call sites explicitly collapse Team→Pro and Max 15x→Max.
 ///
 /// FAIL-CLOSED: an unrecognized server string returns `None` so it is never
 /// silently promoted to a higher tier.  Callers default unresolved strings to
@@ -482,8 +504,11 @@ async fn fetch_tier_from_api(url: &str, jwt: &str) -> Result<MeApiResponse, Fetc
 fn parse_tier_str(s: &str) -> Option<UserTier> {
     match s.to_lowercase().as_str() {
         "free" => Some(UserTier::Free),
-        "pro" | "team" => Some(UserTier::Pro),
+        "basic" => Some(UserTier::Basic),
+        "pro" => Some(UserTier::Pro),
         "max" => Some(UserTier::Max),
+        "max_15x" | "max-15x" | "max15x" => Some(UserTier::Max15x),
+        "team" => Some(UserTier::Team),
         "enterprise" => Some(UserTier::Enterprise),
         "byok" | "local" => Some(UserTier::Byok),
         _ => None,
@@ -493,8 +518,11 @@ fn parse_tier_str(s: &str) -> Option<UserTier> {
 fn tier_to_str(t: &UserTier) -> String {
     match t {
         UserTier::Free => "free",
+        UserTier::Basic => "basic",
         UserTier::Pro => "pro",
         UserTier::Max => "max",
+        UserTier::Max15x => "max_15x",
+        UserTier::Team => "team",
         UserTier::Enterprise => "enterprise",
         UserTier::Byok => "byok",
     }
@@ -571,17 +599,41 @@ mod tests {
     #[test]
     fn parse_tier_str_canonical_variants() {
         assert_eq!(parse_tier_str("free"), Some(UserTier::Free));
+        assert_eq!(parse_tier_str("basic"), Some(UserTier::Basic));
         assert_eq!(parse_tier_str("pro"), Some(UserTier::Pro));
         assert_eq!(parse_tier_str("max"), Some(UserTier::Max));
+        assert_eq!(parse_tier_str("max_15x"), Some(UserTier::Max15x));
+        assert_eq!(parse_tier_str("team"), Some(UserTier::Team));
         assert_eq!(parse_tier_str("enterprise"), Some(UserTier::Enterprise));
         assert_eq!(parse_tier_str("byok"), Some(UserTier::Byok));
         assert_eq!(parse_tier_str("local"), Some(UserTier::Byok));
     }
 
     #[test]
-    fn parse_tier_str_team_normalizes_to_pro() {
-        // Mirrors packages/contracts/types normalizeProductTier: "team" → Pro
-        assert_eq!(parse_tier_str("team"), Some(UserTier::Pro));
+    fn canonical_paid_tiers_keep_their_customer_facing_identity() {
+        assert_eq!(parse_tier_str("basic"), Some(UserTier::Basic));
+        assert_eq!(parse_tier_str("team"), Some(UserTier::Team));
+        assert_eq!(parse_tier_str("max_15x"), Some(UserTier::Max15x));
+        assert_eq!(UserTier::Basic.label(), "Basic");
+        assert_eq!(UserTier::Team.label(), "Team");
+        assert_eq!(UserTier::Max.label(), "Max 5x");
+        assert_eq!(UserTier::Max15x.label(), "Max 15x");
+        assert_eq!(tier_to_str(&UserTier::Max15x), "max_15x");
+    }
+
+    #[test]
+    fn managed_auto_routing_groups_tiers_without_relabeling_accounts() {
+        assert_eq!(UserTier::Free.managed_auto_routing_tier(), "free");
+        assert_eq!(UserTier::Basic.managed_auto_routing_tier(), "free");
+        assert_eq!(UserTier::Byok.managed_auto_routing_tier(), "free");
+        assert_eq!(UserTier::Pro.managed_auto_routing_tier(), "pro");
+        assert_eq!(UserTier::Team.managed_auto_routing_tier(), "pro");
+        assert_eq!(UserTier::Max.managed_auto_routing_tier(), "max");
+        assert_eq!(UserTier::Max15x.managed_auto_routing_tier(), "max");
+        assert_eq!(
+            UserTier::Enterprise.managed_auto_routing_tier(),
+            "enterprise"
+        );
     }
 
     #[test]
@@ -638,7 +690,22 @@ mod tests {
         let cached = CachedTier {
             tier: UserTier::Max,
         };
-        assert_eq!(cached.status_label(), "Max");
+        assert_eq!(cached.status_label(), "Max 5x");
+
+        let cached = CachedTier {
+            tier: UserTier::Max15x,
+        };
+        assert_eq!(cached.status_label(), "Max 15x");
+
+        let cached = CachedTier {
+            tier: UserTier::Basic,
+        };
+        assert_eq!(cached.status_label(), "Basic");
+
+        let cached = CachedTier {
+            tier: UserTier::Team,
+        };
+        assert_eq!(cached.status_label(), "Team");
 
         let cached = CachedTier {
             tier: UserTier::Enterprise,

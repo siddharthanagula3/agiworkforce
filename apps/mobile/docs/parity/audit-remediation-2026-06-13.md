@@ -2,6 +2,11 @@
 
 Status: COMPLETE · Owner: mobile-engineer · Scope: `apps/mobile/**` + `ios/**` only
 
+Current-status addendum (2026-07-26): the two residual model/health-integration
+findings below are now resolved. Paywall copy uses the current `opus_5` gate, and
+the unreachable health-data service was deleted after all references were
+removed. The disposition totals and rows have been refreshed accordingly.
+
 ## What this is
 
 The repo-wide batch audit (`AUDIT_PARTS/`, `AUDIT_BATCHES/`, `AUDIT_FINDINGS.md`) ran ~2 days before this pass. Every mobile-surface finding (batches **225–257**, `cat13`) was verified against the _current_ source, then a second **independent adversarial workflow** re-checked each disposition and fixed defects the first pass missed.
@@ -17,13 +22,13 @@ Originally filed: **5 HIGH · 37 MEDIUM · 85 LOW**.
 | Disposition                                                       | Count   |
 | ----------------------------------------------------------------- | ------- |
 | Fixed this session (2026-06-13)                                   | 9       |
-| Verified resolved in current source                               | 52      |
-| Resolved (file removed / untracked)                               | 2       |
+| Verified resolved in current source                               | 53      |
+| Resolved (file removed / untracked)                               | 3       |
 | Hardcoded-color debt (check:no-hex baseline)                      | 28      |
 | Minor / accepted as-is (LOW cosmetic)                             | 7       |
 | Won’t fix — intentional / by-design                               | 12      |
 | Deferred — pre-launch ops/product gate                            | 3       |
-| Open — confirmed by cross-check, fix needs product/scope decision | 3       |
+| Open — confirmed by cross-check, fix needs product/scope decision | 1       |
 | Release-checklist doc (not code)                                  | 2       |
 | iOS generated/vendored (structural)                               | 9       |
 | **TOTAL**                                                         | **127** |
@@ -50,32 +55,30 @@ Originally filed: **5 HIGH · 37 MEDIUM · 85 LOW**.
 
 An independent workflow (17 agents, one per disjoint cluster) re-read current source and challenged each disposition. Where my grep-signature check had passed over a subtle defect, the agent caught and (if trivially safe) fixed it. CHALLENGES:
 
-| File:line                                         | First-pass call | Cross-check verdict                                                                                                                          |
-| ------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `types/navigation.ts:37`                          | minor-accepted  | **CHALLENGE → fixed** (real contract drift)                                                                                                  |
-| `chat/components/QuotedReplyBar.tsx:21`           | resolved        | **CHALLENGE → fixed** (raw model-ID still shown)                                                                                             |
-| `compare/index.tsx:173`                           | resolved        | **CHALLENGE → fixed** (dead `startA` clobber still present)                                                                                  |
-| `integrations/services/deviceIntegrations.ts:155` | resolved        | **CHALLENGE → fixed** (`-1` sentinel still present)                                                                                          |
-| `memory/services/ragIndex.ts:198,233`             | resolved        | **CHALLENGE → fixed** (LIKE metachars unescaped)                                                                                             |
-| `storage/memory.ts:120`                           | resolved        | **CHALLENGE → fixed** (LIKE metachars unescaped)                                                                                             |
-| `voice/components/VoiceReview.tsx:84`             | resolved        | **CHALLENGE → fixed** (`tier="Tier 2"` still hardcoded)                                                                                      |
-| `voice/services/voice.ts:140`                     | resolved        | **CHALLENGE → fixed then REVERTED** (scope-creep; see above)                                                                                 |
-| `chat/components/PaywallBottomSheet.tsx:57`       | resolved        | **CHALLENGE → open-deferred** (hardcoded `'Opus 4.7'`/`'GPT-5.5'` gate labels; needs a gate-key→catalog mapping, must not invent one)        |
-| `integrations/services/healthData.ts:60-65`       | resolved        | **CHALLENGE → open-deferred** (TODO/decision real, but risk fully contained by `FEATURES.connectors=false` + `HEALTH_CONTEXT_ENABLED=false`) |
-| `services/secureFetch.ts:43`                      | minor-accepted  | CONFIRM-stronger → **already_resolved** (`normalizeRequestUrl` handles URL objects)                                                          |
+| File:line                                         | First-pass call | Cross-check verdict                                                                           |
+| ------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------- |
+| `types/navigation.ts:37`                          | minor-accepted  | **CHALLENGE → fixed** (real contract drift)                                                   |
+| `chat/components/QuotedReplyBar.tsx:21`           | resolved        | **CHALLENGE → fixed** (raw model-ID still shown)                                              |
+| `compare/index.tsx:173`                           | resolved        | **CHALLENGE → fixed** (dead `startA` clobber still present)                                   |
+| `integrations/services/deviceIntegrations.ts:155` | resolved        | **CHALLENGE → fixed** (`-1` sentinel still present)                                           |
+| `memory/services/ragIndex.ts:198,233`             | resolved        | **CHALLENGE → fixed** (LIKE metachars unescaped)                                              |
+| `storage/memory.ts:120`                           | resolved        | **CHALLENGE → fixed** (LIKE metachars unescaped)                                              |
+| `voice/components/VoiceReview.tsx:84`             | resolved        | **CHALLENGE → fixed** (`tier="Tier 2"` still hardcoded)                                       |
+| `voice/services/voice.ts:140`                     | resolved        | **CHALLENGE → fixed then REVERTED** (scope-creep; see above)                                  |
+| `chat/components/PaywallBottomSheet.tsx:57`       | resolved        | **CHALLENGE → resolved 2026-07-26** (`opus_5` now maps to the current catalog-family label)   |
+| `integrations/services/healthData.ts:60-65`       | resolved        | **CHALLENGE → resolved 2026-07-26** (unreachable service and its stale contract were removed) |
+| `services/secureFetch.ts:43`                      | minor-accepted  | CONFIRM-stronger → **already_resolved** (`normalizeRequestUrl` handles URL objects)           |
 
 ## Open / deferred — residual (not code-fixable here)
 
-| File                                                  | Line(s) | Sev    | Disposition                      | Note                                                                                                                                                                      |
-| ----------------------------------------------------- | ------- | ------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/features/chat/components/PaywallBottomSheet.tsx` | 57      | LOW    | Open                             | `FEATURE_LABELS` hardcodes `opus_4_7`/`gpt_5_5` labels; these are gate-error KEYS, not catalog model IDs, so a catalog-backed label needs a deliberate key→model mapping. |
-| `src/features/integrations/services/healthData.ts`    | 60-65   | LOW    | Open                             | TODO: implement `/api/health-context` or delete the service. Risk contained (card never renders in v1); resolution is a product/scope decision.                           |
-| `src/features/voice/services/voice.ts`                | 140     | LOW    | Open                             | `transcribe()` returns the latest partial when no final result exists; "fix" (return empty) is a debatable UX change to a sensitive voice path — left for founder.        |
-| `detox.config.js`                                     | 9       | MEDIUM | Deferred                         | Detox not in devDependencies; adding dep + CI runner is a CI/product decision.                                                                                            |
-| `lib/pinning.ts`                                      | 59-89   | MEDIUM | Deferred                         | TLS SPKI pins are placeholders; `PINNING_ENFORCED=true`. Needs ops to provision real hashes + native pin-sets pre-launch.                                                 |
-| `services/secureFetch.ts`                             | 42-48   | MEDIUM | Deferred                         | Same pre-launch pinning provisioning blocker.                                                                                                                             |
-| `store-listing/LISTING-METADATA-ANDROID.json`         | 55      | MEDIUM | Release-checklist doc (not code) | `data_safety:false` accurate while v1 is local-only/telemetry-off; gate an update into the Cloud/telemetry release checklist.                                             |
-| `store-listing/LISTING-METADATA-IOS.json`             | 76      | LOW    | Release-checklist doc (not code) | App Store contact email/name — founder decision (recommend role address).                                                                                                 |
+| File                                          | Line(s) | Sev    | Disposition                      | Note                                                                                                                                                               |
+| --------------------------------------------- | ------- | ------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/features/voice/services/voice.ts`        | 140     | LOW    | Open                             | `transcribe()` returns the latest partial when no final result exists; "fix" (return empty) is a debatable UX change to a sensitive voice path — left for founder. |
+| `detox.config.js`                             | 9       | MEDIUM | Deferred                         | Detox not in devDependencies; adding dep + CI runner is a CI/product decision.                                                                                     |
+| `lib/pinning.ts`                              | 59-89   | MEDIUM | Deferred                         | TLS SPKI pins are placeholders; `PINNING_ENFORCED=true`. Needs ops to provision real hashes + native pin-sets pre-launch.                                          |
+| `services/secureFetch.ts`                     | 42-48   | MEDIUM | Deferred                         | Same pre-launch pinning provisioning blocker.                                                                                                                      |
+| `store-listing/LISTING-METADATA-ANDROID.json` | 55      | MEDIUM | Release-checklist doc (not code) | `data_safety:false` accurate while v1 is local-only/telemetry-off; gate an update into the Cloud/telemetry release checklist.                                      |
+| `store-listing/LISTING-METADATA-IOS.json`     | 76      | LOW    | Release-checklist doc (not code) | App Store contact email/name — founder decision (recommend role address).                                                                                          |
 
 ## Won’t-fix (by-design) and minor-accepted
 

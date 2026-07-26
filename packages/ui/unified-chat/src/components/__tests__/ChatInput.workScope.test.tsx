@@ -79,6 +79,38 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     expect(screen.queryByRole('button', { name: 'Project or folder' })).not.toBeNull();
   });
 
+  it('keeps ordinary project chat but withholds AGI Work when the host denies the entitlement', () => {
+    const picker = makePicker({ activeProjectId: 'p1' });
+    const { onSend, textarea } = renderComposer({
+      projectPicker: picker,
+      canUseAgiWork: false,
+      onSelectFolder: vi.fn(),
+    });
+
+    expect(screen.queryByRole('group', { name: 'Composer mode' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'AGI Work' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Project' })).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project' }));
+    expect(screen.queryByText(/Choose a local folder/)).toBeNull();
+
+    fireEvent.change(textarea, { target: { value: 'Project chat' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message (Enter)' }));
+
+    expect(onSend).toHaveBeenCalledWith(
+      'Project chat',
+      'ask',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      {
+        workMode: 'chat',
+        projectId: 'p1',
+      },
+    );
+  });
+
   it('picking a project selects it and displaces any folder (mutual exclusion)', () => {
     const picker = makePicker();
     const onClearFolder = vi.fn();

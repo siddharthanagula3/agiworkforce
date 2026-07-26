@@ -1,8 +1,8 @@
 # AGI VS Code Extension — Volume 05 — Chat
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and the real code cited in the Repository map below.
 
@@ -10,7 +10,7 @@ Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README
 
 This volume specifies conversational chat on the AGI VS Code Extension — the IDE-native, workspace-scoped developer surface. Chat here runs in three trust modes with explicit selection and a visible label: **Local** (on-device / local runtime), **BYOK** (user keys — permitted on Desktop/CLI/VS Code only), and **Managed Cloud** (public alpha, open by default for signed-in users). The extension never silently promotes a Local or BYOK conversation into Managed Cloud; a Local→BYOK move is an explicit fork with context selection, secret scan, payload preview, consent, and a provider label (see the trust-mode volume).
 
-The defining constraint on this surface: **chat is developer-session-scoped and does not sync to app chat.** Completed conversations are written only to `vscode.ExtensionContext.globalState` via `ConversationStore` — no platform DB client is imported, and `platform/surface.ts` throws at activation if `vscode` is reclassified as a synced surface (documented in `chatParticipant.ts`). Any handoff to app chat is explicit and redacted, never automatic. Pricing gates use the canon ladder only — Free $0 / Basic $8 (₹399) / Pro $20 / Max $100 & $200 / Enterprise; Local and BYOK are free access modes, not plans.
+The defining constraint on this surface: **chat is developer-session-scoped and does not sync to app chat.** The spawned app-server owns active thread/turn history; the extension's local History tree uses `globalState` records and no platform database client. Any handoff to app chat is explicit and redacted. Local and BYOK are access modes, not paid plans.
 
 ## Chat Panel — sidebar webview
 
@@ -24,13 +24,13 @@ The defining constraint on this surface: **chat is developer-session-scoped and 
 
 **✅ Built.** `agi-workforce.showSessionsHistory` (`commandSetup.ts`) opens a QuickPick of stored sessions (title, relative time, message count · model) and re-opens the chosen one via `agi-workforce.openConversation`, which reloads the message array from `ConversationStore.get(id)`. Requirements: resuming restores the full user/assistant turn history and the model the session used; an empty history offers **New Chat** (`agi-workforce.newConversation`). Cross-device resume is out of scope by trust design — a VS Code session is never synced, so it cannot resume on Mobile/Web.
 
-## Shared Sessions with CLI — 🔭 target
+## Shared app-server runtime
 
-**🔭 Planned.** A single live session shared between the `agi` CLI and the VS Code extension is a target direction and is **not** wired today. The only cross-surface transport present is the localhost desktop bridge (`desktopBridge.ts`, `ws://127.0.0.1:8787/ws`, shared token at `~/.agiworkforce/bridge-token`, `0600`), which connects the extension to the **Desktop** app and carries snippet/context/agent-action frames — not CLI session state. Target requirements when built: sessions stay local (no cloud round-trip), the connection is outbound-only and approval-gated, and the migration to a Unix domain socket / named pipe (noted in `desktopBridge.ts`) lands first. Mark unwired until a real path exists.
+**✅ Built.** `@agi`, the sidebar, and the editor panel all use `LocalRuntimePool`, which spawns `agi app-server` and speaks the shared developer-session protocol. Each workspace root owns one lazy runtime process; multi-root windows stay isolated. The app-server owns threads, turns, streamed output, approvals, cancellation, history, provider credentials, and local-model discovery. This does not mean a separate interactive CLI process and VS Code share the same live thread; they share the runtime/protocol owner.
 
 ## Streaming
 
-**✅ Built (core) / 🟡 Partial (provider-stream route).** The `@agi` handler streams tokens through `streamChatCompletion`, pushing each token to VS Code via `stream.markdown` and accumulating the full reply for persistence on `onDone` (`chatParticipant.ts`). `agiWorkforce.streamingEnabled` (default `true`) governs streaming; `CancellationToken` aborts cleanly. The alternate `streamChatCompletionViaProvider` route (`agiWorkforce.useProviderStream`) is **🟡** — it fails closed with `AGI_ACCOUNT_WEB_AUTH_NOT_WIRED` because AGI Cloud sign-in is not yet wired in the extension (`chatParticipant.ts`, manifest description of `useProviderStream`). On `NO_API_KEY` or network errors with `agiWorkforce.fallbackToVscodeLm` on, the handler degrades to the built-in `vscode.lm` model.
+**✅ Built.** Developer-session surfaces consume app-server turn events and stream text deltas incrementally; cancellation calls the runtime's turn interrupt. Plain `auto` supplies a task classification so routing can resolve within the current plan. The separate `agiWorkforce.useProviderStream` path is wired for cloud-backed editor utilities through device-authenticated account transport and does not affect local developer sessions. There is no implicit `vscode.lm` fallback.
 
 ## Markdown
 
@@ -51,13 +51,14 @@ The defining constraint on this surface: **chat is developer-session-scoped and 
 ## Repository map
 
 - `apps/extension-vscode/package.json` — chat participant, sidebar/History views, commands, keybindings, config.
-- `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts` — `@agi` participant, streaming, fallback, persistence.
+- `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts` — `@agi` participant and app-server streaming.
 - `apps/extension-vscode/src/features/sidebar-webview/{sidebarProvider.ts,webviewContent.ts,ChatStateManager.ts}` — sidebar chat panel.
 - `apps/extension-vscode/src/webview/render.ts` — Markdown → sanitized HTML.
 - `apps/extension-vscode/src/data/conversationStore.ts` — `globalState` persistence.
 - `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts` — History tree.
 - `apps/extension-vscode/src/core/commandSetup.ts` — sessions-history and conversation commands.
-- `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — localhost bridge (Desktop only; CLI sharing 🔭).
+- `apps/extension-vscode/src/integrations/localRuntimeClient.ts` — shared app-server protocol client and runtime pool.
+- `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — optional localhost Desktop bridge.
 
 ## Competitor notes
 
@@ -69,13 +70,13 @@ Chat is production-ready on this surface when: the sidebar panel and `@agi` part
 
 - [ ] **Build:** `@agi` streams and cancels; sidebar renders sanitized Markdown; History tree + `showSessionsHistory` resume the full turn history and prior model; copy buttons work in every code block.
 - [ ] **Trust:** conversations write only to `globalState`; no Neon `chat`/`memory`/`projects` sync from this surface; Local→BYOK requires explicit fork + label; any app-chat handoff is explicit and redacted; paywall/upgrade links use canon tiers only.
-- [ ] **Security:** DOMPurify chokepoint intact (no raw model HTML in DOM); webview CSP blocks inline handlers and `data:` images; `useProviderStream` fails closed until AGI web auth is wired; no model ID hardcoded outside `models.json`.
+- [ ] **Security:** DOMPurify chokepoint intact (no raw model HTML in DOM); webview CSP blocks inline handlers and `data:` images; provider-stream utilities require device sign-in; no model ID hardcoded outside `models.json`.
 
 ## Anti-patterns
 
 - Silently routing a Local or BYOK conversation to Managed Cloud, or auto-syncing VS Code chat to app chat / Neon. Both violate the surface trust boundary.
-- Claiming citations, CLI-shared sessions, cross-device resume, or apply-from-chat as shipped — they are 🔭/🟡; never label them ✅ without a path.
+- Claiming citations, cross-device resume, or remote cloud handoff as shipped; never label them ✅ without a path.
 - Bypassing `render.ts` (raw `innerHTML` of model output) or relaxing the DOMPurify/CSP config.
 - Hardcoding or inventing a model ID instead of reading `packages/contracts/types/src/models.json`.
-- Surfacing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups in any paywall/upgrade copy — note the manifest's `agiWorkforce.tier` enum still lists `hobby`/`pro_plus` (🟡 legacy gap, reconciled separately); specs use the canon ladder.
+- Surfacing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups in any paywall/upgrade copy; the manifest exposes only current extension access modes.
 - Referencing Supabase, or renaming Next.js `proxy.ts` back to `middleware.ts`, in any related backend touchpoint.

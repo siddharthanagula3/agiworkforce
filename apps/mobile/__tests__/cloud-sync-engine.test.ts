@@ -21,6 +21,11 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
 jest.mock('../services/api', () => ({
@@ -38,6 +43,10 @@ import {
   markMessageForSync,
   isManagedSyncEnabled,
 } from '../services/cloudSyncEngine';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
@@ -54,6 +63,14 @@ interface PullPage {
 
 function emptyPull(cursor = '0'): PullPage {
   return { conversations: [], messages: [], artifacts: [], cursor, hasMore: false };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
 }
 
 /** Build an artifact wire delta (snake_case, as returned by GET /api/chat/sync). */
@@ -142,8 +159,11 @@ function seedMessage(conversationId: string, msg: Partial<ChatMessage> & { id: s
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('sync-test-user');
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
+  useArtifactStore.getState().clearArtifacts();
   useArtifactStore.getState().clearCloudArtifacts();
   useChatAppModeStore.getState().setAppMode('cloud');
   // Contract-valid empty pulls per endpoint — the engine schema-validates every
@@ -190,6 +210,41 @@ describe('syncNow — managed gating', () => {
 });
 
 describe('syncNow — pull', () => {
+  it('does not apply an account-A response after a direct switch to account B', async () => {
+    const accountAPull = deferred<PullPage>();
+    mockGet.mockImplementation((async (path: string) => {
+      if (path.startsWith('/api/chat/sync')) return accountAPull.promise;
+      if (path.startsWith('/api/memory/sync')) return { memories: [], cursor: '0', hasMore: false };
+      if (path.startsWith('/api/projects/sync'))
+        return { projects: [], cursor: '0', hasMore: false };
+      return { settings: {}, cursor: '0', hasMore: false };
+    }) as never);
+
+    const pendingAccountASync = syncNow();
+    await Promise.resolve();
+    expect(mockGet).toHaveBeenCalledWith('/api/chat/sync?since=0');
+
+    activateCloudAccount('sync-test-user-b');
+    useChatCloudMessageStore.getState().clearCloudData();
+    useCloudSyncStateStore.getState().reset();
+    accountAPull.resolve({
+      conversations: [convDelta('account-a-chat', '9')],
+      messages: [msgDelta('account-a-message', 'account-a-chat', '10')],
+      artifacts: [],
+      cursor: '10',
+      hasMore: false,
+    });
+    await pendingAccountASync;
+
+    expect(useChatCloudMessageStore.getState().conversations).toEqual([]);
+    expect(useChatCloudMessageStore.getState().messages).toEqual({});
+    expect(useCloudSyncStateStore.getState()).toMatchObject({
+      cursor: '0',
+      status: 'idle',
+      lastError: null,
+    });
+  });
+
   it('applies conversation + message deltas and advances the cursor', async () => {
     mockGet.mockResolvedValueOnce({
       conversations: [convDelta('c1', '5')],
@@ -265,6 +320,49 @@ describe('syncNow — pull', () => {
         }),
       ],
     });
+  });
+
+  it('hydrates a durable generated image from synced metadata after a cold device pull', async () => {
+    const imageUrl = '/api/files/22222222-2222-4222-8222-222222222222';
+    mockGet.mockResolvedValueOnce({
+      conversations: [convDelta('c1', '5')],
+      messages: [
+        msgDelta('m-image', 'c1', '6', {
+          role: 'assistant',
+          content: 'Generated image',
+          model: 'gpt-image-2',
+          metadata: {
+            toolType: 'image-generation',
+            imageUrl,
+            imageGenPrompt: 'A clean enterprise dashboard',
+            imageGenModel: 'gpt-image-2',
+            revisedPrompt: 'A polished enterprise dashboard',
+          },
+        }),
+      ],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    expect(useChatCloudMessageStore.getState().messages.c1?.[0]).toMatchObject({
+      type: 'image',
+      imageUrl,
+      imageGenPrompt: 'A clean enterprise dashboard',
+      revisedPrompt: 'A polished enterprise dashboard',
+      imageGenStatus: 'completed',
+      imageGenProgress: 100,
+      isGeneratingImage: false,
+    });
+    expect(useArtifactStore.getState().artifacts).toContainEqual(
+      expect.objectContaining({
+        id: 'generated-image-m-image',
+        kind: 'image',
+        content: imageUrl,
+      }),
+    );
   });
 
   it('removes a conversation when a deleted_at tombstone is pulled', async () => {
@@ -382,6 +480,57 @@ describe('syncNow — push', () => {
     const sync = useCloudSyncStateStore.getState();
     expect(sync.dirtyConversationIds).toEqual([]);
     expect(sync.dirtyMessages).toEqual([]);
+  });
+
+  it('projects only durable generated-image identity and bounded display metadata', async () => {
+    const imageUrl = '/api/files/22222222-2222-4222-8222-222222222222';
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm-image',
+      role: 'assistant',
+      content: 'Generated image',
+      type: 'image',
+      imageUrl,
+      imageGenPrompt: 'A clean enterprise dashboard',
+      revisedPrompt: 'A polished enterprise dashboard',
+      model: 'gpt-image-2',
+      metadata: { traceId: 'safe-trace' },
+    });
+    markMessageForSync('c1', 'm-image');
+
+    await syncNow();
+
+    const [, body] = mockPost.mock.calls[0] as [string, { messages: MessagePushItem[] }];
+    expect(body.messages[0]?.metadata).toEqual({
+      traceId: 'safe-trace',
+      toolType: 'image-generation',
+      imageUrl,
+      imageGenPrompt: 'A clean enterprise dashboard',
+      imageGenModel: 'gpt-image-2',
+      revisedPrompt: 'A polished enterprise dashboard',
+    });
+  });
+
+  it('strips untrusted generated-image URLs from synced metadata', async () => {
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm-image',
+      role: 'assistant',
+      content: 'Generated image',
+      type: 'image',
+      imageUrl: 'https://evil.example/tracker.png',
+      metadata: {
+        toolType: 'image-generation',
+        imageUrl: 'https://evil.example/tracker.png',
+        traceId: 'safe-trace',
+      },
+    });
+    markMessageForSync('c1', 'm-image');
+
+    await syncNow();
+
+    const [, body] = mockPost.mock.calls[0] as [string, { messages: MessagePushItem[] }];
+    expect(body.messages[0]?.metadata).toEqual({ traceId: 'safe-trace' });
   });
 
   it('pushes a versioned approval projection and stores the acknowledged revision', async () => {
@@ -724,7 +873,10 @@ describe('syncNow — artifact pull wiring (migration 0039)', () => {
     // Seed an existing cloud artifact.
     useArtifactStore
       .getState()
-      .applyCloudArtifactDeltas([artifactDelta('art1', '3', { content: 'old content' })]);
+      .applyCloudArtifactDeltas(
+        [artifactDelta('art1', '3', { content: 'old content' })],
+        'sync-test-user',
+      );
     expect(useArtifactStore.getState().cloudArtifacts[0]?.content).toBe('old content');
 
     // Pull a newer version of the same artifact.
@@ -745,7 +897,9 @@ describe('syncNow — artifact pull wiring (migration 0039)', () => {
 
   it('retains a cloudArtifact tombstone so a derived copy cannot be resurrected', async () => {
     // Seed an existing cloud artifact.
-    useArtifactStore.getState().applyCloudArtifactDeltas([artifactDelta('art1', '5')]);
+    useArtifactStore
+      .getState()
+      .applyCloudArtifactDeltas([artifactDelta('art1', '5')], 'sync-test-user');
     expect(useArtifactStore.getState().cloudArtifacts).toHaveLength(1);
 
     // Pull a tombstone for the same id.
@@ -769,7 +923,9 @@ describe('syncNow — artifact pull wiring (migration 0039)', () => {
   it('does NOT push any artifacts in managed cloud mode (mobile is pull-only)', async () => {
     // Even with cloud artifacts in the store, the push body must never include an
     // `artifacts` key (mobile has no dirty-artifact tracking; design doc §4).
-    useArtifactStore.getState().applyCloudArtifactDeltas([artifactDelta('art1', '3')]);
+    useArtifactStore
+      .getState()
+      .applyCloudArtifactDeltas([artifactDelta('art1', '3')], 'sync-test-user');
     mockGet.mockResolvedValueOnce(emptyPull() as never);
 
     await syncNow();
@@ -795,7 +951,9 @@ describe('syncNow — artifact pull wiring (migration 0039)', () => {
   });
 
   it('applies an empty artifacts array gracefully (no-op, store unchanged)', async () => {
-    useArtifactStore.getState().applyCloudArtifactDeltas([artifactDelta('art1', '2')]);
+    useArtifactStore
+      .getState()
+      .applyCloudArtifactDeltas([artifactDelta('art1', '2')], 'sync-test-user');
 
     mockGet.mockResolvedValueOnce({
       conversations: [],

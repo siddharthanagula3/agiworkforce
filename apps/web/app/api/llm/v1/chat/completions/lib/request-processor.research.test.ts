@@ -7,7 +7,7 @@ function makeRequest(
   extra: Partial<ChatCompletionRequest> = {},
 ): ChatCompletionRequest {
   return {
-    model: 'claude-opus-4-8',
+    model: 'claude-opus-5',
     messages,
     ...extra,
   } as ChatCompletionRequest;

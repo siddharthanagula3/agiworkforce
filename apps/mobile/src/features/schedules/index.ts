@@ -21,3 +21,9 @@ export {
 } from './service';
 export { useScheduleStore } from './store';
 export type { RecurrenceType, Schedule, ScheduleRun, CreateScheduleInput } from './store';
+export {
+  MOBILE_SCHEDULE_CADENCE_NOTE,
+  MOBILE_SUPPORTED_SCHEDULE_RECURRENCES,
+  isMobileScheduleRecurrenceSupported,
+} from './policy';
+export type { MobileSupportedScheduleRecurrence } from './policy';

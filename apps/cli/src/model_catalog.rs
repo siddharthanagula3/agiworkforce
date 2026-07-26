@@ -612,35 +612,56 @@ pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
 
 /// True when `tier` can actually route the managed-cloud model `model_id`.
 ///
-/// Rust mirror of `canAccessModelForSubscriptionTier`
-/// (`packages/contracts/types/src/model-catalog.ts`), reading the same
-/// `tierAllowedModels` slots from the same `models.json`, so the CLI and the
-/// TypeScript surfaces cannot drift on who may reach which model:
+/// CLI composition of `canAccessModelForSubscriptionTier` and the
+/// `developer_surfaces` capability
+/// (`packages/contracts/types/src/model-catalog.ts` and
+/// `packages/contracts/types/src/billing-catalog.ts`). It reads the same
+/// `tierAllowedModels` slots from the same `models.json` and keeps the CLI's
+/// Pro-or-higher product gate visible in the picker:
 ///
-/// - Free / BYOK → no managed-cloud model (BYOK reaches providers with the
-///   user's own key, which is the picker's separate BYOK section, not this one)
-/// - Pro         → `economy` + `pro_additions`
-/// - Max / Enterprise → all three slots
+/// - Free / Basic / BYOK → no managed-cloud model (BYOK reaches providers with
+///   the user's own key, which is the picker's separate BYOK section)
+/// - Pro / Team → `economy` + `pro_additions`
+/// - Max / Max 15x / Enterprise → all three slots
 ///
 /// Applies to the picker's **Cloud** section only. Local and BYOK models are
 /// user-provided access and are never gated by subscription tier.
 pub fn can_access_model_for_tier(model_id: &str, tier: &crate::tier_cache::UserTier) -> bool {
     use crate::tier_cache::UserTier;
 
-    // Free and BYOK carry no managed-cloud entitlement.
-    if matches!(tier, UserTier::Free | UserTier::Byok) {
+    // The CLI is a developer surface, which starts at Pro. Basic can use the
+    // economy roster in Web/Mobile/Desktop chat, but not from the CLI.
+    if matches!(tier, UserTier::Free | UserTier::Basic | UserTier::Byok) {
         return false;
     }
 
     let in_slot = |slot: &str| tier_allowed_models(slot).iter().any(|id| id == model_id);
 
     if in_slot("flagship_additions") {
-        return matches!(tier, UserTier::Max | UserTier::Enterprise);
+        return matches!(
+            tier,
+            UserTier::Max | UserTier::Max15x | UserTier::Enterprise
+        );
     }
     if in_slot("pro_additions") {
-        return matches!(tier, UserTier::Pro | UserTier::Max | UserTier::Enterprise);
+        return matches!(
+            tier,
+            UserTier::Pro
+                | UserTier::Team
+                | UserTier::Max
+                | UserTier::Max15x
+                | UserTier::Enterprise
+        );
     }
     in_slot("economy")
+        && matches!(
+            tier,
+            UserTier::Pro
+                | UserTier::Team
+                | UserTier::Max
+                | UserTier::Max15x
+                | UserTier::Enterprise
+        )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1335,8 +1356,8 @@ pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
     let Some(catalog) = shared_catalog() else {
         return None;
     };
-    // The shared catalog is keyed by canonical ID (e.g. "claude-opus-4.8"),
-    // but model_id may be an apiModelId (e.g. "claude-opus-4-8").  Try both.
+    // The shared catalog is keyed by canonical ID (e.g. "claude-haiku-4.5"),
+    // but model_id may be an apiModelId (e.g. "claude-haiku-4-5"). Try both.
     let canonical = catalog
         .models
         .iter()
@@ -1465,8 +1486,8 @@ mod tests {
         )
         .expect("BYOK coding route should be available");
 
-        assert_eq!(selected.model_key, "claude-opus-4.8");
-        assert_eq!(selected.provider_model_id, "claude-opus-4-8");
+        assert_eq!(selected.model_key, "claude-opus-5");
+        assert_eq!(selected.provider_model_id, "claude-opus-5");
         assert_eq!(selected.upstream_provider, "anthropic");
         assert!(!selected.provider_model_id.starts_with("auto"));
     }
@@ -1619,7 +1640,7 @@ mod tests {
     fn user_override_replaces_existing() {
         let mut cat = Catalog::bundled();
         let ov = UserModelOverride {
-            id: "claude-opus-4-8".into(),
+            id: "claude-opus-5".into(),
             provider: "anthropic".into(),
             display_name: Some("Custom Opus".into()),
             context_window: Some(500_000),
@@ -1633,7 +1654,7 @@ mod tests {
             supports_reasoning: None,
         };
         cat.apply_overrides(&[ov]);
-        let found = cat.find("claude-opus-4-8").unwrap();
+        let found = cat.find("claude-opus-5").unwrap();
         assert_eq!(found.context_window, 500_000);
         assert_eq!(found.display_name, "Custom Opus");
     }
@@ -1730,9 +1751,9 @@ mod tests {
     fn quality_tier_for_known_models() {
         // Anthropic: opus → best, sonnet → balanced, haiku → fast
         assert_eq!(
-            quality_tier_for_model("claude-opus-4-8").as_deref(),
+            quality_tier_for_model("claude-opus-5").as_deref(),
             Some("best"),
-            "claude-opus-4-8 should be qualityTier=best"
+            "claude-opus-5 should be qualityTier=best"
         );
         assert_eq!(
             quality_tier_for_model("claude-sonnet-5").as_deref(),
@@ -1774,8 +1795,8 @@ mod tests {
     fn is_known_model_reflects_catalog() {
         // Active models present in models.json must be known.
         assert!(
-            is_known_model("claude-opus-4-8"),
-            "claude-opus-4-8 should be in the bundled catalog"
+            is_known_model("claude-opus-5"),
+            "claude-opus-5 should be in the bundled catalog"
         );
         assert!(
             is_known_model("gpt-5.6-sol"),

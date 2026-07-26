@@ -58,6 +58,11 @@ jest.mock('../storage/installedModels', () => ({
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
@@ -75,6 +80,11 @@ import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 const mockStreamResume = streamToolApprovalResume as jest.MockedFunction<
@@ -87,6 +97,8 @@ const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('approval-resume-test-user');
   __resetPendingApprovalTurnsForTests();
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
@@ -110,6 +122,40 @@ function lastAssistantMessage() {
 }
 
 describe('resolveToolApproval — durable server-owned checkpoint', () => {
+  it('does not resume or mutate a pending Cloud approval without an active account owner', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onRunReference?.({
+        runId: RUN_ID,
+        runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+        lastSequence: -1,
+      });
+      callbacks.onDelta({
+        x_tool_approval_request: {
+          tool_call_id: 'call_ownerless',
+          name: 'mcp__github__create_comment',
+          args: { body: 'must not post ownerless' },
+        },
+      });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'prepare a comment', CLOUD_MODEL);
+    const assistantId = lastAssistantMessage()!.id;
+    invalidateCloudAccount();
+
+    await useChatExecutionStore
+      .getState()
+      .resolveToolApproval(CONV_ID, assistantId, 'call_ownerless', 'approved');
+
+    expect(mockStreamResume).not.toHaveBeenCalled();
+    expect(lastAssistantMessage()?.toolCalls?.[0]).toMatchObject({
+      toolCallId: 'call_ownerless',
+      requiresApproval: true,
+    });
+    expect(lastAssistantMessage()?.toolCalls?.[0]?.approvalDecision).toBeUndefined();
+    expect(useChatExecutionStore.getState().error).toBe('Sign in to resume this AGI Cloud task.');
+  });
+
   it('resumes a recursive approval with the same run id and no transcript replay', async () => {
     const activityBase = {
       schemaVersion: 3 as const,

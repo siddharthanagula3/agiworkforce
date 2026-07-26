@@ -64,7 +64,7 @@ The domain is production-ready when a reproducible, versioned `.vsix` builds fro
 - Re-publishing an existing version, or publishing without bumping `version` + CHANGELOG.
 - Committing `vsce`/`ovsx` PATs, or baking any secret into the `.vsix`.
 - Hardcoding a model ID in release notes or the manifest; IDs come only from `packages/contracts/types/src/models.json`.
-- Referencing removed tiers. The `agiWorkforce.tier` enum still encodes `hobby`/`pro_plus` (`package.json:818-838`) — a known 🟡 reconciliation gap; copy uses Free / Basic / Pro / Max / Enterprise only, never Plus/Hobby/pro_plus, and never offers top-ups.
+- Referencing removed tiers or credit top-ups. The extension manifest exposes only current access modes.
 - Treating a Marketplace unpublish as remediation for a Managed-Cloud incident (use the server-side kill-switch), or making deployment a data-egress event.
 - Referencing Supabase (fully migrated away) or Next.js `middleware.ts` (Web uses `proxy.ts`); the stack is Clerk + Neon + Stripe.
 - Lowering the `engines.vscode` floor below `^1.100.0` to widen reach, breaking the chat-participant contribution.

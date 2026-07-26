@@ -9,7 +9,7 @@
  *   - Pre-fills values from settingsStore
  */
 
-import { render, fireEvent } from '@testing-library/react-native';
+import { act, render, fireEvent } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — must be before component import
@@ -85,6 +85,7 @@ jest.mock('../services/authSession', () => ({
 import PersonalizationScreen from '../app/(app)/settings/personalization';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
+import { useAuthStore } from '../src/features/auth/store';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -120,6 +121,7 @@ function resetSettingsStore() {
 describe('Personalization page', () => {
   beforeEach(() => {
     resetSettingsStore();
+    useAuthStore.setState({ clerkUserId: null });
     jest.clearAllMocks();
     mockUseLocalSearchParams.mockReturnValue({});
   });
@@ -247,5 +249,60 @@ describe('Personalization page', () => {
 
     expect(getByDisplayValue('Cloud Name')).toBeTruthy();
     expect(getByText('Cloud Personalization')).toBeTruthy();
+  });
+
+  it('hydrates a pristine Cloud draft when the first server pull arrives after mount', () => {
+    mockUseLocalSearchParams.mockReturnValue({ scope: 'cloud' });
+    const { getByDisplayValue } = render(<PersonalizationScreen />);
+
+    act(() => {
+      useCloudSettingsStore.setState({
+        personalization: {
+          ...defaultPersonalization,
+          fullName: 'Server Name',
+          nickname: 'Synced',
+        },
+      });
+    });
+
+    expect(getByDisplayValue('Server Name')).toBeTruthy();
+    expect(getByDisplayValue('Synced')).toBeTruthy();
+  });
+
+  it('does not overwrite an edited Cloud draft when a later server pull arrives', () => {
+    mockUseLocalSearchParams.mockReturnValue({ scope: 'cloud' });
+    const { getByDisplayValue, getByPlaceholderText } = render(<PersonalizationScreen />);
+
+    fireEvent.changeText(getByPlaceholderText('Your full name'), 'Unsaved Draft');
+    act(() => {
+      useCloudSettingsStore.setState({
+        personalization: {
+          ...defaultPersonalization,
+          fullName: 'Later Server Name',
+        },
+      });
+    });
+
+    expect(getByDisplayValue('Unsaved Draft')).toBeTruthy();
+  });
+
+  it('discards an account-A dirty draft when the active Cloud owner changes to B', () => {
+    mockUseLocalSearchParams.mockReturnValue({ scope: 'cloud' });
+    useAuthStore.setState({ clerkUserId: 'account-a' });
+    useCloudSettingsStore.setState({
+      personalization: { ...defaultPersonalization, fullName: 'Account A' },
+    });
+    const { getByDisplayValue, getByPlaceholderText } = render(<PersonalizationScreen />);
+
+    fireEvent.changeText(getByPlaceholderText('Your full name'), 'Account A unsaved private draft');
+    act(() => {
+      useCloudSettingsStore.setState({
+        personalization: { ...defaultPersonalization, fullName: 'Account B' },
+      });
+      useAuthStore.setState({ clerkUserId: 'account-b' });
+    });
+
+    expect(getByDisplayValue('Account B')).toBeTruthy();
+    expect(() => getByDisplayValue('Account A unsaved private draft')).toThrow();
   });
 });

@@ -42,7 +42,7 @@ interface ZustandStoreHandle {
 
 /** Runtime shape check — no cast to `any`, no dependency on each store's declared type. */
 function asZustandStore(value: unknown): ZustandStoreHandle | null {
-  if (!value || typeof value !== 'object') return null;
+  if (!value || (typeof value !== 'object' && typeof value !== 'function')) return null;
   const candidate = value as Record<string, unknown>;
   if (typeof candidate['getState'] !== 'function') return null;
   return value as ZustandStoreHandle;
@@ -75,6 +75,10 @@ function invokeStateMethod(state: unknown, method: string): boolean {
  * removes its durable payload and both sign-out paths navigate away afterwards.
  */
 const STORE_RESET_METHODS = ['resetOnLogout', 'reset', 'clearAll', 'clear'] as const;
+const MODULE_TEARDOWN_METHODS = new Set([
+  'cleanupWorkforceSubscription',
+  'stopMissionCleanupInterval',
+]);
 
 /** Reset a store's in-memory state through whichever clearing action it exposes. */
 function resetStoreState(handle: ZustandStoreHandle): void {
@@ -190,10 +194,10 @@ export async function cleanupAllStores(): Promise<void> {
           if (hasPersistApi(handle)) handle.persist?.clearStorage();
         }
         // Module-level teardown that is not part of any store's state.
-        const moduleFns = mod as Record<string, unknown>;
-        for (const fnName of ['cleanupWorkforceSubscription', 'stopMissionCleanupInterval']) {
-          const fn = moduleFns[fnName];
-          if (typeof fn === 'function') (fn as () => void)();
+        for (const [exportName, exported] of Object.entries(mod as Record<string, unknown>)) {
+          if (MODULE_TEARDOWN_METHODS.has(exportName) && typeof exported === 'function') {
+            (exported as () => void)();
+          }
         }
       } catch (error) {
         logger.error(`Error cleaning up ${label} on logout:`, error);

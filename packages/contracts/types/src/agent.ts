@@ -22,7 +22,7 @@
  * ```typescript
  * const config: AgentConfig = {
  *   name: 'Code Review Agent',
- *   model: 'claude-opus-4.8',
+ *   model: 'claude-opus-5',
  *   provider: 'anthropic',
  *   systemPrompt: 'You are a thorough code reviewer...',
  *   maxIterations: 20,
@@ -36,7 +36,7 @@ export interface AgentConfig {
   /** Human-readable agent name. */
   name: string;
 
-  /** LLM model identifier (e.g., `"claude-opus-4.8"`, `"gpt-5.6-sol"`). */
+  /** LLM model identifier (e.g., `"claude-opus-5"`, `"gpt-5.6-sol"`). */
   model: string;
 
   /** LLM provider identifier (e.g., `"anthropic"`, `"openai"`). */
@@ -110,7 +110,7 @@ export type AgentLifecycleStatus =
  * ```typescript
  * const agent: Agent = {
  *   id: 'agent-abc-123',
- *   config: { name: 'Code Review Agent', model: 'claude-opus-4.8', provider: 'anthropic' },
+ *   config: { name: 'Code Review Agent', model: 'claude-opus-5', provider: 'anthropic' },
  *   status: 'working',
  *   currentAction: 'Reading src/main.rs',
  *   progress: 45,

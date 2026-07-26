@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   githubInstallations: vi.fn(),
   customConnectors: vi.fn(),
   operatorIds: new Set(['slack']),
+  linkingAvailable: vi.fn(() => false),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -29,6 +30,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
 vi.mock('@/lib/github-app', () => ({
   getGitHubAppInstallUrl: vi.fn(() => 'https://github.com/apps/agi/installations/new'),
   isGitHubAppConfigured: vi.fn(() => true),
+  isGitHubInstallationLinkingAvailable: () => mocks.linkingAvailable(),
 }));
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
@@ -64,6 +66,7 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     mocks.execute.mockResolvedValue(undefined);
     mocks.githubInstallations.mockResolvedValue([]);
     mocks.customConnectors.mockResolvedValue([]);
+    mocks.linkingAvailable.mockReturnValue(false);
   });
 
   it('does not advertise or restore device-local connector rows in Cloud mode', async () => {
@@ -92,7 +95,8 @@ describe('/api/connectors managed-cloud capability boundary', () => {
 
     expect(response.status).toBe(200);
     expect(body.connectors.map((connector) => connector.connectorId)).toEqual(['slack']);
-    expect(body.available).toEqual(expect.arrayContaining(['slack', 'github']));
+    expect(body.available).toContain('slack');
+    expect(body.available).not.toContain('github');
     expect(body.available).not.toContain('local-filesystem');
   });
 
@@ -105,6 +109,34 @@ describe('/api/connectors managed-cloud capability boundary', () => {
       error: expect.stringContaining('Desktop Local settings'),
     });
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('does not start GitHub installation while user ownership proof is unavailable', async () => {
+    const response = await POST(postRequest('github'));
+    const body = (await response.json()) as {
+      error: string;
+      installStartPath?: string;
+    };
+
+    expect(response.status).toBe(501);
+    expect(body.error).toContain('ownership');
+    expect(body.installStartPath).toBeUndefined();
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('advertises and starts GitHub only when the complete ownership flow is configured', async () => {
+    mocks.linkingAvailable.mockReturnValue(true);
+
+    const getResponse = await GET(getRequest());
+    const getBody = (await getResponse.json()) as { available: string[] };
+    expect(getBody.available).toContain('github');
+
+    const postResponse = await POST(postRequest('github'));
+    expect(postResponse.status).toBe(409);
+    await expect(postResponse.json()).resolves.toMatchObject({
+      connectorId: 'github',
+      installStartPath: '/api/github/install/start',
+    });
   });
 
   it('fails closed when the real GitHub installation signal cannot be loaded', async () => {

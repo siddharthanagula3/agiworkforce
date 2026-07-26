@@ -7,7 +7,7 @@
  * Mirrors the current-roster verification points:
  *   (a) GPT-5.6 Sol shows its exact none/low/medium/high/xhigh/max ladder.
  *   (b) non-reasoning model (Sonar) shows NO effort control.
- *   (c) Anthropic Opus 4.8 shows low/medium/high/xhigh/max.
+ *   (c) Anthropic Opus 5 shows low/medium/high/xhigh/max.
  *   (d) Haiku 4.5 exposes no effort control because it has no effort ladder.
  *   (e) Fable 5 reasoning is mandatory and cannot be switched off.
  *   (f) GPT-5.6 Sol is live/selectable, while a synthetic future preview is disabled.
@@ -49,8 +49,8 @@ const MODELS = vi.hoisted(() => [
     description: 'Search',
   },
   {
-    id: 'claude-opus-4.8',
-    name: 'Claude 4.8 Opus',
+    id: 'claude-opus-5',
+    name: 'Claude Opus 5',
     provider: 'Anthropic',
     providerKey: 'anthropic',
     description: 'Frontier',
@@ -235,8 +235,8 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
     expect(screen.getByText('Always on for this model')).toBeInTheDocument();
   });
 
-  it('(c) Anthropic Opus 4.8 exposes five catalog levels through the slider', () => {
-    sel.id = 'claude-opus-4.8';
+  it('(c) Anthropic Opus 5 exposes five catalog levels through the slider', () => {
+    sel.id = 'claude-opus-5';
     render(<ComposerFooter />);
     expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute('max', '4');
   });

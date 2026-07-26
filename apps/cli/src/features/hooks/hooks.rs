@@ -1233,7 +1233,7 @@ mod tests {
         let input = HookInput {
             event: "AfterToolUse".to_string(),
             session_id: Some("123".to_string()),
-            model: Some("claude-opus-4-8".to_string()),
+            model: Some("claude-opus-5".to_string()),
             tool_name: Some("read_file".to_string()),
             tool_args: Some(serde_json::json!({"path": "/tmp/test"})),
             tool_output: Some("file contents".to_string()),

@@ -12,6 +12,10 @@ export interface SidePanelChatMessage {
   /** Display-safe canonical events used to rebuild activity after a browser restart. */
   agentEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
+  /** Explicit per-tool choices retained while a multi-tool approval batch is incomplete. */
+  cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
+  /** Retryable, display-only failure from the most recent approval continuation. */
+  cloudApprovalError?: string;
   timestamp: number;
 }
 

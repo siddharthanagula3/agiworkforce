@@ -6,6 +6,10 @@
 **Scope:** Signed-in web products at `claude.ai` and `chatgpt.com`  
 **Method:** Open every safe visible control, record the resulting page, panel, menu, modal, tab, state, and interaction contract. Stop before destructive, purchasing, publishing, installation, permission-granting, data-transmission, or account-security side effects.
 
+**Model-name amendment (2026-07-25):** model labels in this dated interaction
+record were normalized to the current AGI catalog. They are not evidence that
+Opus 5 was available on the original observation date.
+
 This is a dated competitor observation, not AGI's product source of truth. Product decisions belong in `docs/current/frontend-experience-contract.md`. Account-specific conversation names, repository names, connectors, usage totals, and personal data are intentionally omitted or generalized.
 
 ## Evidence labels
@@ -229,7 +233,7 @@ The settings menu contains a checked `Hold to record` microphone behavior toggle
 **Verified-opened.** The picker is a radio menu with keyboard shortcuts and entitlement labels. Observed entries on this account:
 
 - Fable 5, with a temporary inclusion label
-- Opus 4.8
+- Opus 5
 - Sonnet 5
 - Haiku 4.5
 - More models

@@ -44,7 +44,7 @@ Local persistence of conversations, messages, memory, doc chunks, installed-mode
 
 ## Build System — Expo EAS Build
 
-Builds run on **EAS Build** (`eas.json`, CLI `>= 13.0.0`, `appVersionSource: remote`, `requireCommit: true`). A `base` profile pins Node 22.12.0 / pnpm 9.15.3, iOS image `latest` on `m-medium`, Android NDK 27.1.12297006, and caches `node_modules`/`ios/Pods`. Profiles: `development` (dev client, simulator Debug), `preview`/`preview-simulator` (internal Release), `production` (Release, aab, remote credentials). **✅ Built** — `apps/mobile/eas.json`. Requirement: production uses `credentialsSource: remote`; signing secrets stay out of the JS bundle and git.
+Builds run on **EAS Build** (`eas.json`, CLI `>= 13.0.0`, `appVersionSource: remote`, `requireCommit: true`). A `base` profile pins Node 24.18.0 / pnpm 9.15.3, iOS image `latest` on `m-medium`, Android NDK 27.1.12297006, and caches `node_modules`/`ios/Pods`. Profiles: `development` (dev client, simulator Debug), `preview`/`preview-simulator` (internal Release), `production` (Release, aab, remote credentials). **✅ Built** — `apps/mobile/eas.json`. Requirement: production uses `credentialsSource: remote`; signing secrets stay out of the JS bundle and git.
 
 ## Release Pipeline — mobile deployment
 
@@ -64,7 +64,7 @@ Release is script-driven under `apps/mobile/scripts/release/` (`preflight.sh`, `
 
 ## Competitor notes
 
-ChatGPT and Claude mobile are single-provider cloud clients with cloud-only history sync and no on-device model. AGI Mobile diverges deliberately: (1) a real **on-device Local** mode (executorch + llama.rn) running free and offline with zero egress; (2) **multi-provider** Managed Cloud selecting models from `models.json` (e.g. `gpt-5.5`, `claude-opus-4.8`, `gemini-3.1-pro-preview`) instead of one vendor; (3) **per-surface trust** with explicitly **no BYOK on mobile**, unlike Desktop/CLI/VS Code; (4) a **remote-window** companion over a local host session rather than shipping all compute to the cloud.
+ChatGPT and Claude mobile are single-provider cloud clients with cloud-only history sync and no on-device model. AGI Mobile diverges deliberately: (1) a real **on-device Local** mode (executorch + llama.rn) running free and offline with zero egress; (2) **multi-provider** Managed Cloud selecting models from `models.json` (e.g. `gpt-5.5`, `claude-opus-5`, `gemini-3.1-pro-preview`) instead of one vendor; (3) **per-surface trust** with explicitly **no BYOK on mobile**, unlike Desktop/CLI/VS Code; (4) a **remote-window** companion over a local host session rather than shipping all compute to the cloud.
 
 ## Acceptance / Definition of Done
 

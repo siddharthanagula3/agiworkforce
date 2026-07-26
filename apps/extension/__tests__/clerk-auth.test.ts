@@ -77,6 +77,31 @@ describe('Clerk Chrome Extension auth', () => {
     );
   });
 
+  it('hydrates the signed-in account identity on first render', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
+    createClerkClient.mockReturnValue({
+      load: vi.fn().mockResolvedValue(undefined),
+      session: { getToken: vi.fn().mockResolvedValue('fresh-token') },
+      user: {
+        fullName: 'Ada Lovelace',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        primaryEmailAddress: { emailAddress: 'ada@example.com' },
+      },
+      addListener: vi.fn(),
+      signOut: vi.fn(),
+    });
+
+    const auth = await importClerkAuth();
+
+    await expect(auth.getClerkAccountProfile()).resolves.toEqual({
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      initials: 'AL',
+    });
+  });
+
   it('rejects a Sync Host that is not an origin-only HTTPS URL', async () => {
     process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_live_repo_contract';
     process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com/untrusted/path';

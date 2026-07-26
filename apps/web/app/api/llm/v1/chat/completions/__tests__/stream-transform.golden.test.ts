@@ -47,8 +47,8 @@ import type { ProcessedRequest } from '../lib/request-processor';
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-test-001',
-    chatRequest: { model: 'claude-opus-4-8', messages: [], stream: true } as any,
-    requestedModel: 'claude-opus-4-8',
+    chatRequest: { model: 'claude-opus-5', messages: [], stream: true } as any,
+    requestedModel: 'claude-opus-5',
     provider: 'anthropic',
     estimatedCostCents: 0,
     quotaWarningHeader: null,
@@ -244,7 +244,7 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
     const events = parseDataLines(body);
 
     expect(events).toEqual([
-      { choices: [{ delta: { content: 'Let me search. ' }, index: 0 }], model: 'claude-opus-4-8' },
+      { choices: [{ delta: { content: 'Let me search. ' }, index: 0 }], model: 'claude-opus-5' },
       {
         choices: [
           {
@@ -254,7 +254,7 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
             index: 0,
           },
         ],
-        model: 'claude-opus-4-8',
+        model: 'claude-opus-5',
       },
       {
         choices: [
@@ -268,11 +268,11 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
             index: 0,
           },
         ],
-        model: 'claude-opus-4-8',
+        model: 'claude-opus-5',
       },
-      { choices: [{ delta: { content: '<thinking>' }, index: 0 }], model: 'claude-opus-4-8' },
-      { choices: [{ delta: { content: 'pondering...' }, index: 0 }], model: 'claude-opus-4-8' },
-      { choices: [{ delta: { content: '</thinking>' }, index: 0 }], model: 'claude-opus-4-8' },
+      { choices: [{ delta: { content: '<thinking>' }, index: 0 }], model: 'claude-opus-5' },
+      { choices: [{ delta: { content: 'pondering...' }, index: 0 }], model: 'claude-opus-5' },
+      { choices: [{ delta: { content: '</thinking>' }, index: 0 }], model: 'claude-opus-5' },
       {
         choices: [
           {
@@ -289,7 +289,7 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
             index: 0,
           },
         ],
-        model: 'claude-opus-4-8',
+        model: 'claude-opus-5',
       },
       {
         choices: [
@@ -298,11 +298,11 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
             index: 0,
           },
         ],
-        model: 'claude-opus-4-8',
+        model: 'claude-opus-5',
       },
       {
         choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }],
-        model: 'claude-opus-4-8',
+        model: 'claude-opus-5',
       },
       '[DONE]',
     ]);
@@ -401,7 +401,7 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
       },
       {
         choices: [{ delta: { content: ' are mammals' }, index: 0 }],
-        model: 'claude-opus-4-8',
+        model: 'claude-opus-5',
       },
     ]);
   });
