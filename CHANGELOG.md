@@ -2,9 +2,69 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-20
+Last updated: 2026-07-26
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — audit remediation verified; scheduling honesty; documentation sweep] — 2026-07-26
+
+### Verified
+
+- **The `fix/audit-remediation-2026-07-25` branch's test suites ran for the first
+  time.** The handoff recorded "the test suites were never executed" because
+  `rolldown@1.0.3` shipped no `linux-arm64-gnu` binding in that environment. On
+  darwin they run: **10,272 tests pass** — web 4,453 (447 files), desktop 1,894,
+  mobile 2,121, Chrome extension 1,168, VS Code 644 — plus `cargo test
+--workspace --lib`, `tsc --noEmit` across all packages, `pnpm lint`, and all 27
+  `check:llm-operability` guardrails. The five areas the handoff flagged as
+  highest-risk (`route.openai-compat-dispatch.test.ts`, the four
+  `vi.mock('@/lib/rate-limit')` factories, `web-chat-store` consumers,
+  `artifact-derivation.test.ts`, `ChatMessageList.test.tsx`) all pass.
+- Handoff items §2 (19 tombstone files), §3 (migration `0070`/`0071` renumber),
+  and §5 (Rust `report_llm_usage`) were already complete. Handoff §6's claim that
+  "there is still no route that creates an organization" is **false**:
+  `apps/web/app/api/settings/organization/route.ts` ships with Zod validation,
+  CSRF, rate limiting, admin-access checks and tests.
+
+### Fixed
+
+- **Scheduled tasks no longer advertise a cadence the platform cannot deliver.**
+  The composer offered minute-level intervals and arbitrary cron while
+  `/api/cron/run-schedules` is a single `vercel.json` entry firing once a day. A
+  user asking for "every 5 minutes" received at most one run per day, silently.
+  The floor is enforced in `validateScheduleInput` — the one write boundary
+  create and update share — and deliberately **not** in `getNextExecutionAt`,
+  which also runs during finalization where a throw escapes
+  `processClaimedScheduleRun`, rejects `Promise.all(workers)`, and takes every
+  other user's due task down with it. Rows written under the old contract keep
+  running and stay editable; `updateSchedule` applies the floor only when the
+  patch touches timing. `SWEEP_INTERVAL_MS` is pinned to the deployed cron by
+  `schedule-cadence.test.ts`, which parses `vercel.json`, so no plan-tier
+  assumption is encoded.
+- **One bad schedule can no longer abort the whole sweep.**
+  `processDueScheduleRuns` awaited each claim with no guard; a row whose
+  finalization failed persistently rejected the worker and every other due task
+  in the batch went unrun. It now logs and continues, leaving the claim for lease
+  expiry.
+
+### Removed
+
+- 120 superseded documents (501 → 381 markdown files), each read and
+  reference-checked first; per-file reasons in
+  `docs/agent-context/doc-sweep-2026-07-26.md`. Largest removal is `docs/spec/`,
+  which declared itself "the constitution" above `docs/current` while carrying no
+  registration and no CI enforcement.
+- `known-flaws.md` compressed 816KB → 328KB; all 174 flaw IDs retained, open rows
+  keep full detail, and 11 open rows that were stranded below the table guard are
+  now inside it.
+- Tracked `apps/desktop/.tmp_audit/` scratch dumps referencing deleted code.
+
+### Changed
+
+- Marketing-facing brand copy claimed "15 providers, four routing tiers"; the
+  catalog carries 19 providers and the four Auto tiers collapsed into one
+  self-routing Auto. Rewritten to state the guarantee — a fallback behind every
+  model, no single-provider dependency — without a count that drifts.
 
 ## [Unreleased — web app #1 prod-readiness: chat-sync 500 fix + DoD e2e spectrum] — 2026-07-21
 
