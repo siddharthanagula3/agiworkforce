@@ -347,6 +347,95 @@ describe('NeonDatabaseAdapter.withUser', () => {
   });
 });
 
+describe('NeonDatabaseAdapter.withOrg — tenancy scope (migration 0073)', () => {
+  const makeAdapter = () =>
+    new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
+    });
+
+  it('returns a NEW adapter and leaves the receiver unscoped', () => {
+    const adapter = makeAdapter();
+    const scoped = adapter.withOrg('11111111-1111-4111-8111-111111111111');
+    expect(scoped).not.toBe(adapter);
+    expect(scoped).toBeInstanceOf(NeonDatabaseAdapter);
+  });
+
+  it('binds the active organization on every scoped query', async () => {
+    state.clientQueryHandler = async (sql) =>
+      sql.toLowerCase().startsWith('select')
+        ? { rows: [{ id: 1 }], rowCount: 1 }
+        : { rows: [], rowCount: 0 };
+    const scoped = makeAdapter()
+      .withUser(makeJwt({ sub: 'user-abc' }))
+      .withOrg('22222222-2222-4222-8222-222222222222');
+    await scoped.query('select id from t');
+    const setOrg = state.clientCalls.find((c) =>
+      c.sql.includes("set_config('request.jwt.claim.org_id'"),
+    );
+    expect(setOrg?.params).toEqual(['22222222-2222-4222-8222-222222222222']);
+  });
+
+  it('composes in either order without changing the resulting scope', async () => {
+    state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
+    const org = '33333333-3333-4333-8333-333333333333';
+    const jwt = makeJwt({ sub: 'user-xyz' });
+
+    await makeAdapter().withUser(jwt).withOrg(org).query('select 1');
+    const first = {
+      sub: state.clientCalls.find((c) => c.sql.includes("claim.sub'"))?.params,
+      org: state.clientCalls.find((c) => c.sql.includes("claim.org_id'"))?.params,
+    };
+
+    state.clientCalls.length = 0;
+    await makeAdapter().withOrg(org).withUser(jwt).query('select 1');
+    const second = {
+      sub: state.clientCalls.find((c) => c.sql.includes("claim.sub'"))?.params,
+      org: state.clientCalls.find((c) => c.sql.includes("claim.org_id'"))?.params,
+    };
+
+    expect(second).toEqual(first);
+  });
+
+  it('always binds the org GUC, so a pooled connection cannot inherit a previous request scope', async () => {
+    state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
+    // No withOrg() at all: the binding must still fire, with an empty value,
+    // which current_app_org_id() maps to NULL and every org branch denies.
+    await makeAdapter()
+      .withUser(makeJwt({ sub: 'user-abc' }))
+      .query('select 1');
+    const setOrg = state.clientCalls.find((c) =>
+      c.sql.includes("set_config('request.jwt.claim.org_id'"),
+    );
+    expect(setOrg).toBeDefined();
+    expect(setOrg?.params).toEqual(['']);
+  });
+
+  it('clears the organization when passed null', async () => {
+    state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
+    const scoped = makeAdapter()
+      .withUser(makeJwt({ sub: 'user-abc' }))
+      .withOrg('44444444-4444-4444-8444-444444444444')
+      .withOrg(null);
+    await scoped.query('select 1');
+    const setOrg = state.clientCalls.find((c) =>
+      c.sql.includes("set_config('request.jwt.claim.org_id'"),
+    );
+    expect(setOrg?.params).toEqual(['']);
+  });
+
+  it('refuses to rebind tenancy inside an open transaction', async () => {
+    state.clientQueryHandler = async () => ({ rows: [], rowCount: 0 });
+    const adapter = makeAdapter().withUser(makeJwt({ sub: 'user-abc' }));
+    await expect(
+      adapter.transaction(async (tx) => {
+        tx.withOrg('55555555-5555-4555-8555-555555555555');
+        return null;
+      }),
+    ).rejects.toThrow(/BEFORE opening a/);
+  });
+});
+
 describe('NeonDatabaseAdapter.dispose', () => {
   it('calls pool.end() on first dispose and is safe to call twice', async () => {
     const adapter = new NeonDatabaseAdapter({
