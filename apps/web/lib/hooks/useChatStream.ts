@@ -49,6 +49,7 @@ import {
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 // GOV-20: one classifier for every managed quota refusal, free or paid.
 import { classifyManagedQuotaErrorCode, getNextUpgradeTier } from '@agiworkforce/types';
@@ -115,7 +116,7 @@ const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
 /** Decision the user made on a single pending tool call. */
 export type ToolApprovalDecision = 'approved' | 'rejected';
 
-interface UseChatStreamReturn {
+export interface UseChatStreamReturn {
   /**
    * Send a user message and stream the reply. Resolves to `true` once the new user
    * turn has been committed to the transcript (added locally + persisting), or `false`
@@ -948,7 +949,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     // Always persist isThinkingStreaming:false and a stable duration so a
     // reloaded turn renders the collapsed "Thought for Ns" summary, never a
     // stuck live timer.
-    if (thinkingSegments.length > 0) {
+    if (thinkingSegments.length >= 2) {
       metadata.thinkingSegments = thinkingSegments.map((s) => ({ ...s, isStreaming: false }));
     }
     if (thinkingContent.trim().length > 0) {
@@ -1961,7 +1962,7 @@ export function useChatStream(): UseChatStreamReturn {
         ];
 
         // StyleSelector's resolved instruction (preset or custom) is
-        // authoritative; fall back to the '+' menu styleMode hint otherwise.
+        // authoritative; keep the legacy styleMode hint only for older callers.
         if (options.styleInstruction) {
           apiMessages.unshift({ role: 'system', content: options.styleInstruction });
         } else if (options.styleMode && options.styleMode !== 'normal') {
@@ -1987,8 +1988,8 @@ export function useChatStream(): UseChatStreamReturn {
         // Unknown/BYOK models preserve the caller's explicit request. Known catalog
         // models are capability-clamped so a stale persisted preference can never
         // make an otherwise valid chat fail before provider execution.
-        const thinkingEnabled =
-          requestedThinking && (selectedModelMetadata?.capabilities.thinking ?? true);
+        const modelCanThink = selectedModelMetadata?.capabilities.thinking ?? true;
+        const thinkingEnabled = modelCanThink ? requestedThinking : undefined;
         const thinkingEffort = options.thinkingEffort ?? thinkingState.effort;
         const reasoningRequest = selectedModelMetadata?.reasoning?.request;
         const supportsEffort = selectedModelMetadata
@@ -2023,11 +2024,12 @@ export function useChatStream(): UseChatStreamReturn {
             office_creation: options.officeCreation || undefined,
             skill_name: options.skillName,
             work_mode: options.workMode,
-            thinking_mode: thinkingEnabled || undefined,
+            thinking_mode: thinkingEnabled,
             effort:
               supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)
                 ? resolvedEffort
                 : undefined,
+            client_timezone: getBrowserTimeZone(),
             use_prompt_cache: true,
           }),
           signal: abortController.signal,

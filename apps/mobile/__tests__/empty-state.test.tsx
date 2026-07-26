@@ -17,6 +17,18 @@ import { render } from '@testing-library/react-native';
 // Mocks — must be before component import
 // ---------------------------------------------------------------------------
 
+const mockClerkState: {
+  user: null | {
+    firstName?: string | null;
+    fullName?: string | null;
+    primaryEmailAddress?: { emailAddress: string } | null;
+  };
+} = { user: null };
+
+jest.mock('@clerk/expo', () => ({
+  useUser: () => mockClerkState,
+}));
+
 jest.mock('react-native-reanimated', () => {
   const { View } = require('react-native');
   return {
@@ -88,6 +100,8 @@ jest.mock('react-native-safe-area-context', () => {
 
 import { ChatEmptyState } from '../src/features/chat/components/ChatEmptyState';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -110,6 +124,8 @@ const defaultPersonalization = {
 // seed useLocalSettingsStore.
 function resetSettingsStore() {
   useLocalSettingsStore.setState({ personalization: defaultPersonalization });
+  useCloudSettingsStore.setState({ personalization: defaultPersonalization });
+  useChatAppModeStore.setState({ appMode: 'local' });
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +136,7 @@ describe('ChatEmptyState', () => {
   beforeEach(() => {
     resetSettingsStore();
     mockStorageGetString.mockReturnValue(undefined);
+    mockClerkState.user = null;
     jest.clearAllMocks();
   });
 
@@ -165,6 +182,19 @@ describe('ChatEmptyState', () => {
 
       const { getByText } = render(<ChatEmptyState />);
       expect(getByText('Hi, Jane')).toBeTruthy();
+    });
+
+    it('uses the loaded Clerk identity immediately in Cloud before settings sync finishes', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      mockClerkState.user = {
+        firstName: 'Ada',
+        fullName: 'Ada Lovelace',
+        primaryEmailAddress: { emailAddress: 'ada@example.com' },
+      };
+
+      const { getByText } = render(<ChatEmptyState />);
+
+      expect(getByText('Hi, Ada')).toBeTruthy();
     });
   });
 

@@ -17,6 +17,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { providerForExecutionMode } from '@/src/features/chat/utils/conversationMode';
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
+import type { ManagedCloudConversationHistoryStats } from '@agiworkforce/cloud-contracts';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 
 interface CloudMessageState {
@@ -24,9 +25,14 @@ interface CloudMessageState {
   conversations: ConversationSummary[];
   /** Messages keyed by cloud conversation ID. */
   messages: Record<string, ChatMessage[]>;
+  /** Server-authoritative totals for all non-temporary Cloud history. */
+  historyStats: ManagedCloudConversationHistoryStats | null;
 
   /** Replace cloud conversation list with the latest server snapshot. */
-  setCloudConversations: (cloudConversations: ConversationSummary[]) => void;
+  setCloudConversations: (
+    cloudConversations: ConversationSummary[],
+    historyStats?: ManagedCloudConversationHistoryStats,
+  ) => void;
   /** Set cloud messages for a specific conversation. */
   setCloudMessages: (conversationId: string, messages: ChatMessage[]) => void;
   /** Remove a single message from a cloud conversation's cached message list. */
@@ -41,13 +47,25 @@ interface CloudMessageState {
   clearCloudData: () => void;
 }
 
+function stripEphemeralGeneratedImage(message: ChatMessage): ChatMessage {
+  if (message.imageGenPersisted !== false) return message;
+  return {
+    ...message,
+    imageUrl: undefined,
+    imageGenError:
+      message.imageGenError ??
+      'This image was available for one session only and was not saved to AGI Cloud.',
+  };
+}
+
 export const useChatCloudMessageStore = create<CloudMessageState>()(
   persist(
     (set) => ({
       conversations: [],
       messages: {},
+      historyStats: null,
 
-      setCloudConversations: (cloudConversations) => {
+      setCloudConversations: (cloudConversations, historyStats) => {
         // Preserve every locally-dirty mutation so a paginated/stale list snapshot
         // cannot revert it or drop a create that has not appeared in that page yet.
         // A later delta tombstone remains authoritative and removes the record.
@@ -73,7 +91,10 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
             (conversation) =>
               dirtyIds.includes(conversation.id) && !snapshotIds.has(conversation.id),
           );
-          return { conversations: [...dirtyOutsideSnapshot, ...normalized] };
+          return {
+            conversations: [...dirtyOutsideSnapshot, ...normalized],
+            ...(historyStats ? { historyStats } : {}),
+          };
         });
       },
 
@@ -125,7 +146,7 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
       },
 
       clearCloudData: () => {
-        set({ conversations: [], messages: {} });
+        set({ conversations: [], messages: {}, historyStats: null });
       },
     }),
     {
@@ -177,10 +198,10 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
               (message) =>
                 dirtyMessageIds?.has(message.id) === true && !selectedIds.has(message.id),
             );
-            messages[id] = [...dirtyOutsideCap, ...selected];
+            messages[id] = [...dirtyOutsideCap, ...selected].map(stripEphemeralGeneratedImage);
           }
         }
-        return { conversations, messages };
+        return { conversations, messages, historyStats: state.historyStats };
       },
     },
   ),

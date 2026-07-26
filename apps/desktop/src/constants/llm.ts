@@ -158,7 +158,7 @@ const CURRENT_PICKER_MODEL_OPTIONS: GroupedModelOption[] = getCatalogPickerModel
   provider: model.provider,
 }));
 
-/** Selectable Managed Cloud Auto profiles projected from routing policy. */
+/** Selectable Managed Cloud Auto control projected from routing policy. */
 export function getManagedAutoModelOptions(): ModelOption[] {
   return MANAGED_AUTO_MODEL_OPTIONS.map((option) => ({ ...option }));
 }
@@ -174,7 +174,7 @@ export function getProviderModelOptions(provider: Provider): ModelOption[] {
   );
 }
 
-/** Current Auto profiles and provider models for grouped Desktop controls. */
+/** Current Auto control and provider models for grouped Desktop controls. */
 export function getCurrentModelOptions(): GroupedModelOption[] {
   return [
     ...MANAGED_AUTO_MODEL_OPTIONS.map((option) => ({

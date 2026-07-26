@@ -9,6 +9,7 @@ import { getCorsHeaders } from '@/lib/cors';
 import { getAllowedAutoModesForTier } from '@shared/config/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
+  effectivePlanTier,
   getMinimumRequiredTier,
   getModelsForTierAndSurface,
   getPickerModelsForRuntimeProfile,
@@ -125,7 +126,10 @@ async function handleListModels(request: NextRequest) {
   }
 
   const subscription = await SubscriptionService.getSubscription(userId);
-  return listModelsForRequest(request, subscription?.plan_tier || 'free');
+  return listModelsForRequest(
+    request,
+    effectivePlanTier(subscription?.plan_tier, subscription?.status),
+  );
 }
 
 export const GET = withErrorHandler(handleListModels);

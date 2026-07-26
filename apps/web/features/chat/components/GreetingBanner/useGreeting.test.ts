@@ -18,8 +18,20 @@ import { useGreeting } from './useGreeting';
 // Mocks
 // ---------------------------------------------------------------------------
 
+const greetingMocks = vi.hoisted(() => ({
+  canonicalUser: null as null | {
+    name?: string;
+    profile?: { preferred_name?: string | null };
+  },
+}));
+
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: vi.fn(),
+}));
+
+vi.mock('@shared/stores/web-auth-store', () => ({
+  useBillingStore: (selector: (state: { user: typeof greetingMocks.canonicalUser }) => unknown) =>
+    selector({ user: greetingMocks.canonicalUser }),
 }));
 
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -53,6 +65,7 @@ function renderGreeting(hour: number, day: number, userName?: string) {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  greetingMocks.canonicalUser = null;
 });
 
 afterEach(() => {
@@ -65,6 +78,21 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('useGreeting · time band selection', () => {
+  it('uses the canonical /api/me preferred name on the first hydrated render', () => {
+    vi.setSystemTime(new Date(2026, 0, 3, 10, 0, 0));
+    greetingMocks.canonicalUser = {
+      name: 'Canonical Full Name',
+      profile: { preferred_name: 'Preferred' },
+    };
+    vi.mocked(useAuthStore).mockReturnValue({
+      user: null,
+    } as ReturnType<typeof useAuthStore>);
+
+    const { result } = renderHook(() => useGreeting());
+
+    expect(result.current.headline).toBe('Good morning, Preferred');
+  });
+
   it('returns earlyMorning band at hour 4', () => {
     const { result } = renderGreeting(4, 1); // day 1 → variantIndex 1
     // Anonymous variant: config.variants[1] = 'Early start'

@@ -7,6 +7,8 @@ const REMOVED_PROVIDER_IDS = [
   'cohere',
   'deepinfra',
   'fireworks',
+  'groq',
+  'mistral',
   'sambanova',
   'together',
 ] as const;
@@ -24,6 +26,8 @@ describe('provider health policy', () => {
       await import('../../src/services/providerHealth');
     const providers = await checkAllProviders();
     const providerIds = providers.map((provider) => provider.provider);
+
+    expect(providerIds).toContain('minimax');
 
     for (const removedProvider of REMOVED_PROVIDER_IDS) {
       expect(providerIds).not.toContain(removedProvider);

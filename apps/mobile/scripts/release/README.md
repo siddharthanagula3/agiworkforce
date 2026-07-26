@@ -28,7 +28,7 @@ command.
 - **`apps/mobile/secrets/`** — gitignored directory for local copies of release credentials
   (App Store Connect API key `.p8`, Play service account JSON).
 
-Tested with `eas-cli >= 13.0`, Node 22, pnpm 9.15.3 (matches repo `engines`).
+Tested with `eas-cli >= 13.0`, Node 24, pnpm 9.15.3 (matches repo `engines`).
 
 ---
 
@@ -41,7 +41,7 @@ Tested with `eas-cli >= 13.0`, Node 22, pnpm 9.15.3 (matches repo `engines`).
 | `beta`        | Store-signed IPA / Android App Bundle   | TestFlight / Play Internal          | Invited testers          |
 | `production`  | Release build, signed, auto-incremented | App Store / Play Production (draft) | Public release           |
 
-All profiles `extends: "base"` which pins Node 22.12.0 + pnpm 9.15.3 on the EAS build worker
+All profiles `extends: "base"` which pins Node 24.18.0 + pnpm 9.15.3 on the EAS build worker
 and uses macOS `m-medium` for iOS / Linux `medium` for Android.
 
 The `appVersionSource: "remote"` setting in `cli` means EAS tracks build numbers — you don't

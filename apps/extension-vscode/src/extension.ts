@@ -6,7 +6,6 @@
  */
 
 import * as vscode from 'vscode';
-import { fetchTierInfo } from './utils/api';
 import { Config } from './platform/config';
 import { getDesktopBridge, activateDesktopBridge } from './features/desktop-bridge';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
@@ -20,6 +19,7 @@ import { setupCommands } from './core/commandSetup';
 import * as telemetry from './core/telemetry';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
+import { refreshAccountTierCache } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
@@ -172,16 +172,9 @@ export function activate(context: vscode.ExtensionContext): void {
   void checkInlineCompletionsFirstRun(context);
 
   // ── 6. Fetch tier info on activation (fire-and-forget) ──────────────────────
-  void fetchTierInfo(context.secrets).then(async (tierInfo) => {
-    if (tierInfo === undefined) return;
-    try {
-      await context.globalState.update('tierStatus.cachedTier', tierInfo.tier);
-      await vscode.workspace
-        .getConfiguration('agiWorkforce')
-        .update('currentTier', tierInfo.tier, vscode.ConfigurationTarget.Global);
-    } catch {
-      // Non-critical — silently ignore update failures (e.g. no workspace)
-    }
+  void refreshAccountTierCache(context).catch(() => {
+    // Non-critical — model admission falls back to BYOK when the account tier
+    // cannot be persisted (for example, a read-only editor profile).
   });
 }
 

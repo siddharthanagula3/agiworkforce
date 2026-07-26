@@ -32,4 +32,22 @@ describe('web model selection trust boundary', () => {
 
     expect(actualIds).toEqual(expectedIds);
   });
+
+  it('rehydrates an unknown persisted model to the canonical default', async () => {
+    localStorage.setItem(
+      'agi-model-store',
+      JSON.stringify({
+        state: {
+          selectedModelId: 'removed-provider-model',
+          selectedProvider: 'anthropic',
+        },
+        version: 4,
+      }),
+    );
+
+    await useModelStore.persist.rehydrate();
+
+    expect(useModelStore.getState().selectedModelId).toBe('auto');
+    expect(useModelStore.getState().selectedProvider).toBe('managed_cloud');
+  });
 });

@@ -453,6 +453,8 @@ describe('Managed Web AGI Work dispatch', () => {
       customConnectorLimit: undefined,
       // GOV-7: the per-plan ceiling input.
       planTier: 'max',
+      // CON-1: denied tools must be filtered before they are advertised.
+      isToolDenied: expect.any(Function),
     });
     expect(workflowRouteMocks.start).not.toHaveBeenCalled();
   });

@@ -32,9 +32,9 @@ export default function Providers({
   }, []);
 
   return (
-    <CapabilityProvider platform="web">
-      <QueryProvider>
-        <ThemeProvider nonce={nonce}>
+    <ThemeProvider nonce={nonce}>
+      <CapabilityProvider platform="web">
+        <QueryProvider>
           <I18nextProvider i18n={i18n}>
             <WaitlistModalProvider>
               <SettingsModalProvider>{children}</SettingsModalProvider>
@@ -44,8 +44,8 @@ export default function Providers({
               <Toaster position="top-center" richColors closeButton />
             </WaitlistModalProvider>
           </I18nextProvider>
-        </ThemeProvider>
-      </QueryProvider>
-    </CapabilityProvider>
+        </QueryProvider>
+      </CapabilityProvider>
+    </ThemeProvider>
   );
 }

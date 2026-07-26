@@ -161,6 +161,36 @@ export interface ChatRuntime {
   supportsResearch?: boolean;
 
   /**
+   * True when the active runtime has a dedicated image-generation dispatch
+   * that returns a renderable result. When explicitly false, shared empty-chat
+   * quick actions must not advertise Image. Omitted preserves existing host
+   * behavior for runtimes that have not adopted capability declarations yet.
+   */
+  supportsImageGeneration?: boolean;
+
+  /**
+   * True when the active runtime has a dedicated video-generation dispatch.
+   * When explicitly false, shared empty-chat quick actions hide Video instead
+   * of sending a media prompt to an incompatible text-only route.
+   */
+  supportsVideoGeneration?: boolean;
+
+  /**
+   * True when the active runtime can execute computer-use requests. When
+   * explicitly false, shared empty-chat quick actions hide Computer so the UI
+   * does not expose a dead control.
+   */
+  supportsComputerUse?: boolean;
+
+  /**
+   * True only when the runtime can keep independent turns alive in different
+   * conversations and stamps every StreamEvent with its origin
+   * `conversationId`. The shared UI then scopes Stop/send state to the active
+   * conversation. Runtimes that omit this retain the legacy single-turn guard.
+   */
+  supportsConcurrentTurns?: boolean;
+
+  /**
    * True when Web search is executed by the managed Cloud route and therefore
    * must be gated on the deployment-backed generic-search capability plus the
    * selected model. Local/Tauri runtimes omit this so their native tool path is
@@ -377,7 +407,7 @@ export interface TauriAttachmentPayload {
   path?: string;
 }
 
-export type StreamEvent =
+type StreamEventPayload =
   | { type: 'content'; content: string }
   | {
       type: 'thinking';
@@ -481,5 +511,13 @@ export type StreamEvent =
       streamError?: { message: string; code?: string; retryable?: boolean };
     }
   | { type: 'error'; error: string };
+
+/**
+ * `conversationId` is required in practice for concurrent runtimes and
+ * optional on the wire type for legacy single-turn runtimes. A runtime must
+ * not advertise `supportsConcurrentTurns` unless it supplies this field on
+ * every emitted event.
+ */
+export type StreamEvent = StreamEventPayload & { conversationId?: string };
 
 export type StreamCallback = (event: StreamEvent) => void;

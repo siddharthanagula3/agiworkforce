@@ -14,6 +14,7 @@ import {
   setContextPanelInstance,
   type ContextPanelProvider,
 } from '../features/trees/contextPanelProvider';
+import { MEMORY_STORE_KEY } from '../memory/memoryStore';
 
 const editorContext: EditorContext = {
   fileName: '/workspace/src/app.ts',
@@ -112,10 +113,8 @@ describe('chat participant approval lifecycle', () => {
     expect(runtime.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'auto',
+        routingTaskType: 'research',
       }),
-    );
-    expect(runtime.startTurn).not.toHaveBeenCalledWith(
-      expect.objectContaining({ routingTaskType: expect.anything() }),
     );
     for (const listener of listeners) {
       listener({
@@ -156,6 +155,70 @@ describe('chat participant approval lifecycle', () => {
 
     expect(pool.forWorkspace).not.toHaveBeenCalled();
     expect(result.errorDetails?.message).toContain('Trust this workspace');
+  });
+
+  it('includes user-curated memory as untrusted local developer context', async () => {
+    const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+    const runtime = {
+      startThread: vi.fn().mockResolvedValue({ id: 'thread-1' }),
+      startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
+      interruptTurn: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const context = new vscode.ExtensionContext();
+    await context.globalState.update(MEMORY_STORE_KEY, [
+      {
+        id: 'memory-1',
+        text: 'Prefer Rust for command-line tools',
+        createdAt: '2026-07-25T00:00:00.000Z',
+      },
+    ]);
+    const handler = createChatHandler(context.secrets, undefined, context.globalState, pool);
+    const response = handler(
+      request(undefined, 'Implement the CLI command'),
+      { history: [] } as vscode.ChatContext,
+      {
+        progress: vi.fn(),
+        markdown: vi.fn(),
+        button: vi.fn(),
+      } as unknown as vscode.ChatResponseStream,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+      } as unknown as vscode.CancellationToken,
+    );
+
+    await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
+    expect(runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'text',
+            text: expect.stringContaining(
+              '<untrusted_memory_context>\n- Prefer Rust for command-line tools',
+            ),
+          }),
+        ]),
+      }),
+    );
+    for (const listener of listeners) {
+      listener({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+    }
+    await response;
   });
 
   it('interrupts and settles when the runtime rejects an approval response', async () => {

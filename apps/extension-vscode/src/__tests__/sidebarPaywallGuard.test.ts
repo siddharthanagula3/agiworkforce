@@ -1,222 +1,130 @@
 /**
- * sidebarPaywallGuard.test.ts — Tests for the Pro+ paywall guard in _handleSendMessage
+ * Tier-spoofing regression for the real resolver used by both model pickers.
  *
- * Exercises the guardProviderSwitch + resolveTier integration point added in P0-F.
- * Two describe blocks:
- *   1. Guard integration — mocks resolveTier, tests the sidebar dispatch logic.
- *   2. Tier workspace-spoofing regression — does NOT mock resolveTier; exercises
- *      the real resolver with a controlled vscode.workspace stub to prove that a
- *      workspace-scoped "agiWorkforce.tier": "max" cannot escalate the tier above
- *      the global default (regression for the workspace-bypass identified in review).
+ * Production-path selection enforcement is covered in chatStateManager.test.ts;
+ * this file intentionally contains no simulated send handler.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
-import { resolveTier, type Tier } from '../integrations/tierResolver';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
+import {
+  clearAccountTierCache,
+  refreshAccountTierCache,
+  resolveTier,
+} from '../integrations/tierResolver';
 
-// ─── Mock tierResolver bridge fetch so integration tests are offline ──────────
-
-vi.mock('../integrations/tierResolver', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../integrations/tierResolver')>();
+function makeContext(cachedTier?: string): vscode.ExtensionContext {
   return {
-    ...original,
-    resolveTier: vi.fn().mockResolvedValue('byok' as Tier),
-  };
-});
-
-// ─── Paywall guard integration (simulates sidebar sendMessage handler) ────────
-
-async function simulateSendMessage(
-  activeModel: string,
-  incomingModel: string,
-  mockContext: unknown,
-): Promise<{ blocked: boolean; activeModelAfter: string }> {
-  const tier = await resolveTier(mockContext as import('vscode').ExtensionContext);
-  const guardResult = guardProviderSwitch(activeModel, incomingModel, tier);
-  if (guardResult === 'upgrade-required') {
-    return { blocked: true, activeModelAfter: activeModel };
-  }
-  return { blocked: false, activeModelAfter: incomingModel };
+    globalState: {
+      get: (key: string) => (key === 'tierStatus.cachedTier' ? cachedTier : undefined),
+      update: vi.fn(),
+      keys: () => [],
+      setKeysForSync: vi.fn(),
+    },
+  } as unknown as vscode.ExtensionContext;
 }
 
-describe('sidebar sendMessage — paywall guard (P0-F)', () => {
-  const mockContext = {};
+function stubTierInspect(globalValue?: string, workspaceValue?: string): void {
+  vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+    get: vi.fn(),
+    inspect: vi.fn((key: string) => (key === 'tier' ? { globalValue, workspaceValue } : undefined)),
+    has: vi.fn().mockReturnValue(false),
+    update: vi.fn(),
+  } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
+}
 
+describe('resolveTier workspace-spoofing hardening', () => {
   beforeEach(() => {
-    vi.mocked(resolveTier).mockResolvedValue('byok');
+    vi.clearAllMocks();
   });
 
-  it('allows same-provider switch (claude→claude) on byok tier', async () => {
-    const result = await simulateSendMessage('claude-opus-4.8', 'claude-sonnet-4.6', mockContext);
-    expect(result.blocked).toBe(false);
-    expect(result.activeModelAfter).toBe('claude-sonnet-4.6');
+  it('ignores a workspace-scoped max override', async () => {
+    stubTierInspect(undefined, 'max');
+
+    await expect(resolveTier(makeContext(), false)).resolves.toBe('byok');
   });
 
-  it('blocks cross-provider switch (claude→gpt) on free tier', async () => {
-    vi.mocked(resolveTier).mockResolvedValue('byok');
-    const result = await simulateSendMessage('claude-opus-4.8', 'gpt-5.6-sol', mockContext);
-    expect(result.blocked).toBe(true);
-    expect(result.activeModelAfter).toBe('claude-opus-4.8');
+  it('respects a legitimate global max override', async () => {
+    stubTierInspect('max', undefined);
+
+    await expect(resolveTier(makeContext(), false)).resolves.toBe('max');
   });
 
-  it('blocks cross-provider switch (gpt→gemini) on basic tier', async () => {
-    vi.mocked(resolveTier).mockResolvedValue('basic');
-    const result = await simulateSendMessage('gpt-5.6-sol', 'gemini-3.1-pro-preview', mockContext);
-    expect(result.blocked).toBe(true);
-    expect(result.activeModelAfter).toBe('gpt-5.6-sol');
+  it('uses the cached account tier when no global override exists', async () => {
+    stubTierInspect(undefined, undefined);
+
+    await expect(resolveTier(makeContext('basic'), false)).resolves.toBe('basic');
   });
 
-  it('blocks cross-provider switch (claude→grok) on pro tier', async () => {
-    vi.mocked(resolveTier).mockResolvedValue('pro');
-    const result = await simulateSendMessage('claude-opus-4.8', 'grok-4.5', mockContext);
-    expect(result.blocked).toBe(true);
-    expect(result.activeModelAfter).toBe('claude-opus-4.8');
+  it.each(['free', 'max_15x', 'team', 'enterprise'] as const)(
+    'preserves the canonical %s account tier instead of collapsing it to BYOK',
+    async (tier) => {
+      stubTierInspect(undefined, undefined);
+
+      await expect(resolveTier(makeContext(tier), false)).resolves.toBe(tier);
+    },
+  );
+
+  it('keeps cross-provider switching locked after a workspace tier spoof', async () => {
+    stubTierInspect(undefined, 'max');
+    const tier = await resolveTier(makeContext(), false);
+
+    expect(guardProviderSwitch('claude-sonnet-4.6', 'gpt-5.6-sol', tier)).toBe('upgrade-required');
   });
 
-  it('allows cross-provider switch (claude→gpt) on max tier', async () => {
-    vi.mocked(resolveTier).mockResolvedValue('max');
-    const result = await simulateSendMessage('claude-opus-4.8', 'gpt-5.6-sol', mockContext);
-    expect(result.blocked).toBe(false);
-    expect(result.activeModelAfter).toBe('gpt-5.6-sol');
-  });
-
-  it('allows cross-provider switch (gpt→gemini) on max tier', async () => {
-    vi.mocked(resolveTier).mockResolvedValue('max');
-    const result = await simulateSendMessage('gpt-5.6-sol', 'gemini-3.1-pro-preview', mockContext);
-    expect(result.blocked).toBe(false);
-    expect(result.activeModelAfter).toBe('gemini-3.1-pro-preview');
-  });
-
-  it('allows auto-mode switch on any tier (never gated)', async () => {
-    vi.mocked(resolveTier).mockResolvedValue('byok');
-    const result = await simulateSendMessage('claude-opus-4.8', 'auto-balanced', mockContext);
-    expect(result.blocked).toBe(false);
-    expect(result.activeModelAfter).toBe('auto-balanced');
-  });
-
-  it('does not advance activeModel on blocked switch', async () => {
-    vi.mocked(resolveTier).mockResolvedValue('byok');
-    let activeModel = 'claude-opus-4.8';
-
-    const r1 = await simulateSendMessage(activeModel, 'gpt-5.6-sol', mockContext);
-    expect(r1.blocked).toBe(true);
-    // activeModel must not advance
-    activeModel = r1.activeModelAfter;
-    expect(activeModel).toBe('claude-opus-4.8');
-
-    // Second attempt on same provider should still work
-    const r2 = await simulateSendMessage(activeModel, 'claude-sonnet-4.6', mockContext);
-    expect(r2.blocked).toBe(false);
-    expect(r2.activeModelAfter).toBe('claude-sonnet-4.6');
-  });
-});
-
-// ─── Workspace-spoofing regression (real resolveTier path) ───────────────────
-//
-// These tests do NOT mock resolveTier. They control vscode.workspace.getConfiguration
-// to simulate what happens when an untrusted workspace sets "agiWorkforce.tier"
-// via .vscode/settings.json, verifying that inspect().globalValue is what the
-// resolver reads — not the merged effective value that workspaceValue would win.
-
-describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', () => {
-  // Build a fake ExtensionContext with a controllable globalState tier cache.
-  function makeContext(cachedTier?: string): import('vscode').ExtensionContext {
-    return {
-      globalState: {
-        get: (key: string) => (key === 'tierStatus.cachedTier' ? cachedTier : undefined),
-        update: vi.fn(),
-        keys: () => [],
-        setKeysForSync: vi.fn(),
-      },
-    } as unknown as import('vscode').ExtensionContext;
-  }
-
-  // Helper: configure what inspect('tier') returns for a given scope combination.
-  function stubTierInspect({
-    globalValue,
-    workspaceValue,
-  }: {
-    globalValue?: string;
-    workspaceValue?: string;
-  }): void {
+  it('replaces a stale cached tier immediately after account sign-in', async () => {
+    const context = makeContext('basic');
+    const configUpdate = vi.fn();
     vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
       get: vi.fn(),
-      inspect: vi.fn((key: string) => {
-        if (key === 'tier') return { globalValue, workspaceValue };
-        return undefined;
-      }),
+      inspect: vi.fn(),
+      has: vi.fn().mockReturnValue(false),
+      update: configUpdate,
+    } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
+    const loadTier = vi.fn().mockResolvedValue({ tier: 'team' });
+
+    await expect(refreshAccountTierCache(context, loadTier)).resolves.toBe('team');
+    expect(context.globalState.update).toHaveBeenCalledWith('tierStatus.cachedTier', 'team');
+    expect(configUpdate).toHaveBeenCalledWith(
+      'currentTier',
+      'team',
+      vscode.ConfigurationTarget.Global,
+    );
+  });
+
+  it('clears paid-tier reachability immediately after account sign-out', async () => {
+    const context = makeContext('enterprise');
+    const configUpdate = vi.fn();
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+      get: vi.fn(),
+      inspect: vi.fn(),
+      has: vi.fn().mockReturnValue(false),
+      update: configUpdate,
+    } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
+
+    await clearAccountTierCache(context);
+
+    expect(context.globalState.update).toHaveBeenCalledWith('tierStatus.cachedTier', undefined);
+    expect(configUpdate).toHaveBeenCalledWith(
+      'currentTier',
+      'unknown',
+      vscode.ConfigurationTarget.Global,
+    );
+  });
+
+  it('fails closed instead of retaining a stale paid tier when refresh is unavailable', async () => {
+    const context = makeContext('max');
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+      get: vi.fn(),
+      inspect: vi.fn(),
       has: vi.fn().mockReturnValue(false),
       update: vi.fn(),
     } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
-  }
 
-  beforeEach(() => {
-    vi.mocked(resolveTier).mockRestore?.();
-  });
-
-  it('workspace "max" does not escalate when globalValue is byok (the bypass case)', async () => {
-    // Simulate: untrusted workspace sets tier=max; global is the default (undefined → byok)
-    stubTierInspect({ globalValue: undefined, workspaceValue: 'max' });
-    const ctx = makeContext(undefined);
-
-    // Import the REAL resolveTier (not the mock) for this test.
-    const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../integrations/tierResolver')
-    >('../integrations/tierResolver');
-
-    // preferBridge=false so we skip the network call
-    const tier = await realResolveTier(ctx, false);
-    // Should fall through to the safe byok default — NOT 'max'
-    expect(tier).toBe('byok');
-  });
-
-  it('global "max" is respected (legitimate user setting)', async () => {
-    stubTierInspect({ globalValue: 'max', workspaceValue: undefined });
-    const ctx = makeContext(undefined);
-
-    const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../integrations/tierResolver')
-    >('../integrations/tierResolver');
-
-    const tier = await realResolveTier(ctx, false);
-    expect(tier).toBe('max');
-  });
-
-  it('workspace "max" when globalValue is byok still resolves to byok', async () => {
-    stubTierInspect({ globalValue: undefined, workspaceValue: 'max' });
-    const ctx = makeContext(undefined);
-
-    const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../integrations/tierResolver')
-    >('../integrations/tierResolver');
-
-    const tier = await realResolveTier(ctx, false);
-    expect(tier).toBe('byok');
-  });
-
-  it('cached globalState tier is used when no global setting is present', async () => {
-    stubTierInspect({ globalValue: undefined, workspaceValue: undefined });
-    const ctx = makeContext('basic');
-
-    const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../integrations/tierResolver')
-    >('../integrations/tierResolver');
-
-    const tier = await realResolveTier(ctx, false);
-    expect(tier).toBe('basic');
-  });
-
-  it('cross-provider switch is still blocked when workspace spoofs tier=max but global is byok', async () => {
-    stubTierInspect({ globalValue: undefined, workspaceValue: 'max' });
-    const ctx = makeContext(undefined);
-
-    const { resolveTier: realResolveTier } = await vi.importActual<
-      typeof import('../integrations/tierResolver')
-    >('../integrations/tierResolver');
-
-    const tier = await realResolveTier(ctx, false);
-    const guardResult = guardProviderSwitch('claude-opus-4.8', 'gpt-5.6-sol', tier);
-    expect(guardResult).toBe('upgrade-required');
+    await expect(
+      refreshAccountTierCache(context, vi.fn().mockResolvedValue(undefined)),
+    ).resolves.toBeUndefined();
+    expect(context.globalState.update).toHaveBeenCalledWith('tierStatus.cachedTier', undefined);
   });
 });

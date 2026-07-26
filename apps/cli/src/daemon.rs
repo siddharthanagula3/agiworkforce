@@ -90,8 +90,6 @@ fn provider_trust_mode(provider: &Provider) -> Option<agiworkforce_model_registr
 }
 
 async fn managed_subscription_tier() -> &'static str {
-    use crate::tier_cache::UserTier;
-
     let jwt = crate::tier_cache::load_jwt();
     let resolution = tokio::time::timeout(
         std::time::Duration::from_secs(3),
@@ -100,12 +98,10 @@ async fn managed_subscription_tier() -> &'static str {
     .await
     .unwrap_or_default();
 
-    match resolution.cached.map(|cached| cached.tier) {
-        Some(UserTier::Pro) => "pro",
-        Some(UserTier::Max) => "max",
-        Some(UserTier::Enterprise) => "enterprise",
-        Some(UserTier::Free | UserTier::Byok) | None => "free",
-    }
+    resolution
+        .cached
+        .map(|cached| cached.tier.managed_auto_routing_tier())
+        .unwrap_or("free")
 }
 
 async fn resolve_trigger_model(

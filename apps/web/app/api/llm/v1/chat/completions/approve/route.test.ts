@@ -209,6 +209,7 @@ function processedRequest() {
 describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.query.mockResolvedValue([]);
     mockRunAuthGate.mockResolvedValue({
       ok: true,
       userId: 'user-1',
@@ -285,6 +286,7 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
       // GOV-7: the resume path now passes the plan tier so it applies the same
       // per-plan connector-tool ceiling the original turn did.
       planTier: 'pro',
+      isToolDenied: expect.any(Function),
     });
     expect(workflowMocks.start).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -395,5 +397,28 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
     });
     expect(passedProcessed.llmRequest.effort).toBe('high');
     expect(passedProcessed.llmRequest.messages).toEqual(suspendedMessages);
+  });
+
+  it('overrides approval when the persisted connector permission blocks the tool', async () => {
+    db.query.mockResolvedValueOnce([
+      {
+        connector_id: 'github',
+        tool_name: 'get_pull_request_diff',
+        level: 'blocked',
+      },
+    ]);
+
+    const response = await POST(makeRequest(resumeBody()));
+    await response.text();
+
+    expect(workflowMocks.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        continuation: expect.objectContaining({
+          resume: {
+            approvals: [{ toolCallId: 'call_1', decision: 'rejected' }],
+          },
+        }),
+      }),
+    );
   });
 });

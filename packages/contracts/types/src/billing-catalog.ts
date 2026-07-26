@@ -203,6 +203,15 @@ export type BillingPlanLimit = number | 'unlimited' | 'custom';
 
 const MINUTE_MS = 60_000;
 
+/**
+ * Absolute per-user safety ceiling for live managed sandboxes.
+ *
+ * Plan tiers can grant fewer slots, but no plan may exceed five. Managed turns
+ * can still run in parallel without a sandbox, so this bounds stateful compute
+ * cost without turning the chat-concurrency dimension into the same setting.
+ */
+export const MAX_MANAGED_SANDBOXES_PER_USER = 5;
+
 export interface BillingPlanProductLimits {
   projects: BillingPlanLimit;
   customMcpServers: BillingPlanLimit;
@@ -298,7 +307,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     projects: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 8,
-    maxSandboxes: 10,
+    maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
     sandboxTtlMs: 30 * MINUTE_MS,
     maxConnectorTools: 300,
     maxScheduledTasks: 100,
@@ -307,7 +316,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     projects: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 12,
-    maxSandboxes: 20,
+    maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
     sandboxTtlMs: 60 * MINUTE_MS,
     maxConnectorTools: 500,
     maxScheduledTasks: 250,
@@ -325,7 +334,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     projects: 'custom',
     customMcpServers: 'custom',
     maxConcurrentTurns: 'custom',
-    maxSandboxes: 'custom',
+    maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
     sandboxTtlMs: 60 * MINUTE_MS,
     maxConnectorTools: 'custom',
     maxScheduledTasks: 'custom',
@@ -358,9 +367,12 @@ export function getPlanMaxConcurrentTurns(plan: string | null | undefined): numb
   return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxConcurrentTurns);
 }
 
-/** GOV-4: max live managed sandboxes for `plan`; null = uncapped. */
-export function getPlanMaxSandboxes(plan: string | null | undefined): number | null {
-  return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxSandboxes);
+/** GOV-4: max live managed sandboxes for `plan`, always capped at five per user. */
+export function getPlanMaxSandboxes(plan: string | null | undefined): number {
+  const configured = toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxSandboxes);
+  return configured === null
+    ? MAX_MANAGED_SANDBOXES_PER_USER
+    : Math.min(configured, MAX_MANAGED_SANDBOXES_PER_USER);
 }
 
 /** GOV-4: managed sandbox lifetime for `plan`; 0 = no managed sandbox. */

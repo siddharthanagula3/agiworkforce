@@ -738,6 +738,7 @@ function AddCustomConnectorForm({
 }) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  const [authToken, setAuthToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -756,6 +757,9 @@ function AddCustomConnectorForm({
       await adapter.addCustomConnector({
         name: name.trim(),
         url: trimmedUrl,
+        ...(adapter.customConnectorAuthTokenSupported && authToken.trim()
+          ? { authToken: authToken.trim() }
+          : {}),
       });
       onBack();
     } catch (err) {
@@ -815,6 +819,25 @@ function AddCustomConnectorForm({
         />
       </label>
 
+      {adapter?.customConnectorAuthTokenSupported ? (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-foreground">
+            Bearer token <span className="font-normal text-muted-foreground">(optional)</span>
+          </span>
+          <input
+            type="password"
+            value={authToken}
+            onChange={(e) => setAuthToken(e.target.value)}
+            placeholder="Token is encrypted before storage"
+            autoComplete="off"
+            className={inputClass}
+          />
+          <span className="text-[11px] text-muted-foreground">
+            Sent only to this MCP server and never shown again.
+          </span>
+        </label>
+      ) : null}
+
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-foreground">Remote MCP server URL</span>
         <input
@@ -870,7 +893,7 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
     disconnect: handleDisconnect,
   } = useConnectorMutations(adapter);
 
-  const connectors = useMemo(
+  const catalogConnectors = useMemo(
     () => (adapter?.connectors ?? []).filter((c) => !c.exclusive),
     [adapter?.connectors],
   );
@@ -879,6 +902,20 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
     for (const c of adapter?.connectedConnectors ?? []) map.set(c.connectorId, c);
     return map;
   }, [adapter?.connectedConnectors]);
+  // Keep the primary settings table operational: connected connectors,
+  // deployment-ready connectors, and user-added MCP servers. The full preview
+  // catalog remains available under Add > Browse connectors, without flooding
+  // the everyday pane with dozens of inert "Coming soon" rows.
+  const connectors = useMemo(
+    () =>
+      catalogConnectors.filter(
+        (connector) =>
+          connectionById.has(connector.id) ||
+          connector.canConnect === true ||
+          connector.authType === 'custom_mcp',
+      ),
+    [catalogConnectors, connectionById],
+  );
   const loading = adapter?.connectorsLoading ?? false;
   const loadError = adapter?.connectorsError;
 
@@ -975,38 +1012,51 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       ) : (
         <>
           {/* Toolbar: filter tabs (left) + search + Add (right) */}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div role="tablist" aria-label="Filter connectors" className="flex items-center gap-1">
-              {CONNECTOR_TABS.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={cn(
-                    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                    activeTab === tab.key
-                      ? 'bg-foreground text-background'
-                      : 'border border-border text-muted-foreground hover:bg-muted',
-                  )}
-                >
-                  {tab.label}
-                  <span className="ml-1 opacity-60">{tabCounts[tab.key]}</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <div className="relative w-48">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="search"
-                  placeholder="Search connectors..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
-                />
+          <div
+            className={cn(
+              'flex items-center gap-2 flex-wrap',
+              connectors.length > 0 ? 'justify-between' : 'justify-end',
+            )}
+          >
+            {connectors.length > 0 ? (
+              <div
+                role="tablist"
+                aria-label="Filter connectors"
+                className="flex items-center gap-1"
+              >
+                {CONNECTOR_TABS.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={cn(
+                      'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                      activeTab === tab.key
+                        ? 'bg-foreground text-background'
+                        : 'border border-border text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    {tab.label}
+                    <span className="ml-1 opacity-60">{tabCounts[tab.key]}</span>
+                  </button>
+                ))}
               </div>
+            ) : null}
+            <div className="flex shrink-0 items-center gap-1.5">
+              {connectors.length > 0 ? (
+                <div className="relative w-48">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="search"
+                    placeholder="Search connectors..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+              ) : null}
               <Menu
                 align="end"
                 trigger={({ toggle, open }) => (
@@ -1039,11 +1089,29 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 
           {/* Table */}
           {filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              {connectors.length === 0
-                ? 'No connectors available in this environment.'
-                : 'No connectors match your filters.'}
-            </p>
+            connectors.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-8 text-center">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Connect your first tool</p>
+                  <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                    Add a trusted remote MCP server now, or browse the directory to see which
+                    branded connectors your deployment can enable.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setView('add-custom')}
+                  disabled={!adapter?.addCustomConnector}
+                  className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Connect remote MCP server
+                </button>
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No connectors match your filters.
+              </p>
+            )
           ) : (
             <div className="overflow-hidden rounded-lg border border-border/80">
               <table className="w-full border-collapse text-left">

@@ -37,7 +37,7 @@
  *   workspaceId: 'ws-acme',
  *   userId: 'usr-alice',
  *   eventType: 'model_call',
- *   eventName: 'claude-opus-4.8/chat',
+ *   eventName: 'claude-opus-5/chat',
  *   metadata: { inputTokens: 1200, outputTokens: 340, costUsd: 0.048 },
  *   timestamp: '2026-03-19T10:00:00Z',
  * };
@@ -59,7 +59,7 @@ export interface WorkspaceAnalyticsEvent {
   /**
    * Specific event name within the category.
    *
-   * Examples: `"agent/started"`, `"tool/bash"`, `"claude-opus-4.8/chat"`,
+   * Examples: `"agent/started"`, `"tool/bash"`, `"claude-opus-5/chat"`,
    * `"ui/settings_opened"`.
    */
   eventName: string;
@@ -93,7 +93,7 @@ export interface WorkspaceAnalyticsEvent {
  *   totalCost: 240.00,
  *   activeUsers: 18,
  *   topModels: [
- *     { model: 'claude-opus-4.8', count: 3100 },
+ *     { model: 'claude-opus-5', count: 3100 },
  *     { model: 'gpt-5.6-sol',          count: 1200 },
  *   ],
  *   topTools: [
@@ -132,7 +132,7 @@ export interface WorkspaceAnalyticsSummary {
 
   /** Top models by call count, ordered descending. */
   topModels: Array<{
-    /** Model identifier (e.g., `"claude-opus-4.8"`). */
+    /** Model identifier (e.g., `"claude-opus-5"`). */
     model: string;
     /** Number of calls to this model in the period. */
     count: number;

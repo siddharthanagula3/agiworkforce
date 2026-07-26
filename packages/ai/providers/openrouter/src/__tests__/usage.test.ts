@@ -22,7 +22,7 @@ function baseChunk(overrides: Partial<OpenAIChatCompletionChunk>): OpenAIChatCom
     id: 'chatcmpl-1',
     object: 'chat.completion.chunk',
     created: 0,
-    model: 'anthropic/claude-opus-4.8',
+    model: 'anthropic/example-model',
     choices: [{ index: 0, delta: {}, finish_reason: null }],
     ...overrides,
   };

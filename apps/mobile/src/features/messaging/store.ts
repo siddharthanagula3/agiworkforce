@@ -6,6 +6,10 @@ import {
   connectMessagingPlatform,
   disconnectMessagingPlatform,
 } from '@/src/features/messaging/service';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 export interface MessagingPlatform {
   id: 'whatsapp' | 'telegram' | 'slack';
@@ -29,6 +33,8 @@ interface MessagingState {
   disconnectPlatform: (id: string) => Promise<void>;
   updateStats: (id: string, stats: Partial<MessagingPlatform['stats']>) => void;
   clearError: () => void;
+  /** Clear every Clerk-account connection cache on sign-out/account switch. */
+  clearAccountMessaging: () => void;
 }
 
 const DEFAULT_PLATFORMS: MessagingPlatform[] = [
@@ -140,9 +146,12 @@ export const useMessagingStore = create<MessagingState>()(
       error: null,
 
       fetchPlatforms: async () => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
         set({ loading: true, error: null });
         try {
           const data = await getMessagingConfig();
+          if (!isCloudAccountEpochCurrent(account)) return;
           const connections = data.connections ?? [];
 
           // Merge server data with local platforms — preserve local state when server has no data
@@ -162,18 +171,22 @@ export const useMessagingStore = create<MessagingState>()(
 
           set({ platforms: updatedPlatforms });
         } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           set({
             error: error instanceof Error ? error.message : 'Failed to load messaging connections',
           });
         } finally {
-          set({ loading: false });
+          if (isCloudAccountEpochCurrent(account)) set({ loading: false });
         }
       },
 
       connectPlatform: async (id, config) => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
         set({ loading: true, error: null });
         try {
           const result = await connectMessagingPlatform(id, config);
+          if (!isCloudAccountEpochCurrent(account)) return;
           if (!isActiveConnection(result.connection) || !result.connection.is_active) {
             throw new Error('Messaging provider did not confirm an active connection');
           }
@@ -192,19 +205,23 @@ export const useMessagingStore = create<MessagingState>()(
             ),
           }));
         } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           set({
             error: error instanceof Error ? error.message : 'Failed to connect platform',
           });
           throw error;
         } finally {
-          set({ loading: false });
+          if (isCloudAccountEpochCurrent(account)) set({ loading: false });
         }
       },
 
       disconnectPlatform: async (id) => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
         set({ loading: true, error: null });
         try {
           await disconnectMessagingPlatform(id);
+          if (!isCloudAccountEpochCurrent(account)) return;
 
           set((state) => ({
             platforms: state.platforms.map((p) =>
@@ -220,11 +237,12 @@ export const useMessagingStore = create<MessagingState>()(
             ),
           }));
         } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
           set({
             error: error instanceof Error ? error.message : 'Failed to disconnect platform',
           });
         } finally {
-          set({ loading: false });
+          if (isCloudAccountEpochCurrent(account)) set({ loading: false });
         }
       },
 
@@ -238,6 +256,18 @@ export const useMessagingStore = create<MessagingState>()(
 
       clearError: () => {
         set({ error: null });
+      },
+
+      clearAccountMessaging: () => {
+        set({
+          platforms: DEFAULT_PLATFORMS.map((platform) => ({
+            ...platform,
+            config: {},
+            stats: { ...platform.stats },
+          })),
+          loading: false,
+          error: null,
+        });
       },
     }),
     {

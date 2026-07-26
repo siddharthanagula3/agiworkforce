@@ -406,9 +406,9 @@ describe('ModelPickerSheet', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'pro' });
 
-    const opusForFree = getModelByIdForCloudAccess('claude-opus-4.8', true, 'free');
-    const opusForPro = getModelByIdForCloudAccess('claude-opus-4.8', true, 'pro');
-    const opusForMax = getModelByIdForCloudAccess('claude-opus-4.8', true, 'max');
+    const opusForFree = getModelByIdForCloudAccess('claude-opus-5', true, 'free');
+    const opusForPro = getModelByIdForCloudAccess('claude-opus-5', true, 'pro');
+    const opusForMax = getModelByIdForCloudAccess('claude-opus-5', true, 'max');
     expect(opusForFree?.availability).toBe('locked');
     expect(opusForPro?.availability).toBe('locked');
     expect(opusForPro?.lockReason).not.toBe(CLOUD_LOCK_REASON);
@@ -445,7 +445,7 @@ describe('ModelPickerSheet', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'pro' });
 
-    const opus = getModelByIdForCloudAccess('claude-opus-4.8', true, 'pro')!;
+    const opus = getModelByIdForCloudAccess('claude-opus-5', true, 'pro')!;
     const { getAllByText, getByLabelText, queryByText } = renderPicker({ modelScope: 'cloud' });
 
     const row = getByLabelText(`${opus.name}, upgrade required, ${opus.lockReason}`);
@@ -458,9 +458,9 @@ describe('ModelPickerSheet', () => {
   it('suppresses the selected checkmark when the selected cloud model is tier-locked', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'pro' });
-    useModelStore.setState({ selectedModel: 'claude-opus-4.8', selectedProvider: 'cloud_managed' });
+    useModelStore.setState({ selectedModel: 'claude-opus-5', selectedProvider: 'cloud_managed' });
 
-    const opus = getModelByIdForCloudAccess('claude-opus-4.8', true, 'pro')!;
+    const opus = getModelByIdForCloudAccess('claude-opus-5', true, 'pro')!;
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     // No ", selected" suffix and no selected a11y state on a locked row.
@@ -471,8 +471,8 @@ describe('ModelPickerSheet', () => {
   it('falls back to the default cloud model when a tier downgrade locks the selection', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('claude-opus-4.8');
-    expect(useModelStore.getState().selectedModel).toBe('claude-opus-4.8');
+    useModelStore.getState().setModel('claude-opus-5');
+    expect(useModelStore.getState().selectedModel).toBe('claude-opus-5');
 
     useTierStore.setState({ tier: 'pro' });
 
@@ -505,7 +505,7 @@ describe('ModelPickerSheet', () => {
     // The reasoning-effort selector only renders for a reasoning-capable model
     // (component gate: modelScope==='cloud' && selectedSupportsReasoning), so
     // select one first.
-    useModelStore.getState().setModel('claude-opus-4.8');
+    useModelStore.getState().setModel('claude-opus-5');
     const { getByLabelText } = renderPicker({ modelScope: 'cloud', conversationId: 'conv-1' });
 
     const slider = getByLabelText('Reasoning effort');
@@ -515,7 +515,7 @@ describe('ModelPickerSheet', () => {
 
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('high');
     // Effort and model choice are independent: no selection change, no close.
-    expect(useModelStore.getState().selectedModel).toBe('claude-opus-4.8');
+    expect(useModelStore.getState().selectedModel).toBe('claude-opus-5');
     expect(mockSheetRef.current.close).not.toHaveBeenCalled();
   });
 
@@ -523,7 +523,7 @@ describe('ModelPickerSheet', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     // Effort selector needs a reasoning-capable model selected (see above).
-    useModelStore.getState().setModel('claude-opus-4.8');
+    useModelStore.getState().setModel('claude-opus-5');
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     fireEvent(getByLabelText('Reasoning effort'), 'valueChange', 0);
@@ -576,7 +576,7 @@ describe('ModelPickerSheet', () => {
   it('clamps the reasoning effort to the new model default when switching to a model that lacks the previous value', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('claude-opus-4.8');
+    useModelStore.getState().setModel('claude-opus-5');
     const { getByLabelText, getByTestId } = renderPicker({
       modelScope: 'cloud',
       conversationId: 'conv-1',
@@ -597,7 +597,7 @@ describe('ModelPickerSheet', () => {
   it('expands the thinking toggle when re-tapping the already-selected cloud model', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    const thinkingModel = getModelByIdForCloudAccess('claude-opus-4.8', true, 'max')!;
+    const thinkingModel = getModelByIdForCloudAccess('claude-opus-5', true, 'max')!;
     expect(thinkingModel.supportsThinking).toBe(true);
     useModelStore.getState().setModel(thinkingModel.id);
 
@@ -636,7 +636,7 @@ describe('ModelPickerSheet', () => {
       'gpt-5.6-terra',
       'gpt-5.6-luna',
       'claude-fable-5',
-      'claude-opus-4.8',
+      'claude-opus-5',
       'claude-sonnet-5',
       'claude-haiku-4.5',
     ]) {

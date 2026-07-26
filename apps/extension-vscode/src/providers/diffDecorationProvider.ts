@@ -275,7 +275,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
     const lastLine = Math.max(0, editor.document.lineCount - 1);
 
     for (const diff of diffResult) {
-      const line = Math.min(diff.editorLine, lastLine);
+      const line = Math.min(range.start.line + diff.editorLine, lastLine);
       const docLine = editor.document.lineAt(line);
       const opt: vscode.DecorationOptions = {
         range: new vscode.Range(line, 0, line, docLine.text.length),
@@ -493,7 +493,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
     for (const session of this._activeDiffs.values()) {
       if (session.uri.toString() !== editor.document.uri.toString()) continue;
       for (const diff of diffLines(session.originalText, session.newText)) {
-        const line = Math.min(diff.editorLine, lastLine);
+        const line = Math.min(session.range.start.line + diff.editorLine, lastLine);
         const docLine = editor.document.lineAt(line);
         const opt: vscode.DecorationOptions = {
           range: new vscode.Range(line, 0, line, docLine.text.length),

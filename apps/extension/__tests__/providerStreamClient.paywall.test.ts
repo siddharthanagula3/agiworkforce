@@ -11,7 +11,11 @@
  */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { streamFromProvider, type StreamChunk } from '../src/providerStreamClient.ts';
+import {
+  PAYWALL_FEATURES,
+  streamFromProvider,
+  type StreamChunk,
+} from '../src/providerStreamClient.ts';
 
 // ---------------------------------------------------------------------------
 // Fetch mock helpers
@@ -127,9 +131,9 @@ describe('streamFromProvider — 429 paywall detection', () => {
   });
 
   it('yields paywall chunk for every PaywallFeature value', async () => {
-    const features = [
+    expect(PAYWALL_FEATURES).toEqual([
       'video_generation',
-      'opus_4_7',
+      'opus_5',
       'gpt_5_5',
       'computer_use',
       'deep_research',
@@ -137,8 +141,9 @@ describe('streamFromProvider — 429 paywall detection', () => {
       'token_cap',
       'mcp',
       'web_search',
-    ] as const;
-    for (const feature of features) {
+    ]);
+
+    for (const feature of PAYWALL_FEATURES) {
       const body = JSON.stringify({ kind: 'paywall', feature, requiredTier: 'max' });
       const chunks = await collectChunks(makeFetchReturning(429, body));
       expect(chunks[0]).toMatchObject({ type: 'paywall', feature, requiredTier: 'max' });

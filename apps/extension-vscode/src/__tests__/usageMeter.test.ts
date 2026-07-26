@@ -77,6 +77,24 @@ describe('usageMeter', () => {
     });
   });
 
+  it.each(['free', 'max_15x', 'team', 'enterprise'] as const)(
+    'preserves the canonical %s plan returned by account usage',
+    async (tier) => {
+      vi.mocked(fetchTierInfo).mockResolvedValue({
+        tier,
+        usagePercentage: 10,
+        resetsAt: '2026-06-01T00:00:00.000Z',
+      });
+
+      await expect(resolvePlanTier(secrets)).resolves.toBe(tier);
+      await expect(resolveUsageMeter(secrets, 100)).resolves.toEqual({
+        remaining: 0.9,
+        resetsAt: '2026-06-01T00:00:00.000Z',
+        source: 'managed-plan',
+      });
+    },
+  );
+
   it('falls back to not-AGI-managed usage when no cloud tier is available', async () => {
     await expect(resolvePlanTier(secrets)).resolves.toBe('byok');
     await expect(resolveUsageMeter(secrets, 6_200)).resolves.toEqual({

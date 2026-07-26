@@ -29,10 +29,12 @@ const mockGetPrDiff = vi.fn();
 const mockPostIssueComment = vi.fn();
 const mockPostPrReview = vi.fn();
 const mockIsGitHubAppConfigured = vi.fn();
+const mockIsGitHubInstallationLinkingAvailable = vi.fn();
 vi.mock('@/lib/github-app', () => ({
   getInstallationAccessToken: (...a: unknown[]) => mockGetInstallationAccessToken(...a),
   getPrDiff: (...a: unknown[]) => mockGetPrDiff(...a),
   isGitHubAppConfigured: () => mockIsGitHubAppConfigured(),
+  isGitHubInstallationLinkingAvailable: () => mockIsGitHubInstallationLinkingAvailable(),
   postIssueComment: (...a: unknown[]) => mockPostIssueComment(...a),
   postPrReview: (...a: unknown[]) => mockPostPrReview(...a),
 }));
@@ -79,6 +81,7 @@ beforeEach(() => {
   __resetConnectorMcpMapCacheForTests();
   delete process.env['CONNECTOR_MCP_SERVERS_JSON'];
   mockIsGitHubAppConfigured.mockReturnValue(true);
+  mockIsGitHubInstallationLinkingAvailable.mockReturnValue(true);
   mockAssertResolvedPublicHostname.mockResolvedValue(undefined);
 });
 
@@ -89,6 +92,10 @@ describe('loadUserConnectorToolDefs — github built-in gate', () => {
     const names = defs.map((d) => d.qualifiedName);
     expect(names).toContain('mcp__github__get_pull_request_diff');
     expect(names).toContain('mcp__github__post_issue_comment');
+    const githubQuery = mockNeonQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('github_installations'),
+    );
+    expect(String(githubQuery?.[0])).toMatch(/ownership_verified_at is not null/i);
   });
 
   it('offers NO github tools when the user has no installation', async () => {
@@ -99,6 +106,18 @@ describe('loadUserConnectorToolDefs — github built-in gate', () => {
 
   it('offers NO github tools when the GitHub App is not configured', async () => {
     mockIsGitHubAppConfigured.mockReturnValue(false);
+    stubDb({ installations: [{ installation_id: 42, account_login: 'acme' }] });
+
+    const defs = await loadUserConnectorToolDefs('user-1');
+
+    expect(defs).toEqual([]);
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) => String(sql).includes('github_installations')),
+    ).toBe(false);
+  });
+
+  it('offers NO github tools when installation ownership cannot be verified', async () => {
+    mockIsGitHubInstallationLinkingAvailable.mockReturnValue(false);
     stubDb({ installations: [{ installation_id: 42, account_login: 'acme' }] });
 
     const defs = await loadUserConnectorToolDefs('user-1');

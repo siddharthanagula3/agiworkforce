@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { isGitHubInstallationLinkingAvailable } from '@/lib/github-app';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
@@ -19,6 +20,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Rows created by the legacy setup callback were never backed by a GitHub
+  // user-access-token ownership check. Keep them removable through DELETE, but
+  // do not present them as connected until secure installation linking exists.
+  if (!isGitHubInstallationLinkingAvailable()) {
+    return NextResponse.json({ installations: [] });
+  }
+
   const db = getNeonDb();
 
   let installations: GitHubInstallationRow[];
@@ -27,6 +35,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       `select id, installation_id, account_login, account_type, pr_review_enabled, review_model, created_at
        from github_installations
        where user_id = $1
+         and ownership_verified_at is not null
        order by created_at desc`,
       [userId],
     );

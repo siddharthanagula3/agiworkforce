@@ -73,5 +73,5 @@ Production-ready when the UI resolves its display language from the VS Code host
 - Fetching or transmitting the user's locale/timezone through the cloud gateway, or letting locale-derived PII cross the trust boundary without redaction.
 - Claiming translation is shipped: there is no `package.nls`/`l10n` bundle — mark translation 🔭.
 - Splitting surrogate pairs / combining marks when truncating labels; comparing paths without NFC normalization.
-- Introducing removed tiers in upgrade/localization copy (no "Plus", `pro_plus`, "Hobby") — note the `package.json` `agiWorkforce.tier` enum still lists the retired `hobby`/`pro_plus` (`max` is a valid canon tier; the enum also lacks `free`/`basic`/`enterprise` — 🟡 gap, tracked in the billing-catalog reconciliation task); localized copy must use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise, no invented INR for Pro/Max, no top-ups.
+- Introducing removed tiers in upgrade/localization copy (no "Plus", `pro_plus`, or "Hobby"); localized copy must use current plans only, never invent INR pricing, and never offer top-ups.
 - Hardcoding or inventing model IDs in any localized string (IDs come only from `packages/contracts/types/src/models.json`); referencing Supabase (fully migrated to Clerk + Neon + Stripe).

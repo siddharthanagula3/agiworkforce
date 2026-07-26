@@ -9,7 +9,8 @@
  *
  * Sections wired:
  *   general      -> GeneralSection  (profile + preferences + danger zone)
- *   account      -> AccountSection  (sessions, org ID, logout)
+ *   account      -> AccountSection  (sessions, user ID, logout)
+ *   team         -> TeamSection     (workspace + member administration)
  *   security     -> SecuritySection (2FA, session timeout, change password)
  *   privacy      -> PrivacySection  (toggles, export, delete)
  *   billing      -> BillingSection  (plan, payment, invoices)
@@ -35,6 +36,7 @@ import { getCsrfToken } from '@/lib/client/csrf';
 // Section components — real wired content, NOT route stubs
 import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
+import { TeamSection } from '../sections/TeamSection';
 import { SecuritySection } from '../sections/SecuritySection';
 import { PrivacySection } from '../sections/PrivacySection';
 import { BillingSection } from '../sections/BillingSection';
@@ -76,6 +78,7 @@ interface ApiSkill {
 const SECTION_TO_SEGMENT: Record<string, string> = {
   general: 'general',
   account: 'account',
+  team: 'team',
   security: 'security',
   privacy: 'privacy',
   billing: 'billing',
@@ -449,13 +452,17 @@ export function WebSettingsModal({
   // client-credentials aren't supported yet, so the form no longer collects
   // them (the dead Advanced-settings OAuth fields were removed).
   const addCustomConnector = useCallback(
-    async (input: { name: string; url: string }) => {
+    async (input: { name: string; url: string; authToken?: string }) => {
       const csrfToken = await getCsrfToken();
       const res = await fetch('/api/connectors/custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
         credentials: 'include',
-        body: JSON.stringify({ name: input.name, url: input.url }),
+        body: JSON.stringify({
+          name: input.name,
+          url: input.url,
+          ...(input.authToken ? { authToken: input.authToken } : {}),
+        }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -472,6 +479,7 @@ export function WebSettingsModal({
     connectConnector,
     disconnectConnector,
     addCustomConnector,
+    customConnectorAuthTokenSupported: true,
     skills,
     skillsLoading,
     plugins: [],
@@ -485,6 +493,7 @@ export function WebSettingsModal({
   const sectionContent: Partial<Record<string, React.ReactNode>> = {
     general: <GeneralSection />,
     account: <AccountSection />,
+    team: <TeamSection />,
     security: <SecuritySection />,
     privacy: <PrivacySection />,
     billing: <BillingSection />,

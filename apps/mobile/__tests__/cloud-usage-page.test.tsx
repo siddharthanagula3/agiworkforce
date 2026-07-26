@@ -12,6 +12,19 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
+const mockPush = jest.fn();
+const mockAuthState = {
+  isClerkLoaded: true,
+  isClerkSignedIn: true,
+  clerkUserId: 'user-a' as string | null,
+};
+let mockAccountOwner = 'user-a';
+let mockAccountEpoch = 1;
+
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
 jest.mock('@/src/ui/theme', () => {
   const actual = jest.requireActual('@/src/ui/theme/tokens');
   return {
@@ -49,6 +62,20 @@ jest.mock('@/src/features/settings/common', () => {
         <RN.Text>Chat is set to Local Mode</RN.Text>
       </RN.Pressable>
     ),
+    CloudAccountRequired: ({
+      isLoading,
+      onSignIn,
+    }: {
+      isLoading: boolean;
+      onSignIn: () => void;
+    }) =>
+      isLoading ? (
+        <RN.Text>Checking AGI Cloud account…</RN.Text>
+      ) : (
+        <RN.Pressable accessibilityLabel="Sign in to AGI Cloud" onPress={onSignIn}>
+          <RN.Text>Sign in to AGI Cloud</RN.Text>
+        </RN.Pressable>
+      ),
   };
 });
 
@@ -60,6 +87,16 @@ jest.mock('@/services/usage', () => ({
 }));
 
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { usageDashboard: true } }));
+
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (s: typeof mockAuthState) => unknown) => selector(mockAuthState),
+}));
+
+jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
+  captureCloudAccountEpoch: () => ({ ownerId: mockAccountOwner, epoch: mockAccountEpoch }),
+  isCloudAccountEpochCurrent: (snapshot: { ownerId: string; epoch: number }) =>
+    snapshot.ownerId === mockAccountOwner && snapshot.epoch === mockAccountEpoch,
+}));
 
 import CloudUsageScreen from '../src/features/settings/cloud-usage/index';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
@@ -84,9 +121,24 @@ function snap(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
 describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Object.assign(mockAuthState, {
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: 'user-a',
+    });
+    mockAccountOwner = 'user-a';
+    mockAccountEpoch = 1;
     useChatAppModeStore.setState({ appMode: 'cloud' });
   });
 
@@ -103,6 +155,24 @@ describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint'
     expect(queryByText(/\$\d/)).toBeNull();
   });
 
+  it('does not render an account-A usage response after switching to account B', async () => {
+    const accountAResponse = deferred<ReturnType<typeof snap>>();
+    mockFetchUsageSnapshot
+      .mockReturnValueOnce(accountAResponse.promise)
+      .mockResolvedValueOnce(snap({ usagePercentage: 7 }));
+    const screen = render(<CloudUsageScreen />);
+    await waitFor(() => expect(mockFetchUsageSnapshot).toHaveBeenCalledTimes(1));
+
+    mockAccountOwner = 'user-b';
+    mockAccountEpoch = 2;
+    mockAuthState.clerkUserId = 'user-b';
+    screen.rerender(<CloudUsageScreen />);
+    accountAResponse.resolve(snap({ usagePercentage: 99 }));
+
+    await waitFor(() => expect(screen.getByText('7% used')).toBeTruthy());
+    expect(screen.queryByText('99% used')).toBeNull();
+  });
+
   it('never exposes an exact-dollar Details section (the retired private leak)', async () => {
     mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'basic', usagePercentage: 25 }));
 
@@ -114,6 +184,16 @@ describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint'
     expect(queryByLabelText('Show usage details')).toBeNull();
     expect(queryByText('Details')).toBeNull();
     expect(queryByText(/\$\d/)).toBeNull();
+  });
+
+  it('uses the canonical Max 15x plan label instead of collapsing Max tiers', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'max_15x', usagePercentage: 40 }));
+
+    const { getByText } = render(<CloudUsageScreen />);
+
+    await waitFor(() => {
+      expect(getByText('Max 15x plan')).toBeTruthy();
+    });
   });
 
   it('renders the period bar for a free tier from its percentage and reset', async () => {
@@ -142,6 +222,13 @@ describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint'
 describe('Cloud Usage screen — session (rolling 5h) + weekly limits', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Object.assign(mockAuthState, {
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: 'user-a',
+    });
+    mockAccountOwner = 'user-a';
+    mockAccountEpoch = 1;
     useChatAppModeStore.setState({ appMode: 'cloud' });
   });
 
@@ -198,6 +285,13 @@ describe('Cloud Usage screen — session (rolling 5h) + weekly limits', () => {
 describe('Cloud Usage screen — blocked by Local Mode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    Object.assign(mockAuthState, {
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: 'user-a',
+    });
+    mockAccountOwner = 'user-a';
+    mockAccountEpoch = 1;
     useChatAppModeStore.setState({ appMode: 'local' });
   });
 
@@ -228,5 +322,27 @@ describe('Cloud Usage screen — blocked by Local Mode', () => {
     });
     expect(queryByText('Chat is set to Local Mode')).toBeNull();
     expect(mockFetchUsageSnapshot).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Cloud Usage screen — signed-out gate', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.assign(mockAuthState, {
+      isClerkLoaded: true,
+      isClerkSignedIn: false,
+      clerkUserId: null,
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+  });
+
+  it('does not fetch usage and routes the explicit CTA to sign-in', () => {
+    const { getByLabelText, queryByText } = render(<CloudUsageScreen />);
+
+    expect(getByLabelText('Sign in to AGI Cloud')).toBeTruthy();
+    expect(queryByText('% used')).toBeNull();
+    expect(mockFetchUsageSnapshot).not.toHaveBeenCalled();
+    fireEvent.press(getByLabelText('Sign in to AGI Cloud'));
+    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
   });
 });

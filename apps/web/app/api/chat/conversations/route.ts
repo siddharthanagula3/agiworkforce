@@ -52,8 +52,10 @@ async function handleGetConversations(request: NextRequest) {
     parsePositiveInt(url.searchParams.get('limit'), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE) ||
     DEFAULT_PAGE_SIZE;
   const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
+  const includeHistoryStats = url.searchParams.get('includeHistoryStats') === '1';
 
   try {
+    const db = getNeonChatDb();
     const where = ['user_id = $1', 'deleted_at is null'];
     const params: unknown[] = [userId];
     if (projectId) {
@@ -71,24 +73,55 @@ async function handleGetConversations(request: NextRequest) {
     // Fetch one extra row to cheaply detect whether another page exists
     // without a separate count(*) query. Every shape remains owner-scoped;
     // projectId only narrows the authenticated user's own conversations.
-    const rows = await getNeonChatDb().query<ChatConversationRow>(
-      `
-        select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
-        from web_conversations
-        where ${where.join(' and ')}
-        order by pinned desc, updated_at desc
-        limit $${limitParameter} offset $${offsetParameter}
-      `,
-      params,
-    );
+    const [rows, historyStatsRows] = await Promise.all([
+      db.query<ChatConversationRow>(
+        `
+          select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+          from web_conversations
+          where ${where.join(' and ')}
+          order by pinned desc, updated_at desc
+          limit $${limitParameter} offset $${offsetParameter}
+        `,
+        params,
+      ),
+      includeHistoryStats
+        ? db.query<{ conversation_count: string; message_count: string }>(
+            `
+              select
+                count(*)::text as conversation_count,
+                coalesce(
+                  sum(
+                    (select count(*)
+                       from web_messages
+                      where web_messages.conversation_id = web_conversations.id)
+                  ),
+                  0
+                )::text as message_count
+              from web_conversations
+              where user_id = $1
+                and deleted_at is null
+                and is_temporary = false
+            `,
+            [userId],
+          )
+        : Promise.resolve([]),
+    ]);
 
     const hasMore = rows.length > limit;
     const conversations = hasMore ? rows.slice(0, limit) : rows;
+    const historyStatsRow = historyStatsRows[0];
+    const historyStats = historyStatsRow
+      ? {
+          conversationCount: Number(historyStatsRow.conversation_count),
+          messageCount: Number(historyStatsRow.message_count),
+        }
+      : undefined;
 
     return NextResponse.json({
       conversations,
       hasMore,
       nextOffset: offset + conversations.length,
+      ...(historyStats ? { historyStats } : {}),
     });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch conversations');

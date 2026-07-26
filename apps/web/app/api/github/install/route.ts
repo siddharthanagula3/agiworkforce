@@ -2,22 +2,26 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import {
+  generateGitHubInstallState,
+  getGitHubUserAuthorizationUrl,
+  isGitHubInstallationLinkingAvailable,
+} from '@/lib/github-app';
+
+const GITHUB_STATE_PATTERN = /^[a-f0-9]{64}$/i;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { searchParams } = new URL(request.url);
-  const installationId = searchParams.get('installation_id');
-  const accountLogin = searchParams.get('account_login') ?? '';
-  const accountType = searchParams.get('account_type') ?? 'User';
+  const installationId = Number(searchParams.get('installation_id'));
   const state = searchParams.get('state');
 
-  if (!installationId || Number.isNaN(Number(installationId)) || Number(installationId) <= 0) {
+  if (!Number.isSafeInteger(installationId) || installationId <= 0) {
     return NextResponse.redirect(new URL('/connectors?github=install_failed', request.url));
   }
 
@@ -25,7 +29,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // Validate state parameter to prevent installation fixation attacks
   const storedState = cookieStore.get('github_install_state')?.value;
-  if (!state || !storedState || state !== storedState) {
+  if (
+    !state ||
+    !storedState ||
+    !GITHUB_STATE_PATTERN.test(state) ||
+    !GITHUB_STATE_PATTERN.test(storedState) ||
+    state !== storedState
+  ) {
     logger.warn(
       { hasState: !!state, hasStoredState: !!storedState },
       'GitHub install callback: state mismatch',
@@ -33,35 +43,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL('/connectors?github=invalid_state', request.url));
   }
 
-  let userId: string;
   try {
-    const auth = await getClerkAuthUser(request);
-    userId = auth.userId;
+    await getClerkAuthUser(request);
   } catch {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirectTo', '/connectors');
     return NextResponse.redirect(loginUrl);
   }
 
-  const db = getNeonDb();
-
-  try {
-    await db.execute(
-      `insert into github_installations (user_id, installation_id, account_login, account_type)
-       values ($1, $2, $3, $4)
-       on conflict (installation_id)
-       do update set
-         user_id = excluded.user_id,
-         account_login = excluded.account_login,
-         account_type = excluded.account_type`,
-      [userId, Number(installationId), accountLogin, accountType],
-    );
-  } catch (err) {
-    logger.error({ err, userId }, 'Failed to save GitHub installation');
-    return NextResponse.redirect(new URL('/connectors?github=save_failed', request.url));
-  }
-
-  // Clear the state cookie after successful use
+  // Consume the installation state before starting the independent OAuth
+  // authorization turn. A captured setup callback cannot be replayed.
   cookieStore.set({
     name: 'github_install_state',
     value: '',
@@ -69,5 +60,46 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     path: '/',
   });
 
-  return NextResponse.redirect(new URL('/connectors?github=connected', request.url));
+  // GitHub warns that setup URLs can be called with a spoofed installation id.
+  // Treat it only as a short-lived pending candidate until the OAuth callback
+  // proves it appears in this user's `GET /user/installations` response.
+  if (!isGitHubInstallationLinkingAvailable()) {
+    logger.warn(
+      { installationId },
+      'GitHub installation callback rejected: user ownership proof is unavailable',
+    );
+    return NextResponse.redirect(
+      new URL('/connectors?github=ownership_proof_required', request.url),
+    );
+  }
+
+  const oauthState = generateGitHubInstallState();
+  const callbackUrl = new URL('/api/github/oauth/callback', request.url).toString();
+  let authorizationUrl: string;
+  try {
+    authorizationUrl = getGitHubUserAuthorizationUrl(oauthState, callbackUrl);
+  } catch (error) {
+    logger.error({ error }, 'Failed to start GitHub user authorization');
+    return NextResponse.redirect(new URL('/connectors?github=oauth_failed', request.url));
+  }
+
+  const pendingCookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    maxAge: 600,
+    path: '/api/github/oauth/callback',
+  };
+  cookieStore.set({
+    name: 'github_pending_installation_id',
+    value: String(installationId),
+    ...pendingCookieOptions,
+  });
+  cookieStore.set({
+    name: 'github_oauth_state',
+    value: oauthState,
+    ...pendingCookieOptions,
+  });
+
+  return NextResponse.redirect(authorizationUrl);
 }

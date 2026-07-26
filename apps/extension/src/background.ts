@@ -75,7 +75,9 @@ import {
 import {
   createChromeManagedStreamKey,
   createChromeManagedChatDependencies,
+  createChromeManagedApprovalDependencies,
   executeChromeManagedChat,
+  executeChromeManagedApproval,
   type ChromeManagedChatResult,
 } from './features/cloud-bridge/managedChatHandler';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
@@ -995,21 +997,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
 });
 
-// BLOCKER-01: autonomy mode cache. Default 'ask' — user must opt in to unconfirmed execution.
-let actionModeCache: import('./types').ActionMode = 'ask';
-chrome.storage.local
-  .get({ agi_action_mode: 'ask' })
-  .then((res) => {
-    const stored = res['agi_action_mode'];
-    if (stored === 'ask' || stored === 'act') actionModeCache = stored;
-  })
-  .catch(() => {});
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !changes['agi_action_mode']) return;
-  const next = changes['agi_action_mode'].newValue;
-  if (next === 'ask' || next === 'act') actionModeCache = next;
-});
-
 // W5-06: persisted side-panel preference. Outgoing turns carry a snapshot so
 // routing cannot race a later toggle or affect non-side-panel chat surfaces.
 let quickModeCache = false;
@@ -1023,12 +1010,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes['agi_quick_mode']) return;
   quickModeCache = changes['agi_quick_mode'].newValue === true;
 });
-
-// BLOCKER-02: pending permission requests waiting for user decision.
-const pendingPermissionRequests = new Map<
-  string,
-  { resolve: (decision: 'allow' | 'deny' | 'always') => void }
->();
 
 function isAllowlistedSender(
   sender: chrome.runtime.MessageSender,
@@ -1362,6 +1343,17 @@ async function handleMessageAsync(
         return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
       }
       void handleResumeChatRun(resumeMsg);
+      return { success: true } as ExtensionResponse;
+    }
+
+    case 'RESOLVE_CHAT_APPROVAL': {
+      const approvalMsg = message as import('./types').ResolveChatApprovalMessage;
+      try {
+        createChromeManagedStreamKey(approvalMsg.clientInstanceId, approvalMsg.id);
+      } catch {
+        return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
+      }
+      void handleResolveChatApproval(approvalMsg);
       return { success: true } as ExtensionResponse;
     }
 
@@ -1871,22 +1863,6 @@ async function handleMessageAsync(
       } as ExtensionResponse;
     }
 
-    // BLOCKER-01: autonomy mode get/set
-    case 'GET_ACTION_MODE' as ExtensionMessage['type']: {
-      return { success: true, mode: actionModeCache } as ExtensionResponse;
-    }
-
-    case 'SET_ACTION_MODE' as ExtensionMessage['type']: {
-      const modeMsg = message as import('./types').SetActionModeMessage;
-      const newMode = modeMsg.mode;
-      if (newMode !== 'ask' && newMode !== 'act') {
-        return { success: false, error: 'Invalid action mode' } as ExtensionResponse;
-      }
-      actionModeCache = newMode;
-      await chrome.storage.local.set({ agi_action_mode: newMode });
-      return { success: true, mode: newMode } as ExtensionResponse;
-    }
-
     // W5-06: quick mode get/set
     case 'GET_QUICK_MODE' as ExtensionMessage['type']: {
       return { success: true, enabled: quickModeCache } as ExtensionResponse;
@@ -1897,32 +1873,6 @@ async function handleMessageAsync(
       quickModeCache = qmMsg.enabled === true;
       await chrome.storage.local.set({ agi_quick_mode: quickModeCache });
       return { success: true, enabled: quickModeCache } as ExtensionResponse;
-    }
-
-    // BLOCKER-02: user decision arriving from the side panel for a pending permission request
-    case 'PERMISSION_RESPONSE' as ExtensionMessage['type']: {
-      const resp = message as import('./types').PermissionResponseMessage;
-      const pending = pendingPermissionRequests.get(resp.requestId);
-      if (!pending) return { success: false, error: 'No pending request' } as ExtensionResponse;
-      pendingPermissionRequests.delete(resp.requestId);
-      pending.resolve(resp.decision);
-      if (resp.decision === 'always' && resp.requestId) {
-        // Persist to site allowlist using the domain encoded in the requestId prefix
-        const domainMatch = /^perm_([^_]+(?:_[^_]+)*)_\d+$/.exec(resp.requestId);
-        const domain = domainMatch?.[1] ? domainMatch[1].replace(/_dot_/g, '.') : null;
-        if (domain) {
-          const origin = `https://${domain}`;
-          const stored = await chrome.storage.local.get('agi_site_allowlist');
-          const list: string[] = Array.isArray(stored['agi_site_allowlist'])
-            ? (stored['agi_site_allowlist'] as string[])
-            : [];
-          if (!list.includes(origin)) {
-            list.push(origin);
-            await chrome.storage.local.set({ agi_site_allowlist: list });
-          }
-        }
-      }
-      return { success: true } as ExtensionResponse;
     }
 
     case 'AGI_START_COMPUTER_USE' as ExtensionMessage['type']: {
@@ -2982,6 +2932,90 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
           });
         },
       },
+    );
+
+    if (result.status === 'success') {
+      broadcastManagedChatChunk(clientInstanceId, id, {
+        text: '',
+        done: true,
+        ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
+      });
+      return;
+    }
+    if (!activeStream.cancelNotified) {
+      activeStream.cancelNotified = true;
+      broadcastManagedChatChunk(clientInstanceId, id, {
+        text: '',
+        done: true,
+        error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
+        ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
+      });
+    }
+  } finally {
+    if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
+  }
+}
+
+async function handleResolveChatApproval(
+  message: import('./types').ResolveChatApprovalMessage,
+): Promise<void> {
+  const { clientInstanceId, id } = message;
+  let streamKey: string;
+  try {
+    streamKey = createChromeManagedStreamKey(clientInstanceId, id);
+  } catch {
+    return;
+  }
+  if (activeChatStreams.has(streamKey)) {
+    broadcastManagedChatChunk(clientInstanceId, id, {
+      text: '',
+      done: true,
+      error: 'This AGI Cloud run is already active.',
+    });
+    return;
+  }
+
+  const activeStream: ActiveChatStream = {
+    clientInstanceId,
+    controller: new AbortController(),
+    cancelRequested: false,
+    cancelNotified: false,
+    cloudRun: { ...message.cloudRun },
+  };
+  activeChatStreams.set(streamKey, activeStream);
+
+  try {
+    const result = await executeChromeManagedApproval(
+      {
+        id,
+        run: message.cloudRun,
+        toolApprovals: message.toolApprovals,
+        signal: activeStream.controller.signal,
+      },
+      createChromeManagedApprovalDependencies(
+        (text) =>
+          broadcastManagedChatChunk(clientInstanceId, id, {
+            text,
+            done: false,
+          }),
+        {
+          onAgentEvent: (chunk) =>
+            broadcastManagedChatChunk(clientInstanceId, id, {
+              text: '',
+              done: false,
+              agentEvent: chunk.envelope,
+              ...(chunk.durableReplay ? { durableReplay: true } : {}),
+            }),
+          onRunReference: (cloudRun) => {
+            activeStream.cloudRun = { ...cloudRun };
+            broadcastManagedChatChunk(clientInstanceId, id, {
+              text: '',
+              done: false,
+              cloudRun,
+            });
+          },
+        },
+      ),
     );
 
     if (result.status === 'success') {

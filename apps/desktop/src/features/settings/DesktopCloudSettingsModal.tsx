@@ -69,9 +69,21 @@ import { WEB_APP_URL } from '../../api/config';
 import { openExternalUrl } from '../../utils/navigation';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import {
+  canUseDesktopCloudAgiWork,
+  canUseDesktopCloudCodeExecution,
+  canUseDesktopCloudImageGeneration,
+} from '../../services/desktopCloudEntitlements';
+import {
   assertManagedCloudBoundary,
   captureManagedCloudBoundary,
 } from '../../services/managedCloudBoundary';
+import {
+  canUseBillingPlanCapability,
+  getBillingPlanProductLimits,
+  type BillingPlanLimit,
+} from '@agiworkforce/types';
+
+type CustomConnectorInput = Parameters<NonNullable<SettingsDataAdapter['addCustomConnector']>>[0];
 
 // ── Tab components (existing, fully wired) ────────────────────────────────────
 
@@ -260,14 +272,31 @@ function DesktopUsageSection() {
   );
 }
 
+function formatPlanLimit(limit: BillingPlanLimit | undefined): string {
+  if (limit === 'unlimited') return 'Unlimited';
+  if (limit === 'custom') return 'Custom';
+  return typeof limit === 'number' ? limit.toLocaleString() : 'Unavailable';
+}
+
 /** Managed capability status. Native Local agent controls stay in Local settings. */
 function DesktopCapabilitiesSection() {
   const featureFlags = useAuthStore((state) => state.featureFlags);
+  const plan = useAuthStore(selectPlan);
+  const limits = getBillingPlanProductLimits(plan);
+  const codeExecutionConfigured = featureFlags['code_execution'] === true;
+  const codeExecutionAvailable = canUseDesktopCloudCodeExecution(plan, codeExecutionConfigured);
   const capabilities = [
     {
       label: 'Managed code execution',
       description: 'Run supported code in an isolated AGI Cloud sandbox.',
-      status: featureFlags['code_execution'] === true ? 'Available' : 'Not enabled',
+      status:
+        plan === null
+          ? 'Loading'
+          : codeExecutionAvailable
+            ? 'Available'
+            : codeExecutionConfigured
+              ? 'Not in plan'
+              : 'Not configured',
     },
     {
       label: 'Managed web search',
@@ -278,12 +307,43 @@ function DesktopCapabilitiesSection() {
           : 'Model-dependent',
     },
     {
+      label: 'AGI Work',
+      description: 'Run multi-step managed tasks with tools and reviewable deliverables.',
+      status:
+        plan === null ? 'Loading' : canUseDesktopCloudAgiWork(plan) ? 'Available' : 'Pro required',
+    },
+    {
+      label: 'Image generation',
+      description: 'Create durable images that remain available after reload.',
+      status:
+        plan === null
+          ? 'Loading'
+          : canUseDesktopCloudImageGeneration(plan)
+            ? 'Available'
+            : 'Pro required',
+    },
+    {
+      label: 'Cloud files and tools',
+      description: 'Upload supported files and use account-authorized managed tools.',
+      status:
+        plan === null
+          ? 'Loading'
+          : canUseBillingPlanCapability(plan, 'chat_tools')
+            ? 'Available'
+            : 'Not in plan',
+    },
+    {
       label: 'Cloud projects and sync',
       description:
         'Keep account-owned chats, project instructions, and sources available across surfaces.',
-      status: 'Available',
+      status:
+        plan === null
+          ? 'Loading'
+          : canUseBillingPlanCapability(plan, 'projects')
+            ? 'Available'
+            : 'Not in plan',
     },
-  ] as const;
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -321,10 +381,80 @@ function DesktopCapabilitiesSection() {
         ))}
       </div>
 
+      <div>
+        <h3 className="text-sm font-medium text-foreground">Current plan limits</h3>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          These limits are enforced by AGI Cloud across Desktop, Web, and Mobile.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {[
+            ['Parallel managed turns', formatPlanLimit(limits?.maxConcurrentTurns)],
+            ['Live managed sandboxes', formatPlanLimit(limits?.maxSandboxes)],
+            ['Connector tools per turn', formatPlanLimit(limits?.maxConnectorTools)],
+            ['Scheduled tasks', formatPlanLimit(limits?.maxScheduledTasks)],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-border bg-card/40 p-4">
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <p className="text-xs leading-5 text-muted-foreground">
         Tool approvals are enforced by the Managed Cloud policy for each task. Local agent and
         auto-approval controls apply only to the Local workspace and remain in Local settings.
       </p>
+    </div>
+  );
+}
+
+function DesktopTeamSection() {
+  const plan = useAuthStore(selectPlan);
+  const canManageTeam = canUseBillingPlanCapability(plan, 'team_admin');
+  const isEnterprise = canUseBillingPlanCapability(plan, 'enterprise_controls');
+
+  const openTeamSettings = () => openExternalUrl(new URL('/settings/team', WEB_APP_URL).toString());
+  const openSales = () => openExternalUrl(new URL('/contact-sales', WEB_APP_URL).toString());
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-base font-semibold text-foreground">Team &amp; enterprise</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Workspace membership and organization administration are managed in AGI Web.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card/40 p-5">
+        <p className="text-xs text-muted-foreground">Current plan</p>
+        <p className="mt-1 text-lg font-semibold text-foreground">
+          {plan ? PLAN_DISPLAY_NAMES[plan] : 'Loading…'}
+        </p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          {canManageTeam
+            ? 'Open AGI Web to create or update the workspace and manage owner, admin, and member roles.'
+            : 'Team administration requires a provisioned Team or Enterprise account.'}
+        </p>
+        <button
+          type="button"
+          className="mt-4 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90"
+          onClick={() => void (canManageTeam ? openTeamSettings() : openSales())}
+          disabled={plan === null}
+        >
+          {canManageTeam ? 'Manage team on Web' : 'Contact sales'}
+        </button>
+      </div>
+
+      {isEnterprise ? (
+        <div className="rounded-lg border border-border bg-card/40 p-5">
+          <p className="text-sm font-medium text-foreground">Enterprise identity</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            This Desktop build does not expose SSO or SCIM configuration. No identity-provider setup
+            is implied by the Enterprise plan label.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -447,12 +577,14 @@ export function DesktopCloudSettingsModal({
 }: DesktopCloudSettingsModalProps) {
   // ── Resolve initial section from legacy tab map ──────────────────────────
   const resolveSection = (tab: SettingsTab): string => {
+    if (tab === 'team') return 'team';
     const mapped = (LEGACY_TAB_MAP[tab] ?? tab) as string;
     if (mapped === 'models-keys') return 'capabilities';
     // Cloud modal only shows these sections; fall back to general for anything else
     const CLOUD_SECTIONS = new Set([
       'general',
       'account',
+      'team',
       'privacy',
       'billing',
       'usage',
@@ -579,7 +711,7 @@ export function DesktopCloudSettingsModal({
   );
 
   const addCustomConnector = useCallback(
-    async (input: { name: string; url: string }) => {
+    async (input: CustomConnectorInput) => {
       await apiCreateCustomConnector(input);
       await refreshCloudConnectors();
     },
@@ -655,6 +787,7 @@ export function DesktopCloudSettingsModal({
       connectConnector,
       disconnectConnector,
       addCustomConnector,
+      customConnectorAuthTokenSupported: true,
       openHref: (href) => {
         const url = new URL(href, WEB_APP_URL);
         return openExternalUrl(url.toString());
@@ -746,6 +879,7 @@ export function DesktopCloudSettingsModal({
           <LazyAccountTab scope="cloud" />
         </Suspense>
       ),
+      team: <DesktopTeamSection />,
       privacy: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyPrivacyTab scope="cloud" onOpenGovernanceWorkspace={openGovernanceWorkspace} />
@@ -776,9 +910,12 @@ export function DesktopCloudSettingsModal({
   );
 
   // ── Nav keys visible in the cloud modal ─────────────────────────────────
+  // Team administration remains Web-owned, but Desktop provides a truthful,
+  // reachable handoff instead of hiding the account's B2B entry point.
   const activeKeys = [
     'general',
     'account',
+    'team',
     'privacy',
     'billing',
     'usage',

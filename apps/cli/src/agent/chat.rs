@@ -2203,7 +2203,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new("claude-opus-4-8", &ctx, None);
+        let mut session = AgentSession::new("claude-opus-5", &ctx, None);
         session.quiet = true;
         session.managed_session = Some(crate::runtime::session::ManagedSession::new(
             "auto-turn-test",
@@ -2213,7 +2213,7 @@ mod tests {
         session.set_managed_auto_routing(Some(
             crate::runtime::session::ManagedSessionAutoRouting {
                 selection: "auto-premium".to_string(),
-                model_key: "claude-opus-4.8".to_string(),
+                model_key: "claude-opus-5".to_string(),
                 task_type:
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
                 trust_mode: agiworkforce_model_registry::TrustMode::Byok,
@@ -2246,7 +2246,7 @@ mod tests {
             agiworkforce_model_registry::RoutingTaskType::CreativeWriting,
             "byok",
             agiworkforce_model_registry::TrustMode::Byok,
-            Some("claude-opus-4.8"),
+            Some("claude-opus-5"),
             Some(agiworkforce_model_registry::RoutingTaskType::Coding),
         )
         .expect("BYOK creative route should be available");
@@ -2290,7 +2290,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new("claude-opus-4-8", &ctx, None);
+        let mut session = AgentSession::new("claude-opus-5", &ctx, None);
         session.quiet = true;
         let model_before = session.model.clone();
 

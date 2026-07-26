@@ -89,6 +89,24 @@ try {
     await page.close();
   }
 
+  // ── Signed-out account state: options must not offer a fake Log out action ──
+  {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extId}/src/options.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
+    });
+    await page.waitForTimeout(1500);
+    const accountState = await page.evaluate(() => ({
+      signInVisible: Boolean(document.getElementById('opt-signin-btn')),
+      logOutVisible: Boolean(document.getElementById('opt-logout-btn')),
+    }));
+    if (!accountState.signInVisible || accountState.logOutVisible) {
+      fail(`signed-out options account: unexpected controls ${JSON.stringify(accountState)}`);
+    }
+    await page.close();
+  }
+
   // ── Side-panel interactions: composer input, drawer nav, model picker ──
   {
     const page = await context.newPage();
@@ -218,30 +236,52 @@ try {
     }
     await page.click('#sp-model-selector-btn');
 
-    await page.click('#sp-action-mode-toggle');
-    const actionModeOpen = await page.evaluate(() => {
-      const menu = document.getElementById('sp-action-mode-menu');
-      return !!menu && menu.classList.contains('open') && getComputedStyle(menu).display !== 'none';
+    const composerModes = await page.evaluate(() => ({
+      inertAutonomyControlPresent: Boolean(document.getElementById('sp-action-mode-toggle')),
+      quickModePresent: Boolean(document.getElementById('sp-quick-mode-toggle')),
+    }));
+    if (composerModes.inertAutonomyControlPresent || !composerModes.quickModePresent) {
+      fail(`composer modes: unexpected controls ${JSON.stringify(composerModes)}`);
+    }
+
+    // Workflows exposes only controls that execute today. The previous shortcut
+    // modal advertised Start from + Schedule fields with no replay/scheduler
+    // consumer, and onboarding advertised a slash finder that did not exist.
+    await page.click('#sp-menu-btn');
+    await page.click('#sp-drawer-wf-btn');
+    await page.click('#sp-wf-create-shortcut-btn');
+    const shortcutSurface = await page.evaluate(() => {
+      const onboardingStep = document.querySelector('.sp-ob-step[data-step="3"]');
+      return {
+        modalOpen:
+          document.getElementById('sp-create-shortcut-overlay')?.classList.contains('open') ===
+          true,
+        namePresent: Boolean(document.getElementById('sp-sc-name')),
+        promptPresent: Boolean(document.getElementById('sp-sc-prompt')),
+        deadStartFromPresent: Boolean(document.getElementById('sp-sc-starturl')),
+        deadSchedulePresent: Boolean(document.getElementById('sp-sc-schedule')),
+        onboardingCopy: onboardingStep?.textContent ?? '',
+      };
     });
-    if (!actionModeOpen) {
-      fail('action mode: ask/act control did not open an explicit permission menu');
-    }
-    const actionModeChoices = await page
-      .locator('#sp-action-mode-menu [role="menuitemradio"]')
-      .allTextContents();
     if (
-      !actionModeChoices.some((choice) => choice.includes('Ask before acting')) ||
-      !actionModeChoices.some((choice) => choice.includes('Act without asking'))
+      !shortcutSurface.modalOpen ||
+      !shortcutSurface.namePresent ||
+      !shortcutSurface.promptPresent ||
+      shortcutSurface.deadStartFromPresent ||
+      shortcutSurface.deadSchedulePresent ||
+      !shortcutSurface.onboardingCopy.includes('Open Workflows') ||
+      shortcutSurface.onboardingCopy.includes('search shortcuts')
     ) {
-      fail(`action mode: expected ask and act choices, got ${JSON.stringify(actionModeChoices)}`);
+      fail(
+        `workflows: misleading or unfinished shortcut controls ${JSON.stringify(shortcutSurface)}`,
+      );
     }
-    await page.click('#sp-action-mode-toggle');
 
     const pageExceptions = errors.filter((e) => e.startsWith('pageerror:'));
     if (pageExceptions.length)
       fail(`interactions: uncaught page exception(s): ${pageExceptions.join(' | ')}`);
     console.log(
-      `\n[interactions] composer=ok drawer=${drawerOpen} modelPicker=${modelOpen} actionMode=${actionModeOpen}`,
+      `\n[interactions] composer=ok drawer=${drawerOpen} modelPicker=${modelOpen} quickMode=${composerModes.quickModePresent}`,
     );
     await page.close();
   }

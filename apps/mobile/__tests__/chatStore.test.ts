@@ -100,6 +100,11 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
 // Import after mocks are established
@@ -121,6 +126,11 @@ import {
   markInstalledModelUsed,
 } from '../storage/installedModels';
 import type { StreamCallbacks } from '../services/streaming';
+import { useAuthStore } from '../src/features/auth/store';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 const mockCancelMobileCloudAgentRun = cancelMobileCloudAgentRun as jest.MockedFunction<
@@ -176,8 +186,24 @@ function resetStore() {
     chatStyle: 'normal',
     toolAccess: 'auto',
     workMode: 'chat',
-    features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
+    features: {
+      webSearch: true,
+      imageGen: true,
+      health: false,
+      codeExecution: false,
+      research: false,
+    },
   });
+  useTierStore.setState({
+    tier: 'free',
+    billingTier: 'free',
+    billingStatus: 'none',
+    grantedCapabilities: ['canUseWebSearch', 'canUseConnectors'],
+    capabilityHandshakeVersion: 'test-mobile-capabilities',
+    codeExecutionAvailable: false,
+    genericWebSearchAvailable: false,
+    currentConversationProvider: null,
+  } as never);
   useChatCloudMessageStore.setState({ conversations: [], messages: {} });
 }
 
@@ -212,6 +238,13 @@ function seedCloudConversation(model = CLOUD_MODEL) {
 
 describe('chatStore — streaming state', () => {
   beforeEach(() => {
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('chat-store-test-user');
+    useAuthStore.setState({
+      clerkUserId: 'chat-store-test-user',
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+    });
     resetStore();
     jest.clearAllMocks();
     mockRemoteDisabledReason.mockReturnValue(null);
@@ -275,7 +308,7 @@ describe('chatStore — streaming state', () => {
       );
     });
 
-    it('sends web_search:true to the remote stream when the web-search feature is enabled', async () => {
+    it('automatically sends web_search:true when the Cloud route supports search', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
       useChatStore.setState({
@@ -301,7 +334,7 @@ describe('chatStore — streaming state', () => {
       expect(capturedBody?.web_search).toBe(true);
     });
 
-    it('omits web_search when the web-search feature is disabled', async () => {
+    it('ignores a stale persisted web-search opt-out because search is ambient', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
       useChatStore.setState({
@@ -313,7 +346,7 @@ describe('chatStore — streaming state', () => {
           new Promise<void>((resolve) => {
             capturedBody = body;
             setTimeout(() => {
-              callbacks.onDelta({ content: 'no search' });
+              callbacks.onDelta({ content: 'ambient search' });
               callbacks.onDone();
               resolve();
             }, 0);
@@ -322,6 +355,56 @@ describe('chatStore — streaming state', () => {
 
       await act(async () => {
         await getState().sendMessage(CONV_ID, 'just chat normally', CLOUD_MODEL);
+      });
+
+      expect(capturedBody?.web_search).toBe(true);
+    });
+
+    it('omits web_search when neither the model nor deployment can execute it', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      const unsupportedSearchModel = 'qwen-3.7-plus';
+      useTierStore.setState({ tier: 'max', genericWebSearchAvailable: false });
+      seedCloudConversation(unsupportedSearchModel);
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'no search transport' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(
+          CONV_ID,
+          'answer without a search transport',
+          unsupportedSearchModel,
+        );
+      });
+
+      expect(capturedBody?.web_search).toBeUndefined();
+    });
+
+    it('omits ambient web search when the account capability handshake denies it', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
+      useTierStore.setState({ grantedCapabilities: [] } as never);
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'current news', CLOUD_MODEL);
       });
 
       expect(capturedBody?.web_search).toBeUndefined();
@@ -401,6 +484,71 @@ describe('chatStore — streaming state', () => {
       });
 
       expect(capturedBody?.work_mode).toBeUndefined();
+    });
+
+    it('does not send a persisted AGI Work mode for Basic because the server requires Pro', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
+      useTierStore.setState({ tier: 'basic' });
+      useChatStore.setState({ workMode: 'agiwork' });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'continue', CLOUD_MODEL);
+      });
+
+      expect(capturedBody?.work_mode).toBeUndefined();
+    });
+
+    it('sends Deep Research only when the server handshake grants it', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      const researchModel = 'claude-opus-5';
+      seedCloudConversation(researchModel);
+      useTierStore.setState({
+        tier: 'max',
+        grantedCapabilities: ['canUseWebSearch', 'canUseDeepResearch'],
+      } as never);
+      useChatStore.setState({
+        features: {
+          webSearch: true,
+          imageGen: false,
+          health: false,
+          codeExecution: false,
+          research: true,
+        },
+      });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'research this', researchModel);
+      });
+
+      expect(capturedBody?.research).toBe(true);
+
+      capturedBody = null;
+      useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseWebSearch'] } as never);
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'research this again', researchModel);
+      });
+
+      expect(capturedBody?.research).toBeUndefined();
     });
 
     it('uses per-send task options over persisted chat mode', async () => {
@@ -1484,6 +1632,63 @@ describe('chatStore — streaming state', () => {
   });
 
   describe('stopStreaming', () => {
+    it('does not stop a background conversation after navigating to another chat', async () => {
+      const backgroundConversationId = CONV_ID;
+      const foregroundConversationId = 'test-conv-foreground';
+      seedCloudConversation();
+      useChatStore.setState((state) => ({
+        conversations: [
+          ...state.conversations,
+          {
+            id: foregroundConversationId,
+            title: 'Foreground chat',
+            updatedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            messageCount: 0,
+            pinned: false,
+            model: CLOUD_MODEL,
+            provider: 'cloud_managed',
+            executionMode: 'cloud',
+          },
+        ],
+        messages: {
+          ...state.messages,
+          [foregroundConversationId]: [],
+        },
+        currentConversationId: backgroundConversationId,
+      }));
+
+      let backgroundSignal: AbortSignal | undefined;
+      mockStreamChat.mockImplementation(
+        (_body, _callbacks, signal) =>
+          new Promise<void>((resolve) => {
+            backgroundSignal = signal;
+            signal.addEventListener('abort', () => resolve(), { once: true });
+          }),
+      );
+
+      void getState().sendMessage(backgroundConversationId, 'keep working', CLOUD_MODEL);
+      await waitFor(() =>
+        expect(getState().streamingConversationIds).toContain(backgroundConversationId),
+      );
+
+      act(() => {
+        useChatStore.setState({ currentConversationId: foregroundConversationId });
+        getState().stopStreaming();
+      });
+
+      expect(backgroundSignal?.aborted).toBe(false);
+      expect(getState().streamingConversationIds).toContain(backgroundConversationId);
+
+      // Explicit cleanup: returning to the owner chat is the only action that
+      // may abort its run.
+      act(() => {
+        useChatStore.setState({ currentConversationId: backgroundConversationId });
+        getState().stopStreaming();
+      });
+      expect(backgroundSignal?.aborted).toBe(true);
+    });
+
     it('cancels the active managed Cloud run on the server', async () => {
       seedCloudConversation();
       useChatStore.setState({ currentConversationId: CONV_ID });

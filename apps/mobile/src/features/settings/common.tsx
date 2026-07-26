@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type React from 'react';
-import { View, Pressable, ScrollView } from 'react-native';
+import { ActivityIndicator, View, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -102,6 +102,74 @@ export function SettingsInfo({
         <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>{title}</Text>
       </View>
       <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{body}</Text>
+    </View>
+  );
+}
+
+/**
+ * Shared fail-closed state for account-backed Cloud settings. Callers still
+ * gate their effects on the same auth booleans so this view can never sit on
+ * top of an accidental 401 or stale account fetch.
+ */
+export function CloudAccountRequired({
+  isLoading,
+  onSignIn,
+}: {
+  isLoading: boolean;
+  onSignIn: () => void;
+}) {
+  const colors = useThemeColors();
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          minHeight: 120,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+        }}
+      >
+        <ActivityIndicator color={colors.teal} />
+        <Text style={{ color: colors.textMuted, fontSize: 13 }}>Checking AGI Cloud account…</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        borderRadius: cardRadius,
+        backgroundColor: colors.surfaceElevated,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: 18,
+        gap: 10,
+      }}
+    >
+      <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700' }}>
+        Sign in to AGI Cloud
+      </Text>
+      <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+        This page contains account-specific subscription and Cloud data. Local Mode remains
+        available without an account.
+      </Text>
+      <Pressable
+        onPress={onSignIn}
+        accessibilityRole="button"
+        accessibilityLabel="Sign in to AGI Cloud"
+        style={({ pressed }) => ({
+          alignSelf: 'flex-start',
+          minHeight: 42,
+          justifyContent: 'center',
+          paddingHorizontal: 16,
+          borderRadius: 10,
+          backgroundColor: colors.teal,
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Text style={{ color: colors.white, fontSize: 14, fontWeight: '700' }}>Sign in</Text>
+      </Pressable>
     </View>
   );
 }

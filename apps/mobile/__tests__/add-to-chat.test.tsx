@@ -141,10 +141,7 @@ import { useTierStore } from '../src/features/billing/store';
 // Helpers
 // ---------------------------------------------------------------------------
 
-// claude-haiku-4.5 has capabilities.search: true in the catalog — used as the
-// default selected model so the "Web search" row's capability gate (added
-// alongside the model, not hard-coded) renders in these tests the same way it
-// did before that gate existed.
+// Representative Cloud-capable default used by the capability-gated rows.
 const SEARCH_CAPABLE_MODEL_ID = 'claude-haiku-4.5';
 
 function resetStores() {
@@ -171,7 +168,8 @@ function resetStores() {
     tier: 'free',
     codeExecutionAvailable: false,
     genericWebSearchAvailable: false,
-  });
+    grantedCapabilities: [],
+  } as never);
 }
 
 const defaultProps = {
@@ -239,15 +237,23 @@ describe('AddToChatSheet', () => {
       expect(useChatStore.getState().workMode).toBe('agiwork');
     });
 
-    it('keeps AGI Work paid and routes free users to Cloud access', () => {
+    it('does not advertise AGI Work to Free users', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'free' });
 
-      const { getByLabelText } = renderSheet();
-      fireEvent.press(getByLabelText('AGI Work, Paid'));
+      const { queryByText } = renderSheet();
 
-      expect(defaultProps.onOpenCloudAccess).toHaveBeenCalledTimes(1);
+      expect(queryByText('AGI Work')).toBeNull();
       expect(useChatStore.getState().workMode).toBe('chat');
+    });
+
+    it('does not show AGI Work to Basic users because the server requires Pro', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'basic' });
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('AGI Work')).toBeNull();
     });
   });
 
@@ -258,48 +264,55 @@ describe('AddToChatSheet', () => {
       const { getByText, queryByText } = renderSheet();
 
       expect(getByText('Temporary chat')).toBeTruthy();
-      // Web search renders in Local for a search-capable model; image generation is
-      // Cloud-only (runs through the managed media route), so it is hidden here.
-      expect(getByText('Web search')).toBeTruthy();
+      // Search is ambient and capability-clamped at send time, so it is not a
+      // per-turn switch in the + sheet. Image generation is Cloud-only.
+      expect(queryByText('Web search')).toBeNull();
       expect(queryByText('Image generation')).toBeNull();
       // Still gated off in this build.
       expect(queryByText('Computer use')).toBeNull();
       expect(queryByText('Health')).toBeNull();
       expect(queryByText('Beta')).toBeNull();
+      expect(queryByText(/Extended thinking/i)).toBeNull();
+      expect(queryByText('Medium')).toBeNull();
     });
 
     it('shows the Image generation row in Cloud mode only', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
       const { getByText } = renderSheet();
       expect(getByText('Image generation')).toBeTruthy();
     });
 
-    it('hides the Web search row for a model whose catalog capability is search: false', () => {
-      // deepseek-v4-flash has capabilities.search: false in the catalog — the
-      // toggle must not promise a search that silently no-ops server-side.
+    it('hides Image generation below Pro so the toggle cannot promise a denied request', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'basic' });
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('Image generation')).toBeNull();
+    });
+
+    it('hides Image generation when the server capability handshake denies it', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'pro', grantedCapabilities: [] });
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('Image generation')).toBeNull();
+    });
+
+    it('does not render a Web search toggle for an unsupported model', () => {
       useModelStore.setState({ selectedModel: 'deepseek-v4-flash' });
       const { queryByText } = renderSheet();
 
       expect(queryByText('Web search')).toBeNull();
-      // Image generation is Cloud-only; this Local-mode render hides it regardless
-      // of the search gate.
       expect(queryByText('Image generation')).toBeNull();
     });
 
-    it('shows Web search in Cloud for a tools-capable model through the generic backend', () => {
+    it('keeps Web search out of the + sheet when a Cloud generic backend is available', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useModelStore.setState({ selectedModel: 'qwen-3.7-plus' });
       useTierStore.setState({ genericWebSearchAvailable: true });
-
-      const { getByText } = renderSheet();
-
-      expect(getByText('Web search')).toBeTruthy();
-    });
-
-    it('hides generic Web search in Cloud when the deployment backend is unavailable', () => {
-      useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'qwen-3.7-plus' });
-      useTierStore.setState({ genericWebSearchAvailable: false });
 
       const { queryByText } = renderSheet();
 
@@ -312,10 +325,13 @@ describe('AddToChatSheet', () => {
     });
 
     it('shows Deep research in Cloud for a research+search model on a paid plan', () => {
-      // claude-opus-4.8 has capabilities.research: true AND search: true.
+      // claude-opus-5 has capabilities.research: true AND search: true.
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'claude-opus-4.8' });
-      useTierStore.setState({ tier: 'max' });
+      useModelStore.setState({ selectedModel: 'claude-opus-5' });
+      useTierStore.setState({
+        tier: 'max',
+        grantedCapabilities: ['canUseDeepResearch'],
+      } as never);
 
       const { getByText } = renderSheet();
       expect(getByText('Deep research')).toBeTruthy();
@@ -323,10 +339,20 @@ describe('AddToChatSheet', () => {
 
     it('hides Deep research for a free account even with a research-capable model', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'claude-opus-4.8' });
+      useModelStore.setState({ selectedModel: 'claude-opus-5' });
       useTierStore.setState({ tier: 'free' });
 
       const { queryByText } = renderSheet();
+      expect(queryByText('Deep research')).toBeNull();
+    });
+
+    it('hides Deep research when the server handshake denies it even on Pro', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useModelStore.setState({ selectedModel: 'claude-opus-5' });
+      useTierStore.setState({ tier: 'pro', grantedCapabilities: [] } as never);
+
+      const { queryByText } = renderSheet();
+
       expect(queryByText('Deep research')).toBeNull();
     });
   });

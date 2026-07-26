@@ -64,7 +64,10 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
 
   it('returns the authenticated subscription catalog for a valid credential', async () => {
     authMocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1' });
-    subscriptionMocks.getSubscription.mockResolvedValueOnce({ plan_tier: 'max' });
+    subscriptionMocks.getSubscription.mockResolvedValueOnce({
+      plan_tier: 'max',
+      status: 'active',
+    });
 
     const response = await GET(request({ Authorization: 'Bearer valid-token' }));
 
@@ -74,5 +77,40 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
       x_agi_workforce: { user_tier: 'max' },
     });
     expect(subscriptionMocks.getSubscription).toHaveBeenCalledWith('user-1');
+  });
+
+  it.each(['canceled', 'past_due', 'unpaid', 'expired'])(
+    'returns only the free catalog when a retained paid subscription is %s',
+    async (status) => {
+      authMocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1' });
+      subscriptionMocks.getSubscription.mockResolvedValueOnce({
+        plan_tier: 'max',
+        status,
+      });
+
+      const response = await GET(request({ Authorization: 'Bearer valid-token' }));
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        object: 'list',
+        x_agi_workforce: { user_tier: 'free' },
+      });
+    },
+  );
+
+  it('keeps a trialing subscription on its paid catalog', async () => {
+    authMocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1' });
+    subscriptionMocks.getSubscription.mockResolvedValueOnce({
+      plan_tier: 'max',
+      status: 'trialing',
+    });
+
+    const response = await GET(request({ Authorization: 'Bearer valid-token' }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      object: 'list',
+      x_agi_workforce: { user_tier: 'max' },
+    });
   });
 });

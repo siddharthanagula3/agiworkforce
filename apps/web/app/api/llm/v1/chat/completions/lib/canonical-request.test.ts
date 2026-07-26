@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { translateChatRequest } from '@agiworkforce/providers-google';
+import { translateChatRequest as translateAnthropicChatRequest } from '@agiworkforce/providers-anthropic';
 import {
   toCanonicalChatRequest,
   toCanonicalThinking,
   toCanonicalEffort,
   toCanonicalGoogleThinking,
+  buildAnthropicChatRequest,
   buildGoogleChatRequest,
   computeAnthropicCacheConfig,
   resolveWebOpenAIReasoningEffort,
@@ -17,7 +19,7 @@ function makeProcessed(llmRequest: Partial<LlmRequest>, provider = 'anthropic'):
   return {
     provider,
     llmRequest: {
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       messages: [],
       max_tokens: 1024,
       ...llmRequest,
@@ -37,7 +39,7 @@ describe('toCanonicalChatRequest', () => {
 
     const chatRequest = toCanonicalChatRequest(processed);
 
-    expect(chatRequest.model).toBe('claude-opus-4-8');
+    expect(chatRequest.model).toBe('claude-opus-5');
     expect(chatRequest.system).toBe('You are helpful.');
     expect(chatRequest.messages).toEqual([
       { role: 'user', content: 'hi' },
@@ -166,28 +168,28 @@ describe('toCanonicalChatRequest', () => {
 
   it('maps the internal dot-form model id to its provider apiModelId (fails without the mapping)', () => {
     const processed = makeProcessed({
-      model: 'claude-opus-4.8',
+      model: 'claude-haiku-4.5',
       messages: [{ role: 'user', content: 'hi' }],
     });
     const chatRequest = toCanonicalChatRequest(processed);
     // LLMProviderFactory.mapModelIdToApiId did this on a local copy right
     // before the provider HTTP call (factory.ts:310-321) -- toCanonicalChatRequest
-    // sits at that same point, so `claude-opus-4.8` (the internal/catalog id
-    // request-processor.ts routes on) must become `claude-opus-4-8` (what
+    // sits at that same point, so `claude-haiku-4.5` (the internal/catalog id
+    // request-processor.ts routes on) must become `claude-haiku-4-5` (what
     // Anthropic's API actually accepts) here. Every existing fixture in this
     // file uses a model id that's already dash-form, so none of them would
     // catch a regression that dropped this mapping -- this test's input is
     // deliberately dot-form.
-    expect(chatRequest.model).toBe('claude-opus-4-8');
+    expect(chatRequest.model).toBe('claude-haiku-4-5');
   });
 
   it('passes through a model id unchanged when it has no distinct apiModelId', () => {
     const processed = makeProcessed({
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       messages: [{ role: 'user', content: 'hi' }],
     });
     const chatRequest = toCanonicalChatRequest(processed);
-    expect(chatRequest.model).toBe('claude-opus-4-8');
+    expect(chatRequest.model).toBe('claude-opus-5');
   });
 });
 
@@ -230,6 +232,27 @@ describe('toCanonicalEffort', () => {
 
   it('passes an anthropic effort tier through unchanged', () => {
     expect(toCanonicalEffort('anthropic', 'xhigh')).toBe('xhigh');
+  });
+});
+
+describe('buildAnthropicChatRequest -> translateChatRequest wire', () => {
+  it('emits Opus 5 adaptive thinking and suppresses forbidden sampling parameters', () => {
+    const processed = makeProcessed({
+      model: 'claude-opus-5',
+      messages: [{ role: 'user', content: 'hi' }],
+      temperature: 0.4,
+      thinking: { type: 'adaptive' },
+      effort: 'max',
+    });
+
+    const chatRequest = buildAnthropicChatRequest(processed);
+    const body = translateAnthropicChatRequest(chatRequest);
+
+    expect(body.thinking).toEqual({ type: 'adaptive' });
+    expect(body.output_config).toEqual({ effort: 'max' });
+    expect(body.temperature).toBeUndefined();
+    expect(body.top_p).toBeUndefined();
+    expect(body.top_k).toBeUndefined();
   });
 });
 

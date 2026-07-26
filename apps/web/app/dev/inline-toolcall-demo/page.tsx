@@ -287,7 +287,7 @@ export default function InlineToolCallDemoPage() {
             className="rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/30 p-6"
           >
             <WebSearchCard
-              query="agi workforce claude opus 4.7 release"
+              query="agi workforce claude opus 5 release"
               resultCount={5}
               results={FILESYSTEM_RESULTS}
             />
@@ -310,7 +310,7 @@ export default function InlineToolCallDemoPage() {
                 status="success"
                 kind="web-search"
                 iconStyle="badge"
-                argSummary="agi workforce claude opus 4.7"
+                argSummary="agi workforce claude opus 5"
               />
               <InlineToolCall
                 id="bs-2"

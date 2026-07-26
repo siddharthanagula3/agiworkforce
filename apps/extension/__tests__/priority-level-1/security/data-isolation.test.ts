@@ -27,6 +27,7 @@ describe('L1 Security - Data Isolation (sender-class gating)', () => {
       'SAVE_SHORTCUT',
       'DELETE_SHORTCUT',
       'AGI_START_COMPUTER_USE',
+      'RESOLVE_CHAT_APPROVAL',
     ]) {
       expect(getMessagePolicy(type).senderClass).toBe('extension-page-only');
       expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(type)).toBe(true);

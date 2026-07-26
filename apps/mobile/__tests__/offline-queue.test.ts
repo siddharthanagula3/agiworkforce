@@ -27,7 +27,8 @@ function makeMsg(
   return {
     conversationId: 'conv-1',
     content: `message-${Math.random().toString(36).slice(2)}`,
-    model: 'claude-opus-4.8',
+    model: 'claude-opus-5',
+    provenance: { scope: 'local' },
     ...overrides,
   };
 }
@@ -98,8 +99,18 @@ describe('enqueue', () => {
   });
 
   it('allows same content in different conversations', () => {
-    offlineQueue.enqueue({ conversationId: 'conv-a', content: 'hello', model: 'gpt-5.6-sol' });
-    offlineQueue.enqueue({ conversationId: 'conv-b', content: 'hello', model: 'gpt-5.6-sol' });
+    offlineQueue.enqueue({
+      conversationId: 'conv-a',
+      content: 'hello',
+      model: 'gpt-5.6-sol',
+      provenance: { scope: 'local' },
+    });
+    offlineQueue.enqueue({
+      conversationId: 'conv-b',
+      content: 'hello',
+      model: 'gpt-5.6-sol',
+      provenance: { scope: 'local' },
+    });
 
     expect(offlineQueue.getQueueSize()).toBe(2);
   });

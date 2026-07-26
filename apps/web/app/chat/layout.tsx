@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { ChatStreamRuntimeProvider } from '@/features/chat/components/ChatStreamRuntimeProvider';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,5 +16,5 @@ export default async function ChatLayout({ children }: { children: ReactNode }) 
     redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
-  return <>{children}</>;
+  return <ChatStreamRuntimeProvider>{children}</ChatStreamRuntimeProvider>;
 }

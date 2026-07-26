@@ -70,6 +70,9 @@ interface AgentControlStore {
 
   /** Remove the conversation override, reverting to project/global default. */
   clearConversationOverride: (conversationId: string) => void;
+
+  /** Remove only controls keyed to an outgoing Cloud account. */
+  clearCloudOverrides: (conversationIds: string[], projectIds: string[]) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +168,24 @@ export const useAgentControlStore = create<AgentControlStore>()(
           const next = { ...state.byConversation };
           delete next[conversationId];
           return { byConversation: next };
+        }),
+
+      clearCloudOverrides: (conversationIds, projectIds) =>
+        set((state) => {
+          const cloudConversationIds = new Set(conversationIds);
+          const cloudProjectIds = new Set(projectIds);
+          return {
+            byConversation: Object.fromEntries(
+              Object.entries(state.byConversation).filter(
+                ([conversationId]) => !cloudConversationIds.has(conversationId),
+              ),
+            ),
+            byProject: Object.fromEntries(
+              Object.entries(state.byProject).filter(
+                ([projectId]) => !cloudProjectIds.has(projectId),
+              ),
+            ),
+          };
         }),
     }),
     {

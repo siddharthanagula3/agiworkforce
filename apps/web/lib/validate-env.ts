@@ -58,6 +58,15 @@ export function validateRequiredEnvVars(): ValidationResult {
     'TOTP_ENCRYPTION_KEY',
     // API gateway base URL used by web → backend calls; falls back to localhost:3001
     'NEXT_PUBLIC_API_URL',
+    // GitHub App connector. The client id/secret are required for the
+    // user-access-token ownership proof; App id/private key/slug alone must
+    // never make browser-supplied installation ids usable.
+    'GITHUB_APP_ID',
+    'GITHUB_APP_PRIVATE_KEY_BASE64',
+    'GITHUB_APP_SLUG',
+    'GITHUB_APP_CLIENT_ID',
+    'GITHUB_APP_CLIENT_SECRET',
+    'GITHUB_WEBHOOK_SECRET',
     // AUDIT-FIX STB-3: secret-bearing vars that previously had zero coverage.
     // Each has a fail-closed guard at its point of use, but a warning at boot
     // turns a silent misconfiguration into an operator-visible one.

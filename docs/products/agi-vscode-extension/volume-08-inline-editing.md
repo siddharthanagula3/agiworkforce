@@ -87,9 +87,9 @@ Security:
 ## Anti-patterns
 
 - Writing model output to disk without an inline diff and explicit accept (outside opted-in trusted auto-apply).
-- Enabling auto-apply in an untrusted workspace, or honoring workspace-overridden endpoint/gateway/system-prompt settings there.
+- Enabling auto-apply in an untrusted workspace, or honoring workspace-overridden endpoint/gateway settings there.
 - Silently routing a Local inline edit to BYOK or Managed Cloud, or omitting the provider label.
 - Auto-syncing inline edits or diffs to app chat — handoff must be explicit and redacted.
 - Hardcoding or inventing model IDs; all LLM IDs come from `packages/contracts/types/src/models.json`.
-- Referencing removed tiers. `package.json` `agiWorkforce.tier` still enumerates `hobby`/`pro_plus` — that is a known 🟡 reconciliation gap; specs use only Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise, with no top-ups.
+- Referencing removed tiers or credit top-ups. The extension manifest exposes only current access modes.
 - Referencing Supabase (fully migrated away) or renaming `proxy.ts` to `middleware.ts`.

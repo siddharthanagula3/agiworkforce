@@ -11,6 +11,8 @@
  * import path while avoiding duplicated state.
  */
 
+import { inferTaskInterval as inferSchedulerTaskInterval } from './schedulerStore';
+
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'custom';
 
 /**
@@ -40,6 +42,7 @@ export type { ScheduledTask, TaskSchedule, TaskInterval, TaskStatus } from './sc
 export {
   useSchedulerStore,
   useScheduledTaskStore,
+  inferTaskInterval,
   getScheduleSummary,
   getRelativeTimeDisplay,
   selectTasks,
@@ -54,12 +57,10 @@ export {
 
 /** Derive a Frequency value from a TaskSchedule cron expression or interval. */
 export function inferFrequency(cronExpression: string): Frequency {
-  // Canonical built-in patterns emitted by the backend
-  if (cronExpression === '0 * * * *') return 'daily'; // hourly treated as daily for display
-  if (/^0 \d+ \* \* \*$/.test(cronExpression)) return 'daily';
-  if (/^0 \d+ \* \* \d$/.test(cronExpression)) return 'weekly';
-  if (/^0 \d+ \d+ \* \*$/.test(cronExpression)) return 'monthly';
-  return 'custom';
+  const interval = inferSchedulerTaskInterval(cronExpression);
+  return interval === 'daily' || interval === 'weekly' || interval === 'monthly'
+    ? interval
+    : 'custom';
 }
 
 /**

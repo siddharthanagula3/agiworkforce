@@ -59,7 +59,7 @@ Anthropic's "thinnest possible shell over the model" harness — tool loop, suba
 - [ ] No silent boundary crossing; Local→BYOK requires the explicit fork (Vol 3).
 - [ ] Failover/fallback across providers is transparent and order is deterministic (`packages/ai/provider-runtime/src/fallback.ts`).
 - [ ] Offline mode degrades to Local cleanly; no hung requests when the network drops.
-- [ ] Tokenizer drift (e.g. Claude Opus 4.8, +0–35% tokens) is budgeted in estimates so cached prompts don't overshoot the window.
+- [ ] Catalog-declared tokenizer drift is budgeted in estimates so cached prompts do not overshoot the window.
 
 ### Reliability gate
 

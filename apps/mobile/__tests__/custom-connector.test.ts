@@ -12,7 +12,11 @@ jest.mock('../services/api', () => ({
   },
 }));
 
-import { addCustomConnector, getGitHubInstallWebUrl } from '../services/connectors';
+import {
+  addCustomConnector,
+  fetchConnectorDirectory,
+  getGitHubInstallWebUrl,
+} from '../services/connectors';
 import { isLikelyHttpsUrl } from '../src/features/settings/cloud-connectors/AddCustomConnectorModal';
 
 beforeEach(() => jest.clearAllMocks());
@@ -57,6 +61,48 @@ describe('addCustomConnector', () => {
 describe('getGitHubInstallWebUrl', () => {
   it('points at the vetted web GitHub-App install-start flow', () => {
     expect(getGitHubInstallWebUrl()).toMatch(/^https:\/\/.+\/api\/github\/install\/start$/);
+  });
+});
+
+describe('fetchConnectorDirectory', () => {
+  it('preserves real availability and custom-connector identity from the server', async () => {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    mockGet.mockResolvedValue({
+      connectors: [
+        {
+          id: 'row-1',
+          connectorId: 'slack',
+          authType: 'oauth',
+          connectedAt: '2026-07-26T00:00:00.000Z',
+          updatedAt: '2026-07-26T00:00:00.000Z',
+          source: 'user',
+        },
+        {
+          id: 'custom-row-1',
+          connectorId: 'custom-ab12',
+          authType: 'custom_mcp',
+          connectedAt: '2026-07-26T00:00:00.000Z',
+          updatedAt: '2026-07-26T00:00:00.000Z',
+          source: 'custom',
+          name: 'Internal tools',
+        },
+      ],
+      available: ['slack', 'github'],
+    });
+
+    await expect(fetchConnectorDirectory()).resolves.toEqual({
+      connectors: expect.arrayContaining([
+        expect.objectContaining({ connectorId: 'custom-ab12', name: 'Internal tools' }),
+      ]),
+      available: ['slack', 'github'],
+    });
+  });
+
+  it('rejects malformed responses instead of rendering fake availability', async () => {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    mockGet.mockResolvedValue({ connectors: [], available: 'everything' });
+
+    await expect(fetchConnectorDirectory()).rejects.toThrow('Invalid connectors response');
   });
 });
 

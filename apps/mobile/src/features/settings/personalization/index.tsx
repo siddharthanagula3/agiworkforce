@@ -22,6 +22,7 @@ import {
   PERSONALIZATION_STYLES,
   type StyleSliderConfig as SliderConfig,
 } from './constants';
+import { useAuthStore } from '@/src/features/auth/store';
 
 // ---------------------------------------------------------------------------
 // Style preset selector
@@ -239,6 +240,7 @@ export default function PersonalizationScreen() {
   const cloudSetPersonalization = useCloudSettingsStore((s) => s.setPersonalization);
   const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
   const cloudSetThemeMode = useCloudSettingsStore((s) => s.setThemeMode);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
 
   const personalization = isCloud ? cloudPersonalization : localPersonalization;
   const setPersonalization = isCloud ? cloudSetPersonalization : localSetPersonalization;
@@ -255,6 +257,10 @@ export default function PersonalizationScreen() {
   const [enthusiasm, setEnthusiasm] = useState(personalization.enthusiasm);
   const [headersLists, setHeadersLists] = useState(personalization.headersLists);
   const [emoji, setEmoji] = useState(personalization.emoji);
+  const draftDirtyRef = useRef(false);
+  const previousCloudOwnerRef = useRef<string | null | undefined>(
+    isCloud ? clerkUserId : undefined,
+  );
 
   // Expo Router can reuse this screen's instance across pushes to the same
   // route with only the `scope` search param changing (Local <-> Cloud), so
@@ -265,8 +271,19 @@ export default function PersonalizationScreen() {
   // resolved scope actually changes.
   const prevIsCloudRef = useRef(isCloud);
   useEffect(() => {
-    if (prevIsCloudRef.current === isCloud) return;
+    const scopeChanged = prevIsCloudRef.current !== isCloud;
+    const cloudOwnerChanged =
+      isCloud &&
+      previousCloudOwnerRef.current !== undefined &&
+      previousCloudOwnerRef.current !== clerkUserId;
+    if (isCloud) previousCloudOwnerRef.current = clerkUserId;
+    // A first Cloud pull may arrive after this screen mounts. Adopt it while
+    // the draft is pristine, but never overwrite text or slider changes the
+    // user is actively editing. Scope changes always load the destination
+    // scope and clear the dirty marker.
+    if (!scopeChanged && !cloudOwnerChanged && draftDirtyRef.current) return;
     prevIsCloudRef.current = isCloud;
+    draftDirtyRef.current = false;
     setFullName(personalization.fullName);
     setNickname(personalization.nickname);
     setOccupation(personalization.occupation);
@@ -276,7 +293,7 @@ export default function PersonalizationScreen() {
     setEnthusiasm(personalization.enthusiasm);
     setHeadersLists(personalization.headersLists);
     setEmoji(personalization.emoji);
-  }, [isCloud, personalization]);
+  }, [clerkUserId, isCloud, personalization]);
 
   const sliderValues: Record<SliderConfig['key'], number> = {
     warmth,
@@ -286,10 +303,22 @@ export default function PersonalizationScreen() {
   };
 
   const sliderSetters: Record<SliderConfig['key'], (v: number) => void> = {
-    warmth: setWarmth,
-    enthusiasm: setEnthusiasm,
-    headersLists: setHeadersLists,
-    emoji: setEmoji,
+    warmth: (value) => {
+      draftDirtyRef.current = true;
+      setWarmth(value);
+    },
+    enthusiasm: (value) => {
+      draftDirtyRef.current = true;
+      setEnthusiasm(value);
+    },
+    headersLists: (value) => {
+      draftDirtyRef.current = true;
+      setHeadersLists(value);
+    },
+    emoji: (value) => {
+      draftDirtyRef.current = true;
+      setEmoji(value);
+    },
   };
 
   const goBack = useCallback(() => {
@@ -333,6 +362,9 @@ export default function PersonalizationScreen() {
   }, [hasChanges, goBack]);
 
   const handleSave = useCallback(() => {
+    // The store write below is now the saved baseline. Clear before writing so
+    // the same-scope store update can normalize trimmed values into the draft.
+    draftDirtyRef.current = false;
     setPersonalization({
       fullName: fullName.trim(),
       nickname: nickname.trim(),
@@ -419,25 +451,37 @@ export default function PersonalizationScreen() {
           <LabeledInput
             label="Full Name"
             value={fullName}
-            onChangeText={setFullName}
+            onChangeText={(value) => {
+              draftDirtyRef.current = true;
+              setFullName(value);
+            }}
             placeholder="Your full name"
           />
           <LabeledInput
             label="Nickname"
             value={nickname}
-            onChangeText={setNickname}
+            onChangeText={(value) => {
+              draftDirtyRef.current = true;
+              setNickname(value);
+            }}
             placeholder="What should AGI call you?"
           />
           <LabeledInput
             label="Occupation"
             value={occupation}
-            onChangeText={setOccupation}
+            onChangeText={(value) => {
+              draftDirtyRef.current = true;
+              setOccupation(value);
+            }}
             placeholder="e.g. Founder & Engineer"
           />
           <LabeledInput
             label="Custom Instructions"
             value={instructions}
-            onChangeText={setInstructions}
+            onChangeText={(value) => {
+              draftDirtyRef.current = true;
+              setInstructions(value);
+            }}
             placeholder="e.g. I prefer direct, technical answers..."
             multiline
           />
@@ -445,7 +489,13 @@ export default function PersonalizationScreen() {
 
         {/* Base style preset */}
         <Card className="mt-2">
-          <StylePresetSelector value={style} onChange={setStyle} />
+          <StylePresetSelector
+            value={style}
+            onChange={(value) => {
+              draftDirtyRef.current = true;
+              setStyle(value);
+            }}
+          />
         </Card>
 
         {/* Response Style dials */}

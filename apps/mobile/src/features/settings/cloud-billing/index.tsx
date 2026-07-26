@@ -18,39 +18,35 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { CreditCard, ExternalLink, FileText, Check } from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
+  CloudAccountRequired,
   CloudSyncBlockedBanner,
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import {
+  canUseBillingPlanCapability,
+  getBillingPlanPricing,
+  getNextUpgradeTier,
+  isEntitledSubscriptionStatus,
+} from '@agiworkforce/types';
 import { useTierStore } from '@/src/features/billing/store';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
-import type { PurchasableTier } from '@/src/features/billing/iapProducts';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useIapPurchaseFlow } from '@/src/features/billing/useIapPurchaseFlow';
 import { useIapStore } from '@/src/features/billing/iapStore';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-
-/** Ordered purchasable tiers — used to pick "the next tier up" from the user's current one. */
-const PURCHASABLE_TIER_ORDER: PurchasableTier[] = ['basic', 'pro', 'max', 'max_15x'];
-
-function nextPurchasableTier(currentTier: string): PurchasableTier {
-  const idx = PURCHASABLE_TIER_ORDER.indexOf(currentTier as PurchasableTier);
-  if (idx === -1 || idx === PURCHASABLE_TIER_ORDER.length - 1) {
-    return PURCHASABLE_TIER_ORDER[0];
-  }
-  return PURCHASABLE_TIER_ORDER[idx + 1];
-}
+import { useAuthStore } from '@/src/features/auth/store';
 
 // Free-tier feature bullets — mirrors web BillingSection
 const FREE_FEATURES = [
@@ -119,7 +115,12 @@ function PlanBadge() {
 
 export default function CloudBillingScreen() {
   const colors = useThemeColors();
+  const router = useRouter();
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const tier = useTierStore((s) => s.tier);
+  const billingTier = useTierStore((s) => s.billingTier);
+  const billingStatus = useTierStore((s) => s.billingStatus);
   const refreshTier = useTierStore((s) => s.refreshTier);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
@@ -130,16 +131,20 @@ export default function CloudBillingScreen() {
   // doc comment. Re-fetch as soon as the user switches modes so the banner
   // disappearing and real data appearing happen together, not on a delay.
   useEffect(() => {
-    if (isCloudModeActive) void refreshTier();
-  }, [isCloudModeActive, refreshTier]);
+    if (isClerkSignedIn && isCloudModeActive) void refreshTier();
+  }, [isClerkSignedIn, isCloudModeActive, refreshTier]);
 
   const [portalLoading, setPortalLoading] = useState(false);
   const paywallSheetRef = useRef<BottomSheet>(null);
 
   // Single source of truth for plan labels (@agiworkforce/types) — keeps this
   // screen's label in lock-step with account.tsx / web (no "Pro+" vs "Pro Max" drift).
-  const tierLabel = getBillingPlanPricing(tier).label;
-  const isFreeTier = tier === 'free';
+  const tierLabel = getBillingPlanPricing(billingTier).label;
+  const isFreeTier = billingTier === 'free';
+  const isEntitled = isEntitledSubscriptionStatus(billingStatus);
+  const statusLabel = billingStatus.replaceAll('_', ' ');
+  const isWorkspacePlan = canUseBillingPlanCapability(tier, 'team_admin');
+  const nextUpgradeTier = getNextUpgradeTier(tier);
 
   // Upgrading/adjusting a plan never opens an external checkout URL — Apple
   // Guideline 3.1.1 requires in-app subscription purchases go through native
@@ -168,6 +173,18 @@ export default function CloudBillingScreen() {
     paywallSheetRef.current?.expand();
   }, []);
 
+  const handleSignIn = useCallback(() => {
+    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  if (!isClerkLoaded || !isClerkSignedIn) {
+    return (
+      <SettingsScreenShell title="Billing">
+        <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
+      </SettingsScreenShell>
+    );
+  }
+
   return (
     <SettingsScreenShell title="Billing">
       <SettingsInfo
@@ -175,7 +192,9 @@ export default function CloudBillingScreen() {
         body={
           isFreeTier
             ? 'You are on the Free plan. Upgrade to unlock higher limits and cloud features.'
-            : `You are on the ${tierLabel} plan.`
+            : isEntitled
+              ? `You are on the ${tierLabel} plan.`
+              : `Your ${tierLabel} subscription is ${statusLabel}. Paid capabilities are unavailable.`
         }
         icon={CreditCard}
       />
@@ -233,6 +252,18 @@ export default function CloudBillingScreen() {
                 Try AGI Cloud
               </Text>
             )}
+            {!isFreeTier && !isEntitled && (
+              <Text
+                style={{
+                  color: colors.agentWarning,
+                  fontSize: 13,
+                  marginTop: 2,
+                  textTransform: 'capitalize',
+                }}
+              >
+                {statusLabel}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -260,13 +291,23 @@ export default function CloudBillingScreen() {
             borderTopColor: colors.border,
           }}
         >
-          <SettingsRow
-            label={isFreeTier ? 'Upgrade plan' : 'Adjust plan'}
-            icon={ExternalLink}
-            onPress={handleUpgrade}
-            isLast={isFreeTier}
-          />
-          {!isFreeTier && (
+          {nextUpgradeTier && !isWorkspacePlan ? (
+            <SettingsRow
+              label={isFreeTier ? 'Upgrade plan' : isEntitled ? 'Adjust plan' : 'Choose plan'}
+              icon={ExternalLink}
+              onPress={handleUpgrade}
+              isLast={isFreeTier}
+            />
+          ) : null}
+          {isWorkspacePlan ? (
+            <SettingsRow
+              label="Workspace administration"
+              icon={ExternalLink}
+              onPress={() => void openExternalUrl('https://agiworkforce.com/settings/team')}
+              isLast={!FEATURES.billing}
+            />
+          ) : null}
+          {!isFreeTier && FEATURES.billing && (
             <SettingsRow
               label={portalLoading ? 'Opening portal…' : 'Manage billing'}
               icon={CreditCard}
@@ -294,12 +335,14 @@ export default function CloudBillingScreen() {
         />
       </SettingsGroup>
 
-      <PaywallBottomSheet
-        ref={paywallSheetRef}
-        feature="general_upgrade"
-        requiredTier={nextPurchasableTier(tier)}
-        onDismiss={() => paywallSheetRef.current?.close()}
-      />
+      {nextUpgradeTier ? (
+        <PaywallBottomSheet
+          ref={paywallSheetRef}
+          feature="general_upgrade"
+          requiredTier={nextUpgradeTier}
+          onDismiss={() => paywallSheetRef.current?.close()}
+        />
+      ) : null}
     </SettingsScreenShell>
   );
 }

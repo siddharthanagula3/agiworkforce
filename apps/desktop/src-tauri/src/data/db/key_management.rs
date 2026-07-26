@@ -1,0 +1,495 @@
+//! Stable SQLCipher key storage and legacy-key adoption for the main database.
+//!
+//! New installations use a random 256-bit key stored by the operating system's
+//! credential service. Existing machine-derived databases are opened only after
+//! a read-only SQLCipher proof, then that proven key is adopted into secure
+//! storage without rekeying or rewriting the database.
+
+use super::encryption::{
+    inspect_database_format, open_or_migrate_encrypted_connection, DatabaseFormat,
+    DatabaseOpenError,
+};
+use rand::{rngs::OsRng, RngCore};
+use rusqlite::Connection;
+use std::path::Path;
+use std::sync::{Arc, OnceLock};
+
+const DATABASE_KEY_BYTES: usize = 32;
+const DATABASE_KEYRING_ACCOUNT: &str = "sqlcipher-main-database-key-v1";
+static MAIN_DATABASE_ACCESS: OnceLock<MainDatabaseAccess> = OnceLock::new();
+
+/// Minimal secure-storage boundary used by startup and deterministic tests.
+pub trait DatabaseKeyStore {
+    fn load(&self) -> Result<Option<[u8; DATABASE_KEY_BYTES]>, DatabaseKeyError>;
+    fn store(&self, key: &[u8; DATABASE_KEY_BYTES]) -> Result<(), DatabaseKeyError>;
+}
+
+/// Operating-system credential storage already used elsewhere in Desktop.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OsDatabaseKeyStore {
+    service: String,
+}
+
+impl OsDatabaseKeyStore {
+    /// Build a credential namespace from the actual Tauri bundle identity.
+    ///
+    /// Debug, WDIO, demo, and production bundles must never share a database
+    /// key. Apple's bundle-identifier character rules also prevent treating an
+    /// arbitrary path or user-controlled string as a Keychain namespace.
+    pub fn for_bundle_identifier(identifier: &str) -> Result<Self, DatabaseKeyError> {
+        if !is_valid_bundle_identifier(identifier) {
+            return Err(DatabaseKeyError::InvalidBundleIdentifier);
+        }
+
+        Ok(Self {
+            service: identifier.to_string(),
+        })
+    }
+
+    fn entry(&self) -> Result<keyring::Entry, DatabaseKeyError> {
+        keyring::Entry::new(&self.service, DATABASE_KEYRING_ACCOUNT)
+            .map_err(|error| DatabaseKeyError::SecureStorage(error.to_string()))
+    }
+}
+
+impl DatabaseKeyStore for OsDatabaseKeyStore {
+    fn load(&self) -> Result<Option<[u8; DATABASE_KEY_BYTES]>, DatabaseKeyError> {
+        let secret = match self.entry()?.get_secret() {
+            Ok(secret) => secret,
+            Err(keyring::Error::NoEntry) => return Ok(None),
+            Err(error) => return Err(DatabaseKeyError::SecureStorage(error.to_string())),
+        };
+
+        let actual = secret.len();
+        secret
+            .try_into()
+            .map(Some)
+            .map_err(|_| DatabaseKeyError::InvalidStoredKey { actual })
+    }
+
+    fn store(&self, key: &[u8; DATABASE_KEY_BYTES]) -> Result<(), DatabaseKeyError> {
+        self.entry()?
+            .set_secret(key)
+            .map_err(|error| DatabaseKeyError::SecureStorage(error.to_string()))
+    }
+}
+
+fn is_valid_bundle_identifier(identifier: &str) -> bool {
+    if identifier.len() < 3 || identifier.len() > 255 || !identifier.contains('.') {
+        return false;
+    }
+
+    identifier.split('.').all(|segment| {
+        let bytes = segment.as_bytes();
+        !bytes.is_empty()
+            && bytes.first().is_some_and(u8::is_ascii_alphanumeric)
+            && bytes.last().is_some_and(u8::is_ascii_alphanumeric)
+            && bytes
+                .iter()
+                .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
+    })
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DatabaseKeyError {
+    #[error("secure database-key storage is unavailable: {0}")]
+    SecureStorage(String),
+    #[error("secure database-key storage returned {actual} bytes; expected {DATABASE_KEY_BYTES}")]
+    InvalidStoredKey { actual: usize },
+    #[error("operating-system random generation failed: {0}")]
+    RandomGeneration(String),
+    #[error("the application bundle identifier is not valid for secure database-key storage")]
+    InvalidBundleIdentifier,
+    #[error("the existing database could not be identified without changing it")]
+    UnidentifiedDatabase,
+    #[error(transparent)]
+    Database(#[from] DatabaseOpenError),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatabaseKeyOrigin {
+    Stored,
+    Generated,
+    AdoptedLegacy,
+    MigratedPlaintext,
+}
+
+/// Cloneable in-process capability for opening another keyed connection to the
+/// already verified main database. The path and key stay native and are never
+/// serialized to the webview.
+#[derive(Clone)]
+pub struct MainDatabaseAccess {
+    path: Arc<Path>,
+    key: Arc<[u8; DATABASE_KEY_BYTES]>,
+}
+
+impl MainDatabaseAccess {
+    pub fn open_connection(&self) -> Result<Connection, String> {
+        let path = self.path.to_string_lossy();
+        super::encryption::open_encrypted_connection(&path, self.key.as_ref()).map_err(|error| {
+            tracing::error!("Failed to open an additional keyed main-database connection: {error}");
+            "The encrypted local database is unavailable.".to_string()
+        })
+    }
+}
+
+/// Publish the verified main-database capability for native services that do
+/// not run as Tauri commands and therefore cannot receive managed state.
+pub fn register_main_database_access(access: MainDatabaseAccess) -> Result<(), String> {
+    MAIN_DATABASE_ACCESS
+        .set(access)
+        .map_err(|_| "The main database capability was already registered.".to_string())
+}
+
+/// Open another connection to the verified main database.
+///
+/// Production code fails closed until startup has registered the OS-protected
+/// key. Unit tests retain the legacy helper so isolated database tests do not
+/// need a native Keychain or a Tauri application handle.
+pub fn open_registered_main_database_connection() -> Result<Connection, String> {
+    if let Some(access) = MAIN_DATABASE_ACCESS.get() {
+        return access.open_connection();
+    }
+
+    #[cfg(test)]
+    {
+        return crate::data::db::encryption::open_keyed_connection(
+            crate::sys::utils::database_path().map_err(|error| error.to_string())?,
+        );
+    }
+
+    #[cfg(not(test))]
+    Err("The encrypted local database is unavailable.".to_string())
+}
+
+pub struct StableDatabase {
+    pub connection: Connection,
+    pub key_origin: DatabaseKeyOrigin,
+    pub access: MainDatabaseAccess,
+}
+
+fn random_database_key() -> Result<[u8; DATABASE_KEY_BYTES], DatabaseKeyError> {
+    let mut key = [0u8; DATABASE_KEY_BYTES];
+    OsRng
+        .try_fill_bytes(&mut key)
+        .map_err(|error| DatabaseKeyError::RandomGeneration(error.to_string()))?;
+    Ok(key)
+}
+
+fn open_with_key(
+    path: &str,
+    key: &[u8; DATABASE_KEY_BYTES],
+    key_origin: DatabaseKeyOrigin,
+) -> Result<StableDatabase, DatabaseKeyError> {
+    let connection = open_or_migrate_encrypted_connection(path, key)?;
+    Ok(StableDatabase {
+        connection,
+        key_origin,
+        access: MainDatabaseAccess {
+            path: Arc::from(Path::new(path)),
+            key: Arc::new(*key),
+        },
+    })
+}
+
+fn create_stable_database<S: DatabaseKeyStore>(
+    path: &str,
+    store: &S,
+    key_origin: DatabaseKeyOrigin,
+) -> Result<StableDatabase, DatabaseKeyError> {
+    let key = random_database_key()?;
+    // Persist before creating/migrating the database. If the database operation
+    // fails, the next launch can safely retry with the same stored key.
+    store.store(&key)?;
+    open_with_key(path, &key, key_origin)
+}
+
+/// Open the main database using a stable OS-protected key.
+///
+/// Existing ciphertext is never modified while candidate keys are evaluated.
+/// A legacy candidate is persisted only after it has successfully read the
+/// schema. Plaintext migration uses a newly generated stable key unless a
+/// stored stable key already exists.
+pub fn open_main_database<S: DatabaseKeyStore>(
+    path: impl AsRef<Path>,
+    store: &S,
+    legacy_candidates: &[[u8; DATABASE_KEY_BYTES]],
+) -> Result<StableDatabase, DatabaseKeyError> {
+    let path = path.as_ref();
+    let path_string = path.to_string_lossy().to_string();
+    let stored_key = store.load()?;
+    let mut last_unreadable = None;
+
+    if let Some(key) = stored_key {
+        match inspect_database_format(path, &key) {
+            Ok(DatabaseFormat::New | DatabaseFormat::Keyed) => {
+                return open_with_key(&path_string, &key, DatabaseKeyOrigin::Stored);
+            }
+            Ok(DatabaseFormat::Plaintext) => {
+                return open_with_key(&path_string, &key, DatabaseKeyOrigin::MigratedPlaintext);
+            }
+            Err(error @ DatabaseOpenError::EncryptedOrCorrupt { .. }) => {
+                // A stale secure-store item can exist after an interrupted
+                // upgrade. Continue with read-only legacy proof below.
+                last_unreadable = Some(error);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    } else if !path.exists()
+        || std::fs::metadata(path)
+            .map(|metadata| metadata.len() == 0)
+            .unwrap_or(false)
+    {
+        return create_stable_database(&path_string, store, DatabaseKeyOrigin::Generated);
+    }
+
+    for candidate in legacy_candidates {
+        if stored_key.as_ref() == Some(candidate) {
+            continue;
+        }
+
+        match inspect_database_format(path, candidate) {
+            Ok(DatabaseFormat::Keyed) => {
+                let database =
+                    open_with_key(&path_string, candidate, DatabaseKeyOrigin::AdoptedLegacy)?;
+                // Only a candidate that actually opened the schema can replace
+                // a missing/stale keychain item.
+                store.store(candidate)?;
+                return Ok(database);
+            }
+            Ok(DatabaseFormat::Plaintext) => {
+                return create_stable_database(
+                    &path_string,
+                    store,
+                    DatabaseKeyOrigin::MigratedPlaintext,
+                );
+            }
+            Ok(DatabaseFormat::New) => {
+                return create_stable_database(&path_string, store, DatabaseKeyOrigin::Generated);
+            }
+            Err(error @ DatabaseOpenError::EncryptedOrCorrupt { .. }) => {
+                last_unreadable = Some(error);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+
+    // A candidate list is normally non-empty, but use a read-only arbitrary-key
+    // probe so a proven plaintext database can still migrate in tests or on an
+    // unsupported legacy platform.
+    if legacy_candidates.is_empty() {
+        match inspect_database_format(path, &[0u8; DATABASE_KEY_BYTES]) {
+            Ok(DatabaseFormat::Plaintext) => {
+                return create_stable_database(
+                    &path_string,
+                    store,
+                    DatabaseKeyOrigin::MigratedPlaintext,
+                );
+            }
+            Ok(DatabaseFormat::New) => {
+                return create_stable_database(&path_string, store, DatabaseKeyOrigin::Generated);
+            }
+            Ok(DatabaseFormat::Keyed) => {
+                // A real SQLCipher database cannot be keyed with an arbitrary
+                // value by coincidence; keep the branch exhaustive.
+                return open_with_key(
+                    &path_string,
+                    &[0u8; DATABASE_KEY_BYTES],
+                    DatabaseKeyOrigin::AdoptedLegacy,
+                );
+            }
+            Err(error @ DatabaseOpenError::EncryptedOrCorrupt { .. }) => {
+                last_unreadable = Some(error);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+
+    match last_unreadable {
+        Some(error) => Err(error.into()),
+        None => Err(DatabaseKeyError::UnidentifiedDatabase),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::db::encryption::open_encrypted_connection;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct MemoryKeyStore {
+        key: Mutex<Option<[u8; DATABASE_KEY_BYTES]>>,
+        writes: Mutex<usize>,
+        fail_writes: bool,
+    }
+
+    impl DatabaseKeyStore for MemoryKeyStore {
+        fn load(&self) -> Result<Option<[u8; DATABASE_KEY_BYTES]>, DatabaseKeyError> {
+            Ok(*self.key.lock().expect("key store lock"))
+        }
+
+        fn store(&self, key: &[u8; DATABASE_KEY_BYTES]) -> Result<(), DatabaseKeyError> {
+            if self.fail_writes {
+                return Err(DatabaseKeyError::SecureStorage(
+                    "test store unavailable".to_string(),
+                ));
+            }
+            *self.key.lock().expect("key store lock") = Some(*key);
+            *self.writes.lock().expect("write count lock") += 1;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn new_database_uses_and_reuses_a_random_stored_key() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("main.db");
+        let store = MemoryKeyStore::default();
+
+        let first = open_main_database(&db_path, &store, &[]).expect("create stable database");
+        assert_eq!(first.key_origin, DatabaseKeyOrigin::Generated);
+        first
+            .connection
+            .execute_batch(
+                "CREATE TABLE durable (value TEXT NOT NULL);
+                 INSERT INTO durable (value) VALUES ('persisted');",
+            )
+            .expect("seed stable database");
+        drop(first);
+
+        let stored_key = store
+            .load()
+            .expect("load stored key")
+            .expect("key was persisted");
+        assert_ne!(stored_key, [0u8; DATABASE_KEY_BYTES]);
+
+        let reopened = open_main_database(&db_path, &store, &[]).expect("reopen stable database");
+        assert_eq!(reopened.key_origin, DatabaseKeyOrigin::Stored);
+        let value: String = reopened
+            .connection
+            .query_row("SELECT value FROM durable", [], |row| row.get(0))
+            .expect("read durable value");
+        assert_eq!(value, "persisted");
+    }
+
+    #[test]
+    fn proven_legacy_key_is_adopted_without_rewriting_database_bytes() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("legacy.db");
+        let path = db_path.to_string_lossy().to_string();
+        let wrong_key = [0x11u8; DATABASE_KEY_BYTES];
+        let legacy_key = [0x83u8; DATABASE_KEY_BYTES];
+        let store = MemoryKeyStore::default();
+
+        {
+            let connection =
+                open_encrypted_connection(&path, &legacy_key).expect("create legacy database");
+            connection
+                .execute_batch(
+                    "CREATE TABLE durable (value TEXT NOT NULL);
+                     INSERT INTO durable (value) VALUES ('legacy');",
+                )
+                .expect("seed legacy database");
+        }
+        let before = std::fs::read(&db_path).expect("snapshot legacy database");
+
+        let opened = open_main_database(&db_path, &store, &[wrong_key, legacy_key])
+            .expect("adopt proven legacy key");
+        assert_eq!(opened.key_origin, DatabaseKeyOrigin::AdoptedLegacy);
+        drop(opened);
+        assert_eq!(store.load().expect("load adopted key"), Some(legacy_key));
+        assert_eq!(*store.writes.lock().expect("write count"), 1);
+        assert_eq!(
+            std::fs::read(&db_path).expect("re-read legacy database"),
+            before,
+            "legacy-key adoption must not rekey or rewrite database bytes"
+        );
+    }
+
+    #[test]
+    fn unproven_legacy_keys_never_rewrite_database_or_secure_storage() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("legacy.db");
+        let path = db_path.to_string_lossy().to_string();
+        let actual_key = [0x29u8; DATABASE_KEY_BYTES];
+        let store = MemoryKeyStore::default();
+
+        {
+            let connection =
+                open_encrypted_connection(&path, &actual_key).expect("create encrypted database");
+            connection
+                .execute_batch("CREATE TABLE durable (value TEXT NOT NULL);")
+                .expect("seed encrypted database");
+        }
+        let before = std::fs::read(&db_path).expect("snapshot encrypted database");
+
+        let error = open_main_database(&db_path, &store, &[[0x61u8; DATABASE_KEY_BYTES]])
+            .err()
+            .expect("an unproven key must fail closed");
+        assert!(matches!(
+            error,
+            DatabaseKeyError::Database(DatabaseOpenError::EncryptedOrCorrupt { .. })
+        ));
+        assert_eq!(store.load().expect("load key"), None);
+        assert_eq!(*store.writes.lock().expect("write count"), 0);
+        assert_eq!(
+            std::fs::read(&db_path).expect("re-read encrypted database"),
+            before
+        );
+    }
+
+    #[test]
+    fn secure_store_failure_does_not_create_a_new_database() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("main.db");
+        let store = MemoryKeyStore {
+            fail_writes: true,
+            ..MemoryKeyStore::default()
+        };
+
+        let error = open_main_database(&db_path, &store, &[])
+            .err()
+            .expect("secure storage failure must fail closed");
+        assert!(matches!(error, DatabaseKeyError::SecureStorage(_)));
+        assert!(
+            !db_path.exists(),
+            "database must not be created with an unpersisted key"
+        );
+    }
+
+    #[test]
+    fn bundle_identifier_namespaces_isolate_production_and_wdio_keys() {
+        let production = OsDatabaseKeyStore::for_bundle_identifier("com.agiworkforce.desktop")
+            .expect("production bundle identifier");
+        let wdio = OsDatabaseKeyStore::for_bundle_identifier("com.agiworkforce.desktop.wdio")
+            .expect("WDIO bundle identifier");
+
+        assert_eq!(production.service, "com.agiworkforce.desktop");
+        assert_eq!(wdio.service, "com.agiworkforce.desktop.wdio");
+        assert_ne!(production.service, wdio.service);
+        assert_eq!(DATABASE_KEYRING_ACCOUNT, "sqlcipher-main-database-key-v1");
+    }
+
+    #[test]
+    fn invalid_bundle_identifiers_never_reach_the_keyring() {
+        for identifier in [
+            "",
+            "desktop",
+            "com..desktop",
+            "com.agi workforce.desktop",
+            "com.agiworkforce.desktop/",
+            ".com.agiworkforce.desktop",
+            "com.agiworkforce.desktop.",
+            "com.agiworkforce.-desktop",
+        ] {
+            assert!(
+                matches!(
+                    OsDatabaseKeyStore::for_bundle_identifier(identifier),
+                    Err(DatabaseKeyError::InvalidBundleIdentifier)
+                ),
+                "identifier should be rejected: {identifier:?}"
+            );
+        }
+    }
+}

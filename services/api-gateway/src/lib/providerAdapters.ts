@@ -6,11 +6,11 @@
  * to the client).
  *
  * Restructure Wave 2: this factory is the ONLY provider-calling seam in the
- * gateway. All thirteen cloud adapters from packages/ai/providers/* are wired
- * here; a provider is "available" only when its server env key is present
+ * gateway. Every current factory adapter except LM Studio is wired here; a
+ * provider is "available" only when its server env key is present
  * (buildProviderAdapter returns null otherwise and routes respond 502/503).
- * LM Studio is deliberately absent — it is a local-device provider and has
- * no meaning behind the managed gateway.
+ * LM Studio is deliberately absent — it is a local-device provider and has no
+ * meaning behind the managed gateway.
  */
 
 import {
@@ -30,8 +30,7 @@ export const SUPPORTED_PROVIDER_IDS = [
   'deepseek',
   'xai',
   'perplexity',
-  'groq',
-  'mistral',
+  'minimax',
   'moonshot',
   'qwen',
   'zhipu',
@@ -44,8 +43,7 @@ const ENV_KEYED_PROVIDERS: Partial<Record<ProviderId, { envVars: string[]; baseU
     deepseek: { envVars: ['DEEPSEEK_API_KEY'] },
     xai: { envVars: ['XAI_API_KEY'] },
     perplexity: { envVars: ['PERPLEXITY_API_KEY'] },
-    groq: { envVars: ['GROQ_API_KEY'] },
-    mistral: { envVars: ['MISTRAL_API_KEY'] },
+    minimax: { envVars: ['MINIMAX_API_KEY'] },
     moonshot: {
       envVars: ['MOONSHOT_API_KEY'],
       // Honor MOONSHOT_BASE_URL so international keys can target api.moonshot.ai

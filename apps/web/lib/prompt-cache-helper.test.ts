@@ -15,4 +15,12 @@ describe('shouldEnablePromptCache model ownership', () => {
     expect(shouldEnablePromptCache(largeSystemRequest, 'claude-future-unknown')).toBe(false);
     expect(shouldEnablePromptCache(largeSystemRequest, 'gpt-future-unknown')).toBe(false);
   });
+
+  it('uses the Opus 5 provider minimum of 512 tokens', () => {
+    const exactly512Tokens = {
+      messages: [{ role: 'system', content: 'x'.repeat(512 * 4) }],
+    };
+
+    expect(shouldEnablePromptCache(exactly512Tokens, 'claude-opus-5')).toBe(true);
+  });
 });

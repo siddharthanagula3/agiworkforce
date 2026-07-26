@@ -14,7 +14,8 @@ import { useThemeColors } from '@/src/ui/theme';
 
 interface ImageGenProgressProps {
   prompt: string;
-  progress: number; // 0-100
+  /** Real server-reported percentage. Omit for an indeterminate operation. */
+  progress?: number;
   status: 'pending' | 'generating' | 'completed' | 'failed';
   estimatedTime?: number; // seconds
   errorMessage?: string;
@@ -55,9 +56,11 @@ export function ImageGenProgress({
   const barWidth = useSharedValue(0);
 
   useEffect(() => {
-    barWidth.value = withTiming(Math.min(100, Math.max(0, progress)), {
-      duration: 400,
-    });
+    if (typeof progress === 'number' && Number.isFinite(progress)) {
+      barWidth.value = withTiming(Math.min(100, Math.max(0, progress)), {
+        duration: 400,
+      });
+    }
   }, [progress, barWidth]);
 
   const barStyle = useAnimatedStyle(() => ({
@@ -66,6 +69,11 @@ export function ImageGenProgress({
 
   const isFailed = status === 'failed';
   const isPending = status === 'pending';
+  const hasDeterminateProgress =
+    status === 'generating' && typeof progress === 'number' && Number.isFinite(progress);
+  const normalizedProgress = hasDeterminateProgress
+    ? Math.min(100, Math.max(0, progress))
+    : undefined;
 
   return (
     <Animated.View entering={FadeInDown.duration(250).springify()}>
@@ -81,11 +89,11 @@ export function ImageGenProgress({
         }}
         accessibilityLabel={`Image generation ${status}`}
         accessibilityRole="progressbar"
-        accessibilityValue={{
-          min: 0,
-          max: 100,
-          now: progress,
-        }}
+        accessibilityValue={
+          normalizedProgress === undefined
+            ? { text: isFailed ? 'Failed' : 'In progress' }
+            : { min: 0, max: 100, now: normalizedProgress }
+        }
       >
         {/* Header row: icon + title */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -142,7 +150,7 @@ export function ImageGenProgress({
         )}
 
         {/* Generating state: progress bar + stats */}
-        {status === 'generating' && (
+        {status === 'generating' && normalizedProgress !== undefined && (
           <View style={{ gap: 6 }}>
             {/* Progress bar */}
             <View
@@ -179,7 +187,7 @@ export function ImageGenProgress({
                   color: colors.textMuted,
                 }}
               >
-                {Math.round(progress)}% complete
+                {Math.round(normalizedProgress)}% complete
               </Text>
 
               {estimatedTime != null && estimatedTime > 0 ? (
@@ -195,6 +203,12 @@ export function ImageGenProgress({
             </View>
           </View>
         )}
+
+        {status === 'generating' && !hasDeterminateProgress ? (
+          <Text style={{ fontSize: 12, color: colors.textMuted }}>
+            Generating securely in AGI Cloud…
+          </Text>
+        ) : null}
 
         {/* Failed state: error message + retry button */}
         {isFailed && (

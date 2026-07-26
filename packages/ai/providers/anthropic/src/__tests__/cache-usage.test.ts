@@ -42,7 +42,7 @@ describe('translateAnthropicStream — 1h/5m cache-write split', () => {
           type: 'message',
           role: 'assistant',
           content: [],
-          model: 'claude-opus-4.8',
+          model: 'claude-opus-5',
           stop_reason: null,
           stop_sequence: null,
           usage: {
@@ -80,7 +80,7 @@ describe('translateAnthropicStream — 1h/5m cache-write split', () => {
           type: 'message',
           role: 'assistant',
           content: [],
-          model: 'claude-opus-4.8',
+          model: 'claude-opus-5',
           stop_reason: null,
           stop_sequence: null,
           usage: {
@@ -113,7 +113,7 @@ describe('translateAnthropicStream — 1h/5m cache-write split', () => {
           type: 'message',
           role: 'assistant',
           content: [],
-          model: 'claude-opus-4.8',
+          model: 'claude-opus-5',
           stop_reason: null,
           stop_sequence: null,
           usage: {

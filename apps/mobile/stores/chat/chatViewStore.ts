@@ -14,6 +14,10 @@ export type ToolAccess = 'auto' | 'on-demand' | 'always';
 
 /** Feature toggles available in the "Add to Chat" sheet. */
 export interface ChatFeatures {
+  /**
+   * @deprecated Retained only for persisted-state compatibility. Search is
+   * automatic and capability-clamped at send time; the composer has no toggle.
+   */
   webSearch: boolean;
   imageGen: boolean;
   health: boolean;
@@ -47,6 +51,8 @@ interface ViewState {
   setChatStyle: (style: ChatStyle) => void;
   setToolAccess: (access: ToolAccess) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
+  /** Clear account-scoped server search state while preserving device preferences. */
+  clearCloudSearchState: () => void;
 }
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -178,7 +184,7 @@ export const useChatViewStore = create<ViewState>()(
       isSearching: false,
       chatMode: 'chat',
       workMode: 'chat',
-      chatStyle: 'normal',
+      chatStyle: 'concise',
       toolAccess: 'auto',
       features: {
         webSearch: true,
@@ -217,6 +223,13 @@ export const useChatViewStore = create<ViewState>()(
       setToolAccess: (access) => set({ toolAccess: access }),
       setFeature: (feature, enabled) =>
         set((state) => ({ features: { ...state.features, [feature]: enabled } })),
+      clearCloudSearchState: () => {
+        if (searchDebounceTimer !== undefined) {
+          clearTimeout(searchDebounceTimer);
+          searchDebounceTimer = undefined;
+        }
+        set({ searchQuery: '', searchResults: [], isSearching: false });
+      },
     }),
     {
       name: 'chat-view-store',

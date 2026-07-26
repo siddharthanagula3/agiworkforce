@@ -15,7 +15,14 @@
 
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
-import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  isAutoModeModelId,
+  normalizeModelId,
+  type ArtifactManifest,
+  type ComputeSession,
+  type GeneratedFile,
+} from '@agiworkforce/types';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 import type {
   CloudToolApprovalProjection,
@@ -60,13 +67,16 @@ export interface ComposerToggleState {
 }
 
 /**
- * Baseline for a conversation that has no stored composer state yet. The web
- * search default is overridden per conversation by the persisted
- * `webSearchByDefault` preference (AUDIT-FIX CMP-4/CMP-12).
+ * Baseline for a conversation that has no stored composer state yet.
+ *
+ * Managed Web search is an ambient capability: when the selected model and
+ * deployment can search, the composer keeps it enabled automatically. The
+ * capability effect in ChatComposerNew turns this off only when there is no
+ * honest search path for the selected model/deployment.
  */
 export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
   workMode: 'chat',
-  webSearchEnabled: false,
+  webSearchEnabled: true,
   researchEnabled: false,
   codeExecutionEnabled: false,
   officeCreationEnabled: false,
@@ -434,21 +444,9 @@ interface ChatState {
   /**
    * AUDIT-FIX CMP-1/CMP-2/CMP-5: composer send options per conversation. See
    * `ComposerToggleState`. Not persisted -- these describe one live
-   * conversation's next turn, not a user preference (the one preference that
-   * IS durable is `webSearchByDefault` below).
+   * conversation's next turn, not a user preference.
    */
   composerTogglesByConversation: Record<string, ComposerToggleState>;
-  /**
-   * AUDIT-FIX CMP-4/CMP-12: durable "search by default" preference.
-   *
-   * Web search previously defaulted OFF with NO persistence anywhere and no
-   * settings-level preference, so there was no code path by which "search by
-   * default" could ever take effect. Toggling Web search now also records the
-   * choice here, and every conversation that has no composer state yet seeds
-   * from it -- so the preference is honoured on the next new chat and across
-   * reloads. Persisted (see `partialize`).
-   */
-  webSearchByDefault: boolean;
 
   // Sidebar state
   sidebarCollapsed: boolean;
@@ -560,8 +558,6 @@ interface ChatState {
     updates: Partial<ComposerToggleState>,
     conversationId?: string | null,
   ) => void;
-  /** Record the durable "search by default" preference (AUDIT-FIX CMP-4/CMP-12). */
-  setWebSearchByDefault: (enabled: boolean) => void;
 
   // Actions - Sidebar
   toggleSidebar: () => void;
@@ -586,7 +582,6 @@ const initialState = {
   draftsByConversation: {} as Record<string, string>,
   draftContent: '',
   composerTogglesByConversation: {} as Record<string, ComposerToggleState>,
-  webSearchByDefault: false,
   sidebarCollapsed: false,
 };
 
@@ -1085,7 +1080,6 @@ export const useChatStore = create<ChatState>()(
           return (
             state.composerTogglesByConversation[conversationKey(targetId)] ?? {
               ...DEFAULT_COMPOSER_TOGGLES,
-              webSearchEnabled: state.webSearchByDefault,
             }
           );
         },
@@ -1098,7 +1092,6 @@ export const useChatStore = create<ChatState>()(
               const key = conversationKey(targetId);
               const current = state.composerTogglesByConversation[key] ?? {
                 ...DEFAULT_COMPOSER_TOGGLES,
-                webSearchEnabled: state.webSearchByDefault,
               };
               return {
                 composerTogglesByConversation: {
@@ -1110,9 +1103,6 @@ export const useChatStore = create<ChatState>()(
             undefined,
             'chat/setComposerToggles',
           ),
-
-        setWebSearchByDefault: (enabled) =>
-          set({ webSearchByDefault: enabled }, undefined, 'chat/setWebSearchByDefault'),
 
         // Sidebar
         toggleSidebar: () =>
@@ -1131,22 +1121,30 @@ export const useChatStore = create<ChatState>()(
       {
         name: 'agiworkforce-web-chat',
         storage: createJSONStorage(() => localStorage),
-        version: 2,
+        version: 4,
         partialize: (state) => ({
-          // Only persist model selection, sidebar state, and the durable
-          // "search by default" preference (AUDIT-FIX CMP-4/CMP-12). The
-          // per-conversation composer toggles are deliberately NOT persisted:
-          // they describe one live conversation's next turn.
+          // Per-conversation composer toggles are deliberately NOT persisted:
+          // they describe one live conversation's next turn. Managed search is
+          // ambient and therefore has no stale user preference to carry.
           selectedModel: state.selectedModel,
           selectedModelTier: state.selectedModelTier,
           sidebarCollapsed: state.sidebarCollapsed,
-          webSearchByDefault: state.webSearchByDefault,
         }),
-        migrate: (persisted: unknown, version: number) => {
-          if (version < 2) {
-            return { ...(persisted as Record<string, unknown>), webSearchByDefault: false };
+        migrate: (persisted: unknown) => {
+          const next = { ...(persisted as Record<string, unknown>) };
+          // v2 persisted a user-controlled search default. Search is automatic
+          // in v3, so retaining that bit could silently disable it forever.
+          delete next['webSearchByDefault'];
+          const persistedModel =
+            typeof next['selectedModel'] === 'string' ? next['selectedModel'] : 'auto';
+          const canonicalModel = normalizeModelId(persistedModel) ?? persistedModel;
+          if (!isAutoModeModelId(canonicalModel) && !getModelMetadataById(canonicalModel)) {
+            next['selectedModel'] = 'auto';
+            next['selectedModelTier'] = 'balanced';
+          } else {
+            next['selectedModel'] = canonicalModel;
           }
-          return persisted;
+          return next;
         },
       },
     ),
@@ -1169,6 +1167,13 @@ export const selectIsConversationLoading = (conversationId: string | null) => (s
   conversationId !== null &&
   (state.loadingConversationIds.includes(conversationId) ||
     state.streamingConversationIds.includes(conversationId));
+/** Whether one route-owned conversation has a live stream. Unlike the
+ * active-conversation selector below, this is safe during the short interval
+ * between a URL change and the async transcript loader updating the store's
+ * active id. */
+export const selectIsConversationStreaming =
+  (conversationId: string | null) => (state: ChatState) =>
+    conversationId !== null && state.streamingConversationIds.includes(conversationId);
 /** AUDIT-FIX ROOT-CAUSE: one named conversation's transcript. */
 export const selectConversationMessages =
   (conversationId: string | null) =>

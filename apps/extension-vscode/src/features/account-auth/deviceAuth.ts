@@ -123,7 +123,7 @@ export async function requestDeviceAuthorization(
   post: DeviceAuthPost = postJson,
 ): Promise<DeviceAuthorizationRequest> {
   const trustedOrigin = new URL(origin).origin;
-  const response = await post(`${trustedOrigin}/api/auth/device/code`, {});
+  const response = await post(`${trustedOrigin}/api/auth/device/code`, { surface: 'vscode' });
   if (response.status < 200 || response.status >= 300) {
     throw new Error('Could not start AGI Cloud sign-in. Try again.');
   }

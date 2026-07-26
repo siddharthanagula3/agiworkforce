@@ -116,4 +116,22 @@ describe('SendPreview', () => {
     expect(screen.getByText('Source session')).toBeDefined();
     expect(screen.getByText('Session conv-7')).toBeDefined();
   });
+
+  it('renders an unobtrusive compact destination control with details on demand', () => {
+    const presentation = summarizeSendPreview({
+      providerMode: 'ManagedGateway',
+      destinationHost: 'AGI managed cloud',
+      modelLabel: 'Auto',
+      toolNames: ['Web search'],
+    });
+    render(<SendPreview presentation={presentation} variant="compact" />);
+
+    expect(screen.getByText('Managed cloud')).toBeDefined();
+    expect(screen.queryByText(presentation.bannerCopy)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /show send details/i }));
+
+    expect(screen.getByText(presentation.bannerCopy)).toBeDefined();
+    expect(screen.getByText('Web search')).toBeDefined();
+  });
 });

@@ -235,7 +235,7 @@ interface ModelState {
 
   /**
    * Cycle the currently selected model to its thinking/reasoning counterpart, or back.
-   * E.g. claude-sonnet-5 ↔ claude-opus-4.8, gemini-3.5-flash-lite ↔ gemini-3.1-pro-preview.
+   * E.g. claude-sonnet-5 ↔ claude-opus-5, gemini-3.5-flash-lite ↔ gemini-3.1-pro-preview.
    * Shows a toast with the result.
    */
   cycleModelVariant: () => void;
@@ -288,7 +288,14 @@ const defaultUsageStats: UsageStats = {
 // storageFallback is imported from '../lib/storageFallback'
 
 // Version for storage migration
-const MODEL_STORE_VERSION = 2;
+const MODEL_STORE_VERSION = 3;
+
+function normalizePersistedCatalogModel(modelId: string | null | undefined): string | null {
+  if (!modelId) return null;
+  const canonical = normalizeModelId(modelId) ?? modelId;
+  if (canonical === 'auto') return canonical;
+  return getModelMetadata(canonical) ? canonical : null;
+}
 
 export const useModelStore = create<ModelState>()(
   devtools(
@@ -362,7 +369,7 @@ export const useModelStore = create<ModelState>()(
             let nextModelId = normalizeModelId(modelId) ?? modelId;
             let nextProvider = provider;
 
-            if (!nextModelId.startsWith('auto') && nextModelId !== 'auto') {
+            if (nextModelId !== 'auto') {
               const selectedMetadata = getModelMetadata(nextModelId);
               if (selectedMetadata?.provider) {
                 nextProvider = selectedMetadata.provider;
@@ -383,14 +390,14 @@ export const useModelStore = create<ModelState>()(
                 const allowedAutoModes = getAllowedAutoModesForTier(normalizedTier);
                 if (!allowedAutoModes.includes(modelId)) {
                   console.warn(
-                    `[ModelStore] Blocking disallowed auto-mode for ${normalizedTier} tier: ${modelId}. Falling back to auto-economy.`,
+                    `[ModelStore] Blocking non-selectable Auto alias for ${normalizedTier} tier: ${modelId}. Falling back to Auto.`,
                   );
                   nextModelId = 'auto';
                   nextProvider = 'managed_cloud';
                 }
               } else if (!isModelAllowedForTier(modelId, normalizedTier)) {
                 console.warn(
-                  `[ModelStore] Blocking disallowed model selection for ${normalizedTier} tier: ${modelId}. Falling back to auto-economy.`,
+                  `[ModelStore] Blocking disallowed model selection for ${normalizedTier} tier: ${modelId}. Falling back to Auto.`,
                 );
                 nextModelId = 'auto';
                 nextProvider = 'managed_cloud';
@@ -835,18 +842,20 @@ export const useModelStore = create<ModelState>()(
             return (persistedState ?? {}) as ModelState;
           }
 
+          const selectedModel = normalizePersistedCatalogModel(state.selectedModel) ?? 'auto';
           return {
             ...state,
-            selectedModel:
-              state.selectedModel === undefined
-                ? state.selectedModel
-                : (normalizeModelId(state.selectedModel) ?? state.selectedModel),
-            favorites: (state.favorites ?? []).map(
-              (modelId) => normalizeModelId(modelId) ?? modelId,
-            ),
-            recentModels: (state.recentModels ?? []).map(
-              (modelId) => normalizeModelId(modelId) ?? modelId,
-            ),
+            selectedModel,
+            selectedProvider:
+              selectedModel === 'auto'
+                ? 'managed_cloud'
+                : (getModelMetadata(selectedModel)?.provider ?? state.selectedProvider),
+            favorites: (state.favorites ?? [])
+              .map((modelId) => normalizePersistedCatalogModel(modelId))
+              .filter((modelId): modelId is string => modelId !== null),
+            recentModels: (state.recentModels ?? [])
+              .map((modelId) => normalizePersistedCatalogModel(modelId))
+              .filter((modelId): modelId is string => modelId !== null),
           } as ModelState;
         },
       },
@@ -904,8 +913,7 @@ export const selectOllamaLoading = (state: ModelState) => state.ollamaLoading;
 export const selectOllamaError = (state: ModelState) => state.ollamaError;
 
 export const selectSpeedQualityMode = (state: ModelState) => state.speedQualityMode;
-export const selectIsAutoMode = (state: ModelState) =>
-  state.selectedModel?.startsWith('auto-') ?? false;
+export const selectIsAutoMode = (state: ModelState) => state.selectedModel === 'auto';
 
 // Router suggestion selectors
 export const selectRouterSuggestion = (state: ModelState) => state.routerSuggestion;
@@ -966,7 +974,7 @@ export const initializeModelStoreFromSettings = async () => {
 
     if (defaultProvider && defaultModel) {
       // If default is auto/managed_cloud, ensure we set the provider correctly in the store
-      // Use 'auto' as the default auto mode (lowest common denominator for all tiers)
+      // Auto is one self-routing selection; the server clamps each task to the plan's slots.
       if (defaultProvider === 'managed_cloud' || defaultModel === 'auto') {
         await modelStore.selectModel('auto', 'managed_cloud');
       } else if (
@@ -985,25 +993,24 @@ export const initializeModelStoreFromSettings = async () => {
 };
 
 /**
- * Get the best auto mode for a given tier.
- * Max/Enterprise → Premium, Pro → Balanced, Basic/Free → Economy
+ * Return the single selectable Auto id.
+ * The server chooses and tier-clamps its routing profile per task.
  */
 export const getBestAutoModeForTier = (tier: string): string => {
   return getBestAutoModeForSubscriptionTier(tier);
 };
 
 /**
- * Enforce tier-appropriate model selection.
- * Called when user's plan tier changes to ensure they're using an allowed auto mode.
+ * Enforce tier-appropriate model selection when the user's plan changes.
  *
  * Behavior:
- * - In Simple Mode: Automatically selects the BEST auto mode for the tier
- * - In Advanced Mode: Only downgrades if using an auto mode above their tier
+ * - Simple Mode always selects canonical Auto.
+ * - Advanced Mode preserves an allowed manual selection.
+ * - Persisted non-selectable Auto aliases and out-of-tier manual models fall
+ *   back to canonical Auto.
  *
- * Tier restrictions:
- * - basic/free/none: Only 'auto' allowed
- * - pro: 'auto' or 'auto-balanced' allowed
- * - max/enterprise: All auto modes allowed
+ * Every tier exposes the same Auto control; the managed resolver applies the
+ * tier's reachable slots at request time.
  */
 // [C1 fix] Re-entrancy guard: prevents concurrent plan-change events from corrupting tier state
 let _isEnforcingTier = false;
@@ -1029,14 +1036,14 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
         selectedProvider === 'ollama' || selectedMetadata?.provider === 'ollama';
 
       if (isSimpleMode) {
-        // In Simple Mode: Always use the BEST auto mode for the tier
+        // Simple Mode always uses the one self-routing Auto selection.
         const bestAutoMode = getBestAutoModeForTier(normalizedTier);
         if (selectedModel !== bestAutoMode) {
           // Await selectModel so the reentrancy guard holds until selection completes
           await selectModel(bestAutoMode, 'managed_cloud');
         }
       } else {
-        // In Advanced Mode: Only downgrade if using an auto mode they shouldn't have
+        // Replace any non-selectable legacy Auto alias that survived in memory.
         if (isAutoSelection && selectedModel && !allowed.includes(selectedModel)) {
           await selectModel('auto', 'managed_cloud');
         } else if (

@@ -142,6 +142,23 @@ describe('ArtifactRenderer', () => {
     expect(screen.getByText(/Waiting for tool output/)).toBeDefined();
   });
 
+  it('renders available content while a running artifact continues to stream', () => {
+    const artifact = {
+      ...makeArtifact({
+        id: 'a6-streaming',
+        type: 'code',
+        content: 'const alreadyVisible = true;',
+        language: 'typescript',
+      }),
+      status: 'running',
+    } as Artifact & { status: string };
+
+    render(<ArtifactRenderer artifact={artifact} />);
+
+    expect(screen.queryByText(/Waiting for tool output/)).toBeNull();
+    expect(screen.getByText(/const alreadyVisible = true/)).toBeDefined();
+  });
+
   it('renders React preview for react type', () => {
     const artifact = makeArtifact({
       id: 'a7',

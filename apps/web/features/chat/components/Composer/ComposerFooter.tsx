@@ -31,6 +31,7 @@ import {
   type EnvironmentAvailability,
 } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
+import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import {
   getAllowedAutoModesForTier,
   getBestAutoModeForTier,
@@ -551,6 +552,7 @@ export function ComposerFooter({
   const setThinkingEnabled = useThinkingStore((s) => s.setEnabled);
   const setThinkingEffort = useThinkingStore((s) => s.setEffort);
   const subscription = useBillingStore((s) => s.subscription);
+  const billingPolicyReady = useBillingStore(isBillingPolicyReady);
   const tier = subscription?.tier ?? 'free';
 
   const selectedModel = getSelectedModel();
@@ -639,6 +641,7 @@ export function ComposerFooter({
     : defaultStoreEffort(reasoning);
 
   useEffect(() => {
+    if (!billingPolicyReady) return;
     // modelLock covers tier, env AND availability gates — closing the selection-
     // reset leak where a now-invalid model could remain selected after the tier
     // changed. (coming_soon models can never be selected in the first place, but
@@ -646,7 +649,7 @@ export function ComposerFooter({
     if (modelLock(selectedModel, tier).locked) {
       setSelectedModelId(getBestAutoModeForTier(tier));
     }
-  }, [selectedModel, setSelectedModelId, tier]);
+  }, [billingPolicyReady, selectedModel, setSelectedModelId, tier]);
 
   useEffect(() => {
     // always_on reasoners keep thinking on. If thinking is enabled but the current

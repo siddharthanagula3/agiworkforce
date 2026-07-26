@@ -6,7 +6,6 @@ module.exports = {
     // Excluded suites are tracked in tasks/quality-sweep-2026-05-19/squad-mobile.md
     // and cover feature-gated Auth/Billing paths that are outside this pass.
     '__tests__/auth-401\\.test\\.ts$',
-    '__tests__/api-paywall\\.test\\.ts$',
   ],
   // Runs BEFORE jest-expo's setup to fix missing UIManager mock
   setupFiles: ['./jest.setup.js'],
@@ -27,10 +26,12 @@ module.exports = {
     // Workspace packages that may not be pnpm-linked in CI: resolve src directly.
     '^@agiworkforce/local-llm$': '<rootDir>/../../packages/platform/local-llm/src/index',
     '^@agiworkforce/artifacts$': '<rootDir>/../../packages/platform/artifacts/src/index',
-    '^@agiworkforce/cloud-contracts$': '<rootDir>/../../packages/contracts/cloud-contracts/src/index',
+    '^@agiworkforce/cloud-contracts$':
+      '<rootDir>/../../packages/contracts/cloud-contracts/src/index',
     '^@agiworkforce/sync$': '<rootDir>/../../packages/client/sync/src/index',
     // Platform-neutral trust policy is ESM; resolve source for Jest/Babel.
-    '^@agiworkforce/trust-boundaries$': '<rootDir>/../../packages/contracts/trust-boundaries/src/index',
+    '^@agiworkforce/trust-boundaries$':
+      '<rootDir>/../../packages/contracts/trust-boundaries/src/index',
     // expo-clipboard is a native Expo module; keep Jest from loading native glue.
     '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
     // expo-sqlite stub for storage tests until the native module is linked.

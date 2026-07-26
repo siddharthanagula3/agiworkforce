@@ -132,11 +132,18 @@ const ACTION_BUTTON_SIZE = 'h-11 w-11 touch-manipulation sm:h-8 sm:w-8';
 
 function generatedFileLanguage(file: GeneratedFileMetadataEntry): string {
   const extension = file.fileName.toLowerCase().split('.').pop() ?? '';
+  if (file.kind === 'image') return extension || 'image';
   const candidate = file.kind === 'other' ? extension : file.kind;
   if (candidate === 'htm') return 'html';
   if (candidate === 'md') return 'markdown';
   if (candidate === 'mmd') return 'mermaid';
   return candidate || 'text';
+}
+
+function generatedImageArtifactTitle(prompt?: string): string {
+  const normalized = prompt?.replace(/\s+/g, ' ').trim();
+  if (!normalized) return 'Generated image';
+  return normalized.length > 80 ? `${normalized.slice(0, 77).trimEnd()}…` : normalized;
 }
 
 function generatedFileArtifactType(file: GeneratedFileMetadataEntry): ArtifactData['type'] {
@@ -522,10 +529,38 @@ const MessageBubbleComponent = function MessageBubble({
     if (isUser) return [];
     const out: ArtifactData[] = [];
 
-    // Renderable generated files → existing artifact renderers. Images and
-    // download-only kinds render through the attachment grid instead.
+    // A completed image-generation turn historically rendered only inside the
+    // transcript. Project it into the same durable artifact store as code and
+    // files so opening the panel (including after a reload) shows the output.
+    const generatedImageUrl =
+      message.metadata?.toolType === 'image-generation' &&
+      typeof message.metadata.imageUrl === 'string'
+        ? message.metadata.imageUrl.trim()
+        : '';
+    if (generatedImageUrl) {
+      out.push({
+        id: `generated-image-${message.id}`,
+        type: 'image',
+        language: 'png',
+        title: generatedImageArtifactTitle(message.metadata?.imageGenPrompt),
+        content: generatedImageUrl,
+      });
+    }
+
+    // Renderable generated files → existing artifact renderers. Images remain
+    // in the attachment grid for their transcript thumbnail, and are ALSO
+    // addressable in the artifact panel.
     for (const f of generatedFiles) {
-      if (f.kind === 'pdf') {
+      if (f.kind === 'image') {
+        out.push({
+          id: `genfile-${f.id}`,
+          type: 'image',
+          language: generatedFileLanguage(f),
+          title: f.fileName,
+          content: f.uri,
+          generatedFile: toGeneratedFile(f),
+        });
+      } else if (f.kind === 'pdf') {
         out.push({
           id: `genfile-${f.id}`,
           type: 'document',
@@ -641,6 +676,13 @@ const MessageBubbleComponent = function MessageBubble({
   const displayAttachments = useMemo<Attachment[]>(
     () => [...(message.attachments ?? []), ...generatedFileAttachments],
     [message.attachments, generatedFileAttachments],
+  );
+  // Generated images already have a purpose-built transcript card/thumbnail.
+  // Keep their artifact projection panel-only so the message does not render a
+  // second, visually redundant "Open artifact" card beneath the same image.
+  const inlineArtifacts = useMemo(
+    () => artifacts.filter((artifact) => artifact.type !== 'image'),
+    [artifacts],
   );
 
   useEffect(() => {
@@ -961,7 +1003,8 @@ const MessageBubbleComponent = function MessageBubble({
             {message.isStreaming &&
             !cleanedContent.trim() &&
             !streamingBlock &&
-            !canonicalActivity ? (
+            !canonicalActivity &&
+            message.metadata?.toolType !== 'image-generation' ? (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                 <span className="text-sm">Thinking...</span>
@@ -1109,13 +1152,16 @@ const MessageBubbleComponent = function MessageBubble({
               inline ArtifactBlock loses no unique rendering. */}
 
           {/* Inline artifact thumbnail cards · quick visual summary, click to open panel */}
-          {!isUser && artifacts.length > 0 && <InlineArtifactCards artifacts={artifacts} />}
+          {!isUser && inlineArtifacts.length > 0 && (
+            <InlineArtifactCards artifacts={inlineArtifacts} />
+          )}
 
           {/* Image generation card (states A/B/C/D) */}
           {!isUser && message.metadata?.toolType === 'image-generation' && (
             <div className="mt-4">
               <ImageGenerationCard
                 imageUrl={message.metadata.imageUrl as string | undefined}
+                isGenerating={message.isStreaming === true}
                 prompt={message.metadata.imageGenPrompt as string | undefined}
                 aspectRatio={message.metadata.imageGenAspect as ImageAspectRatio | undefined}
                 modelId={message.metadata.imageGenModel as string | undefined}

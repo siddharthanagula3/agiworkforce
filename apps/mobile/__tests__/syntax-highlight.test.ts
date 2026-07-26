@@ -14,6 +14,72 @@ function joined(tokens: SyntaxToken[]): string {
   return tokens.map((t) => t.text).join('');
 }
 
+interface Rgb {
+  red: number;
+  green: number;
+  blue: number;
+  alpha: number;
+}
+
+function parseColor(color: string): Rgb {
+  if (color.startsWith('#')) {
+    const hex = color.slice(1);
+    const expanded =
+      hex.length === 3
+        ? hex
+            .split('')
+            .map((part) => part + part)
+            .join('')
+        : hex;
+    return {
+      red: Number.parseInt(expanded.slice(0, 2), 16),
+      green: Number.parseInt(expanded.slice(2, 4), 16),
+      blue: Number.parseInt(expanded.slice(4, 6), 16),
+      alpha: 1,
+    };
+  }
+
+  const channels = color.match(/[\d.]+/g)?.map(Number);
+  if (!channels || channels.length < 3) throw new Error(`Unsupported color: ${color}`);
+  return {
+    red: channels[0]!,
+    green: channels[1]!,
+    blue: channels[2]!,
+    alpha: channels[3] ?? 1,
+  };
+}
+
+function flatten(foreground: Rgb, background: Rgb): Rgb {
+  return {
+    red: foreground.red * foreground.alpha + background.red * (1 - foreground.alpha),
+    green: foreground.green * foreground.alpha + background.green * (1 - foreground.alpha),
+    blue: foreground.blue * foreground.alpha + background.blue * (1 - foreground.alpha),
+    alpha: 1,
+  };
+}
+
+function relativeLuminance(color: Rgb): number {
+  const channels = [color.red, color.green, color.blue].map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const parsedBackground = parseColor(background);
+  const flattenedForeground = flatten(parseColor(foreground), parsedBackground);
+  const lighter = Math.max(
+    relativeLuminance(flattenedForeground),
+    relativeLuminance(parsedBackground),
+  );
+  const darker = Math.min(
+    relativeLuminance(flattenedForeground),
+    relativeLuminance(parsedBackground),
+  );
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 describe('tokenizeCode', () => {
   it('tokenizes js keywords, strings, numbers, and comments', () => {
     const code = `// setup\nconst answer = 42;\nlet name = "world";`;
@@ -114,13 +180,21 @@ describe('tokenizeCode', () => {
 });
 
 describe('syntaxTokenColor', () => {
-  it('maps token types to theme tokens in both schemes', () => {
+  it('keeps every token at 4.5:1 on inline and fullscreen code backgrounds', () => {
     for (const scheme of [lightColors, darkColors]) {
-      expect(syntaxTokenColor('comment', scheme)).toBe(scheme.textMuted);
-      expect(syntaxTokenColor('string', scheme)).toBe(scheme.agentSuccess);
-      expect(syntaxTokenColor('number', scheme)).toBe(scheme.agentWarning);
-      expect(syntaxTokenColor('keyword', scheme)).toBe(scheme.purple);
-      expect(syntaxTokenColor('plain', scheme)).toBe(scheme.textPrimary);
+      for (const background of [scheme.surfaceHover, scheme.surfaceBase]) {
+        for (const tokenType of ['comment', 'string', 'number', 'keyword', 'plain'] as const) {
+          expect(
+            contrastRatio(syntaxTokenColor(tokenType, scheme), background),
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
     }
+  });
+
+  it('falls back to primary text when a legacy theme omits a code-surface token', () => {
+    const legacyTheme = { ...darkColors, surfaceHover: undefined as never };
+
+    expect(syntaxTokenColor('keyword', legacyTheme)).toBe(darkColors.textPrimary);
   });
 });

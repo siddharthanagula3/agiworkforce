@@ -186,24 +186,26 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
 
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const assistantMessageIdRef = useRef<string | null>(null);
+  const assistantMessageIdsRef = useRef(new Map<string, string>());
+  const cloudAgentRunsRef = useRef(new Map<string, { runId: string; runPath: string }>());
   /**
    * The conversation the CURRENTLY in-flight turn was sent to -- pinned at
    * each turn-start site (sendMessage / continueGeneration /
    * resolveToolApproval) and read by onStream / stopGeneration instead of
    * the live activeConversationId. Nothing prevents navigating to a
-   * different conversation mid-turn (see ConversationItem's onClick), and
-   * without this pin every subsequent stream event would resolve against
-   * whatever conversation is now active: updateMessage no-ops when the
-   * message id isn't found there, so the rest of the response is silently
-   * dropped for the conversation actually streaming. There is still only
-   * one in-flight turn at a time (isStreamingRef's guard below is
-   * unchanged) -- this ref tracks WHICH conversation that turn belongs to,
-   * it does not add concurrent-turn support.
+   * different conversation mid-turn (see ConversationItem's onClick). Legacy
+   * runtimes use this single pin. Concurrent runtimes stamp every event with
+   * its conversation id and use the per-conversation maps above.
    */
   const streamConvIdRef = useRef<string | null>(null);
-  // Use ref for isStreaming to avoid stale closures in useCallback
+  const aggregateIsStreaming = useChatStore((s) => s.isStreaming);
+  const streamingConversationIds = useChatStore((s) => s.streamingConversationIds);
+  const isStreaming = runtime?.supportsConcurrentTurns
+    ? Boolean(activeConversationId && streamingConversationIds[activeConversationId])
+    : aggregateIsStreaming;
+  // Use a ref for active-conversation streaming state to avoid stale callback closures.
   const isStreamingRef = useRef(false);
-  isStreamingRef.current = useChatStore((s) => s.isStreaming);
+  isStreamingRef.current = isStreaming;
 
   // Register stream callback on runtime to receive assistant responses
   useEffect(() => {
@@ -211,12 +213,15 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
 
     const unsubscribe = runtime.onStream((event) => {
       const store = useChatStore.getState();
-      // Pinned to the conversation this turn was sent to -- see
-      // streamConvIdRef's doc comment. Falls back to activeConversationId
-      // only so an onStream event firing before any send (shouldn't happen)
-      // doesn't hard no-op.
-      const convId = streamConvIdRef.current ?? store.activeConversationId;
+      // Concurrent runtimes must stamp every event. Falling back to the active
+      // conversation in that mode could leak one turn into another transcript,
+      // so fail closed if the runtime breaks its declared contract.
+      const convId = runtime.supportsConcurrentTurns
+        ? event.conversationId
+        : (event.conversationId ?? streamConvIdRef.current ?? store.activeConversationId);
       if (!convId) return;
+      assistantMessageIdRef.current = assistantMessageIdsRef.current.get(convId) ?? null;
+      cloudAgentRunRef.current = cloudAgentRunsRef.current.get(convId) ?? null;
 
       switch (event.type) {
         case 'agent_run': {
@@ -710,7 +715,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           if (!awaitingApproval) {
             assistantMessageIdRef.current = null;
           }
-          store.stopStreaming();
+          store.stopStreaming(convId);
           break;
         }
         case 'error': {
@@ -760,10 +765,21 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             });
           }
           assistantMessageIdRef.current = null;
-          store.stopStreaming();
+          store.stopStreaming(convId);
           toast.error(event.error || 'Failed to get response');
           break;
         }
+      }
+
+      if (assistantMessageIdRef.current) {
+        assistantMessageIdsRef.current.set(convId, assistantMessageIdRef.current);
+      } else {
+        assistantMessageIdsRef.current.delete(convId);
+      }
+      if (cloudAgentRunRef.current) {
+        cloudAgentRunsRef.current.set(convId, cloudAgentRunRef.current);
+      } else {
+        cloudAgentRunsRef.current.delete(convId);
       }
     });
 
@@ -942,7 +958,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       // first event (which can fire before this function returns) already
       // resolves against the right conversation.
       streamConvIdRef.current = convId;
-      store.startStreaming();
+      store.startStreaming(convId);
 
       const systemPrompt = [
         getSystemPromptForMode(store.activeMode),
@@ -1007,6 +1023,8 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       // the lightweight "Thinking…" placeholder rendered by MessageBubble.
       assistantMessageIdRef.current = null;
       cloudAgentRunRef.current = null;
+      assistantMessageIdsRef.current.delete(convId);
+      cloudAgentRunsRef.current.delete(convId);
 
       // Build full conversation history for multi-turn context
       const allMessages = store.messagesByConversation[convId] ?? [];
@@ -1019,6 +1037,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const assistantMessageId = crypto.randomUUID();
       const startedAtMs = Date.now();
       assistantMessageIdRef.current = assistantMessageId;
+      assistantMessageIdsRef.current.set(convId, assistantMessageId);
       addMsg(
         {
           id: assistantMessageId,
@@ -1090,12 +1109,15 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           if (assistantMessageIdRef.current === assistantMessageId) {
             assistantMessageIdRef.current = null;
           }
+          if (assistantMessageIdsRef.current.get(convId) === assistantMessageId) {
+            assistantMessageIdsRef.current.delete(convId);
+          }
           toast.error(message || 'Failed to send message');
         })
         .finally(() => {
           // Safety net — stop streaming if onStream 'done' wasn't received
-          if (useChatStore.getState().isStreaming) {
-            useChatStore.getState().stopStreaming();
+          if (useChatStore.getState().streamingConversationIds[convId]) {
+            useChatStore.getState().stopStreaming(convId);
           }
         });
     },
@@ -1108,7 +1130,10 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     // comment. Nothing stops navigating to a different conversation mid-turn
     // and clicking Stop there; it must still stop the real turn rather than
     // silently targeting the wrong (unrelated) conversation id.
-    const convId = streamConvIdRef.current;
+    const currentStore = useChatStore.getState();
+    const convId = runtime?.supportsConcurrentTurns
+      ? currentStore.activeConversationId
+      : streamConvIdRef.current;
     if (runtime && convId) {
       runtime.stopGeneration(convId);
       // Continue-Generation (cloud/Web runtime only): the abort path emits no
@@ -1119,7 +1144,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       // (TauriRuntime) can't resume in place, so they must NOT get the marker
       // (it would surface a fake, broken Continue button in the Tauri build,
       // which uses TauriRuntime for both local and cloud).
-      const partialId = assistantMessageIdRef.current;
+      const partialId = assistantMessageIdsRef.current.get(convId) ?? null;
       if (runtime.supportsContinueGeneration && partialId) {
         const store = useChatStore.getState();
         const msg = store.messagesByConversation[convId]?.find((m) => m.id === partialId);
@@ -1143,7 +1168,10 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         }
       }
       assistantMessageIdRef.current = null;
-      useChatStore.getState().stopStreaming();
+      cloudAgentRunRef.current = null;
+      assistantMessageIdsRef.current.delete(convId);
+      cloudAgentRunsRef.current.delete(convId);
+      useChatStore.getState().stopStreaming(convId);
     }
   }, [runtime]);
 
@@ -1202,6 +1230,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       // clear the continuable marker while streaming (re-recorded honestly at
       // stream end — re-offered if truncated again).
       assistantMessageIdRef.current = assistantMessageId;
+      assistantMessageIdsRef.current.set(convId, assistantMessageId);
       const persistedRun = message.metadata?.['cloudAgentRun'];
       cloudAgentRunRef.current =
         persistedRun && typeof persistedRun === 'object'
@@ -1210,11 +1239,16 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               runPath: String((persistedRun as Record<string, unknown>)['runPath'] ?? ''),
             }
           : null;
+      if (cloudAgentRunRef.current) {
+        cloudAgentRunsRef.current.set(convId, cloudAgentRunRef.current);
+      } else {
+        cloudAgentRunsRef.current.delete(convId);
+      }
       store.updateMessage(convId, assistantMessageId, {
         isStreaming: true,
         metadata: { ...message.metadata, finishReason: undefined },
       });
-      store.startStreaming();
+      store.startStreaming(convId);
 
       const systemPrompt = getSystemPromptForMode(store.activeMode);
       void runtime
@@ -1245,11 +1279,14 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           if (assistantMessageIdRef.current === assistantMessageId) {
             assistantMessageIdRef.current = null;
           }
+          if (assistantMessageIdsRef.current.get(convId) === assistantMessageId) {
+            assistantMessageIdsRef.current.delete(convId);
+          }
           toast.error(errMessage || 'Failed to continue generation');
         })
         .finally(() => {
-          if (useChatStore.getState().isStreaming) {
-            useChatStore.getState().stopStreaming();
+          if (useChatStore.getState().streamingConversationIds[convId]) {
+            useChatStore.getState().stopStreaming(convId);
           }
         });
     },
@@ -1306,6 +1343,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         // Re-point the ref at this message so continuation events append onto
         // the same bubble. A partial decision does not start a fake stream.
         assistantMessageIdRef.current = assistantMessageId;
+        assistantMessageIdsRef.current.set(convId, assistantMessageId);
         const persistedRun = msg?.metadata?.['cloudAgentRun'];
         cloudAgentRunRef.current =
           persistedRun && typeof persistedRun === 'object'
@@ -1314,7 +1352,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                 runPath: String((persistedRun as Record<string, unknown>)['runPath'] ?? ''),
               }
             : null;
-        store.startStreaming();
+        if (cloudAgentRunRef.current) {
+          cloudAgentRunsRef.current.set(convId, cloudAgentRunRef.current);
+        } else {
+          cloudAgentRunsRef.current.delete(convId);
+        }
+        store.startStreaming(convId);
       }
 
       void runtime
@@ -1341,19 +1384,19 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               ),
             });
             assistantMessageIdRef.current = assistantMessageId;
+            assistantMessageIdsRef.current.set(convId, assistantMessageId);
           }
           toast.error(message || 'Failed to resolve tool approval');
         })
         .finally(() => {
-          if (useChatStore.getState().isStreaming) {
-            useChatStore.getState().stopStreaming();
+          if (useChatStore.getState().streamingConversationIds[convId]) {
+            useChatStore.getState().stopStreaming(convId);
           }
         });
     },
     [runtime],
   );
 
-  const isStreaming = useChatStore((s) => s.isStreaming);
   const activeApprovalMessages = useChatStore((state) =>
     activeConversationId ? state.messagesByConversation[activeConversationId] : undefined,
   );

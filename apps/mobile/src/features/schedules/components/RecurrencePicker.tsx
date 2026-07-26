@@ -5,6 +5,12 @@ import { Text } from '@/components/ui/text';
 import { Input } from '@/components/ui/input';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { RecurrenceType } from '../store';
+import {
+  MOBILE_SCHEDULE_CADENCE_NOTE,
+  MOBILE_SUPPORTED_SCHEDULE_RECURRENCES,
+  isMobileScheduleRecurrenceSupported,
+  type MobileSupportedScheduleRecurrence,
+} from '../policy';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -15,18 +21,14 @@ interface RecurrencePickerProps {
   daysOfWeek?: number[];
   dayOfMonth?: number;
   timeOfDay: string;
-  scheduledAt?: string | null;
-  cronExpression?: string;
-  intervalMs?: number;
+  scheduledDate?: string | null;
   onChange: (
     recurrence: RecurrenceType,
     options?: {
       daysOfWeek?: number[];
       dayOfMonth?: number;
       timeOfDay?: string;
-      scheduledAt?: string;
-      cronExpression?: string;
-      intervalMs?: number;
+      scheduledDate?: string;
     },
   ) => void;
 }
@@ -35,14 +37,12 @@ interface RecurrencePickerProps {
 // Constants
 // ---------------------------------------------------------------------------
 
-const RECURRENCE_OPTIONS: { key: RecurrenceType; label: string }[] = [
-  { key: 'once', label: 'Once' },
-  { key: 'daily', label: 'Daily' },
-  { key: 'weekly', label: 'Weekly' },
-  { key: 'monthly', label: 'Monthly' },
-  { key: 'custom', label: 'Custom' },
-  { key: 'interval', label: 'Interval' },
-];
+const RECURRENCE_LABELS: Readonly<Record<MobileSupportedScheduleRecurrence, string>> = {
+  once: 'Once',
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+};
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -67,11 +67,6 @@ function isValidIsoDateInput(value: string): boolean {
   );
 }
 
-function isValidCronInput(value: string): boolean {
-  const parts = value.trim().split(/\s+/);
-  return parts.length === 5 && parts.every((part) => /^[0-9*/,-]+$/.test(part));
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -81,35 +76,17 @@ export function RecurrencePicker({
   daysOfWeek = [],
   dayOfMonth = 1,
   timeOfDay,
-  scheduledAt,
-  cronExpression = '',
-  intervalMs = 60 * 60 * 1000,
+  scheduledDate,
   onChange,
 }: RecurrencePickerProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const [localCron, setLocalCron] = useState(cronExpression);
-  const [localIntervalMinutes, setLocalIntervalMinutes] = useState(
-    String(Math.max(1, Math.round(intervalMs / 60_000))),
-  );
-  const [localDate, setLocalDate] = useState(scheduledAt ?? '');
+  const [localDate, setLocalDate] = useState(scheduledDate ?? '');
   const [dateError, setDateError] = useState<string | undefined>();
-  const [cronError, setCronError] = useState<string | undefined>();
-  const [intervalError, setIntervalError] = useState<string | undefined>();
 
   useEffect(() => {
-    setLocalDate(scheduledAt ?? '');
+    setLocalDate(scheduledDate ?? '');
     setDateError(undefined);
-  }, [scheduledAt]);
-
-  useEffect(() => {
-    setLocalCron(cronExpression);
-    setCronError(undefined);
-  }, [cronExpression]);
-
-  useEffect(() => {
-    setLocalIntervalMinutes(String(Math.max(1, Math.round(intervalMs / 60_000))));
-    setIntervalError(undefined);
-  }, [intervalMs]);
+  }, [scheduledDate]);
 
   const timeParts = (timeOfDay || '09:00').split(':');
   const hours = timeParts[0] ?? '09';
@@ -180,35 +157,7 @@ export function RecurrencePicker({
         return;
       }
       setDateError(undefined);
-      onChange('once', { scheduledAt: text });
-    },
-    [onChange],
-  );
-
-  // --- Cron expression ---
-  const handleCronChange = useCallback(
-    (text: string) => {
-      setLocalCron(text);
-      if (!isValidCronInput(text)) {
-        setCronError('Use a 5-field cron expression with numbers, *, /, - and commas.');
-        return;
-      }
-      setCronError(undefined);
-      onChange('custom', { cronExpression: text });
-    },
-    [onChange],
-  );
-
-  const handleIntervalChange = useCallback(
-    (text: string) => {
-      setLocalIntervalMinutes(text);
-      const minutes = Number(text);
-      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 525_600) {
-        setIntervalError('Enter a whole number from 1 to 525600 minutes.');
-        return;
-      }
-      setIntervalError(undefined);
-      onChange('interval', { intervalMs: minutes * 60_000 });
+      onChange('once', { scheduledDate: text });
     },
     [onChange],
   );
@@ -219,30 +168,37 @@ export function RecurrencePicker({
       <View>
         <Text className="text-sm text-white/70 mb-2">Recurrence</Text>
         <View className="flex-row flex-wrap gap-2">
-          {RECURRENCE_OPTIONS.map((opt) => {
-            const selected = value === opt.key;
+          {MOBILE_SUPPORTED_SCHEDULE_RECURRENCES.map((recurrence) => {
+            const selected = value === recurrence;
             return (
               <Pressable
-                key={opt.key}
-                onPress={() => handleTypeChange(opt.key)}
+                key={recurrence}
+                onPress={() => handleTypeChange(recurrence)}
                 className={`px-4 py-2 rounded-full border ${
                   selected
                     ? 'bg-teal-500/20 border-teal-500'
                     : 'bg-surface-elevated border-white/10'
                 }`}
-                accessibilityLabel={`Recurrence: ${opt.label}`}
+                accessibilityLabel={`Recurrence: ${RECURRENCE_LABELS[recurrence]}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
               >
                 <Text
                   className={`text-xs font-medium ${selected ? 'text-teal-400' : 'text-white/60'}`}
                 >
-                  {opt.label}
+                  {RECURRENCE_LABELS[recurrence]}
                 </Text>
               </Pressable>
             );
           })}
         </View>
+        <Text className="text-xs text-white/40 mt-2 leading-4">{MOBILE_SCHEDULE_CADENCE_NOTE}</Text>
+        {!isMobileScheduleRecurrenceSupported(value) ? (
+          <Text className="text-xs text-amber-400 mt-2 leading-4">
+            This legacy cadence is not deliverable from Mobile. Choose Once, Daily, Weekly, or
+            Monthly before saving.
+          </Text>
+        ) : null}
       </View>
 
       {/* Weekly: Day circles */}
@@ -322,35 +278,10 @@ export function RecurrencePicker({
         />
       )}
 
-      {/* Custom: Cron expression */}
-      {value === 'custom' && (
-        <Input
-          label="Cron Expression"
-          placeholder="0 9 * * 1-5"
-          value={localCron}
-          onChangeText={handleCronChange}
-          error={cronError}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      )}
-
-      {/* Interval: repeat delay */}
-      {value === 'interval' && (
-        <Input
-          label="Repeat every (minutes)"
-          placeholder="60"
-          value={localIntervalMinutes}
-          onChangeText={handleIntervalChange}
-          error={intervalError}
-          keyboardType="number-pad"
-        />
-      )}
-
       {/* Time picker (HH:MM) */}
-      {value !== 'interval' && (
+      {isMobileScheduleRecurrenceSupported(value) && (
         <View>
-          <Text className="text-sm text-white/70 mb-2">Time</Text>
+          <Text className="text-sm text-white/70 mb-2">Preferred time</Text>
           <View className="flex-row items-center gap-3">
             {/* Hours */}
             <View className="flex-1">

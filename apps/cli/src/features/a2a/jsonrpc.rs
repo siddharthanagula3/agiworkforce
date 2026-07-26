@@ -172,7 +172,7 @@ mod tests {
             name: "AGI".into(),
             version: "1.3.0".into(),
             capabilities: vec!["code".into(), "search".into()],
-            supported_models: vec!["claude-opus-4-8".into()],
+            supported_models: vec!["claude-opus-5".into()],
             endpoint: "http://127.0.0.1:7892".into(),
             auth_required: false,
             metadata: HashMap::new(),

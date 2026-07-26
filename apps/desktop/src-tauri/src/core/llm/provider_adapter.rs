@@ -2080,6 +2080,35 @@ impl AnthropicAdapter {
             .filter(|effort| super::models_config::model_supports_effort(&request.model, effort))
     }
 
+    fn validate_model_request_contract(
+        request: &LLMRequest,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
+        if matches!(
+            request.thinking,
+            Some(super::ThinkingParameter::Enabled(false))
+        ) {
+            if let Some(effort) = request.effort.as_deref() {
+                if !super::models_config::model_allows_effort_with_thinking_disabled(
+                    &request.model,
+                    effort,
+                ) {
+                    let maximum =
+                        super::models_config::max_effort_when_thinking_disabled(&request.model)
+                            .unwrap_or("the catalog maximum");
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!(
+                            "Thinking is disabled for {}; effort must be {} or lower",
+                            request.model, maximum
+                        ),
+                    )
+                    .into());
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// c3 switch predicate: can the shared crate serializer express this
     /// request byte-faithfully? Anything outside this shape falls back to the
     /// legacy adapter arm below (no silent field drops):
@@ -2126,31 +2155,39 @@ impl AnthropicAdapter {
     /// mode, mirroring the legacy adapter's mapping exactly (Enabled(true) →
     /// 8192-token budget; Level → the same low/medium/high/extreme table).
     fn map_thinking(
+        model: &str,
         thinking: Option<&super::ThinkingParameter>,
     ) -> Option<agiworkforce_llm::AnthropicThinking> {
         use super::ThinkingParameter;
         use agiworkforce_llm::AnthropicThinking;
-        thinking.map(|thinking| match thinking {
-            ThinkingParameter::Enabled(true) => AnthropicThinking::Enabled {
-                budget_tokens: 8192,
-            },
-            ThinkingParameter::Enabled(false) => AnthropicThinking::Disabled,
-            ThinkingParameter::Level {
-                level,
-                max_thinking_tokens,
-            } => AnthropicThinking::Enabled {
-                budget_tokens: max_thinking_tokens.unwrap_or(match level.as_str() {
-                    "low" => 2048,
-                    "medium" => 8192,
-                    "high" => 16384,
-                    "extreme" => 32768,
-                    _ => 8192,
-                }),
-            },
-            ThinkingParameter::Budget { budget_tokens, .. } => AnthropicThinking::Enabled {
-                budget_tokens: *budget_tokens,
-            },
-            ThinkingParameter::Adaptive { .. } => AnthropicThinking::Adaptive,
+        thinking.map(|thinking| {
+            if super::models_config::model_uses_adaptive_thinking(model)
+                && !matches!(thinking, ThinkingParameter::Enabled(false))
+            {
+                return AnthropicThinking::Adaptive;
+            }
+            match thinking {
+                ThinkingParameter::Enabled(true) => AnthropicThinking::Enabled {
+                    budget_tokens: 8192,
+                },
+                ThinkingParameter::Enabled(false) => AnthropicThinking::Disabled,
+                ThinkingParameter::Level {
+                    level,
+                    max_thinking_tokens,
+                } => AnthropicThinking::Enabled {
+                    budget_tokens: max_thinking_tokens.unwrap_or(match level.as_str() {
+                        "low" => 2048,
+                        "medium" => 8192,
+                        "high" => 16384,
+                        "extreme" => 32768,
+                        _ => 8192,
+                    }),
+                },
+                ThinkingParameter::Budget { budget_tokens, .. } => AnthropicThinking::Enabled {
+                    budget_tokens: *budget_tokens,
+                },
+                ThinkingParameter::Adaptive { .. } => AnthropicThinking::Adaptive,
+            }
         })
     }
 
@@ -2273,11 +2310,14 @@ impl AnthropicAdapter {
     pub(crate) fn adapt_request_via_crate(
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        Self::validate_model_request_contract(request)?;
         let wire_model = super::models_config::get_api_model_id(&request.model);
         Self::validate_tool_message_pairing(&request.messages)?;
 
         let messages = Self::wire_messages(request);
         let tools = request.tools.as_deref().map(to_crate_tool_definitions);
+        let rejects_sampling =
+            super::models_config::model_rejects_sampling_parameters(&request.model);
         let req = agiworkforce_llm::ChatRequest {
             model: &wire_model,
             messages: &messages,
@@ -2285,14 +2325,14 @@ impl AnthropicAdapter {
             max_tokens: clamp_max_tokens(Some(request.max_tokens.unwrap_or(4096)))
                 .0
                 .unwrap_or(4096),
-            temperature: request.temperature,
+            temperature: (!rejects_sampling).then_some(request.temperature).flatten(),
             tools: tools.as_deref(),
             tool_choice: request.tool_choice.as_ref().map(Self::map_tool_choice),
             thinking_budget: None,
-            anthropic_thinking: Self::map_thinking(request.thinking.as_ref()),
+            anthropic_thinking: Self::map_thinking(&request.model, request.thinking.as_ref()),
             effort: Self::resolved_effort(request),
-            top_p: request.top_p,
-            top_k: request.top_k,
+            top_p: (!rejects_sampling).then_some(request.top_p).flatten(),
+            top_k: (!rejects_sampling).then_some(request.top_k).flatten(),
             metadata: request.metadata.as_ref(),
             reasoning_effort: None,
             gemini_thinking_budget: None,
@@ -2321,6 +2361,7 @@ impl AnthropicAdapter {
     pub(crate) fn adapt_request_legacy(
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        Self::validate_model_request_contract(request)?;
         // Resolve the wire API model ID: catalog keys carrying a dotted internal
         // id (e.g. "claude-haiku-4.5") must be translated to the real Anthropic
         // API string ("claude-haiku-4-5") before being sent in the request body.
@@ -2599,14 +2640,16 @@ impl AnthropicAdapter {
         }
 
         // ── Sampling parameters ──────────────────────────────────────
-        if let Some(temp) = request.temperature {
-            anthropic_request["temperature"] = serde_json::json!(temp);
-        }
-        if let Some(top_p) = request.top_p {
-            anthropic_request["top_p"] = serde_json::json!(top_p);
-        }
-        if let Some(top_k) = request.top_k {
-            anthropic_request["top_k"] = serde_json::json!(top_k);
+        if !super::models_config::model_rejects_sampling_parameters(&request.model) {
+            if let Some(temp) = request.temperature {
+                anthropic_request["temperature"] = serde_json::json!(temp);
+            }
+            if let Some(top_p) = request.top_p {
+                anthropic_request["top_p"] = serde_json::json!(top_p);
+            }
+            if let Some(top_k) = request.top_k {
+                anthropic_request["top_k"] = serde_json::json!(top_k);
+            }
         }
 
         // ── Streaming ────────────────────────────────────────────────
@@ -2627,51 +2670,60 @@ impl AnthropicAdapter {
         let mut thinking_budget_tokens: Option<u32> = None;
         if let Some(thinking) = &request.thinking {
             use super::ThinkingParameter;
-            match thinking {
-                ThinkingParameter::Enabled(true) => {
-                    let budget = 8192u32;
-                    anthropic_request["thinking"] = serde_json::json!({
-                        "type": "enabled",
-                        "budget_tokens": budget
-                    });
-                    thinking_budget_tokens = Some(budget);
-                }
-                ThinkingParameter::Enabled(false) => {
-                    anthropic_request["thinking"] = serde_json::json!({
-                        "type": "disabled"
-                    });
-                }
-                ThinkingParameter::Level {
-                    level,
-                    max_thinking_tokens,
-                } => {
-                    let budget = max_thinking_tokens.unwrap_or(match level.as_str() {
-                        "low" => 2048,
-                        "medium" => 8192,
-                        "high" => 16384,
-                        "extreme" => 32768,
-                        _ => 8192,
-                    });
-                    anthropic_request["thinking"] = serde_json::json!({
-                        "type": "enabled",
-                        "budget_tokens": budget
-                    });
-                    thinking_budget_tokens = Some(budget);
-                }
-                ThinkingParameter::Budget { budget_tokens, .. } => {
-                    anthropic_request["thinking"] = serde_json::json!({
-                        "type": "enabled",
-                        "budget_tokens": budget_tokens
-                    });
-                    thinking_budget_tokens = Some(*budget_tokens);
-                }
-                ThinkingParameter::Adaptive { .. } => {
-                    anthropic_request["thinking"] = serde_json::json!({
-                        "type": "adaptive"
-                    });
-                    // Adaptive thinking has no fixed budget; the model decides.
-                    // Still remove temperature below but no max_tokens adjustment.
-                    thinking_budget_tokens = Some(0);
+            if super::models_config::model_uses_adaptive_thinking(&request.model)
+                && !matches!(thinking, ThinkingParameter::Enabled(false))
+            {
+                anthropic_request["thinking"] = serde_json::json!({
+                    "type": "adaptive"
+                });
+                thinking_budget_tokens = Some(0);
+            } else {
+                match thinking {
+                    ThinkingParameter::Enabled(true) => {
+                        let budget = 8192u32;
+                        anthropic_request["thinking"] = serde_json::json!({
+                            "type": "enabled",
+                            "budget_tokens": budget
+                        });
+                        thinking_budget_tokens = Some(budget);
+                    }
+                    ThinkingParameter::Enabled(false) => {
+                        anthropic_request["thinking"] = serde_json::json!({
+                            "type": "disabled"
+                        });
+                    }
+                    ThinkingParameter::Level {
+                        level,
+                        max_thinking_tokens,
+                    } => {
+                        let budget = max_thinking_tokens.unwrap_or(match level.as_str() {
+                            "low" => 2048,
+                            "medium" => 8192,
+                            "high" => 16384,
+                            "extreme" => 32768,
+                            _ => 8192,
+                        });
+                        anthropic_request["thinking"] = serde_json::json!({
+                            "type": "enabled",
+                            "budget_tokens": budget
+                        });
+                        thinking_budget_tokens = Some(budget);
+                    }
+                    ThinkingParameter::Budget { budget_tokens, .. } => {
+                        anthropic_request["thinking"] = serde_json::json!({
+                            "type": "enabled",
+                            "budget_tokens": budget_tokens
+                        });
+                        thinking_budget_tokens = Some(*budget_tokens);
+                    }
+                    ThinkingParameter::Adaptive { .. } => {
+                        anthropic_request["thinking"] = serde_json::json!({
+                            "type": "adaptive"
+                        });
+                        // Adaptive thinking has no fixed budget; the model decides.
+                        // Still remove temperature below but no max_tokens adjustment.
+                        thinking_budget_tokens = Some(0);
+                    }
                 }
             }
         }

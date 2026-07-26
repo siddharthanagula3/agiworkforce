@@ -1,7 +1,7 @@
 export const meta = {
   name: 'agi-cli-parity-1000',
   description:
-    'AGI CLI parity: 1000 Opus-4.8-1M agent jobs (990 read-only research/audit/design/verify workers + 10 synthesis), 16 concurrent, model inherited (no downshift/fallback)',
+    'AGI CLI parity: 1000 predecessor-Opus 1M agent jobs (990 read-only research/audit/design/verify workers + 10 synthesis), 16 concurrent, model inherited (no downshift/fallback)',
   phases: [
     { title: 'Approval', detail: 'adversarial verification of the landed TUI approval wiring' },
     { title: 'RefStudy', detail: 'reference CLIs (Claude/Codex/Gemini/OpenCode) architecture map' },
@@ -904,7 +904,7 @@ log(
     BUCKETS.length +
     ' synthesis = ' +
     (totalWorkers + BUCKETS.length) +
-    ' agents; model inherited (Opus 4.8 1M); 8 effective concurrent on this 10-core host; 10 incremental artifact checkpoints',
+    ' agents; model inherited (predecessor Opus, 1M context); 8 effective concurrent on this 10-core host; 10 incremental artifact checkpoints',
 );
 
 const compact = (items) =>
@@ -951,7 +951,7 @@ for (let bi = 0; bi < BUCKETS.length; bi++) {
   const s = await agent(
     'You are a synthesis lead for AGI CLI parity. Below are ' +
       found.length +
-      ' compact findings (priority, headline, top recommendation) from parallel Opus-4.8-1M research/audit/design agents (bucket: ' +
+      ' compact findings (priority, headline, top recommendation) from parallel predecessor-Opus 1M research/audit/design agents (bucket: ' +
       b.name +
       ').\n\n' +
       body +

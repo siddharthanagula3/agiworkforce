@@ -85,7 +85,7 @@ Representative routing models (full list in `packages/contracts/types/src/models
 | gpt-5.6-terra                         | 2.50  | 15.00  | 0.25       | models.json                                                                                           |
 | claude-sonnet-5                       | 3.00  | 15.00  | 0.30       | platform.claude.com                                                                                   |
 | gpt-5.5 / gpt-5.6-sol (flagship)      | 5.00  | 30.00  | 0.50       | models.json; developers.openai.com                                                                    |
-| claude-opus-4.8                       | 5.00  | 25.00  | 0.50       | platform.claude.com                                                                                   |
+| claude-opus-5                         | 5.00  | 25.00  | 0.50       | platform.claude.com                                                                                   |
 | grok-4.3                              | 1.25  | 2.50   | —          | models.json                                                                                           |
 | glm-5.2                               | 1.40  | 4.40   | 0.26       | models.json                                                                                           |
 | qwen-3.7-plus                         | 0.40  | 1.60   | 0.08       | models.json; Alibaba Cloud Model Studio                                                               |

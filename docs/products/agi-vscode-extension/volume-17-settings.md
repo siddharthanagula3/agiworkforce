@@ -1,8 +1,8 @@
 # AGI VS Code Extension — Volume 17 — Settings
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/extension-vscode/AGENTS.md`; and real repo paths: `apps/extension-vscode/package.json` (`contributes.configuration`, `contributes.keybindings`, `capabilities.untrustedWorkspaces`), `apps/extension-vscode/src/utils/api.ts`, `apps/extension-vscode/src/core/telemetry.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/scripts/check-vscode-theme-tokens.mjs`, `packages/contracts/types/src/models.json`.
 
@@ -12,7 +12,7 @@ This volume specifies the Settings domain for the AGI VS Code Extension: how a d
 
 ## General
 
-The extension contributes 26 configuration keys under `agiWorkforce.*` (`apps/extension-vscode/package.json` → `contributes.configuration.properties`) ✅. Core behavior settings: `agiWorkforce.model` (default `auto-economy`; resolved from `packages/contracts/types/src/models.json`, never a hardcoded ID), `agiWorkforce.streamingEnabled`, `agiWorkforce.contextLines`, `agiWorkforce.fallbackToVscodeLm`, `agiWorkforce.codeLensEnabled`, `agiWorkforce.hoverEnabled`, `agiWorkforce.inlineCompletions.{enabled,debounceMs,maxLength}`, `agiWorkforce.agent.{mode,effort,thinking,maxIterations}`, and `agiWorkforce.mcp.enabled` ✅. Requirements: every setting has a `default`, numeric ranges use `minimum`/`maximum`, and enum settings enumerate `enumDescriptions`. The `agiWorkforce.tier` enum still lists removed tiers (`hobby`, `pro_plus`) 🟡 — it must be reconciled to the canonical ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) as part of the tracked `packages/contracts/types/src/billing-catalog.ts` reconciliation. The `agiWorkforce.openInviteCodeModal` command ("Unlock Cloud Features") is a legacy invite gate 🟡 — Managed Cloud is public alpha, open by default for signed-in users, so this must not gate access. Cross-surface **settings sync is allowlist-gated and lands last** 🔭; until then extension settings are device/workspace-scoped.
+The extension contributes 24 configuration keys under `agiWorkforce.*` (`apps/extension-vscode/package.json` → `contributes.configuration.properties`) ✅. Core behavior settings include `agiWorkforce.model` (default `auto`; routed using the task and resolved plan), `agiWorkforce.streamingEnabled`, `agiWorkforce.contextLines`, `agiWorkforce.codeLensEnabled`, `agiWorkforce.hoverEnabled`, `agiWorkforce.inlineCompletions.{enabled,debounceMs,maxLength}`, `agiWorkforce.agent.{mode,effort,thinking}`, and `agiWorkforce.mcp.enabled`. Inline completions, MCP, the Desktop bridge, provider-stream transport, and telemetry all default off. The tier override preserves the canonical plan values (`local`, `byok`, `free`, `basic`, `pro`, `team`, `max`, `max_15x`, `enterprise`); retired `hobby` and `pro_plus` values are accepted only when normalizing legacy server data. The compatibility command id `agi-workforce.openInviteCodeModal` is presented as “Sign In to AGI Cloud” and routes directly to device sign-in; it is not an invite or waitlist gate. Cross-surface settings sync remains planned; settings are currently device/workspace-scoped.
 
 ## Theme
 
@@ -24,11 +24,11 @@ Keybindings are declared in `contributes.keybindings` (14 bindings) with mac/win
 
 ## Providers
 
-Provider/model selection is exposed through `agiWorkforce.model`, `agiWorkforce.providerStreamProvider` (enum: `auto`, `anthropic`, `openai`, `google`, `ollama`, `ollama-cloud`, `xai`, `deepseek`, `perplexity`, `qwen`, `moonshot`, `zhipu`, `lmstudio`, `custom`), `agiWorkforce.apiEndpoint`, and `agiWorkforce.gatewayUrl` ✅, plus the model picker under `apps/extension-vscode/src/features/model-picker`. Model IDs must resolve from `packages/contracts/types/src/models.json` — settings store provider/model **selectors**, never invented IDs. BYOK keys are entered via the `AGI Workforce: Set API Key` command and stored in VS Code `SecretStorage`, never in settings JSON: `getApiKey`/`setApiKey`/`clearApiKey` in `apps/extension-vscode/src/utils/api.ts` take a `vscode.SecretStorage` handle ✅. BYOK is permitted on this surface (Desktop/CLI/VS Code only). Requirements: the active trust mode and provider are labeled visibly in-session; switching a Local session to a BYOK/Cloud provider is an explicit consent-gated fork. The provider-stream path (`agiWorkforce.useProviderStream` → `/api/v1/providers/:id/stream`) depends on AGI web auth that is **not yet wired** in the extension 🟡 (per the setting's own description).
+Provider/model selection is exposed through `agiWorkforce.model`, `agiWorkforce.apiEndpoint`, and `agiWorkforce.gatewayUrl`, plus the catalog-driven model picker under `apps/extension-vscode/src/features/model-picker`. There is no independent provider selector: provider-stream routing derives the provider from the selected catalog model, avoiding invalid model/provider pairs. `agiWorkforce.useProviderStream` is an opt-in account-authenticated transport for older cloud-backed editor utilities only; it does not affect the local `@agi`, sidebar, or editor developer sessions. Device sign-in and bearer-token use are wired. A legacy gateway API key can be entered with `AGI Workforce: Set API Key` and is stored in VS Code `SecretStorage`, never settings JSON. The local app-server owns developer-session providers and exposes installed local models through `model/list`. The UI labels the Local host and the resolved provider or “Auto routing”; crossing a live session's provider boundary starts a new runtime thread and visibly states that the earlier transcript was not forwarded. The complete context-selection/payload-preview handoff ceremony remains required before any future feature attempts to forward an existing Local transcript.
 
 ## Permissions
 
-Agent-action permissions are governed by `agiWorkforce.agent.mode` (`ask` | `auto` | `plan` | `bypass`), `agiWorkforce.autoApplyFixes`, and `agiWorkforce.agent.autoApply` ✅. Workspace-trust permissions are declared in `capabilities.untrustedWorkspaces` with `supported: "limited"`: in untrusted workspaces, `apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, `agent.autoApply`, `autoApplyFixes`, `telemetryEndpoint`, and `tier` cannot be overridden by workspace settings, and **agent-mode file writes are disabled until the workspace is trusted** ✅. Requirements: `bypass` mode must surface a clear, revocable warning and never be silently defaulted; risky settings that steer network endpoints or file writes stay in the `restrictedConfigurations` list. Remote control of an editor session from phone/web (Claude Code `/remote-control` parity) is 🔭.
+Agent-action permissions are governed by `agiWorkforce.agent.mode` (`ask` | `auto` | `plan` | `bypass`) and `agiWorkforce.autoApplyFixes` ✅. Workspace-trust permissions are declared in `capabilities.untrustedWorkspaces` with `supported: "limited"`: `apiEndpoint`, `gatewayUrl`, `cliPath`, `autoApplyFixes`, `telemetryEndpoint`, and `tier` cannot be overridden by an untrusted workspace. The manifest no longer lists nonexistent `systemPrompt` or `agent.autoApply` settings as restricted configurations. Agent-mode file writes remain disabled until the workspace is trusted. `bypass` must surface a clear, revocable warning and never be silently defaulted. Remote control of an editor session from phone/web remains planned.
 
 ## Privacy
 
@@ -36,7 +36,7 @@ Telemetry is **off by default**: `agiWorkforce.telemetryEnabled` defaults to `fa
 
 ## Security
 
-BYOK keys live only in VS Code `SecretStorage` (`src/utils/api.ts`) ✅. The desktop bridge reuses the shared token at `~/.agiworkforce/bridge-token`, enforced `0600`, read via `readBridgeToken` in `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — the reader refuses group/world-readable files and opens-then-fstats a single fd to close a TOCTOU race ✅. Transport is `ws://127.0.0.1:8787/ws` (localhost, outbound), with a stated migration target of Unix domain socket / named pipe behind `agiWorkforce.desktopBridge.transport` 🔭. Requirements: endpoint/gateway/CLI-path/system-prompt overrides stay untrusted-workspace-restricted; secret material never lands in settings, logs, or telemetry.
+BYOK keys live only in VS Code `SecretStorage` (`src/utils/api.ts`) ✅. The desktop bridge reuses the shared token at `~/.agiworkforce/bridge-token`, enforced `0600`, read via `readBridgeToken` in `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — the reader refuses group/world-readable files and opens-then-fstats a single fd to close a TOCTOU race ✅. Transport is `ws://127.0.0.1:8787/ws` (localhost, outbound), with a stated migration target of Unix domain socket / named pipe behind `agiWorkforce.desktopBridge.transport` 🔭. Requirements: endpoint, gateway, CLI-path, auto-apply, telemetry-endpoint, and tier overrides stay untrusted-workspace-restricted; secret material never lands in settings, logs, or telemetry.
 
 ## Repository map
 
@@ -57,8 +57,8 @@ Claude Code and Codex IDE extensions expose a mostly single-vendor settings surf
 Settings are production-ready when every key has a default, is scoped/restricted correctly, and matches the canonical trust and pricing model.
 
 - [ ] Build: `pnpm --filter agi-workforce typecheck` and `check:vscode-theme-tokens` pass; every `agiWorkforce.*` key documents its default/range/enum.
-- [ ] Trust: no setting silently routes Local→BYOK/Cloud; active provider/trust mode is labeled; `agiWorkforce.tier` enum reconciled to Free/Basic/Pro/Max/Enterprise (no `hobby`/`pro_plus`).
-- [ ] Security/Privacy: BYOK keys only in SecretStorage; telemetry off by default and redacted; endpoint/gateway/CLI/system-prompt/telemetry/tier remain untrusted-workspace-restricted; bridge token 0600 enforced.
+- [ ] Trust: no prior transcript is forwarded across a provider-boundary reset; active host/provider is visible; the tier enum preserves all canonical plan values.
+- [ ] Security/Privacy: credentials use SecretStorage; telemetry is off by default and redacted; endpoint/gateway/CLI/auto-apply/telemetry/tier remain untrusted-workspace-restricted; bridge token 0600 enforced.
 
 ## Anti-patterns
 

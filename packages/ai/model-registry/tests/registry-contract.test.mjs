@@ -148,7 +148,7 @@ test('emits separated registry records and cross-language artifacts', () => {
     'imageOutput',
   );
   assert.equal(registry.policies.auto.slots.image_generation.modelKey, 'gemini-3.1-flash-image');
-  assert.equal(registry.policies.auto.slots.flagship_coding.modelKey, 'claude-opus-4.8');
+  assert.equal(registry.policies.auto.slots.flagship_coding.modelKey, 'claude-opus-5');
   for (const [slotId, slot] of Object.entries(registry.policies.auto.slots)) {
     assert.ok(slot.label?.trim(), `${slotId} must expose a generated presentation label`);
     assert.ok(
@@ -169,6 +169,11 @@ test('emits separated registry records and cross-language artifacts', () => {
   );
   assert.equal(registry.runtimeProfiles['cli/byok-chat'].status, 'implemented');
   assert.equal(registry.runtimeProfiles['desktop/cloud-chat'].status, 'implemented');
+  assert.equal(
+    registry.runtimeProfiles['web/cloud-chat'].features.toolDiscovery.implementation,
+    'implemented',
+    'Managed Web loads operator MCP and per-user connector tools into the platform tool loop',
+  );
   assert.equal(
     registry.runtimeProfiles['desktop/cloud-chat'].features.webSearch.implementation,
     'implemented',

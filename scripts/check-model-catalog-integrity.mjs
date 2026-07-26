@@ -5,8 +5,11 @@
 // packages/contracts/types/src/models.json. This guard fails if NON-TEST TypeScript
 // shipping code OR hand-maintained doc files (.md/.mdx) reference a model ID
 // that is NOT in the canonical catalog (i.e. a removed/ghost/drifted ID). It
-// is the durable backstop that stops the recurring catalog-drift class recorded
-// in archived recon notes under docs/archive/2026-06-05-doc-reset/reports/audit/.
+// is the durable backstop for the recurring catalog-drift class tracked by the
+// current model-registry tests and known-flaws ledger.
+// The specifically retired Opus predecessor is stricter: it is forbidden across
+// source, tests, docs, and generated compatibility artifacts in every supported
+// spelling, per the founder's latest-family-only policy.
 //
 // Scope:
 //   - .ts/.tsx under apps/ packages/ services/ (excluding tests, specs,
@@ -31,6 +34,21 @@ const CATALOG_INPUTS = [
   CATALOG,
   path.join(root, 'packages/ai/model-registry/catalog/models.curation.json'),
   path.join(root, 'packages/ai/model-registry/catalog/models.synced.json'),
+];
+
+// Founder policy keeps only the latest Opus generation selectable. Match the
+// retired family generically so the next old spelling cannot bypass a static
+// denylist (`claude-opus-4.x`, `claude-opus-4-x`, `opus_4_x`, display labels,
+// and the older `claude-3-opus` ordering are all covered).
+const RETIRED_OPUS_ID_PATTERN =
+  /\b(?:claude-3-opus(?:-[0-9]{8})?|claude-opus-(?:3|4)(?:[.-]\d+)?(?:-[0-9]{8})?)\b/i;
+const RETIRED_OPUS_LABEL_PATTERNS = [
+  /\b(?:claude[\s._-]+)?opus[\s._-]+(?:3|4)(?:[\s._-]+\d+)?\b/i,
+  /\bclaude[\s._-]+(?:3|4)(?:[\s._-]+\d+)?[\s._-]+opus\b/i,
+];
+const REMOVED_OPUS_PREDECESSOR_PATTERNS = [
+  /\b(?:claude[\s._-]+)?opus[\s._-]*4[\s._-]+8\b/i,
+  /\bclaude[\s._-]+4[\s._-]+8[\s._-]+opus\b/i,
 ];
 
 // Deprecated, removed, or unverified model IDs that must not appear in selectable
@@ -89,8 +107,8 @@ const REMOVED_SELECTABLE_MODEL_IDS = new Set([
 
 // Confirmed-removed SELECTABLE model IDs that must not appear in live TS code as
 // catalog entries, defaults, or selectable-model references.
-// Source: model curation (opus-4.6/4.7 -> opus-4.8; retired gpt-5.4
-// flagship/pro/codex ids -> gpt-5.5; gpt-5.4-mini remains current).
+// Source: model curation (older Opus generations -> Opus 5; retired GPT-5.4
+// flagship/pro/codex IDs; GPT-5.4 Mini remains a current Free-tier exception).
 //
 // SCOPE NOTE: this guard deliberately does NOT police `o3` or `gpt-image-1.x`.
 // Those can appear in legitimate provider-API/reasoning-detection code even
@@ -146,6 +164,17 @@ const SKIP_DIR = new Set([
   '.turbo',
   '.cache',
 ]);
+const RETIREMENT_SKIP_DIR = new Set([
+  'node_modules',
+  'dist',
+  'dist-web',
+  '.next',
+  'build',
+  'target',
+  'coverage',
+  '.turbo',
+  '.cache',
+]);
 const isTestFile = (f) => /\.(test|spec)\.[cm]?tsx?$/.test(f) || /\.stories\./.test(f);
 const isTs = (f) => /\.[cm]?tsx?$/.test(f);
 const isMd = (f) => /\.mdx?$/.test(f);
@@ -175,6 +204,28 @@ function* walk(dir) {
   }
 }
 
+// The founder explicitly requires the immediately retired Opus predecessor to
+// be absent from the entire source tree — including tests, historical docs,
+// generated compatibility artifacts, and non-TypeScript consumers.
+function* walkRetirementSources(dir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    if (e.name.startsWith('.') && e.name !== '.well-known') continue;
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (RETIREMENT_SKIP_DIR.has(e.name)) continue;
+      yield* walkRetirementSources(full);
+    } else if (e.isFile() && /\.(?:mdx?|[cm]?[jt]sx?|rs|json|ya?ml|py|sh)$/.test(e.name)) {
+      yield full;
+    }
+  }
+}
+
 // Skip comment lines in TypeScript/TSX (JSDoc examples are not live behavior).
 function isCommentLine(line) {
   const t = line.trim();
@@ -195,7 +246,10 @@ if (!fs.existsSync(CATALOG)) {
 const catalogViolations = [];
 
 function recordCatalogValue(file, pathLabel, value) {
-  if (typeof value === 'string' && REMOVED_SELECTABLE_MODEL_IDS.has(value)) {
+  if (
+    typeof value === 'string' &&
+    (REMOVED_SELECTABLE_MODEL_IDS.has(value) || RETIRED_OPUS_ID_PATTERN.test(value))
+  ) {
     catalogViolations.push({
       file: path.relative(root, file),
       path: pathLabel,
@@ -269,7 +323,8 @@ for (const scanRoot of SCAN_ROOTS) {
     }
     const cheapHit =
       DISALLOWED_SUBSTRING.some((id) => text.includes(id)) ||
-      DISALLOWED_TOKEN.some((id) => text.includes(id));
+      DISALLOWED_TOKEN.some((id) => text.includes(id)) ||
+      (kind === 'ts' && RETIRED_OPUS_LABEL_PATTERNS.some((pattern) => pattern.test(text)));
     if (!cheapHit) continue;
     const skipComment = kind === 'md' ? isMdCommentLine : isCommentLine;
     const lines = text.split('\n');
@@ -295,13 +350,50 @@ for (const scanRoot of SCAN_ROOTS) {
           });
         }
       }
+      if (kind === 'ts') {
+        for (const pattern of RETIRED_OPUS_LABEL_PATTERNS) {
+          const match = lines[i].match(pattern);
+          if (match) {
+            violations.push({
+              file: path.relative(root, file),
+              line: i + 1,
+              id: match[0],
+              text: lines[i].trim().slice(0, 120),
+            });
+          }
+        }
+      }
+    }
+  }
+}
+
+for (const file of walkRetirementSources(root)) {
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    continue;
+  }
+  if (!REMOVED_OPUS_PREDECESSOR_PATTERNS.some((pattern) => pattern.test(text))) continue;
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    for (const pattern of REMOVED_OPUS_PREDECESSOR_PATTERNS) {
+      const match = lines[i].match(pattern);
+      if (match) {
+        violations.push({
+          file: path.relative(root, file),
+          line: i + 1,
+          id: match[0],
+          text: lines[i].trim().slice(0, 120),
+        });
+      }
     }
   }
 }
 
 if (violations.length > 0) {
   console.error(
-    'Model-catalog integrity check FAILED — removed/ghost model IDs in live TS or doc files:',
+    'Model-catalog integrity check FAILED — removed/ghost model references in guarded source files:',
   );
   console.error(
     '(IDs must come from packages/contracts/types/src/models.json — fix the site or update DISALLOWED if the ID was re-added.)\n',
@@ -314,5 +406,5 @@ if (violations.length > 0) {
 }
 
 console.log(
-  'Model-catalog integrity check passed (no removed/ghost model IDs in live TS or doc files).',
+  'Model-catalog integrity check passed (no removed/ghost model references in guarded source files).',
 );

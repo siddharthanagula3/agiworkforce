@@ -22,6 +22,7 @@ import { Zap, X, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/src/ui/theme';
 import { useScheduleStore, type CreateScheduleInput } from '../store';
+import { requestsSubDailySchedule } from '../policy';
 
 // ---------------------------------------------------------------------------
 // Natural language parser
@@ -87,6 +88,7 @@ function extractTime(text: string): string {
 export function parseNaturalLanguage(text: string): ParsedSchedule | null {
   const lower = text.toLowerCase().trim();
   if (!lower) return null;
+  if (requestsSubDailySchedule(lower)) return null;
 
   const timeOfDay = extractTime(text);
 

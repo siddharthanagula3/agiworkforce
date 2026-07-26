@@ -414,6 +414,7 @@ export const window = {
   showErrorMessage: vi.fn().mockResolvedValue(undefined),
   showInputBox: vi.fn().mockResolvedValue(undefined),
   showQuickPick: vi.fn().mockResolvedValue(undefined),
+  showOpenDialog: vi.fn().mockResolvedValue(undefined),
   showTextDocument: vi.fn().mockResolvedValue(undefined),
   createStatusBarItem: vi.fn(() => new MockStatusBarItem()),
   createTextEditorDecorationType: vi.fn(() => ({ dispose: vi.fn() })),

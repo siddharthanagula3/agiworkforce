@@ -59,4 +59,16 @@ describe('ImageGenProgress', () => {
       color: lightColors.textMuted,
     });
   });
+
+  it('shows an honest indeterminate state when the server exposes no progress feed', () => {
+    const { getByLabelText, getByText, queryByText } = render(
+      <ImageGenProgress prompt="Draw a product launch" status="generating" />,
+    );
+
+    expect(getByLabelText('Image generation generating')).toHaveAccessibilityValue({
+      text: 'In progress',
+    });
+    expect(getByText('Generating securely in AGI Cloud…')).toBeTruthy();
+    expect(queryByText('0% complete')).toBeNull();
+  });
 });

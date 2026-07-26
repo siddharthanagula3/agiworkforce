@@ -286,8 +286,8 @@ pub(super) fn escape_xml(s: &str) -> String {
 /// not specific model IDs, so they keep matching new versions like
 /// `gpt-4o-2024-11`, `claude-3-5-sonnet`, etc.
 pub(super) fn model_likely_supports_vision(model: &str) -> bool {
-    // 1. Authoritative catalog lookup (post-canonicalization, e.g. "claude-opus-4.8"
-    //    -> "claude-opus-4.8").  If the model is in the catalog we trust the flag.
+    // 1. Authoritative catalog lookup (post-canonicalization, e.g. "claude-opus-5"
+    //    -> "claude-opus-5").  If the model is in the catalog we trust the flag.
     let canonical = models_config::get_canonicalized_id(model);
     if let Some(entry) = models_config::get_all_model_entries().get(&canonical) {
         return entry.capabilities.vision;

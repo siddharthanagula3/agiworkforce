@@ -41,8 +41,8 @@ require_cmd pnpm
 NODE_VERSION="$(node --version 2>/dev/null || echo none)"
 smoke "Node: ${NODE_VERSION}"
 case "${NODE_VERSION}" in
-  v22.*) ok "Node version OK" ;;
-  *) warn "Node 22.x expected (repo .nvmrc). Got: ${NODE_VERSION}" ;;
+  v24.*) ok "Node version OK" ;;
+  *) warn "Node 24.x expected (repo .nvmrc). Got: ${NODE_VERSION}" ;;
 esac
 
 EAS_VERSION="$(eas --version 2>/dev/null | head -n1 || echo 'not found')"

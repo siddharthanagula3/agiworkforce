@@ -40,19 +40,19 @@ export function AccountSection() {
   const { session } = useSession();
   const router = useRouter();
 
-  const orgId = user?.id ?? null;
+  const userId = user?.id ?? null;
   const [copied, setCopied] = useState(false);
 
-  const handleCopyOrgId = useCallback(async () => {
-    if (!orgId) return;
+  const handleCopyUserId = useCallback(async () => {
+    if (!userId) return;
     try {
-      await navigator.clipboard.writeText(orgId);
+      await navigator.clipboard.writeText(userId);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard API may be unavailable in some contexts; fail silently.
     }
-  }, [orgId]);
+  }, [userId]);
 
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -308,7 +308,7 @@ export function AccountSection() {
         </div>
       </section>
 
-      {/* Organization / User ID */}
+      {/* Account identifier */}
       <section
         style={{
           border: '1px solid var(--settings-border)',
@@ -326,11 +326,11 @@ export function AccountSection() {
             color: 'var(--text-2)',
           }}
         >
-          Organization
+          Account identifier
         </div>
         <div style={{ padding: '20px' }}>
           <label
-            htmlFor="org-id-field"
+            htmlFor="user-id-field"
             style={{
               display: 'block',
               fontSize: 13,
@@ -339,14 +339,14 @@ export function AccountSection() {
               marginBottom: 8,
             }}
           >
-            Organization ID
+            User ID
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input
-              id="org-id-field"
+              id="user-id-field"
               type="text"
               readOnly
-              value={orgId ?? 'Not available'}
+              value={userId ?? 'Not available'}
               style={{
                 flex: 1,
                 fontSize: 13,
@@ -364,9 +364,9 @@ export function AccountSection() {
             />
             <button
               type="button"
-              onClick={() => void handleCopyOrgId()}
-              disabled={!orgId}
-              aria-label="Copy organization ID"
+              onClick={() => void handleCopyUserId()}
+              disabled={!userId}
+              aria-label="Copy user ID"
               title="Copy"
               style={{
                 flexShrink: 0,
@@ -380,8 +380,8 @@ export function AccountSection() {
                 border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
                 color: copied ? 'var(--teal, #21808d)' : 'var(--text-3)',
-                cursor: orgId ? 'pointer' : 'not-allowed',
-                opacity: orgId ? 1 : 0.4,
+                cursor: userId ? 'pointer' : 'not-allowed',
+                opacity: userId ? 1 : 0.4,
                 transition: 'color 0.15s',
               }}
             >

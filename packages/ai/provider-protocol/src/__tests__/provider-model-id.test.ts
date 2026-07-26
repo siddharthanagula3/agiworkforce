@@ -4,12 +4,8 @@ import { listCanonicalModels } from '@agiworkforce/types';
 import { toProviderApiModelId } from '../provider-model-id';
 
 describe('toProviderApiModelId', () => {
-  it('maps a canonical product model ID to the provider wire ID', () => {
-    expect(toProviderApiModelId('claude-opus-4.8')).toBe('claude-opus-4-8');
-  });
-
-  it('keeps an already-mapped provider wire ID stable', () => {
-    expect(toProviderApiModelId('claude-opus-4-8')).toBe('claude-opus-4-8');
+  it('keeps the Opus 5 canonical product and provider ID stable', () => {
+    expect(toProviderApiModelId('claude-opus-5')).toBe('claude-opus-5');
   });
 
   it('derives every provider wire ID from the canonical model registry', () => {

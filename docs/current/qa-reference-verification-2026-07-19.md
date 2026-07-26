@@ -2,7 +2,11 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-19
+Last updated: 2026-07-25
+
+Model-catalog amendment (2026-07-25): model rows below use the current
+machine-readable catalog after the Claude Opus 5 replacement. This does not
+change the original 2026-07-19 verification date for the non-model behavior.
 
 Master, clause-by-clause verification of the two founder-supplied QA reference
 contracts against the actual codebase:
@@ -46,7 +50,7 @@ search path.** Nothing needs removal because nothing is search-incapable.
 
 | Path             | Provider   | Model                  |
 | ---------------- | ---------- | ---------------------- |
-| native           | anthropic  | claude-opus-4.8        |
+| native           | anthropic  | claude-opus-5          |
 | native           | anthropic  | claude-haiku-4.5       |
 | native           | anthropic  | claude-fable-5         |
 | native           | openai     | gpt-5.6-sol            |
@@ -91,7 +95,7 @@ execution (E2B) 8/18.**
 
 | Model                  | tools | research | vision | codeExec (E2B) | agentic |
 | ---------------------- | ----- | -------- | ------ | -------------- | ------- |
-| claude-opus-4.8        | Y     | Y        | Y      | Y              | Y       |
+| claude-opus-5          | Y     | Y        | Y      | Y              | Y       |
 | claude-haiku-4.5       | Y     | –        | Y      | –              | Y       |
 | claude-fable-5         | Y     | Y        | Y      | Y              | Y       |
 | gpt-5.6-sol            | Y     | –        | Y      | –              | Y       |

@@ -14,6 +14,7 @@
 import * as vscode from 'vscode';
 import { type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
 import { getDesktopBridge } from '../features/desktop-bridge';
+import { fetchTierInfo, type TierInfo } from '../utils/api';
 
 // ─── Tier type ────────────────────────────────────────────────────────────────
 
@@ -26,9 +27,13 @@ export type Tier = UIPlanTier;
 const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
   'local',
   'byok',
+  'free',
   'basic',
   'pro',
   'max',
+  'max_15x',
+  'team',
+  'enterprise',
 ]);
 
 /**
@@ -38,7 +43,17 @@ const VALID_TIERS: ReadonlySet<string> = new Set<UIPlanTier>([
  * Kept here as a local convenience for tests that introspect order; the
  * canonical comparator is {@link tierAtLeast} from `@agiworkforce/types`.
  */
-export const TIER_ORDER: readonly Tier[] = ['local', 'byok', 'basic', 'pro', 'max'];
+export const TIER_ORDER: readonly Tier[] = [
+  'local',
+  'byok',
+  'free',
+  'basic',
+  'pro',
+  'team',
+  'max',
+  'max_15x',
+  'enterprise',
+];
 
 /** Re-export of the canonical {@link tierAtLeast} comparator. */
 export { tierAtLeast };
@@ -58,6 +73,54 @@ function coerceTier(raw: string | undefined): Tier | undefined {
         ? 'max'
         : normalized;
   return VALID_TIERS.has(remapped) ? (remapped as Tier) : undefined;
+}
+
+export type AccountTierLoader = (secrets: vscode.SecretStorage) => Promise<TierInfo | undefined>;
+
+/**
+ * Remove account-derived tier state when a device session ends or cannot be
+ * revalidated. Leaving a previous Pro/Team tier cached after sign-out makes
+ * managed models appear reachable even though the account token is gone.
+ */
+export async function clearAccountTierCache(context: vscode.ExtensionContext): Promise<void> {
+  await Promise.all([
+    context.globalState.update('tierStatus.cachedTier', undefined),
+    vscode.workspace
+      .getConfiguration('agiWorkforce')
+      .update('currentTier', 'unknown', vscode.ConfigurationTarget.Global),
+  ]);
+}
+
+/**
+ * Refresh the server-owned account tier and replace any prior cache.
+ *
+ * A failed or malformed refresh clears the old account tier so model and Auto
+ * admission fail closed instead of retaining paid reachability from an earlier
+ * session. Provider BYOK remains available through the independent app-server.
+ */
+export async function refreshAccountTierCache(
+  context: vscode.ExtensionContext,
+  loadTier: AccountTierLoader = fetchTierInfo,
+): Promise<Tier | undefined> {
+  let tierInfo: TierInfo | undefined;
+  try {
+    tierInfo = await loadTier(context.secrets);
+  } catch {
+    tierInfo = undefined;
+  }
+  const tier = coerceTier(tierInfo?.tier);
+  if (tier === undefined) {
+    await clearAccountTierCache(context);
+    return undefined;
+  }
+
+  await Promise.all([
+    context.globalState.update('tierStatus.cachedTier', tier),
+    vscode.workspace
+      .getConfiguration('agiWorkforce')
+      .update('currentTier', tier, vscode.ConfigurationTarget.Global),
+  ]);
+  return tier;
 }
 
 // ─── Bridge fetch ─────────────────────────────────────────────────────────────

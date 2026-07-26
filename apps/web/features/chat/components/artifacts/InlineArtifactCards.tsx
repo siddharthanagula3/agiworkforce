@@ -58,6 +58,8 @@ function typeBadge(type: ArtifactData['type']): string {
       return 'Slides';
     case 'email':
       return 'Email';
+    case 'image':
+      return 'Image';
     default:
       return 'File';
   }
@@ -80,6 +82,8 @@ function kindLabel(type: ArtifactData['type']): string {
       return 'Slides';
     case 'email':
       return 'Email';
+    case 'image':
+      return 'Image';
     case 'document':
     default:
       return 'Document';
@@ -113,6 +117,7 @@ export function TypeIcon({ type, className }: { type: ArtifactData['type']; clas
     case 'react':
       return <Code2 className={cls} aria-hidden="true" />;
     case 'svg':
+    case 'image':
       return <ImageIcon className={cls} aria-hidden="true" />;
     case 'mermaid':
       return <FileCode className={cls} aria-hidden="true" />;
@@ -138,6 +143,8 @@ function badgeClass(type: ArtifactData['type']): string {
       return 'bg-sky-500/15 text-sky-400';
     case 'svg':
       return 'bg-violet-500/15 text-violet-400';
+    case 'image':
+      return 'bg-fuchsia-500/15 text-fuchsia-400';
     case 'mermaid':
       return 'bg-emerald-500/15 text-emerald-400';
     case 'code':

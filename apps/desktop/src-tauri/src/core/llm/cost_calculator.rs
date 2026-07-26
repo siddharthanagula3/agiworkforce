@@ -343,7 +343,7 @@ mod tests {
     #[test]
     fn calculate_returns_positive_for_known_model() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::Anthropic, "claude-opus-4.8", 1000, 500);
+        let cost = calc.calculate(Provider::Anthropic, "claude-opus-5", 1000, 500);
         assert!(
             cost > 0.0,
             "known model cost must be positive, got {}",
@@ -417,11 +417,11 @@ mod tests {
     #[test]
     fn calculate_with_cache_anthropic_applies_cache_discount() {
         let calc = CostCalculator::new();
-        let cost_no_cache = calc.calculate(Provider::Anthropic, "claude-opus-4.8", 1000, 500);
+        let cost_no_cache = calc.calculate(Provider::Anthropic, "claude-opus-5", 1000, 500);
         // With cache: 500 cache_read tokens billed at 0.1x should be cheaper
         let cost_cached = calc.calculate_with_cache(
             Provider::Anthropic,
-            "claude-opus-4.8",
+            "claude-opus-5",
             1000,
             500,
             500, // cache_read_tokens

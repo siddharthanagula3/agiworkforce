@@ -45,6 +45,7 @@ import { usePlanModeStore } from '../../stores/planModeStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useUIStore } from '../../stores/uiStore';
+import type { ChatRuntime } from '../../lib/runtime';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Store reset helpers
@@ -136,6 +137,24 @@ describe('ChatInterface host ownership slots', () => {
     expect(html).toContain('>Code<');
     expect(html).toContain('>Research<');
     expect(html).toContain('>Computer<');
+  });
+
+  it('renders only the quick actions declared by the active runtime', () => {
+    const runtime = {
+      supportsResearch: true,
+      supportsImageGeneration: true,
+      supportsVideoGeneration: false,
+      supportsComputerUse: false,
+    } as ChatRuntime;
+
+    const html = renderToStaticMarkup(
+      <ChatInterface runtime={runtime} sidebarSlot={null} enableSearchOverlay={false} />,
+    );
+
+    expect(html).toContain('>Research<');
+    expect(html).toContain('>Image<');
+    expect(html).not.toContain('>Video<');
+    expect(html).not.toContain('>Computer<');
   });
 
   it('keeps the empty-state badge CTA host-configurable', () => {

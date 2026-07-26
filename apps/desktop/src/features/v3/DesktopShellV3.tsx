@@ -20,6 +20,7 @@ import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/projectStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
+import { selectPlan, useUnifiedAuthStore } from '../../stores/auth';
 import { invoke } from '../../lib/tauri-mock';
 import { ActionRecorder } from '@/features/automation/ActionRecorder';
 import { ProjectSettingsDialog } from '@/features/chat/ProjectSettingsDialog';
@@ -28,6 +29,10 @@ import {
   SelectedContextReview,
   type SelectedContextHandoff,
 } from '../context-handoff/SelectedContextReview';
+import {
+  canUseDesktopCloudAgiWork,
+  canUseDesktopCloudImageGeneration,
+} from '../../services/desktopCloudEntitlements';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -93,6 +98,12 @@ export function DesktopShellV3({
   // in both the attachment menu and the composer scope picker.
   const privacyMode = useAppModeStore(selectPrivacyMode);
   const folderSeamEnabled = privacyMode === 'local';
+  const accountPlan = useUnifiedAuthStore(selectPlan);
+  const isManagedCloud = privacyMode === 'managed';
+  const canUseAgiWork = !isManagedCloud || canUseDesktopCloudAgiWork(accountPlan);
+  const quickChipAvailability = isManagedCloud
+    ? { image: canUseDesktopCloudImageGeneration(accountPlan) }
+    : undefined;
 
   useEffect(() => {
     if (
@@ -282,6 +293,8 @@ export function DesktopShellV3({
               currentFolderLabel={folderSeamEnabled ? currentFolderLabel : null}
               onClearFolder={folderSeamEnabled ? clearFolder : undefined}
               projectPicker={composerProjectPicker}
+              canUseAgiWork={canUseAgiWork}
+              quickChipAvailability={quickChipAvailability}
               onNavigateView={handleNavigateView}
               sidebarSlot={null}
               emptyStateSlot={<EmptyChat />}

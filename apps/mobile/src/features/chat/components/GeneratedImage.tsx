@@ -1,17 +1,21 @@
-import { useState, useCallback } from 'react';
-import { View, Pressable, Share, Platform } from 'react-native';
+import { useState, useCallback, useEffect } from 'react';
+import { View, Pressable, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { colors } from '@/src/ui/theme';
+import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
+import { shareGeneratedImage } from '@/services/fileCreation';
 
 interface GeneratedImageProps {
   imageUrl: string;
   revisedPrompt?: string;
   width?: number;
   onPress?: () => void;
+  /** Display-only fallback for an API response explicitly marked persisted:false. */
+  allowEphemeral?: boolean;
 }
 
 type LoadState = 'loading' | 'loaded' | 'error';
@@ -21,8 +25,19 @@ type LoadState = 'loading' | 'loaded' | 'error';
  * Shows a generated image with rounded corners, optional revised prompt,
  * long-press share, and fade-in animation on load.
  */
-export function GeneratedImage({ imageUrl, revisedPrompt, width, onPress }: GeneratedImageProps) {
+export function GeneratedImage({
+  imageUrl,
+  revisedPrompt,
+  width,
+  onPress,
+  allowEphemeral = false,
+}: GeneratedImageProps) {
   const [loadState, setLoadState] = useState<LoadState>('loading');
+  const { source, status: sourceStatus } = useGeneratedImageSource(imageUrl, allowEphemeral);
+
+  useEffect(() => {
+    setLoadState('loading');
+  }, [source?.uri]);
 
   const handleLoad = useCallback(() => {
     setLoadState('loaded');
@@ -35,23 +50,28 @@ export function GeneratedImage({ imageUrl, revisedPrompt, width, onPress }: Gene
   const handleLongPress = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      // Android does not support the `url` field in Share.share — use `message` instead.
-      // iOS supports `url` natively for sharing image links.
-      await Share.share({
-        title: 'Generated Image',
-        message: Platform.OS === 'android' ? imageUrl : (revisedPrompt ?? ''),
-        url: Platform.OS !== 'android' ? imageUrl : undefined,
-      });
-    } catch {
-      // User cancelled or share failed silently
+      await shareGeneratedImage(imageUrl);
+    } catch (error) {
+      Alert.alert(
+        'Could not share image',
+        error instanceof Error ? error.message : 'Save the image and try again.',
+      );
     }
-  }, [imageUrl, revisedPrompt]);
+  }, [imageUrl]);
 
   const imageWidth = width ?? 280;
   const imageHeight = imageWidth; // Default to square aspect ratio
 
-  // Error state
-  if (loadState === 'error') {
+  const unavailableMessage =
+    sourceStatus === 'signed-out'
+      ? 'Sign in to view this generated image'
+      : sourceStatus === 'invalid'
+        ? 'Generated image unavailable'
+        : sourceStatus === 'error' || loadState === 'error'
+          ? 'Failed to load image'
+          : null;
+
+  if (unavailableMessage) {
     return (
       <View
         style={{
@@ -66,7 +86,7 @@ export function GeneratedImage({ imageUrl, revisedPrompt, width, onPress }: Gene
           gap: 8,
           marginVertical: 6,
         }}
-        accessibilityLabel="Failed to load generated image"
+        accessibilityLabel={unavailableMessage}
       >
         <ImageOff size={28} color={colors.textMuted} />
         <Text
@@ -75,8 +95,25 @@ export function GeneratedImage({ imageUrl, revisedPrompt, width, onPress }: Gene
             color: colors.textMuted,
           }}
         >
-          Failed to load image
+          {unavailableMessage}
         </Text>
+      </View>
+    );
+  }
+
+  if (sourceStatus === 'authorizing' || !source) {
+    return (
+      <View
+        style={{
+          width: imageWidth,
+          height: imageHeight,
+          borderRadius: 12,
+          overflow: 'hidden',
+          marginVertical: 6,
+        }}
+        accessibilityLabel="Loading generated image"
+      >
+        <Skeleton width={imageWidth} height={imageHeight} borderRadius={12} />
       </View>
     );
   }
@@ -113,7 +150,7 @@ export function GeneratedImage({ imageUrl, revisedPrompt, width, onPress }: Gene
           }}
         >
           <Image
-            source={{ uri: imageUrl }}
+            source={source}
             style={{
               width: imageWidth,
               height: imageHeight,
@@ -125,7 +162,7 @@ export function GeneratedImage({ imageUrl, revisedPrompt, width, onPress }: Gene
             transition={200}
             onLoad={handleLoad}
             onError={handleError}
-            cachePolicy="memory-disk"
+            cachePolicy="memory"
             accessibilityLabel={revisedPrompt ?? 'Generated image'}
           />
         </View>

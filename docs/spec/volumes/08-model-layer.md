@@ -18,7 +18,7 @@ A real, honest gap to record: the registry currently has chat/code/reasoning/ima
 3. **Auto-routing reads `catalog/routing-policies.json` through `resolveAutoRoute`.** Auto aliases are policies, never models. Task→slot and slot→model assignments must not be recreated in an application.
 4. **Default casual traffic to economy.** Route simple/quick tasks to `auto-economy`/fast-tier models for cost/latency (Vol 31).
 5. **Respect the user-preferred model within the active trust boundary.** Routing may optimize, but never cross Local/BYOK/Managed silently.
-6. **Honor tokenizer drift.** Re-baseline cost/latency using `tokenizerDriftFactor`/`ESTIMATE_INFLATION` (e.g., Claude Opus 4.8 inherits the Opus 4.7 tokenizer baseline: 1.0×–1.35× tokens for the same text).
+6. **Honor tokenizer drift only when declared.** Re-baseline cost/latency using `tokenizerDriftFactor`/`ESTIMATE_INFLATION`; never carry a predecessor's drift factor onto a replacement model without verified metadata.
 7. **Honor deprecation/promo metadata.** Use `isDeprecated`/`isPromoExpired` and `effectiveInputPrice`/`effectiveOutputPrice`; never serve a deprecated ID as current.
 8. **Embeddings/rerankers/moderation are registry-gated.** No such capability is assumed until it has a registry entry and an implemented harness.
 
@@ -86,7 +86,7 @@ The model layer is production-ready only when every TypeScript and Rust consumer
 - Treating Auto aliases as provider model IDs.
 - Treating provider documentation as proof that an AGI harness feature is implemented.
 - Showing reasoning/vision/tools UI for a model whose `capabilities` do not support them.
-- Ignoring tokenizer drift and under-budgeting Opus-4.8-class context/cost.
+- Ignoring declared tokenizer drift and under-budgeting long-context model cost.
 - Routing that silently changes provider across a trust boundary.
 - Claiming embeddings/RAG-grade retrieval or moderation models that have no `models.json` entry.
 - Serving a `deprecated` ID as if it were current.

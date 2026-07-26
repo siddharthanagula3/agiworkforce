@@ -10,7 +10,8 @@
  */
 
 import { getExtensionTokensCss } from './tokens';
-import { clearAuthToken } from './features/cloud-bridge/freeTrialClient';
+import { clearAuthToken, getAuthToken } from './features/cloud-bridge/freeTrialClient';
+import { isClerkExtensionAuthConfigured, openClerkSignIn } from './features/cloud-bridge/clerkAuth';
 
 const SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 const API_KEY_STORAGE_KEY = 'agi_api_key';
@@ -630,39 +631,80 @@ async function buildPage(): Promise<void> {
   accountHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Account'));
   accountSection.appendChild(accountHeader);
 
-  const logoutRow = el('div', { class: 'opt-row' });
-  const logoutLeft = el('div');
-  logoutLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Log out'));
-  logoutLeft.appendChild(
-    el('div', { class: 'opt-row-hint' }, 'Remove your AGI account session from this device.'),
-  );
-  logoutRow.appendChild(logoutLeft);
+  const renderAccountRow = (signedIn: boolean): void => {
+    accountSection.querySelector('.opt-row')?.remove();
+    const accountRow = el('div', { class: 'opt-row' });
+    const accountLeft = el('div');
 
-  const logoutBtn = el('button', { class: 'opt-btn-danger', id: 'opt-logout-btn' }, 'Log out');
-  logoutBtn.addEventListener('click', async () => {
-    logoutBtn.textContent = 'Logging out…';
-    logoutBtn.disabled = true;
-    try {
-      // Actually end the session: clearAuthToken() runs signOutClerk() and clears
-      // the session/dev tokens — the same real sign-out the side panel uses. The
-      // storage.remove below only purged legacy keys that nothing writes, so the
-      // Clerk session (the real auth) survived and the panel stayed signed in.
-      await clearAuthToken();
-      await chrome.storage.local.remove([
-        API_KEY_STORAGE_KEY,
-        'agi_user_id',
-        'agi_user_tier',
-        'agi_session',
-      ]);
-      logoutBtn.textContent = 'Logged out';
-    } catch {
-      logoutBtn.textContent = 'Error';
-      logoutBtn.disabled = false;
+    if (!signedIn) {
+      accountLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Sign in'));
+      accountLeft.appendChild(
+        el(
+          'div',
+          { class: 'opt-row-hint' },
+          isClerkExtensionAuthConfigured()
+            ? 'Use your AGI account for Managed Cloud chat and models.'
+            : 'AGI account sign-in is not configured in this development build.',
+        ),
+      );
+      accountRow.appendChild(accountLeft);
+
+      const signInBtn = el(
+        'button',
+        { class: 'opt-btn-primary', id: 'opt-signin-btn' },
+        isClerkExtensionAuthConfigured() ? 'Sign in' : 'Unavailable',
+      ) as HTMLButtonElement;
+      signInBtn.disabled = !isClerkExtensionAuthConfigured();
+      signInBtn.addEventListener('click', async () => {
+        signInBtn.textContent = 'Opening…';
+        signInBtn.disabled = true;
+        try {
+          await openClerkSignIn();
+          signInBtn.textContent = 'Sign-in opened';
+        } catch {
+          signInBtn.textContent = 'Try again';
+          signInBtn.disabled = false;
+        }
+      });
+      accountRow.appendChild(signInBtn);
+      accountSection.appendChild(accountRow);
+      return;
     }
-  });
 
-  logoutRow.appendChild(logoutBtn);
-  accountSection.appendChild(logoutRow);
+    accountLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Log out'));
+    accountLeft.appendChild(
+      el('div', { class: 'opt-row-hint' }, 'Remove your AGI account session from this device.'),
+    );
+    accountRow.appendChild(accountLeft);
+
+    const logoutBtn = el('button', { class: 'opt-btn-danger', id: 'opt-logout-btn' }, 'Log out');
+    logoutBtn.addEventListener('click', async () => {
+      logoutBtn.textContent = 'Logging out…';
+      logoutBtn.disabled = true;
+      try {
+        // Actually end the session: clearAuthToken() runs signOutClerk() and clears
+        // the session/dev tokens — the same real sign-out the side panel uses. The
+        // storage.remove below only purged legacy keys that nothing writes, so the
+        // Clerk session (the real auth) survived and the panel stayed signed in.
+        await clearAuthToken();
+        await chrome.storage.local.remove([
+          API_KEY_STORAGE_KEY,
+          'agi_user_id',
+          'agi_user_tier',
+          'agi_session',
+        ]);
+        renderAccountRow(false);
+      } catch {
+        logoutBtn.textContent = 'Error';
+        logoutBtn.disabled = false;
+      }
+    });
+
+    accountRow.appendChild(logoutBtn);
+    accountSection.appendChild(accountRow);
+  };
+
+  renderAccountRow(Boolean(await getAuthToken()));
   page.appendChild(accountSection);
 
   // ── Section: Autofill Profile ─────────────────────────────────────────────

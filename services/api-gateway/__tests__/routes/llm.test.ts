@@ -24,7 +24,11 @@ import { getAllowedModelsForTier, getRoutingSlotModel, modelsCatalog } from '@ag
 // Mirrors the `from(table) -> {select/eq/maybeSingle}` shape already used in
 // revocation.test.ts / deviceAuth.test.ts for the same module.
 const { tierState } = vi.hoisted(() => ({
-  tierState: { planTier: null as string | null, hasRow: true },
+  tierState: {
+    planTier: null as string | null,
+    status: 'active' as string | null,
+    hasRow: true,
+  },
 }));
 
 vi.mock('../../src/lib/neonClients', () => ({
@@ -34,7 +38,9 @@ vi.mock('../../src/lib/neonClients', () => ({
         eq: () => ({
           maybeSingle: () =>
             Promise.resolve({
-              data: tierState.hasRow ? { plan_tier: tierState.planTier } : null,
+              data: tierState.hasRow
+                ? { plan_tier: tierState.planTier, status: tierState.status }
+                : null,
               error: null,
             }),
         }),
@@ -71,9 +77,9 @@ describe('llm route — catalog-driven Basic allow-list', () => {
   });
 
   it('excludes flagship models that should be Pro-only', () => {
-    // claude-opus-4.8 + gpt-5.5 are flagship; the api-gateway must NOT
+    // claude-opus-5 + gpt-5.5 are flagship; the api-gateway must NOT
     // serve them on Basic even if a malicious caller supplies the ID.
-    expect(BASIC_ALLOWED_MODELS.has('claude-opus-4.8')).toBe(false);
+    expect(BASIC_ALLOWED_MODELS.has('claude-opus-5')).toBe(false);
     expect(BASIC_ALLOWED_MODELS.has('gpt-5.5')).toBe(false);
   });
 
@@ -121,6 +127,10 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
     expect(resolveProvider('sonar')).toBe('perplexity');
   });
 
+  it('proxies the current MiniMax model through its registered leaf adapter', () => {
+    expect(resolveProvider('minimax-m3')).toBe('minimax');
+  });
+
   it('lookup is consistent with the catalog provider field for every Basic model', () => {
     // For each model in the Basic allow-list, verify that:
     //   - if its catalog provider is a proxied cloud provider, resolveProvider() succeeds
@@ -135,8 +145,7 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
       'deepseek',
       'xai',
       'perplexity',
-      'groq',
-      'mistral',
+      'minimax',
       'moonshot',
       'qwen',
       'zhipu',
@@ -249,6 +258,7 @@ describe('llm route — enforcePlanTier tier ladder (founder directive 2026-07-1
 
   beforeEach(() => {
     tierState.planTier = null;
+    tierState.status = 'active';
     tierState.hasRow = true;
   });
 
@@ -260,7 +270,7 @@ describe('llm route — enforcePlanTier tier ladder (founder directive 2026-07-1
       new Set([...PRO_ALLOWED_MODELS, ...getAllowedModelsForTier('flagship_additions')]),
     );
     // The directive's named models are flagship-gated.
-    for (const id of ['claude-opus-4.8', 'claude-fable-5', 'gpt-5.6-sol']) {
+    for (const id of ['claude-opus-5', 'claude-fable-5', 'gpt-5.6-sol']) {
       expect(PRO_ALLOWED_MODELS.has(id)).toBe(false);
       expect(FLAGSHIP_ALLOWED_MODELS.has(id)).toBe(true);
     }
@@ -277,6 +287,37 @@ describe('llm route — enforcePlanTier tier ladder (founder directive 2026-07-1
   it('missing subscription row is treated as the Free plan', async () => {
     tierState.hasRow = false;
     await expect(enforcePlanTier('user-1', 'token', allowedBasicModel)).resolves.toBe('free');
+  });
+
+  it.each(['canceled', 'past_due', 'unpaid', 'expired'])(
+    'rejects a retained paid plan when its subscription is %s',
+    async (status) => {
+      tierState.planTier = 'pro';
+      tierState.status = status;
+
+      await expect(enforcePlanTier('user-1', 'token', allowedBasicModel, 'app')).rejects.toThrow(
+        `Subscription is ${status}`,
+      );
+    },
+  );
+
+  it('does not let an inactive retained paid plan pass developer-surface admission', async () => {
+    tierState.planTier = 'pro';
+    tierState.status = 'canceled';
+
+    await expect(enforcePlanTier('user-1', 'token', proAdditionModel, 'developer')).rejects.toThrow(
+      'Subscription is canceled',
+    );
+  });
+
+  it('keeps trialing subscriptions entitled on app and developer surfaces', async () => {
+    tierState.planTier = 'pro';
+    tierState.status = 'trialing';
+
+    await expect(enforcePlanTier('user-1', 'token', proAdditionModel, 'app')).resolves.toBe('pro');
+    await expect(enforcePlanTier('user-1', 'token', proAdditionModel, 'developer')).resolves.toBe(
+      'pro',
+    );
   });
 
   for (const tier of ['basic'] as const) {

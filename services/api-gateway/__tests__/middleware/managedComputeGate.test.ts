@@ -91,7 +91,7 @@ describe('managedComputeGate', () => {
 
     const eligibility = buildManagedComputeEligibility(req, {
       provider: 'anthropic',
-      model: 'claude-opus-4.8',
+      model: 'claude-opus-5',
     });
 
     expect(eligibility.allowed).toBe(true);

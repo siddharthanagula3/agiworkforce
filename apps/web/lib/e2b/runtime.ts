@@ -59,19 +59,20 @@ const E2B_SANDBOX_TIMEOUT_MS = 60_000;
 const E2B_CONVERSATION_TIMEOUT_MS = 10 * 60_000;
 
 /**
- * GOV-4: the per-user sandbox cap and the conversation sandbox lifetime are now
- * PLAN DIMENSIONS (`BILLING_PLAN_PRODUCT_LIMITS.maxSandboxes` /
- * `.sandboxTtlMs`), not one flat constant.
+ * GOV-4: the per-user sandbox allowance and conversation lifetime are plan
+ * dimensions (`BILLING_PLAN_PRODUCT_LIMITS.maxSandboxes` / `.sandboxTtlMs`).
+ * Plans grant 0–5 slots under the absolute five-per-user safety ceiling.
  *
- * They used to be `MAX_SANDBOXES_PER_USER = 5` and a flat 10-minute lifetime
- * for every tier including Free, so a paid tier bought literally nothing in
- * compute: same sandbox count, same lifetime, same everything.
+ * The old implementation granted the same five slots and flat 10-minute
+ * lifetime to every tier, including Free. The catalog now denies unsupported
+ * tiers, gives Basic fewer slots, and scales lifetime with the plan while
+ * preserving that hard ceiling.
  *
  * Only scoped (authenticated) sandboxes are counted and enforced; ephemeral
  * bare-API sandboxes self-dispose within `E2B_SANDBOX_TIMEOUT_MS`.
  */
 function resolveSandboxLimits(planTier: string | null | undefined): {
-  maxSandboxes: number | null;
+  maxSandboxes: number;
   ttlMs: number;
 } {
   return {

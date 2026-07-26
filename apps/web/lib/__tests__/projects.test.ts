@@ -45,7 +45,7 @@ describe('mapProjectRow', () => {
       default_privacy_mode: 'managed',
       default_provider_mode: 'ManagedNative',
       allowed_surfaces: ['web', 'mobile'],
-      default_model_id: 'claude-opus-4-8',
+      default_model_id: 'claude-opus-5',
       last_used_at: '2026-05-20T12:00:00Z',
       icon_emoji: '🚀',
       accent_color: 'emerald',
@@ -56,7 +56,7 @@ describe('mapProjectRow', () => {
     expect(mapped.defaultProviderMode).toBe('ManagedNative');
     expect(mapped.allowedSurfaces).toEqual(['web', 'mobile']);
     expect(mapped.organizationId).toBe('org-xyz');
-    expect(mapped.defaultModelId).toBe('claude-opus-4-8');
+    expect(mapped.defaultModelId).toBe('claude-opus-5');
     expect(mapped.lastUsedAt).toBe('2026-05-20T12:00:00Z');
     expect(mapped.iconEmoji).toBe('🚀');
     expect(mapped.accentColor).toBe('emerald');

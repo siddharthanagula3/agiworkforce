@@ -24,20 +24,52 @@ jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
 }));
 
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+}));
+
 jest.mock('../lib/constants', () => ({
   API_URL: 'https://api.test.local',
-  TIMEOUTS: { DEFAULT: 10_000 },
+  TIMEOUTS: { DEFAULT: 10_000, UPLOAD: 30_000 },
 }));
 
 jest.mock('../lib/abortSignal', () => ({
   combineAbortSignals: (signals: AbortSignal[]) => signals[0],
 }));
 
+jest.mock('../lib/egressGuard', () => ({
+  guardedFetch: (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init),
+}));
+
+const mockInvalidateCloudAccount = jest.fn();
+jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
+  invalidateCloudAccount: () => mockInvalidateCloudAccount(),
+}));
+
+const mockClearLocalCloudAccountState = jest.fn();
+jest.mock('../src/features/auth/services/cloudAccountTeardown', () => ({
+  clearLocalCloudAccountState: () => mockClearLocalCloudAccountState(),
+}));
+
+const mockGetInfoAsync = jest.fn();
+const mockUploadAsync = jest.fn();
+const mockCancelUploadAsync = jest.fn();
+const mockCreateUploadTask = jest.fn(() => ({
+  uploadAsync: (...args: unknown[]) => mockUploadAsync(...args),
+  cancelAsync: (...args: unknown[]) => mockCancelUploadAsync(...args),
+}));
+jest.mock('expo-file-system/legacy', () => ({
+  FileSystemUploadType: { BINARY_CONTENT: 0 },
+  getInfoAsync: (...args: unknown[]) => mockGetInfoAsync(...args),
+  createUploadTask: (...args: unknown[]) => mockCreateUploadTask(...args),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
 
-import { api, ApiPaywallError } from '../services/api';
+import { api, ApiPaywallError, resetApiAccountState } from '../services/api';
+import { waitFor } from '@testing-library/react-native';
 import {
   clearAuthSession,
   getAuthHeaders,
@@ -71,10 +103,112 @@ function makeResponse(status: number, body: unknown, contentType = 'application/
 
 beforeEach(() => {
   jest.clearAllMocks();
+  resetApiAccountState();
   mockGetAuthToken.mockResolvedValue('test-token');
   mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer test-token' });
   mockRefreshAuthSession.mockResolvedValue(false);
   mockClearAuthSession.mockResolvedValue(undefined);
+  mockGetInfoAsync.mockResolvedValue({
+    exists: true,
+    isDirectory: false,
+    size: 32,
+  });
+  mockCancelUploadAsync.mockResolvedValue(undefined);
+});
+
+describe('Cloud account request isolation', () => {
+  it('rejects an account-A response that resolves after account teardown', async () => {
+    let resolveResponse: ((response: Response) => void) | undefined;
+    jest.spyOn(globalThis, 'fetch').mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveResponse = resolve;
+      }),
+    );
+
+    const accountARequest = api.get<{ owner: string }>('/api/account-scoped');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    resetApiAccountState();
+    resolveResponse?.(makeResponse(200, { owner: 'account-a' }));
+
+    await expect(accountARequest).rejects.toMatchObject({
+      name: 'StaleApiAccountOperationError',
+    });
+
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(200, { owner: 'account-b' }));
+    await expect(api.get('/api/account-scoped')).resolves.toEqual({ owner: 'account-b' });
+  });
+
+  it('invalidates and clears Cloud account state synchronously on terminal 401', async () => {
+    mockRefreshAuthSession.mockResolvedValueOnce(false);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, { error: 'expired' }));
+
+    const request = api.get('/api/account-scoped');
+    await expect(request).rejects.toThrow('Session expired');
+
+    expect(mockInvalidateCloudAccount).toHaveBeenCalledTimes(1);
+    expect(mockClearLocalCloudAccountState).toHaveBeenCalledTimes(1);
+    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels an in-flight direct-to-storage upload on account teardown', async () => {
+    let resolveUpload:
+      | ((value: { status: number; body: string; headers: object }) => void)
+      | undefined;
+    mockUploadAsync.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpload = resolve;
+      }),
+    );
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(200, {
+        storageKey: 'users/account-a/attachment.txt',
+        uploadUrl: 'https://storage.example.test/upload',
+        uploadMethod: 'PUT',
+        uploadHeaders: { 'Content-Type': 'text/plain' },
+      }),
+    );
+
+    const accountAUpload = api.uploadFile({
+      name: 'attachment.txt',
+      type: 'text/plain',
+      uri: 'file:///attachment.txt',
+    });
+    await Promise.resolve();
+    await waitFor(() => expect(mockCreateUploadTask).toHaveBeenCalledTimes(1));
+
+    resetApiAccountState();
+    expect(mockCancelUploadAsync).toHaveBeenCalledTimes(1);
+    resolveUpload?.({ status: 200, body: '', headers: {} });
+
+    await expect(accountAUpload).rejects.toMatchObject({
+      name: 'StaleApiAccountOperationError',
+    });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an insecure presigned upload destination before creating a native task', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(200, {
+        storageKey: 'users/account-a/attachment.txt',
+        uploadUrl: 'http://storage.example.test/upload',
+        uploadMethod: 'PUT',
+        uploadHeaders: { 'Content-Type': 'text/plain' },
+      }),
+    );
+
+    await expect(
+      api.uploadFile({
+        name: 'attachment.txt',
+        type: 'text/plain',
+        uri: 'file:///attachment.txt',
+      }),
+    ).rejects.toThrow('Refusing an insecure upload destination');
+    expect(mockCreateUploadTask).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -86,7 +220,7 @@ describe('429 with paywall payload', () => {
     const paywallBody = {
       kind: 'paywall',
       feature: 'token_cap',
-      requiredTier: 'hobby',
+      requiredTier: 'basic',
       reason: '2M tokens used this month',
     };
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(429, paywallBody));
@@ -101,7 +235,7 @@ describe('429 with paywall payload', () => {
     expect(caught).toBeInstanceOf(ApiPaywallError);
     const paywallErr = caught as ApiPaywallError;
     expect(paywallErr.feature).toBe('token_cap');
-    expect(paywallErr.requiredTier).toBe('hobby');
+    expect(paywallErr.requiredTier).toBe('basic');
     expect(paywallErr.reason).toBe('2M tokens used this month');
     expect(paywallErr.name).toBe('ApiPaywallError');
   });
@@ -120,7 +254,7 @@ describe('429 with paywall payload', () => {
     );
   });
 
-  it('uses "token_cap" and "hobby" as defaults when fields are missing', async () => {
+  it('uses "token_cap" and canonical "basic" defaults when fields are missing', async () => {
     const paywallBody = { kind: 'paywall' };
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(429, paywallBody));
 
@@ -134,22 +268,22 @@ describe('429 with paywall payload', () => {
     expect(caught).toBeInstanceOf(ApiPaywallError);
     const paywallErr = caught as ApiPaywallError;
     expect(paywallErr.feature).toBe('token_cap');
-    expect(paywallErr.requiredTier).toBe('hobby');
+    expect(paywallErr.requiredTier).toBe('basic');
     expect(paywallErr.reason).toBe('');
   });
 
-  it('handles pro_plus tier correctly', async () => {
+  it('handles max_15x tier correctly', async () => {
     const paywallBody = {
       kind: 'paywall',
       feature: 'video_generation',
-      requiredTier: 'pro_plus',
-      reason: 'Video generation requires Pro+',
+      requiredTier: 'max_15x',
+      reason: 'Video generation requires Max 15x',
     };
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(429, paywallBody));
 
     const err = await api.get('/api/chat').catch((e) => e);
     expect(err).toBeInstanceOf(ApiPaywallError);
-    expect((err as ApiPaywallError).requiredTier).toBe('pro_plus');
+    expect((err as ApiPaywallError).requiredTier).toBe('max_15x');
   });
 });
 
@@ -190,7 +324,9 @@ describe('non-429 errors pass through', () => {
 
     const err = await api.get('/api/test').catch((e) => e);
     expect(err).not.toBeInstanceOf(ApiPaywallError);
-    expect((err as Error).message).toContain('500');
+    expect((err as Error).message).toBe(
+      'The server hit a problem handling this request. Please try again.',
+    );
   });
 
   it('does NOT throw ApiPaywallError for 403', async () => {
@@ -201,10 +337,10 @@ describe('non-429 errors pass through', () => {
   });
 
   it('2xx responses still return parsed JSON', async () => {
-    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(200, { tier: 'hobby' }));
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(200, { tier: 'basic' }));
 
     const result = await api.get<{ tier: string }>('/api/auth/me');
-    expect(result.tier).toBe('hobby');
+    expect(result.tier).toBe('basic');
   });
 });
 
@@ -214,19 +350,19 @@ describe('non-429 errors pass through', () => {
 
 describe('ApiPaywallError class', () => {
   it('is an instance of Error', () => {
-    const err = new ApiPaywallError('token_cap', 'hobby', 'reason');
+    const err = new ApiPaywallError('token_cap', 'basic', 'reason');
     expect(err).toBeInstanceOf(Error);
   });
 
   it('is an instance of ApiPaywallError', () => {
-    const err = new ApiPaywallError('token_cap', 'hobby', '');
+    const err = new ApiPaywallError('token_cap', 'basic', '');
     expect(err).toBeInstanceOf(ApiPaywallError);
   });
 
   it('carries all three fields', () => {
-    const err = new ApiPaywallError('image_quota', 'pro_plus', 'custom reason');
+    const err = new ApiPaywallError('image_quota', 'max_15x', 'custom reason');
     expect(err.feature).toBe('image_quota');
-    expect(err.requiredTier).toBe('pro_plus');
+    expect(err.requiredTier).toBe('max_15x');
     expect(err.reason).toBe('custom reason');
   });
 });

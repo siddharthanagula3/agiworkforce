@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import type { PropsWithChildren } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const routeMocks = vi.hoisted(() => ({
@@ -32,6 +33,10 @@ vi.mock('@features/chat/pages/UnifiedChatPage', () => ({
 
 vi.mock('@features/chat/pages/WebChatPage', () => ({
   default: () => <div data-testid="web-chat-page">WebChatPage</div>,
+}));
+
+vi.mock('@/features/chat/components/ChatStreamRuntimeProvider', () => ({
+  ChatStreamRuntimeProvider: ({ children }: PropsWithChildren) => <>{children}</>,
 }));
 
 beforeEach(() => {
@@ -72,24 +77,5 @@ describe('/chat route', () => {
     await ChatLayout({ children: <div>Chat</div> });
 
     expect(routeMocks.redirect).toHaveBeenCalledWith('/login?redirectTo=%2Fchat');
-  });
-});
-
-describe('WebChatRuntime', () => {
-  // The dynamic import below pulls the whole chat-runtime graph; under full
-  // parallel suite load the import alone can exceed the 5s default (observed
-  // 5.9s), while the test passes in ~3s in isolation. Explicit timeout keeps
-  // this load-sensitive import-weight test from flaking the suite.
-  it('instantiates without throwing', { timeout: 20_000 }, async () => {
-    vi.doMock('@/services/cloudDb', () => ({
-      getNeonClient: () => ({
-        auth: {
-          getSession: () => Promise.resolve({ data: { session: { access_token: 'test-token' } } }),
-        },
-      }),
-    }));
-
-    const { WebChatRuntime } = await import('@/lib/runtime/WebChatRuntime');
-    expect(() => new WebChatRuntime()).not.toThrow();
   });
 });

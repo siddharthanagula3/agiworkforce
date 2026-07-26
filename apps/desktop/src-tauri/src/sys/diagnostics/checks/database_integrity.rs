@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use tauri::Manager;
 
 /// Verifies SQLite database integrity
 pub struct DatabaseIntegrityCheck;
@@ -52,9 +53,16 @@ impl DiagnosticCheck for DatabaseIntegrityCheck {
     async fn run(&self, ctx: &DiagnosticContext) -> DiagnosticResult {
         let start = std::time::Instant::now();
         let db_path = ctx.db_path.clone();
+        let main_database = ctx
+            .app_handle
+            .as_ref()
+            .and_then(|app| app.try_state::<crate::data::db::key_management::MainDatabaseAccess>())
+            .map(|access| (*access).clone());
 
         // Run blocking database operations in a spawn_blocking task
-        let result = tokio::task::spawn_blocking(move || check_database(&db_path)).await;
+        let result =
+            tokio::task::spawn_blocking(move || check_database(&db_path, main_database.as_ref()))
+                .await;
 
         let duration = start.elapsed();
 
@@ -124,12 +132,18 @@ impl DiagnosticCheck for DatabaseIntegrityCheck {
     }
 }
 
-fn check_database(db_path: &std::path::Path) -> Result<DatabaseStats, String> {
+fn check_database(
+    db_path: &std::path::Path,
+    main_database: Option<&crate::data::db::key_management::MainDatabaseAccess>,
+) -> Result<DatabaseStats, String> {
     if !db_path.exists() {
         return Err(format!("Database file not found: {:?}", db_path));
     }
 
-    let conn = Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = match main_database {
+        Some(access) => access.open_connection()?,
+        None => Connection::open(db_path).map_err(|e| format!("Failed to open database: {}", e))?,
+    };
 
     // Get database file size
     let size_bytes = std::fs::metadata(db_path).map(|m| m.len()).unwrap_or(0);

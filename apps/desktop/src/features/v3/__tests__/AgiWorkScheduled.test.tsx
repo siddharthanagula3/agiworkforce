@@ -73,6 +73,31 @@ describe('AgiWorkScheduled capability honesty', () => {
     expect(toggleTask).toHaveBeenCalledWith('task-1');
   });
 
+  it('presents built-in maintenance schedules with user-facing names', () => {
+    useSchedulerStore.setState((state) => ({
+      tasks: [
+        {
+          ...state.tasks[0]!,
+          name: 'memory_weekly_decay',
+          schedule: {
+            type: 'recurring',
+            interval: 'weekly',
+            cronExpression: '0 0 4 * * 1',
+          },
+        },
+      ],
+    }));
+
+    render(<AgiWorkScheduled />);
+
+    expect(screen.getByText('Weekly memory cleanup')).toBeInTheDocument();
+    expect(screen.getByText('Every week')).toBeInTheDocument();
+    expect(screen.queryByText('memory_weekly_decay')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('switch', { name: 'Pause scheduled task Weekly memory cleanup' }),
+    ).toBeInTheDocument();
+  });
+
   it('requires confirmation before deleting a scheduled task', () => {
     render(<AgiWorkScheduled />);
 

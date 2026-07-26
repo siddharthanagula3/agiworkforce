@@ -5,6 +5,7 @@
 use crate::sys::diagnostics::{DiagnosticCheck, DiagnosticContext, DiagnosticResult};
 use async_trait::async_trait;
 use std::time::Duration;
+use tauri::Manager;
 
 /// Validates configuration and settings
 pub struct ConfigValidationCheck;
@@ -71,7 +72,14 @@ impl DiagnosticCheck for ConfigValidationCheck {
 
         // Check for settings database integrity
         if ctx.db_path.exists() {
-            match validate_settings_schema(&ctx.db_path) {
+            let main_database = ctx
+                .app_handle
+                .as_ref()
+                .and_then(|app| {
+                    app.try_state::<crate::data::db::key_management::MainDatabaseAccess>()
+                })
+                .map(|access| (*access).clone());
+            match validate_settings_schema(&ctx.db_path, main_database.as_ref()) {
                 Ok(()) => {}
                 Err(e) => {
                     warnings.push(format!("Settings schema issue: {}", e));
@@ -141,9 +149,15 @@ impl DiagnosticCheck for ConfigValidationCheck {
     }
 }
 
-fn validate_settings_schema(db_path: &std::path::Path) -> Result<(), String> {
-    let conn = rusqlite::Connection::open(db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+fn validate_settings_schema(
+    db_path: &std::path::Path,
+    main_database: Option<&crate::data::db::key_management::MainDatabaseAccess>,
+) -> Result<(), String> {
+    let conn = match main_database {
+        Some(access) => access.open_connection()?,
+        None => rusqlite::Connection::open(db_path)
+            .map_err(|e| format!("Failed to open database: {}", e))?,
+    };
 
     // Check if settings table exists
     let table_exists: bool = conn

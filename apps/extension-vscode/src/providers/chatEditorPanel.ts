@@ -12,6 +12,7 @@ import { parseWebviewMessage } from '../protocol/webviewMessages';
 import { type ConversationTreeProvider } from '../features/trees';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { resolveTierSync } from '../integrations/tierResolver';
+import { type DiffDecorationProvider } from './diffDecorationProvider';
 
 export class ChatEditorPanel {
   public static readonly viewType = 'agi-workforce.chatPanel';
@@ -29,6 +30,7 @@ export class ChatEditorPanel {
     context: vscode.ExtensionContext,
     localRuntimes: LocalRuntimePool,
     conversationTreeProvider: ConversationTreeProvider,
+    diffDecorationProvider: DiffDecorationProvider,
   ): ChatEditorPanel {
     const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One;
     if (ChatEditorPanel.instance !== undefined) {
@@ -47,6 +49,7 @@ export class ChatEditorPanel {
       context,
       localRuntimes,
       conversationTreeProvider,
+      diffDecorationProvider,
     );
     return ChatEditorPanel.instance;
   }
@@ -58,6 +61,7 @@ export class ChatEditorPanel {
     context: vscode.ExtensionContext,
     localRuntimes: LocalRuntimePool,
     conversationTreeProvider: ConversationTreeProvider,
+    diffDecorationProvider: DiffDecorationProvider,
   ) {
     this.stateManager = new ChatStateManager(
       secrets,
@@ -66,6 +70,7 @@ export class ChatEditorPanel {
       conversationTreeProvider,
       context.workspaceState,
       localRuntimes,
+      diffDecorationProvider,
     );
     const model = normalizeConfiguredModelId(Config.model());
     this.panel.webview.options = { enableScripts: true, localResourceRoots: [extensionUri] };

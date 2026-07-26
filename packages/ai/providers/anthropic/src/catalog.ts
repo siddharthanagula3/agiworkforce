@@ -5,8 +5,8 @@
  * `@agiworkforce/model-registry`; `@agiworkforce/types` projects that data
  * into the provider-adapter catalog shape.
  *
- * (The Anthropic API does not expose a `/v1/models` discovery endpoint,
- * so the generated catalog is also the runtime fallback for `adapter.catalog()`.)
+ * The provider catalog deliberately uses that verified snapshot so picker
+ * policy stays deterministic instead of changing with live discovery.
  */
 
 import { getProviderModelCatalog, type ModelInfo } from '@agiworkforce/types';

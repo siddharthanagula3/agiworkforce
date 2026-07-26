@@ -1,17 +1,19 @@
 /**
  * providerSwitchGuard.ts — Max-tier enforcement for cross-provider model switches.
  *
- * Multi-provider in-thread switching is a Max-tier differentiator. When a user on
- * a tier below 'max' attempts to switch from one provider to a different one
- * mid-conversation, this guard returns 'upgrade-required' and the caller shows
- * the upgrade prompt.
+ * Cross-provider model selection is a Max-tier differentiator. When a user on a
+ * tier below 'max' attempts to choose a model from another provider in the
+ * visible conversation, this guard returns 'upgrade-required' and the caller
+ * shows the upgrade prompt. An allowed provider-boundary change still starts a
+ * fresh runtime session; this guard never authorizes transcript forwarding.
  *
  * (This previously gated on the unshipped 'pro_plus' tier, which was removed
  * with no direct successor — the gate now sits at the next tier that actually
  * exists above it, 'max', rather than silently loosening to 'pro'.)
  *
- * Mirrors the logic in unified-chat's selectProviderSwitchGate so that behaviour
- * is consistent across surfaces.
+ * Mirrors unified-chat's plan eligibility while preserving the VS Code trust
+ * boundary: provider changes remain visible, but runtime context does not cross
+ * providers implicitly.
  *
  * Design notes:
  *   - "Provider" is derived from model ID prefix, not from the full model catalog,

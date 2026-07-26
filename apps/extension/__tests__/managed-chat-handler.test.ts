@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { getPickerModels } from '@agiworkforce/types';
 import {
   createChromeManagedStreamKey,
+  executeChromeManagedApproval,
   executeChromeManagedChat,
+  type ChromeManagedApprovalDependencies,
   type ChromeManagedChatDependencies,
 } from '../src/features/cloud-bridge/managedChatHandler';
 import {
@@ -29,6 +31,17 @@ function dependencies(
       allowedAutoModes: ['auto', 'auto-economy'],
     })),
     streamChat: vi.fn(() => stream({ type: 'text', text: 'hello' }, { type: 'done' })),
+    onText: vi.fn(),
+    ...overrides,
+  };
+}
+
+function approvalDependencies(
+  overrides: Partial<ChromeManagedApprovalDependencies> = {},
+): ChromeManagedApprovalDependencies {
+  return {
+    getAuthToken: vi.fn(async () => 'token'),
+    streamApproval: vi.fn(() => stream({ type: 'text', text: 'continued' }, { type: 'done' })),
     onText: vi.fn(),
     ...overrides,
   };
@@ -94,23 +107,26 @@ describe('executeChromeManagedChat', () => {
     expect(deps.streamChat).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps Chrome paid and stops a free account before routing or inference', async () => {
-    const deps = dependencies({
-      getModelAccess: vi.fn(async () => ({
-        subscriptionTier: 'free',
-        modelIds: [FREE_TRIAL_MODEL],
-        allowedAutoModes: ['auto', 'auto-economy'],
-      })),
-    });
+  it.each(['free', 'basic'])(
+    'stops the %s plan before it enters the Pro-only Chrome AGI Work path',
+    async (subscriptionTier) => {
+      const deps = dependencies({
+        getModelAccess: vi.fn(async () => ({
+          subscriptionTier,
+          modelIds: [FREE_TRIAL_MODEL],
+          allowedAutoModes: ['auto', 'auto-economy'],
+        })),
+      });
 
-    const result = await executeChromeManagedChat(
-      { id: 'stream-free', text: 'Hello', modelSelection: 'auto' },
-      deps,
-    );
+      const result = await executeChromeManagedChat(
+        { id: `stream-${subscriptionTier}`, text: 'Hello', modelSelection: 'auto' },
+        deps,
+      );
 
-    expect(result).toMatchObject({ status: 'error', code: 'plan_required' });
-    expect(deps.streamChat).not.toHaveBeenCalled();
-  });
+      expect(result).toMatchObject({ status: 'error', code: 'plan_required' });
+      expect(deps.streamChat).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects a model absent from authenticated server admission', async () => {
     const deps = dependencies();
@@ -212,5 +228,52 @@ describe('executeChromeManagedChat', () => {
 
     expect(result).toMatchObject({ status: 'error', code: 'protocol_error' });
     expect(deps.onText).toHaveBeenCalledWith('partial');
+  });
+});
+
+describe('executeChromeManagedApproval', () => {
+  const runId = '11111111-1111-4111-8111-111111111111';
+  const run = {
+    runId,
+    runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+    lastSequence: 4,
+    state: 'awaiting_input' as const,
+  };
+
+  it('continues the exact server-owned run with explicit tool decisions', async () => {
+    const deps = approvalDependencies();
+    const result = await executeChromeManagedApproval(
+      {
+        id: 'stream-approval',
+        run,
+        toolApprovals: [{ tool_call_id: 'call-1', decision: 'approved' }],
+      },
+      deps,
+    );
+
+    expect(result).toEqual({ status: 'success' });
+    expect(deps.streamApproval).toHaveBeenCalledWith(
+      runId,
+      [{ tool_call_id: 'call-1', decision: 'approved' }],
+      'token',
+      { signal: undefined },
+    );
+    expect(deps.onText).toHaveBeenCalledWith('continued');
+  });
+
+  it('rejects a forged run path and malformed decisions before authentication', async () => {
+    const deps = approvalDependencies();
+    const result = await executeChromeManagedApproval(
+      {
+        id: 'stream-approval',
+        run: { ...run, runPath: 'https://attacker.example/run' },
+        toolApprovals: [],
+      },
+      deps,
+    );
+
+    expect(result).toMatchObject({ status: 'error', code: 'invalid_request' });
+    expect(deps.getAuthToken).not.toHaveBeenCalled();
+    expect(deps.streamApproval).not.toHaveBeenCalled();
   });
 });

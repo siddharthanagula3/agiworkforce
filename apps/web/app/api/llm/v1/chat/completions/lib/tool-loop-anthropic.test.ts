@@ -83,16 +83,16 @@ function fakeAdapterStream(chunks: unknown[]) {
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-anthropic-1',
-    chatRequest: { model: 'claude-opus-4-8', messages: [], stream: true } as never,
+    chatRequest: { model: 'claude-opus-5', messages: [], stream: true } as never,
     conversationId: undefined,
-    requestedModel: 'claude-opus-4.8',
+    requestedModel: 'claude-opus-5',
     provider: 'anthropic',
     estimatedCostCents: 0,
     estimatedPromptTokens: 0,
     maxTokens: 1000,
     usedFallback: false,
     fallbackReason: undefined,
-    originalModel: 'claude-opus-4.8',
+    originalModel: 'claude-opus-5',
     resolvedTaskType: 'general' as never,
     classifierConfidence: 1,
     resolvedSlot: null,
@@ -101,7 +101,7 @@ function makeProcessed(): ProcessedRequest {
     isFlagshipRequest: false,
     indicResult: undefined as never,
     llmRequest: {
-      model: 'claude-opus-4.8',
+      model: 'claude-opus-5',
       messages: [{ role: 'user', content: 'search the web and fetch a page' }],
       max_tokens: 1000,
       stream: true,
@@ -262,7 +262,7 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     expect(output).toContain('data: [DONE]');
   });
 
-  it('surfaces an adapter-level error as inline SSE content, flushes terminal, and stops -- no second call', async () => {
+  it('surfaces an adapter-level error on structured SSE channels, flushes terminal, and stops -- no second call', async () => {
     mockAnthropicStream.mockImplementationOnce(
       fakeAdapterStream([{ type: 'error', message: 'rate limited', code: '429' }]),
     );
@@ -270,7 +270,8 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     const processed = makeProcessed();
     const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
 
-    expect(output).toContain('Error:');
+    expect(output).not.toContain('"content":"\\n\\nError:');
+    expect(output).toContain('"type":"error"');
     expect(output).toContain('rate limited');
     // A mid-loop provider error is a terminal exit like any other (see
     // flushTerminal()'s doc comment): it still owes the client any files
@@ -280,7 +281,7 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     expect(mockAnthropicStream).toHaveBeenCalledTimes(1);
   });
 
-  it('emits an additive x_stream_error marker alongside the inline error content (Finding 3: tool-loop hand-rolls its own SSE, so the base-path marker does not cover it without this)', async () => {
+  it('emits an x_stream_error marker alongside the canonical error event (Finding 3: tool-loop hand-rolls its own SSE, so the base-path marker does not cover it without this)', async () => {
     mockAnthropicStream.mockImplementationOnce(
       fakeAdapterStream([{ type: 'error', message: 'rate limited', code: '429' }]),
     );

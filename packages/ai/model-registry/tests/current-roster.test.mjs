@@ -48,8 +48,8 @@ const currentAnthropic = {
     context: 1_000_000,
     maxOutput: 128_000,
   },
-  'claude-opus-4.8': {
-    providerModelId: 'claude-opus-4-8',
+  'claude-opus-5': {
+    providerModelId: 'claude-opus-5',
     input: 5,
     cacheRead: 0.5,
     cacheWrite5m: 6.25,
@@ -155,6 +155,18 @@ test('publishes the current Claude roster with exact API IDs, limits, and prompt
   assert.equal(sonnetReasoning.defaultEffort, 'high');
   assert.equal(sonnetReasoning.canDisableThinking, true);
   assert.equal(sonnetReasoning.request.togglePath, 'thinking.type');
+
+  const opus = compatibility.models['claude-opus-5'];
+  assert.equal(opus.knowledgeCutoff, '2026-05');
+  assert.equal(opus.released, 'July 24, 2026');
+  assert.equal(opus.tierPolicy.minTier, 'max');
+  assert.equal(opus.promptCacheMinimumTokens, 512);
+  assert.deepEqual(opus.providerCompatibility, { nativeWebFetch: false });
+  assert.deepEqual(opus.reasoning.supportedEfforts, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(opus.reasoning.thinkingDefault, 'adaptive');
+  assert.equal(opus.reasoning.supportsManualThinking, false);
+  assert.equal(opus.reasoning.maxEffortWhenThinkingDisabled, 'high');
+  assert.equal(opus.reasoning.rejectsSamplingParameters, true);
 
   assert.equal(compatibility.models['claude-sonnet-5'].promo_expires_at, undefined);
   assert.equal(compatibility.models['claude-sonnet-5'].post_promo_prices, undefined);

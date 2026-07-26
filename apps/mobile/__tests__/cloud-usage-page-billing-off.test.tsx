@@ -9,6 +9,10 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
 jest.mock('@/src/ui/theme', () => {
   const actual = jest.requireActual('@/src/ui/theme/tokens');
   return {
@@ -37,6 +41,7 @@ jest.mock('@/src/features/settings/common', () => {
       <RN.View>{children}</RN.View>
     ),
     SettingsInfo: () => <RN.View />,
+    CloudAccountRequired: () => <RN.Text>Sign in to AGI Cloud</RN.Text>,
   };
 });
 
@@ -48,6 +53,11 @@ jest.mock('@/services/usage', () => ({
 }));
 
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { usageDashboard: false } }));
+
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (s: { isClerkLoaded: boolean; isClerkSignedIn: boolean }) => unknown) =>
+    selector({ isClerkLoaded: true, isClerkSignedIn: true }),
+}));
 
 import CloudUsageScreen from '../src/features/settings/cloud-usage/index';
 

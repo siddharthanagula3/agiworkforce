@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
+  type AppStateStatus,
   FlatList,
   Pressable,
   RefreshControl,
@@ -29,6 +31,11 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
+import { useAuthStore } from '@/src/features/auth/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const ACTIVE_STATES: AgentTaskState[] = [
   'queued',
@@ -39,7 +46,7 @@ const ACTIVE_STATES: AgentTaskState[] = [
 ];
 
 const FILTERS = [
-  { key: 'all', label: 'All', states: ACTIVE_STATES },
+  { key: 'active', label: 'Active', states: ACTIVE_STATES },
   { key: 'needs-input', label: 'Needs input', states: ['awaiting_input'] },
   { key: 'ready-review', label: 'Ready for review', states: ['ready_for_review'] },
 ] as const satisfies ReadonlyArray<{
@@ -49,6 +56,8 @@ const FILTERS = [
 }>;
 
 type TaskFilter = (typeof FILTERS)[number]['key'];
+
+export const TASK_POLL_INTERVAL_MS = 15_000;
 
 function statePresentation(state: AgentTaskState, colors: ColorScheme) {
   switch (state) {
@@ -83,15 +92,18 @@ export default function TasksScreen() {
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const conversations = useChatStore((state) => state.conversations);
-  const [filter, setFilter] = useState<TaskFilter>('all');
+  const [filter, setFilter] = useState<TaskFilter>('active');
   const [runs, setRuns] = useState<CloudAgentRun[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState ?? 'active');
   const isCloudMode = appMode === 'cloud';
+  const isForeground = appState === 'active';
 
   const selectedStates = useMemo(
     () => [...(FILTERS.find((item) => item.key === filter)?.states ?? ACTIVE_STATES)],
@@ -103,13 +115,22 @@ export default function TasksScreen() {
   );
 
   const fetchRuns = useCallback(
-    async (options: { append?: boolean; cursor?: string; signal?: AbortSignal } = {}) => {
+    async (
+      options: {
+        append?: boolean;
+        cursor?: string;
+        signal?: AbortSignal;
+      } = {},
+    ) => {
+      const account = captureCloudAccountEpoch();
+      if (!account) return;
       const page = await createMobileCloudAgentRunClient().listRuns({
         states: selectedStates,
         limit: 25,
         ...(options.cursor ? { cursor: options.cursor } : {}),
         signal: options.signal,
       });
+      if (options.signal?.aborted || !isCloudAccountEpochCurrent(account)) return;
       setRuns((current) => (options.append ? mergeRuns(current, page.runs) : page.runs));
       setNextCursor(page.nextCursor);
       setError(null);
@@ -118,7 +139,21 @@ export default function TasksScreen() {
   );
 
   useEffect(() => {
-    if (!FEATURES.cloudTasks || !isCloudMode) return undefined;
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    setRuns([]);
+    setNextCursor(null);
+    setLoading(false);
+    setLoadingMore(false);
+    setRefreshing(false);
+    setError(null);
+  }, [clerkUserId]);
+
+  useEffect(() => {
+    if (!FEATURES.cloudTasks || !isCloudMode || !cloudUnlocked || !isForeground) return undefined;
     const controller = new AbortController();
     setLoading(true);
     setRuns([]);
@@ -134,7 +169,33 @@ export default function TasksScreen() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [fetchRuns, isCloudMode]);
+  }, [clerkUserId, cloudUnlocked, fetchRuns, isCloudMode, isForeground]);
+
+  useEffect(() => {
+    if (!FEATURES.cloudTasks || !isCloudMode || !cloudUnlocked || !isForeground) return undefined;
+
+    const controller = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
+
+    const poll = async () => {
+      try {
+        await fetchRuns({ signal: controller.signal });
+      } catch {
+        // Background refresh is best-effort. Keep the last durable list and
+        // reserve visible errors for user-initiated loads/refreshes.
+      } finally {
+        if (!disposed) timeout = setTimeout(poll, TASK_POLL_INTERVAL_MS);
+      }
+    };
+
+    timeout = setTimeout(poll, TASK_POLL_INTERVAL_MS);
+    return () => {
+      disposed = true;
+      controller.abort();
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [clerkUserId, cloudUnlocked, fetchRuns, isCloudMode, isForeground]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -182,7 +243,7 @@ export default function TasksScreen() {
 
   if (!FEATURES.cloudTasks) return <FeatureUnavailable feature="Cloud tasks" />;
 
-  if (!isCloudMode) {
+  if (!isCloudMode || !cloudUnlocked) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
         <Header onBack={handleBack} colors={colors} />
@@ -439,7 +500,7 @@ function TaskCard({
 }
 
 function EmptyState({ filter, colors }: { filter: TaskFilter; colors: ColorScheme }) {
-  const filtered = filter !== 'all';
+  const filtered = filter !== 'active';
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
       <Bot size={32} color={colors.textMuted} />

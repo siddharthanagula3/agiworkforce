@@ -15,13 +15,20 @@ import { CancellationTokenSource } from './__mocks__/vscode';
 vi.mock('../integrations/providerStreamClient', () => ({
   streamFromProvider: vi.fn(),
 }));
+vi.mock('../platform/config', () => ({
+  Config: {
+    useProviderStream: vi.fn(() => false),
+  },
+}));
 
 import {
+  chatCompletion,
   streamChatCompletionViaProvider,
   setAccountToken,
   AgiWorkforceApiError,
 } from '../utils/api';
 import { streamFromProvider } from '../integrations/providerStreamClient';
+import { Config } from '../platform/config';
 
 describe('streamChatCompletionViaProvider', () => {
   let ctx: InstanceType<typeof ExtensionContext>;
@@ -29,8 +36,28 @@ describe('streamChatCompletionViaProvider', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(Config.useProviderStream).mockReturnValue(false);
     ctx = new ExtensionContext();
     secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+  });
+
+  it('routes production cloud utility completions through provider streaming when enabled', async () => {
+    await setAccountToken(secrets, 'account-token-123');
+    vi.mocked(Config.useProviderStream).mockReturnValue(true);
+    vi.mocked(streamFromProvider).mockImplementation(async function* () {
+      yield { type: 'text-delta', delta: 'wired' } as const;
+      yield { type: 'stop', reason: 'end_turn' } as const;
+    });
+
+    const result = await chatCompletion(
+      secrets,
+      [{ role: 'user', content: 'explain this diagnostic' }],
+      new CancellationTokenSource().token,
+      'gpt-5.6-sol',
+    );
+
+    expect(result).toBe('wired');
+    expect(streamFromProvider).toHaveBeenCalledOnce();
   });
 
   it('throws a clear, actionable error when no AGI Cloud account token is stored', async () => {
@@ -41,7 +68,7 @@ describe('streamChatCompletionViaProvider', () => {
         [{ role: 'user', content: 'hi' }],
         { onToken: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
         cts.token,
-        'claude-opus-4.8',
+        'claude-opus-5',
       ),
     ).rejects.toThrow(/sign in to agi cloud/i);
   });
@@ -77,7 +104,7 @@ describe('streamChatCompletionViaProvider', () => {
       [{ role: 'user', content: 'hi' }],
       { onToken, onDone, onError: vi.fn() },
       cts.token,
-      'claude-opus-4.8',
+      'claude-opus-5',
     );
 
     expect(onToken).toHaveBeenNthCalledWith(1, 'Hello');
@@ -111,7 +138,7 @@ describe('streamChatCompletionViaProvider', () => {
         onToolUseEnd,
       },
       cts.token,
-      'claude-opus-4.8',
+      'claude-opus-5',
     );
 
     expect(onToolUseStart).toHaveBeenCalledWith('t1', 'search');
@@ -134,11 +161,37 @@ describe('streamChatCompletionViaProvider', () => {
       [{ role: 'user', content: 'hi' }],
       { onToken: vi.fn(), onDone, onError },
       cts.token,
-      'claude-opus-4.8',
+      'claude-opus-5',
     );
 
     expect(onError).toHaveBeenCalledWith(expect.any(AgiWorkforceApiError));
     expect(onError.mock.calls[0][0].message).toBe('upstream exploded');
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('rejects cancellation without completing a partial provider response', async () => {
+    await setAccountToken(secrets, 'account-token-123');
+    const cts = new CancellationTokenSource();
+    vi.mocked(streamFromProvider).mockImplementation(async function* () {
+      yield { type: 'text-delta', delta: 'partial' } as const;
+      cts.cancel();
+      yield { type: 'text-delta', delta: 'must-not-apply' } as const;
+    });
+    const onToken = vi.fn();
+    const onDone = vi.fn();
+
+    await expect(
+      streamChatCompletionViaProvider(
+        secrets,
+        [{ role: 'user', content: 'fix this code' }],
+        { onToken, onDone, onError: vi.fn() },
+        cts.token,
+        'claude-opus-5',
+      ),
+    ).rejects.toMatchObject({ code: 'CANCELLED' });
+
+    expect(onToken).toHaveBeenCalledWith('partial');
+    expect(onToken).not.toHaveBeenCalledWith('must-not-apply');
     expect(onDone).not.toHaveBeenCalled();
   });
 });

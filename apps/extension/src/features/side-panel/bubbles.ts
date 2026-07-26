@@ -6,7 +6,12 @@
  * Behaviour is unchanged. Only buildBubbleWithTools + buildToolCallEl are called
  * from side_panel.ts; the rest are internal to this cluster.
  */
-import { type AgentActivityEntry, type AgentActivityState } from '@agiworkforce/client-runtime';
+import {
+  type AgentActivityArtifactEntry,
+  type AgentActivityEntry,
+  type AgentActivityState,
+  type AgentActivityToolEntry,
+} from '@agiworkforce/client-runtime';
 import {
   renderIcon,
   ChevronRight,
@@ -26,8 +31,35 @@ import {
 import { sanitizeHtml, renderMarkdown } from './markdown';
 import { el, formatTime } from './dom';
 import { shouldRenderTextBubble, type SidePanelChatMessage } from './chat-state';
+import { FREE_TRIAL_GATEWAY } from '../cloud-bridge/freeTrialClient';
 
 type ChatMessage = SidePanelChatMessage;
+export type ManagedApprovalDecision = 'approved' | 'rejected';
+
+export interface BubbleInteractionOptions {
+  approvalDecisions?: Readonly<Record<string, ManagedApprovalDecision>>;
+  approvalError?: string;
+  onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
+}
+
+/**
+ * Resolve only user-actionable artifact locations. Relative generated-file
+ * paths belong to the authenticated AGI web origin; absolute HTTPS URLs are
+ * opened exactly as returned by the server. Non-web schemes remain visible as
+ * an honest unavailable state instead of becoming a dead link.
+ */
+export function resolveManagedArtifactUrl(uri: string): string | null {
+  const trimmed = uri.trim();
+  if (!trimmed) return null;
+  try {
+    const resolved = new URL(trimmed, `${FREE_TRIAL_GATEWAY}/`);
+    if (resolved.protocol !== 'https:') return null;
+    if (trimmed.startsWith('/') && resolved.origin !== FREE_TRIAL_GATEWAY) return null;
+    return resolved.href;
+  } catch {
+    return null;
+  }
+}
 
 function buildBubble(msg: ChatMessage): HTMLElement {
   const isUser = msg.role === 'user';
@@ -239,7 +271,103 @@ function appendActivitySources(
   if (list.childElementCount > 0) parent.appendChild(list);
 }
 
-function buildAgentActivityStep(entry: AgentActivityEntry): HTMLElement {
+function appendArtifactAction(parent: HTMLElement, entry: AgentActivityArtifactEntry): void {
+  const href = resolveManagedArtifactUrl(entry.uri);
+  if (!href) {
+    parent.appendChild(
+      el(
+        'div',
+        { class: 'sp-agent-artifact-unavailable' },
+        'Download unavailable in Chrome for this artifact.',
+      ),
+    );
+    return;
+  }
+  const link = el('a', {
+    class: 'sp-agent-artifact-link',
+    href,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    title: `Open or download ${entry.name}`,
+  });
+  link.appendChild(renderIcon(FileText, 12));
+  link.appendChild(document.createTextNode('Open or download'));
+  parent.appendChild(link);
+}
+
+function appendApprovalActions(
+  parent: HTMLElement,
+  entry: AgentActivityToolEntry,
+  options: BubbleInteractionOptions,
+): void {
+  if (!entry.approval || entry.approval.decision) return;
+  const selected = options.approvalDecisions?.[entry.toolCallId];
+  const approval = el('div', { class: 'sp-agent-approval' });
+  approval.appendChild(
+    el(
+      'div',
+      { class: 'sp-agent-approval__summary' },
+      `${entry.approval.riskLevel ? `${entry.approval.riskLevel} risk · ` : ''}Your approval is required before this tool can run.`,
+    ),
+  );
+  if (options.approvalError) {
+    approval.appendChild(
+      el('div', { class: 'sp-agent-approval__error', role: 'alert' }, options.approvalError),
+    );
+  }
+  if (selected) {
+    approval.appendChild(
+      el(
+        'div',
+        { class: 'sp-agent-approval__recorded', role: 'status' },
+        `${selected === 'approved' ? 'Approved' : 'Declined'} · decision recorded`,
+      ),
+    );
+  } else if (options.onResolveApproval) {
+    const actions = el('div', { class: 'sp-agent-approval__actions' });
+    const approve = el(
+      'button',
+      {
+        class: 'sp-agent-approval__button sp-agent-approval__button--approve',
+        type: 'button',
+        'aria-label': `Approve ${entry.name}`,
+      },
+      'Approve',
+    );
+    approve.addEventListener('click', () =>
+      options.onResolveApproval?.(entry.toolCallId, 'approved'),
+    );
+    const decline = el(
+      'button',
+      {
+        class: 'sp-agent-approval__button',
+        type: 'button',
+        'aria-label': `Decline ${entry.name}`,
+      },
+      'Decline',
+    );
+    decline.addEventListener('click', () =>
+      options.onResolveApproval?.(entry.toolCallId, 'rejected'),
+    );
+    actions.appendChild(approve);
+    actions.appendChild(decline);
+    approval.appendChild(actions);
+  } else {
+    approval.appendChild(
+      el(
+        'div',
+        { class: 'sp-agent-artifact-unavailable' },
+        'This approval cannot be continued from the current Chrome session.',
+      ),
+    );
+  }
+  parent.appendChild(approval);
+}
+
+function buildAgentActivityStep(
+  entry: AgentActivityEntry,
+  options: BubbleInteractionOptions,
+): HTMLElement {
   const status = activityEntryStatus(entry);
   const detailParts: string[] = [];
   let sources: Array<{ url: string; title?: string }> = [];
@@ -262,7 +390,11 @@ function buildAgentActivityStep(entry: AgentActivityEntry): HTMLElement {
     detailParts.push(entry.message);
   }
 
-  const hasDetails = detailParts.length > 0 || sources.length > 0;
+  const hasDetails =
+    detailParts.length > 0 ||
+    sources.length > 0 ||
+    entry.kind === 'artifact' ||
+    (entry.kind === 'tool' && Boolean(entry.approval));
   const step = document.createElement(hasDetails ? 'details' : 'div');
   step.className = `sp-agent-step sp-agent-step--${status}`;
   const row = document.createElement(hasDetails ? 'summary' : 'div');
@@ -294,12 +426,17 @@ function buildAgentActivityStep(entry: AgentActivityEntry): HTMLElement {
     if (detailParts.length > 0)
       detail.appendChild(document.createTextNode(detailParts.join('\n\n')));
     appendActivitySources(detail, sources);
+    if (entry.kind === 'artifact') appendArtifactAction(detail, entry);
+    if (entry.kind === 'tool') appendApprovalActions(detail, entry, options);
     step.appendChild(detail);
   }
   return step;
 }
 
-function buildAgentActivityEl(activity: AgentActivityState): HTMLElement {
+function buildAgentActivityEl(
+  activity: AgentActivityState,
+  options: BubbleInteractionOptions,
+): HTMLElement {
   const details = el('details', { class: 'sp-agent-activity' });
   const summary = document.createElement('summary');
   const terminal = ['completed', 'failed', 'cancelled'].includes(activity.status);
@@ -328,12 +465,17 @@ function buildAgentActivityEl(activity: AgentActivityState): HTMLElement {
   details.appendChild(summary);
 
   const timeline = el('div', { class: 'sp-agent-activity__timeline' });
-  for (const entry of activity.entries) timeline.appendChild(buildAgentActivityStep(entry));
+  for (const entry of activity.entries) {
+    timeline.appendChild(buildAgentActivityStep(entry, options));
+  }
   details.appendChild(timeline);
   return details;
 }
 
-export function buildBubbleWithTools(msg: ChatMessage): HTMLElement {
+export function buildBubbleWithTools(
+  msg: ChatMessage,
+  options: BubbleInteractionOptions = {},
+): HTMLElement {
   const segments = parseToolCalls(msg.content);
   const hasTools = segments.some((s) => typeof s !== 'string');
   const hasAgentActivity = msg.role === 'assistant' && Boolean(msg.agentActivity);
@@ -354,7 +496,7 @@ export function buildBubbleWithTools(msg: ChatMessage): HTMLElement {
     }
   }
 
-  if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity));
+  if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, options));
 
   if (shouldRenderTextBubble({ text: textParts.join(''), streaming: Boolean(msg.streaming) })) {
     const bubble = document.createElement('div');

@@ -1,1 +1,0 @@
--- TOMBSTONE: renumbered to 0071_account_deletion_scheduling.sql (0070 was taken concurrently). Delete this file with `git rm`.

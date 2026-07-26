@@ -280,8 +280,6 @@ export default function IntegrationsScreen() {
 
   if (!FEATURES.connectors) return <FeatureUnavailable feature="Connectors" />;
 
-  const connectedCount = platforms.filter((p) => p.connected).length;
-
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
       {/* Header */}
@@ -306,42 +304,50 @@ export default function IntegrationsScreen() {
       >
         {/* Description */}
         <Text className="text-sm leading-5 mt-2" style={{ color: colors.textMuted }}>
-          Connect messaging platforms and device features to give AI assistants the context they
-          need. Data stays on your device and is only shared when you start a chat.
+          {FEATURES.messaging
+            ? 'Connect messaging platforms and device features to give AI assistants the context they need.'
+            : 'Manage device features that can provide context to AI assistants.'}{' '}
+          Data stays on your device and is only shared when you start a chat.
         </Text>
 
         {/* ------------------------------------------------------------------ */}
         {/* SECTION 1: Messaging Platforms                                       */}
         {/* ------------------------------------------------------------------ */}
-        <View>
-          <SectionHeader title="Messaging" count={connectedCount} colors={colors} />
+        {FEATURES.messaging && (
+          <View>
+            <SectionHeader
+              title="Messaging"
+              count={platforms.filter((platform) => platform.connected).length}
+              colors={colors}
+            />
 
-          {platformsLoading && (
-            <View className="flex-row items-center justify-center py-4">
-              <ActivityIndicator size="small" color={colors.teal} />
-              <Text className="text-sm ml-3" style={{ color: colors.textMuted }}>
-                Loading platforms...
-              </Text>
-            </View>
-          )}
+            {platformsLoading && (
+              <View className="flex-row items-center justify-center py-4">
+                <ActivityIndicator size="small" color={colors.teal} />
+                <Text className="text-sm ml-3" style={{ color: colors.textMuted }}>
+                  Loading platforms...
+                </Text>
+              </View>
+            )}
 
-          {!platformsLoading &&
-            platforms.map((p) => (
-              <PlatformCard
-                key={p.id}
-                platform={{
-                  name: p.name,
-                  icon: p.id,
-                  connected: p.connected,
-                  accountName: p.accountName,
-                  lastSynced: p.lastSynced,
-                  messageCount: p.messageCount,
-                }}
-                onConnect={() => handleConnect(p.id)}
-                onDisconnect={() => handleDisconnect(p.id)}
-              />
-            ))}
-        </View>
+            {!platformsLoading &&
+              platforms.map((p) => (
+                <PlatformCard
+                  key={p.id}
+                  platform={{
+                    name: p.name,
+                    icon: p.id,
+                    connected: p.connected,
+                    accountName: p.accountName,
+                    lastSynced: p.lastSynced,
+                    messageCount: p.messageCount,
+                  }}
+                  onConnect={() => handleConnect(p.id)}
+                  onDisconnect={() => handleDisconnect(p.id)}
+                />
+              ))}
+          </View>
+        )}
 
         {/* ------------------------------------------------------------------ */}
         {/* SECTION 2: Device Integrations (new component)                       */}
@@ -466,7 +472,7 @@ export default function IntegrationsScreen() {
       </ScrollView>
 
       {/* Bottom sheet for legacy platform setup (Slack / Telegram / WhatsApp) */}
-      {selectedLegacyPlatform && (
+      {FEATURES.messaging && selectedLegacyPlatform && (
         <PlatformSetupSheet
           sheetRef={setupSheetRef}
           platform={selectedLegacyPlatform}

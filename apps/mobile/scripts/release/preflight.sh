@@ -41,8 +41,8 @@ log "eas-cli: ${EAS_VERSION}"
 NODE_VERSION="$(node --version 2>/dev/null || echo none)"
 log "node: ${NODE_VERSION}"
 case "${NODE_VERSION}" in
-  v22.*) log_ok "node version OK" ;;
-  *) log_warn "node should be 22.x (repo .nvmrc) — got ${NODE_VERSION}" ;;
+  v24.*) log_ok "node version OK" ;;
+  *) log_warn "node should be 24.x (repo .nvmrc) — got ${NODE_VERSION}" ;;
 esac
 
 # --- Auth -----------------------------------------------------------------

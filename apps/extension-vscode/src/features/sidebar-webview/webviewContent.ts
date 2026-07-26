@@ -182,6 +182,12 @@ export function getWebviewContent(
       background: var(--accent-teal);
       flex-shrink: 0;
     }
+    .runtime-pill-label,
+    .provider-badge > span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
     .header-left {
       display: flex;
@@ -199,7 +205,7 @@ export function getWebviewContent(
       letter-spacing: 0.3px;
       padding: 2px 7px 2px 5px;
       border-radius: 10px;
-      color: rgba(0, 0, 0, 0.75);
+      color: var(--text-primary);
       white-space: nowrap;
       flex-shrink: 0;
       transition: background 0.25s ease;
@@ -209,7 +215,7 @@ export function getWebviewContent(
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: rgba(0, 0, 0, 0.4);
+      background: var(--vscode-descriptionForeground);
       flex-shrink: 0;
     }
 
@@ -217,6 +223,7 @@ export function getWebviewContent(
       display: flex;
       gap: 2px;
       align-items: center;
+      flex-shrink: 0;
     }
 
     .account-status-dot {
@@ -261,7 +268,7 @@ export function getWebviewContent(
       padding: 10px;
       border: 1px solid var(--vscode-editorWarning-foreground, #cca700);
       border-radius: var(--radius-md);
-      background: var(--vscode-inputValidation-warningBackground, rgba(204, 167, 0, 0.12));
+      background: var(--vscode-inputValidation-warningBackground);
       color: var(--text-primary);
       display: none;
       flex-direction: column;
@@ -394,7 +401,7 @@ export function getWebviewContent(
     }
     .composer-card:focus-within {
       border-color: var(--accent-teal);
-      box-shadow: 0 0 0 2px rgba(33, 128, 141, 0.18);
+      box-shadow: 0 0 0 2px var(--vscode-focusBorder);
     }
 
     .model-row { display: none; } /* hidden — model is now in bottom controls row */
@@ -510,7 +517,7 @@ export function getWebviewContent(
       background: var(--bg-elevated);
       border: 1px solid var(--border);
       border-radius: 10px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 6px 20px var(--vscode-widget-shadow);
       width: min(300px, calc(100vw - 20px));
       z-index: 20;
       overflow: hidden;
@@ -575,7 +582,7 @@ export function getWebviewContent(
       background: var(--bg-elevated);
       border: 1px solid var(--border);
       border-radius: 10px;
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+      box-shadow: 0 10px 28px var(--vscode-widget-shadow);
       z-index: 24;
       padding: 6px;
     }
@@ -607,7 +614,7 @@ export function getWebviewContent(
       background: var(--bg-overlay);
     }
     .model-popover__option.is-active {
-      outline: 1px solid rgba(33, 128, 141, 0.45);
+      outline: 1px solid var(--vscode-focusBorder);
     }
     .model-popover__option:disabled {
       cursor: default;
@@ -631,10 +638,10 @@ export function getWebviewContent(
     }
 
     /* ── Code blocks ── */
-    pre { background: #0d0d0d; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
+    pre { background: var(--vscode-textCodeBlock-background, var(--bg-overlay)); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
     code { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 12px; }
-    pre code { color: #e6edf3; }
-    :not(pre) > code { background: rgba(255,255,255,0.08); padding: 2px 5px; border-radius: 3px; color: #79c0ff; }
+    pre code { color: var(--vscode-editor-foreground, var(--text-primary)); }
+    :not(pre) > code { background: var(--vscode-textCodeBlock-background, var(--bg-overlay)); padding: 2px 5px; border-radius: 3px; color: var(--vscode-textPreformat-foreground, var(--text-primary)); }
     strong { font-weight: 600; }
     em { font-style: italic; }
     del { text-decoration: line-through; opacity: 0.6; }
@@ -644,11 +651,15 @@ export function getWebviewContent(
     li { margin-left: 16px; list-style: disc; }
     blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
     .code-block-wrapper { position: relative; margin: 8px 0; }
-    .code-block-wrapper pre { margin: 0; }
+    .code-block-wrapper pre { margin: 0; padding-top: 36px; }
+    .code-block-actions { position: absolute; top: 5px; right: 5px; z-index: 1; display: flex; gap: 4px; }
     .code-lang { position: absolute; top: 4px; left: 8px; font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-    .copy-btn { position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-secondary); font-size: 11px; padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
-    .code-block-wrapper:hover .copy-btn { opacity: 1; }
-    .copy-btn:hover { background: rgba(255,255,255,0.15); color: var(--text-primary); }
+    .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: 4px; color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: 11px; padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+    .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
+    .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
+    .copy-btn:hover { background: var(--vscode-button-secondaryHoverBackground, var(--bg-overlay)); color: var(--text-primary); }
+    .apply-btn { background: var(--vscode-button-background); border-color: transparent; color: var(--vscode-button-foreground); }
+    .apply-btn:hover { background: var(--vscode-button-hoverBackground); }
 
     /* ── Composer controls row (mode chip + effort chip + model chip) ── */
     .composer-controls {
@@ -674,8 +685,8 @@ export function getWebviewContent(
     }
     .mode-chip:hover, .effort-chip:hover, .model-chip:hover {
       color: var(--text-primary);
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.18);
+      background: var(--vscode-toolbar-hoverBackground);
+      border-color: var(--vscode-focusBorder);
     }
     .mode-chip.active {
       border-color: var(--accent-teal);
@@ -702,8 +713,8 @@ export function getWebviewContent(
     }
 
     .usage-meter-banner.warn {
-      background: rgba(218, 119, 86, 0.08);
-      border-bottom-color: rgba(218, 119, 86, 0.2);
+      background: var(--vscode-inputValidation-warningBackground);
+      border-bottom-color: var(--vscode-inputValidation-warningBorder);
     }
 
     .usage-meter-collapsed {
@@ -727,7 +738,7 @@ export function getWebviewContent(
     .usage-progress {
       flex: 1;
       height: 4px;
-      background: rgba(255,255,255,0.1);
+      background: var(--vscode-editorWidget-border);
       border-radius: 2px;
       overflow: hidden;
     }
@@ -1045,11 +1056,28 @@ export function getWebviewContent(
     }
     .prompt-chip:hover { background: var(--bg-overlay); color: var(--text-primary); }
 
+    /*
+     * VS Code sidebars commonly render at 260–400 px. Keeping Model, Mode, and
+     * Effort on one non-wrapping row pushed Send outside the composer at those
+     * widths. Mode and reasoning remain available through Tools and actions;
+     * the primary row keeps only +, Model, and Send so it stays usable.
+     */
+    @media (max-width: 480px) {
+      .mode-chip,
+      .effort-chip { display: none !important; }
+      .model-pill {
+        min-width: 72px;
+        max-width: min(150px, calc(100vw - 112px));
+      }
+    }
+
     @media (max-width: 340px) {
-      .runtime-pill { display: none; }
-      .provider-badge { display: none !important; }
       .header { padding-inline: 8px; }
+      .header-left { gap: 4px; max-width: calc(100% - 112px); overflow: hidden; }
       .header-actions { gap: 0; }
+      .header-title { display: none; }
+      .runtime-pill { max-width: 66px; min-width: 0; overflow: hidden; flex-shrink: 1; }
+      .provider-badge { max-width: 54px; min-width: 0; overflow: hidden; flex-shrink: 1; }
       .model-pill { max-width: 88px; }
       .composer-hint { display: none; }
       .empty-state-copy { max-width: 230px; }
@@ -1067,7 +1095,7 @@ export function getWebviewContent(
     /* ── Composer drag-drop overlay + attachment strip (2026-05-21 P0 #3) ── */
     .composer-card.dragover {
       border-color: var(--accent-teal);
-      box-shadow: 0 0 0 2px rgba(33, 128, 141, 0.35);
+      box-shadow: 0 0 0 2px var(--vscode-focusBorder);
     }
 
     .attachment-strip {
@@ -1141,7 +1169,7 @@ export function getWebviewContent(
     <div class="header-left">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
       <span class="header-title">AGI</span>
-      <span class="runtime-pill"><span class="runtime-pill-dot"></span>Local Runtime</span>
+      <span class="runtime-pill" title="Workspace-local runtime"><span class="runtime-pill-dot"></span><span class="runtime-pill-label">Local host</span></span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
@@ -1217,8 +1245,8 @@ export function getWebviewContent(
       <button type="button" class="plus-menu-item" id="plusMenuUpload" role="menuitem">
         <span class="pm-icon codicon codicon-files" aria-hidden="true"></span>
         <span class="plus-menu-copy">
-          <span class="plus-menu-title">Files and folders</span>
-          <span class="plus-menu-description">Attach local workspace context</span>
+          <span class="plus-menu-title">Workspace files</span>
+          <span class="plus-menu-description">Pin files from the open workspace</span>
         </span>
       </button>
       <button type="button" class="plus-menu-item" id="plusMenuPlanMode" role="menuitem">
@@ -1255,15 +1283,15 @@ export function getWebviewContent(
             spellcheck="true"
             aria-label="Chat input"
           ></textarea>
-          <div class="composer-hint" id="composerHint"><kbd>⌘↵</kbd> to send</div>
+          <div class="composer-hint" id="composerHint"><kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline</div>
         </div>
       </div>
       <div class="composer-bottom">
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
-        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">Local Runtime · Auto</button>
-        <button class="mode-chip" id="modeChip" title="Agent mode">${modeLabel}</button>
-        <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>${effortLabel}</button>
-        <button id="sendBtn" title="Send (Cmd+Enter)" aria-label="Send"></button>
+        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">Model · Auto</button>
+        <button class="mode-chip" id="modeChip" title="Agent mode">Mode · ${modeLabel}</button>
+        <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>Effort · ${effortLabel}</button>
+        <button id="sendBtn" title="Send (Enter)" aria-label="Send"></button>
       </div>
     </div>
   </div>
@@ -1320,12 +1348,15 @@ export function getWebviewContent(
       if (!providerBadgeEl || !providerBadgeDotEl || !providerBadgeTextEl) return;
       if (!providerLabel) {
         providerBadgeTextEl.textContent = '';
+        providerBadgeEl.removeAttribute('title');
         providerBadgeEl.style.display = 'none';
         return;
       }
-      providerBadgeEl.style.background = brandColor;
-      providerBadgeDotEl.style.background = 'rgba(0,0,0,0.35)';
+      providerBadgeEl.style.background = 'var(--bg-overlay)';
+      providerBadgeEl.style.border = '1px solid ' + brandColor;
+      providerBadgeDotEl.style.background = brandColor;
       providerBadgeTextEl.textContent = providerLabel;
+      providerBadgeEl.title = providerLabel;
       providerBadgeEl.style.display = 'inline-flex';
     }
 
@@ -1460,7 +1491,7 @@ export function getWebviewContent(
       sendBtn.disabled = false;
       sendBtn.classList.toggle('streaming', value);
       sendBtn.setAttribute('aria-label', value ? 'Stop response' : 'Send');
-      sendBtn.setAttribute('title', value ? 'Stop response' : 'Send (Cmd+Enter)');
+      sendBtn.setAttribute('title', value ? 'Stop response' : 'Send (Enter)');
       userInput.disabled = value;
     }
 
@@ -1545,7 +1576,7 @@ export function getWebviewContent(
             if (modelSelect) modelSelect.value = modelId;
             if (modelPill) {
               var selectedLabel = target.querySelector('.model-popover__label');
-              modelPill.textContent = selectedLabel ? selectedLabel.textContent : modelId;
+              modelPill.textContent = 'Model · ' + (selectedLabel ? selectedLabel.textContent : modelId);
             }
             closeModelPopover();
             vscode.postMessage({ type: 'selectModel', payload: { modelId: modelId } });
@@ -1577,21 +1608,54 @@ export function getWebviewContent(
         .replace(/\\n/g, '<br>');
     }
 
-    // Attach copy-button click handlers after sanitized HTML is in the DOM.
-    // The previous inline onclick="copyCode(this)" is stripped by DOMPurify
-    // (and would not fire under the nonce-only script-src CSP anyway).
-    function bindCopyButtons(rootEl) {
+    // Attach code-action handlers after sanitized HTML is in the DOM. A
+    // WeakSet prevents duplicate listeners without adding data attributes to
+    // model-rendered content.
+    var boundCodeActionButtons = new WeakSet();
+
+    function getCodeBlock(button) {
+      var wrapper = button && button.closest ? button.closest('.code-block-wrapper') : null;
+      return wrapper ? wrapper.querySelector('pre code') : null;
+    }
+
+    function getCodeLanguage(codeEl) {
+      if (!codeEl || !codeEl.classList) return '';
+      for (var i = 0; i < codeEl.classList.length; i++) {
+        var className = codeEl.classList.item(i) || '';
+        if (className.indexOf('language-') === 0) {
+          return className.slice('language-'.length);
+        }
+      }
+      return '';
+    }
+
+    function bindCodeBlockActions(rootEl) {
       if (!rootEl) return;
-      var btns = rootEl.querySelectorAll('.copy-btn');
+      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn');
       for (var i = 0; i < btns.length; i++) {
         var btn = btns[i];
-        if (btn.dataset.bound === '1') continue;
-        btn.dataset.bound = '1';
+        if (boundCodeActionButtons.has(btn)) continue;
+        boundCodeActionButtons.add(btn);
         btn.addEventListener('click', function(ev) {
           var b = ev.currentTarget;
-          var pre = b.parentElement && b.parentElement.querySelector('pre code');
-          if (!pre) return;
-          var text = pre.textContent || '';
+          var codeEl = getCodeBlock(b);
+          if (!codeEl) return;
+          var text = codeEl.textContent || '';
+          if (b.classList.contains('apply-btn')) {
+            vscode.postMessage({
+              type: 'proposeDiff',
+              payload: {
+                code: text,
+                language: getCodeLanguage(codeEl)
+              }
+            });
+            return;
+          }
+          if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+            b.textContent = 'Failed';
+            setTimeout(function() { b.textContent = 'Copy'; }, 1500);
+            return;
+          }
           navigator.clipboard.writeText(text).then(function() {
             b.textContent = 'Copied!';
             setTimeout(function() { b.textContent = 'Copy'; }, 1500);
@@ -1942,6 +2006,7 @@ export function getWebviewContent(
         // flash at stream completion. renderAssistant falls back to escaped
         // plain text if window.agiRender is not yet loaded.
         currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+        bindCodeBlockActions(currentAssistantEl);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
@@ -1949,11 +2014,14 @@ export function getWebviewContent(
         removeTyping();
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
-          // token is flushed, then bind copy buttons on any code blocks.
+          // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
-          bindCopyButtons(currentAssistantEl);
+          bindCodeBlockActions(currentAssistantEl);
         }
         finalizeToolCallStack();
+        if (msg.payload && msg.payload.providerLabel) {
+          updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor || 'var(--border)');
+        }
         setStreaming(false);
         currentAssistantEl = null;
         accumulatedContent = '';
@@ -2008,6 +2076,10 @@ export function getWebviewContent(
         currentAssistantEl = null;
       }
 
+      else if (msg.type === 'sessionNotice') {
+        addMessage('system', msg.payload.message);
+      }
+
       else if (msg.type === 'model') {
         // Match by comparing option.value directly rather than building a CSS
         // selector via string concat — a model id containing a quote/"]" would
@@ -2018,9 +2090,9 @@ export function getWebviewContent(
         }
         if (opt) {
           modelSelect.value = msg.payload.model;
-          if (modelPill) modelPill.textContent = opt.dataset.displayLabel || opt.text;
+          if (modelPill) modelPill.textContent = 'Model · ' + (opt.dataset.displayLabel || opt.text);
         } else if (modelPill) {
-          modelPill.textContent = msg.payload.model;
+          modelPill.textContent = 'Model · ' + msg.payload.model;
         }
       }
 
@@ -2098,12 +2170,12 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'modeChanged') {
-        if (modeChip) modeChip.textContent = msg.payload.mode.charAt(0).toUpperCase() + msg.payload.mode.slice(1);
+        if (modeChip) modeChip.textContent = 'Mode · ' + msg.payload.mode.charAt(0).toUpperCase() + msg.payload.mode.slice(1);
       }
 
       else if (msg.type === 'effortChanged') {
         if (effortChip) {
-          effortChip.textContent = msg.payload.effort.charAt(0).toUpperCase() + msg.payload.effort.slice(1);
+          effortChip.textContent = 'Effort · ' + msg.payload.effort.charAt(0).toUpperCase() + msg.payload.effort.slice(1);
           effortChip.style.display = msg.payload.supportsEffort ? '' : 'none';
         }
       }

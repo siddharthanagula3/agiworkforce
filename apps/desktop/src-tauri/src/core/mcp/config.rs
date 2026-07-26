@@ -1,7 +1,5 @@
 use super::transport::TransportConfig;
 use crate::core::mcp::McpResult;
-use crate::data::db::encryption::open_encrypted_connection;
-use crate::sys::security::machine_key::{derive_key, KeyPurpose};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -941,10 +939,7 @@ impl McpServersConfig {
 }
 
 pub fn open_mcp_settings_db() -> Result<rusqlite::Connection, String> {
-    let db_path = crate::sys::utils::database_path()
-        .map_err(|e| format!("Failed to resolve database path: {}", e))?;
-    let encryption_key = derive_key(KeyPurpose::DatabaseEncryption);
-    open_encrypted_connection(db_path.to_string_lossy().as_ref(), &encryption_key)
+    crate::data::db::key_management::open_registered_main_database_connection()
 }
 
 pub fn upsert_settings_v2_value(

@@ -43,6 +43,15 @@ function nextRunDisplay(t: ScheduledTask): string {
   return getRelativeTimeDisplay(t.nextRunAt);
 }
 
+const BUILT_IN_TASK_LABELS: Record<string, string> = {
+  memory_auto_summarization: 'Daily memory summary',
+  memory_weekly_decay: 'Weekly memory cleanup',
+};
+
+function taskDisplayName(task: ScheduledTask): string {
+  return BUILT_IN_TASK_LABELS[task.name] ?? task.name;
+}
+
 export function AgiWorkScheduled() {
   const { t } = useTranslation('v3');
   const tasks = useSchedulerStore((s) => s.tasks);
@@ -86,7 +95,7 @@ export function AgiWorkScheduled() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-[var(--chat-text-primary)]">
-                    {task.name}
+                    {taskDisplayName(task)}
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--chat-text-secondary)]">
                     <span>{getScheduleSummary(task.schedule)}</span>
@@ -106,10 +115,8 @@ export function AgiWorkScheduled() {
                   on={isTaskOn(task)}
                   onToggle={() => void toggleTask(task.id)}
                   label={t(
-                    isTaskOn(task)
-                      ? 'agiWork.scheduled.pauseAria'
-                      : 'agiWork.scheduled.resumeAria',
-                    { name: task.name },
+                    isTaskOn(task) ? 'agiWork.scheduled.pauseAria' : 'agiWork.scheduled.resumeAria',
+                    { name: taskDisplayName(task) },
                   )}
                 />
 
@@ -117,8 +124,8 @@ export function AgiWorkScheduled() {
                   <button
                     type="button"
                     className="flex h-8 w-8 items-center justify-center rounded text-[var(--chat-text-muted)] hover:text-[var(--chat-destructive)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
-                    title={`${t('common.delete')} ${task.name}`}
-                    aria-label={`${t('common.delete')} ${task.name}`}
+                    title={`${t('common.delete')} ${taskDisplayName(task)}`}
+                    aria-label={`${t('common.delete')} ${taskDisplayName(task)}`}
                     onClick={() => setDeleteCandidate(task)}
                   >
                     <Trash2 size={12} aria-hidden="true" />
@@ -142,7 +149,7 @@ export function AgiWorkScheduled() {
         }}
         title={t('agiWork.scheduled.deleteTitle')}
         description={t('agiWork.scheduled.deleteDescription', {
-          name: deleteCandidate?.name ?? '',
+          name: deleteCandidate ? taskDisplayName(deleteCandidate) : '',
         })}
         confirmText={t('common.delete')}
         variant="destructive"

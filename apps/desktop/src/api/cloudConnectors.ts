@@ -54,6 +54,8 @@ export type ConnectConnectorResult =
 export interface CreateCustomConnectorInput {
   name: string;
   url: string;
+  /** Optional bearer credential. The server encrypts it before persistence. */
+  authToken?: string;
 }
 
 function readApiError(body: unknown, fallback: string): string {
@@ -219,12 +221,14 @@ export async function disconnectConnector(connectorId: string): Promise<void> {
 export async function createCustomConnector(input: CreateCustomConnectorInput): Promise<void> {
   const boundary = captureManagedCloudBoundary('Custom Cloud connector creation');
   const headers = await getAuthHeaders();
+  const authToken = input.authToken?.trim();
   const res = await cloudFetch(`${CLOUD_API_BASE_URL}/api/connectors/custom`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
       name: input.name,
       url: input.url,
+      ...(authToken ? { authToken } : {}),
     }),
   });
   if (!res.ok) {

@@ -49,6 +49,8 @@ export interface ImageGenMeta {
 interface ImageGenerationCardProps {
   /** undefined = currently generating (state A); string = image ready (state B+) */
   imageUrl?: string;
+  /** Authoritative request state from the owning chat message. */
+  isGenerating?: boolean;
   /** The original prompt used to generate this image */
   prompt?: string;
   /** Aspect ratio that was requested */
@@ -119,20 +121,19 @@ async function downloadImage(url: string, filename = 'image.png') {
 // State A: Generating card
 // ---------------------------------------------------------------------------
 
-const GENERATING_PHRASES = [
-  'Creating image',
-  'Sketching it out',
-  'Painting details',
-  'Almost there',
-];
+function formatElapsed(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
 
 function GeneratingCard() {
-  const [phraseIdx, setPhraseIdx] = useState(0);
+  const startedAt = useRef(Date.now());
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   useEffect(() => {
     const id = setInterval(() => {
-      setPhraseIdx((i) => (i + 1) % GENERATING_PHRASES.length);
-    }, 1800);
+      setElapsedSeconds(Math.floor((Date.now() - startedAt.current) / 1000));
+    }, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -154,15 +155,12 @@ function GeneratingCard() {
       {/* Shimmer overlay */}
       <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-white/[0.02] via-transparent to-white/[0.04]" />
 
-      <div className="relative z-10 flex flex-col items-center gap-3">
+      <div className="relative z-10 flex flex-col items-center gap-2.5">
         {/* Spinner ring */}
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-primary/60" />
-        <span
-          key={phraseIdx}
-          className="animate-in fade-in text-sm font-medium text-muted-foreground duration-500"
-        >
-          {GENERATING_PHRASES[phraseIdx]}
-          <span className="ml-0.5 animate-pulse">...</span>
+        <span className="text-sm font-medium text-foreground">Generating image</span>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          Waiting for the image provider · {formatElapsed(elapsedSeconds)} elapsed
         </span>
       </div>
     </div>
@@ -748,6 +746,7 @@ function ResultCard({ imageUrl, prompt, onEdit, onShare }: ResultCardProps) {
 
 export function ImageGenerationCard({
   imageUrl,
+  isGenerating = !imageUrl,
   prompt = '',
   aspectRatio = '1:1',
   modelId,
@@ -783,9 +782,37 @@ export function ImageGenerationCard({
     [],
   );
 
-  // State A: generating
-  if (!imageUrl) {
+  // State A: generating. The copy deliberately reflects observable state and
+  // elapsed time; rotating pseudo-stages such as "Painting details" and
+  // "Almost there" implied provider telemetry we do not receive.
+  if (!imageUrl && isGenerating) {
     return <GeneratingCard />;
+  }
+
+  // A failed/disconnected request must never leave an infinite loading card.
+  if (!imageUrl) {
+    return (
+      <div
+        className="mt-3 flex w-full max-w-[420px] items-center justify-between gap-3 rounded-xl border border-border/50 bg-muted/20 px-4 py-3"
+        role="status"
+        aria-label="Image generation stopped"
+      >
+        <span className="text-sm text-muted-foreground">
+          Image generation stopped before a result was received.
+        </span>
+        {onRegenerate && prompt ? (
+          <button
+            type="button"
+            className="shrink-0 rounded-lg border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60"
+            onClick={() => {
+              void onRegenerate({ prompt, aspectRatio, modelId }).catch(() => undefined);
+            }}
+          >
+            Try again
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
   // State B/C/D: image ready

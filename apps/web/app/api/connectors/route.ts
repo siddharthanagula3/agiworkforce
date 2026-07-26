@@ -32,7 +32,11 @@ import {
   getUserGithubInstallations,
   getUserCustomConnectorSummaries,
 } from '@/lib/user-connector-tools';
-import { getGitHubAppInstallUrl, isGitHubAppConfigured } from '@/lib/github-app';
+import {
+  getGitHubAppInstallUrl,
+  isGitHubAppConfigured,
+  isGitHubInstallationLinkingAvailable,
+} from '@/lib/github-app';
 
 const GITHUB_CONNECTOR_ID = 'github';
 
@@ -144,7 +148,13 @@ const LOCAL_CONNECTOR_IDS = new Set([
 function getAvailableConnectorIds(): string[] {
   const available = new Set<string>();
   for (const id of getOperatorMappedConnectorIds()) available.add(id);
-  if (isGitHubAppConfigured() && getGitHubAppInstallUrl()) available.add(GITHUB_CONNECTOR_ID);
+  if (
+    isGitHubInstallationLinkingAvailable() &&
+    isGitHubAppConfigured() &&
+    getGitHubAppInstallUrl()
+  ) {
+    available.add(GITHUB_CONNECTOR_ID);
+  }
   return [...available];
 }
 
@@ -284,6 +294,16 @@ async function handleCreateConnector(request: NextRequest) {
   }
 
   if (body.connectorId === GITHUB_CONNECTOR_ID) {
+    if (!isGitHubInstallationLinkingAvailable()) {
+      return NextResponse.json(
+        {
+          error:
+            'GitHub installation ownership verification is not available in this deployment. The connector stays disabled until the GitHub user authorization flow is configured.',
+          connectorId: body.connectorId,
+        },
+        { status: 501 },
+      );
+    }
     const installUrl = getGitHubAppInstallUrl();
     return NextResponse.json(
       {

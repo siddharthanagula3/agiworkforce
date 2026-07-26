@@ -112,7 +112,7 @@ describe('getWebviewContent — structural smoke', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
-    expect(doc.body.textContent).toContain('Local Runtime');
+    expect(doc.body.textContent).toContain('Local host');
     expect(doc.querySelector('#apiKeyBanner')).toBeNull();
     expect(doc.querySelector('#signInBtn')).toBeNull();
     expect(doc.querySelector('#cloudHistoryBtn')).toBeNull();
@@ -124,6 +124,61 @@ describe('getWebviewContent — structural smoke', () => {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     expect(doc.querySelector('#userInput')).not.toBeNull();
     expect(doc.querySelector('#sendBtn')).not.toBeNull();
+    expect(doc.querySelector('#sendBtn')?.getAttribute('title')).toBe('Send (Enter)');
+  });
+
+  it('keeps runtime and routing identity visible in narrow layouts', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const styles = Array.from(doc.querySelectorAll('style'))
+      .map((style) => style.textContent ?? '')
+      .join('\n');
+
+    expect(doc.querySelector('.runtime-pill')?.textContent).toContain('Local host');
+    expect(styles).not.toContain('.runtime-pill { display: none; }');
+    expect(styles).not.toContain('.provider-badge { display: none !important; }');
+    expect(styles).toContain(
+      '.header-left { gap: 4px; max-width: calc(100% - 112px); overflow: hidden; }',
+    );
+    expect(styles).toContain('.runtime-pill { max-width: 66px;');
+    expect(styles).toContain('.provider-badge { max-width: 54px;');
+    expect(doc.querySelector('.runtime-pill')?.getAttribute('title')).toBe(
+      'Workspace-local runtime',
+    );
+
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+    expect(scriptBody).toContain('providerBadgeEl.title = providerLabel');
+  });
+
+  it('labels model, mode, effort, and the actual Enter shortcut without ambiguity', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(doc.querySelector('#modelPill')?.textContent).toBe('Model · Auto');
+    expect(doc.querySelector('#modeChip')?.textContent).toContain('Mode ·');
+    expect(doc.querySelector('#effortChip')?.textContent).toContain('Effort ·');
+    expect(doc.querySelector('#composerHint')?.textContent).toContain('Enter to send');
+    expect(doc.querySelector('#composerHint')?.textContent).toContain('Shift+Enter for newline');
+    expect(scriptBody).toContain("'Model · ' +");
+    expect(scriptBody).toContain("'Mode · ' +");
+    expect(scriptBody).toContain("'Effort · ' +");
+  });
+
+  it('uses theme-aware code colors and exposes Copy to keyboard focus', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const styles = Array.from(doc.querySelectorAll('style'))
+      .map((style) => style.textContent ?? '')
+      .join('\n');
+
+    expect(styles).toContain('var(--vscode-textPreformat-foreground');
+    expect(styles).toContain('var(--vscode-textCodeBlock-background');
+    expect(styles).toContain('.copy-btn:focus-visible');
   });
 
   it('exposes a visible AGI Cloud account control with signed-in and reconnect states', () => {
@@ -182,9 +237,23 @@ describe('getWebviewContent — structural smoke', () => {
     );
     expect(doc.querySelector('#composerHint')?.textContent).toContain('to send');
     expect(doc.querySelector('#plusMenuLabel')?.textContent).toBe('Add to this chat');
-    expect(doc.querySelector('#plusMenuUpload')?.textContent).toContain('Files and folders');
+    expect(doc.querySelector('#plusMenuUpload')?.textContent).toContain('Workspace files');
     expect(doc.querySelector('#plusMenuPlanMode')?.textContent).toContain('Plan mode');
     expect(doc.querySelector('#plusMenuActions')?.textContent).toContain('Tools and actions');
+  });
+
+  it('keeps the primary composer controls on-screen in a narrow VS Code sidebar', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const styles = Array.from(doc.querySelectorAll('style'))
+      .map((style) => style.textContent ?? '')
+      .join('\n');
+
+    expect(styles).toContain('@media (max-width: 480px)');
+    expect(styles).toMatch(
+      /\.mode-chip,\s*\.effort-chip\s*\{\s*display:\s*none\s*!important;\s*\}/,
+    );
+    expect(doc.querySelector('#plusMenuActions')?.textContent).toContain('Models, reasoning');
   });
 
   it('submits an attachment-only turn with a visible trusted prompt', () => {
@@ -256,7 +325,7 @@ describe('getWebviewContent — structural smoke', () => {
     expect(scriptBody).toContain("msg.type === 'modelPickerData'");
     expect(scriptBody).toContain("vscode.postMessage({ type: 'selectModel'");
     expect(scriptBody).toContain('if (options[i].disabled) continue;');
-    expect(scriptBody).toContain('modelPill.textContent = msg.payload.model');
+    expect(scriptBody).toContain("modelPill.textContent = 'Model · ' + msg.payload.model");
   });
 
   it('keeps locked model guidance out of the compact composer label', () => {
@@ -273,16 +342,16 @@ describe('getWebviewContent — structural smoke', () => {
     expect(scriptBody).toContain('opt.dataset.displayLabel || opt.text');
   });
 
-  it('hides the provider badge when Auto has not resolved a provider yet', () => {
+  it('renders the host-provided Auto routing identity without claiming a provider', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const scriptBody = Array.from(doc.querySelectorAll('script'))
       .map((script) => script.textContent ?? '')
       .join('\n');
 
-    expect(doc.querySelector('#providerBadge')?.getAttribute('style')).toContain('display:none');
-    expect(scriptBody).toContain('if (!providerLabel)');
-    expect(scriptBody).toContain("providerBadgeEl.style.display = 'none'");
+    expect(scriptBody).toContain('providerBadgeDotEl.style.background = brandColor');
+    expect(scriptBody).toContain("providerBadgeEl.style.background = 'var(--bg-overlay)'");
+    expect(scriptBody).toContain("providerBadgeEl.style.display = 'inline-flex'");
   });
 
   it('nonce is present on style and script tags', () => {

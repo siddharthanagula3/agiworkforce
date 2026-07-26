@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -20,7 +20,6 @@ import {
 } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/text';
-import { fetchPortalSessionUrl } from '@/src/features/billing';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
@@ -32,7 +31,7 @@ import {
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
-import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
+import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -54,7 +53,9 @@ export default function ProfileScreen() {
   // Clerk user exposes the actual email for the cloud profile header.
   const { user: clerkUser } = useUser();
   const localConversations = useChatStore((s) => s.conversations);
+  const loadConversations = useChatStore((s) => s.loadConversations);
   const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
+  const cloudHistoryStats = useChatCloudMessageStore((s) => s.historyStats);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isCloudMode = appMode === 'cloud';
   const localPersonalization = useLocalSettingsStore((s) => s.personalization);
@@ -74,13 +75,26 @@ export default function ProfileScreen() {
       ).filter(isHistoryVisibleConversation),
     [appMode, isCloudMode, localConversations, cloudConversations],
   );
-  const totalMessages = modeConversations.reduce((sum, conversation) => {
-    return sum + (conversation.messageCount ?? 0);
-  }, 0);
+  const totalChats =
+    isCloudMode && cloudHistoryStats
+      ? cloudHistoryStats.conversationCount
+      : modeConversations.length;
+  const totalMessages =
+    isCloudMode && cloudHistoryStats
+      ? cloudHistoryStats.messageCount
+      : modeConversations.reduce((sum, conversation) => {
+          return sum + (conversation.messageCount ?? 0);
+        }, 0);
 
   const cloudEmail = clerkUser?.primaryEmailAddress?.emailAddress;
   const displayName = isCloudMode
-    ? 'AGI Cloud'
+    ? personalization.nickname ||
+      personalization.fullName ||
+      clerkUser?.fullName ||
+      clerkUser?.firstName ||
+      clerkUser?.username ||
+      cloudEmail?.split('@')[0] ||
+      'AGI Cloud'
     : personalization.nickname || personalization.fullName || 'Local profile';
   const subtitle = isCloudMode
     ? cloudEmail || (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
@@ -89,6 +103,12 @@ export default function ProfileScreen() {
   // Gate cloud account section on the real Clerk signal, not on useAuthStore.user
   // which is permanently null in v1.
   const hasCloudAccount = FEATURES.auth && isClerkSignedIn;
+
+  useEffect(() => {
+    if (isCloudMode && isClerkSignedIn) {
+      void loadConversations();
+    }
+  }, [isCloudMode, isClerkSignedIn, loadConversations]);
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -100,25 +120,9 @@ export default function ProfileScreen() {
     [router],
   );
 
-  const handleManageSubscription = useCallback(async () => {
-    try {
-      const portalUrl = await fetchPortalSessionUrl();
-      if (isAllowedExternalUrl(portalUrl)) {
-        await openExternalUrl(portalUrl);
-        return;
-      }
-    } catch {
-      // Fall back to the public billing page below.
-    }
-
-    const opened = await openExternalUrl('https://agiworkforce.com/settings/billing');
-    if (!opened) {
-      Alert.alert(
-        'Billing unavailable',
-        'Open agiworkforce.com/settings/billing in your browser to manage billing.',
-      );
-    }
-  }, []);
+  const handleManageSubscription = useCallback(() => {
+    router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const handleSignOut = useCallback(() => {
     Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
@@ -208,7 +212,7 @@ export default function ProfileScreen() {
             <ProfileStat
               icon={MessageSquare}
               label="Chats"
-              value={modeConversations.length}
+              value={totalChats}
               color={colors.textSecondary}
             />
             <ProfileStat

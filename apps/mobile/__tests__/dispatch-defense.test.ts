@@ -496,7 +496,7 @@ function makeAgent(overrides: Record<string, unknown> = {}): Record<string, unkn
   return {
     id: `agent-${Math.random().toString(36).slice(2)}`,
     name: 'Test Agent',
-    model: 'claude-opus-4.8',
+    model: 'claude-opus-5',
     status: 'running',
     currentStep: 'Processing files',
     progress: 50,

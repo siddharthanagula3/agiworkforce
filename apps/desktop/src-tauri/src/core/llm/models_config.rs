@@ -144,6 +144,14 @@ pub struct ModelReasoning {
     #[serde(default)]
     pub supported_efforts: Vec<String>,
     #[serde(default)]
+    pub thinking_default: Option<String>,
+    #[serde(default)]
+    pub supports_manual_thinking: Option<bool>,
+    #[serde(default)]
+    pub max_effort_when_thinking_disabled: Option<String>,
+    #[serde(default)]
+    pub rejects_sampling_parameters: Option<bool>,
+    #[serde(default)]
     pub request: Option<ModelReasoningRequest>,
 }
 
@@ -342,6 +350,52 @@ pub fn model_supports_effort(model_id: &str, effort: &str) -> bool {
                 .iter()
                 .any(|item| item == effort)
         })
+}
+
+fn get_model_entry(model_id: &str) -> Option<&'static ModelEntry> {
+    let canonical_model_id = get_canonicalized_id(model_id);
+    CONFIG.models.get(&canonical_model_id)
+}
+
+/// Whether this model's provider contract uses adaptive rather than
+/// manually-budgeted thinking.
+pub fn model_uses_adaptive_thinking(model_id: &str) -> bool {
+    get_model_entry(model_id)
+        .and_then(|entry| entry.reasoning.as_ref())
+        .is_some_and(|reasoning| reasoning.thinking_default.as_deref() == Some("adaptive"))
+}
+
+/// Whether provider sampling knobs must be omitted for this exact model.
+pub fn model_rejects_sampling_parameters(model_id: &str) -> bool {
+    get_model_entry(model_id)
+        .and_then(|entry| entry.reasoning.as_ref())
+        .and_then(|reasoning| reasoning.rejects_sampling_parameters)
+        .unwrap_or(false)
+}
+
+/// Validate an effort requested while thinking is explicitly disabled.
+/// Unknown models have no declared ceiling and are left to their provider.
+pub fn model_allows_effort_with_thinking_disabled(model_id: &str, effort: &str) -> bool {
+    const ORDER: &[&str] = &["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+    let Some(maximum) = get_model_entry(model_id)
+        .and_then(|entry| entry.reasoning.as_ref())
+        .and_then(|reasoning| reasoning.max_effort_when_thinking_disabled.as_deref())
+    else {
+        return true;
+    };
+    let Some(effort_index) = ORDER.iter().position(|item| *item == effort) else {
+        return false;
+    };
+    let Some(maximum_index) = ORDER.iter().position(|item| *item == maximum) else {
+        return false;
+    };
+    effort_index <= maximum_index
+}
+
+pub fn max_effort_when_thinking_disabled(model_id: &str) -> Option<&'static str> {
+    get_model_entry(model_id)
+        .and_then(|entry| entry.reasoning.as_ref())
+        .and_then(|reasoning| reasoning.max_effort_when_thinking_disabled.as_deref())
 }
 
 /// Infer the Rust `Provider` enum from a model ID string using prefix matching.
@@ -562,8 +616,7 @@ mod tests {
             get_canonicalized_id("claude-sonnet-9-9"),
             "claude-sonnet-9-9"
         );
-        assert_eq!(get_canonicalized_id("claude-opus-4.8"), "claude-opus-4.8");
-        assert_eq!(get_canonicalized_id("claude-opus-4-8"), "claude-opus-4.8");
+        assert_eq!(get_canonicalized_id("claude-opus-5"), "claude-opus-5");
         assert_eq!(
             get_canonicalized_id("gemini-3.1-pro-preview"),
             "gemini-3.1-pro-preview"
@@ -620,7 +673,7 @@ mod tests {
         assert!(!model_uses_responses_api("gpt-4o"));
         assert!(!model_uses_responses_api("gpt-4-turbo"));
         assert!(!model_uses_responses_api("gpt-3.5-turbo"));
-        assert!(!model_uses_responses_api("claude-opus-4.8"));
+        assert!(!model_uses_responses_api("claude-opus-5"));
         assert!(!model_uses_responses_api("gemini-2.5-pro"));
     }
 
@@ -706,16 +759,39 @@ mod tests {
     fn model_supports_gemini_thinking_for_pro_models() {
         assert!(model_supports_gemini_thinking("gemini-3.1-pro-preview"));
         assert!(!model_supports_gemini_thinking("gemini-3-flash"));
-        assert!(!model_supports_gemini_thinking("claude-opus-4.8"));
+        assert!(!model_supports_gemini_thinking("claude-opus-5"));
     }
 
     #[test]
     fn model_effort_support_comes_from_exact_catalog_request_metadata() {
-        assert!(model_supports_effort("claude-opus-4.8", "high"));
-        assert!(model_supports_effort("claude-opus-4-8", "max"));
+        assert!(model_supports_effort("claude-opus-5", "high"));
+        assert!(model_supports_effort("claude-opus-5", "xhigh"));
+        assert!(model_supports_effort("claude-opus-5", "max"));
         assert!(!model_supports_effort("claude-haiku-4.5", "low"));
         assert!(!model_supports_effort("unknown-anthropic-model", "high"));
-        assert!(!model_supports_effort("claude-opus-4.8", "minimal"));
+        assert!(!model_supports_effort("claude-opus-5", "minimal"));
+    }
+
+    #[test]
+    fn opus_5_request_contract_comes_from_catalog_metadata() {
+        assert!(model_uses_adaptive_thinking("claude-opus-5"));
+        assert!(model_rejects_sampling_parameters("claude-opus-5"));
+        assert!(model_allows_effort_with_thinking_disabled(
+            "claude-opus-5",
+            "high"
+        ));
+        assert!(!model_allows_effort_with_thinking_disabled(
+            "claude-opus-5",
+            "xhigh"
+        ));
+        assert!(!model_allows_effort_with_thinking_disabled(
+            "claude-opus-5",
+            "max"
+        ));
+        assert_eq!(
+            max_effort_when_thinking_disabled("claude-opus-5"),
+            Some("high")
+        );
     }
 
     #[test]
@@ -724,19 +800,19 @@ mod tests {
         assert!(!models.is_empty(), "model entries must not be empty");
         // Spot-check a well-known model exists
         assert!(
-            models.contains_key("claude-opus-4.8") || models.contains_key("claude-sonnet-5"),
+            models.contains_key("claude-opus-5") || models.contains_key("claude-sonnet-5"),
             "At least one claude model must be in the catalog"
         );
     }
 
     #[test]
     fn get_pricing_returns_some_for_known_model() {
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4.8");
-        assert!(pricing.is_some(), "claude-opus-4.8 must have pricing");
+        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-5");
+        assert!(pricing.is_some(), "claude-opus-5 must have pricing");
         let p = pricing.unwrap();
         assert!(
             p.input_per_million > 0.0 || p.output_per_million > 0.0,
-            "claude-opus-4.8 pricing must be non-zero"
+            "claude-opus-5 pricing must be non-zero"
         );
     }
 
@@ -762,7 +838,7 @@ mod tests {
         // models get provider-level default pricing. The None path is a safety
         // net for future changes when providers might be added to the enum
         // before models.json is updated.
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4.8");
+        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-5");
         assert!(pricing.is_some(), "known model must have pricing");
 
         // Verify provider fallback works for all providers

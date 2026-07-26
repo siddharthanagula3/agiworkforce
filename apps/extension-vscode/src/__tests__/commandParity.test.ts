@@ -143,13 +143,23 @@ describe('package.json ↔ runtime command parity', () => {
     const declared = readDeclaredCommands().filter(
       (command) => unsupported.test(command.command) || unsupported.test(command.title ?? ''),
     );
-    const setupSource = fs.readFileSync(
-      path.resolve(__dirname, '../core/commandSetup.ts'),
-      'utf8',
-    );
+    const setupSource = fs.readFileSync(path.resolve(__dirname, '../core/commandSetup.ts'), 'utf8');
 
     expect(declared).toEqual([]);
     expect(setupSource).not.toMatch(/restore-checkpoint|restoreCheckpoint|rewindLast/);
+  });
+
+  it('keeps Cloud connectors and Team administration as explicit Web handoffs', () => {
+    const setupSource = fs.readFileSync(path.resolve(__dirname, '../core/commandSetup.ts'), 'utf8');
+
+    expect(setupSource).toContain('!isEntitledSubscriptionStatus(tierInfo.subscriptionStatus)');
+    expect(setupSource).toContain('Manage Cloud connectors on Web');
+    expect(setupSource).toContain(
+      "Cloud connectors do not replace this workspace's local MCP configuration",
+    );
+    expect(setupSource).toContain('https://agiworkforce.com/connectors?from=vscode-extension');
+    expect(setupSource).toContain('https://agiworkforce.com/settings/team?from=vscode-extension');
+    expect(setupSource).toContain('https://agiworkforce.com/teams?from=vscode-extension');
   });
 
   it('parity holds on second activate after reset (module-state isolation)', () => {

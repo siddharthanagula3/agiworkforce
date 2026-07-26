@@ -17,6 +17,7 @@ export const TierInfoSchema = z
     // (ManagedUsageSummaryResponse). No exact token/cent numerator/cap is
     // exposed to clients — only the plan tier, a 0-100 percentage, and reset.
     plan_tier: z.string().min(1).max(64),
+    subscription_status: z.string().min(1).max(64),
     usage_percentage: z.number().min(0).max(100).optional(),
     usage_reset_at: z.string().min(1).nullable().optional(),
   })

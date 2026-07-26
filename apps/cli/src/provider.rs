@@ -234,10 +234,10 @@ pub fn is_deprecated(model_id: &str) -> bool {
 ///
 /// Example output:
 /// ```text
-/// claude-opus-4-8  (anthropic)  [active]
-///   Context window:  200K tokens
-///   Max output:      32K tokens
-///   Pricing:         $15.00 / $75.00 per 1M tokens (input/output)
+/// claude-opus-5  (anthropic)  [active]
+///   Context window:  1M tokens
+///   Max output:      128K tokens
+///   Pricing:         $5.00 / $25.00 per 1M tokens (input/output)
 ///   Tool use:        yes
 ///   Vision:          yes
 ///   Reasoning:       yes
@@ -476,8 +476,8 @@ mod tests {
     fn test_catalog_has_new_models() {
         let catalog = model_catalog();
         let ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
-        // claude-opus-4.8 apiModelId = "claude-opus-4-8" per models.json
-        assert!(ids.contains(&"claude-opus-4-8"));
+        // The CLI exposes the exact provider ID from models.json.
+        assert!(ids.contains(&"claude-opus-5"));
         assert!(ids.contains(&"claude-sonnet-5"));
         // OpenAI flagship + fast (luna) entries are both sourced from models.json.
         assert!(ids.contains(&"gpt-5.6-sol"));
@@ -584,8 +584,8 @@ mod tests {
             .filter(|m| m.supports_reasoning)
             .map(|m| m.id.as_str())
             .collect();
-        // claude-opus-4.8 apiModelId = "claude-opus-4-8" per models.json (thinking=true)
-        assert!(reasoning_ids.contains(&"claude-opus-4-8"));
+        // Reasoning support is sourced from models.json.
+        assert!(reasoning_ids.contains(&"claude-opus-5"));
         assert!(reasoning_ids.contains(&"claude-sonnet-5"));
         // Haiku 4.5 supports extended thinking (models.json capabilities.thinking=true,
         // flipped in the effort-catalog wave).
@@ -662,16 +662,16 @@ mod tests {
         assert!(!gemini_flash.supports_audio_output);
         assert!(gemini_flash.supports_pdf);
 
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
-        let claude = find_model("claude-opus-4-8").unwrap();
+        // Capability flags are sourced from the current catalog record.
+        let claude = find_model("claude-opus-5").unwrap();
         assert!(!claude.supports_audio_input);
         assert!(!claude.supports_audio_output);
     }
 
     #[test]
     fn test_pdf_support() {
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
-        let claude = find_model("claude-opus-4-8").unwrap();
+        // Capability flags are sourced from the current catalog record.
+        let claude = find_model("claude-opus-5").unwrap();
         assert!(!claude.supports_pdf);
 
         let gemini = find_model("gemini-3.1-pro-preview").unwrap();
@@ -693,8 +693,8 @@ mod tests {
 
     #[test]
     fn test_find_model_case_insensitive() {
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
-        let model = find_model("Claude-Opus-4-8");
+        // Matching uses the provider ID from the current catalog.
+        let model = find_model("Claude-Opus-5");
         assert!(model.is_some());
     }
 
@@ -705,8 +705,8 @@ mod tests {
 
     #[test]
     fn test_find_model_new_entries() {
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
-        assert!(find_model("claude-opus-4-8").is_some());
+        // New entries are sourced from the current catalog.
+        assert!(find_model("claude-opus-5").is_some());
         assert!(find_model("claude-sonnet-5").is_some());
         // OpenAI flagship + fast (luna) entries are both sourced from models.json.
         assert!(find_model("gpt-5.6-sol").is_some());
@@ -816,8 +816,8 @@ mod tests {
 
     #[test]
     fn test_supports_tool_use_true() {
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json (tools=true)
-        assert!(supports_tool_use("claude-opus-4-8"));
+        // Tool support is sourced from models.json.
+        assert!(supports_tool_use("claude-opus-5"));
         // gpt-5.6-sol is the current OpenAI flagship (tools=true)
         assert!(supports_tool_use("gpt-5.6-sol"));
         assert!(supports_tool_use("gemini-3.1-pro-preview"));
@@ -869,7 +869,7 @@ mod tests {
 
     #[test]
     fn test_default_temperature_claude_none() {
-        assert_eq!(default_temperature("claude-opus-4-8"), None);
+        assert_eq!(default_temperature("claude-opus-5"), None);
         assert_eq!(default_temperature("claude-sonnet-5"), None);
     }
 
@@ -894,8 +894,8 @@ mod tests {
 
     #[test]
     fn test_supports_reasoning_true() {
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json (thinking=true)
-        assert!(supports_reasoning("claude-opus-4-8"));
+        // Reasoning support is sourced from models.json.
+        assert!(supports_reasoning("claude-opus-5"));
         assert!(supports_reasoning("claude-sonnet-5"));
         // OpenAI flagship + fast (luna) entries are both sourced from models.json.
         assert!(supports_reasoning("gpt-5.6-sol"));
@@ -919,7 +919,7 @@ mod tests {
 
     #[test]
     fn test_is_deprecated_false() {
-        assert!(!is_deprecated("claude-opus-4-8"));
+        assert!(!is_deprecated("claude-opus-5"));
         assert!(!is_deprecated("gpt-5.6-sol"));
         assert!(!is_deprecated("gemini-3.1-pro-preview"));
         assert!(!is_deprecated("grok-4.5"));
@@ -935,11 +935,11 @@ mod tests {
 
     #[test]
     fn test_format_model_detail_paid_model() {
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
+        // The formatter consumes the current catalog limits and prices.
         // context: 1,000,000 (1M), input $5.00/output $25.00
-        let model = find_model("claude-opus-4-8").unwrap();
+        let model = find_model("claude-opus-5").unwrap();
         let detail = format_model_detail(&model);
-        assert!(detail.contains("claude-opus-4-8"));
+        assert!(detail.contains("claude-opus-5"));
         assert!(detail.contains("(anthropic)"));
         assert!(detail.contains("[active]"));
         assert!(detail.contains("1M tokens"));
@@ -1006,8 +1006,8 @@ mod tests {
     #[test]
     fn test_format_model_list_contains_new_models() {
         let list = format_model_list();
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
-        assert!(list.contains("claude-opus-4-8"));
+        // The formatted list consumes the current catalog.
+        assert!(list.contains("claude-opus-5"));
         // OpenAI flagship + fast (luna) entries are both sourced from models.json.
         assert!(list.contains("gpt-5.6-sol"));
         assert!(list.contains("gpt-5.6-luna"));

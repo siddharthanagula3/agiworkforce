@@ -93,10 +93,12 @@ async function getBridgeBaseUrl(): Promise<string> {
 /**
  * Request pairing with the desktop app.
  *
- * Sends POST <bridgeUrl>/pair. The desktop is expected to respond with
- * { token: string; fingerprint: string }. On success, the token is stored in
- * session storage and the state transitions to PAIRED. On failure the state
- * transitions to ERROR with the failure reason.
+ * Pairing uses two loopback-only requests:
+ * 1. Bootstrap a short-lived bridge token without requesting manifest changes.
+ * 2. Present that token while asking Desktop to authorize this extension ID.
+ *
+ * The second response rotates the token. Only that final token is stored in
+ * session storage before the native-messaging worker is asked to reconnect.
  *
  * If the desktop /pair endpoint is not yet implemented, the fetch will reject
  * (ECONNREFUSED or non-ok status) and the state will be ERROR.
@@ -121,9 +123,29 @@ export async function requestPairing(): Promise<PairingState> {
       throw new Error('Pairing is only supported with local desktop bridge');
     }
 
-    const resp = await fetch(`${baseUrl}/pair`, {
+    const bootstrapResp = await fetch(`${baseUrl}/pair`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!bootstrapResp.ok) {
+      const text = await bootstrapResp.text().catch(() => '');
+      throw new Error(`Desktop returned ${bootstrapResp.status}${text ? `: ${text}` : ''}`);
+    }
+
+    const bootstrapData = (await bootstrapResp.json()) as { token?: string };
+    if (!bootstrapData.token || !isValidPairingToken(bootstrapData.token)) {
+      throw new Error('Desktop returned a malformed bootstrap token');
+    }
+
+    const resp = await fetch(`${baseUrl}/pair`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Bridge-Token': bootstrapData.token,
+      },
       body: JSON.stringify({ extensionId: chrome.runtime.id }),
       signal: AbortSignal.timeout(8000),
     });
@@ -133,10 +155,17 @@ export async function requestPairing(): Promise<PairingState> {
       throw new Error(`Desktop returned ${resp.status}${text ? `: ${text}` : ''}`);
     }
 
-    const data = (await resp.json()) as { token?: string; fingerprint?: string };
+    const data = (await resp.json()) as {
+      token?: string;
+      fingerprint?: string;
+      nativeHostManifestInstalled?: boolean;
+    };
 
     if (!data.token) {
       throw new Error('Desktop response missing token');
+    }
+    if (data.nativeHostManifestInstalled !== true) {
+      throw new Error('Desktop could not install the native host manifest');
     }
     // SECURITY (H-07 audit 2026-05-19): validate token shape. Accept only
     // URL-safe base64 / hex tokens between 32 and 128 chars. Reject
@@ -166,6 +195,10 @@ export async function requestPairing(): Promise<PairingState> {
     });
 
     _state = { phase: 'paired', fingerprint, error: null };
+
+    if (typeof chrome.runtime.sendMessage === 'function') {
+      await chrome.runtime.sendMessage({ type: 'RECONNECT_NATIVE' }).catch(() => undefined);
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Pairing failed';
     _state = { phase: 'error', fingerprint: null, error: msg };

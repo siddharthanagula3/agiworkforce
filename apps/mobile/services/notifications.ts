@@ -175,13 +175,29 @@ Notifications.setNotificationHandler({
 // Permission + token registration
 // ---------------------------------------------------------------------------
 
-export async function registerForPushNotifications(): Promise<string | null> {
+export interface PushNotificationAccountContext {
+  ownerId: string;
+  signal: AbortSignal;
+  isCurrent: () => boolean;
+  getAuthToken: () => Promise<string | null>;
+}
+
+function accountContextIsCurrent(accountContext: PushNotificationAccountContext): boolean {
+  return !accountContext.signal.aborted && accountContext.isCurrent();
+}
+
+export async function registerForPushNotifications(
+  accountContext: PushNotificationAccountContext,
+): Promise<string | null> {
   try {
+    if (!accountContextIsCurrent(accountContext)) return null;
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    if (!accountContextIsCurrent(accountContext)) return null;
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
+      if (!accountContextIsCurrent(accountContext)) return null;
       finalStatus = status;
     }
 
@@ -200,6 +216,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
           sound: 'sound' in channel ? (channel.sound as string) : undefined,
           bypassDnd: 'bypassDnd' in channel ? (channel.bypassDnd as boolean) : undefined,
         });
+        if (!accountContextIsCurrent(accountContext)) return null;
       }
     }
 
@@ -207,9 +224,11 @@ export async function registerForPushNotifications(): Promise<string | null> {
     const tokenData = await Notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : undefined,
     );
+    if (!accountContextIsCurrent(accountContext)) return null;
     const pushToken = tokenData.data;
 
-    await sendTokenToBackend(pushToken);
+    const registered = await sendTokenToBackend(pushToken, accountContext);
+    if (!registered || !accountContextIsCurrent(accountContext)) return null;
 
     return pushToken;
   } catch (err) {
@@ -231,34 +250,34 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
 // --- Token backend sync ---
 
-async function sendTokenToBackend(token: string): Promise<void> {
+async function sendTokenToBackend(
+  token: string,
+  accountContext: PushNotificationAccountContext,
+): Promise<boolean> {
   try {
+    if (!accountContextIsCurrent(accountContext)) return false;
+    const authToken = await accountContext.getAuthToken();
+    if (!authToken || !accountContextIsCurrent(accountContext)) {
+      return false;
+    }
+
     const deviceId = await getDeviceId();
-    await api.post('/api/mobile/push-token', {
-      deviceId,
-      pushToken: token,
-    });
+    if (!accountContextIsCurrent(accountContext)) return false;
+    await api.post(
+      '/api/mobile/push-token',
+      {
+        deviceId,
+        pushToken: token,
+      },
+      {
+        headers: { Authorization: `Bearer ${authToken}` },
+        signal: accountContext.signal,
+      },
+    );
+    return accountContextIsCurrent(accountContext);
   } catch {
     // Non-critical — token will be re-sent on next app launch
-  }
-}
-
-/**
- * Clear this device's push token on sign-out. Without this, the token
- * registered by the previous account stays live server-side (mobile_devices
- * is keyed by deviceId, not by session) — a subsequent different account
- * signing in on the same physical device would otherwise still receive push
- * notifications addressed to the prior account. Call from the sign-out
- * trust-boundary teardown, alongside the other per-account resets.
- */
-export async function unregisterPushToken(): Promise<void> {
-  try {
-    const deviceId = await getDeviceId();
-    await api.delete(`/api/mobile/push-token?deviceId=${encodeURIComponent(deviceId)}`);
-  } catch {
-    // Non-critical / best-effort — matches sendTokenToBackend's contract.
-    // Worst case a stale token lingers until overwritten by the next sign-in's
-    // registerForPushNotifications() call on this device.
+    return false;
   }
 }
 
@@ -618,7 +637,9 @@ let tokenSubscription: Notifications.Subscription | null = null;
  * Set up all notification listeners. Call once on app mount.
  * Returns a cleanup function to remove all listeners.
  */
-export function setupNotificationListeners(): () => void {
+export function setupNotificationListeners(
+  accountContext: PushNotificationAccountContext | null,
+): () => void {
   // Guard: if listeners already exist, return existing cleanup to prevent duplicates.
   if (foregroundSubscription || responseSubscription || tokenSubscription) {
     return () => {
@@ -658,7 +679,9 @@ export function setupNotificationListeners(): () => void {
 
   // Push token refreshed (re-register with backend)
   tokenSubscription = Notifications.addPushTokenListener((newToken) => {
-    sendTokenToBackend(newToken.data);
+    if (accountContext && accountContextIsCurrent(accountContext)) {
+      void sendTokenToBackend(newToken.data, accountContext);
+    }
   });
 
   return () => {

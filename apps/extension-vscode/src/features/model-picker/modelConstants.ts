@@ -87,9 +87,11 @@ function codiconForProvider(providerId: ProviderId): string {
 // cloud model as if it were selectable. That is a trust-boundary presentation
 // bug: it implies managed-cloud reachability that does not exist.
 //
-// The gate reuses the shared catalog rule rather than re-deriving one here:
-// `normalizeSubscriptionAccessTier` maps both 'local' and 'byok' to 'free', and
-// `canAccessModelForSubscriptionTier` denies every model under 'free'.
+// The gate reuses the shared catalog's per-model subscription rule after the
+// VS Code surface entitlement is applied. BYOK remains available independently
+// of a managed subscription; the app-server performs provider/key admission.
+// Local mode exposes only CLI-discovered local models. Managed developer access
+// starts at Pro, matching the server-owned AGI Work entitlement.
 //
 // Deliberately NOT filtered out of the list. models.json contains zero
 // ollama/lmstudio rows (local models arrive only via runtime discovery from the
@@ -109,6 +111,8 @@ export const MODEL_LOCKED_HINT = 'Sign in or add a provider key';
  */
 export function isModelReachableForTier(modelId: string, tier: string | undefined): boolean {
   if (tier === undefined) return true;
+  if (tier === 'byok') return true;
+  if (tier === 'local' || tier === 'free' || tier === 'basic') return false;
   return canAccessModelForSubscriptionTier(modelId, tier);
 }
 
@@ -123,6 +127,11 @@ function getPickerCapabilityLabel(modelId: string, catalogDetail: string): strin
 export interface GroupedQuickPickItem extends vscode.QuickPickItem {
   /** undefined for separator items */
   modelId?: string;
+  /**
+   * VS Code's native QuickPick has no disabled-row primitive. Callers must
+   * reject rows with this flag; the custom webview picker renders it directly.
+   */
+  disabled?: boolean;
 }
 
 /**
@@ -136,8 +145,8 @@ export interface GroupedQuickPickItem extends vscode.QuickPickItem {
  *        sub-label (+ "· Thinking" when supportsEffort), detail = model ID
  */
 export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[] {
-  // The auto-* routing modes resolve to managed-cloud models, so they are gated
-  // with them rather than treated as always-available.
+  // Resolve Auto through the shared BYOK/managed routing policy before applying
+  // this surface's entitlement gate.
   const autoReachable = (autoId: string): boolean =>
     isModelReachableForTier(resolveAutoModeModel(autoId, tier) ?? autoId, tier);
 
@@ -153,6 +162,7 @@ export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[
       ),
       detail: 'Recommended',
       modelId: 'auto',
+      disabled: !autoReachable('auto'),
     },
     { label: '', kind: vscode.QuickPickItemKind.Separator },
   ];
@@ -228,6 +238,7 @@ export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[
         description,
         detail: opt.id,
         modelId: opt.id,
+        disabled: !reachable,
       });
     }
   }
@@ -243,14 +254,9 @@ export interface ModelProviderInfo {
   brandColor: string;
 }
 
-/**
- * Brand colors for provider badges. Centralized here (single source) so they no
- * longer drift as inline hex literals across files (audit 218 L162/L684). The
- * AGI Cloud accent is the website's Linear indigo; the unknown-provider fallback
- * is a neutral grey.
- */
-export const AGI_CLOUD_BRAND_COLOR = '#5e6ad2';
-export const UNKNOWN_PROVIDER_BRAND_COLOR = '#71717a';
+/** Theme-safe provider badge fallbacks for host-generated status messages. */
+export const AGI_CLOUD_BRAND_COLOR = 'var(--vscode-activityBarBadge-background)';
+export const UNKNOWN_PROVIDER_BRAND_COLOR = 'var(--vscode-descriptionForeground)';
 
 export function getModelProviderInfo(modelId: string): ModelProviderInfo {
   const metadata = getModelMetadataById(modelId);

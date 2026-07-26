@@ -222,7 +222,7 @@ describe('runToolLoop openai-passthrough dispatch (mocked adapter)', () => {
     expect(output).toContain('data: [DONE]');
   });
 
-  it('surfaces an adapter-level error as inline SSE content, flushes terminal, and stops -- no second call', async () => {
+  it('surfaces an adapter-level error on structured SSE channels, flushes terminal, and stops -- no second call', async () => {
     mockOpenAIStream.mockImplementationOnce(
       fakeAdapterStream([{ type: 'error', message: 'rate limited', code: '429' }]),
     );
@@ -230,7 +230,8 @@ describe('runToolLoop openai-passthrough dispatch (mocked adapter)', () => {
     const processed = makeProcessed();
     const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
 
-    expect(output).toContain('Error:');
+    expect(output).not.toContain('"content":"\\n\\nError:');
+    expect(output).toContain('"type":"error"');
     expect(output).toContain('rate limited');
     // A mid-loop provider error is a terminal exit like any other (see
     // flushTerminal()'s doc comment in tool-loop.ts): it still owes the
@@ -240,7 +241,7 @@ describe('runToolLoop openai-passthrough dispatch (mocked adapter)', () => {
     expect(mockOpenAIStream).toHaveBeenCalledTimes(1);
   });
 
-  it('emits an additive x_stream_error marker alongside the inline error content (Finding 3: tool-loop hand-rolls its own SSE, so the base-path marker does not cover it without this)', async () => {
+  it('emits an x_stream_error marker alongside the canonical error event (Finding 3: tool-loop hand-rolls its own SSE, so the base-path marker does not cover it without this)', async () => {
     mockOpenAIStream.mockImplementationOnce(
       fakeAdapterStream([{ type: 'error', message: 'rate limited', code: '429' }]),
     );

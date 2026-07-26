@@ -15,6 +15,11 @@ import type { MemoryFact } from '@/storage/types';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
 import { markMemoryForSync } from '@/services/cloudSyncEngine';
+import {
+  captureAccountScopedUiState,
+  isAccountScopedUiStateCurrent,
+  type AccountScopedUiState,
+} from '@/src/features/auth/services/accountScopedUiState';
 
 export type { MemoryFact };
 
@@ -41,6 +46,18 @@ interface MemoryState {
   bulkInsert: (facts: string[]) => Promise<{ inserted: number; skipped: number }>;
   syncMemories: () => Promise<void>;
   clearError: () => void;
+  /** Clear the mode-aware presentation facade without deleting Local or Cloud source data. */
+  resetVisibleState: () => void;
+}
+
+function captureMemoryOperationScope(): AccountScopedUiState | null {
+  return captureAccountScopedUiState(useChatAppModeStore.getState().appMode);
+}
+
+function isMemoryOperationScopeCurrent(
+  scope: AccountScopedUiState | null | undefined,
+): scope is AccountScopedUiState {
+  return isAccountScopedUiStateCurrent(scope, useChatAppModeStore.getState().appMode);
 }
 
 export const useMemoryStore = create<MemoryState>()((set, get) => ({
@@ -53,9 +70,20 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   lastSyncAt: null,
 
   fetchMemories: async () => {
+    const operationScope = captureMemoryOperationScope();
+    if (!operationScope) {
+      set({
+        entries: [],
+        filteredEntries: [],
+        loading: false,
+        error: null,
+        searchQuery: '',
+      });
+      return;
+    }
     set({ loading: true, error: null });
     try {
-      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+      const isCloud = operationScope.scope === 'cloud';
       let entries: MemoryFact[];
       if (isCloud) {
         // ── Cloud path: read from the cloud memory store (synced via cloudSyncEngine).
@@ -80,6 +108,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         // ── Local path: read from SQLite (unchanged).
         entries = await listMemoryFacts({ limit: 500 });
       }
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
       set({ entries, loading: false });
 
       const { searchQuery } = get();
@@ -90,6 +119,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         set({ filteredEntries: [] });
       }
     } catch (err) {
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
       set({
         loading: false,
         error: err instanceof Error ? err.message : 'Failed to load memories',
@@ -98,9 +128,14 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   },
 
   addMemory: async (fact, _category) => {
+    const operationScope = captureMemoryOperationScope();
+    if (!operationScope) {
+      set({ error: 'Sign in to manage Cloud memories' });
+      return;
+    }
     set({ error: null });
     try {
-      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+      const isCloud = operationScope.scope === 'cloud';
       if (isCloud) {
         // ── Cloud path: write to cloud memory store + queue for push ──────────
         // TRUST BOUNDARY: local SQLite is NOT written. Cloud memory IDs are
@@ -150,6 +185,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           created_at: Date.now(),
         };
         await insertMemoryFact(newFact);
+        if (!isMemoryOperationScopeCurrent(operationScope)) return;
         set((state) => {
           const entry = { ...newFact, pinned: false };
           // #28: also surface the new memory in the filtered view when a search is
@@ -166,13 +202,19 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         });
       }
     } catch (err) {
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
       set({ error: err instanceof Error ? err.message : 'Failed to add memory' });
     }
   },
 
   updateMemory: async (id, fact) => {
+    const operationScope = captureMemoryOperationScope();
+    if (!operationScope) {
+      set({ error: 'Sign in to manage Cloud memories' });
+      return;
+    }
     set({ error: null });
-    const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+    const isCloud = operationScope.scope === 'cloud';
 
     // In cloud mode, validate the entry exists BEFORE applying optimistic update.
     if (isCloud) {
@@ -207,12 +249,18 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         await updateMemoryFact(id, fact.trim());
       }
     } catch (err) {
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
       set({ error: err instanceof Error ? err.message : 'Failed to update memory' });
       await get().fetchMemories();
     }
   },
 
   deleteMemory: async (id) => {
+    const operationScope = captureMemoryOperationScope();
+    if (!operationScope) {
+      set({ error: 'Sign in to manage Cloud memories' });
+      return;
+    }
     set({ error: null });
     const prev = get().entries;
     const prevFiltered = get().filteredEntries;
@@ -222,7 +270,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       filteredEntries: state.filteredEntries.filter((e) => e.id !== id),
     }));
     try {
-      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+      const isCloud = operationScope.scope === 'cloud';
       if (isCloud) {
         // ── Cloud path: mark as tombstone, keep in cloud store until server acks ──
         // CRITICAL: must NOT hard-delete locally before the server receives the
@@ -244,6 +292,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         await deleteMemoryFact(id);
       }
     } catch (err) {
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
       set({
         entries: prev,
         filteredEntries: prevFiltered,
@@ -253,6 +302,11 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   },
 
   togglePin: async (id) => {
+    const operationScope = captureMemoryOperationScope();
+    if (!operationScope) {
+      set({ error: 'Sign in to manage Cloud memories' });
+      return;
+    }
     const current = get().entries.find((e) => e.id === id);
     if (!current) return;
     const pinned = !current.pinned;
@@ -265,7 +319,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at),
     }));
     try {
-      const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+      const isCloud = operationScope.scope === 'cloud';
       if (isCloud) {
         // ── Cloud path: write to the cloud memory store + queue for push ──────
         // The local-only SQLite path (togglePinMemoryFact) must NOT be used
@@ -285,6 +339,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         await togglePinMemoryFact(id, pinned);
       }
     } catch (err) {
+      if (!isMemoryOperationScopeCurrent(operationScope)) return;
       set({ error: err instanceof Error ? err.message : 'Failed to update pin' });
       await get().fetchMemories();
     }
@@ -359,6 +414,17 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  resetVisibleState: () =>
+    set({
+      entries: [],
+      filteredEntries: [],
+      loading: false,
+      error: null,
+      searchQuery: '',
+      syncing: false,
+      lastSyncAt: null,
+    }),
 }));
 
 // Words too common to signal relevance on their own (kept small — this only

@@ -5,6 +5,7 @@ import { analyticsDeleteAllData } from '@/api/analytics';
 import { chat, cache, settings, onboarding } from '@agiworkforce/desktop-command-client';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { appDataDir } from '@tauri-apps/api/path';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { Button } from '@/components/ui/Button';
 import { errorTracking } from '../../../../services/errorTracking';
@@ -46,6 +47,8 @@ function DataPrivacySection() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [clearingData, setClearingData] = useState(false);
   const [clearError, setClearError] = useState<string | null>(null);
+  const [localDataPath, setLocalDataPath] = useState<string | null>(null);
+  const [localDataPathUnavailable, setLocalDataPathUnavailable] = useState(false);
   const [crashReportingEnabled, setCrashReportingEnabled] = useState(() => {
     return errorTracking.getConfig().enabled;
   });
@@ -70,6 +73,31 @@ function DataPrivacySection() {
         }
       }
     })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let mounted = true;
+    void appDataDir()
+      .then((path) => {
+        if (!mounted) return;
+        const normalizedPath = path.trim();
+        if (!normalizedPath) {
+          setLocalDataPathUnavailable(true);
+          return;
+        }
+        setLocalDataPath(normalizedPath);
+        setLocalDataPathUnavailable(false);
+      })
+      .catch((error) => {
+        console.error('Failed to resolve the local data directory:', error);
+        if (mounted) setLocalDataPathUnavailable(true);
+      });
+
     return () => {
       mounted = false;
     };
@@ -225,10 +253,14 @@ function DataPrivacySection() {
               <p className="text-sm text-muted-foreground mb-2">
                 All your data is stored locally on your device at:
               </p>
-              <code className="block rounded bg-secondary px-3 py-2 text-xs font-mono">
-                {typeof window !== 'undefined' && navigator.platform.startsWith('Win')
-                  ? '%APPDATA%\\AGI Workforce\\'
-                  : '~/.local/share/agi-workforce/'}
+              <code
+                aria-live="polite"
+                className="block rounded bg-secondary px-3 py-2 text-xs font-mono"
+              >
+                {localDataPath ??
+                  (localDataPathUnavailable
+                    ? 'Application data directory unavailable'
+                    : 'Loading local data directory…')}
               </code>
               <p className="text-xs text-muted-foreground mt-2">
                 Integration credentials (GitHub tokens, MCP server keys, etc.) are stored securely

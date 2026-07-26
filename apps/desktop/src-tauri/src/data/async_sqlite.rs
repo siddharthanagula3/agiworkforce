@@ -18,6 +18,17 @@ pub struct AsyncConnection {
 }
 
 impl AsyncConnection {
+    /// Wrap an already-opened connection.
+    ///
+    /// This is used for the main database, whose stable OS-protected key is
+    /// intentionally different from the machine-derived keys used by
+    /// auxiliary databases.
+    pub fn from_connection(connection: RawConnection) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(connection)),
+        }
+    }
+
     /// Open (or create) an encrypted (SQLCipher) database at `path`.
     ///
     /// Routes through [`crate::data::db::encryption::open_keyed_connection`] so

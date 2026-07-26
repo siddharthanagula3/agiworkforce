@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -20,6 +20,11 @@ import { getModelById, getProviderById, getDisplayName } from '@/lib/models';
 import { getProviderDefaultModel } from '@agiworkforce/types';
 import { useThemeColors } from '@/src/ui/theme';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
+import { useAuthStore } from '@/src/features/auth/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -68,6 +73,7 @@ const DEFAULT_MODEL_B = getProviderDefaultModel('openai') ?? 'openai/default';
 export default function CompareScreen() {
   const colors = useThemeColors();
   const router = useRouter();
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
   const [modelA, setModelA] = useState(DEFAULT_MODEL_A);
   const [modelB, setModelB] = useState(DEFAULT_MODEL_B);
@@ -80,6 +86,7 @@ export default function CompareScreen() {
   // Each model gets its own abort controller and sheet ref
   const controllerARef = useRef<AbortController | null>(null);
   const controllerBRef = useRef<AbortController | null>(null);
+  const compareGenerationRef = useRef(0);
   const modelPickerARef = useRef<BottomSheet>(null);
   const modelPickerBRef = useRef<BottomSheet>(null);
 
@@ -88,6 +95,7 @@ export default function CompareScreen() {
 
   const handleBack = useCallback(() => {
     // Abort any running streams before leaving
+    compareGenerationRef.current += 1;
     controllerARef.current?.abort();
     controllerBRef.current?.abort();
     if (router.canGoBack()) {
@@ -98,17 +106,46 @@ export default function CompareScreen() {
   }, [router]);
 
   const handleStop = useCallback(() => {
+    compareGenerationRef.current += 1;
     controllerARef.current?.abort();
     controllerBRef.current?.abort();
     setStateA((prev) => ({ ...prev, isStreaming: false, isDone: true }));
     setStateB((prev) => ({ ...prev, isStreaming: false, isDone: true }));
   }, []);
 
+  useLayoutEffect(() => {
+    // Compare responses are intentionally ephemeral, but they are still Cloud
+    // account data. Clear them before paint whenever Clerk changes identity,
+    // and invalidate every buffered callback from the prior account.
+    compareGenerationRef.current += 1;
+    controllerARef.current?.abort();
+    controllerBRef.current?.abort();
+    controllerARef.current = null;
+    controllerBRef.current = null;
+    setLastPrompt(null);
+    setStateA(initialStreamState());
+    setStateB(initialStreamState());
+  }, [clerkUserId]);
+
   const handleSend = useCallback(
     (text: string) => {
-      if (!text.trim()) return;
+      if (!text.trim()) return false;
+
+      const accountEpoch = captureCloudAccountEpoch();
+      if (!accountEpoch) {
+        const signedOutState: CompareStreamState = {
+          ...initialStreamState(),
+          isDone: true,
+          errorMessage: 'Sign in to use AGI Cloud model comparison.',
+        };
+        setStateA(signedOutState);
+        setStateB(signedOutState);
+        return false;
+      }
 
       // Abort previous streams if any
+      compareGenerationRef.current += 1;
+      const generation = compareGenerationRef.current;
       controllerARef.current?.abort();
       controllerBRef.current?.abort();
 
@@ -123,6 +160,10 @@ export default function CompareScreen() {
       // ---------------------------------------------------------------------------
       const ctrlA = new AbortController();
       controllerARef.current = ctrlA;
+      const isAActive = () =>
+        compareGenerationRef.current === generation &&
+        !ctrlA.signal.aborted &&
+        isCloudAccountEpochCurrent(accountEpoch);
 
       const startA = Date.now();
       setStateA((prev) => ({ ...prev, isStreaming: true }));
@@ -137,6 +178,7 @@ export default function CompareScreen() {
         },
         {
           onDelta: (delta: StreamDelta) => {
+            if (!isAActive()) return;
             if (delta.content) {
               setStateA((prev) => {
                 const newContent = prev.content + delta.content;
@@ -152,6 +194,7 @@ export default function CompareScreen() {
             }
           },
           onDone: () => {
+            if (!isAActive()) return;
             setStateA((prev) => ({
               ...prev,
               isStreaming: false,
@@ -160,6 +203,7 @@ export default function CompareScreen() {
             }));
           },
           onError: (err: Error) => {
+            if (!isAActive()) return;
             setStateA((prev) => ({
               ...prev,
               isStreaming: false,
@@ -176,6 +220,10 @@ export default function CompareScreen() {
       // ---------------------------------------------------------------------------
       const ctrlB = new AbortController();
       controllerBRef.current = ctrlB;
+      const isBActive = () =>
+        compareGenerationRef.current === generation &&
+        !ctrlB.signal.aborted &&
+        isCloudAccountEpochCurrent(accountEpoch);
 
       const startB = Date.now();
       setStateB((prev) => ({ ...prev, isStreaming: true }));
@@ -190,6 +238,7 @@ export default function CompareScreen() {
         },
         {
           onDelta: (delta: StreamDelta) => {
+            if (!isBActive()) return;
             if (delta.content) {
               setStateB((prev) => {
                 const newContent = prev.content + delta.content;
@@ -204,6 +253,7 @@ export default function CompareScreen() {
             }
           },
           onDone: () => {
+            if (!isBActive()) return;
             setStateB((prev) => ({
               ...prev,
               isStreaming: false,
@@ -212,6 +262,7 @@ export default function CompareScreen() {
             }));
           },
           onError: (err: Error) => {
+            if (!isBActive()) return;
             setStateB((prev) => ({
               ...prev,
               isStreaming: false,
@@ -222,6 +273,7 @@ export default function CompareScreen() {
         },
         ctrlB.signal,
       );
+      return true;
     },
     [modelA, modelB],
   );
@@ -320,7 +372,11 @@ export default function CompareScreen() {
           )}
 
           {/* Response columns — stacked on narrow screens */}
-          {(lastPrompt || stateA.isStreaming || stateB.isStreaming) && (
+          {(lastPrompt ||
+            stateA.isStreaming ||
+            stateB.isStreaming ||
+            stateA.errorMessage ||
+            stateB.errorMessage) && (
             <>
               <ResponsePanel slot="A" modelId={modelA} state={stateA} winner={winner === 'A'} />
               <ResponsePanel slot="B" modelId={modelB} state={stateB} winner={winner === 'B'} />

@@ -66,6 +66,10 @@ import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import { initializeWebAuth, cloudAccountAuth } from './services/cloudAccountAuth';
 import {
+  canUseDesktopCloudCodeExecution,
+  resolveDesktopCloudPickerModels,
+} from './services/desktopCloudEntitlements';
+import {
   useAuthStore,
   useAccountStore,
   useBillingStore,
@@ -271,6 +275,7 @@ const DesktopShell = () => {
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
   const accessToken = useAuthStore((state) => state.accessToken);
   const authenticatedUserId = useAuthStore((state) => state.user?.id ?? null);
+  const accountPlan = useAuthStore((state) => state.plan);
   const appMode = useAppModeStore((s) => s.mode);
   const isCloudMode = useAppModeStore((s) => s.mode === 'cloud');
   const hasCloudSession = isAuthenticated && !!accessToken;
@@ -763,15 +768,26 @@ const DesktopShell = () => {
         }
 
         if (currentMode === 'cloud') {
+          // The native credential is projected before the account snapshot
+          // finishes. Do not briefly turn the public all-model catalog into an
+          // entitlement claim while the effective plan is still unknown.
+          if (!accountPlan) {
+            const modelStore = useChatModelStore.getState();
+            modelStore.setModels([]);
+            modelStore.selectModel('');
+            return;
+          }
+
           const discoveredModels = await getCloudModels();
           if (cancelled) return;
-          if (discoveredModels.length === 0) {
-            throw new Error('The managed model catalog is empty.');
+          const entitledModels = resolveDesktopCloudPickerModels(discoveredModels, accountPlan);
+          if (entitledModels.length === 0) {
+            throw new Error('No managed models are available for this account and Desktop.');
           }
 
           const modelStore = useChatModelStore.getState();
           modelStore.setModels(
-            discoveredModels.map((model) =>
+            entitledModels.map((model) =>
               createChatModelInfo({
                 id: model.id,
                 name: model.name,
@@ -910,7 +926,7 @@ const DesktopShell = () => {
     return () => {
       cancelled = true;
     };
-  }, [appMode, hasCloudSession]);
+  }, [accountPlan, appMode, hasCloudSession]);
 
   // Sync desktop auth user profile → chat package's settingsStore
   useEffect(() => {
@@ -1347,9 +1363,11 @@ const DesktopShell = () => {
   // composer's "Run code" toggle (packages/ui/unified-chat) and useChat's
   // send-time gate both read this instead of re-deriving it, so they can
   // never disagree with what the account actually entitles.
-  const codeExecutionDeploymentEnabled = useUnifiedAuthStore(
+  const codeExecutionDeploymentConfigured = useUnifiedAuthStore(
     (s) => s.featureFlags['code_execution'] ?? false,
   );
+  const codeExecutionDeploymentEnabled =
+    isCloudMode && canUseDesktopCloudCodeExecution(accountPlan, codeExecutionDeploymentConfigured);
   useEffect(() => {
     useChatSettingsStore
       .getState()

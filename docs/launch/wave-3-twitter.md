@@ -1,5 +1,10 @@
 # Wave 3 Twitter / X launch thread
 
+> **Status: Retired draft — do not publish.** This copy predates the current
+> public-alpha access policy, subscription catalog, model roster, cross-surface
+> sync boundaries, and implemented B2B scope. Rebuild launch copy from
+> `docs/current/source-of-truth.md` and the live product before posting.
+
 > Post from `@siddharthanagul` on Wave 3 launch day.
 > 9 tweets, each ≤ 280 chars.
 

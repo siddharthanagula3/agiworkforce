@@ -166,7 +166,7 @@ describe('model catalog helpers', () => {
     expect(canAccessModelForSubscriptionTier('claude-haiku-4.5', 'basic')).toBe(true);
     expect(canAccessModelForSubscriptionTier('deepseek-v4-flash', 'basic')).toBe(false);
     expect(canAccessModelForSubscriptionTier('claude-haiku-4.5', 'pro')).toBe(true);
-    expect(canAccessModelForSubscriptionTier('claude-opus-4.8', 'max_plus')).toBe(true);
+    expect(canAccessModelForSubscriptionTier('claude-opus-5', 'max_plus')).toBe(true);
   });
 
   it('derives the single selectable Auto from routing policy', () => {
@@ -590,17 +590,17 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
     expect(getDefaultModelFor('pro', 'chat')).toBe(getRoutingSlotModel('general_balanced_pro'));
   });
 
-  it('pro reasoning resolves to reasoning_premium_pro (Kimi K2.6)', () => {
+  it('pro reasoning resolves to reasoning_premium_pro (Qwen 3.7 Plus)', () => {
     expect(getDefaultModelFor('pro', 'reasoning')).toBe(
       getRoutingSlotModel('reasoning_premium_pro'),
     );
   });
 
-  it('pro computer-use resolves to computer_use slot (Sonnet 4.6) — premium slot is Pro+ only', () => {
+  it('pro computer-use resolves to computer_use slot (Sonnet 5) — premium slot is Pro+ only', () => {
     expect(getDefaultModelFor('pro', 'computer-use')).toBe(getRoutingSlotModel('computer_use'));
   });
 
-  it('max computer-use resolves to computer_use_premium (Opus 4.7)', () => {
+  it('max computer-use resolves to computer_use_premium (Opus 5)', () => {
     expect(getDefaultModelFor('max', 'computer-use')).toBe(
       getRoutingSlotModel('computer_use_premium'),
     );
@@ -764,7 +764,7 @@ describe('model env-gating (requiresEnvironment)', () => {
     // Anthropic's server-managed web_search tool — making that code path
     // permanently dead for every Claude model. Assert the fix stays in place.
     it('every current-generation Anthropic model advertises search support', () => {
-      for (const modelId of ['claude-opus-4.8', 'claude-sonnet-5', 'claude-haiku-4.5']) {
+      for (const modelId of ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4.5']) {
         const metadata = getModelMetadataById(modelId);
         expect(metadata, `missing catalog entry for ${modelId}`).not.toBeNull();
         expect(metadata!.capabilities.search, `${modelId} capabilities.search`).toBe(true);

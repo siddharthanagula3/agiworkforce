@@ -537,7 +537,7 @@ mod tests {
     #[tokio::test]
     async fn list_snapshots_exposes_status_and_runtime_metadata() {
         let r = SubagentRegistry::new();
-        let mut spec = SubagentSpec::new("claude-opus-4-8");
+        let mut spec = SubagentSpec::new("claude-opus-5");
         spec.max_turns = 9;
         spec.system_prompt = Some("work independently".into());
         let id = r.spawn(spec).await.unwrap();
@@ -546,7 +546,7 @@ mod tests {
         assert_eq!(snapshots.len(), 1);
         let snapshot = &snapshots[0];
         assert_eq!(snapshot.id, id);
-        assert_eq!(snapshot.model, "claude-opus-4-8");
+        assert_eq!(snapshot.model, "claude-opus-5");
         assert_eq!(snapshot.max_turns, 9);
         assert!(snapshot.has_system_prompt);
         assert!(snapshot.created_at_unix_ms > 0);
@@ -692,7 +692,7 @@ mod tests {
             system_prompt: None,
         });
         let r = SubagentRegistry::new();
-        let mut spec = SubagentSpec::new("claude-opus-4-8");
+        let mut spec = SubagentSpec::new("claude-opus-5");
         spec.runner = runner;
         let id = r.spawn(spec).await.unwrap();
         let arc = r.get(id).await.unwrap();
@@ -713,7 +713,7 @@ mod tests {
             system_prompt: None,
         });
         let r = SubagentRegistry::new();
-        let mut spec = SubagentSpec::new("claude-opus-4-8");
+        let mut spec = SubagentSpec::new("claude-opus-5");
         spec.runner = runner;
         let id = r.spawn(spec).await.unwrap();
         let arc = r.get(id).await.unwrap();
@@ -737,7 +737,7 @@ mod tests {
             system_prompt: None,
         });
         let r = SubagentRegistry::new();
-        let mut spec = SubagentSpec::new("claude-opus-4-8");
+        let mut spec = SubagentSpec::new("claude-opus-5");
         spec.max_turns = 1;
         spec.runner = runner;
         let id = r.spawn(spec).await.unwrap();
@@ -835,7 +835,7 @@ mod tests {
             system_prompt: Some("you are a helpful agent".into()),
         });
         let r = SubagentRegistry::new();
-        let mut spec = SubagentSpec::new("claude-opus-4-8");
+        let mut spec = SubagentSpec::new("claude-opus-5");
         spec.runner = runner;
         let id = r.spawn(spec).await.unwrap();
         let arc = r.get(id).await.unwrap();

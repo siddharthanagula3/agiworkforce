@@ -209,9 +209,7 @@ mod tests {
 
     #[test]
     fn close_window_menu_action_quits_the_application() {
-        assert!(should_quit_application_for_menu_id(
-            "menu_quit_application"
-        ));
+        assert!(should_quit_application_for_menu_id("menu_quit_application"));
         assert!(!should_quit_application_for_menu_id(
             "menu_new_conversation"
         ));

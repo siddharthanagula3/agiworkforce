@@ -28,10 +28,10 @@ export interface PromptCacheRequest {
  * pricing but predate the capability flag. Unknown models are treated as not
  * cache-capable; a model name is not evidence of a provider feature.
  */
-function modelSupportsCaching(model: string): boolean {
+function getCachingModel(model: string) {
   const meta = getModelMetadataById(model);
-  if (!meta) return false;
-  return meta.capabilities?.caching === true || meta.cached_input != null;
+  if (!meta || (meta.capabilities?.caching !== true && meta.cached_input == null)) return null;
+  return meta;
 }
 
 /**
@@ -42,7 +42,8 @@ function modelSupportsCaching(model: string): boolean {
  * 3. The model supports caching (catalog `capabilities.caching`)
  */
 export function shouldEnablePromptCache(request: PromptCacheRequest, model: string): boolean {
-  if (!modelSupportsCaching(model)) {
+  const metadata = getCachingModel(model);
+  if (!metadata) {
     return false;
   }
 
@@ -54,10 +55,11 @@ export function shouldEnablePromptCache(request: PromptCacheRequest, model: stri
 
   // Estimate tokens: ~1 token per 4 characters
   const estimatedTokens = Math.ceil(systemMessage.content.length / 4);
+  const providerMinimumTokens = metadata.promptCacheMinimumTokens ?? 1000;
 
-  // Enable caching if system prompt is substantial (>1000 tokens)
+  // Enable caching once the prompt reaches the provider's per-model minimum.
   // This ensures cache write cost is justified by reuse
-  if (estimatedTokens > 1000) {
+  if (estimatedTokens >= providerMinimumTokens) {
     return true;
   }
 
@@ -69,7 +71,7 @@ export function shouldEnablePromptCache(request: PromptCacheRequest, model: stri
     systemMessage.content.includes('excerpt') ||
     systemMessage.content.toLowerCase().includes('rag');
 
-  if (isDocumentQuery && estimatedTokens > 500) {
+  if (isDocumentQuery && estimatedTokens >= Math.max(500, providerMinimumTokens)) {
     return true;
   }
 

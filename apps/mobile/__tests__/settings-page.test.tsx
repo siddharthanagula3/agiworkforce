@@ -4,6 +4,18 @@ import { Alert } from 'react-native';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
+const mockClerkState: {
+  user: null | {
+    fullName?: string | null;
+    firstName?: string | null;
+    username?: string | null;
+    primaryEmailAddress?: { emailAddress: string } | null;
+  };
+} = { user: null };
+
+jest.mock('@clerk/expo', () => ({
+  useUser: () => mockClerkState,
+}));
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({
@@ -84,12 +96,22 @@ import SettingsTabScreen from '../app/(app)/(tabs)/settings';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { useTierStore } from '../src/features/billing/store';
+import { useAuthStore } from '../src/features/auth/store';
 
 describe('Settings page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClerkState.user = null;
     useSettingsStore.setState({ themeMode: 'system', accentColor: 'neutral' });
     useChatAppModeStore.setState({ appMode: 'local' });
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
+    useTierStore.setState({
+      tier: 'free',
+      billingTier: 'free',
+      billingStatus: 'none',
+      grantedCapabilities: [],
+    } as never);
     useWaitlistStore.setState({
       joined: false,
       email: undefined,
@@ -129,6 +151,7 @@ describe('Settings page', () => {
     const { queryByText } = render(<SettingsTabScreen />);
     expect(queryByText('Skills')).toBeNull();
     expect(queryByText('Plugins')).toBeNull();
+    expect(queryByText('Restore purchases')).toBeNull();
   });
 
   it('does not use local personalization as the Cloud settings identity', () => {
@@ -156,6 +179,36 @@ describe('Settings page', () => {
     expect(getByText('Cloud Memory')).toBeTruthy();
   });
 
+  it('shows Clerk name/email on the first Cloud render without waiting for a reload', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    mockClerkState.user = {
+      fullName: 'Ada Lovelace',
+      firstName: 'Ada',
+      primaryEmailAddress: { emailAddress: 'ada@example.com' },
+    };
+
+    const { getAllByText, getByText } = render(<SettingsTabScreen />);
+
+    expect(getByText('Ada Lovelace')).toBeTruthy();
+    expect(getAllByText('ada@example.com').length).toBeGreaterThan(0);
+    expect(getByText('Log Out')).toBeTruthy();
+  });
+
+  it('gives Team and Enterprise accounts a visible web administration handoff', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useTierStore.setState({
+      tier: 'team',
+      billingTier: 'team',
+      billingStatus: 'active',
+    } as never);
+
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    expect(getByLabelText('Workspace administration. Web')).toBeTruthy();
+  });
+
   it('shows cloud rows as sign-in-gated instead of live account controls', () => {
     const { getByText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
@@ -168,6 +221,7 @@ describe('Settings page', () => {
   });
 
   it('shows cloud rows as cloud-gated after invite redemption', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
     useWaitlistStore.setState({ cloudUnlocked: true });
     const { getByLabelText, getAllByText } = render(<SettingsTabScreen />);
 
@@ -176,6 +230,7 @@ describe('Settings page', () => {
   });
 
   it('does not route to sign-in again after cloud access is unlocked', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
     useWaitlistStore.setState({ cloudUnlocked: true });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { getByLabelText } = render(<SettingsTabScreen />);
@@ -188,6 +243,7 @@ describe('Settings page', () => {
   });
 
   it('routes unlocked Cloud rows to their real screens instead of a dead-end alert', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
     useWaitlistStore.setState({ cloudUnlocked: true });
     const { getByLabelText } = render(<SettingsTabScreen />);
 
@@ -205,6 +261,18 @@ describe('Settings page', () => {
 
     fireEvent.press(getByLabelText('Cloud Data Controls. Sign in'));
 
+    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+  });
+
+  it('routes every signed-out subscription surface to sign-in instead of account data', () => {
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    fireEvent.press(getByLabelText('Subscription. Sign in'));
+    fireEvent.press(getByLabelText('Billing. Sign in'));
+    fireEvent.press(getByLabelText('Usage. Sign in'));
+    fireEvent.press(getByLabelText('Connectors. Sign in'));
+
+    expect(mockPush).toHaveBeenCalledTimes(4);
     expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
   });
 

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Pressable,
@@ -22,6 +22,13 @@ import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloud
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme } from '@/src/ui/theme';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
+import { useAuthStore } from '@/src/features/auth/store';
+import {
+  accountScopedUiStateKey,
+  captureAccountScopedUiState,
+  isAccountScopedUiStateCurrent,
+  type AccountScopedUiState,
+} from '@/src/features/auth/services/accountScopedUiState';
 
 /**
  * Projects tab -- manage project contexts that apply instructions to chat.
@@ -51,6 +58,7 @@ export default function ProjectsTabScreen() {
   const navigation = useNavigation();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isCloud = appMode === 'cloud';
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
   // Read from the appropriate store depending on mode.
   const localProjects = useProjectStore((s) => s.projects);
@@ -78,24 +86,67 @@ export default function ProjectsTabScreen() {
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formInstructions, setFormInstructions] = useState('');
+  const activeScopeRef = useRef<AccountScopedUiState | null>(null);
+  const activeScopeKeyRef = useRef<string | null>(null);
+  const editorScopeRef = useRef<AccountScopedUiState | null>(null);
+
+  const resetEditor = useCallback(() => {
+    editorScopeRef.current = null;
+    setModalVisible(false);
+    setEditingProject(null);
+    setFormName('');
+    setFormDescription('');
+    setFormInstructions('');
+  }, []);
+
+  // The screen instance survives direct account switches. Bind its editor to
+  // the scope that opened it and clear Cloud-owned fields before paint when
+  // that epoch changes. A Local editor remains device-owned across Clerk
+  // account changes because its scope key remains `local`.
+  useLayoutEffect(() => {
+    const nextScope = captureAccountScopedUiState(isCloud ? 'cloud' : 'local');
+    const nextKey = accountScopedUiStateKey(nextScope);
+    if (activeScopeKeyRef.current !== nextKey) resetEditor();
+    activeScopeRef.current = nextScope;
+    activeScopeKeyRef.current = nextKey;
+  }, [clerkUserId, isCloud, resetEditor]);
+
+  const isScopeCurrent = useCallback((captured: AccountScopedUiState | null | undefined) => {
+    return isAccountScopedUiStateCurrent(
+      captured,
+      useChatAppModeStore.getState().appMode === 'cloud' ? 'cloud' : 'local',
+    );
+  }, []);
 
   const openCreateModal = useCallback(() => {
+    const actionScope = activeScopeRef.current;
+    if (!isScopeCurrent(actionScope)) return;
+    editorScopeRef.current = actionScope;
     setEditingProject(null);
     setFormName('');
     setFormDescription('');
     setFormInstructions('');
     setModalVisible(true);
-  }, []);
+  }, [isScopeCurrent]);
 
-  const openEditModal = useCallback((project: DisplayProject) => {
-    setEditingProject(project);
-    setFormName(project.name);
-    setFormDescription(project.description);
-    setFormInstructions(project.instructions);
-    setModalVisible(true);
-  }, []);
+  const openEditModal = useCallback(
+    (project: DisplayProject, actionScope = activeScopeRef.current) => {
+      if (!isScopeCurrent(actionScope)) return;
+      editorScopeRef.current = actionScope;
+      setEditingProject(project);
+      setFormName(project.name);
+      setFormDescription(project.description);
+      setFormInstructions(project.instructions);
+      setModalVisible(true);
+    },
+    [isScopeCurrent],
+  );
 
   const handleSave = useCallback(() => {
+    if (!isScopeCurrent(editorScopeRef.current)) {
+      resetEditor();
+      return;
+    }
     const trimmedName = formName.trim();
     if (!trimmedName) return;
 
@@ -108,37 +159,54 @@ export default function ProjectsTabScreen() {
     } else {
       createProject(trimmedName, formDescription.trim(), formInstructions.trim());
     }
-    setModalVisible(false);
-  }, [formName, formDescription, formInstructions, editingProject, createProject, updateProject]);
+    resetEditor();
+  }, [
+    createProject,
+    editingProject,
+    formDescription,
+    formInstructions,
+    formName,
+    isScopeCurrent,
+    resetEditor,
+    updateProject,
+  ]);
 
   const handleProjectPress = useCallback(
     (id: string) => {
+      const actionScope = activeScopeRef.current;
+      if (!isScopeCurrent(actionScope)) return;
       // Toggle active: tap again to deactivate
       setActiveProject(activeProjectId === id ? null : id);
     },
-    [activeProjectId, setActiveProject],
+    [activeProjectId, isScopeCurrent, setActiveProject],
   );
 
   const handleProjectLongPress = useCallback(
     (id: string) => {
+      const actionScope = activeScopeRef.current;
+      if (!isScopeCurrent(actionScope)) return;
       const project = projects.find((p) => p.id === id);
       if (!project) return;
 
       Alert.alert(project.name, 'Choose an action', [
         {
           text: 'Edit',
-          onPress: () => openEditModal(project),
+          onPress: () => openEditModal(project, actionScope),
         },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            if (!isScopeCurrent(actionScope)) return;
             Alert.alert('Delete Project', `Are you sure you want to delete "${project.name}"?`, [
               { text: 'Cancel', style: 'cancel' },
               {
                 text: 'Delete',
                 style: 'destructive',
-                onPress: () => deleteProject(id),
+                onPress: () => {
+                  if (!isScopeCurrent(actionScope)) return;
+                  deleteProject(id);
+                },
               },
             ]);
           },
@@ -146,8 +214,13 @@ export default function ProjectsTabScreen() {
         { text: 'Cancel', style: 'cancel' },
       ]);
     },
-    [projects, openEditModal, deleteProject],
+    [deleteProject, isScopeCurrent, openEditModal, projects],
   );
+
+  const handleClearActiveProject = useCallback(() => {
+    if (!isScopeCurrent(activeScopeRef.current)) return;
+    setActiveProject(null);
+  }, [isScopeCurrent, setActiveProject]);
 
   const handleOpenDrawer = useCallback(() => {
     openNearestDrawer(navigation);
@@ -213,7 +286,7 @@ export default function ProjectsTabScreen() {
             Active: {projects.find((p) => p.id === activeProjectId)?.name}
           </Text>
           <Pressable
-            onPress={() => setActiveProject(null)}
+            onPress={handleClearActiveProject}
             className="px-2 py-0.5 rounded"
             style={({ pressed }) => ({
               backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
@@ -280,7 +353,7 @@ export default function ProjectsTabScreen() {
         visible={modalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={resetEditor}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -293,7 +366,7 @@ export default function ProjectsTabScreen() {
             style={{ borderBottomColor: colors.border }}
           >
             <Pressable
-              onPress={() => setModalVisible(false)}
+              onPress={resetEditor}
               className="w-8 h-8 items-center justify-center rounded-lg"
               style={({ pressed }) => ({
                 backgroundColor: pressed ? colors.surfaceHover : colors.transparent,

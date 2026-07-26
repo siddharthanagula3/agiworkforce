@@ -92,6 +92,11 @@ export interface CustomConnectorInput {
   name: string;
   /** Remote MCP server URL. */
   url: string;
+  /**
+   * Optional bearer token forwarded only to surfaces that explicitly
+   * advertise `customConnectorAuthTokenSupported`.
+   */
+  authToken?: string;
 }
 
 // ─── Data adapter interface (injected per surface) ────────────────────────────
@@ -121,6 +126,12 @@ export interface SettingsDataAdapter {
    * form surfaces the message) rather than faking success.
    */
   addCustomConnector?: (input: CustomConnectorInput) => Promise<void> | void;
+  /**
+   * Whether the surface can encrypt and persist a bearer token for a custom
+   * remote MCP connector. The shared form hides the credential field unless
+   * this is true, so native adapters cannot silently discard a secret.
+   */
+  customConnectorAuthTokenSupported?: boolean;
   /**
    * Surface-owned navigation for docs/catalog links. Native shells provide
    * this so a relative anchor never replaces the application webview.

@@ -104,6 +104,8 @@ describe('ChatComposerNew', () => {
   let originalModelId: string;
   let originalFeatureFlags: ReturnType<typeof useBillingStore.getState>['featureFlags'];
   let originalSubscription: ReturnType<typeof useBillingStore.getState>['subscription'];
+  let originalBillingInitialized: ReturnType<typeof useBillingStore.getState>['initialized'];
+  let originalBillingLoading: ReturnType<typeof useBillingStore.getState>['isLoading'];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -119,6 +121,8 @@ describe('ChatComposerNew', () => {
     originalModelId = useModelStore.getState().selectedModelId;
     originalFeatureFlags = useBillingStore.getState().featureFlags;
     originalSubscription = useBillingStore.getState().subscription;
+    originalBillingInitialized = useBillingStore.getState().initialized;
+    originalBillingLoading = useBillingStore.getState().isLoading;
     // AUDIT-FIX CMP-14: the Chat | AGI Work toggle is gated on the canonical
     // `agi_work` billing capability (PRO_TIERS) so the client agrees with
     // `request-processor.ts`. It used to be gated on `!isFreeTrial`, which left
@@ -129,7 +133,7 @@ describe('ChatComposerNew', () => {
     useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
     // AUDIT-FIX CMP-1/CMP-2/CMP-5: composer toggles are per-conversation store
     // state now, so each test must start from a clean bucket.
-    useChatStore.setState({ composerTogglesByConversation: {}, webSearchByDefault: false });
+    useChatStore.setState({ composerTogglesByConversation: {} });
   });
 
   afterEach(() => {
@@ -137,8 +141,10 @@ describe('ChatComposerNew', () => {
     useBillingStore.setState({
       featureFlags: originalFeatureFlags,
       subscription: originalSubscription,
+      initialized: originalBillingInitialized,
+      isLoading: originalBillingLoading,
     });
-    useChatStore.setState({ composerTogglesByConversation: {}, webSearchByDefault: false });
+    useChatStore.setState({ composerTogglesByConversation: {} });
     vi.unstubAllGlobals();
   });
 
@@ -435,6 +441,38 @@ describe('ChatComposerNew', () => {
     );
   });
 
+  it('does not erase paid composer modes while account billing is still hydrating', async () => {
+    const conversationId = 'billing-hydration-conversation';
+    useBillingStore.setState({
+      subscription: null,
+      featureFlags: null,
+      initialized: false,
+      isLoading: true,
+    });
+    useChatStore.getState().setComposerToggles(
+      {
+        workMode: 'agiwork',
+        researchEnabled: true,
+        codeExecutionEnabled: true,
+        officeCreationEnabled: true,
+        imageMode: true,
+      },
+      conversationId,
+    );
+
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={conversationId} />);
+
+    await waitFor(() => {
+      expect(useChatStore.getState().getComposerToggles(conversationId)).toMatchObject({
+        workMode: 'agiwork',
+        researchEnabled: true,
+        codeExecutionEnabled: true,
+        officeCreationEnabled: true,
+        imageMode: true,
+      });
+    });
+  });
+
   it('shows a non-numeric upgrade gate only after the server reports usage exhaustion', async () => {
     const onSend = vi.fn();
     const onUpgradeRequest = vi.fn();
@@ -459,17 +497,18 @@ describe('ChatComposerNew', () => {
     expect(onUpgradeRequest).toHaveBeenCalledTimes(1);
   });
 
-  it('opens + menu and shows the backed Web search toggle row', async () => {
+  it('keeps automatic Web search and reasoning effort out of the + menu', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
     const moreBtn = screen.getByRole('button', { name: /more options/i });
     fireEvent.click(moreBtn);
 
-    expect(screen.getAllByText('Web search').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /web search/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/extended thinking/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /toggle research mode/i })).not.toBeInTheDocument();
   });
 
-  it('shows Web search for a tools-capable model through the configured generic backend', () => {
+  it('automatically sends Web search for a tools-capable generic backend', async () => {
     const genericSearchModel = getSelectableModels().find(
       (model) =>
         model.capabilities.tools === true && providerSupportsWebSearch(model.provider) === false,
@@ -485,13 +524,50 @@ describe('ChatComposerNew', () => {
       },
     });
 
-    render(<ChatComposerNew onSend={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'Find the latest release');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
-    expect(screen.getByRole('button', { name: /web search/i })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith(
+        'Find the latest release',
+        undefined,
+        undefined,
+        expect.objectContaining({ webSearchEnabled: true }),
+      ),
+    );
   });
 
-  it('hides generic Web search when the deployment backend is unavailable', () => {
+  it('keeps ambient Web search enabled for Auto when the managed backend is available', async () => {
+    useModelStore.getState().setSelectedModelId('auto');
+    useBillingStore.setState({
+      featureFlags: {
+        beta_features: originalFeatureFlags?.beta_features ?? false,
+        advanced_model_access: originalFeatureFlags?.advanced_model_access ?? false,
+        ...originalFeatureFlags,
+        generic_web_search: true,
+      },
+    });
+
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'What changed today?');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith(
+        'What changed today?',
+        undefined,
+        undefined,
+        expect.objectContaining({ webSearchEnabled: true }),
+      ),
+    );
+  });
+
+  it('honestly disables ambient generic search when the backend is unavailable', async () => {
     const genericSearchModel = getSelectableModels().find(
       (model) =>
         model.capabilities.tools === true && providerSupportsWebSearch(model.provider) === false,
@@ -507,10 +583,20 @@ describe('ChatComposerNew', () => {
       },
     });
 
-    render(<ChatComposerNew onSend={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'Hello');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
-    expect(screen.getByRole('button', { name: /web search/i })).toBeDisabled();
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith(
+        'Hello',
+        undefined,
+        undefined,
+        expect.objectContaining({ webSearchEnabled: false }),
+      ),
+    );
   });
 
   // AUDIT-FIX CMP-3: "Temporary chat" only renders when the host supplies
@@ -627,19 +713,56 @@ describe('ChatComposerNew', () => {
         }}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-pressed', 'true');
+    const chatButton = screen.getByRole('button', { name: 'Chat' });
+    expect(chatButton).toHaveAttribute('aria-pressed', 'true');
+    expect(chatButton.parentElement).toHaveClass('chat-composer-mode-inline');
+    expect(chatButton.closest('.chat-composer-container')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute(
+      'title',
+      'Chat — quick questions and conversation',
+    );
     expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
+    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+      'title',
+      'AGI Work — multi-step tasks with tools, files, and reviewable deliverables',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    expect(document.querySelector('.chat-composer-mode-in-menu')).not.toBeNull();
   });
 
-  it('web search + deep research live inside the + menu (not the input area)', () => {
+  it('keeps only explicit task modes inside the + menu', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));
-    expect(screen.getByRole('button', { name: /web search/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /web search/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/extended thinking/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /use style/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /deep research/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /create office files/i })).toBeInTheDocument();
+  });
+
+  it('keeps routed Auto capabilities actionable for a paid plan', () => {
+    useModelStore.getState().setSelectedModelId('auto');
+
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+
+    expect(screen.getByRole('button', { name: /deep research/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /run code/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /create office files/i })).toBeEnabled();
+  });
+
+  it('shows the enabled + menu option beside the menu button', () => {
+    useModelStore.getState().setSelectedModelId('auto');
+
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /run code/i }));
+
+    expect(screen.getByRole('status', { name: 'Active options: Run code' })).toBeVisible();
   });
 
   it('sends the persistent Office file-creation selection to the server', async () => {
@@ -672,7 +795,7 @@ describe('ChatComposerNew', () => {
     expect(screen.queryByRole('button', { name: /choose a project/i })).not.toBeInTheDocument();
   });
 
-  it('web search is a PERSISTENT toggle — stays on across sends (not fire-once)', async () => {
+  it('ambient web search stays on across sends', async () => {
     const searchModel = getSelectableModels().find(
       (model) =>
         model.capabilities.search === true && providerSupportsWebSearch(model.provider) === true,
@@ -685,10 +808,6 @@ describe('ChatComposerNew', () => {
 
     const onSendMock = vi.fn();
     render(<ChatComposerNew onSend={onSendMock} />);
-
-    // Turn Web search on via the + menu.
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
-    fireEvent.click(screen.getByRole('button', { name: /web search/i }));
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
 

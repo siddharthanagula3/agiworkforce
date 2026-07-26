@@ -1,4 +1,10 @@
-import { getDefaultModelFor } from '@agiworkforce/types';
+import { resolveAutoRoute } from '@agiworkforce/routing';
+import {
+  getAutoRoutingProfiles,
+  getDefaultModelFor,
+  getModelMetadataById,
+  getProvidersWithImplementedHarnessFeature,
+} from '@agiworkforce/types';
 import { resolveMobileCloudDispatch } from '../src/features/chat/utils/cloudDispatchRouting';
 
 describe('Mobile Managed Cloud dispatch routing', () => {
@@ -35,19 +41,39 @@ describe('Mobile Managed Cloud dispatch routing', () => {
   });
 
   it('routes Mobile research through the verified server-side search harness', () => {
+    const autoSelection = getAutoRoutingProfiles()[0]?.id;
+    if (!autoSelection) {
+      throw new Error('Expected a selectable Auto profile in the canonical model registry.');
+    }
+
     const decision = resolveMobileCloudDispatch({
-      selection: 'auto-premium',
+      selection: autoSelection,
       message: 'Search the web for the latest AI platform news and cite sources',
       subscriptionTier: 'max',
     });
+    const canonicalRoute = resolveAutoRoute({
+      selection: autoSelection,
+      taskType: 'research',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'mobile/cloud-chat',
+      fallbackToAutoForCapabilityMismatch: true,
+    });
+    if (canonicalRoute.status !== 'selected') {
+      throw new Error(`Expected a selected canonical research route: ${canonicalRoute.reason}`);
+    }
 
     expect(decision).toMatchObject({
       status: 'selected',
       dispatch: 'chat',
       taskType: 'research',
-      modelKey: 'sonar-deep-research',
-      harnessId: 'perplexity/chat-completions',
+      modelKey: canonicalRoute.modelKey,
+      harnessId: canonicalRoute.harnessId,
     });
+
+    const routedModel = getModelMetadataById(canonicalRoute.modelKey);
+    expect(routedModel?.capabilities.search).toBe(true);
+    expect(getProvidersWithImplementedHarnessFeature('webSearch')).toContain(routedModel?.provider);
   });
 
   // Conversation continuity: mobile must apply the same 5-turn sticky pivot as

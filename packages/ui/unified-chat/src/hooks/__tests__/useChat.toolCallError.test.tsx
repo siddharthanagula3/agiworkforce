@@ -425,6 +425,72 @@ describe('useChat — stream events stay pinned to their origin conversation acr
 
     expect(stopGenerationMock).toHaveBeenCalledWith('conv-a');
   });
+
+  it('runs and stops independent conversations in parallel when the runtime supports it', () => {
+    let capturedCallback: StreamCallback | null = null;
+    const sentConversationIds: string[] = [];
+    const stopGenerationMock = vi.fn();
+    const runtime: ChatRuntime = {
+      supportsConcurrentTurns: true,
+      sendMessage: vi.fn((conversationId: string) => {
+        sentConversationIds.push(conversationId);
+        return new Promise<void>(() => {});
+      }),
+      stopGeneration: stopGenerationMock,
+      createConversation: vi.fn(async () => 'conv-1'),
+      deleteConversation: vi.fn(async () => {}),
+      renameConversation: vi.fn(async () => {}),
+      onStream: (cb: StreamCallback) => {
+        capturedCallback = cb;
+        return () => {
+          capturedCallback = null;
+        };
+      },
+    };
+    const emit = (event: Parameters<StreamCallback>[0]) => {
+      if (!capturedCallback) throw new Error('onStream callback not registered yet');
+      act(() => capturedCallback!(event));
+    };
+
+    const { result } = renderHook(() => useChat(runtime));
+
+    act(() => result.current.sendMessage('from a'));
+    expect(result.current.isStreaming).toBe(true);
+
+    act(() => {
+      useChatStore.getState().setActiveConversation('conv-b');
+    });
+    expect(result.current.isStreaming).toBe(false);
+
+    act(() => result.current.sendMessage('from b'));
+    expect(sentConversationIds).toEqual(['conv-a', 'conv-b']);
+    expect(result.current.isStreaming).toBe(true);
+
+    emit({ type: 'content', content: 'A reply', conversationId: 'conv-a' });
+    emit({ type: 'content', content: 'B reply', conversationId: 'conv-b' });
+
+    expect(
+      useChatStore
+        .getState()
+        .messagesByConversation['conv-a']?.find((message) => message.role === 'assistant')?.content,
+    ).toBe('A reply');
+    expect(
+      useChatStore
+        .getState()
+        .messagesByConversation['conv-b']?.find((message) => message.role === 'assistant')?.content,
+    ).toBe('B reply');
+
+    act(() => result.current.stopGeneration());
+    expect(stopGenerationMock).toHaveBeenLastCalledWith('conv-b');
+    expect(result.current.isStreaming).toBe(false);
+
+    act(() => {
+      useChatStore.getState().setActiveConversation('conv-a');
+    });
+    expect(result.current.isStreaming).toBe(true);
+    act(() => result.current.stopGeneration());
+    expect(stopGenerationMock).toHaveBeenLastCalledWith('conv-a');
+  });
 });
 
 describe('useChat — execution-boundary model admission', () => {

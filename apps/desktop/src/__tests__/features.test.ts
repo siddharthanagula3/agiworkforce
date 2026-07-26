@@ -91,10 +91,10 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      await store.selectModel('claude-opus-4.8', 'anthropic');
+      await store.selectModel('claude-opus-5', 'anthropic');
 
       const state = useModelStore.getState();
-      expect(state.recentModels).toContain('claude-opus-4.8');
+      expect(state.recentModels).toContain('claude-opus-5');
     });
 
     it('should handle selection errors gracefully', async () => {
@@ -195,14 +195,14 @@ describe('modelStore', () => {
 
     it('should remove a model from favorites if already favorited', async () => {
       const { useModelStore } = await import('../stores/modelStore');
-      useModelStore.setState({ favorites: ['gpt-5.6-sol', 'claude-opus-4.8'] });
+      useModelStore.setState({ favorites: ['gpt-5.6-sol', 'claude-opus-5'] });
 
       const store = useModelStore.getState();
       store.toggleFavorite('gpt-5.6-sol');
 
       const state = useModelStore.getState();
       expect(state.favorites).not.toContain('gpt-5.6-sol');
-      expect(state.favorites).toContain('claude-opus-4.8');
+      expect(state.favorites).toContain('claude-opus-5');
     });
 
     it('should handle multiple favorites', async () => {
@@ -210,12 +210,12 @@ describe('modelStore', () => {
       const store = useModelStore.getState();
 
       store.toggleFavorite('gpt-5.6-sol');
-      store.toggleFavorite('claude-opus-4.8');
+      store.toggleFavorite('claude-opus-5');
       store.toggleFavorite('gemini-3.1-pro-preview');
 
       const state = useModelStore.getState();
       expect(state.favorites).toHaveLength(3);
-      expect(state.favorites).toEqual(['gpt-5.6-sol', 'claude-opus-4.8', 'gemini-3.1-pro-preview']);
+      expect(state.favorites).toEqual(['gpt-5.6-sol', 'claude-opus-5', 'gemini-3.1-pro-preview']);
     });
   });
 
@@ -249,10 +249,10 @@ describe('modelStore', () => {
       const store = useModelStore.getState();
 
       store.addToRecent('gpt-5.6-sol');
-      store.addToRecent('claude-opus-4.8');
+      store.addToRecent('claude-opus-5');
 
       const state = useModelStore.getState();
-      expect(state.recentModels[0]).toBe('claude-opus-4.8');
+      expect(state.recentModels[0]).toBe('claude-opus-5');
       expect(state.recentModels[1]).toBe('gpt-5.6-sol');
     });
 
@@ -323,7 +323,7 @@ describe('modelStore', () => {
     it('should return models from backend', async () => {
       const mockModels = [
         { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'openai', available: true },
-        { id: 'claude-opus-4.8', name: 'Claude Opus 4.8', provider: 'anthropic', available: true },
+        { id: 'claude-opus-5', name: 'Claude Opus 5', provider: 'anthropic', available: true },
       ];
 
       vi.mocked(invoke).mockResolvedValueOnce(mockModels);

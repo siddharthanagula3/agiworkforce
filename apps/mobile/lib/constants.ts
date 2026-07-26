@@ -36,6 +36,8 @@ export const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? 'wss://signaling.agiwork
 /** Request timeouts */
 export const TIMEOUTS = {
   DEFAULT: 30_000,
+  /** Best-effort remote cleanup must never make an offline sign-out feel hung. */
+  SIGN_OUT_CLEANUP: 5_000,
   STREAMING: 120_000,
   /**
    * Max silence between stream chunks once the first token has arrived. A

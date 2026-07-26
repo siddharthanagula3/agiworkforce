@@ -18,8 +18,17 @@ export interface SyntaxToken {
   type: SyntaxTokenType;
 }
 
+interface RgbaColor {
+  red: number;
+  green: number;
+  blue: number;
+  alpha: number;
+}
+
 /** Beyond ~50KB, tokenizing (and rendering thousands of spans) is not worth it. */
 export const MAX_HIGHLIGHT_LENGTH = 50_000;
+const MINIMUM_CODE_CONTRAST = 4.5;
+const syntaxPaletteCache = new WeakMap<object, Record<SyntaxTokenType, string>>();
 
 // ── Shared regex fragments (all backtracking-safe: disjoint alternatives,
 //    no nested quantifiers) ──
@@ -214,18 +223,144 @@ export function tokenizeCode(code: string, language: string | undefined): Syntax
   return tokens;
 }
 
-/** Maps a token type to a theme color that reads in both light and dark mode. */
-export function syntaxTokenColor(type: SyntaxTokenType, colors: ColorScheme): string {
-  switch (type) {
-    case 'comment':
-      return colors.textMuted;
-    case 'string':
-      return colors.agentSuccess;
-    case 'number':
-      return colors.agentWarning;
-    case 'keyword':
-      return colors.purple;
-    default:
-      return colors.textPrimary;
+function parseCssColor(value: unknown): RgbaColor | null {
+  if (typeof value !== 'string') return null;
+  const hexMatch = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(value.trim());
+  if (hexMatch) {
+    const compact = hexMatch[1]!;
+    const expanded =
+      compact.length === 3
+        ? compact
+            .split('')
+            .map((part) => part + part)
+            .join('')
+        : compact;
+    return {
+      red: Number.parseInt(expanded.slice(0, 2), 16),
+      green: Number.parseInt(expanded.slice(2, 4), 16),
+      blue: Number.parseInt(expanded.slice(4, 6), 16),
+      alpha: expanded.length === 8 ? Number.parseInt(expanded.slice(6, 8), 16) / 255 : 1,
+    };
   }
+
+  const functionalMatch = /^rgba?\(([^)]+)\)$/i.exec(value.trim());
+  if (!functionalMatch) return null;
+  const channels = functionalMatch[1]!.split(',').map((channel) => Number(channel.trim()));
+  if (
+    channels.length < 3 ||
+    channels.some((channel) => !Number.isFinite(channel)) ||
+    (channels[3] !== undefined && (channels[3] < 0 || channels[3] > 1))
+  ) {
+    return null;
+  }
+  return {
+    red: Math.min(255, Math.max(0, channels[0]!)),
+    green: Math.min(255, Math.max(0, channels[1]!)),
+    blue: Math.min(255, Math.max(0, channels[2]!)),
+    alpha: channels[3] ?? 1,
+  };
+}
+
+function flattenColor(foreground: RgbaColor, background: RgbaColor): RgbaColor {
+  return {
+    red: foreground.red * foreground.alpha + background.red * (1 - foreground.alpha),
+    green: foreground.green * foreground.alpha + background.green * (1 - foreground.alpha),
+    blue: foreground.blue * foreground.alpha + background.blue * (1 - foreground.alpha),
+    alpha: 1,
+  };
+}
+
+function relativeLuminance(color: RgbaColor): number {
+  const channels = [color.red, color.green, color.blue].map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+}
+
+function contrastRatio(first: RgbaColor, second: RgbaColor): number {
+  const firstLuminance = relativeLuminance(first);
+  const secondLuminance = relativeLuminance(second);
+  const lighter = Math.max(firstLuminance, secondLuminance);
+  const darker = Math.min(firstLuminance, secondLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function opaqueRgb(color: RgbaColor): RgbaColor {
+  return {
+    red: Math.round(color.red),
+    green: Math.round(color.green),
+    blue: Math.round(color.blue),
+    alpha: 1,
+  };
+}
+
+function mixColors(from: RgbaColor, to: RgbaColor, amount: number): RgbaColor {
+  return opaqueRgb({
+    red: from.red + (to.red - from.red) * amount,
+    green: from.green + (to.green - from.green) * amount,
+    blue: from.blue + (to.blue - from.blue) * amount,
+    alpha: 1,
+  });
+}
+
+function formatRgb(color: RgbaColor): string {
+  return `rgb(${color.red}, ${color.green}, ${color.blue})`;
+}
+
+/**
+ * Preserve the theme's semantic hue, but pull it toward primary text until it
+ * reaches WCAG AA on both code surfaces: inline blocks use `surfaceHover`,
+ * while the fullscreen artifact source view uses `surfaceBase`.
+ */
+function accessibleCodeColor(candidate: string, colors: ColorScheme): string {
+  const canvas = parseCssColor(colors.background);
+  const parsedHover = parseCssColor(colors.surfaceHover);
+  const parsedBase = parseCssColor(colors.surfaceBase);
+  const parsedCandidate = parseCssColor(candidate);
+  const parsedPrimary = parseCssColor(colors.textPrimary);
+  if (!canvas || !parsedHover || !parsedBase || !parsedCandidate || !parsedPrimary) {
+    return colors.textPrimary;
+  }
+
+  const opaqueCanvas = opaqueRgb(canvas);
+  const backgrounds = [
+    opaqueRgb(flattenColor(parsedHover, opaqueCanvas)),
+    opaqueRgb(flattenColor(parsedBase, opaqueCanvas)),
+  ];
+  const start = opaqueRgb(flattenColor(parsedCandidate, backgrounds[0]!));
+  const target = opaqueRgb(flattenColor(parsedPrimary, backgrounds[0]!));
+  const meetsContrast = (color: RgbaColor) =>
+    backgrounds.every((background) => contrastRatio(color, background) >= MINIMUM_CODE_CONTRAST);
+
+  if (meetsContrast(start)) {
+    // Preserve an already-accessible opaque semantic token verbatim. Besides
+    // avoiding needless churn in rendered styles, this keeps theme identity
+    // stable for snapshots and consumers that compare color strings.
+    return parsedCandidate.alpha === 1 ? candidate : formatRgb(start);
+  }
+  for (let step = 1; step <= 100; step++) {
+    const adjusted = mixColors(start, target, step / 100);
+    if (meetsContrast(adjusted)) return formatRgb(adjusted);
+  }
+  return colors.textPrimary;
+}
+
+function syntaxPalette(colors: ColorScheme): Record<SyntaxTokenType, string> {
+  const cached = syntaxPaletteCache.get(colors);
+  if (cached) return cached;
+  const palette: Record<SyntaxTokenType, string> = {
+    comment: accessibleCodeColor(colors.textSecondary, colors),
+    string: accessibleCodeColor(colors.agentSuccess, colors),
+    number: accessibleCodeColor(colors.agentWarning, colors),
+    keyword: accessibleCodeColor(colors.purple, colors),
+    plain: accessibleCodeColor(colors.textPrimary, colors),
+  };
+  syntaxPaletteCache.set(colors, palette);
+  return palette;
+}
+
+/** Maps a token type to an accessible theme-derived code color. */
+export function syntaxTokenColor(type: SyntaxTokenType, colors: ColorScheme): string {
+  return syntaxPalette(colors)[type];
 }

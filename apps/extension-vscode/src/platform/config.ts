@@ -16,8 +16,6 @@
  *
  * Settings NOT covered by this module:
  *   - `apiEndpoint` / `gatewayUrl` / `modelEndpoint` — see `utils/api.ts`
- *   - `systemPrompt` / `agent.autoApply` — handled at use-site
- *     with explicit Workspace Trust check
  */
 
 import * as vscode from 'vscode';
@@ -40,7 +38,6 @@ const DEFAULTS = {
   telemetryEnabled: false,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
   useProviderStream: false,
-  providerStreamProvider: 'auto',
   desktopBridgeEnabled: false,
   desktopBridgePort: 8787,
   tier: 'byok',
@@ -110,9 +107,6 @@ export const Config = {
   },
   useProviderStream(): boolean {
     return get<boolean>('useProviderStream', DEFAULTS.useProviderStream);
-  },
-  providerStreamProvider(): string {
-    return get<string>('providerStreamProvider', DEFAULTS.providerStreamProvider);
   },
 
   // ── MCP + desktop bridge ────────────────────────────────────────────────

@@ -17,6 +17,23 @@ import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 // Mocks — declared before imports
 // ---------------------------------------------------------------------------
 
+let mockSelectedModel = 'claude-sonnet-5';
+let mockAppMode: 'local' | 'cloud' = 'local';
+let mockIsClerkSignedIn = false;
+let mockChatFeatures = {
+  webSearch: true,
+  imageGen: true,
+  health: false,
+  codeExecution: false,
+  research: false,
+};
+let mockTierState = {
+  tier: 'free',
+  grantedCapabilities: [] as string[],
+  codeExecutionAvailable: false,
+  genericWebSearchAvailable: false,
+};
+
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   ImpactFeedbackStyle: { Light: 'Light', Medium: 'Medium', Heavy: 'Heavy' },
@@ -63,6 +80,19 @@ jest.mock('../services/authSession', () => ({
   getCurrentUser: jest.fn(async () => null),
   getCurrentUserId: jest.fn(async () => null),
 }));
+
+jest.mock('../src/features/chat/draftStore', () => ({
+  getDraft: jest.fn(() => ''),
+  setDraft: jest.fn(),
+  clearDraft: jest.fn(),
+}));
+const mockDraftStore = require('../src/features/chat/draftStore') as {
+  getDraft: jest.Mock;
+  setDraft: jest.Mock;
+  clearDraft: jest.Mock;
+};
+const mockGetDraft = mockDraftStore.getDraft;
+const mockSetDraft = mockDraftStore.setDraft;
 
 // Mock sub-components to simplify testing
 jest.mock('../src/features/chat/components/ModelSelectorButton', () => {
@@ -180,9 +210,28 @@ jest.mock('../src/features/voice/services/voice', () => ({
 jest.mock('../src/features/model-picker/store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
-      selectedModel: 'claude-sonnet-5',
+      selectedModel: mockSelectedModel,
       thinkingEnabledPerModel: {},
     }),
+}));
+
+jest.mock('../src/features/chat/store/appModeStore', () => ({
+  useChatAppModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ appMode: mockAppMode }),
+}));
+
+jest.mock('../src/features/auth/store', () => ({
+  useAuthStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ isClerkSignedIn: mockIsClerkSignedIn }),
+}));
+
+jest.mock('../stores/chatStore', () => ({
+  useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ features: mockChatFeatures }),
+}));
+
+jest.mock('../src/features/billing/store', () => ({
+  useTierStore: (selector: (s: Record<string, unknown>) => unknown) => selector(mockTierState),
 }));
 
 jest.mock('../src/features/model-picker/service', () => ({
@@ -202,9 +251,16 @@ jest.mock('../src/ui/theme', () => ({
     colors: {
       textPrimary: '#fff',
       textMuted: '#888',
+      textSecondary: '#bbb',
       surfaceElevated: '#1a1a1a',
+      surfaceHover: '#303030',
+      inputSurface: '#242424',
+      accentSurface: '#292929',
+      accentBorder: '#555',
+      border: '#444',
       teal: '#14b8a6',
       terraCotta: '#e07a5f',
+      transparent: 'transparent',
     },
     isDark: true,
   }),
@@ -212,8 +268,15 @@ jest.mock('../src/ui/theme', () => ({
     teal: '#14b8a6',
     terraCotta: '#e07a5f',
     textMuted: '#888',
+    textSecondary: '#bbb',
     textPrimary: '#fff',
     surfaceElevated: '#1a1a1a',
+    surfaceHover: '#303030',
+    inputSurface: '#242424',
+    accentSurface: '#292929',
+    accentBorder: '#555',
+    border: '#444',
+    transparent: 'transparent',
   },
   radii: {
     sm: 6,
@@ -251,7 +314,7 @@ const defaultProps = {
   isOnline: true,
 };
 
-function renderInput(overrides: Partial<typeof defaultProps> = {}) {
+function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInput>> = {}) {
   return render(<ChatInput {...defaultProps} {...overrides} />);
 }
 
@@ -267,6 +330,88 @@ describe('ChatInput', () => {
     capturedOverlayCancel = undefined;
     capturedRecordingStart = undefined;
     capturedAttachmentPreviewProps = undefined;
+    mockSelectedModel = 'claude-sonnet-5';
+    mockAppMode = 'local';
+    mockIsClerkSignedIn = false;
+    mockChatFeatures = {
+      webSearch: true,
+      imageGen: true,
+      health: false,
+      codeExecution: false,
+      research: false,
+    };
+    mockTierState = {
+      tier: 'free',
+      grantedCapabilities: [],
+      codeExecutionAvailable: false,
+      genericWebSearchAvailable: false,
+    };
+    mockGetDraft.mockReturnValue('');
+  });
+
+  describe('account-scoped drafts', () => {
+    it('reloads text and writes with explicit provenance when the Cloud owner changes', async () => {
+      mockGetDraft.mockImplementation(() => 'Account A draft');
+      const { getByLabelText, getByDisplayValue, rerender } = renderInput({
+        draftKey: 'conversation-1',
+        draftProvenance: { scope: 'cloud', ownerId: 'account-a' },
+      });
+      expect(getByDisplayValue('Account A draft')).toBeTruthy();
+
+      fireEvent.changeText(getByLabelText('Message input'), 'Account A edited secret');
+      expect(mockSetDraft).toHaveBeenLastCalledWith('conversation-1', 'Account A edited secret', {
+        scope: 'cloud',
+        ownerId: 'account-a',
+      });
+
+      mockGetDraft.mockImplementation(() => 'Account B draft');
+      await act(async () => {
+        rerender(
+          <ChatInput
+            {...defaultProps}
+            draftKey="conversation-1"
+            draftProvenance={{ scope: 'cloud', ownerId: 'account-b' }}
+          />,
+        );
+      });
+
+      expect(getByDisplayValue('Account B draft')).toBeTruthy();
+      expect(() => getByDisplayValue('Account A edited secret')).toThrow();
+
+      mockGetDraft.mockImplementation(() => 'Local draft');
+      await act(async () => {
+        rerender(
+          <ChatInput
+            {...defaultProps}
+            draftKey="conversation-1"
+            draftProvenance={{ scope: 'local' }}
+          />,
+        );
+      });
+
+      expect(getByDisplayValue('Local draft')).toBeTruthy();
+      expect(() => getByDisplayValue('Account B draft')).toThrow();
+
+      mockSetDraft.mockClear();
+      await act(async () => {
+        rerender(<ChatInput {...defaultProps} draftKey="conversation-1" />);
+      });
+
+      expect(getByLabelText('Message input').props.value).toBe('');
+      expect(() => getByDisplayValue('Local draft')).toThrow();
+      expect(mockSetDraft).not.toHaveBeenCalled();
+    });
+
+    it('renders and persists no unowned draft', () => {
+      const { getByLabelText } = renderInput({
+        draftKey: 'conversation-1',
+        initialText: 'unowned carry-over',
+      });
+
+      expect(getByLabelText('Message input').props.value).toBe('');
+      expect(mockGetDraft).not.toHaveBeenCalled();
+      expect(mockSetDraft).not.toHaveBeenCalled();
+    });
   });
 
   // ---- Button presence ----
@@ -312,6 +457,87 @@ describe('ChatInput', () => {
       fireEvent.press(getByLabelText('Add to chat'));
 
       expect(onOpenAddToChat).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('active Cloud tools', () => {
+    it('shows ambient Web Search only for an eligible signed-in Cloud chat', () => {
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = true;
+      mockTierState = {
+        tier: 'pro',
+        grantedCapabilities: ['canUseWebSearch'],
+        codeExecutionAvailable: false,
+        genericWebSearchAvailable: true,
+      };
+
+      const { getByLabelText, queryByLabelText, rerender } = renderInput();
+
+      expect(getByLabelText('Web Search active')).toBeTruthy();
+
+      mockAppMode = 'local';
+      rerender(<ChatInput {...defaultProps} />);
+      expect(queryByLabelText('Web Search active')).toBeNull();
+
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = false;
+      rerender(<ChatInput {...defaultProps} />);
+      expect(queryByLabelText('Web Search active')).toBeNull();
+    });
+
+    it('keeps enabled Research, Code, and Image options visible after the sheet closes', () => {
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = true;
+      mockChatFeatures = {
+        ...mockChatFeatures,
+        research: true,
+        codeExecution: true,
+        imageGen: true,
+      };
+      mockTierState = {
+        tier: 'pro',
+        grantedCapabilities: [
+          'canUseWebSearch',
+          'canUseDeepResearch',
+          'canUseCloudExecution',
+          'canUseImages',
+        ],
+        codeExecutionAvailable: true,
+        genericWebSearchAvailable: true,
+      };
+
+      const { getByLabelText, queryByLabelText, rerender } = renderInput();
+
+      expect(getByLabelText('Deep Research active')).toBeTruthy();
+      expect(getByLabelText('Code execution active')).toBeTruthy();
+      expect(getByLabelText('Image generation active')).toBeTruthy();
+
+      mockChatFeatures = {
+        ...mockChatFeatures,
+        research: false,
+        codeExecution: false,
+        imageGen: false,
+      };
+      rerender(<ChatInput {...defaultProps} />);
+
+      expect(queryByLabelText('Deep Research active')).toBeNull();
+      expect(queryByLabelText('Code execution active')).toBeNull();
+      expect(queryByLabelText('Image generation active')).toBeNull();
+    });
+
+    it('hides Image when the server capability handshake denies it', () => {
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = true;
+      mockTierState = {
+        tier: 'pro',
+        grantedCapabilities: [],
+        codeExecutionAvailable: false,
+        genericWebSearchAvailable: false,
+      };
+
+      const { queryByLabelText } = renderInput();
+
+      expect(queryByLabelText('Image generation active')).toBeNull();
     });
   });
 

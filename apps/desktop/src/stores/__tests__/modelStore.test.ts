@@ -6,6 +6,7 @@ import {
   formatOllamaModelSize,
   getManagedCloudModelsForTier,
   getOllamaModelDisplayName,
+  selectIsAutoMode,
 } from '../modelStore';
 
 // Mock @tauri-apps/api/core - throw for unknown commands so error-handling paths are exercised
@@ -217,7 +218,63 @@ describe('modelStore', () => {
     });
   });
 
+  describe('persisted model migration', () => {
+    it('drops unknown selected, favorite, and recent model ids', async () => {
+      localStorage.setItem(
+        'agiworkforce-models',
+        JSON.stringify({
+          state: {
+            selectedModel: 'removed-provider-model',
+            selectedProvider: 'anthropic',
+            favorites: ['removed-provider-model', 'claude-sonnet-5'],
+            recentModels: ['removed-provider-model', 'claude-sonnet-5'],
+          },
+          version: 1,
+        }),
+      );
+
+      await useModelStore.persist.rehydrate();
+
+      const state = useModelStore.getState();
+      expect(state.selectedModel).toBe('auto');
+      expect(state.selectedProvider).toBe('managed_cloud');
+      expect(state.favorites).toEqual(['claude-sonnet-5']);
+      expect(state.recentModels).toEqual(['claude-sonnet-5']);
+    });
+
+    it('replaces a non-selectable legacy Auto alias with canonical Auto', async () => {
+      localStorage.setItem(
+        'agiworkforce-models',
+        JSON.stringify({
+          state: {
+            selectedModel: 'auto-premium',
+            selectedProvider: 'managed_cloud',
+            favorites: [],
+            recentModels: [],
+          },
+          version: 2,
+        }),
+      );
+
+      await useModelStore.persist.rehydrate();
+
+      expect(useModelStore.getState().selectedModel).toBe('auto');
+      expect(selectIsAutoMode(useModelStore.getState())).toBe(true);
+    });
+  });
+
   describe('helper functions', () => {
+    it('recognizes the canonical Auto selection without accepting removed aliases', () => {
+      useModelStore.setState({ selectedModel: 'auto' });
+      expect(selectIsAutoMode(useModelStore.getState())).toBe(true);
+
+      useModelStore.setState({ selectedModel: 'auto-balanced' });
+      expect(selectIsAutoMode(useModelStore.getState())).toBe(false);
+
+      useModelStore.setState({ selectedModel: 'claude-sonnet-5' });
+      expect(selectIsAutoMode(useModelStore.getState())).toBe(false);
+    });
+
     it('derives cloud rows from the shared tier + Desktop runtime intersection', () => {
       const expectedIds = getModelsForTierAndSurface('max', 'desktop/cloud-chat', {
         modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],

@@ -1,14 +1,14 @@
 # AGI VS Code Extension — Product Specification
 
-Status: Draft spec
+Status: Current index
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
-AGI VS Code Extension is the IDE-native developer surface, workspace-scoped, that brings AGI's agentic coding into the editor where developers already work. Its trust stance is Local + BYOK + Managed with explicit selection and visible provider labels — there is NO automatic app-chat sync, and any handoff to app chat is explicit and redacted. It shares the localhost desktop bridge: `src/features/desktop-bridge/desktopBridge.ts` connects `ws://127.0.0.1:8787/ws` using the shared bridge token at `~/.agiworkforce/bridge-token` (mode `0600`) ✅ — the same transport as the Chrome extension, with a stated migration target of a Unix domain socket / named pipe. Shipped feature directions (verify counts against `package.json` before repeating any specific number) span commands, settings, keybindings, the `@agi` chat participant, a sidebar webview, a History tree, a Context Files tree, a model picker, inline completions, code lens, hover, telemetry, terminal capture, and patch/checkpoint flows. Shared sessions with the CLI are a target direction — anything unwired is marked 🔭. Remote control of the editor from other surfaces is likewise a design target and is not assumed to be wired unless the repo proves it.
+AGI VS Code Extension is the IDE-native, workspace-scoped developer surface. `@agi`, the sidebar, and the editor chat panel use the local `agi app-server`, which owns threads, turns, streaming, approvals, cancellation, provider configuration, and local-model discovery. Local + BYOK + Managed remain explicit trust boundaries with visible host/provider labels. There is no automatic app-chat sync. The Desktop bridge is optional and defaults off. Remote control from other surfaces remains planned.
 
 ## Pricing
 
-Pricing follows the shared platform model across every AGI surface: Free, Basic ($7 · ₹399), Pro ($20), Max ($100 and $200), Team ($30/seat), and Enterprise. There is no Plus tier and no Hobby tier; top-ups are enabled for paid tiers (capped, opt-in). Local and BYOK are free access modes wherever this surface allows them, so a developer can run the extension against local or bring-your-own-key providers without a paid plan; Managed inference is what the paid tiers unlock.
+Pricing follows the shared platform model: Free, Basic ($8 · ₹399), Pro ($20), Max ($100 and $200), and Enterprise. There is no Plus or Hobby tier and no credit top-up product. Local and BYOK are free access modes; Managed inference follows the signed-in account plan.
 
 These volumes are target/design specs, not a claim of shipped state. They are governed by [../README.md](../README.md) (the product canon) and `docs/current/source-of-truth.md`. Every capability claim must carry a mandatory status label: ✅ shipped and verified, 🟡 partial or in progress, or 🔭 planned / unwired. When in doubt, mark it 🔭 and record a tracked gap rather than overstating readiness.
 

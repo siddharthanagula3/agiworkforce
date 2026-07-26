@@ -63,7 +63,7 @@ pub struct ComputerUseConfig {
     pub window: WindowManagerConfig,
     /// Stream 2: explicit model override for the planning vision LLM.
     /// `None` lets the router pick (typically the user's default vision
-    /// model). Setting this to e.g. `"claude-opus-4.8"`, `"gpt-5.6-sol"`,
+    /// model). Setting this to e.g. `"claude-opus-5"`, `"gpt-5.6-sol"`,
     /// `"gemini-3.1-pro"`, or `"grok-4.5"` lets the user choose
     /// any vision-capable model from the catalog — this is the multi-
     /// provider differentiator vs Claude Cowork's Anthropic-only computer use.

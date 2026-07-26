@@ -1,14 +1,21 @@
 import { ApiPaywallError } from '@/services/api';
 import {
   generateImage,
+  getDurableGeneratedImagePath,
   getGeneratedImageUri,
   type GeneratedImage,
   type ImageGenRequest,
   type ImageGenResponse,
 } from '@/src/features/image/services/imagegen';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 interface ImageTurnCompletion {
   imageUrl: string;
+  persisted: boolean;
+  persistenceWarning?: string;
   revisedPrompt?: string;
   model?: string;
 }
@@ -18,12 +25,8 @@ export interface RunImageGenerationTurnInput {
   displayText: string;
   prompt: string;
   model: string;
-  begin: (
-    conversationId: string,
-    displayText: string,
-    prompt: string,
-    model: string,
-  ) => string;
+  ownerId: string;
+  begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
   complete: (
     conversationId: string,
     assistantMessageId: string,
@@ -38,16 +41,25 @@ export interface RunImageGenerationTurnInput {
 export interface ImageGenerationTurnDependencies {
   generate: (request: ImageGenRequest) => Promise<ImageGenResponse>;
   getUri: (image: GeneratedImage | undefined) => string | null;
+  getDurablePath?: (image: GeneratedImage | undefined) => string | null;
 }
 
 export type ImageGenerationTurnOutcome = {
-  status: 'completed' | 'failed' | 'paywall';
-  assistantMessageId: string;
+  status: 'completed' | 'failed' | 'paywall' | 'cancelled';
+  assistantMessageId: string | null;
 };
+
+let cloudImageGeneration = 0;
+
+/** Invalidate late image callbacks during sign-out/account switch. */
+export function clearCloudImageGenerationState(): void {
+  cloudImageGeneration += 1;
+}
 
 const defaultDependencies: ImageGenerationTurnDependencies = {
   generate: generateImage,
   getUri: getGeneratedImageUri,
+  getDurablePath: getDurableGeneratedImagePath,
 };
 
 /** Shared state-transition action for image turns used by both chat screens. */
@@ -55,6 +67,22 @@ export async function runImageGenerationTurn(
   input: RunImageGenerationTurnInput,
   dependencies: ImageGenerationTurnDependencies = defaultDependencies,
 ): Promise<ImageGenerationTurnOutcome> {
+  const accountEpoch = captureCloudAccountEpoch();
+  if (!accountEpoch) {
+    input.onUnexpectedError?.(
+      new Error('Sign in to an active AGI Cloud account before generating an image.'),
+    );
+    return { status: 'failed', assistantMessageId: null };
+  }
+  if (accountEpoch.ownerId !== input.ownerId) {
+    input.onUnexpectedError?.(
+      new Error('The active AGI Cloud account changed before image generation started.'),
+    );
+    return { status: 'failed', assistantMessageId: null };
+  }
+  const generation = cloudImageGeneration;
+  const isAccountCurrent = () =>
+    generation === cloudImageGeneration && isCloudAccountEpochCurrent(accountEpoch);
   const assistantMessageId = input.begin(
     input.conversationId,
     input.displayText,
@@ -64,6 +92,7 @@ export async function runImageGenerationTurn(
 
   try {
     const result = await dependencies.generate({ prompt: input.prompt, model: input.model });
+    if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     const image = result.images?.[0];
     const imageUrl = dependencies.getUri(image);
     if (result.success === false || !imageUrl) {
@@ -75,13 +104,25 @@ export async function runImageGenerationTurn(
       return { status: 'failed', assistantMessageId };
     }
 
+    const durablePath = (dependencies.getDurablePath ?? getDurableGeneratedImagePath)(image);
+    const persisted = result.persisted !== false && durablePath !== null;
     input.complete(input.conversationId, assistantMessageId, {
-      imageUrl,
+      // Persisted media keeps the canonical relative owner-scoped identity.
+      // Unsaved provider/data URLs are display-only for this in-memory turn.
+      imageUrl: durablePath ?? imageUrl,
+      persisted,
+      ...(!persisted
+        ? {
+            persistenceWarning:
+              'This image is available for this session only because AGI Cloud media storage is not configured. Try again after storage is available to save it.',
+          }
+        : {}),
       revisedPrompt: image?.revisedPrompt,
       model: result.model,
     });
     return { status: 'completed', assistantMessageId };
   } catch (error) {
+    if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     if (error instanceof ApiPaywallError) {
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);

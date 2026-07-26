@@ -50,6 +50,15 @@ export function useStreamingArtifactSync({
   // panel the user had already dismissed — the UI kept overruling them.
   const autoOpenDismissedRef = useRef(false);
 
+  // Reset before publishing the first block for a new message. Effects run in
+  // declaration order; keeping this ahead of the publishing effect prevents
+  // the initial publish from being immediately forgotten and re-opened on the
+  // next chunk after the user closes the panel.
+  useEffect(() => {
+    autoOpenDismissedRef.current = false;
+    openedForRef.current = null;
+  }, [messageId]);
+
   useEffect(() => {
     const store = useStreamingArtifactStore.getState();
 
@@ -88,13 +97,6 @@ export function useStreamingArtifactSync({
       if (!autoOpenDismissedRef.current) artifacts.setPanelOpen(true);
     }
   }, [messageId, conversationId, isStreaming, block]);
-
-  // A new message starts a new stream, so the previous dismissal no longer
-  // applies — the next assistant reply may auto-open the panel again.
-  useEffect(() => {
-    autoOpenDismissedRef.current = false;
-    openedForRef.current = null;
-  }, [messageId]);
 
   // On unmount, drop any live entry this message still owns so a navigation
   // away mid-stream cannot leave a stuck "writing…" tab behind.

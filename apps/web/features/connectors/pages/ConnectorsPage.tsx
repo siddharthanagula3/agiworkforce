@@ -37,6 +37,7 @@ import {
   invalidateConnectorsCache,
   type ConnectorSource,
 } from '../hooks/use-connectors';
+import { getGitHubCallbackNotice } from '../lib/github-callback-notice';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 interface CustomConnectorSummary {
@@ -656,14 +657,11 @@ export function ConnectorsPage() {
   useEffect(() => {
     const github = searchParams.get('github');
     if (!github) return;
-    if (github === 'connected') {
-      toast.success('GitHub connected.');
-    } else if (github === 'unavailable') {
-      toast.error('GitHub App is not configured in this deployment.');
-    } else if (github === 'invalid_state') {
-      toast.error('GitHub connection failed a security check. Please try again.');
-    } else {
-      toast.error('Could not complete the GitHub connection. Please try again.');
+    const notice = getGitHubCallbackNotice(github);
+    if (notice?.kind === 'success') {
+      toast.success(notice.message);
+    } else if (notice) {
+      toast.error(notice.message);
     }
     const params = new URLSearchParams(searchParams.toString());
     params.delete('github');

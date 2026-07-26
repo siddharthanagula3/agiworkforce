@@ -17,6 +17,7 @@ import type {
 import { useMemoryStore } from '@agiworkforce/unified-chat';
 import { getAuthToken as getClerkToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { buildMemorySystemContent, withMemorySystemMessage } from './memory-context';
 import { isMemoryCapabilityEnabled } from './memory-capability';
 
@@ -200,6 +201,7 @@ export class WebChatRuntime implements ChatRuntime {
         research: options?.research ?? undefined,
         code_execution: options?.codeExecution ?? undefined,
         work_mode: options?.workMode ?? undefined,
+        client_timezone: getBrowserTimeZone(),
         use_prompt_cache: true,
       }),
       signal: controller.signal,
