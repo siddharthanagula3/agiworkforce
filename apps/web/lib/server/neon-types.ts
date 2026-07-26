@@ -22,6 +22,10 @@ export type SubscriptionRow = {
   cancel_at_period_end: boolean;
   canceled_at: string | null;
   stripe_coupon_id: string | null;
+  /** StoreKit's stable subscription identifier (migration 0046). */
+  apple_original_transaction_id: string | null;
+  /** Play Billing's durable purchase token (migration 0046). */
+  google_purchase_token: string | null;
   updated_at: string;
 };
 

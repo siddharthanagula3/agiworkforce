@@ -36,7 +36,27 @@ export interface SubscriptionInfo {
   current_period_end: Date;
   stripe_subscription_id: string | null;
   stripe_price_id: string | null;
+  /**
+   * Present when the subscription is billed by Apple (migration 0046).
+   * Optional because not every `SubscriptionInfo` comes from the table — the
+   * free-trial service synthesises one, and a synthetic row is never
+   * store-owned, so `undefined` is the correct answer rather than a lie.
+   */
+  apple_original_transaction_id?: string | null;
+  /** Present when the subscription is billed by Google (migration 0046). */
+  google_purchase_token?: string | null;
 }
+
+/**
+ * Grace period applied to a lapsed store subscription before entitlement is
+ * withdrawn. Apple and Google can both report a renewal after the previous
+ * period has technically ended, so expiring on the exact boundary would revoke
+ * access from paying customers during normal renewal lag.
+ *
+ * ponytail: fixed 3 days. Make it env-tunable only if observed store renewal
+ * lag proves longer than this.
+ */
+const STORE_RENEWAL_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
 
 interface CreditAllocationOptions {
   /** Compatibility-only audit context; allocation always comes from planTier. */
@@ -75,7 +95,8 @@ export class SubscriptionService {
     try {
       const rows = await db.query<SubscriptionRow>(
         `SELECT id, user_id, plan_tier, status, current_period_start, current_period_end,
-                stripe_subscription_id, stripe_price_id
+                stripe_subscription_id, stripe_price_id,
+                apple_original_transaction_id, google_purchase_token
          FROM subscriptions
          WHERE user_id = $1
          LIMIT 1`,
@@ -88,15 +109,46 @@ export class SubscriptionService {
 
       const data = rows[0]!;
 
+      // A store-billed subscription has no webhook that tells us it lapsed:
+      // there is no Apple ASSN V2 or Play RTDN endpoint, no re-verification
+      // cron, and the only refresh path (mobile restorePurchases) is
+      // user-initiated. Cancel in the App Store and `status` stays 'active'
+      // forever, so `effectivePlanTier` — which gates on status alone — keeps
+      // handing out the paid tier indefinitely.
+      //
+      // This is the one reader every server-side entitlement check shares, so
+      // deriving expiry here covers the chat auth-gate, /api/me, model listing
+      // and the credit-reset cron in a single place, without changing
+      // `effectivePlanTier`'s signature (20+ call sites across five surfaces,
+      // several client-side with cached state that carries no period end).
+      //
+      // Scope is deliberately narrow. Only rows owned by a store and NOT
+      // linked to Stripe are eligible, and a null or unparseable
+      // `current_period_end` NEVER expires: that column is nullable, the IAP
+      // route writes null when Apple returns no expiry, and manually
+      // provisioned Team/Enterprise rows rely on it. Expiring on a null would
+      // downgrade paying customers.
+      const storeOwned =
+        Boolean(data.apple_original_transaction_id || data.google_purchase_token) &&
+        !data.stripe_subscription_id;
+      const periodEnd = data.current_period_end ? new Date(data.current_period_end) : null;
+      const lapsed =
+        storeOwned &&
+        periodEnd !== null &&
+        Number.isFinite(periodEnd.getTime()) &&
+        periodEnd.getTime() + STORE_RENEWAL_GRACE_MS < Date.now();
+
       return {
         id: data.id,
         user_id: data.user_id,
         plan_tier: data.plan_tier || 'free',
-        status: data.status || 'none',
+        status: lapsed ? 'expired' : data.status || 'none',
         current_period_start: new Date(data.current_period_start),
         current_period_end: new Date(data.current_period_end),
         stripe_subscription_id: data.stripe_subscription_id,
         stripe_price_id: data.stripe_price_id,
+        apple_original_transaction_id: data.apple_original_transaction_id,
+        google_purchase_token: data.google_purchase_token,
       };
     } catch (error) {
       logger.error({ error, userId: resolvedUserId }, 'Error in getSubscription');

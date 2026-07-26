@@ -34,6 +34,7 @@ import { resolveTierFromProductId } from '@/lib/server/iap-product-catalog';
 import { verifyAppleTransaction } from '@/lib/server/iap-verify-apple';
 import { verifyGoogleSubscription } from '@/lib/server/iap-verify-google';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
 
 const VerifyRequestSchema = z
   .object({
@@ -127,6 +128,23 @@ async function handleVerify(request: NextRequest) {
   const purchase = await verifyPurchase(platform, productId, receipt, purchaseToken);
 
   const db = getNeonDb();
+
+  // Both billing channels upsert the SAME `subscriptions` row on
+  // `on conflict (user_id)`. /api/checkout already refuses a second Stripe
+  // subscription, but nothing stopped a Stripe-billed customer buying again
+  // through the store: this upsert would overwrite plan_tier/status while
+  // `stripe_subscription_id` survived untouched, so Stripe kept charging, the
+  // next `customer.subscription.updated` flipped the tier back, and the
+  // customer was billed twice with an oscillating tier.
+  //
+  // Reject BEFORE the upsert and before the client calls finishTransaction, so
+  // the purchase surfaces as a store failure and stays refundable.
+  const existing = await SubscriptionService.getSubscription(db, userId);
+  if (existing?.stripe_subscription_id && isEntitledSubscriptionStatus(existing.status)) {
+    throw createError.conflict(
+      'This account already has a web subscription. Cancel it in Billing before subscribing through the App Store or Play Store.',
+    );
+  }
 
   const upserted = await db
     .query<{ id: string }>(
