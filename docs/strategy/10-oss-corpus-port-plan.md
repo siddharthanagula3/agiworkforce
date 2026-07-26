@@ -4,7 +4,7 @@ Status: Strategy analysis (not source-of-truth)
 Owner: Founder + platform lead
 Last updated: 2026-06-28
 Method: deep-dive of the reference corpus in `/Users/siddhartha/Desktop/opensource_reference/`, building on the existing 9-axis scout.
-Companion docs: `09-reference-codebases.md` (claude-code + odysseus), `03-code-reality-and-tech-debt.md`, `07-roadmap-12-month.md`
+Companion docs: none (companion set retired 2026-07-26)
 Source corpus: the founder's own `opensource_reference/README.md` (9-axis library) + `FINDINGS.md` (6-scout read) + ~40 additional repos.
 
 You have assembled one of the best reference libraries a founder in this space could have: a structured "9 axes × 6 surfaces" scout (already analyzed in your `FINDINGS.md`) plus a deep bench of coding agents, memory/skills/security tools, and multimodal infra. This doc does not redo your 9-axis findings — it **integrates them and extends them** with the new cohort, then turns the whole corpus into one prioritized, license-aware port plan.

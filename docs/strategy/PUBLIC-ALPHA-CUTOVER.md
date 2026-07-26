@@ -11,7 +11,7 @@ Why desktop was a fast-follow, not "never": managed Desktop Cloud goes through t
 boundary rather than a client-driven Rust credit-deduction endpoint. Streaming and persistence
 now run through the shared Cloud contracts, with Local + BYOK still on their separate trust
 boundaries.
-Companion: `docs/spec/AGI_CODE_MASTER_SPEC.md` (invariants), `11-execution-playbook.md` (loop), `03` (risks).
+Companion: `11-execution-playbook.md`
 
 Guardrail (non-negotiable): never claim a surface's managed cloud is "available" where its runtime doesn't serve. Copy ≤ shipped scope. The kill-switch `AGI_MANAGED_COMPUTE_PRIVATE_BETA` stays as the instant rollback.
 

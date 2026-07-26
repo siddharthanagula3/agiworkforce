@@ -3,7 +3,7 @@
 Status: Strategy analysis (not source-of-truth)
 Owner: Founder
 Last updated: 2026-06-27
-Companion docs: `05-gtm-pricing-business-model.md`, `07-roadmap-12-month.md`
+Companion docs: `05-gtm-pricing-business-model.md`
 Framing: reality-check + the real path (per your request)
 
 You asked what it would take to become "a billion dollar company in just 1 year." This doc answers that directly and honestly, then gives you the path that is actually achievable with the assets you have.

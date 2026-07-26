@@ -3,7 +3,7 @@
 Status: Active execution plan
 Owner: Founder + platform lead
 Last updated: 2026-06-28
-Companion docs: `09-reference-codebases.md`, `10-oss-corpus-port-plan.md`, `03-code-reality-and-tech-debt.md`, `07-roadmap-12-month.md`
+Companion docs: `10-oss-corpus-port-plan.md`
 Reference library: `/Users/siddhartha/Desktop/opensource_reference/` (odysseus updated to `main` @ `dd055ee` on 2026-06-28)
 
 This is the build plan to run end-to-end as a loop. Surfaces in priority order, per founder: **Website → Mobile → Desktop** first. Strategy: adapt licensed open source aggressively; spend original engineering only on the moat (trust enforcement, billing, client-side BYOK).

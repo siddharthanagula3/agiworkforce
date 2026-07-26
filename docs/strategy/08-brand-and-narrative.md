@@ -3,7 +3,7 @@
 Status: Strategy analysis (not source-of-truth)
 Owner: Founder
 Last updated: 2026-06-27
-Companion docs: `05-gtm-pricing-business-model.md`, `07-roadmap-12-month.md`
+Companion docs: `05-gtm-pricing-business-model.md`
 
 This translates the strategy into how AGI should _sound_ and the story it tells. It is a starting brand system, not a finished one — refine it with real customer language once design partners are live. The voice is derived from the one asset competitors can't copy: an honest, privacy-first architecture that does what it says.
 
@@ -29,7 +29,7 @@ One-sentence narrative: **AGI is the AI workspace you actually own — multi-pro
 ## 3. Messaging pillars
 
 1. **Private by architecture.** Local Mode never silently leaves your device. The boundary is enforced in code and provable with tests — not a policy you have to trust.
-2. **Your providers, your choice.** 15 providers, four routing tiers, one catalog. No lock-in. The model lab works for you, not the other way around.
+2. **Your providers, your choice.** Every provider in one catalog, one Auto that routes for you, and a fallback behind every model. No lock-in — no single provider can take the product down with it. The model lab works for you, not the other way around. (Never quote a provider or model count in shipped copy: the catalog in `packages/contracts/types/src/models.json` is the only source, and it moves. Read it at publish time.)
 3. **No metered black box.** Bring your own keys at no markup, or run models locally. Pay for the software, not a meter you can't see.
 4. **One workspace, every surface.** Desktop, web, mobile, CLI, IDE, browser — the same product, the right sync boundary for each.
 5. **Honest by default.** We claim only what we've shipped. (This is already true in your code and trust pages — make it a brand promise.)
