@@ -222,6 +222,16 @@ export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
 export class NeonDatabaseAdapter implements DatabaseAdapter {
   private poolPromise: Promise<Pool>;
   private boundSub: string | null = null;
+  /**
+   * The ACTIVE organization for this request, bound to
+   * `request.jwt.claim.org_id` so tenancy policies (migration 0073) can resolve
+   * a workspace context. Unlike `boundSub` this is NOT read from the token:
+   * organization membership is authoritative in the database, so
+   * `current_app_org_role()` looks it up rather than trusting a claim. Binding
+   * an organization the caller does not belong to therefore grants nothing —
+   * the role resolves NULL and every org branch denies.
+   */
+  private boundOrgId: string | null = null;
   private disposed = false;
   /**
    * `true` when this instance owns the pool and should `pool.end()` on
@@ -284,6 +294,12 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       // Bind the RLS subject. set_config(..., true) is the transaction-local
       // (SET LOCAL) form and, unlike `SET LOCAL ... = $1`, accepts a parameter.
       await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [this.boundSub]);
+      // Bind the active organization for tenancy policies (0073). Always bound,
+      // even when null, so a pooled connection can never inherit a previous
+      // request's workspace context.
+      await client.query("SELECT set_config('request.jwt.claim.org_id', $1, true)", [
+        this.boundOrgId ?? '',
+      ]);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
       await client.query('COMMIT');
       return result.rows as T[];
@@ -320,6 +336,12 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       // Bind the RLS subject. set_config(..., true) is the transaction-local
       // (SET LOCAL) form and, unlike `SET LOCAL ... = $1`, accepts a parameter.
       await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [this.boundSub]);
+      // Bind the active organization for tenancy policies (0073). Always bound,
+      // even when null, so a pooled connection can never inherit a previous
+      // request's workspace context.
+      await client.query("SELECT set_config('request.jwt.claim.org_id', $1, true)", [
+        this.boundOrgId ?? '',
+      ]);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
       await client.query('COMMIT');
       return result.rowCount ?? 0;
@@ -357,6 +379,12 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
         // Bind the RLS subject. set_config(..., true) is the transaction-local
         // (SET LOCAL) form and, unlike `SET LOCAL ... = $1`, accepts a parameter.
         await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [this.boundSub]);
+        // Bind the active organization for tenancy policies (0073). Always bound,
+        // even when null, so a pooled connection can never inherit a previous
+        // request's workspace context.
+        await client.query("SELECT set_config('request.jwt.claim.org_id', $1, true)", [
+          this.boundOrgId ?? '',
+        ]);
       }
       const tx = new NeonTransactionAdapter(client);
       const result = await fn(tx);
@@ -409,6 +437,8 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       );
     }
     const sub = decodeJwtSub(jwt);
+    // Preserve any organization already bound on this instance so the order of
+    // `withUser`/`withOrg` never changes the resulting scope.
     // Hand the parent's pool promise down so the child re-uses the same
     // pool instead of constructing a new TCP/WebSocket connection.
     const next = new NeonDatabaseAdapter({
@@ -416,6 +446,30 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       poolPromise: this.poolPromise,
     });
     next.boundSub = sub;
+    next.boundOrgId = this.boundOrgId;
+    return next;
+  }
+
+  /**
+   * Bind the ACTIVE organization for tenancy policies (migration 0073).
+   *
+   * Pass `null` to return to a purely personal scope. The value is bound to
+   * `request.jwt.claim.org_id` on every query in the resulting adapter.
+   *
+   * This is deliberately NOT read from the token. Organization membership lives
+   * in `organization_members` and `current_app_org_role()` reads it there, so
+   * binding an organization the caller is not a member of grants nothing: the
+   * role resolves NULL, org visibility denies, and `app_row_is_writable`
+   * refuses the write. Tenancy therefore cannot be forged from the client even
+   * if a caller passes an attacker-supplied id.
+   */
+  withOrg(organizationId: string | null): DatabaseAdapter {
+    const next = new NeonDatabaseAdapter({
+      ...this.config,
+      poolPromise: this.poolPromise,
+    });
+    next.boundSub = this.boundSub;
+    next.boundOrgId = organizationId;
     return next;
   }
 
@@ -492,6 +546,15 @@ class NeonTransactionAdapter implements DatabaseAdapter {
     throw new DataLayerConfigError(
       'Call withUser(jwt) on the outer NeonDatabaseAdapter BEFORE opening a transaction. ' +
         'The JWT subject is bound via SET LOCAL at the start of the transaction.',
+    );
+  }
+
+  withOrg(_organizationId: string | null): DatabaseAdapter {
+    throw new DataLayerConfigError(
+      'Call withOrg(organizationId) on the outer NeonDatabaseAdapter BEFORE opening a ' +
+        'transaction. The active organization is bound via SET LOCAL at the start of the ' +
+        'transaction; rebinding it mid-transaction would change tenancy scope for statements ' +
+        'that have already run.',
     );
   }
 

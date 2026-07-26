@@ -110,6 +110,18 @@ export interface DatabaseAdapter {
   withUser(jwt: string): DatabaseAdapter;
 
   /**
+   * Bind the ACTIVE organization for tenancy-scoped policies. Returns a NEW
+   * adapter; does not mutate the receiver. Pass `null` for a purely personal
+   * scope.
+   *
+   * Composes with {@link withUser} in either order. The organization is a
+   * SCOPE SELECTOR, not a grant: authorization is resolved in the database
+   * from the membership table, so binding an organization the subject does not
+   * belong to yields no additional visibility.
+   */
+  withOrg(organizationId: string | null): DatabaseAdapter;
+
+  /**
    * Release any pooled connections / open handles. Safe to call multiple
    * times. After dispose, all methods reject.
    */

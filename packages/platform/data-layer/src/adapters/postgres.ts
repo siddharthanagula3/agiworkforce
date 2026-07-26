@@ -132,6 +132,10 @@ export class PostgresDatabaseAdapter implements DatabaseAdapter {
     throw new NotImplementedError('Postgres', 'withUser', MIGRATION_GUIDE);
   }
 
+  withOrg(_organizationId: string | null): DatabaseAdapter {
+    throw new NotImplementedError('Postgres', 'withOrg', MIGRATION_GUIDE);
+  }
+
   async dispose(): Promise<void> {
     // No-op until pooled connections exist.
   }
