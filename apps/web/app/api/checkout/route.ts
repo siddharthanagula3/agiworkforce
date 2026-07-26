@@ -130,12 +130,19 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   // Route them to the Billing Portal instead to prevent duplicate subscriptions / double billing.
   type SubRow = Pick<
     SubscriptionRow,
-    'status' | 'plan_tier' | 'stripe_customer_id' | 'stripe_subscription_id'
+    | 'status'
+    | 'plan_tier'
+    | 'stripe_customer_id'
+    | 'stripe_subscription_id'
+    | 'apple_original_transaction_id'
+    | 'google_purchase_token'
   >;
   let subRows: SubRow[];
   try {
     subRows = await db.query<SubRow>(
-      'select status, plan_tier, stripe_customer_id, stripe_subscription_id from subscriptions where user_id = $1 limit 1',
+      'select status, plan_tier, stripe_customer_id, stripe_subscription_id, ' +
+        'apple_original_transaction_id, google_purchase_token ' +
+        'from subscriptions where user_id = $1 limit 1',
       [user.id],
     );
   } catch (error) {
@@ -157,6 +164,22 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     existingSubscription.plan_tier !== 'free' &&
     activeStatuses.has(existingSubscription.status) &&
     !isStripeSubscriptionId(existingSubscription.stripe_subscription_id);
+
+  // An unlinked paid row is normally a manually provisioned entitlement that
+  // checkout may replace. A row carrying a store identifier is NOT that: it is
+  // a live Apple/Google subscription that only the store can cancel. Replacing
+  // it here would leave the customer paying the store AND Stripe, and the
+  // downgrade guard below would not catch it because an equal-or-higher tier
+  // is permitted.
+  if (
+    replacesUnlinkedEntitlement &&
+    (existingSubscription.apple_original_transaction_id ||
+      existingSubscription.google_purchase_token)
+  ) {
+    throw createError.conflict(
+      'This subscription is billed by the App Store or Play Store. Manage or cancel it there before subscribing on the web.',
+    );
+  }
 
   if (
     replacesUnlinkedEntitlement &&
