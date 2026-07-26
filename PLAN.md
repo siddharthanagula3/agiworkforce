@@ -2,9 +2,18 @@
 
 Status: Active
 Owner: Founder + platform lead
-Last updated: 2026-07-15
+Last updated: 2026-07-26
 Detailed plan: `docs/plans/monorepo-restructure-2026-07-08.md`
 Organization sequence: `docs/plans/pre-release-repo-organization-2026-05-20.md`
+
+> **Phase note (2026-07-26).** The mechanical restructure below is complete —
+> every wave is landed and the repository is structurally coherent (baseline:
+> 10,272 passing tests, 27 green operability guardrails). The active phase is now
+> **surface production quality**: Desktop Cloud and Mobile Cloud to the standard
+> Web already meets, and the VS Code and Chrome extensions to the frontend UI/UX
+> standard of ChatGPT's equivalents. The executable queue for that phase is
+> `TODO.md`. The objective and boundaries below still govern; only the sequencing
+> has moved on.
 
 ## Objective
 
