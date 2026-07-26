@@ -80,6 +80,7 @@ vi.mock('../sessionLabeling', () => ({
 }));
 
 const sendCloudMessage = vi.fn();
+const generateCloudImage = vi.fn();
 const followRun = vi.fn();
 const cancelRun = vi.fn();
 vi.mock('../../api/cloudApi', () => ({
@@ -88,6 +89,7 @@ vi.mock('../../api/cloudApi', () => ({
   getAuthHeaders: vi.fn(async () => ({
     Authorization: 'Bearer desktop-cloud-token',
   })),
+  generateCloudImage: (...args: unknown[]) => generateCloudImage(...args),
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
   createDesktopCloudAgentRunClient: () => ({ followRun, cancelRun }),
 }));
@@ -136,23 +138,129 @@ describe('CloudRuntime', () => {
   });
 
   describe('sendMessage', () => {
-    it('forwards Research, Cloud work mode, and a server-owned skill selection', async () => {
+    it('forwards managed search, thinking, code, Research, effort, work mode, and skill selection', async () => {
       const runtime = new CloudRuntime();
+      expect(runtime.supportsManagedWebSearch).toBe(true);
+      expect(runtime.supportsCodeExecution).toBe(true);
       expect(runtime.supportsResearch).toBe(true);
+      expect(runtime.supportsImageGeneration).toBe(true);
+      expect(runtime.supportsVideoGeneration).toBe(false);
+      expect(runtime.supportsComputerUse).toBe(false);
+      expect(runtime.supportsConcurrentTurns).toBe(true);
       sendCloudMessage.mockResolvedValue(undefined);
 
       await runtime.sendMessage('conv_research', 'investigate', {
+        webSearch: true,
+        thinkingEnabled: true,
+        codeExecution: true,
         research: true,
         agentMode: 'auto',
+        effort: 'high',
         workMode: 'agiwork',
         skillName: 'frontend-design',
       });
 
+      expect(sendCloudMessage.mock.calls[0]?.[8]).toBe(true);
+      expect(sendCloudMessage.mock.calls[0]?.[10]).toBe(true);
+      expect(sendCloudMessage.mock.calls[0]?.[11]).toBe(true);
       expect(sendCloudMessage.mock.calls[0]?.[13]).toEqual({
         research: true,
         workMode: 'agiwork',
         skillName: 'frontend-design',
+        effort: 'high',
       });
+    });
+
+    it('dispatches image prompts to durable managed media and persists the generated file', async () => {
+      const runtime = new CloudRuntime();
+      const events = collectEvents(runtime);
+      generateCloudImage.mockResolvedValue({
+        id: 'image-asset-1',
+        uri: 'https://cloud.example/api/files/image-asset-1',
+        provider: 'google',
+        model: 'gemini-3.1-flash-image',
+      });
+
+      await runtime.sendMessage('conv_image', 'Create an image of a glass lighthouse at sunrise', {
+        model: 'auto',
+      });
+
+      expect(sendCloudMessage).not.toHaveBeenCalled();
+      expect(generateCloudImage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: 'Create an image of a glass lighthouse at sunrise',
+          provider: 'google',
+          model: expect.any(String),
+          idempotencyKey: expect.stringMatching(/^agi\.media\.desktop\.image\./),
+        }),
+      );
+      expect(events.map((event) => event.type)).toEqual([
+        'tool_call',
+        'tool_result',
+        'generated_files',
+        'done',
+      ]);
+      expect(events.every((event) => event.conversationId === 'conv_image')).toBe(true);
+      expect(events.find((event) => event.type === 'generated_files')).toMatchObject({
+        files: [
+          {
+            id: 'image-asset-1',
+            uri: 'https://cloud.example/api/files/image-asset-1',
+            kind: 'image',
+            previewable: true,
+          },
+        ],
+      });
+      expect(saveMessage).toHaveBeenNthCalledWith(
+        2,
+        'conv_image',
+        expect.objectContaining({
+          role: 'assistant',
+          metadata: expect.objectContaining({
+            finishReason: 'stop',
+            generatedFiles: [
+              expect.objectContaining({
+                id: 'image-asset-1',
+                uri: 'https://cloud.example/api/files/image-asset-1',
+              }),
+            ],
+          }),
+        }),
+      );
+    });
+
+    it('settles a failed image request instead of leaving the assistant turn loading', async () => {
+      const runtime = new CloudRuntime();
+      const events = collectEvents(runtime);
+      generateCloudImage.mockRejectedValue(new Error('Image provider unavailable'));
+
+      await runtime.sendMessage('conv_image_failure', 'Draw an image of a lighthouse');
+
+      expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_result', 'error']);
+      expect(events.find((event) => event.type === 'error')).toEqual({
+        type: 'error',
+        error: 'Image provider unavailable',
+        conversationId: 'conv_image_failure',
+      });
+      expect(events.some((event) => event.type === 'done')).toBe(false);
+      expect(saveMessage).toHaveBeenNthCalledWith(
+        2,
+        'conv_image_failure',
+        expect.objectContaining({
+          role: 'assistant',
+          metadata: expect.objectContaining({
+            finishReason: 'error',
+            streamError: { message: 'Image provider unavailable' },
+            toolCalls: [
+              expect.objectContaining({
+                name: 'media_generate_image',
+                status: 'failed',
+                error: 'Image provider unavailable',
+              }),
+            ],
+          }),
+        }),
+      );
     });
 
     it('persists the user message before streaming, then the assistant message on done', async () => {
@@ -276,6 +384,7 @@ describe('CloudRuntime', () => {
       expect(events).toContainEqual({
         type: 'error',
         error: 'AGI Cloud completed without returning a response. Please retry.',
+        conversationId: 'conv_activity',
       });
       expect(events.some((event) => event.type === 'done')).toBe(false);
     });
@@ -288,7 +397,7 @@ describe('CloudRuntime', () => {
       await runtime.sendMessage('conv_1', 'Hi there');
 
       expect(sendCloudMessage).not.toHaveBeenCalled();
-      expect(events).toEqual([{ type: 'error', error: 'network down' }]);
+      expect(events).toEqual([{ type: 'error', error: 'network down', conversationId: 'conv_1' }]);
     });
 
     it('surfaces a save failure and does not report the reply as durably done', async () => {
@@ -339,7 +448,11 @@ describe('CloudRuntime', () => {
 
       await runtime.sendMessage('conv_1', 'Hi');
 
-      expect(events).toContainEqual({ type: 'error', error: 'stream broke' });
+      expect(events).toContainEqual({
+        type: 'error',
+        error: 'stream broke',
+        conversationId: 'conv_1',
+      });
     });
 
     it('persists canonical activity as failed when the stream promise rejects directly', async () => {

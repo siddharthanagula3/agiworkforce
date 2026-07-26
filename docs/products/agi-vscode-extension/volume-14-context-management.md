@@ -40,7 +40,7 @@ Conversation history is stored in `src/data/conversationStore.ts` using VS Code 
 
 ## Token Budget
 
-`src/data/contextBudget.ts` computes a model-aware budget: it reads the selected model's window from `MODEL_CONTEXT_LIMITS` (`src/features/model-picker/modelConstants.ts`, `DEFAULT_CONTEXT_LIMIT` fallback), allocates **3% (chat) / 5% (agent)** by default, honors an `agiWorkforce.contextBudgetPercent` override clamped to 1–20%, and reserves ~40% of the char budget for the indexer section. `src/data/tokenCounter.ts` tracks session prompt/completion tokens and an estimated cost in the status bar (`agi-workforce.showTokenBreakdown`, `agi-workforce.resetTokenCounter`). **🟡 Partial:** budgeting uses a `CHARS_PER_TOKEN` (4-chars/token) heuristic, not per-provider tokenizers, and `agiWorkforce.contextBudgetPercent` is read in code but **not declared** in `package.json` `contributes.configuration` — users cannot set it from Settings UI yet. Model-window figures MUST stay sourced from `packages/contracts/types/src/models.json` (via `modelConstants.ts`); do not hardcode new model IDs.
+`src/data/contextBudget.ts` computes a model-aware budget from catalog context limits: **3% for chat / 5% for agent**, with roughly 40% of the character budget reserved for indexed context. The previous undeclared `contextBudgetPercent` read was removed, so there is no hidden setting that appears configurable only through raw JSON. `tokenCounter.ts` tracks session prompt/completion estimates for the status bar. Budgeting still uses a four-chars/token heuristic rather than provider tokenizers; model-window figures stay sourced from `packages/contracts/types/src/models.json`.
 
 - Requirement: the budget MUST recompute when the active model changes.
 - Requirement: over-budget assembly MUST drop lowest-priority sections (workspace tree first, pinned selection last), not the user's prompt.
@@ -73,7 +73,7 @@ Context management is production-ready when every layer respects caps, the budge
 Build:
 
 - [ ] Budget recomputes on model change; token counter and `showTokenBreakdown` reflect the active session.
-- [ ] `agiWorkforce.contextBudgetPercent` is declared in `package.json` or the code override is removed (close the 🟡 gap).
+- [x] The undeclared `contextBudgetPercent` read is removed; mode budgets are deterministic and regression-tested.
 
 Trust:
 
@@ -90,5 +90,5 @@ Security:
 - Silently routing Local context to BYOK/Cloud without fork consent, secret scan, or provider label.
 - Claiming a semantic repo index, tokenizer-exact budgets, or conversation summarization as shipped — they are 🔭/🟡.
 - Hardcoding model IDs or context-window numbers instead of sourcing from `packages/contracts/types/src/models.json`.
-- Referencing removed tiers (`hobby`, `pro_plus`, "Plus", "Hobby") or credit top-ups; use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise. Note: `package.json` `agiWorkforce.tier` still enumerates `hobby`/`pro_plus` (🟡 catalog-reconciliation gap).
+- Referencing removed tiers (`hobby`, `pro_plus`, "Plus", "Hobby") or credit top-ups; the extension manifest exposes only current access modes.
 - Reintroducing Supabase or `middleware.ts`; the stack is Clerk + Neon + Stripe with Next.js `proxy.ts`.

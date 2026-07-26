@@ -15,7 +15,11 @@
 //   const mock = await browser.tauri.mock('llm_send_message');
 //   await mock.mockReturnValue({ content: 'test-only assistant reply' });
 
-const appBinaryPath = '../../target/debug/agiworkforce-desktop';
+// CI and local parallel agents can point WDIO at an isolated debug build with
+// its own bundle identifier/app-data directory. This prevents a native smoke
+// run from opening or mutating the user's installed-app database.
+const appBinaryPath =
+  process.env['AGI_DESKTOP_WDIO_BINARY'] ?? '../../target/debug/agiworkforce-desktop';
 
 // The embedded WebDriver server binds a fixed port (default 4445) unless overridden
 // here or via TAURI_WEBDRIVER_PORT. With multiple agents/CI runs on this machine

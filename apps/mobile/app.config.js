@@ -2,6 +2,16 @@
 // New Architecture is the default in Expo SDK 55 — no explicit newArchEnabled needed.
 /** @type {import('expo/config').ExpoConfig} */
 const appEnv = process.env.APP_ENV || process.env.EXPO_PUBLIC_APP_ENV || 'development';
+const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
+
+if (
+  (appEnv === 'production' || appEnv === 'preview') &&
+  !clerkPublishableKey?.startsWith('pk_live_')
+) {
+  throw new Error(
+    `[clerk] ${appEnv} builds require EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to be a live Clerk publishable key.`,
+  );
+}
 
 function envIsTruthy(name) {
   const value = process.env[name]?.toLowerCase();
@@ -291,6 +301,11 @@ const config = {
   },
   experiments: {
     typedRoutes: true,
+  },
+  extra: {
+    eas: {
+      projectId: '38f0941c-88a7-468a-9750-fcd8b357ff4c',
+    },
   },
 };
 

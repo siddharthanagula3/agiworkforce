@@ -1,4 +1,11 @@
-import { useState, useRef, useCallback, useEffect, useImperativeHandle } from 'react';
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,7 +16,19 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Link as LinkIcon, AudioLines, ArrowUp, X } from 'lucide-react-native';
+import {
+  Plus,
+  Link as LinkIcon,
+  AudioLines,
+  ArrowUp,
+  X,
+  Search,
+  Telescope,
+  Terminal,
+  Paintbrush,
+} from 'lucide-react-native';
+import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
+import { isWebSearchAvailable } from '@agiworkforce/search';
 import { Text } from '@/components/ui/text';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
@@ -22,12 +41,20 @@ import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatStore } from '@/stores/chatStore';
 import { useTierStore } from '@/src/features/billing/store';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme, radii } from '@/src/ui/theme';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { getDraft, setDraft, clearDraft } from '@/src/features/chat/draftStore';
+import {
+  getDraft,
+  setDraft,
+  clearDraft,
+  type DraftProvenance,
+} from '@/src/features/chat/draftStore';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
 import { formatClock } from '@/src/lib/time';
@@ -79,6 +106,8 @@ interface ChatInputProps {
    * half-typed message survives navigation / backgrounding. Cleared on send.
    */
   draftKey?: string;
+  /** Trust-boundary owner for a persisted draft. Required whenever draftKey is set. */
+  draftProvenance?: DraftProvenance;
 }
 
 export function ChatInput({
@@ -98,9 +127,12 @@ export function ChatInput({
   isThreadActive = false,
   initialText,
   draftKey,
+  draftProvenance,
 }: ChatInputProps) {
   // Seed from a saved draft (if any) first, else the one-time initialText prop.
-  const [text, setText] = useState(() => getDraft(draftKey) || (initialText ?? ''));
+  const [text, setText] = useState(() =>
+    draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance) || (initialText ?? ''),
+  );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -112,14 +144,92 @@ export function ChatInput({
   const recordingStartTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sendPendingRef = useRef(false);
+  const draftIdentity =
+    draftProvenance?.scope === 'cloud'
+      ? `${draftKey ?? ''}:cloud:${draftProvenance.ownerId}`
+      : `${draftKey ?? ''}:${draftProvenance?.scope ?? 'unowned'}`;
+  const previousDraftIdentityRef = useRef(draftIdentity);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const chatFeatures = useChatStore((s) => s.features);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const subscriptionTier = useTierStore((s) => s.tier);
+  const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
+  const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
+  const genericWebSearchAvailable = useTierStore((s) => s.genericWebSearchAvailable);
   const { colors: themeColors } = useTheme();
   const insets = useSafeAreaInsets();
 
   const modelName = getShortDisplayName(selectedModel, subscriptionTier);
+  const selectedModelMetadata = getModelMetadataById(selectedModel);
+  const isSignedInCloudChat = appMode === 'cloud' && isClerkSignedIn;
+  const webSearchActive =
+    isSignedInCloudChat &&
+    FEATURES.webSearch &&
+    grantedCapabilities.includes('canUseWebSearch') &&
+    isWebSearchAvailable({
+      provider: selectedModelMetadata?.provider,
+      modelSupportsNativeSearch: selectedModelMetadata?.capabilities.search,
+      modelSupportsTools: selectedModelMetadata?.capabilities.tools,
+      genericBackendConfigured: genericWebSearchAvailable,
+    });
+  const researchActive =
+    isSignedInCloudChat &&
+    FEATURES.research &&
+    chatFeatures.research &&
+    selectedModelMetadata?.capabilities.research === true &&
+    selectedModelMetadata.capabilities.search === true &&
+    grantedCapabilities.includes('canUseDeepResearch');
+  const codeExecutionActive =
+    isSignedInCloudChat &&
+    FEATURES.codeExecution &&
+    chatFeatures.codeExecution &&
+    selectedModelMetadata?.capabilities.codeExecution === true &&
+    codeExecutionAvailable &&
+    grantedCapabilities.includes('canUseCloudExecution');
+  const imageGenerationActive =
+    isSignedInCloudChat &&
+    FEATURES.imageGen &&
+    chatFeatures.imageGen &&
+    grantedCapabilities.includes('canUseImages') &&
+    canUseBillingPlanCapability(subscriptionTier, 'image_generation');
+  const activeToolStatuses = [
+    ...(webSearchActive
+      ? [{ key: 'search', label: 'Search', accessibilityLabel: 'Web Search active', Icon: Search }]
+      : []),
+    ...(researchActive
+      ? [
+          {
+            key: 'research',
+            label: 'Research',
+            accessibilityLabel: 'Deep Research active',
+            Icon: Telescope,
+          },
+        ]
+      : []),
+    ...(codeExecutionActive
+      ? [
+          {
+            key: 'code',
+            label: 'Code',
+            accessibilityLabel: 'Code execution active',
+            Icon: Terminal,
+          },
+        ]
+      : []),
+    ...(imageGenerationActive
+      ? [
+          {
+            key: 'image',
+            label: 'Image',
+            accessibilityLabel: 'Image generation active',
+            Icon: Paintbrush,
+          },
+        ]
+      : []),
+  ];
 
   const applyTranscript = useCallback((transcript: string) => {
     const cleanedTranscript = cleanupVoiceDictation(transcript);
@@ -169,9 +279,20 @@ export function ChatInput({
 
   // Persist the in-progress draft so it survives unmount / backgrounding.
   // MMKV writes are synchronous + memory-mapped, so per-change persistence is cheap.
-  useEffect(() => {
-    setDraft(draftKey, text);
-  }, [text, draftKey]);
+  useLayoutEffect(() => {
+    if (previousDraftIdentityRef.current !== draftIdentity) {
+      previousDraftIdentityRef.current = draftIdentity;
+      // Router can reuse the composer instance for another conversation,
+      // Local/Cloud scope, or Clerk account. Never carry the prior identity's
+      // in-memory text or attachments across that boundary. A layout effect
+      // resets before paint so account A's text cannot flash for account B.
+      setText(draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance));
+      setAttachments([]);
+      return;
+    }
+    if (!draftKey || !draftProvenance) return;
+    setDraft(draftKey, text, draftProvenance);
+  }, [draftIdentity, draftKey, draftProvenance, text]);
 
   // Collapse the home-indicator inset while the keyboard is up — with the
   // KeyboardAvoidingView pushing the composer above the keyboard, keeping the
@@ -215,7 +336,7 @@ export function ChatInput({
     Promise.resolve(onSend(outgoing, fileAttachments.length > 0 ? fileAttachments : undefined))
       .then((accepted) => {
         if (accepted === false) return;
-        clearDraft(draftKey);
+        clearDraft(draftKey, draftProvenance);
         setText((current) => (current === sentText ? '' : current));
         setAttachments((current) => current.filter((a) => !sentAttachmentIds.has(a.id)));
       })
@@ -225,7 +346,7 @@ export function ChatInput({
       .finally(() => {
         sendPendingRef.current = false;
       });
-  }, [text, attachments, onSend, hapticsEnabled, draftKey]);
+  }, [text, attachments, onSend, hapticsEnabled, draftKey, draftProvenance]);
 
   /**
    * A very large block dropped into the composer (paste) becomes a compact
@@ -507,6 +628,51 @@ export function ChatInput({
           </Pressable>
         ) : null}
       </View>
+
+      {activeToolStatuses.length > 0 && !isRecording && !isTranscribing ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 6,
+            marginBottom: 8,
+          }}
+          accessibilityLabel="Active chat tools"
+        >
+          {activeToolStatuses.map(({ key, label, accessibilityLabel, Icon }) => (
+            <View
+              key={key}
+              accessible
+              accessibilityLabel={accessibilityLabel}
+              style={{
+                minHeight: 24,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: 8,
+                borderRadius: radii.full,
+                borderWidth: 1,
+                borderColor: themeColors.accentBorder,
+                backgroundColor: themeColors.accentSurface,
+              }}
+            >
+              <Icon size={12} color={themeColors.teal} strokeWidth={1.8} />
+              <Text
+                style={{
+                  color: themeColors.textSecondary,
+                  fontSize: 11,
+                  lineHeight: 14,
+                  fontWeight: '500',
+                  includeFontPadding: false,
+                }}
+              >
+                {label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {/* Main composer row -- [+] outside-left, single-line pill with the
           mic inside its right edge, circular send/stop/voice button

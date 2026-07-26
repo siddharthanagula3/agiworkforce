@@ -7,9 +7,49 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { describeRejection, safeResolveWorkspacePath } from '../../utils/pathSafety';
 
 const GROUP_PINNED = 'pinned';
 const GROUP_AUTO = 'auto';
+
+export type WorkspaceContextFileResult =
+  | { ok: true; uri: vscode.Uri }
+  | { ok: false; message: string };
+
+/**
+ * Validates a user-selected context path before it reaches the persistent tree
+ * or the privileged app-server. The runtime protocol accepts files only.
+ */
+export async function validateWorkspaceContextFile(
+  uri: vscode.Uri,
+): Promise<WorkspaceContextFileResult> {
+  if (uri.scheme !== 'file') {
+    return { ok: false, message: 'Only local workspace files can be added to context.' };
+  }
+  const resolved = await safeResolveWorkspacePath(uri.fsPath, { allowAbsolute: true });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      message:
+        resolved.reason === 'traversal'
+          ? 'Path is not inside any open workspace folder.'
+          : describeRejection(resolved.reason),
+    };
+  }
+
+  try {
+    const stat = await vscode.workspace.fs.stat(resolved.uri);
+    if ((stat.type & vscode.FileType.File) === 0) {
+      return {
+        ok: false,
+        message: 'Choose a file. Folder context is not supported by the local runtime.',
+      };
+    }
+  } catch {
+    return { ok: false, message: 'The selected workspace file could not be read.' };
+  }
+  return { ok: true, uri: resolved.uri };
+}
 
 export class ContextItem extends vscode.TreeItem {
   constructor(

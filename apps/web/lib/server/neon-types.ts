@@ -297,6 +297,7 @@ export type GitHubInstallationRow = {
   installation_id: number;
   account_login: string;
   account_type: string;
+  ownership_verified_at: string | null;
   pr_review_enabled: boolean;
   review_model: string | null;
   created_at: string;

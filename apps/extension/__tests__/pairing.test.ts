@@ -50,6 +50,7 @@ const chromeMock = {
   runtime: {
     id: 'test-extension-id',
     lastError: null as null | { message: string },
+    sendMessage: vi.fn(),
   },
   storage: {
     session: makeStorageArea(sessionStore),
@@ -63,6 +64,8 @@ beforeEach(() => {
   for (const k of Object.keys(sessionStore)) delete sessionStore[k];
   for (const k of Object.keys(localStore)) delete localStore[k];
   chromeMock.runtime.lastError = null;
+  chromeMock.runtime.sendMessage.mockReset();
+  chromeMock.runtime.sendMessage.mockResolvedValue({ success: true });
   // Reset module-level state
   _resetStateForTesting();
   // Install chrome global
@@ -167,14 +170,29 @@ describe('unpair', () => {
 });
 
 describe('requestPairing — success path', () => {
-  it('stores token + fingerprint and transitions to paired', async () => {
-    // H-07: bridge must emit a 32-128 char token from [A-Za-z0-9_-].
-    const validToken = 'bridge-tok-' + 'a'.repeat(30);
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ token: validToken, fingerprint: 'br12' }),
-      text: async () => '',
-    });
+  it('bootstraps a token before authorizing the unpacked extension manifest', async () => {
+    const bootstrapToken = 'bootstrap-' + 'a'.repeat(40);
+    const finalToken = 'bridge-tok-' + 'b'.repeat(40);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: bootstrapToken,
+          fingerprint: 'boot1234',
+          nativeHostManifestInstalled: false,
+        }),
+        text: async () => '',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          token: finalToken,
+          fingerprint: 'bridge12',
+          nativeHostManifestInstalled: true,
+        }),
+        text: async () => '',
+      });
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('AbortSignal', {
       timeout: (_ms: number) => ({ signal: 'mock-signal' }),
@@ -183,16 +201,106 @@ describe('requestPairing — success path', () => {
     const state = await requestPairing();
 
     expect(state.phase).toBe('paired');
-    expect(state.fingerprint).toBe('br12');
-    expect(sessionStore['agi_bridge_token']).toBe(validToken);
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(state.fingerprint).toBe('bridge12');
+    expect(sessionStore['agi_bridge_token']).toBe(finalToken);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
       expect.stringContaining('/pair'),
-      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
     );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/pair'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'X-Bridge-Token': bootstrapToken,
+        }),
+        body: JSON.stringify({ extensionId: 'test-extension-id' }),
+      }),
+    );
+  });
+
+  it('reconnects native messaging after the manifest is installed', async () => {
+    const bootstrapToken = 'bootstrap-' + 'a'.repeat(40);
+    const finalToken = 'bridge-tok-' + 'b'.repeat(40);
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            token: bootstrapToken,
+            fingerprint: 'boot1234',
+            nativeHostManifestInstalled: false,
+          }),
+          text: async () => '',
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            token: finalToken,
+            fingerprint: 'bridge12',
+            nativeHostManifestInstalled: true,
+          }),
+          text: async () => '',
+        }),
+    );
+    vi.stubGlobal('AbortSignal', { timeout: (_ms: number) => ({}) });
+    chromeMock.runtime.sendMessage.mockResolvedValue({
+      success: true,
+      nativeConnected: true,
+      connectionStatus: 'connected',
+    });
+
+    await requestPairing();
+
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'RECONNECT_NATIVE',
+    });
   });
 });
 
 describe('requestPairing — failure paths', () => {
+  it('reports an error when Desktop cannot install the native-host manifest', async () => {
+    const bootstrapToken = 'bootstrap-' + 'a'.repeat(40);
+    const finalToken = 'bridge-tok-' + 'b'.repeat(40);
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            token: bootstrapToken,
+            fingerprint: 'boot1234',
+            nativeHostManifestInstalled: false,
+          }),
+          text: async () => '',
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            token: finalToken,
+            fingerprint: 'bridge12',
+            nativeHostManifestInstalled: false,
+          }),
+          text: async () => '',
+        }),
+    );
+    vi.stubGlobal('AbortSignal', { timeout: (_ms: number) => ({}) });
+
+    const state = await requestPairing();
+
+    expect(state.phase).toBe('error');
+    expect(state.error).toMatch(/native host manifest/i);
+    expect(sessionStore['agi_bridge_token']).toBeUndefined();
+  });
+
   it('transitions to error when fetch rejects', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
     vi.stubGlobal('AbortSignal', { timeout: (_ms: number) => ({}) });

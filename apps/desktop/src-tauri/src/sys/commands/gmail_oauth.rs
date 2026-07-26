@@ -303,13 +303,11 @@ pub async fn gmail_oauth_get_account(
 // =============================================================================
 
 fn open_connection(app_handle: &AppHandle) -> Result<Connection> {
-    let db_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| Error::Generic(format!("Failed to get app data dir: {}", e)))?
-        .join("agiworkforce.db");
-
-    Connection::open(db_path).map_err(|e| Error::Generic(format!("Database error: {}", e)))
+    app_handle
+        .try_state::<crate::data::db::key_management::MainDatabaseAccess>()
+        .ok_or_else(|| Error::Generic("Encrypted local database is unavailable.".to_string()))?
+        .open_connection()
+        .map_err(Error::Generic)
 }
 
 fn ensure_gmail_table(conn: &Connection) -> Result<()> {

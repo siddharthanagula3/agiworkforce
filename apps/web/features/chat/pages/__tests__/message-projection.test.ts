@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Message } from '@shared/stores/web-chat-store';
-import { toChatMessage } from '../WebChatPage';
+import { resolveChatAccountDisplay, resolveChatAccountUser, toChatMessage } from '../WebChatPage';
 
 describe('WebChatPage message projection', () => {
   it('preserves durable attachments for the transcript after reload', () => {
@@ -23,5 +23,60 @@ describe('WebChatPage message projection', () => {
     };
 
     expect(toChatMessage(message, 'conversation-id').attachments).toEqual(message.attachments);
+  });
+});
+
+describe('WebChatPage account identity', () => {
+  it('prefers the canonical /api/me identity over the compatibility auth store', () => {
+    const canonicalUser = {
+      id: 'user-1',
+      name: 'Canonical Name',
+      email: 'canonical@example.com',
+    };
+    const compatibilityUser = {
+      id: 'user-1',
+      name: 'Stale Name',
+      email: 'stale@example.com',
+    };
+
+    const clerkUser = {
+      id: 'user-1',
+      name: 'Clerk Name',
+      email: 'clerk@example.com',
+    };
+
+    expect(resolveChatAccountUser(canonicalUser, compatibilityUser, clerkUser)).toBe(canonicalUser);
+    expect(resolveChatAccountUser(null, compatibilityUser, clerkUser)).toBe(compatibilityUser);
+    expect(resolveChatAccountUser(null, null, clerkUser)).toBe(clerkUser);
+  });
+
+  it('shows authenticated identity immediately without guessing a tier while policy loads', () => {
+    expect(
+      resolveChatAccountDisplay(
+        {
+          id: 'user-1',
+          name: 'Siddhartha',
+          email: 'siddhartha@example.com',
+        },
+        null,
+        false,
+      ),
+    ).toEqual({
+      displayName: 'Siddhartha',
+      userInitial: 'S',
+      tierLabel: null,
+      showFreeUpgrade: false,
+      isLoading: false,
+    });
+  });
+
+  it('shows a neutral loading state when neither identity nor policy is ready', () => {
+    expect(resolveChatAccountDisplay(null, null, false)).toEqual({
+      displayName: 'Loading account',
+      userInitial: '…',
+      tierLabel: null,
+      showFreeUpgrade: false,
+      isLoading: true,
+    });
   });
 });

@@ -19,6 +19,7 @@ import {
   Lock,
   Clock3,
   Activity,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -55,6 +56,7 @@ export type SettingsNavKey =
   // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
   // desktop panel renderer — see apps/desktop settings-ia contract test).
   | 'security'
+  | 'team'
   | 'reflect'
   | 'time-focus'
   | 'skills';
@@ -244,6 +246,7 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
     items: [
       { key: 'general', label: 'General', icon: Settings2 },
       { key: 'account', label: 'Account', icon: UserRound },
+      { key: 'team', label: 'Team', icon: Users },
       { key: 'privacy', label: 'Privacy', icon: Shield },
       { key: 'billing', label: 'Billing', icon: CreditCard },
       { key: 'usage', label: 'Usage', icon: Gauge },

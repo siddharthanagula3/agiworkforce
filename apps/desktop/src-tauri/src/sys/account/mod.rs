@@ -1,4 +1,4 @@
-use crate::sys::api::{ApiRequest, ApiResponse, AuthType, HttpMethod};
+use crate::sys::api::{ApiClient, ApiRequest, ApiResponse, AuthType, HttpMethod};
 use crate::sys::commands::{security::SecretManagerState, ApiState};
 use crate::sys::security::SecretManager;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -110,15 +110,8 @@ pub struct DeviceAuthorizationHttpResponse {
     pub body: String,
 }
 
-async fn execute_device_authorization_request(
-    path: &str,
-    body: String,
-    state: State<'_, ApiState>,
-) -> Result<DeviceAuthorizationHttpResponse, String> {
-    let api_base = get_api_base_url();
-    validate_api_base_url(&api_base)?;
-
-    let api_request = ApiRequest {
+fn build_device_authorization_request(api_base: &str, path: &str, body: String) -> ApiRequest {
+    ApiRequest {
         method: HttpMethod::Post,
         url: format!("{}{}", api_base, path),
         body: Some(body),
@@ -128,11 +121,19 @@ async fn execute_device_authorization_request(
         ]),
         timeout_ms: Some(30_000),
         ..Default::default()
-    };
+    }
+}
 
-    let response = state
-        .get_client()?
-        .execute(api_request)
+async fn execute_device_authorization_request(
+    path: &str,
+    body: String,
+    client: &ApiClient,
+) -> Result<DeviceAuthorizationHttpResponse, String> {
+    let api_base = get_api_base_url();
+    validate_api_base_url(&api_base)?;
+
+    let response = client
+        .execute(build_device_authorization_request(&api_base, path, body))
         .await
         .map_err(|e| format!("AGI Cloud device authorization request failed: {}", e))?;
 
@@ -147,10 +148,11 @@ async fn execute_device_authorization_request(
 pub async fn account_start_device_authorization(
     state: State<'_, ApiState>,
 ) -> Result<DeviceAuthorizationHttpResponse, String> {
+    let client = state.get_single_attempt_client()?;
     execute_device_authorization_request(
         "/api/auth/device/code",
         serde_json::json!({ "surface": "desktop" }).to_string(),
-        state,
+        client,
     )
     .await
 }
@@ -169,7 +171,8 @@ pub async fn account_poll_device_authorization(
     }
 
     let body = serde_json::json!({ "device_code": device_code }).to_string();
-    execute_device_authorization_request("/api/auth/device/token", body, state).await
+    let client = state.get_client()?;
+    execute_device_authorization_request("/api/auth/device/token", body, client).await
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -787,107 +790,6 @@ pub async fn fetch_credit_balance(
     parse_json_response(&response)
 }
 
-/// Deduct credits request
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeductCreditsRequest {
-    pub amount_cents: i32,
-    pub description: Option<String>,
-    pub metadata: Option<serde_json::Value>,
-}
-
-/// Deduct credits response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeductCreditsResponse {
-    pub success: bool,
-    pub remaining_cents: Option<i32>,
-    pub error: Option<String>,
-    pub code: Option<String>,
-    pub daily_limit: Option<i32>,
-    pub daily_used: Option<i32>,
-    pub daily_remaining: Option<i32>,
-    pub reset_in_hours: Option<f64>,
-}
-
-/// Report usage to the API (for manual credit deduction if needed)
-#[tauri::command]
-pub async fn report_llm_usage(
-    amount_cents: i32,
-    model: String,
-    provider: String,
-    input_tokens: Option<i32>,
-    output_tokens: Option<i32>,
-    state: State<'_, ApiState>,
-) -> Result<DeductCreditsResponse, String> {
-    // Validate amount_cents bounds
-    if amount_cents <= 0 {
-        return Err(format!(
-            "amount_cents must be positive, got {}",
-            amount_cents
-        ));
-    }
-    if amount_cents > 100_000 {
-        return Err(format!(
-            "amount_cents exceeds maximum single deduction of $1000 (100000 cents), got {}",
-            amount_cents
-        ));
-    }
-
-    let token = get_access_token()?;
-    let api_base = get_api_base_url();
-
-    let url = format!("{}/api/llm/v1/credits/deduct", api_base);
-
-    let request_body = serde_json::json!({
-        "amount_cents": amount_cents,
-        "description": format!("LLM usage: {}/{}", provider, model),
-        "metadata": {
-            "model": model,
-            "provider": provider,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-        }
-    });
-
-    let api_request = ApiRequest {
-        method: HttpMethod::Post,
-        url,
-        body: Some(request_body.to_string()),
-        auth: AuthType::Bearer { token },
-        headers: std::collections::HashMap::from([(
-            "Content-Type".to_string(),
-            "application/json".to_string(),
-        )]),
-        ..Default::default()
-    };
-
-    let response = state
-        .get_client()?
-        .execute(api_request)
-        .await
-        .map_err(|e| format!("Failed to report usage: {}", e))?;
-
-    // 402 is expected when credits are exhausted
-    if response.status == 402 {
-        return parse_json_response(&response);
-    }
-
-    if !response.success {
-        // Provide more context for common error codes
-        let hint = match response.status {
-            401 => " (Token may be expired or from a different auth environment)",
-            500 => " (Server crashed - check API logs)",
-            502 | 503 => " (API server is down or restarting)",
-            _ => "",
-        };
-        return Err(format!(
-            "API error {}{}: {}",
-            response.status, hint, response.body
-        ));
-    }
-
-    parse_json_response(&response)
-}
-
 // ---------------------------------------------------------------------------
 // Device Management
 // ---------------------------------------------------------------------------
@@ -976,9 +878,10 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
 #[cfg(test)]
 mod tests {
     use super::{
-        clear_cloud_tokens, restore_cloud_access_token, store_cloud_access_token,
-        validate_api_base_url, CreditBalanceResponse,
+        build_device_authorization_request, clear_cloud_tokens, restore_cloud_access_token,
+        store_cloud_access_token, validate_api_base_url, CreditBalanceResponse,
     };
+    use crate::sys::api::HttpMethod;
     use crate::sys::security::SecretManager;
     use rusqlite::Connection;
     use std::sync::{Arc, Mutex};
@@ -1012,6 +915,28 @@ mod tests {
 
         clear_cloud_tokens(&manager).unwrap();
         assert_eq!(restore_cloud_access_token(&manager).unwrap(), None);
+    }
+
+    #[test]
+    fn device_code_request_uses_the_exact_native_contract() {
+        let request = build_device_authorization_request(
+            "https://agiworkforce.com",
+            "/api/auth/device/code",
+            r#"{"surface":"desktop"}"#.to_string(),
+        );
+
+        assert!(matches!(request.method, HttpMethod::Post));
+        assert_eq!(request.url, "https://agiworkforce.com/api/auth/device/code");
+        assert_eq!(request.body.as_deref(), Some(r#"{"surface":"desktop"}"#));
+        assert_eq!(request.timeout_ms, Some(30_000));
+        assert_eq!(
+            request.headers.get("Content-Type").map(String::as_str),
+            Some("application/json")
+        );
+        assert_eq!(
+            request.headers.get("X-Requested-With").map(String::as_str),
+            Some("XMLHttpRequest")
+        );
     }
 
     // Regression guard for the SSRF allowlist that BYOK-RUST-EGRESS-01 relies on

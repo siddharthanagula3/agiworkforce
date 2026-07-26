@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { getProviderModelCatalog } from '@agiworkforce/types';
 
 import { OPENROUTER_MODEL_CATALOG } from '../catalog';
 
 describe('OPENROUTER_MODEL_CATALOG', () => {
-  it('is non-empty', () => {
-    expect(OPENROUTER_MODEL_CATALOG.length).toBeGreaterThan(0);
+  it('matches the canonical registry projection without inventing fallback models', () => {
+    expect(OPENROUTER_MODEL_CATALOG).toEqual(getProviderModelCatalog('open_router'));
   });
 
   it('only contains models with provider === "open_router"', () => {

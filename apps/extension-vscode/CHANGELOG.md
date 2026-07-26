@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **Workspace-trust gating** for sensitive settings (`apiEndpoint`, `gatewayUrl`, `modelEndpoint`, `cliPath`, `systemPrompt`, `agentMode.autoApply`). Cloning a malicious repo can no longer redirect API traffic via `.vscode/settings.json`.
+- **Workspace-trust gating** for sensitive endpoint, gateway, CLI-path, auto-apply, telemetry, and tier settings. Cloning a malicious repo can no longer redirect privileged behavior through workspace settings.
 - **Desktop bridge token-based auth** — the `ws://127.0.0.1:8787` connection now sends `{type:'auth', token}` from `~/.agiworkforce/bridge-token` (refused if perms ≠ 0600) and drops every inbound message until the server replies `auth_ok`. Inbound and outbound message types are both allowlisted.
 - **Suggested-command shell sanitization** — `$(`, backticks, `;`, `&&`, `||`, `>`, `<`, `|`, `..`, and known destructive patterns are refused; valid suggestions require an explicit modal confirmation showing the exact command before it reaches `terminal.sendText()`.
 - **Webview link sanitizer** rewritten — only `https?:` and `mailto:` URIs survive on `<a href>`, `<img src>`, `<form action>`, `<button formaction>`. `command:`, `javascript:`, `vscode-resource:`, `data:` are all stripped. `srcdoc` removed unconditionally.
@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`agi.git.commit`** prefers the built-in Git extension API (shell-quoting-free, cross-platform). Falls back to a platform-aware shell-quoted invocation (POSIX single-quote escape on macOS/Linux; double-quote with `""` escape on Windows, `` ` `` and `$` stripped).
 - **CodeLens cache** keyed by `(uri, document.version)` — avoids the previous 45,000-regex scan per refresh on a 5K-line file.
 - **Inline-completion LRU cache** (16 entries, 15-second TTL) replaces the single-slot cache so typo-correction / undo loops no longer fire fresh requests every keystroke.
-- **`providerStreamProvider`** setting expanded from 5 to 14 enum values (`auto` + 13 wired providers + `custom`) with markdown description linking to provider docs.
+- **Account-authenticated provider streaming** for supported cloud-backed editor utilities. Provider identity is inferred from the selected catalog model, preventing a stale independent provider selector from disagreeing with the model.
 
 ### Changed
 
@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **56+ commands** — full command palette coverage including `showSubsystemHealth`, `selectModel`, `sendFeedback`, `openChatInEditor`, and 52 others.
 - **Model picker** (`agi-workforce.selectModel`) — QuickPick over the full `MANUAL_MODEL_OPTIONS` catalog from `@agiworkforce/types`; no hardcoded IDs.
 - **Context Files tree** — sidebar view for pinning `@file` context into chat; content capped at 20 K chars, binary files rejected.
-- **23 configurable settings** including `agiWorkforce.inlineCompletions.enabled`, `agiWorkforce.codeActions.enabled`, `agiWorkforce.agentMode.autoApply`, `agiWorkforce.desktopBridge.port` (default 8787), and `agiWorkforce.telemetryEnabled`.
+- **23 configurable settings** including `agiWorkforce.inlineCompletions.enabled`, `agiWorkforce.codeActions.enabled`, `agiWorkforce.autoApplyFixes`, `agiWorkforce.desktopBridge.port` (default 8787), and `agiWorkforce.telemetryEnabled`.
 - **13 keybindings** — default shortcuts for open-chat, explain, fix, refactor, agent mode, and more.
 
 ### Changed
@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- Workspace-trust gating for endpoint/CLI/systemPrompt settings.
+- Workspace-trust gating for sensitive endpoint and CLI settings.
 - Desktop bridge token auth (port 8787); message type allowlisting.
 - Webview link sanitizer — only `https?:` and `mailto:` survive; `javascript:`, `data:`, `command:` stripped.
 - Telemetry redactor scrubs JWTs and API keys before any network call.

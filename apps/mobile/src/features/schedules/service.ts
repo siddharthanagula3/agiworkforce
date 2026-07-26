@@ -13,6 +13,7 @@ import {
   type ManagedCloudScheduleRecurrence,
 } from '@agiworkforce/cloud-contracts';
 import type { Schedule, ScheduleRun, CreateScheduleInput } from './store';
+import { assertMobileScheduleRecurrenceSupported } from './policy';
 
 /**
  * Schedule API Service
@@ -121,6 +122,7 @@ export async function fetchSchedules(): Promise<Schedule[]> {
  */
 export async function createSchedule(input: CreateScheduleInput): Promise<Schedule> {
   assertSchedulesAvailable();
+  assertMobileScheduleRecurrenceSupported(input.recurrence);
   const value = await api.post<unknown>('/api/schedules', input);
   const data = parseResponse(
     ManagedCloudScheduleResponseSchema,
@@ -138,6 +140,9 @@ export async function updateSchedule(
   input: Partial<CreateScheduleInput>,
 ): Promise<Schedule> {
   assertSchedulesAvailable();
+  if (input.recurrence !== undefined) {
+    assertMobileScheduleRecurrenceSupported(input.recurrence);
+  }
   const value = await api.put<unknown>(managedCloudSchedulePath(id), input);
   const data = parseResponse(
     ManagedCloudScheduleResponseSchema,

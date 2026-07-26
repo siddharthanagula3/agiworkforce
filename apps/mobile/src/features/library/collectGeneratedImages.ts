@@ -5,6 +5,7 @@
  * renders (message.type === 'image') rather than persisting a second copy.
  */
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import { getDurableGeneratedImagePath } from '@/src/features/image/services/imagegen';
 
 export interface LibraryImage {
   id: string;
@@ -27,10 +28,15 @@ export function collectGeneratedImages(
     for (const message of messages) {
       if (message.type !== 'image' || !message.imageUrl) continue;
       if (message.imageGenStatus === 'failed') continue;
+      const durablePath =
+        message.imageGenPersisted === false
+          ? null
+          : getDurableGeneratedImagePath({ url: message.imageUrl });
+      if (!durablePath) continue;
       images.push({
         id: message.id,
         conversationId: conversation.id,
-        imageUrl: message.imageUrl,
+        imageUrl: durablePath,
         prompt: message.imageGenPrompt ?? message.revisedPrompt,
         createdAt: message.createdAt,
         sourceLabel: conversationTitleById.get(conversation.id) ?? 'Chat',

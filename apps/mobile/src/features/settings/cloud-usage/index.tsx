@@ -20,10 +20,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { View, ActivityIndicator, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { BarChart3, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
+  CloudAccountRequired,
   CloudSyncBlockedBanner,
   SettingsInfo,
   SettingsScreenShell,
@@ -32,20 +34,16 @@ import { fetchUsageSnapshot, type UsageSnapshot } from '@/services/usage';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { getBillingPlanPricing } from '@agiworkforce/types';
+import { useAuthStore } from '@/src/features/auth/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const PLAN_LABELS: Record<string, string> = {
-  free: 'Free',
-  basic: 'Basic',
-  pro: 'Pro',
-  max: 'Max',
-  max_15x: 'Max',
-  team: 'Team',
-  enterprise: 'Enterprise',
-};
 
 function formatResetDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -188,6 +186,10 @@ function BillingUnavailablePlaceholder() {
 
 export default function CloudUsageScreen() {
   const colors = useThemeColors();
+  const router = useRouter();
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const isCloudModeActive = appMode === 'cloud';
@@ -198,31 +200,54 @@ export default function CloudUsageScreen() {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
     setLoading(true);
     setError(null);
     try {
       const data = await fetchUsageSnapshot();
+      if (!isCloudAccountEpochCurrent(account)) return;
       setSnapshot(data);
       setLastUpdated(
         new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
       );
     } catch (err) {
+      if (!isCloudAccountEpochCurrent(account)) return;
       setError(err instanceof Error ? err.message : 'Could not load usage');
     } finally {
-      setLoading(false);
+      if (isCloudAccountEpochCurrent(account)) setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    setSnapshot(null);
+    setLoading(false);
+    setError(null);
+    setLastUpdated(null);
+  }, [clerkUserId]);
 
   // guardedFetch blocks this screen's own fetch (an EgressBlockedError) while
   // chat is set to Local — see CloudSyncBlockedBanner's doc comment. Skip the
   // doomed request and show the banner instead of the raw technical error
   // message; re-fetch as soon as the user switches modes.
   useEffect(() => {
-    if (FEATURES.usageDashboard && isCloudModeActive) void load();
-  }, [load, isCloudModeActive]);
+    if (FEATURES.usageDashboard && isClerkSignedIn && isCloudModeActive) void load();
+  }, [clerkUserId, load, isClerkSignedIn, isCloudModeActive]);
 
-  const planLabel = snapshot ? (PLAN_LABELS[snapshot.planTier] ?? snapshot.planTier) : '';
+  const handleSignIn = useCallback(() => {
+    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  const planLabel = snapshot ? getBillingPlanPricing(snapshot.planTier).label : '';
   const periodResetLabel = snapshot ? formatResetDate(snapshot.usageResetAt) : null;
+
+  if (!isClerkLoaded || !isClerkSignedIn) {
+    return (
+      <SettingsScreenShell title="Usage">
+        <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
+      </SettingsScreenShell>
+    );
+  }
 
   return (
     <SettingsScreenShell title="Usage">

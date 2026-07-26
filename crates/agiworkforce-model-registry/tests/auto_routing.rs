@@ -8,7 +8,7 @@ use agiworkforce_model_registry::{
 fn distinguishes_auto_profiles_from_concrete_model_ids() {
     assert!(is_auto_routing_selection("auto"));
     assert!(is_auto_routing_selection("AUTO-BALANCED"));
-    assert!(!is_auto_routing_selection("claude-opus-4.8"));
+    assert!(!is_auto_routing_selection("claude-opus-5"));
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn single_auto_computes_premium_for_a_hard_coding_task_on_a_max_tier() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "claude-opus-4.8");
+    assert_eq!(selected.model_key, "claude-opus-5");
     assert_eq!(selected.requested_profile, Some(RoutingProfile::Premium));
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Premium));
 }
@@ -147,7 +147,7 @@ fn treats_basic_as_free_and_max_aliases_as_max() {
     assert_eq!(basic.model_key, free.model_key);
     assert_eq!(basic.effective_profile, Some(RoutingProfile::Economy));
     assert_eq!(max_plus.effective_profile, Some(RoutingProfile::Premium));
-    assert_eq!(max_plus.model_key, "claude-opus-4.8");
+    assert_eq!(max_plus.model_key, "claude-opus-5");
 }
 
 #[test]
@@ -207,8 +207,8 @@ fn uses_premium_coding_slot_when_permitted() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "claude-opus-4.8");
-    assert_eq!(selected.provider_model_id, "claude-opus-4-8");
+    assert_eq!(selected.model_key, "claude-opus-5");
+    assert_eq!(selected.provider_model_id, "claude-opus-5");
     assert_eq!(
         selected
             .fallbacks
@@ -376,7 +376,7 @@ fn byok_is_not_clamped_by_managed_subscription_tiers() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "claude-opus-4.8");
+    assert_eq!(selected.model_key, "claude-opus-5");
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Premium));
 }
 

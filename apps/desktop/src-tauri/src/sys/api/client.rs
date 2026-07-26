@@ -143,6 +143,23 @@ impl ApiClient {
         Self::with_retry_config(RetryConfig::default())
     }
 
+    /// Build a client that never replays a request.
+    ///
+    /// Use this for non-idempotent operations that do not carry an
+    /// idempotency key, such as creating an OAuth device authorization code.
+    pub fn single_attempt() -> Result<Self> {
+        let reqwest_client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .retry(reqwest::retry::never())
+            .build()
+            .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
+
+        Ok(Self {
+            client: Arc::new(ClientBuilder::new(reqwest_client).build()),
+            default_timeout: Duration::from_secs(30),
+        })
+    }
+
     pub fn with_retry_config(config: RetryConfig) -> Result<Self> {
         let retry_policy = ExponentialBackoff::builder()
             .retry_bounds(
@@ -533,6 +550,43 @@ impl Default for ApiClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+    use tokio::time::timeout;
+
+    async fn read_http_request(stream: &mut tokio::net::TcpStream) -> Vec<u8> {
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 1024];
+
+        loop {
+            let bytes_read = stream.read(&mut buffer).await.expect("read request");
+            if bytes_read == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..bytes_read]);
+
+            let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+            else {
+                continue;
+            };
+            let headers = String::from_utf8_lossy(&request[..header_end]);
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())
+                        .flatten()
+                })
+                .unwrap_or(0);
+            if request.len() >= header_end + 4 + content_length {
+                break;
+            }
+        }
+
+        request
+    }
 
     #[test]
     fn test_http_method_conversion() {
@@ -553,6 +607,71 @@ mod tests {
     async fn test_api_client_creation() {
         let client = ApiClient::new().expect("Failed to create ApiClient for test");
         assert_eq!(client.default_timeout, Duration::from_secs(30));
+    }
+
+    #[tokio::test]
+    async fn single_attempt_client_does_not_replay_non_idempotent_post() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind local HTTP server");
+        let address = listener.local_addr().expect("read local server address");
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let server_attempts = Arc::clone(&attempts);
+
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept first request");
+            server_attempts.fetch_add(1, Ordering::SeqCst);
+            let request = read_http_request(&mut stream).await;
+            stream
+                .write_all(
+                    b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .expect("write first response");
+
+            if let Ok(Ok((mut replay, _))) =
+                timeout(Duration::from_millis(800), listener.accept()).await
+            {
+                server_attempts.fetch_add(1, Ordering::SeqCst);
+                let _ = read_http_request(&mut replay).await;
+                replay
+                    .write_all(
+                        b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .await
+                    .expect("write replay response");
+            }
+
+            request
+        });
+
+        let client =
+            ApiClient::single_attempt().expect("create single-attempt API client for test");
+        let response = client
+            .execute(ApiRequest {
+                method: HttpMethod::Post,
+                url: format!("http://{address}/device/code"),
+                headers: HashMap::from([
+                    ("Content-Type".to_string(), "application/json".to_string()),
+                    ("X-Requested-With".to_string(), "XMLHttpRequest".to_string()),
+                ]),
+                body: Some(r#"{"surface":"desktop"}"#.to_string()),
+                timeout_ms: Some(2_000),
+                ..Default::default()
+            })
+            .await
+            .expect("503 should be returned as an HTTP response");
+
+        let raw_request = String::from_utf8(server.await.expect("join local HTTP server"))
+            .expect("request should be UTF-8");
+        let normalized_request = raw_request.to_ascii_lowercase();
+
+        assert_eq!(response.status, 503);
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+        assert!(normalized_request.starts_with("post /device/code http/1.1\r\n"));
+        assert!(normalized_request.contains("\r\ncontent-type: application/json\r\n"));
+        assert!(normalized_request.contains("\r\nx-requested-with: xmlhttprequest\r\n"));
+        assert!(raw_request.ends_with(r#"{"surface":"desktop"}"#));
     }
 
     #[tokio::test]

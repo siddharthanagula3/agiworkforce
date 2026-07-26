@@ -1,8 +1,8 @@
 # AGI VS Code Extension — Volume 23 — UI Components
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `src/providers/chatEditorPanel.ts`, `src/features/sidebar-webview/{sidebarProvider.ts,webviewContent.ts}`, `src/webview/render.ts`, `src/providers/diffDecorationProvider.ts`, `src/core/commandSetup.ts`, `src/providers/agentMode/agentUI.ts`, `src/features/model-picker/{index.ts,modelConstants.ts}`, `src/data/tokenCounter.ts`, `src/extension.ts`, `src/features/desktop-bridge/desktopBridge.ts`. Model facts (never re-listed): `packages/contracts/types/src/models.json`.
 
@@ -10,7 +10,7 @@ Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README
 
 This volume specifies the presentation-layer UI components of the AGI VS Code Extension: the chat surfaces, the composer, the diff/patch review UI, the menus/toolbars, Quick Pick pickers, the status bar, and notifications. The extension is the IDE-native developer surface and is **workspace-scoped**: UI never auto-syncs a session to app chat, and any handoff is explicit and redacted.
 
-All three trust modes apply here — **Local**, **BYOK**, and **Managed Cloud** — with **explicit selection and a visible label at all times**. Every component that shows or switches a model must render the active provider/model so the user always knows which trust boundary is in force. Local sessions are never silently routed to BYOK or Cloud; a Local→BYOK fork requires context selection, secret scan, payload preview, provider label, and consent (guarded in `src/integrations/providerSwitchGuard.ts`). Cloud features are gated by the resolved tier (`src/integrations/tierResolver.ts`), not faked in the UI. Components reuse VS Code theme tokens via `@agiworkforce/design-tokens` so the UI honors the user's editor theme rather than shipping a bespoke skin.
+All three trust modes apply here — **Local**, **BYOK**, and **Managed Cloud** — with explicit selection and visible host/provider labels. Every component that shows or switches a model must make the boundary legible. The current sidebar labels “Local host” plus the resolved provider or “Auto routing,” including at narrow widths. A provider-boundary change starts a new runtime thread, does not forward the previous transcript, and adds a visible reset notice. `providerSwitchGuard.ts` enforces plan eligibility for cross-provider selection inside the visible conversation; it never authorizes transcript forwarding. Any future continuity feature must add the full context-selection/secret-scan/payload-preview consent ceremony. Cloud features are gated by `tierResolver.ts`, not faked in the UI. Components use VS Code theme tokens so light, dark, and high-contrast themes remain legible.
 
 ## Chat Panel
 
@@ -18,6 +18,8 @@ Two functionally identical webview surfaces: the activity-bar **sidebar** (`cont
 
 - Assistant markdown must render through the sanitized pipeline in `src/webview/render.ts` (markdown-it `html:false` + DOMPurify + CSP nonce) — no raw HTML, no `data:` images. ✅ Built (`src/webview/render.ts`).
 - The panel must display the active model/provider label and current agent mode/effort at all times. ✅ Built (`webviewContent.ts` composer-controls chips).
+- Narrow sidebars preserve the runtime/provider labels, constrain long badges, and keep the composer usable instead of hiding provenance. ✅ Built and webview-tested.
+- Markdown code blocks use VS Code code foreground/background tokens, and their copy control is keyboard-visible. ✅ Built and webview-tested.
 - Inline tool-call/patch results render within the transcript with accept/reject affordances. 🟡 Partial — transcript rendering exists (`webviewContent.ts`); inline tool-call UI rubric is fixture-verified (`src/__tests__/`), full agent tool-call streaming UI is still hardening.
 - `@agi` chat participant (`contributes.chatParticipants`, `src/features/chat-participant/chatParticipant.ts`) surfaces the same responses in VS Code's native Chat view with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, `/model`. ✅ Built.
 
@@ -26,7 +28,7 @@ Two functionally identical webview surfaces: the activity-bar **sidebar** (`cont
 The composer is the rounded input card at the bottom of the webview (`webviewContent.ts` `.composer-card`, `#userInput`, placeholder "Ask about your code…"). ✅ Built.
 
 - Multiline textarea with focus-within styling; Enter sends, Shift+Enter newlines. ✅ Built (`webviewContent.ts`).
-- **Attachment strip + drag-drop overlay**: files dropped/pasted or added via the `+` menu appear as chips with uploading/failed states (`.attachment-strip`, `.attachment-chip`, `.composer-card.dragover`, `#plusMenu`). ✅ Built.
+- **Attachment strip + drag-drop overlay**: files dropped/pasted or added through the `+` menu appear as chips with uploading/failed states. Workspace files are validated against traversal, symlinks, folders, and sensitive filenames before becoming model context. ✅ Built.
 - **Composer control chips row**: agent-mode chip, effort chip, and model chip (`.composer-controls`) — the model chip is the always-visible trust/provider label. ✅ Built (`webviewContent.ts`).
 - `+` (plus) toolbar button opens the attach/tools menu (`#plusBtn`, `role="menu"`). ✅ Built.
 - `@`-mention of workspace files must feed the redacted context builder, never auto-upload the whole workspace (`agi-workforce.mentionFileInChat`, `src/data/contextBuilder.ts`). ✅ Built.
@@ -39,6 +41,7 @@ AI edits are reviewed as inline decorations, never silently applied by default (
 - Per-hunk accept/reject plus file-level and global batch controls: `agi-workforce.acceptCurrentDiff`/`rejectCurrentDiff`, `acceptAllDiffsGlobal`/`rejectAllDiffsGlobal`, `acceptBatch`/`rejectBatch` (`package.json:contributes.commands`). ✅ Built.
 - Keybindings are context-gated by `agi-workforce.hasDiff` so `cmd/ctrl+shift+a` means "new chat" without a diff and "accept current diff" with one (intentional dual-binding). ✅ Built (`package.json:contributes.keybindings`).
 - Patch provenance: `agi-workforce.showOriginalContext` (expected vs actual) and `agi-workforce.showPatchLogs` expose why a patch applied/failed. ✅ Built.
+- The editor-panel Apply action now calls the shared `DiffDecorationProvider`, opens the proposed change in VS Code's native diff view, and emits the normal `diffProposed` state. ✅ Built and regression-tested.
 - Applying a **remote/cloud** diff locally must show the provider label and route through the same approval UI. 🔭 Planned (parity: Codex/Claude local-apply-of-remote-diff; not wired end-to-end).
 
 ## Toolbars
@@ -70,7 +73,7 @@ Two right-aligned status bar items:
 
 - Use `showInformationMessage`/`showWarningMessage`/`showErrorMessage` for confirmations, and `withProgress` for long operations. Destructive/agent actions (writes, terminal, checkpoint restore) must use a **warning** modal with a non-default confirm (`src/providers/agentMode/agentUI.ts`). ✅ Built.
 - Bridge-down notification offers a "Reconnect" action (`agi-workforce.bridgeReconnect`). ✅ Built (`src/features/desktop-bridge/desktopBridge.ts`).
-- Trust/consent prompts (Local→BYOK fork, Cloud upgrade) must name the provider and boundary, never auto-proceed. ✅ Built (`src/integrations/providerSwitchGuard.ts`); Cloud-run handoff preview 🔭 Planned.
+- Provider-boundary resets and Cloud upgrade messages name the boundary and do not forward prior transcript context. ✅ Built. A full Cloud-run handoff payload preview remains planned.
 
 ## Repository map
 
@@ -98,7 +101,7 @@ Trust
 
 - [ ] Active provider/model label visible in composer chip and status bar in every mode.
 - [ ] Local→BYOK/Cloud transitions require explicit consent; no silent routing.
-- [ ] `agiWorkforce.tier` enum reconciled to canon tiers (Free/Basic/Pro/Max/Enterprise) — currently 🟡 encodes removed `hobby`/`pro_plus` (tracked billing-catalog reconciliation).
+- [ ] Extension access-mode enum preserves every canonical plan value; locked model rows cannot be selected through Quick Pick or forged webview messages.
 
 Security
 

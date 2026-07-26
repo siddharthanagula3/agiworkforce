@@ -815,7 +815,7 @@ fn validate_opa_execution_boundary(
 /// Executes an OPA (Observe-Plan-Act) computer use task.
 ///
 /// Stream 2 params:
-/// - `model`: explicit model id from the catalog (e.g. `claude-opus-4.8`,
+/// - `model`: explicit model id from the catalog (e.g. `claude-opus-5`,
 ///   `gpt-5.6-sol`, `gemini-3.1-pro`, `grok-4.5`). `None` lets the
 ///   router pick the user's default vision model.
 /// - `provider`: explicit provider name (`anthropic`, `openai`, `google`,

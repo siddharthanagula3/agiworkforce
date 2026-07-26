@@ -1,10 +1,10 @@
 # AGI VS Code Extension — Volume 24 — Edge Cases
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`. Grounded in the repo paths cited under **Repository map** below — chiefly `apps/extension-vscode/package.json` (manifest, `capabilities.untrustedWorkspaces`, `agiWorkforce.contextLines`/`fallbackToVscodeLm`/`desktopBridge.*`/`providerStreamProvider`/`tier`) plus `src/providers/chatEditorPanel.ts`, `src/features/chat-participant/chatParticipant.ts`, `src/integrations/providerStreamClient.ts`, `src/features/account-auth/deviceAuth.ts`, and `src/features/desktop-bridge/desktopBridge.ts`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`. Grounded in the repo paths cited under **Repository map** below — chiefly `apps/extension-vscode/package.json`, `src/providers/chatEditorPanel.ts`, `src/features/chat-participant/chatParticipant.ts`, `src/integrations/{localRuntimeClient,providerStreamClient}.ts`, `src/features/account-auth/deviceAuth.ts`, and `src/features/desktop-bridge/desktopBridge.ts`.
 
 ## Overview & stance
 
@@ -20,19 +20,19 @@ Non-text content is detected and skipped, never fed to a model as garbage. ✅ B
 
 ## Workspace trust — restricted mode
 
-The extension declares **limited** untrusted-workspace support and degrades safely. ✅ Built: `capabilities.untrustedWorkspaces` in `package.json` is `"supported": "limited"` with `restrictedConfigurations` (`apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, `agent.autoApply`, `autoApplyFixes`, `telemetryEndpoint`, `tier`). At runtime `src/platform/config.ts` reads tier from global scope only (workspace cannot spoof it), `src/providers/terminalProvider.ts` refuses command execution when `!vscode.workspace.isTrusted`, and `src/providers/agentMode/agentUI.ts` blocks auto-apply of edits/patches until the workspace is trusted (modal "Trust Workspace and Proceed"). Requirements: read-only chat/explain stays available in restricted mode; every new write/execute/endpoint-redirect capability adds an `isTrusted` gate or `restrictedConfigurations` entry before merge; the UI states why an action is disabled.
+The extension declares **limited** untrusted-workspace support and degrades safely. ✅ Built: `restrictedConfigurations` contains `apiEndpoint`, `gatewayUrl`, `cliPath`, `autoApplyFixes`, `telemetryEndpoint`, and `tier`; a regression test rejects references to settings the extension does not contribute. At runtime tier resolution reads global scope only, terminal execution is refused when the workspace is untrusted, and agent edits/patches require trust. Requirements: read-only inspection remains available in restricted mode; every new write/execute/endpoint-redirect capability adds an `isTrusted` gate or restricted configuration before merge; the UI states why an action is disabled.
 
 ## Authentication failure
 
-Auth failures are explicit and recoverable — never a silent trust-mode swap. ✅ Built: Managed-Cloud sign-in uses the device-authorization flow in `src/features/account-auth/deviceAuth.ts` (browser approval + bounded `POST /api/device/poll`); when no key/token is present, `chatParticipant.ts` detects the `isNoKey` case and, if `agiWorkforce.fallbackToVscodeLm` is enabled, uses the VS Code built-in Language Model with a visible note plus a `Set API Key` link. 🟡 Partial: the provider-stream path is manifest-flagged not-yet-wired for web auth (`agiWorkforce.useProviderStream`); `chatParticipant.ts` handles that `isWebAuthNotWired` branch by surfacing the error, not retrying. Requirements: (1) a 401/expired token must prompt re-authentication, not downgrade a Cloud session to BYOK or Local without consent; (2) auth is Clerk-issued (never Supabase); (3) no token is logged. 🔭 Planned: token refresh/expiry handling and a first-class `vscode.AuthenticationProvider`.
+Auth failures are explicit and recoverable — never a silent trust-mode swap. Managed-Cloud utilities use the device-authorization flow in `src/features/account-auth/deviceAuth.ts`; the provider-stream helper requires the resulting account token and fails with a sign-in action when it is absent. Local `@agi`, sidebar, and editor developer sessions do not depend on this token: they use the workspace app-server. The removed `fallbackToVscodeLm` setting is not a hidden cross-provider escape hatch. Requirements: a 401/expired token prompts re-authentication rather than downgrading the trust mode; auth is Clerk-issued; no token is logged. Token refresh/expiry handling and a first-class `vscode.AuthenticationProvider` remain planned.
 
 ## Provider failure
 
-Provider errors are typed and, where permitted, fall back within the same trust boundary. ✅ Built: `src/integrations/providerStreamClient.ts` yields structured `{ type: 'error', code?, message, retryable? }` events (marking `retryable` on `>= 500`) and a terminal `stop` with `reason: 'error'`; `chatParticipant.ts` distinguishes no-key vs network/server errors and, when `fallbackToVscodeLm` is on for a genuine provider error, falls back to the built-in model with a visible "AGI Workforce API error … falling back" note. Requirements: (1) 429/5xx are retryable with backoff, other 4xx surface immediately; (2) fallback must show which provider/model served the turn; (3) a BYOK failure must never silently reroute to Managed Cloud, or vice versa. 🔭 Planned: automatic failover across the `agiWorkforce.providerStreamProvider` list with per-provider health tracking.
+Provider errors are typed and stay within the selected boundary. `providerStreamClient.ts` yields structured error events and a terminal error stop for cloud-backed utilities. Developer-session provider errors come from the app-server and are surfaced to the active chat; the extension does not silently retry them through a different provider. Requirements: 429/5xx may be retried with bounded backoff, other 4xx surface immediately, and BYOK/Managed/Local failures never silently reroute. Automatic multi-provider failover remains planned and must be app-server-owned.
 
 ## Local model failure
 
-Local inference failures stay Local — they do not escalate to a paid path without an explicit fork. 🟡 Partial: `src/features/model-picker/modelConstants.ts` enumerates local providers (Ollama, LM Studio) selectable via `agiWorkforce.providerStreamProvider`, but an unreachable Local runtime (daemon down, connection refused) is currently surfaced through the generic provider-error/fallback path in `chatParticipant.ts`. Requirements: (1) a local-model connection failure must produce a Local-specific message ("local runtime unreachable — start Ollama/LM Studio, or explicitly fork to BYOK/Cloud"), **not** an automatic switch to a keyed or cloud model; (2) any Local→BYOK/Cloud transition remains the full explicit fork (context selection, secret scan, payload preview, visible label, consent); (3) `fallbackToVscodeLm` is not a Local fallback — the built-in VS Code model is a separate, separately-labeled provider. 🔭 Planned: dedicated local-runtime health detection and a distinct "Local unavailable" state.
+Local inference failures stay Local. If the app-server cannot start, `@agi` reports “The AGI local runtime is unavailable,” while the sidebar shows “Local runtime needs setup” with guidance to install/update the CLI or configure `agiWorkforce.cliPath`. Installed Ollama/LM Studio rows come from app-server `model/list`; no cloud selector is substituted when discovery fails. Requirements: Local failure never switches to a keyed or cloud model, and any future forwarding path must implement the full Local→BYOK/Cloud preview and consent flow.
 
 ## Desktop bridge unavailable
 
@@ -42,9 +42,9 @@ The bridge is optional; its absence must degrade gracefully and never block loca
 
 All under `apps/extension-vscode/`:
 
-- `package.json` — manifest, trust capabilities, context/fallback/bridge/provider settings.
+- `package.json` — manifest, trust capabilities, context/bridge/provider settings.
 - `src/providers/chatEditorPanel.ts` — `@file` resolution, size/binary/sensitive guards.
-- `src/features/chat-participant/chatParticipant.ts` — error classification, vscode.lm fallback.
+- `src/features/chat-participant/chatParticipant.ts` — local runtime error handling.
 - `src/integrations/providerStreamClient.ts` — stream error/stop events.
 - `src/features/account-auth/deviceAuth.ts` — device auth flow.
 - `src/features/desktop-bridge/desktopBridge.ts` — bridge lifecycle + degradation.
@@ -66,9 +66,9 @@ Production-ready when every failure degrades to a clear, non-crashing, secret-sa
 ## Anti-patterns
 
 - Silently routing a failed Local session to BYOK or Managed Cloud (or the reverse) — a trust-boundary violation.
-- Treating `fallbackToVscodeLm` as a "Local" fallback, or hiding which provider served a fallback turn.
+- Adding an implicit VS Code-LM/provider fallback, or hiding which provider served a turn.
 - Feeding binary bytes or oversized files to a model instead of skipping with a visible placeholder.
 - Enabling write/execute in an untrusted workspace, or letting a workspace override a `restrictedConfigurations` key.
 - Claiming shipped state without a real repo path, or inventing a model ID instead of reading `packages/contracts/types/src/models.json`.
-- Referencing removed tiers (Plus / `pro_plus` / Hobby) or credit top-ups; the `agiWorkforce.tier` enum still encodes older values — flag as a 🟡 reconciliation gap, do not propagate.
+- Referencing removed tiers (Plus / `pro_plus` / Hobby) or credit top-ups; the manifest exposes only current extension access modes.
 - Any reference to Supabase (fully migrated away) or Next.js `middleware.ts` (use `proxy.ts`).

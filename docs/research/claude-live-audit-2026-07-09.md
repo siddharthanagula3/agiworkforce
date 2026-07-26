@@ -4,6 +4,10 @@ Date: 2026-07-09
 Account: Siddhartha Nagula (Max plan)
 Method: Claude-in-Chrome MCP, read-only + limited real sends (per authorization)
 
+2026-07-25 model-name amendment: model labels in this dated UI snapshot were
+normalized to the current AGI catalog. They should not be read as evidence that
+Opus 5 was available on the original observation date.
+
 ---
 
 ## 1. HOME (Chat mode)
@@ -45,7 +49,7 @@ Trigger button reads "Fable 5 Max" (current model + current effort level, both s
 Dropdown:
 
 - Fable 5 — badge "Included until July 12" — subtitle "For your toughest challenges" — checkmark (selected)
-- Opus 4.8 — "For complex tasks"
+- Opus 5 — "For complex tasks"
 - Sonnet 5 — "Most efficient for everyday tasks"
 - Haiku 4.5 — "Fastest for quick answers"
 - divider

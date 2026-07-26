@@ -48,7 +48,7 @@ import { cn } from '@shared/lib/utils';
 
 export type PaywallFeature =
   | 'video_generation'
-  | 'opus_4_7'
+  | 'opus_5'
   | 'gpt_5_5'
   | 'computer_use'
   | 'deep_research'
@@ -103,7 +103,7 @@ const EMPTY_REASON = '';
 
 const FEATURE_LABELS: Record<PaywallFeature, string> = {
   video_generation: 'video generation',
-  opus_4_7: 'Opus 4.7 access',
+  opus_5: 'Opus 5 access',
   gpt_5_5: 'GPT-5.5 access',
   computer_use: 'computer use',
   deep_research: 'deep research',
@@ -125,7 +125,7 @@ const FEATURE_LABELS: Record<PaywallFeature, string> = {
  */
 const FEATURE_LIMIT_HEADLINES: Record<PaywallFeature, string> = {
   video_generation: 'You have reached your video generation limit',
-  opus_4_7: 'You have reached your Opus 4.7 limit',
+  opus_5: 'You have reached your Opus 5 limit',
   gpt_5_5: 'You have reached your GPT-5.5 limit',
   computer_use: 'You have reached your computer use limit',
   deep_research: 'You have reached your deep research limit',
@@ -174,7 +174,7 @@ const FeatureIcon = memo(function FeatureIcon({ feature, className }: FeatureIco
   // Use explicit ternary chain · rendering-conditional-render
   return feature === 'video_generation' ? (
     <Video className={iconClass} aria-hidden="true" />
-  ) : feature === 'opus_4_7' ? (
+  ) : feature === 'opus_5' ? (
     <Brain className={iconClass} aria-hidden="true" />
   ) : feature === 'gpt_5_5' ? (
     <Zap className={iconClass} aria-hidden="true" />

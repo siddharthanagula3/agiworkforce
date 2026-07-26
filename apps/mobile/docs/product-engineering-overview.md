@@ -1,7 +1,10 @@
 # AGI Workforce Mobile — Product & Engineering Overview
 
-> Generated 2026-06-23. Every fact below is grounded in repo files (`file:line`), verified by 4 parallel readers. Versions quoted verbatim from `package.json` / configs.
-> **Framing that matters:** the mobile app is **Local-first**. A large amount of cloud/agentic code exists but is intentionally **flag-gated OFF** for v1 (`lib/v1FeatureFlags.ts`). "Built" ≠ "shipping in v1." Status labels below: **wired** (reachable end-to-end), **partial** (full code but flag-off or server unproven), **stubbed** (UI shell, no real logic), **missing/dark** (gated off / not wired into any flow).
+> Generated 2026-06-23; Cloud/subscription status refreshed 2026-07-26 from
+> `lib/v1FeatureFlags.ts`, the shared billing catalog, and the Mobile/Web API
+> contracts. Status labels below: **wired** (reachable end-to-end), **partial**
+> (server/deployment dependent), **stubbed** (UI shell, no real logic), and
+> **missing/dark** (not wired into any flow).
 
 ---
 
@@ -9,10 +12,19 @@
 
 - **Name.** Brand **"AGI"**; platform/repo **"AGI Workforce"**; CLI command `agi`. Mobile `app.config.js` name = `AGI Workforce` (slug `agi-workforce`, scheme `agiworkforce`, bundle `com.agiworkforce.app`). App Store listing name = **"AGI"**, subtitle "On-device AI assistant". ⚠️ **Version mismatch:** `app.config.js` = `1.2.0`, store-listing metadata = `1.0.0` ("AGI 1.0 — first release"). Reconcile before submit.
 - **Problem.** Most AI apps funnel every conversation through remote servers. AGI runs an open-source LLM **on-device first** — works offline / airplane mode, no account, no Wi-Fi, no data leaving the phone in Local Mode, encrypted at rest, "free at inference, forever." Suite-level thesis: pick **Local / BYOK / managed cloud** instead of being locked into one model lab.
-- **Audience.** Explicitly **India-first** ("runs offline, installs once, handles Hindi queries," DPDP Act 2023 + EU AI Act Art. 50 compliance). Broader: privacy-conscious mobile users; the free local wedge is designed to create demand for invite-gated Cloud.
-- **Stage.** **Pre-release / not yet on the App Store.** Mobile is the **single active surface**; all other surfaces are locked behind the Mobile App Store release. Target launch **2026-08-06** (`README.md`). Managed Cloud is **waitlist / private-beta only**. (`source-of-truth.md:43-52`, `agi-product-requirements.md:88-98`, `README.md:11-12`)
+- **Audience.** Individual users plus paid Team/Enterprise customers who need
+  cross-surface managed Cloud continuity. Mobile retains a Local-first privacy
+  boundary, but Cloud subscription behavior is a first-class shipped path.
+- **Stage.** **Pre-release / not yet on the App Store.** Managed Cloud is public
+  alpha and open to signed-in users; the private-beta environment variable is
+  an incident-response kill-switch, not a normal waitlist gate.
 
-**v1 runtime feature flags** (`lib/v1FeatureFlags.ts`): ON → `cloudChat`, `auth`, `projects`. OFF → `billing`, `byokKeys`, `agents`, `dispatch`, `schedules`, `companion`, `messaging`, `connectors`, `webSearch`, `computerUse`, `imageGen`, `crossDeviceSync`. `v1LocalOnly=false` (the single governing cloud flag is `cloudChat`).
+**Current runtime feature flags** (`lib/v1FeatureFlags.ts`): ON →
+`cloudChat`, `auth`, `projects`, `cloudTasks`, `schedules`, `connectors`,
+`webSearch`, `research`, `imageGen`, `usageDashboard`, `codeExecution`. OFF →
+`billing`, `iap`, `byokKeys`, `agents`, `dispatch`, `companion`, `messaging`,
+`computerUse`, `crossDeviceSync`. A true flag never overrides the server
+capability handshake, model capabilities, or canonical plan entitlements.
 
 ---
 
@@ -23,7 +35,7 @@
 |---|---|
 | Auth (Clerk Expo, native AuthView, SecureStore token cache) | `app/_layout.tsx:29-34,77-83` |
 | Local chat (on-device tiered LLM, token streaming, `<think>` parsing, tok/s metering) | `chatExecutionStore.ts:744-892` |
-| Cloud chat (SSE `/api/llm/v1/chat/completions`, Clerk bearer) — _invite-gated at runtime_ | `chatExecutionStore.ts:468-499,895-1005` |
+| Cloud chat (SSE `/api/llm/v1/chat/completions`, Clerk bearer) — signed-in public alpha | `chatExecutionStore.ts`, `services/streaming.ts` |
 | Streaming (SSE reader + reconnect/backoff + paywall handling) | `services/streaming.ts:150-267` |
 | Model picker (catalog from `@agiworkforce/types`, no hardcoded IDs; local+cloud scopes) | `model-picker/service.ts` |
 | Voice dictation (on-device STT, `expo-speech-recognition`) | `voice/services/voiceInput.ts:148-255` |
@@ -34,25 +46,42 @@
 | Chat search, Artifacts capture, Compare (multi-model), Translate (local), Share/Export | `chatViewStore.ts`, `chatExecutionStore.ts:390-416`, `compare/index.tsx` |
 | Notifications (expo-notifications + push token registration) | `services/notifications.ts` |
 | Settings tree (~30 screens) + Profile; Offline send queue; Camera/Scan | `app/(app)/settings/*` |
-| AGI Cloud invite/waitlist modal (redeem code + join waitlist + rank) | `cloud-bridge/InviteCodeModal.tsx` |
+| Read-only Cloud plan/usage, canonical entitlements, and Team/Enterprise Web administration handoff | `billing/store.ts`, `settings/cloud-billing`, `settings/cloud-usage` |
+| Deployment-truthful connector directory (operator mapped, GitHub App, custom remote MCP) | `services/connectors.ts`, `settings/cloud-connectors` |
+| Durable active Cloud Tasks (cursor pagination, foreground refresh, owning-chat handoff) | `app/(app)/agents`, `services/streaming.ts` |
+| Plan-gated daily-or-slower Cloud schedules with run history and Cloud-only models | `app/(app)/schedules`, `src/features/schedules` |
+| Authenticated durable generated images in chat, Library, Artifacts, fullscreen, and share | `src/features/image`, `services/cloudSyncEngine.ts`, `services/fileCreation.ts` |
 
 **Partial (full code, flag-off or server-dependent):**
 
-- **Image generation** — `generateImage()` POSTs `/api/media/image/generate` but throws "not available in v1" (`imageGen=false`).
+- **Image generation** — Cloud generation is wired through
+  `/api/media/image/generate`, with canonical Pro+ enforcement. Only
+  owner-scoped `/api/files/{uuid}` media persists/syncs; provider URLs and
+  inline base64 remain explicitly session-only.
 - **Vision (image input)** — local mode is OCR-fallback only (`resolveVisionRoute` always `'ocr-fallback'`); true multimodal only on cloud vision models.
-- **Tool calling / web search / code execution** — client _receive-side_ parsing wired (`tool_calls`, `x_search_results`, `x_code_result`), but `webSearch=false` and server tool execution unproven from the mobile repo.
-- **Projects cloud sync** — local projects wired; cloud detail gated on `crossDeviceSync=false` → always renders `LocalOnlyFallback`.
+- **Tool calling / web search / code execution** — ambient Web Search and the
+  streamed result UI are wired; code execution remains deployment-handshake and
+  model gated, so an unconfigured sandbox fails closed.
+- **Projects cloud sync** — cloud project detail resolves from
+  `cloudProjectStore`; broader companion-style cross-device UI remains off.
 - **Project sources** — metadata-only; picked docs are **not** parsed/chunked/embedded.
-- **Billing/paywall** — paywall sheet opens on server 429; billing screen returns null (`billing=false`); upgrades route to invite modal. No Stripe/IAP in v1.
+- **Billing/paywall** — recorded plan/status, limits, usage, and canonical upgrade
+  targets render natively. External Mobile billing management stays off.
+  StoreKit/Play verification code exists, but purchase/restore controls stay
+  hidden until real store products are provisioned.
 - **Cloud sync engine** — real 4-surface delta-sync, runs for chat when unlocked; broader cross-device UI gated by `crossDeviceSync=false`.
 - **Skills** — real catalog fetch path, cloud/auth-dependent.
+- **Connectors** — only the server-advertised deployment set is connectable;
+  unavailable catalog providers intentionally remain disabled.
+- **Schedules** — Mobile exposes only Once/Daily/Weekly/Monthly and labels the
+  selected time as a preference. Deployment still checks once daily and claims
+  at most 10 due runs platform-wide, so exact-time/scaled scheduling is not yet
+  production-ready.
 
 **Stubbed / dark (gated off for v1):**
 
-- **Conversation starters** — complete component, self-wires prompt-prefill, but **rendered by no screen** (orphaned). [Earlier audit P1]
 - **Agents / multi-agent** — local UI-state store only, no orchestration (`agents=false`).
-- **Connectors/integrations** — local-state shell (`connectors=false`).
-- **Schedules / Companion / Messaging / Dispatch** — screens early-return null (all flags false); services exist but unreachable.
+- **Companion / Messaging / Dispatch** — these native surfaces remain disabled.
 
 ---
 
@@ -115,39 +144,51 @@
 
 ## 6. AI capabilities
 
-| Capability                      | Status                  | Note                                                  |
-| ------------------------------- | ----------------------- | ----------------------------------------------------- |
-| Chat (local)                    | **wired**               | on-device tiered runtime, streaming                   |
-| Chat (cloud)                    | **wired, invite-gated** | SSE via gateway                                       |
-| Streaming                       | **wired**               | SSE + reconnect; RN `response.text()` fallback caveat |
-| Voice (dictation + live)        | **wired (local)**       | system TTS in v1; cloud TTS not implemented           |
-| OCR                             | **wired**               | native, offline                                       |
-| Memory + memory-RAG             | **wired (local)**       | sqlite-vec retrieval into context                     |
-| Vision (image input)            | **partial**             | local = OCR-fallback only; true vision = cloud model  |
-| Image generation                | **partial**             | built, `imageGen=false`                               |
-| Tool calling / function calling | **partial**             | client receive-side only; server exec unproven        |
-| Web search                      | **partial**             | receive-side parsing; `webSearch=false`               |
-| Code execution                  | **partial**             | receive-side parsing only                             |
-| RAG (document)                  | **dark**                | `ragIndex.ts` built but **wired into no flow**        |
-| Multi-agent workflows           | **stubbed**             | local UI state only, no orchestration                 |
+| Capability                      | Status            | Note                                                      |
+| ------------------------------- | ----------------- | --------------------------------------------------------- |
+| Chat (local)                    | **wired**         | on-device tiered runtime, streaming                       |
+| Chat (cloud)                    | **wired**         | Signed-in public-alpha SSE via gateway                    |
+| Streaming                       | **wired**         | SSE + reconnect; RN `response.text()` fallback caveat     |
+| Voice (dictation + live)        | **wired (local)** | system TTS in v1; cloud TTS not implemented               |
+| OCR                             | **wired**         | native, offline                                           |
+| Memory + memory-RAG             | **wired (local)** | sqlite-vec retrieval into context                         |
+| Vision (image input)            | **partial**       | local = OCR-fallback only; true vision = cloud model      |
+| Image generation                | **wired**         | Cloud Pro+, durable authenticated media                   |
+| Cloud Tasks                     | **wired**         | Active runs, pagination, foreground polling, chat handoff |
+| Scheduled tasks                 | **partial**       | Plan/model gated; once-daily/10-run deployment ceiling    |
+| Tool calling / function calling | **partial**       | Deployment/provider dependent                             |
+| Web search                      | **wired**         | Ambient default; server/model gated                       |
+| Code execution                  | **partial**       | Deployment handshake + model gated                        |
+| RAG (document)                  | **dark**          | `ragIndex.ts` built but **wired into no flow**            |
+| Multi-agent workflows           | **stubbed**       | local UI state only, no orchestration                     |
 
 ---
 
 ## 7. What's missing (gaps to the vision)
 
-1. **Cloud is the thin half by design.** Most cloud/agentic surfaces are flag-dark for v1. The shared-state _engine_ is real, but the surrounding UX (cross-device projects, agents, dispatch, connectors, schedules) is gated off.
-2. **Two live UX defects** (from the parity audit): orphaned empty-home starters; project-detail gated to a mislabeled "Local" fallback (raw UUID).
-3. **Mobile chat parity** still owes the empty-composer parity pass vs the Desktop v3 reference.
+1. **Native Team/Enterprise control plane:** Mobile hands authenticated workspace
+   admins to Web; native org/member/role/device administration is still absent.
+2. **Store billing provisioning:** self-serve Mobile purchase and restore cannot
+   ship until real App Store Connect and Play Console products are configured.
+3. **Mobile chat parity:** browser/computer-use remains intentionally
+   unavailable; code execution depends on deployment sandbox availability.
 4. **Memory/projects depth:** project "sources" are metadata-only (no indexing); doc-RAG dead-from-flow; no memory enable-toggle/summary; memory import broken in cloud.
-5. **Settings/account thinness:** entitlement is a spoofable MMKV boolean + hardcoded invite string; tier pinned Free by flag; sign-out doesn't reset settings (latent cross-account personalization leak once real auth ships).
+5. **Settings/account depth:** identity, tier, capability handshake, sign-out
+   isolation, usage, and billing status are wired; native organization/device
+   administration remains a Web handoff.
 6. **Heavy generation** intentionally deferred (mobile previews/shares; not first heavy generator).
 7. **Infra debt:** no error tracking, no mobile CI workflow, Detox not installed, dev Clerk key, version-string mismatch (1.0.0 vs 1.2.0).
 8. **Verification debt (P0 in docs):** launch-critical flows need screenshot/e2e UI verification, not just typecheck/build.
+9. **Scheduled-work capacity:** the UI no longer promises sub-daily cadence,
+   but the once-daily runner with a 10-run claim limit is not sufficient for a
+   scaled Team/Enterprise rollout.
 
 ---
 
 ## 8. Vision (v1.0)
 
-- **Suite:** "practical parity with current leading AI application ecosystems" (ChatGPT/Claude as references) **plus one differentiation** — user choice of **Local / BYOK / private-beta managed cloud**. "Must feel like a serious modern AI application suite, not a demo, not a model playground, not a collection of disconnected tools." Parity = _capability/workflow_ parity, own design system/names (no cloned code/branding).
+- **Suite:** "practical parity with current leading AI application ecosystems" (ChatGPT/Claude as references) **plus one differentiation** — user choice of **Local / BYOK / public-alpha managed cloud**. "Must feel like a serious modern AI application suite, not a demo, not a model playground, not a collection of disconnected tools." Parity = _capability/workflow_ parity, own design system/names (no cloned code/branding).
 - **Shared cross-surface model:** every surface native-shaped but sharing one trust model, model/provider rules, session/artifact/memory model, and source of truth. App-chat sync only within Web/Mobile/Desktop; CLI/VS Code/Chrome stay workspace/task-scoped unless explicit redacted handoff.
-- **Mobile v1 specifically:** "Ship a polished iOS app publicly that proves AGI's Local-first privacy thesis and creates demand for Cloud invite access." Not the deepest surface — reliable, privacy-clear, released. Explicit non-goals for v1: CLI workflows, computer use, Chrome automation, full connector directory, full billing purchase path, team/admin, heavy local doc generation, full project collaboration.
+- **Mobile v1 specifically:** ship a polished public app that preserves the Local
+  trust boundary while making paid Cloud continuity, real entitlements, and a
+  truthful Team/Enterprise control-plane handoff demo-ready.

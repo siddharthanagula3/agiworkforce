@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import {
   createCloudConversation,
+  generateCloudImage,
   getCloudConversation,
   listCloudConversations,
   sendCloudApprovalResume,
@@ -135,6 +136,76 @@ describe('cloudApi', () => {
     expect(conversation.messages).toHaveLength(1);
   });
 
+  it('generates a durable Cloud image through the managed-media endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        success: true,
+        persisted: true,
+        images: [{ url: '/api/files/image-asset-1' }],
+        provider: 'google',
+        model: 'gemini-3.1-flash-image',
+        latency_ms: 12_000,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateCloudImage({
+      prompt: 'Create an image of a glass lighthouse',
+      provider: 'google',
+      model: 'gemini-3.1-flash-image',
+      idempotencyKey: 'agi.media.desktop.image.0190a000-0000-7000-8000-000000000001',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/media/image/generate'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer token',
+          'Idempotency-Key': 'agi.media.desktop.image.0190a000-0000-7000-8000-000000000001',
+        }),
+        body: JSON.stringify({
+          prompt: 'Create an image of a glass lighthouse',
+          provider: 'google',
+          model: 'gemini-3.1-flash-image',
+          size: '1024x1024',
+          n: 1,
+          quality: 'standard',
+        }),
+      }),
+    );
+    expect(result).toEqual({
+      id: 'image-asset-1',
+      uri: expect.stringContaining('/api/files/image-asset-1'),
+      provider: 'google',
+      model: 'gemini-3.1-flash-image',
+    });
+  });
+
+  it('rejects an image result that cannot survive a reload', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          success: true,
+          persisted: false,
+          images: [{ b64_json: 'inline-bytes' }],
+          provider: 'google',
+          model: 'gemini-3.1-flash-image',
+        }),
+      ),
+    );
+
+    await expect(
+      generateCloudImage({
+        prompt: 'Create an image',
+        provider: 'google',
+        model: 'gemini-3.1-flash-image',
+        idempotencyKey: 'agi.media.desktop.image.0190a000-0000-7000-8000-000000000002',
+      }),
+    ).rejects.toThrow('durable Cloud media storage is not configured');
+  });
+
   it('posts message payloads and streams SSE chunks', async () => {
     const runId = '019c3330-02b7-7000-8000-000000000001';
     const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
@@ -216,6 +287,7 @@ describe('cloudApi', () => {
     expect(onDone).toHaveBeenCalledOnce();
     expect(onError).not.toHaveBeenCalled();
     expect(onRunHandle).toHaveBeenCalledWith({ runId, runPath });
+    expect(onRunHandle).toHaveBeenCalledOnce();
   });
 
   it('dispatches a retried canonical event and its text projection exactly once', async () => {
@@ -353,20 +425,25 @@ describe('cloudApi', () => {
       vi.fn(),
       undefined,
       undefined,
+      true,
       undefined,
-      undefined,
-      undefined,
-      undefined,
+      true,
+      true,
       'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000002',
-      { research: true, workMode: 'agiwork', skillName: 'frontend-design' },
+      { research: true, workMode: 'agiwork', skillName: 'frontend-design', effort: 'high' },
     );
 
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(JSON.parse(request.body as string)).toEqual(
       expect.objectContaining({
         research: true,
+        web_search: true,
+        web_fetch: true,
+        thinking_mode: true,
+        code_execution: true,
         work_mode: 'agiwork',
         skill_name: 'frontend-design',
+        effort: 'high',
       }),
     );
   });

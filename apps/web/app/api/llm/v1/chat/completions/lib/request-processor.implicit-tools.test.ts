@@ -14,12 +14,31 @@ type ApplyImplicitManagedToolIntent = (
   },
 ) => void;
 
+type ResolveToolAwareTaskType = (
+  classifiedTaskType: RoutingTaskType,
+  request: Pick<
+    ChatCompletionRequest,
+    'research' | 'work_mode' | 'office_creation' | 'code_execution'
+  >,
+) => RoutingTaskType;
+
 function applyImplicitManagedToolIntent(): ApplyImplicitManagedToolIntent {
   const candidate = (
     requestProcessor as typeof requestProcessor & {
       applyImplicitManagedToolIntent?: ApplyImplicitManagedToolIntent;
     }
   ).applyImplicitManagedToolIntent;
+
+  expect(candidate).toBeTypeOf('function');
+  return candidate!;
+}
+
+function resolveToolAwareTaskType(): ResolveToolAwareTaskType {
+  const candidate = (
+    requestProcessor as typeof requestProcessor & {
+      resolveToolAwareTaskType?: ResolveToolAwareTaskType;
+    }
+  ).resolveToolAwareTaskType;
 
   expect(candidate).toBeTypeOf('function');
   return candidate!;
@@ -148,6 +167,21 @@ describe('implicit managed-tool intent', () => {
     expect(chatRequest.code_execution).toBeUndefined();
     expect(chatRequest.office_creation).toBeUndefined();
   });
+});
+
+describe('tool-aware Auto routing', () => {
+  it.each([
+    ['research', request({ research: true }), 'research'],
+    ['AGI Work', request({ work_mode: 'agiwork' }), 'agentic'],
+    ['Office creation', request({ office_creation: true }), 'agentic'],
+    ['code execution', request({ code_execution: true }), 'coding'],
+    ['ordinary chat', request(), 'simple_chat'],
+  ] satisfies Array<[string, ChatCompletionRequest, RoutingTaskType]>)(
+    'routes %s to a capability-compatible task',
+    (_label, chatRequest, expectedTaskType) => {
+      expect(resolveToolAwareTaskType()('simple_chat', chatRequest)).toBe(expectedTaskType);
+    },
+  );
 });
 
 describe('managed code tool choice', () => {

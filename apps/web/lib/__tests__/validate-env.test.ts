@@ -70,6 +70,20 @@ describe('validateRequiredEnvVars · database URL either-or check', () => {
     expect(dbError).toBeDefined();
     expect(dbError).toContain('AGI_DATABASE_URL');
   });
+
+  it('warns when GitHub App user-authorization credentials are missing', () => {
+    delete process.env['GITHUB_APP_CLIENT_ID'];
+    delete process.env['GITHUB_APP_CLIENT_SECRET'];
+
+    const result = validateRequiredEnvVars();
+
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('GITHUB_APP_CLIENT_ID'),
+        expect.stringContaining('GITHUB_APP_CLIENT_SECRET'),
+      ]),
+    );
+  });
 });
 
 // Import after mocks are registered (see top of file).

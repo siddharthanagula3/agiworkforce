@@ -3,7 +3,6 @@
  *
  * Computes available context tokens based on the selected model's context window.
  * Allocates 3% for chat mode and 5% for agent mode by default.
- * Users can override via `agiWorkforce.contextBudgetPercent`.
  *
  * Uses the 4-chars-per-token heuristic (consistent with tokenCounter.ts).
  */
@@ -48,10 +47,9 @@ export interface ContextBudget {
 export function getContextBudget(mode: 'chat' | 'agent'): ContextBudget {
   const config = vscode.workspace.getConfiguration('agiWorkforce');
   const model = normalizeConfiguredModelId(config.get<string>('model'));
-  const userOverride = config.get<number>('contextBudgetPercent');
 
   const modelContextWindow = MODEL_CONTEXT_LIMITS[model] ?? DEFAULT_CONTEXT_LIMIT;
-  const budgetPercent = userOverride ?? MODE_BUDGET_PERCENT[mode] ?? 3;
+  const budgetPercent = MODE_BUDGET_PERCENT[mode] ?? 3;
 
   // Clamp to 1-20% range.
   const clampedPercent = Math.max(1, Math.min(20, budgetPercent));

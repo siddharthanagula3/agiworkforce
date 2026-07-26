@@ -5,7 +5,7 @@
  * Root cause: chat/[id].tsx resolveAppMode classified the tapped model via
  * getModelById, whose map (allModelMap) holds only local models + ONE "preview"
  * cloud model per provider (cloudPreviewModelByProvider). Every non-preview cloud
- * model — Claude Opus 4.8, GPT-5.6 Terra, Grok 4.3 — was therefore unknown to it and
+ * model — Claude Opus 5, GPT-5.6 Terra, Grok 4.3 — was therefore unknown to it and
  * fell through to 'local', triggering a spurious mode-switch prompt. The fix
  * routes resolveAppMode through executionModeForModel, which consults the FULL
  * managed-cloud catalog (cloudModelSourceMap).
@@ -21,7 +21,7 @@ import {
 
 describe('managed-cloud model classification (resolveAppMode root cause)', () => {
   it.each([
-    'claude-opus-4.8', // Max flagship — the model in the bug report
+    'claude-opus-5', // Max flagship — the model in the bug report
     'grok-4.5', // Max flagship
     'gpt-5.6-terra', // current balanced OpenAI model
   ])('classifies non-preview managed-cloud model %s as cloud', (modelId) => {
@@ -50,7 +50,7 @@ describe('managed-cloud model classification (resolveAppMode root cause)', () =>
   );
 
   it('still lets explicit models determine their own boundary', () => {
-    expect(executionModeForSelection('claude-opus-4.8', 'local')).toBe('cloud');
+    expect(executionModeForSelection('claude-opus-5', 'local')).toBe('cloud');
     expect(executionModeForSelection('qwen3-4b-instruct-2507', 'cloud')).toBe('local');
   });
 });

@@ -14,7 +14,7 @@ import { Search, X } from 'lucide-react';
 import { HostBridgeContext, type ChatHostBridge, useHostBridge } from '../lib/hostBridge';
 import type { ChatRuntime } from '../lib/runtime';
 import type { Artifact, ChatMessage } from '../lib/types';
-import type { ChipType } from './QuickChips';
+import type { ChipType, QuickChipAvailability } from './QuickChips';
 import { Sidebar } from './Sidebar';
 import { EmptyState } from './EmptyState';
 import { ChatInput, type ChatInputProjectPicker, type ChatWorkScope } from './ChatInput';
@@ -282,6 +282,10 @@ export interface ChatInterfaceProps {
    * Forwarded to ChatInput; absent = no toggle rendered (mobile).
    */
   projectPicker?: ChatInputProjectPicker;
+  /** Managed-account entitlement for AGI Work; ordinary project chat remains available when false. */
+  canUseAgiWork?: boolean;
+  /** Host/account overrides layered over runtime quick-action capabilities. */
+  quickChipAvailability?: QuickChipAvailability;
   /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
   onNavigateView?: (view: string) => void;
   /** Explicit host-owned bridge for conversation selection and persistence. */
@@ -334,6 +338,8 @@ export function ChatInterface({
   currentFolderLabel = null,
   onClearFolder,
   projectPicker,
+  canUseAgiWork = true,
+  quickChipAvailability,
   onNavigateView,
   hostBridge = null,
   onAddMessage,
@@ -367,6 +373,7 @@ export function ChatInterface({
     stopGeneration,
     continueGeneration,
     resolveToolApproval,
+    isStreaming,
     isApprovalTurnLive,
   } = useChat(runtime, {
     hostBridge,
@@ -406,7 +413,6 @@ export function ChatInterface({
       ? (s.messagesByConversation[activeConversationId] ?? emptyMessages)
       : emptyMessages,
   );
-  const isStreaming = useChatStore((s) => s.isStreaming);
   const loadedConversationIdsRef = useRef(new Set<string>());
   const [messageLoadAttempt, setMessageLoadAttempt] = useState(0);
   const [messageLoadState, setMessageLoadState] = useState<
@@ -754,6 +760,8 @@ export function ChatInterface({
                 currentFolderLabel={currentFolderLabel}
                 onClearFolder={onClearFolder}
                 projectPicker={projectPicker}
+                canUseAgiWork={canUseAgiWork}
+                isStreamingOverride={isStreaming}
                 hasMessages={hasMessages}
                 disabled={!runtime}
                 disabledMessage="Connect to start chatting"
@@ -761,14 +769,23 @@ export function ChatInterface({
                 projectId={projectPicker?.activeProjectId ?? null}
                 supportsCodeExecution={runtime?.supportsCodeExecution ?? false}
                 supportsResearch={runtime?.supportsResearch ?? false}
-                supportsManagedWebSearch={runtime?.supportsManagedWebSearch ?? false}
                 attachmentPolicy={runtime?.attachmentPolicy}
               />
               {/* Sample-prompt mode chips below the composer (claude.ai parity —
                   ref: claude_reference/015). This is a composer-area element shown
                   whenever the chat is empty; it's independent of `emptyStateSlot`,
                   which owns the content area above (the branded greeting). */}
-              {!hasMessages && <QuickChips onChipClick={handleChipClick} />}
+              {!hasMessages && (
+                <QuickChips
+                  onChipClick={handleChipClick}
+                  availability={{
+                    research: quickChipAvailability?.research ?? runtime?.supportsResearch,
+                    image: quickChipAvailability?.image ?? runtime?.supportsImageGeneration,
+                    video: quickChipAvailability?.video ?? runtime?.supportsVideoGeneration,
+                    computer: quickChipAvailability?.computer ?? runtime?.supportsComputerUse,
+                  }}
+                />
+              )}
               <Disclaimer variant={disclaimerVariant} />
             </>
           )}

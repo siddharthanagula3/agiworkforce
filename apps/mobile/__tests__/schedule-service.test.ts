@@ -142,6 +142,21 @@ describe('mobile schedule service', () => {
     });
   });
 
+  it.each(['custom', 'interval'] as const)(
+    'rejects unsupported %s cadence before contacting Cloud',
+    async (recurrence) => {
+      await expect(createSchedule({ ...scheduleInput, recurrence })).rejects.toThrow(
+        'Mobile schedules support Once, Daily, Weekly, or Monthly',
+      );
+      await expect(updateSchedule('schedule-1', { recurrence })).rejects.toThrow(
+        'Mobile schedules support Once, Daily, Weekly, or Monthly',
+      );
+
+      expect(apiMock.post).not.toHaveBeenCalled();
+      expect(apiMock.put).not.toHaveBeenCalled();
+    },
+  );
+
   it('uses the dedicated PATCH endpoint for activation changes', async () => {
     apiMock.patch.mockResolvedValueOnce({ schedule: { ...serverSchedule, isEnabled: false } });
 

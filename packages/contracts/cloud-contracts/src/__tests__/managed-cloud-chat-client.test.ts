@@ -25,20 +25,33 @@ function response(body: unknown, status = 200): Response {
 describe('createManagedCloudChatClient', () => {
   it('uses one encoded transport path and runtime-validates list responses', async () => {
     const fetchImpl = vi.fn(async () =>
-      response({ conversations: [rawConversation], hasMore: false, nextOffset: 1 }),
+      response({
+        conversations: [rawConversation],
+        hasMore: false,
+        nextOffset: 1,
+        historyStats: { conversationCount: 195, messageCount: 842 },
+      }),
     );
     const client = createManagedCloudChatClient({ fetchImpl });
 
-    const page = await client.listConversations({ limit: 50, offset: 0 });
-
-    expect(fetchImpl).toHaveBeenCalledWith('/api/chat/conversations?limit=50&offset=0', {
-      headers: {},
+    const page = await client.listConversations({
+      limit: 50,
+      offset: 0,
+      includeHistoryStats: true,
     });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/api/chat/conversations?limit=50&offset=0&includeHistoryStats=1',
+      {
+        headers: {},
+      },
+    );
     expect(page.conversations[0]).toMatchObject({
       id: rawConversation.id,
       projectId: null,
       createdAt: rawConversation.created_at,
     });
+    expect(page.historyStats).toEqual({ conversationCount: 195, messageCount: 842 });
   });
 
   it('fails closed when a successful HTTP response violates the contract', async () => {

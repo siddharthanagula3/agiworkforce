@@ -75,6 +75,11 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
 import { api } from '../services/api';
@@ -88,6 +93,11 @@ import { useChatStore } from '../stores/chatStore';
 import type { ChatMessage } from '../types/chat';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import { syncNow } from '../services/cloudSyncEngine';
+import { useAuthStore } from '../src/features/auth/store';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
@@ -107,6 +117,13 @@ function streamReplies(text: string) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('cloud-sync-wiring-user');
+  useAuthStore.setState({
+    clerkUserId: 'cloud-sync-wiring-user',
+    isClerkLoaded: true,
+    isClerkSignedIn: true,
+  });
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {} });

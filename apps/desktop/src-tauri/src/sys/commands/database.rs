@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 
 use crate::data::database::{
@@ -1012,8 +1012,18 @@ pub async fn db_redis_disconnect(
 /// Store a database connection password securely using encrypted storage.
 /// The password is encrypted with machine-derived keys and stored in the database.
 /// This prevents passwords from being visible in React DevTools or memory dumps.
+fn open_main_database(app: &AppHandle) -> Result<rusqlite::Connection, String> {
+    app.try_state::<crate::data::db::key_management::MainDatabaseAccess>()
+        .ok_or_else(|| "The encrypted local database is unavailable.".to_string())?
+        .open_connection()
+}
+
 #[tauri::command]
-pub async fn db_store_password(connection_id: String, password: String) -> Result<(), String> {
+pub async fn db_store_password(
+    app: AppHandle,
+    connection_id: String,
+    password: String,
+) -> Result<(), String> {
     use crate::core::mcp::config::encrypt_mcp_credential;
 
     if connection_id.trim().is_empty() {
@@ -1031,32 +1041,10 @@ pub async fn db_store_password(connection_id: String, password: String) -> Resul
     let encrypted = encrypt_mcp_credential(&password)
         .ok_or_else(|| "Failed to encrypt password".to_string())?;
 
-    // Get the database path
-    let app_data =
-        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
-    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
-
-    // Store in database.
-    //
-    // KNOWN LIMITATION (M16): This function opens a raw rusqlite connection that
-    // bypasses the application connection pool (DatabaseState / SqlitePool). This is
-    // acceptable here for two reasons:
-    //
-    //   1. Security: The password has already been encrypted by `encrypt_mcp_credential`
-    //      before reaching the database write. No plaintext credential ever touches the
-    //      storage layer. The security invariant is preserved regardless of which
-    //      connection handle is used.
-    //
-    //   2. Concurrency: This is a single-user desktop application. SQLite WAL mode
-    //      (enabled below) allows concurrent reads alongside this write without
-    //      blocking the pool. Write contention risk is negligible in practice.
-    //
-    // TECH DEBT (M16): This opens a standalone connection instead of using the pool.
-    // Migration to pool-based access requires adding `pool: State<'_, SqlitePoolState>`
-    // to the command signature, updating the frontend `invoke()` call, and the
-    // Tauri command registration in `lib.rs`.
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    // Use the verified in-process main-database capability. A plain SQLite
+    // reopen cannot read the SQLCipher database and previously wrote to a
+    // different legacy path on some platforms.
+    let conn = open_main_database(&app)?;
 
     // Enable WAL mode on this standalone connection to reduce lock contention with
     // the pool (M16 mitigation — remove once migrated to pool-based access).
@@ -1084,19 +1072,12 @@ pub async fn db_store_password(connection_id: String, password: String) -> Resul
 /// Returns true if a password is stored, false otherwise.
 /// Does NOT return the actual password for security reasons.
 #[tauri::command]
-pub async fn db_has_stored_password(connection_id: String) -> Result<bool, String> {
+pub async fn db_has_stored_password(app: AppHandle, connection_id: String) -> Result<bool, String> {
     if connection_id.trim().is_empty() {
         return Err("Connection ID cannot be empty".to_string());
     }
 
-    // Get the database path
-    let app_data =
-        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
-    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
-
-    // Check in database
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_main_database(&app)?;
 
     let cred_key = format!("db_connection_password_{}", connection_id);
 
@@ -1152,14 +1133,7 @@ pub async fn db_get_stored_password(
         return Err("Password retrieval cancelled by user".to_string());
     }
 
-    // Get the database path
-    let app_data =
-        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
-    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
-
-    // Retrieve from database
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_main_database(&app)?;
 
     let cred_key = format!("db_connection_password_{}", connection_id);
 
@@ -1188,19 +1162,15 @@ pub async fn db_get_stored_password(
 
 /// Delete a stored database password.
 #[tauri::command]
-pub async fn db_delete_stored_password(connection_id: String) -> Result<(), String> {
+pub async fn db_delete_stored_password(
+    app: AppHandle,
+    connection_id: String,
+) -> Result<(), String> {
     if connection_id.trim().is_empty() {
         return Err("Connection ID cannot be empty".to_string());
     }
 
-    // Get the database path
-    let app_data =
-        dirs::data_dir().ok_or_else(|| "Failed to get app data directory".to_string())?;
-    let db_path = app_data.join("agiworkforce").join("agiworkforce.db");
-
-    // Delete from database
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open database: {}", e))?;
+    let conn = open_main_database(&app)?;
 
     let cred_key = format!("db_connection_password_{}", connection_id);
 

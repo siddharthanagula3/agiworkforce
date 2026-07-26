@@ -46,8 +46,6 @@ export type SubscriptionInfo = ManagedUsageSubscription;
 export type CreditsInfo = ManagedUsageBalance;
 export type CreditBalanceResponse = ManagedUsageBalanceResponse;
 
-// STB-6: `DeductCreditsResponse` (the response type for the `report_llm_usage`
-// Tauri command) was removed. The command posts to /api/llm/v1/credits/deduct,
-// a route that has never existed, and client-driven credit deduction was
-// retired platform-wide — /api/usage/deduct now returns 410 ENDPOINT_RETIRED
-// because managed operations deduct server-side. The type had no consumers.
+// STB-6: `DeductCreditsResponse` was removed with its obsolete Tauri command.
+// That command targeted a route that never existed, and client-driven usage
+// deduction is retired platform-wide; managed operations deduct server-side.

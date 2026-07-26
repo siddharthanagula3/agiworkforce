@@ -124,7 +124,7 @@ pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
 /// ```text
 /// Model             Provider   Cost
 /// ─────────────────────────────────
-/// claude-opus-4-8   anthropic  $15.00
+/// claude-opus-5   anthropic  $5.00
 /// gpt-5.6-sol       openai     $5.00
 /// ```
 #[allow(dead_code)]
@@ -494,8 +494,8 @@ mod tests {
 
     #[test]
     fn test_model_pricing_anthropic_opus() {
-        // canonical apiModelId for claude-opus-4.8 per models.json
-        let (i, o) = model_pricing("claude-opus-4-8");
+        // canonical apiModelId for claude-opus-5 per models.json
+        let (i, o) = model_pricing("claude-opus-5");
         assert_eq!(i, 5.0);
         assert_eq!(o, 25.0);
     }
@@ -548,8 +548,8 @@ mod tests {
     #[test]
     fn test_model_pricing_case_insensitive() {
         // Same model, different case → identical pricing (lookup is case-insensitive).
-        let (i1, o1) = model_pricing("Claude-Opus-4-8");
-        let (i2, o2) = model_pricing("claude-opus-4-8");
+        let (i1, o1) = model_pricing("Claude-Opus-5");
+        let (i2, o2) = model_pricing("claude-opus-5");
         assert_eq!(i1, i2);
         assert_eq!(o1, o2);
     }
@@ -587,11 +587,11 @@ mod tests {
 
     #[test]
     fn test_format_cost_small_token_counts() {
-        // claude-opus-4-8: input $5/1M, output $25/1M
+        // claude-opus-5: input $5/1M, output $25/1M
         // Input: 100/1M * 5  = $0.0005
         // Output: 50/1M  * 25 = $0.00125
         // Total: ~$0.00175
-        let result = format_cost("claude-opus-4-8", 100, 50);
+        let result = format_cost("claude-opus-5", 100, 50);
         assert!(result.contains("Cost:"));
         assert!(result.contains("100 in"));
         assert!(result.contains("50 out"));
@@ -621,7 +621,7 @@ mod tests {
     #[test]
     fn test_all_pricing_branches_non_negative() {
         let models = [
-            "claude-opus-4-8",
+            "claude-opus-5",
             "claude-sonnet-5",
             "claude-haiku-4-5-20251001",
             "gpt-5.6-luna",

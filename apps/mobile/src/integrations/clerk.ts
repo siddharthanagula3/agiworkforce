@@ -1,15 +1,27 @@
 /**
  * Clerk client configuration for AGI Mobile (cloud auth).
  *
- * CLERK_PUBLISHABLE_KEY is the DEVELOPMENT publishable key (`pk_test_…`). Clerk
- * publishable keys are PUBLIC client keys — they are designed to ship in the
- * client bundle, so committing this value is safe. Before a production store
- * release, swap this for the `pk_live_…` key of a production Clerk instance
- * (the linked Clerk app currently has no production instance).
+ * Clerk publishable keys are public client identifiers, but production and
+ * preview builds must still use the live Clerk instance. Expo inlines
+ * EXPO_PUBLIC_* values into the application bundle at build time.
  */
 import { getClerkInstance } from '@clerk/expo';
 
-export const CLERK_PUBLISHABLE_KEY = 'pk_test_aGFuZHktamF3ZmlzaC03My5jbGVyay5hY2NvdW50cy5kZXYk';
+const DEVELOPMENT_CLERK_PUBLISHABLE_KEY =
+  'pk_test_aGFuZHktamF3ZmlzaC03My5jbGVyay5hY2NvdW50cy5kZXYk';
+const appEnv = process.env.EXPO_PUBLIC_APP_ENV ?? 'development';
+const configuredPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
+
+if (
+  (appEnv === 'production' || appEnv === 'preview') &&
+  !configuredPublishableKey?.startsWith('pk_live_')
+) {
+  throw new Error(
+    `[clerk] ${appEnv} builds require EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to be a live Clerk publishable key.`,
+  );
+}
+
+export const CLERK_PUBLISHABLE_KEY = configuredPublishableKey || DEVELOPMENT_CLERK_PUBLISHABLE_KEY;
 
 /**
  * Clerk's native Expo components can create a pending session while an

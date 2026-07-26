@@ -72,9 +72,9 @@ pub enum ServerTool {
     #[serde(rename = "bash_20250124")]
     Bash20250124 { name: String },
 
-    /// Computer use tool for desktop interaction (computer_20250124)
-    #[serde(rename = "computer_20250124")]
-    Computer20250124 {
+    /// Computer use tool for desktop interaction (computer_20251124)
+    #[serde(rename = "computer_20251124")]
+    Computer20251124 {
         name: String,
         display_width_px: u32,
         display_height_px: u32,
@@ -222,7 +222,7 @@ pub fn build_server_tool_definition(name: &str) -> Option<serde_json::Value> {
             "name": "memory"
         })),
         "computer" => Some(serde_json::json!({
-            "type": "computer_20250124",
+            "type": "computer_20251124",
             "name": "computer",
             "display_width_px": 1920,
             "display_height_px": 1080
@@ -315,5 +315,12 @@ mod tests {
         let bm25_alias =
             build_server_tool_definition("tool_search_bm25").expect("bm25 alias definition");
         assert_eq!(bm25_alias["name"], "tool_search_tool_bm25");
+    }
+
+    #[test]
+    fn test_computer_tool_uses_current_anthropic_version() {
+        let computer = build_server_tool_definition("computer").expect("computer tool definition");
+        assert_eq!(computer["type"], "computer_20251124");
+        assert_eq!(computer["name"], "computer");
     }
 }

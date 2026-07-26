@@ -17,11 +17,24 @@ const baseProps = {
   open: true,
   onOpenChange: vi.fn(),
   onAddFiles: vi.fn(),
-  webSearchEnabled: false,
-  onWebSearchToggle: vi.fn(),
   researchEnabled: false,
   onResearchToggle: vi.fn(),
 };
+
+describe('AttachmentMenu — automatic Web search', () => {
+  it('does not expose automatic Web search as a user-facing menu toggle', () => {
+    render(
+      <CapabilityProvider platform="desktop">
+        <AttachmentMenu {...baseProps}>
+          <button type="button">Plus</button>
+        </AttachmentMenu>
+      </CapabilityProvider>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Web search' })).toBeNull();
+    expect(screen.queryByText('Web search')).toBeNull();
+  });
+});
 
 describe('AttachmentMenu — Select folder', () => {
   it('renders "Select folder" on desktop (canUseWorkingDirectory) and calls back on click', () => {

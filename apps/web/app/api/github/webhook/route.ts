@@ -128,26 +128,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       };
       const installRows = await db
         .query<InstallRow>(
-          'select user_id, pr_review_enabled, review_model from github_installations where installation_id = $1 limit 1',
+          `select user_id, pr_review_enabled, review_model
+             from github_installations
+            where installation_id = $1
+              and ownership_verified_at is not null
+            limit 1`,
           [installationId],
         )
         .catch(() => [] as InstallRow[]);
       const installationRecord = installRows[0] ?? null;
 
-      const token = await getInstallationAccessToken(installationId);
-
       if (!installationRecord) {
-        await postIssueComment(
-          token,
-          owner,
-          repo,
-          prNumber,
-          `To use AGI PR review, connect your GitHub account at [agiworkforce.com/chat](https://agiworkforce.com/chat).`,
-        );
+        // A webhook signature proves GitHub sent the event; it does not bind
+        // this installation to an AGI account. Do not mint a token or perform
+        // an external write until the user-authorization proof exists.
         return;
       }
 
       if (!installationRecord.pr_review_enabled) return;
+
+      const token = await getInstallationAccessToken(installationId);
 
       // web-HIGH-3 spend cap (audit 2026-05-05): debounce + monthly quota.
       // Both checks are best-effort · if the table read fails we proceed

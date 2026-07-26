@@ -3,10 +3,14 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { secureStorage } from '@/lib/secureStorage';
 import {
   clearAuthSession,
+  getAuthToken,
   type MobileAuthSession,
   type MobileAuthUser,
 } from '@/services/authSession';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
+import { invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
+import { unregisterPushTokenForSignOut } from '@/src/features/auth/services/signOutPushTokenCleanup';
 
 interface AuthState {
   session: MobileAuthSession | null;
@@ -21,6 +25,9 @@ interface AuthState {
    */
   isClerkSignedIn: boolean;
   setClerkSignedIn: (value: boolean) => void;
+  /** Current Clerk account identity; changes even for direct signed-in A -> B switches. */
+  clerkUserId: string | null;
+  setClerkUserId: (value: string | null) => void;
   /**
    * True once Clerk's SDK has finished its async initialization (useAuth().isLoaded).
    * Defaults to false on every cold-start; set by ClerkTokenBridge when isLoaded
@@ -52,12 +59,20 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
       isInitialized: false,
       isClerkSignedIn: false,
+      clerkUserId: null,
       isClerkLoaded: false,
 
       setClerkSignedIn: (value: boolean) => {
         set((state) => {
           if (state.isClerkSignedIn === value) return state;
           return { isClerkSignedIn: value };
+        });
+      },
+
+      setClerkUserId: (value: string | null) => {
+        set((state) => {
+          if (state.clerkUserId === value) return state;
+          return { clerkUserId: value };
         });
       },
 
@@ -105,104 +120,43 @@ export const useAuthStore = create<AuthState>()(
       },
 
       signOut: async () => {
+        // Start resolving the current Clerk JWT before changing app mode. The
+        // token getter is invoked synchronously when this promise is created,
+        // preserving the credential needed for the one exact push-token DELETE.
+        const capturedAuthTokenPromise = getAuthToken();
+
+        // Fail closed before awaiting Clerk/FAPI. A slow or offline external
+        // sign-out must not leave account UI active or the privacy boundary in
+        // persisted Cloud mode for the duration of that request.
+        set({
+          session: null,
+          user: null,
+          isLoading: false,
+          isClerkSignedIn: false,
+          clerkUserId: null,
+        });
+        invalidateCloudAccount();
+        clearLocalCloudAccountState();
+
         try {
+          const capturedAuthToken = await capturedAuthTokenPromise;
+          if (capturedAuthToken) {
+            await unregisterPushTokenForSignOut(capturedAuthToken);
+          }
+        } catch (err) {
+          console.warn('[auth] push-token teardown on sign-out failed:', err);
+        }
+
+        try {
+          // Clear Clerk only after the authenticated device-token revocation was
+          // attempted. UI and every local Cloud cache already failed closed above.
           await clearAuthSession();
         } catch {
-          // signOut network call may fail — always clear local session below
+          // External sign-out may fail; local state already failed closed above.
         } finally {
-          // Always clear session, even if signOut network call fails
-          set({ session: null, user: null, isLoading: false });
           if (authSubscription) {
             authSubscription.unsubscribe();
             authSubscription = null;
-          }
-          // P2 sync teardown: stop the loop and drop cloud-scoped state so a
-          // different account can never inherit this user's cloud chats, memories,
-          // or pending sync queues. Lazy require avoids an auth↔api↔sync import
-          // cycle at init.
-          try {
-            /* eslint-disable @typescript-eslint/no-require-imports */
-            const { stopCloudSyncLoop } = require('@/services/cloudSyncEngine');
-            const { useCloudSyncStateStore } = require('@/stores/chat/cloudSyncStateStore');
-            const { useChatCloudMessageStore } = require('@/stores/chat/chatCloudMessageStore');
-            const { useCloudMemoryStore } = require('@/stores/memory/cloudMemoryStore');
-            const { useMemorySyncStateStore } = require('@/stores/memory/memorySyncStateStore');
-            const { useCloudProjectStore } = require('@/stores/projects/cloudProjectStore');
-            const { useProjectSyncStateStore } = require('@/stores/projects/projectSyncStateStore');
-            // Settings trust-boundary reset: personalization and the settings sync
-            // cursor are scoped to the signed-in user. Clear them so a subsequent
-            // account cannot inherit a prior user's profile or push a wipe to cloud.
-            // settingsUpdatedAt is set to null so the next pull adopts cloud state
-            // rather than treating the cleared defaults as a local edit.
-            const {
-              useSettingsSyncStateStore,
-            } = require('@/stores/settings/settingsSyncStateStore');
-            const { useCloudSettingsStore } = require('@/stores/settings/cloudSettingsStore');
-            const { useTierStore } = require('@/src/features/billing/store');
-            const { useArtifactStore } = require('@/src/features/artifacts/store');
-            const { useIntegrationStore } = require('@/src/features/integrations/store');
-            const { unregisterPushToken } = require('@/services/notifications');
-            /* eslint-enable @typescript-eslint/no-require-imports */
-            stopCloudSyncLoop();
-            useCloudSyncStateStore.getState().reset();
-            useChatCloudMessageStore.getState().clearCloudData();
-            // Artifacts trust-boundary reset: cloudArtifacts (migration 0039 pulled
-            // artifacts) are scoped to the signed-in user and persisted to MMKV.
-            // clearCloudArtifacts existed for this purpose but was never wired to
-            // sign-out — a subsequent account could inherit a prior user's artifacts.
-            useArtifactStore.getState().clearCloudArtifacts();
-            // Memory trust-boundary reset: cloud memories and the memory sync cursor
-            // are scoped to the signed-in user and MUST be cleared on sign-out so a
-            // subsequent account cannot inherit a prior user's memories.
-            useCloudMemoryStore.getState().clearCloudMemoryData();
-            useMemorySyncStateStore.getState().resetMemorySync();
-            // Project trust-boundary reset: cloud projects and the project sync cursor
-            // are scoped to the signed-in user and MUST be cleared on sign-out so a
-            // subsequent account cannot inherit a prior user's projects.
-            useCloudProjectStore.getState().clearCloudProjectData();
-            useProjectSyncStateStore.getState().resetProjectSync();
-            useSettingsSyncStateStore.getState().resetSettingsSync();
-            // Cloud settings trust-boundary reset: personalization and the settings
-            // sync cursor are scoped to the signed-in user. Clear the cloud store's
-            // personalization and settingsUpdatedAt so the next account starts fresh.
-            // Local settings are intentionally preserved — they belong to this device,
-            // not to the account.
-            useCloudSettingsStore.setState({
-              personalization: {
-                fullName: '',
-                nickname: '',
-                occupation: '',
-                instructions: '',
-                style: 'default',
-                warmth: 50,
-                enthusiasm: 50,
-                headersLists: 50,
-                emoji: 50,
-              },
-              settingsUpdatedAt: null,
-            });
-            // Billing trust-boundary reset: the cached subscription tier is
-            // read-only plan metadata scoped to the signed-in user. Without this,
-            // a previously Pro/Max account's tier survives sign-out in MMKV and
-            // the Billing screen shows a stale "You are on the Pro plan" to a
-            // signed-out (or different) user.
-            useTierStore.getState().setTier('free');
-            // Integrations trust-boundary reset: platform connection status
-            // (connected/lastSynced/accountName) is scoped to the signed-in
-            // user and persisted to MMKV, but had no sign-out reset at all —
-            // a subsequent account on this device would otherwise see a
-            // prior user's "Connected" badges (Slack/Gmail/etc.) as its own,
-            // with no self-heal (fetchPlatforms() does not reconcile against
-            // the server; see its own doc comment).
-            useIntegrationStore.getState().clearPlatformConnections();
-            // Push-token trust-boundary reset: mobile_devices is keyed by
-            // deviceId, not by session, so an unregistered token survives
-            // sign-out server-side indefinitely — a subsequent different
-            // account signing in on this device would otherwise still
-            // receive push notifications addressed to the prior account.
-            await unregisterPushToken();
-          } catch (err) {
-            console.warn('[auth] cloud sync teardown on sign-out failed:', err);
           }
         }
       },
@@ -240,6 +194,7 @@ export const useAuthStore = create<AuthState>()(
         if (state) {
           state.session = null;
           state.user = null;
+          state.clerkUserId = null;
           state.isLoading = true;
           state.isInitialized = false;
         }

@@ -3,6 +3,10 @@
 Status: Reference for rebuilding AGI Workforce web UI to match claude.ai component-for-component.
 Sources: (A) `/Users/siddhartha/Desktop/reference/claude_reference/` — 128 screenshots, no INDEX.md/manifest present, filenames used as citations below. (B) Live claude.ai crawl via Chrome MCP, signed in as Siddhartha Nagula (Max plan), 2026-07-10, tab `claude.ai/chat/ef86542d-5d88-415b-a68e-2e56a51d0ee5`.
 
+2026-07-25 model-name amendment: picker labels were normalized to the current
+AGI catalog. This dated interaction record is not evidence that Opus 5 was
+available on the original crawl date.
+
 **Contamination warning**: several source-A screenshots (`030_web-free__artifact-result.png`, `031_web-free__artifact-widget-interacted.png`, `391_artifacts__artifact-editor-html-code-source-view.png`, `393-394_artifacts__artifact-sidebar-markdown-*.png`, `399_artifacts__artifact-viewer-tabbed-content-with-print-button.png`) show a Chromium browser with an "Ask Gemini" button in the tab-strip corner and artifact cards carrying "Open in Comet" / "Open in Antigravity" pills. That is the **Perplexity Comet browser's own injected UI** overlaid on a genuine claude.ai page (URL bar confirms `claude.ai/chat/...`). Do not copy "Open in Comet"/"Open in Antigravity" pills or the "Ask Gemini" corner button — those are not claude.ai UI. Everything else in those screenshots (artifact panel chrome: eye/code toggle, title + type label, Copy/Publish, refresh, close) is real and consistent with the live crawl.
 
 ---
@@ -56,7 +60,7 @@ Right-opening flyout: **Add connector** (chevron submenu), **Manage connectors**
 Trigger: `{Model} {Effort} ⌄` at composer right. Dropdown, bottom-anchored, opens upward:
 
 - **Fable 5** — badge "Included until July 12" (usage-window chip), subtitle "For your toughest challenges", blue checkmark (current selection)
-- **Opus 4.8** — subtitle "For complex tasks"
+- **Opus 5** — subtitle "For complex tasks"
 - **Sonnet 5** — subtitle "Most efficient for everyday tasks"
 - **Haiku 4.5** — subtitle "Fastest for quick answers"
 - — divider —
@@ -67,7 +71,10 @@ Trigger: `{Model} {Effort} ⌄` at composer right. Dropdown, bottom-anchored, op
 
 **More models flyout** (opens to the right of "More models"): legacy/other models — **Opus 4.7, Opus 4.6, Opus 3, Sonnet 4.6** — no subtitles, flat list.
 
-Model IDs visible live do not match `packages/types/src/models.json` naming 1:1 — treat "Fable 5 / Opus 4.8 / Sonnet 5 / Haiku 4.5" as the current claude.ai-displayed names as of 2026-07-10, re-verify against the models JSON before hardcoding anywhere in our app.
+The labels in this section were normalized by the 2026-07-25 amendment and are
+not a verbatim record of model availability on 2026-07-10. AGI identifiers must
+come from the current machine-readable model registry, never this dated UI
+record.
 
 ---
 

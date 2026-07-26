@@ -38,16 +38,19 @@ export interface ProviderStreamRequest {
  * Paywall feature identifiers — mirrors InlinePaywallCard.tsx PaywallFeature type.
  * Kept in sync manually; if the web surface adds new features, add them here too.
  */
-export type PaywallFeature =
-  | 'video_generation'
-  | 'opus_4_7'
-  | 'gpt_5_5'
-  | 'computer_use'
-  | 'deep_research'
-  | 'image_quota'
-  | 'token_cap'
-  | 'mcp'
-  | 'web_search';
+export const PAYWALL_FEATURES = [
+  'video_generation',
+  'opus_5',
+  'gpt_5_5',
+  'computer_use',
+  'deep_research',
+  'image_quota',
+  'token_cap',
+  'mcp',
+  'web_search',
+] as const;
+
+export type PaywallFeature = (typeof PAYWALL_FEATURES)[number];
 
 /**
  * Tier labels a paywall can require — mirrors InlinePaywallCard.tsx RequiredTier.

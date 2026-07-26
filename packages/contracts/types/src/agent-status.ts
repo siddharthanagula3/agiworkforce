@@ -46,7 +46,7 @@ export type AgentStatus = 'idle' | 'thinking' | 'working' | 'error';
  *   currentAction: 'Analyzing src/main.rs',
  *   startedAt: '2026-03-08T10:30:00Z',
  *   progress: 45,
- *   model: 'claude-opus-4.8',
+ *   model: 'claude-opus-5',
  *   iterationCount: 3,
  *   maxIterations: 10,
  * };

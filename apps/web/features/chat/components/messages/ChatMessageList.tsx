@@ -1167,7 +1167,10 @@ const ChatMessageListComponent = ({
 
           {/* Follow-up suggestion pills after last assistant message */}
           {showFollowUps && lastMessage && (
-            <div className="px-4 md:px-12 lg:px-20">
+            <div
+              className="mx-auto w-full max-w-3xl px-4"
+              data-testid="follow-up-suggestions-shell"
+            >
               <FollowUpSuggestions
                 lastAssistantContent={lastMessage.content}
                 onSelect={onSendMessage!}

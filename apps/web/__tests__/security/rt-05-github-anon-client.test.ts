@@ -4,7 +4,7 @@
  * Tests that:
  * - Background task queries Neon DB for installation record
  * - HMAC-verified webhook finds installation and posts review
- * - Missing installation -> graceful "connect your account" comment
+ * - Missing/unverified installation -> no privileged external write
  * - Forged webhook (bad HMAC) rejected at route level
  */
 
@@ -125,6 +125,7 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     expect(mockNeonQuery).toHaveBeenCalled();
     const [sql] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('github_installations');
+    expect(sql).toMatch(/ownership_verified_at is not null/i);
   });
 
   it('posts review comment when installation found and pr_review_enabled', async () => {
@@ -137,15 +138,13 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     expect(callArgs[4] as string).toContain('AGI Code Review');
   });
 
-  it('posts "connect your account" when installation not found', async () => {
+  it('posts no comment when a verified installation is not found', async () => {
     mockNeonQuery.mockResolvedValue([]); // No installation record
     const req = makeWebhookRequest(VALID_PAYLOAD);
     await POST(req);
     await waitForBackground();
 
-    expect(mockPostComment).toHaveBeenCalledOnce();
-    const callArgs = mockPostComment.mock.calls[0] as unknown[];
-    expect(callArgs[4] as string).toContain('connect your GitHub account');
+    expect(mockPostComment).not.toHaveBeenCalled();
   });
 
   it('posts no comment when pr_review_enabled = false', async () => {
@@ -185,8 +184,8 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     await POST(req);
     await waitForBackground();
 
-    // Should post the "connect your account" message, not crash
-    expect(mockPostComment).toHaveBeenCalledOnce();
+    // No linked owner means no authority to write to the repository.
+    expect(mockPostComment).not.toHaveBeenCalled();
     expect(mockLogger.error).not.toHaveBeenCalled();
   });
 });

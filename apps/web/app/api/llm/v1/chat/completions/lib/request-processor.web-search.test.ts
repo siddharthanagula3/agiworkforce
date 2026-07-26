@@ -27,6 +27,7 @@ import {
   processRequest,
   shouldOfferGenericWebSearchTool,
 } from './request-processor';
+import * as requestProcessorModule from './request-processor';
 import {
   WEB_SEARCH_INJECTION_PROVIDERS,
   providerInjectsWebSearchTool,
@@ -418,6 +419,41 @@ describe('appendWebSearchTool', () => {
       expect(providerInjectsWebSearchTool(provider)).toBe(false);
       expect(appendWebSearchTool(provider, undefined, caps)).toBeUndefined();
     }
+  });
+});
+
+describe('resolveWebFetchTools', () => {
+  type ResolveWebFetchTools = (options: {
+    providerLower: string;
+    model: string;
+    tools: unknown[] | undefined;
+    toolsCapable: boolean;
+    stream: boolean | undefined;
+  }) => unknown[] | undefined;
+
+  it('uses AGI url_fetch instead of the unavailable Anthropic native tool for Opus 5', () => {
+    const resolveWebFetchTools = (
+      requestProcessorModule as unknown as {
+        resolveWebFetchTools?: ResolveWebFetchTools;
+      }
+    ).resolveWebFetchTools;
+
+    expect(resolveWebFetchTools).toBeTypeOf('function');
+    const tools = resolveWebFetchTools?.({
+      providerLower: 'anthropic',
+      model: 'claude-opus-5',
+      tools: undefined,
+      toolsCapable: true,
+      stream: true,
+    });
+
+    expect(tools).toContainEqual(
+      expect.objectContaining({
+        type: 'function',
+        function: expect.objectContaining({ name: 'url_fetch' }),
+      }),
+    );
+    expect(tools).not.toContainEqual(expect.objectContaining({ name: 'web_fetch' }));
   });
 });
 

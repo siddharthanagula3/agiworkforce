@@ -8,7 +8,7 @@ Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README
 
 ## Overview & stance
 
-This volume maps AGI onto VS Code's native contribution surfaces — the points where the editor exposes the extension. AGI VS Code is the IDE-native, workspace-scoped developer surface with all three trust modes (Local, BYOK, Managed Cloud) selectable, each carrying a visible provider/model label. Every integration point below inherits the surface invariants: sessions stay workspace/task-scoped, there is **no automatic app-chat sync** (any handoff is explicit and redacted), and Local context is never silently routed to BYOK or Cloud. The manifest is the source of truth for what is contributed: `apps/extension-vscode/package.json` declares 1 activity-bar container, 4 side-bar views, 71 commands, 14 keybindings, 1 `@agi` chat participant (6 slash commands), 4 menu groups, and 26 configuration keys — verified counts. Parity references are the Claude Code and Codex IDE extensions; AGI diverges by being multi-provider, BYOK where the surface allows it, per-surface trust, and local-first.
+This volume maps AGI onto VS Code's native contribution surfaces — the points where the editor exposes the extension. AGI VS Code is the IDE-native, workspace-scoped developer surface with all three trust modes (Local, BYOK, Managed Cloud) selectable and visibly labeled. Every integration point inherits the surface invariants: no automatic app-chat sync and no silent Local-context routing to BYOK or Cloud. The manifest is the source of truth: `package.json` currently declares 1 activity-bar container, 4 side-bar views, 67 commands, 14 keybindings, 1 `@agi` participant with 6 slash commands, and 24 configuration keys.
 
 ## Activity Bar
 
@@ -36,7 +36,7 @@ This volume maps AGI onto VS Code's native contribution surfaces — the points 
 
 ## Commands
 
-- ✅ Built — 71 commands under `contributes.commands` (`package.json`), spanning chat/agent, edit actions (`explain`/`fix`/`refactor`/`generateTests`/`docs`/`codeReview`), diff/patch/checkpoint flows, model/tier/account, memory, context, and desktop-bridge (`sendToDesktop`, `bridgeReconnect`). 14 keybindings and a `commandPalette` filter scope palette visibility by `when` context. Requirement: commands crossing a trust boundary (send-to-desktop, cloud sign-in) must be explicit and labeled; palette entries must not appear when their `when` context is unmet.
+- ✅ Built — 67 commands under `contributes.commands`, spanning chat/agent, edit actions, diff/patch/checkpoint flows, model/tier/account, memory, context, and Desktop bridge. Fourteen keybindings and command-palette filters scope visibility by `when` context. Commands crossing a trust boundary must be explicit and labeled.
 
 ## Status Bar
 
@@ -83,7 +83,7 @@ VS Code integration is production-ready when every contributed point behaves as 
 
 Build:
 
-- [ ] Manifest counts verified against `package.json` (1 container, 4 views, 71 commands, 14 keybindings, 1 participant, 26 config keys); no contribution references a missing handler. Status-bar items reflect real model/bridge state; CodeLens/hover respect their enable flags.
+- [ ] Manifest counts verified against `package.json` (1 container, 4 views, 67 commands, 14 keybindings, 1 participant, 24 config keys); no contribution references a missing handler. Status-bar items reflect real model/bridge state; CodeLens/hover respect their enable flags.
 
 Trust:
 
@@ -100,5 +100,5 @@ Security:
 - Auto-syncing side-bar History/Memory/Context to Web/Mobile/Desktop app chat, or routing a Local session to BYOK/Cloud without consent, a payload preview, and a visible label.
 - Firing an LLM request on hover, CodeLens render, or Explorer expansion before an explicit user action.
 - Hardcoding or inventing model IDs; all LLM IDs come from `packages/contracts/types/src/models.json`.
-- Referencing removed tiers. `package.json` `agiWorkforce.tier` still enumerates `hobby`/`pro_plus` — a known 🟡 reconciliation gap; specs use only Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise, with no top-ups.
+- Referencing removed tiers or credit top-ups. The extension manifest exposes only current access modes.
 - Referencing Supabase (fully migrated away) or renaming `proxy.ts` to `middleware.ts`.

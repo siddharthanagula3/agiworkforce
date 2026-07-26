@@ -48,7 +48,7 @@ describe('InlinePaywallCard', () => {
     const cases: Array<[PaywallFeature, RequiredTier, string]> = [
       ['web_search', 'basic', 'Upgrade to Basic for web search'],
       ['video_generation', 'max_15x', 'Upgrade to Max 15x for video generation'],
-      ['opus_4_7', 'max', 'Upgrade to Max 5x for Opus 4.7 access'],
+      ['opus_5', 'max', 'Upgrade to Max 5x for Opus 5 access'],
       ['gpt_5_5', 'max', 'Upgrade to Max 5x for GPT-5.5 access'],
       ['computer_use', 'pro', 'Upgrade to Pro for computer use'],
       ['deep_research', 'max', 'Upgrade to Max 5x for deep research'],

@@ -70,6 +70,7 @@ jest.mock('../lib/mmkv', () => ({
 // ---------------------------------------------------------------------------
 
 import { useChatStore } from '../stores/chatStore';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,8 +126,8 @@ describe('chatStore — Wave 2 additions', () => {
   // ---- chatStyle ----
 
   describe('chatStyle', () => {
-    it('defaults to "normal"', () => {
-      expect(getState().chatStyle).toBe('normal');
+    it('defaults to "concise" for new chats', () => {
+      expect(useChatViewStore.getInitialState().chatStyle).toBe('concise');
     });
 
     it('setChatStyle changes to "concise"', () => {

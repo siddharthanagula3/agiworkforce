@@ -15,25 +15,20 @@ interface MediaGenerationProgressProps {
   className?: string;
 }
 
-// Estimated generation times per provider (seconds)
-const PROVIDER_ESTIMATES: Record<string, { min: number; max: number; label: string }> = {
-  'image:openai': { min: 10, max: 25, label: 'OpenAI image model' },
-  'image:google': { min: 8, max: 20, label: 'Google image model' },
-  'image:stability': { min: 10, max: 20, label: 'Stability image model' },
-  'video:runway': { min: 60, max: 120, label: 'Runway video model' },
-  'video:google': { min: 90, max: 150, label: 'Google video model' },
+const PROVIDER_LABELS: Record<string, string> = {
+  'image:openai': 'OpenAI image model',
+  'image:google': 'Google image model',
+  'image:stability': 'Stability image model',
+  'video:runway': 'Runway video model',
+  'video:google': 'Google video model',
 };
 
-const DEFAULT_IMAGE_ESTIMATE = { min: 10, max: 30, label: 'Image AI' };
-const DEFAULT_VIDEO_ESTIMATE = { min: 60, max: 120, label: 'Video AI' };
-
-function getEstimate(type: 'image' | 'video', provider?: MediaGenProvider, model?: string) {
-  const fallback = type === 'image' ? DEFAULT_IMAGE_ESTIMATE : DEFAULT_VIDEO_ESTIMATE;
-  const providerEstimate = provider ? PROVIDER_ESTIMATES[`${type}:${provider}`] : undefined;
-  const estimate = providerEstimate ?? fallback;
+function getProviderLabel(type: 'image' | 'video', provider?: MediaGenProvider, model?: string) {
+  const fallback = type === 'image' ? 'image provider' : 'video provider';
+  const providerLabel = provider ? PROVIDER_LABELS[`${type}:${provider}`] : undefined;
   const modelName = getModelMetadataById(model)?.name;
 
-  return modelName ? { ...estimate, label: modelName } : estimate;
+  return modelName ?? providerLabel ?? fallback;
 }
 
 /**
@@ -41,9 +36,12 @@ function getEstimate(type: 'image' | 'video', provider?: MediaGenProvider, model
  *
  * Shows:
  *   - Animated spinner with media-appropriate color (amber=image, purple=video)
- *   - Provider label and estimated wait range
- *   - Elapsed seconds counter so users know progress is happening
+ *   - Provider label when known
+ *   - Actual elapsed time so users know the request remains in flight
  *   - Prompt snippet (first 60 chars) for context
+ *
+ * The provider does not emit percentage or named-stage telemetry, so this
+ * intentionally stays indeterminate instead of fabricating progress.
  */
 export const MediaGenerationProgress: React.FC<MediaGenerationProgressProps> = ({
   type,
@@ -53,7 +51,7 @@ export const MediaGenerationProgress: React.FC<MediaGenerationProgressProps> = (
   className,
 }) => {
   const [elapsedSecs, setElapsedSecs] = useState(0);
-  const estimate = getEstimate(type, provider, model);
+  const providerLabel = getProviderLabel(type, provider, model);
   const isImage = type === 'image';
 
   useEffect(() => {
@@ -68,11 +66,11 @@ export const MediaGenerationProgress: React.FC<MediaGenerationProgressProps> = (
   const bgColor = isImage ? 'bg-amber-500/5' : 'bg-purple-500/5';
   const Icon = isImage ? ImageIcon : Clapperboard;
 
-  const progressPercent = Math.min(95, Math.round((elapsedSecs / estimate.max) * 100));
-
   return (
     <div
       className={cn('rounded-xl border p-4 flex flex-col gap-3', borderColor, bgColor, className)}
+      role="status"
+      aria-label={isImage ? 'Image generation in progress' : 'Video generation in progress'}
     >
       {/* Header row */}
       <div className="flex items-center gap-3">
@@ -82,7 +80,7 @@ export const MediaGenerationProgress: React.FC<MediaGenerationProgressProps> = (
         <div className="flex-1 min-w-0">
           <p className={cn('text-sm font-medium', accentColor)}>
             {isImage ? 'Generating image' : 'Rendering video'}
-            <span className="ml-1 text-xs font-normal opacity-70">via {estimate.label}</span>
+            <span className="ml-1 text-xs font-normal opacity-70">via {providerLabel}</span>
           </p>
           {prompt && (
             <p className="text-xs text-muted-foreground mt-0.5 truncate">
@@ -97,26 +95,29 @@ export const MediaGenerationProgress: React.FC<MediaGenerationProgressProps> = (
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+      {/* Indeterminate progress: the media providers do not expose completion percentages. */}
+      <div
+        className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden"
+        role="progressbar"
+        aria-label={isImage ? 'Generating image' : 'Rendering video'}
+      >
         <div
           className={cn(
-            'h-full rounded-full transition-all duration-1000',
-            isImage ? 'bg-amber-400' : 'bg-purple-400',
+            'h-full w-full rounded-full animate-pulse',
+            isImage
+              ? 'bg-gradient-to-r from-amber-400/20 via-amber-400 to-amber-400/20'
+              : 'bg-gradient-to-r from-purple-400/20 via-purple-400 to-purple-400/20',
           )}
-          style={{ width: `${progressPercent}%` }}
         />
       </div>
 
-      {/* Time estimate row */}
+      {/* Only report observable state; no rotating pseudo-stages or fabricated ETA. */}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <Icon className="h-3 w-3" />
-          {isImage
-            ? `This may take ${estimate.min}–${estimate.max} seconds`
-            : `Video rendering typically takes ${estimate.min}–${estimate.max} seconds`}
+          Waiting for {providerLabel}
         </span>
-        <span className="opacity-60">{progressPercent}%</span>
+        <span className="opacity-60 tabular-nums">{elapsedSecs}s elapsed</span>
       </div>
     </div>
   );

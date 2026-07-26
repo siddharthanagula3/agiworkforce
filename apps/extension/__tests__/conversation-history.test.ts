@@ -233,6 +233,8 @@ describe('conversation-history', () => {
           lastSequence: 0,
           state: 'running',
         },
+        cloudApprovalDecisions: { 'call-1': 'approved' },
+        cloudApprovalError: 'Approval continuation was interrupted.',
       },
     ];
 
@@ -240,6 +242,8 @@ describe('conversation-history', () => {
     expect(saved?.messages[1]).toMatchObject({
       agentEvents: [expect.objectContaining({ sequence: 0 })],
       cloudAgentRun: expect.objectContaining({ runId: RUN_ID, lastSequence: 0 }),
+      cloudApprovalDecisions: { 'call-1': 'approved' },
+      cloudApprovalError: 'Approval continuation was interrupted.',
     });
     expect((await getActiveConversation())?.messages[1]).toMatchObject(saved?.messages[1] ?? {});
   });
@@ -263,6 +267,8 @@ describe('conversation-history', () => {
                 runPath: 'https://attacker.example/run',
                 lastSequence: 0,
               },
+              cloudApprovalDecisions: { ['x'.repeat(129)]: 'approved' },
+              cloudApprovalError: 'x'.repeat(501),
             },
           ],
           savedAt: Date.now(),
@@ -275,6 +281,8 @@ describe('conversation-history', () => {
     expect(message?.content).toBe('Safe public answer');
     expect(message?.agentEvents).toBeUndefined();
     expect(message?.cloudAgentRun).toBeUndefined();
+    expect(message?.cloudApprovalDecisions).toBeUndefined();
+    expect(message?.cloudApprovalError).toBeUndefined();
   });
 
   it('writes to the explicit conversation owner even when another panel changes the active chat', async () => {

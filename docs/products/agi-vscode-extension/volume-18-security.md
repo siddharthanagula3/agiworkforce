@@ -1,18 +1,18 @@
 # AGI VS Code Extension — Volume 18 — Security
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`. Grounded in real repo paths: `apps/extension-vscode/package.json` (manifest, `capabilities.untrustedWorkspaces`), `apps/extension-vscode/src/utils/api.ts` (SecretStorage), `apps/extension-vscode/src/features/account-auth/deviceAuth.ts` (device sign-in), `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` (bridge token + auth), `apps/extension-vscode/src/platform/config.ts` (trust-gated config), `apps/extension-vscode/src/providers/terminalProvider.ts`, `apps/extension-vscode/src/providers/agentMode/agentUI.ts`, `apps/extension-vscode/src/core/commandSetup.ts`.
 
 ## Overview & stance
 
-Security for the AGI VS Code Extension is shaped by the three trust modes it exposes — **Local**, **BYOK** (Desktop/CLI/VS Code only), and **Managed Cloud** — each with an explicit selection and a visible provider label. This surface is workspace-scoped: there is **no automatic app-chat sync**, and any handoff to app chat must be explicit and redacted (see `apps/extension-vscode/AGENTS.md`). Secrets never leave device boundaries silently, Local sessions are never routed to BYOK or Cloud without an explicit fork, and tool execution is gated behind VS Code Workspace Trust. The extension holds real provider keys (unlike Chrome), so key custody, the shared localhost bridge token, and approval-gated write/execute paths are the core attack surface this volume governs.
+Security for the AGI VS Code Extension is shaped by three trust modes — **Local**, **BYOK**, and **Managed Cloud** — with explicit selection and visible host/provider labels. The surface is workspace-scoped with no automatic app-chat sync. Developer-session provider credentials are owned by the local app-server/CLI, while the extension stores only its legacy AGI gateway credential and Managed account token. Key custody, workspace-path containment, the optional localhost bridge token, and approval-gated write/execute paths are the core attack surface.
 
 ## Secret Storage — VS Code SecretStorage
 
-All persisted secrets live in `vscode.SecretStorage` (OS keychain–backed), never in `settings.json`, workspace state, or globalState. ✅ Built: `src/utils/api.ts` stores the BYOK provider key under `agiWorkforce.apiKey` (`getApiKey`/`setApiKey`/`clearApiKey`) and the AGI Cloud account token under `agiWorkforce.accountToken` (`getAccountToken`/`setAccountToken`). Requirements: (1) no secret is ever written to a config key or logged; (2) `clearApiKey`/sign-out must delete the corresponding SecretStorage entry; (3) settings that could redirect traffic (`apiEndpoint`, `gatewayUrl`, `telemetryEndpoint`) are workspace-trust restricted (see below) so an untrusted workspace cannot exfiltrate a stored secret to an attacker endpoint. 🔭 Planned: per-provider distinct keys for multi-provider BYOK sessions and a "reveal/rotate key" audit surface.
+All extension-persisted secrets live in `vscode.SecretStorage`, never settings, workspace state, or globalState. `src/utils/api.ts` stores the legacy AGI gateway key under `agiWorkforce.apiKey` and the Cloud account token under `agiWorkforce.accountToken`. Provider keys used by developer sessions remain in the CLI/runtime's own credential store. Clearing/signing out deletes the corresponding extension secret, and endpoint/gateway/telemetry redirect settings are workspace-trust restricted.
 
 ## OAuth
 
@@ -20,11 +20,11 @@ Managed Cloud sign-in uses an RFC-8628-style **device authorization flow**, not 
 
 ## API Keys
 
-BYOK is a **first-class, opt-in** mode on this surface only. ✅ Built: the `agi-workforce.setApiKey` and `agi-workforce.clearApiKey` commands (`apps/extension-vscode/package.json`) write/remove the key through the SecretStorage helpers in `src/utils/api.ts`. Requirements: (1) keys are entered via masked input, never echoed; (2) a Local→BYOK transition is an explicit fork with context selection, secret scan, payload preview, visible provider label, and consent (canon) — the extension must never silently promote a Local session to a keyed provider; (3) the active provider must be labeled in the UI so the user always knows which trust mode is live; (4) BYOK keys are never synced (Neon delta-sync carries Managed-Cloud chats only — Local/BYOK rows never sync). 🟡 Partial: the provider-stream path (`agiWorkforce.useProviderStream`) enumerates providers but its manifest note states web auth "is not wired in the VS Code extension yet."
+BYOK is a **first-class, opt-in** developer-session mode. Provider credentials are configured through `agi login <provider>` and consumed by the app-server; the palette's Set/Clear API Key commands manage only the legacy AGI gateway credential. Inputs are masked and never echoed. The sidebar shows Local host plus the resolved provider or Auto routing. A provider-boundary change starts a new thread, does not forward the earlier transcript, and emits a visible notice. Any future feature that forwards existing Local context must add the complete context-selection, secret-scan, payload-preview, and consent ceremony. `agiWorkforce.useProviderStream` is an account-authenticated Managed transport for cloud-backed utilities, not BYOK.
 
 ## Workspace Trust
 
-The extension declares **limited** untrusted-workspace support. ✅ Built: `capabilities.untrustedWorkspaces` in `apps/extension-vscode/package.json` marks it `"supported": "limited"` and lists `restrictedConfigurations` that a workspace cannot override — `apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, `agent.autoApply`, `autoApplyFixes`, `telemetryEndpoint`, and `tier`. Enforced at runtime: `src/platform/config.ts` reads `currentTier` from global scope only (workspace values ignored to prevent tier spoofing); `src/providers/terminalProvider.ts` refuses command execution when `!vscode.workspace.isTrusted`; `src/core/commandSetup.ts` blocks the git-commit and test-run fallbacks in untrusted workspaces; `src/providers/agentMode/agentUI.ts` blocks auto-apply of AI edits and patches until the workspace is trusted (modal "Trust Workspace and Proceed"). Requirement: every new file-write, execute, or endpoint-redirect capability must add an `isTrusted` gate or a restricted-config entry before merge.
+The extension declares **limited** untrusted-workspace support. ✅ Built: `restrictedConfigurations` contains `apiEndpoint`, `gatewayUrl`, `cliPath`, `autoApplyFixes`, `telemetryEndpoint`, and `tier`; a manifest regression test prevents nonexistent settings from being listed. Enforced at runtime: tier values are read from global scope only, terminal execution and git/test fallbacks are refused in untrusted workspaces, and agent edits/patches require trust. Every new file-write, execute, or endpoint-redirect capability must add an `isTrusted` gate or a restricted-config entry before merge.
 
 ## Sandboxing
 
@@ -49,7 +49,7 @@ Actions are approval-gated by agent mode and command allowlists. ✅ Built: `agi
 
 ## Competitor notes
 
-Claude Code and Codex IDE extensions gate agent edits behind approvals, apply diffs locally, and preview cloud handoffs; both lean on a single first-party account. AGI's deliberate divergence: **multi-provider BYOK** with per-provider keys in SecretStorage (Desktop/CLI/VS Code only), **three explicit trust modes** with visible labels rather than one hosted identity, **local-first** custody (Local/BYOK rows never sync; only Managed-Cloud chats delta-sync via Neon), and a **shared localhost bridge** with strict token hygiene and command allowlists. Remote control is a secure window over a locally-running session, not a cloud offload.
+Claude Code and Codex IDE extensions gate agent edits behind approvals, apply diffs locally, and preview cloud handoffs; both lean on a single first-party account. AGI's deliberate divergence is multi-provider BYOK owned by the local runtime, three explicit trust modes with visible labels, local-first custody, and an optional localhost bridge with strict token hygiene and command allowlists. Remote control remains planned as a secure window over a locally running session, not cloud offload.
 
 ## Acceptance / Definition of Done
 

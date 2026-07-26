@@ -1,0 +1,201 @@
+'use client';
+
+import { useId, useState, type FormEvent } from 'react';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  Label,
+} from '@agiworkforce/ui';
+import { getCsrfToken } from '@/lib/client/csrf';
+
+type FeedbackKind = 'bug' | 'feature' | 'general';
+type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
+
+const FEEDBACK_KINDS: Array<{ value: FeedbackKind; label: string }> = [
+  { value: 'general', label: 'General feedback' },
+  { value: 'bug', label: 'Something is broken' },
+  { value: 'feature', label: 'Feature request' },
+];
+
+interface ComposerFeedbackDialogProps {
+  conversationId?: string | null;
+}
+
+export function ComposerFeedbackDialog({ conversationId }: ComposerFeedbackDialogProps) {
+  const messageId = useId();
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<FeedbackKind>('general');
+  const [message, setMessage] = useState('');
+  const [submitState, setSubmitState] = useState<SubmitState>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setSubmitState('idle');
+      setErrorMessage(null);
+    }
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage || submitState === 'submitting') return;
+
+    setSubmitState('submitting');
+    setErrorMessage(null);
+
+    try {
+      const csrfToken = await getCsrfToken();
+      const selectedKind =
+        FEEDBACK_KINDS.find((option) => option.value === kind)?.label ?? 'Feedback';
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({
+          subject: `${selectedKind} · Web chat`,
+          message: trimmedMessage,
+          metadata: {
+            source: 'web',
+            platform: 'web',
+            version: process.env['NEXT_PUBLIC_APP_VERSION'] ?? 'unknown',
+            user_agent: navigator.userAgent,
+            page_path: window.location.pathname,
+            ...(conversationId ? { conversation_id: conversationId } : {}),
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: { message?: string } | string;
+          message?: string;
+        } | null;
+        const serverMessage =
+          typeof body?.error === 'string'
+            ? body.error
+            : (body?.error?.message ?? body?.message ?? null);
+        throw new Error(serverMessage || 'Could not send feedback. Please try again.');
+      }
+
+      setSubmitState('success');
+      setMessage('');
+    } catch (error) {
+      setSubmitState('error');
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Could not send feedback. Please try again.',
+      );
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        Feedback
+      </button>
+
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent
+          className="w-[min(94vw,30rem)] border-border/70 bg-background sm:rounded-2xl"
+          closeLabel="Close feedback dialog"
+        >
+          <DialogHeader>
+            <DialogTitle>Share feedback</DialogTitle>
+            <DialogDescription>
+              Tell us what worked, what did not, or what you would like AGI to do next.
+            </DialogDescription>
+          </DialogHeader>
+
+          {submitState === 'success' ? (
+            <div className="space-y-4 py-2">
+              <p role="status" className="text-sm text-foreground">
+                Thanks — your feedback was sent.
+              </p>
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => setOpen(false)}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium text-foreground">Feedback type</legend>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {FEEDBACK_KINDS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={kind === option.value}
+                      onClick={() => setKind(option.value)}
+                      className={
+                        kind === option.value
+                          ? 'rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 text-left text-xs font-medium text-foreground'
+                          : 'rounded-lg border border-border bg-muted/30 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground'
+                      }
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div className="space-y-2">
+                <Label htmlFor={messageId}>Details</Label>
+                <textarea
+                  id={messageId}
+                  value={message}
+                  onChange={(event) => {
+                    setMessage(event.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  required
+                  maxLength={10_000}
+                  rows={6}
+                  autoFocus
+                  placeholder="What happened, what did you expect, or what should we build?"
+                  className="w-full resize-y rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
+                />
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  We include your app version, browser type, and current AGI page so we can diagnose
+                  the report. Your prompt and conversation content are not attached.
+                </p>
+              </div>
+
+              {errorMessage ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {errorMessage}
+                </p>
+              ) : null}
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!message.trim() || submitState === 'submitting'}
+                  isLoading={submitState === 'submitting'}
+                >
+                  Send feedback
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

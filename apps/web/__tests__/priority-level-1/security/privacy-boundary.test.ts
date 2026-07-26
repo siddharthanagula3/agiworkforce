@@ -73,7 +73,7 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
 
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'anthropic',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       feature: 'chat',
     });
     expect(res).toBeNull();
@@ -101,7 +101,7 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
 
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'anthropic',
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
     });
     // null === gate passed; the route may proceed.
     expect(res).toBeNull();

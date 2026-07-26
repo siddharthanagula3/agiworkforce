@@ -67,4 +67,4 @@ Claude Code, ChatGPT, and Codex IDE extensions collect usage and error telemetry
 - Adding a stable device/user identifier; `sessionId` is per-activation and random.
 - Widening the endpoint allowlist to wildcard subdomains, or letting workspace settings override the endpoint in untrusted workspaces.
 - Referencing Supabase, or reusing the Neon delta-sync path for analytics (that path is Managed-Cloud chat data only).
-- 🟡 Gap — `package.json` `agiWorkforce.tier` still enumerates removed tiers (`hobby`, `pro_plus`); analytics must not label events with retired tier names. Use only Free / Basic / Pro / Max / Enterprise; the enum cleanup is the separately tracked billing-catalog reconciliation.
+- Analytics must not label events with retired tier names; the extension access-mode enum preserves every canonical plan value.

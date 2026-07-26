@@ -200,27 +200,48 @@ impl MachineKeyManager {
     }
 
     fn fallback_install_id(&self) -> String {
+        Self::fallback_install_id_for_machine(&self.machine_id)
+    }
+
+    fn fallback_install_id_for_machine(machine_id: &str) -> String {
         use sha2::{Digest, Sha256};
 
         let mut hasher = Sha256::new();
-        hasher.update(self.machine_id.as_bytes());
+        hasher.update(machine_id.as_bytes());
         hasher.update(b"install_id_fallback");
         hex::encode(hasher.finalize())
     }
 
     fn derive_key_for_install_id(&self, install_id: &str, purpose: KeyPurpose) -> [u8; KEY_SIZE] {
+        Self::derive_key_for_machine_and_install(&self.machine_id, install_id, purpose)
+    }
+
+    fn derive_key_for_machine_and_install(
+        machine_id: &str,
+        install_id: &str,
+        purpose: KeyPurpose,
+    ) -> [u8; KEY_SIZE] {
         let salt = format!(
             "{}:{}:{}:{}",
-            self.machine_id,
+            machine_id,
             APP_BUNDLE_ID,
             install_id,
             purpose.as_str()
         );
 
         pbkdf2_hmac_array::<Sha256, KEY_SIZE>(
-            self.machine_id.as_bytes(),
+            machine_id.as_bytes(),
             salt.as_bytes(),
             PBKDF2_ITERATIONS,
+        )
+    }
+
+    fn derive_legacy_database_key_for_machine(machine_id: &str) -> [u8; KEY_SIZE] {
+        let install_id = Self::fallback_install_id_for_machine(machine_id);
+        Self::derive_key_for_machine_and_install(
+            machine_id,
+            &install_id,
+            KeyPurpose::DatabaseEncryption,
         )
     }
 
@@ -259,6 +280,92 @@ pub fn get_machine_id_hash() -> String {
     hasher.update(MACHINE_KEY_MANAGER.machine_id.as_bytes());
     // Return truncated hash for privacy
     hex::encode(&hasher.finalize()[..8])
+}
+
+/// Return every source-backed key that a pre-Keychain Desktop build could have
+/// derived for the main database on this machine.
+///
+/// The old macOS implementation used `machine-uid`, which shells out to
+/// `ioreg`. App Sandbox can deny that subprocess even though reading the same
+/// IORegistry property directly is permitted. Keep both derivations so a
+/// packaged app can perform a read-only proof against databases created by
+/// either execution environment. Callers must never persist or use a candidate
+/// unless SQLCipher successfully reads the existing database with it.
+pub fn legacy_database_key_candidates() -> Vec<[u8; KEY_SIZE]> {
+    let mut machine_ids = vec![MACHINE_KEY_MANAGER.machine_id.clone()];
+
+    let fallback_machine_id = MachineKeyManager::get_fallback_machine_id();
+    if !machine_ids.contains(&fallback_machine_id) {
+        machine_ids.push(fallback_machine_id);
+    }
+
+    #[cfg(target_os = "macos")]
+    if let Some(platform_uuid) = macos_platform_uuid() {
+        if !machine_ids.contains(&platform_uuid) {
+            machine_ids.push(platform_uuid);
+        }
+    }
+
+    let mut keys = Vec::with_capacity(machine_ids.len());
+    for machine_id in machine_ids {
+        let key = MachineKeyManager::derive_legacy_database_key_for_machine(&machine_id);
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys
+}
+
+/// Read the hardware UUID through IOKit without spawning `ioreg`.
+///
+/// IORegistry reads are available to sandboxed macOS applications. The
+/// CoreFoundation type check prevents treating an unexpected property value as
+/// a string, and both owned IOKit/CoreFoundation references are released on
+/// every path.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn macos_platform_uuid() -> Option<String> {
+    use core_foundation::base::{kCFAllocatorDefault, CFGetTypeID, CFRelease, TCFType};
+    use core_foundation::string::{CFString, CFStringRef};
+    use io_kit_sys::types::IO_OBJECT_NULL;
+
+    unsafe {
+        let matching = io_kit_sys::IOServiceMatching(c"IOPlatformExpertDevice".as_ptr());
+        if matching.is_null() {
+            return None;
+        }
+
+        // IOServiceGetMatchingService consumes the matching dictionary.
+        let service =
+            io_kit_sys::IOServiceGetMatchingService(io_kit_sys::kIOMasterPortDefault, matching);
+        if service == IO_OBJECT_NULL {
+            return None;
+        }
+
+        let property_name = CFString::new("IOPlatformUUID");
+        let property = io_kit_sys::IORegistryEntryCreateCFProperty(
+            service,
+            property_name.as_concrete_TypeRef(),
+            kCFAllocatorDefault,
+            0,
+        );
+        let _ = io_kit_sys::IOObjectRelease(service);
+
+        if property.is_null() {
+            return None;
+        }
+
+        if CFGetTypeID(property) != CFString::type_id() {
+            CFRelease(property);
+            return None;
+        }
+
+        let value = CFString::wrap_under_create_rule(property as CFStringRef)
+            .to_string()
+            .trim()
+            .to_string();
+        (!value.is_empty()).then_some(value)
+    }
 }
 
 /// Derive an encryption key using a password combined with machine ID (SECSYS-001)
@@ -344,6 +451,37 @@ mod tests {
         let key1 = derive_key(KeyPurpose::JwtSecret);
         let key2 = derive_key(KeyPurpose::JwtSecret);
         assert_eq!(key1, key2);
+    }
+
+    #[test]
+    fn legacy_database_candidates_include_current_derivation_without_duplicates() {
+        let current: [u8; KEY_SIZE] = derive_key(KeyPurpose::DatabaseEncryption)
+            .try_into()
+            .expect("database key length");
+        let candidates = legacy_database_key_candidates();
+
+        assert!(candidates.contains(&current));
+        assert!(candidates
+            .iter()
+            .all(|candidate| candidate.len() == KEY_SIZE));
+        for (index, candidate) in candidates.iter().enumerate() {
+            assert!(
+                !candidates[..index].contains(candidate),
+                "legacy candidates must be deduplicated"
+            );
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn direct_iokit_platform_uuid_matches_legacy_machine_uid_when_available() {
+        let Some(direct_uuid) = macos_platform_uuid() else {
+            panic!("IOPlatformUUID should be readable directly through IOKit");
+        };
+
+        if let Ok(legacy_uuid) = machine_uid::get() {
+            assert_eq!(direct_uuid, legacy_uuid);
+        }
     }
 
     #[test]

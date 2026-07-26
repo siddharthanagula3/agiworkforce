@@ -5,6 +5,7 @@ import { render } from '@testing-library/react-native';
 jest.mock('expo-router', () => ({
   useRouter: () => ({
     navigate: jest.fn(),
+    push: jest.fn(),
   }),
 }));
 
@@ -41,6 +42,11 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { connectors: false } }));
+
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (s: { isClerkLoaded: boolean; isClerkSignedIn: boolean }) => unknown) =>
+    selector({ isClerkLoaded: true, isClerkSignedIn: true }),
+}));
 
 import CloudConnectorsScreen from '../app/(app)/settings/cloud-connectors';
 

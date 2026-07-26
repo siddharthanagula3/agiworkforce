@@ -7,6 +7,7 @@ export { ConversationTreeItem, ConversationTreeProvider } from './conversationTr
 export {
   ContextItem,
   ContextPanelProvider,
+  validateWorkspaceContextFile,
   setContextPanelInstance,
   getContextPanelProvider,
 } from './contextPanelProvider';

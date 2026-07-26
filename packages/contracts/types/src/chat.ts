@@ -41,7 +41,7 @@ import type {
  *   content: 'Here is the refactored code...',
  *   kind: 'text',
  *   status: 'delivered',
- *   model: 'claude-opus-4.8',
+ *   model: 'claude-opus-5',
  *   provider: 'anthropic',
  *   createdAt: '2026-03-15T10:30:00Z',
  *   tokenCount: 512,
@@ -325,7 +325,7 @@ export interface SignedUploadResponse {
  * const conversation: Conversation = {
  *   id: 'conv-abc',
  *   title: 'Code Review Discussion',
- *   model: 'claude-opus-4.8',
+ *   model: 'claude-opus-5',
  *   provider: 'anthropic',
  *   messageCount: 12,
  *   createdAt: '2026-03-15T10:00:00Z',

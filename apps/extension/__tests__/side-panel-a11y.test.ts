@@ -13,7 +13,9 @@ describe('Chrome side-panel interaction accessibility', () => {
     expect(source).toContain("const opt = el('button', {");
     expect(source).toContain("const screenshotItem = el('button', {");
     expect(source).toContain("const fileItem = el('button', {");
-    expect(source).toContain("const chip = el('button', { class: 'sp-cmd-chip', type: 'button' }, cmd)");
+    expect(source).toContain(
+      "const chip = el('button', { class: 'sp-cmd-chip', type: 'button' }, cmd)",
+    );
   });
 
   it('names the composer controls and announces streamed chat updates', () => {
@@ -26,8 +28,8 @@ describe('Chrome side-panel interaction accessibility', () => {
     expect(source).toContain("'aria-label': 'Voice input'");
   });
 
-  it('requires explicit confirmation before enabling act-without-asking mode', () => {
-    expect(source).toContain('Enable “Act without asking”?');
-    expect(source).toContain('window.confirm');
+  it('does not expose an autonomy selector whose value is not connected to execution', () => {
+    expect(source).not.toContain("id: 'sp-action-mode-toggle'");
+    expect(source).not.toContain('Act without asking');
   });
 });

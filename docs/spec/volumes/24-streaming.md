@@ -68,7 +68,7 @@ CopilotKit's AG-UI SSE taxonomy (`TEXT_DELTA` / `TOOL_CALL_*` / `STATE_SNAPSHOT`
 
 - [ ] Context overflow triggers drain → compact (summary-replaces-history) → escalate, never a raw error.
 - [ ] Compaction summary is resume-grade (adapt gemini-cli `<state_snapshot>`), with an inflation guard.
-- [ ] Tokenizer drift (e.g. Claude Opus 4.8) is budgeted so cached prompts don't overshoot the window mid-stream.
+- [ ] Catalog-declared tokenizer drift is budgeted so cached prompts do not overshoot the window mid-stream.
 
 ### Trust & labels
 

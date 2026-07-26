@@ -37,7 +37,7 @@ echo -e "${GREEN}✓ Homebrew installed${NC}"
 
 # Check for Node.js
 if ! command -v node &> /dev/null; then
-    echo -e "${RED}Node.js not found. Please install Node.js 22+${NC}"
+    echo -e "${RED}Node.js not found. Please install Node.js 24+${NC}"
     exit 1
 fi
 echo -e "${GREEN}✓ Node.js $(node -v) installed${NC}"

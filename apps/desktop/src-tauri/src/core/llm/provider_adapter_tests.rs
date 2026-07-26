@@ -1016,7 +1016,7 @@ mod tests {
         };
 
         let opus = adapter
-            .adapt_request(&request_for("claude-opus-4.8", None))
+            .adapt_request(&request_for("claude-opus-5", None))
             .expect("Opus effort request should adapt");
         assert!(opus.get("effort").is_none());
         assert_eq!(opus["output_config"]["effort"], "high");
@@ -1029,7 +1029,7 @@ mod tests {
 
         let structured = adapter
             .adapt_request(&request_for(
-                "claude-opus-4.8",
+                "claude-opus-5",
                 Some(OutputConfig {
                     format: OutputFormat::JsonSchema {
                         name: "answer".to_string(),
@@ -1763,7 +1763,7 @@ mod tests {
     // ────────────────────────────────────────────────────────────────
 
     #[test]
-    fn test_anthropic_adapter_thinking_enabled_true() {
+    fn test_anthropic_adapter_opus_enabled_uses_adaptive_thinking() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
 
         let request = LLMRequest {
@@ -1774,7 +1774,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-4.8".to_string(),
+            model: "claude-opus-5".to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -1798,12 +1798,8 @@ mod tests {
         };
 
         let adapted = adapter.adapt_request(&request).unwrap();
-        // Anthropic requires {"type": "enabled", "budget_tokens": N}, NOT bare `true`
-        assert_eq!(adapted["thinking"]["type"], "enabled");
-        assert!(
-            adapted["thinking"]["budget_tokens"].as_u64().unwrap() > 0,
-            "budget_tokens must be positive"
-        );
+        assert_eq!(adapted["thinking"]["type"], "adaptive");
+        assert!(adapted["thinking"].get("budget_tokens").is_none());
     }
 
     #[test]
@@ -1846,7 +1842,7 @@ mod tests {
     }
 
     #[test]
-    fn test_anthropic_adapter_thinking_budget() {
+    fn test_anthropic_adapter_opus_legacy_budget_uses_adaptive_thinking() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
 
         let request = LLMRequest {
@@ -1857,7 +1853,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-4.8".to_string(),
+            model: "claude-opus-5".to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -1884,12 +1880,12 @@ mod tests {
         };
 
         let adapted = adapter.adapt_request(&request).unwrap();
-        assert_eq!(adapted["thinking"]["type"], "enabled");
-        assert_eq!(adapted["thinking"]["budget_tokens"], 16384);
+        assert_eq!(adapted["thinking"]["type"], "adaptive");
+        assert!(adapted["thinking"].get("budget_tokens").is_none());
     }
 
     #[test]
-    fn test_anthropic_adapter_thinking_level_maps_to_budget() {
+    fn test_anthropic_adapter_opus_level_uses_adaptive_thinking() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
 
         let request = LLMRequest {
@@ -1900,7 +1896,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-4.8".to_string(),
+            model: "claude-opus-5".to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -1927,11 +1923,88 @@ mod tests {
         };
 
         let adapted = adapter.adapt_request(&request).unwrap();
-        assert_eq!(adapted["thinking"]["type"], "enabled");
-        assert_eq!(
-            adapted["thinking"]["budget_tokens"], 16384,
-            "high level should map to 16384 budget tokens"
-        );
+        assert_eq!(adapted["thinking"]["type"], "adaptive");
+        assert!(adapted["thinking"].get("budget_tokens").is_none());
+    }
+
+    #[test]
+    fn test_anthropic_adapter_opus_suppresses_sampling_parameters() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Analyze this".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-opus-5".to_string(),
+            temperature: Some(0.2),
+            max_tokens: Some(4096),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: Some(0.8),
+            top_k: Some(20),
+            system: None,
+            thinking: None,
+            response_format: None,
+            output_config: None,
+            cache_control: None,
+            effort: Some("high".to_string()),
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let adapted = adapter.adapt_request(&request).unwrap();
+        assert!(adapted.get("temperature").is_none());
+        assert!(adapted.get("top_p").is_none());
+        assert!(adapted.get("top_k").is_none());
+    }
+
+    #[test]
+    fn test_anthropic_adapter_rejects_disabled_opus_at_max_effort() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+        let request = LLMRequest {
+            messages: vec![ChatMessage {
+                role: "user".to_string(),
+                content: "Analyze this".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            model: "claude-opus-5".to_string(),
+            temperature: None,
+            max_tokens: Some(4096),
+            stream: false,
+            tools: None,
+            tool_choice: None,
+            thinking_mode: None,
+            top_p: None,
+            top_k: None,
+            system: None,
+            thinking: Some(ThinkingParameter::Enabled(false)),
+            response_format: None,
+            output_config: None,
+            cache_control: None,
+            effort: Some("max".to_string()),
+            thinking_level: None,
+            metadata: None,
+            audio_output: None,
+            background: None,
+            previous_response_id: None,
+            conversation_id: None,
+        };
+
+        let error = adapter
+            .adapt_request(&request)
+            .expect_err("disabled thinking at max effort must fail before the provider call");
+        assert!(error.to_string().contains("high"));
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -2017,7 +2090,7 @@ mod tests {
             "id": "msg_789",
             "type": "message",
             "role": "assistant",
-            "model": "claude-opus-4.8",
+            "model": "claude-opus-5",
             "content": [
                 {
                     "type": "thinking",

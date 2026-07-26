@@ -21,6 +21,8 @@ export interface HistoryMessage {
   timestamp: number;
   agentEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
+  cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
+  cloudApprovalError?: string;
 }
 
 export interface ConversationEntry {
@@ -95,6 +97,33 @@ function normalizeHistoryMessage(value: unknown): HistoryMessage | undefined {
   if (message['role'] === 'assistant') {
     const run = ManagedCloudAgentRunReferenceSchema.safeParse(message['cloudAgentRun']);
     if (run.success) normalized.cloudAgentRun = run.data;
+    const decisions = message['cloudApprovalDecisions'];
+    if (decisions && typeof decisions === 'object' && !Array.isArray(decisions)) {
+      const entries = Object.entries(decisions);
+      if (
+        entries.length <= 32 &&
+        entries.every(
+          ([toolCallId, decision]) =>
+            toolCallId.length > 0 &&
+            toolCallId.length <= 128 &&
+            !containsControlCharacter(toolCallId) &&
+            (decision === 'approved' || decision === 'rejected'),
+        )
+      ) {
+        normalized.cloudApprovalDecisions = Object.fromEntries(entries) as Record<
+          string,
+          'approved' | 'rejected'
+        >;
+      }
+    }
+    if (
+      typeof message['cloudApprovalError'] === 'string' &&
+      message['cloudApprovalError'].length > 0 &&
+      message['cloudApprovalError'].length <= 500 &&
+      !containsControlCharacter(message['cloudApprovalError'])
+    ) {
+      normalized.cloudApprovalError = message['cloudApprovalError'];
+    }
   }
   return normalized;
 }

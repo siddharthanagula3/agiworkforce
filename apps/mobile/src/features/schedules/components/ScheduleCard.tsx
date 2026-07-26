@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, type GestureResponderEvent } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Clock, Trash2, ChevronDown, ChevronUp } from 'lucide-react-native';
@@ -12,6 +12,7 @@ import { ScheduleRunHistory } from './ScheduleRunHistory';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
 import type { Schedule } from '../store';
+import { isMobileScheduleRecurrenceSupported } from '../policy';
 
 interface ScheduleCardProps {
   schedule: Schedule;
@@ -143,20 +144,29 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const statusBadge = getStatusBadge(schedule.lastRunStatus);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const hasLegacyCadence = !isMobileScheduleRecurrenceSupported(schedule.recurrence);
 
-  const handleDelete = useCallback(() => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    onDelete(schedule.id);
-  }, [hapticsEnabled, onDelete, schedule.id]);
+  const handleDelete = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      onDelete(schedule.id);
+    },
+    [hapticsEnabled, onDelete, schedule.id],
+  );
 
-  const handleToggleHistory = useCallback(() => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    setHistoryExpanded((v) => !v);
-  }, [hapticsEnabled]);
+  const handleToggleHistory = useCallback(
+    (event: GestureResponderEvent) => {
+      event.stopPropagation();
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      setHistoryExpanded((v) => !v);
+    },
+    [hapticsEnabled],
+  );
 
   return (
     <Animated.View
@@ -189,6 +199,11 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             <Clock size={13} color={colors.textMuted} />
             <Text className="text-xs text-white/60">{formatRecurrence(schedule)}</Text>
           </View>
+          {hasLegacyCadence ? (
+            <Text className="mb-2.5 text-xs leading-4 text-amber-400">
+              Legacy cadence — Cloud checks schedules once daily. Edit before reactivating.
+            </Text>
+          ) : null}
 
           {/* Row 4: Model + Last run status */}
           <View className="flex-row items-center gap-2 mb-2">

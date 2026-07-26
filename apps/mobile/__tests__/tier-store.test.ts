@@ -3,7 +3,9 @@
  *
  * Verifies:
  *  - Defaults to 'free' tier
- *  - refreshTier() fetches /api/auth/me and persists the normalised tier
+ *  - refreshTier() fetches the mobile /api/me capability handshake
+ *  - paid access is derived from plan status, never the raw tier alone
+ *  - account-scoped entitlement state is cleared atomically on sign-out
  *  - refreshTier() falls back to cached tier on network error
  *  - refreshTier() de-duplicates concurrent calls
  *  - setTier() overrides locally
@@ -24,6 +26,11 @@ jest.mock('../lib/mmkv', () => ({
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
     removeItem: jest.fn(),
+  },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -53,28 +60,16 @@ jest.mock('../services/api', () => {
   };
 });
 
-// Override only the billing normalizer. Cloud-contract schemas loaded by the
-// store also consume shared contract constants from this package.
-jest.mock('@agiworkforce/types', () => {
-  const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
-  return {
-    ...actual,
-    normalizeBillingPlanTier: (val: string | null | undefined): string => {
-      if (!val) return 'free';
-      const known = ['local-only', 'byok', 'free', 'hobby', 'pro', 'pro_plus', 'max', 'enterprise'];
-      const lower = val.toLowerCase();
-      return known.includes(lower) ? lower : 'free';
-    },
-  };
-});
-
 // ---------------------------------------------------------------------------
 // Imports
 // ---------------------------------------------------------------------------
 
 import { useTierStore } from '../src/features/billing/store';
 import { api } from '../services/api';
-import { FEATURES } from '../lib/v1FeatureFlags';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 // Retrieve the mock function reference AFTER imports (the factory ran during hoisting)
 const mockApiGet = api.get as jest.Mock;
@@ -92,7 +87,18 @@ function getState() {
  * cloud-contracts/me.ts). refreshTier() now validates responses with
  * parseMeResponse, so partial payloads throw and fall back to the cached tier.
  */
-function mePayload(tier: string) {
+function mePayload(
+  tier: string,
+  {
+    status = 'active',
+    granted = ['canChat', 'canUseCloudExecution', 'canUseConnectors'],
+    codeExecution = true,
+  }: {
+    status?: string;
+    granted?: string[];
+    codeExecution?: boolean;
+  } = {},
+) {
   return {
     id: 'user_test_1',
     email: 'test@example.com',
@@ -100,25 +106,43 @@ function mePayload(tier: string) {
     avatar_url: null,
     created_at: null,
     updated_at: 1751712000,
-    plan: { tier, display_name: tier, status: 'active', current_period_end: null },
+    plan: { tier, display_name: tier, status, current_period_end: null },
     feature_flags: {
       beta_features: true,
       advanced_model_access: true,
+      code_execution: codeExecution,
       generic_web_search: true,
     },
     credits: null,
     routing_preferences: {},
+    capability_handshake: {
+      sessionId: 'user_test_1',
+      version: 'mobile-capabilities-v1',
+      computedAt: '2026-07-26T00:00:00.000Z',
+      sources: {
+        model: 'models.json@1',
+        tier: `tier:${tier}`,
+        surface: 'surface:mobile',
+        settings: 'settings:none-configured',
+      },
+      granted,
+      deniedBy: {},
+    },
   };
 }
 
 function resetStore() {
   useTierStore.setState({
     tier: 'free',
+    billingTier: 'free',
     isRefreshing: false,
     lastRefreshedAt: null,
     currentConversationProvider: null,
+    grantedCapabilities: [],
+    capabilityHandshakeVersion: null,
+    codeExecutionAvailable: false,
     genericWebSearchAvailable: false,
-  });
+  } as never);
 }
 
 // ---------------------------------------------------------------------------
@@ -127,6 +151,8 @@ function resetStore() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('tier-test-user-a');
   resetStore();
 });
 
@@ -139,6 +165,10 @@ describe('tierStore defaults', () => {
     expect(getState().tier).toBe('free');
   });
 
+  it('starts with raw billing tier = free', () => {
+    expect((getState() as unknown as { billingTier: string }).billingTier).toBe('free');
+  });
+
   it('starts with isRefreshing = false', () => {
     expect(getState().isRefreshing).toBe(false);
   });
@@ -148,17 +178,13 @@ describe('tierStore defaults', () => {
   });
 });
 
-// refreshTier() is a no-op when FEATURES.billing = false (v1 local-only).
-// These tests verify cloud billing behaviour and are skipped in v1 config.
-const describeRefreshTier = FEATURES.billing ? describe : describe.skip;
-
-describeRefreshTier('refreshTier — success cases', () => {
+describe('refreshTier — success cases', () => {
   it('hydrates tier from /api/me plan field', async () => {
-    mockApiGet.mockResolvedValueOnce(mePayload('hobby'));
+    mockApiGet.mockResolvedValueOnce(mePayload('basic'));
 
     await getState().refreshTier();
 
-    expect(getState().tier).toBe('hobby');
+    expect(getState().tier).toBe('basic');
   });
 
   it('normalises "PRO" to "pro"', async () => {
@@ -173,7 +199,7 @@ describeRefreshTier('refreshTier — success cases', () => {
     // Partial payloads (missing id/email/plan envelope) fail parseMeResponse —
     // the store must degrade to the cached tier, exactly like a network error.
     useTierStore.setState({ tier: 'pro', isRefreshing: false, lastRefreshedAt: null });
-    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'hobby' } });
+    mockApiGet.mockResolvedValueOnce({ plan: { tier: 'basic' } });
 
     await getState().refreshTier();
 
@@ -182,7 +208,7 @@ describeRefreshTier('refreshTier — success cases', () => {
   });
 
   it('sets lastRefreshedAt on success', async () => {
-    mockApiGet.mockResolvedValueOnce(mePayload('pro_plus'));
+    mockApiGet.mockResolvedValueOnce(mePayload('max_15x'));
     const before = Date.now();
 
     await getState().refreshTier();
@@ -201,11 +227,11 @@ describeRefreshTier('refreshTier — success cases', () => {
   });
 
   it('calls the /api/me endpoint', async () => {
-    mockApiGet.mockResolvedValueOnce(mePayload('hobby'));
+    mockApiGet.mockResolvedValueOnce(mePayload('basic'));
 
     await getState().refreshTier();
 
-    expect(mockApiGet).toHaveBeenCalledWith('/api/me');
+    expect(mockApiGet).toHaveBeenCalledWith('/api/me?surface=mobile');
   });
 
   it('hydrates the generic web-search deployment capability', async () => {
@@ -214,6 +240,46 @@ describeRefreshTier('refreshTier — success cases', () => {
     await getState().refreshTier();
 
     expect(getState().genericWebSearchAvailable).toBe(true);
+  });
+
+  it('keeps the raw plan for billing copy but fails closed on a canceled paid plan', async () => {
+    mockApiGet.mockResolvedValueOnce(mePayload('pro', { status: 'canceled' }));
+
+    await getState().refreshTier();
+
+    expect(getState().tier).toBe('free');
+    expect((getState() as unknown as { billingTier: string }).billingTier).toBe('pro');
+  });
+
+  it('persists the server-authoritative capability handshake', async () => {
+    mockApiGet.mockResolvedValueOnce(
+      mePayload('max', {
+        granted: ['canChat', 'canUseDeepResearch', 'canUseConnectors'],
+      }),
+    );
+
+    await getState().refreshTier();
+
+    const state = getState() as unknown as {
+      grantedCapabilities: string[];
+      capabilityHandshakeVersion: string | null;
+    };
+    expect(state.grantedCapabilities).toEqual([
+      'canChat',
+      'canUseDeepResearch',
+      'canUseConnectors',
+    ]);
+    expect(state.capabilityHandshakeVersion).toBe('mobile-capabilities-v1');
+  });
+
+  it('requires both deployment availability and the per-account cloud-execution grant', async () => {
+    mockApiGet.mockResolvedValueOnce(
+      mePayload('max', { granted: ['canChat'], codeExecution: true }),
+    );
+
+    await getState().refreshTier();
+
+    expect(getState().codeExecutionAvailable).toBe(false);
   });
 });
 
@@ -246,7 +312,7 @@ describe('refreshTier — failure cases', () => {
   });
 });
 
-describeRefreshTier('refreshTier — concurrent call de-duplication', () => {
+describe('refreshTier — concurrent call de-duplication', () => {
   it('skips a second concurrent call if one is already in flight', async () => {
     // Make the first call slow so the second call sees isRefreshing=true
     let resolveFirst!: (v: unknown) => void;
@@ -267,9 +333,33 @@ describeRefreshTier('refreshTier — concurrent call de-duplication', () => {
     expect(mockApiGet).toHaveBeenCalledTimes(1);
 
     // Resolve the first call
-    resolveFirst(mePayload('hobby'));
+    resolveFirst(mePayload('basic'));
     await first;
-    expect(getState().tier).toBe('hobby');
+    expect(getState().tier).toBe('basic');
+  });
+
+  it('ignores an account-A response that resolves after switching to account B', async () => {
+    let resolveAccountA!: (value: unknown) => void;
+    mockApiGet.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAccountA = resolve;
+      }),
+    );
+
+    const accountARefresh = getState().refreshTier();
+    await Promise.resolve();
+    activateCloudAccount('tier-test-user-b');
+    getState().clearAccountEntitlements();
+
+    resolveAccountA(mePayload('max'));
+    await accountARefresh;
+
+    expect(getState()).toMatchObject({
+      tier: 'free',
+      billingTier: 'free',
+      isRefreshing: false,
+      grantedCapabilities: [],
+    });
   });
 });
 
@@ -280,10 +370,52 @@ describe('setTier', () => {
   });
 
   it('does not affect isRefreshing or lastRefreshedAt', () => {
-    getState().setTier('pro_plus');
+    getState().setTier('max_15x');
 
     expect(getState().isRefreshing).toBe(false);
     expect(getState().lastRefreshedAt).toBeNull();
+  });
+});
+
+describe('clearAccountEntitlements', () => {
+  it('clears every account-scoped tier, capability, and provider cache', () => {
+    useTierStore.setState({
+      tier: 'enterprise',
+      billingTier: 'enterprise',
+      lastRefreshedAt: '2026-07-26T00:00:00.000Z',
+      grantedCapabilities: ['canUseDeepResearch', 'canUseConnectors'],
+      capabilityHandshakeVersion: 'version-user-a',
+      codeExecutionAvailable: true,
+      genericWebSearchAvailable: true,
+      currentConversationProvider: 'anthropic',
+    } as never);
+
+    (
+      getState() as unknown as {
+        clearAccountEntitlements: () => void;
+      }
+    ).clearAccountEntitlements();
+
+    const state = getState() as unknown as {
+      tier: string;
+      billingTier: string;
+      lastRefreshedAt: string | null;
+      grantedCapabilities: string[];
+      capabilityHandshakeVersion: string | null;
+      codeExecutionAvailable: boolean;
+      genericWebSearchAvailable: boolean;
+      currentConversationProvider: string | null;
+    };
+    expect(state).toMatchObject({
+      tier: 'free',
+      billingTier: 'free',
+      lastRefreshedAt: null,
+      grantedCapabilities: [],
+      capabilityHandshakeVersion: null,
+      codeExecutionAvailable: false,
+      genericWebSearchAvailable: false,
+      currentConversationProvider: null,
+    });
   });
 });
 

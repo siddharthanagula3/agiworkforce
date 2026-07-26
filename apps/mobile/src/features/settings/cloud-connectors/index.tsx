@@ -12,16 +12,15 @@
  *   3. Gradient tile + 2-char initials — last resort only
  *
  * Cloud-only — gated behind FEATURES.connectors. When the flag is false a
- * waitlist placeholder is shown rather than a dead list.
+ * capability-unavailable placeholder is shown rather than a dead list.
  *
- * Connected state loads from GET /api/connectors (Neon-backed, Clerk-auth).
- * Disconnect calls DELETE /api/connectors. Connect attempts POST — the server
- * currently answers 501 for OAuth providers (per-provider OAuth flows are a
- * tracked backend gap), so the connect action shows honest not-yet-available
- * copy instead of faking a connection.
+ * GET /api/connectors returns both real connected state and the deployment's
+ * available provider ids. Only those rows receive a working Connect action;
+ * GitHub opens the server-owned App installation flow, custom remote-MCP rows
+ * use the encrypted custom route, and unavailable catalog entries stay disabled.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Image,
@@ -33,9 +32,11 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Plug, Link, CheckCircle, RefreshCw, Search } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
+  CloudAccountRequired,
   CloudSyncBlockedBanner,
   SettingsInfo,
   SettingsScreenShell,
@@ -44,11 +45,21 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as WebBrowser from 'expo-web-browser';
 import { AddCustomConnectorModal } from './AddCustomConnectorModal';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useTierStore } from '@/src/features/billing/store';
+import { useAuthStore } from '@/src/features/auth/store';
 import {
-  listConnectedConnectors,
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
+import {
+  connectConnector,
+  deleteCustomConnector,
   disconnectConnector,
+  fetchConnectorDirectory,
   getGitHubInstallWebUrl,
   type ConnectedConnector,
+  type ConnectorDirectory,
 } from '@/services/connectors';
 
 // ---------------------------------------------------------------------------
@@ -464,14 +475,26 @@ function ConnectorCard({
   entry,
   connected,
   connectedAt,
+  available,
+  busy,
   onPress,
 }: {
   entry: ConnectorEntry;
   connected: boolean;
   connectedAt?: string;
-  onPress: () => void;
+  available: boolean;
+  busy: boolean;
+  onPress?: () => void;
 }) {
   const colors = useThemeColors();
+  const status = connected
+    ? 'Connected'
+    : busy
+      ? 'Connecting'
+      : available
+        ? 'Connect'
+        : 'Coming soon';
+  const actionable = !busy && (connected || available);
   const connectedLabel = connectedAt
     ? `Connected ${new Date(connectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
     : 'Connected';
@@ -490,8 +513,10 @@ function ConnectorCard({
     // See known-flaws MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01.
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${entry.name}. ${connected ? 'Connected' : 'Connect'}`}
+      disabled={!actionable}
+      accessibilityRole={actionable ? 'button' : 'text'}
+      accessibilityLabel={`${entry.name}. ${status}`}
+      accessibilityState={{ disabled: !actionable }}
     >
       {({ pressed }) => (
         <View
@@ -536,7 +561,7 @@ function ConnectorCard({
               >
                 <CheckCircle size={15} color={colors.agentSuccess} />
               </View>
-            ) : (
+            ) : available || busy ? (
               // Filled, high-contrast pill — same inverse treatment as the
               // active filter chip below, so the one actionable control on
               // the screen is unambiguous at a glance.
@@ -551,9 +576,13 @@ function ConnectorCard({
                 }}
               >
                 <Text style={{ color: colors.background, fontSize: 13, fontWeight: '700' }}>
-                  Connect
+                  {busy ? 'Connecting…' : 'Connect'}
                 </Text>
               </View>
+            ) : (
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>
+                Coming soon
+              </Text>
             )}
           </View>
         </View>
@@ -611,12 +640,24 @@ export default function CloudConnectorsScreen({
   backHref?: string;
 } = {}) {
   const colors = useThemeColors();
+  const router = useRouter();
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const isCloudModeActive = appMode === 'cloud';
+  const canUseConnectors = useTierStore((s) => s.grantedCapabilities.includes('canUseConnectors'));
+  const isTierRefreshing = useTierStore((s) => s.isRefreshing);
+  const lastTierRefreshAt = useTierStore((s) => s.lastRefreshedAt);
+  const refreshTier = useTierStore((s) => s.refreshTier);
+  const capabilityRefreshOwnerRef = useRef<string | null>(null);
+  const capabilityHandshakePending =
+    isClerkSignedIn && isCloudModeActive && (isTierRefreshing || lastTierRefreshAt === null);
 
-  const [connections, setConnections] = useState<ConnectedConnector[] | null>(null);
+  const [directory, setDirectory] = useState<ConnectorDirectory | null>(null);
   const [loading, setLoading] = useState(false);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Directory filter chips (All | Connected | <category>) + search — mirrors the
   // reference connectors directory layout.
@@ -625,31 +666,98 @@ export default function CloudConnectorsScreen({
   const [addCustomVisible, setAddCustomVisible] = useState(false);
 
   const load = useCallback(async () => {
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
     setLoading(true);
     setError(null);
     try {
-      setConnections(await listConnectedConnectors());
+      const nextDirectory = await fetchConnectorDirectory();
+      if (!isCloudAccountEpochCurrent(account)) return;
+      setDirectory(nextDirectory);
     } catch (err) {
+      if (!isCloudAccountEpochCurrent(account)) return;
       setError(err instanceof Error ? err.message : 'Could not load connectors');
     } finally {
-      setLoading(false);
+      if (isCloudAccountEpochCurrent(account)) setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    setDirectory(null);
+    setLoading(false);
+    setConnectingId(null);
+    setError(null);
+    setActiveFilter('All');
+    setSearch('');
+    setAddCustomVisible(false);
+  }, [clerkUserId]);
+
+  // Empty grants are not an authoritative denial until /api/me has completed
+  // at least once for this owner. A cold-start deep link can render before
+  // RootLayout's refresh resolves; keep a loading state and initiate one
+  // owner-bound refresh instead of flashing "not available" to paid users.
+  useEffect(() => {
+    if (!FEATURES.connectors || !isClerkSignedIn || !clerkUserId || !isCloudModeActive) {
+      capabilityRefreshOwnerRef.current = null;
+      return;
+    }
+    if (
+      lastTierRefreshAt === null &&
+      !isTierRefreshing &&
+      capabilityRefreshOwnerRef.current !== clerkUserId
+    ) {
+      capabilityRefreshOwnerRef.current = clerkUserId;
+      void refreshTier();
+    }
+  }, [
+    clerkUserId,
+    isClerkSignedIn,
+    isCloudModeActive,
+    isTierRefreshing,
+    lastTierRefreshAt,
+    refreshTier,
+  ]);
 
   // guardedFetch blocks cloud requests while chat is in Local mode — skip the
   // doomed request and show the switch-to-cloud banner instead (same pattern
   // as the Usage screen).
   useEffect(() => {
-    if (FEATURES.connectors && isCloudModeActive) void load();
-  }, [load, isCloudModeActive]);
+    if (
+      FEATURES.connectors &&
+      isClerkSignedIn &&
+      isCloudModeActive &&
+      !capabilityHandshakePending &&
+      canUseConnectors
+    ) {
+      void load();
+    }
+  }, [
+    clerkUserId,
+    load,
+    isClerkSignedIn,
+    isCloudModeActive,
+    capabilityHandshakePending,
+    canUseConnectors,
+  ]);
+
+  const connections = directory?.connectors ?? null;
+  const availableIds = useMemo(() => new Set(directory?.available ?? []), [directory]);
 
   const connectionFor = useCallback(
     (id: string) => connections?.find((c) => c.connectorId === id),
     [connections],
   );
 
+  const isConnectorActionCurrent = useCallback((account: CloudAccountEpoch | null) => {
+    return (
+      isCloudAccountEpochCurrent(account) && useChatAppModeStore.getState().appMode === 'cloud'
+    );
+  }, []);
+
   const handlePress = useCallback(
     (entry: ConnectorEntry) => {
+      const account = captureCloudAccountEpoch();
+      if (!isConnectorActionCurrent(account)) return;
       const connection = connectionFor(entry.id);
       if (connection) {
         Alert.alert(`Disconnect ${entry.name}?`, 'Remove this connector from your account.', [
@@ -658,9 +766,17 @@ export default function CloudConnectorsScreen({
             text: 'Disconnect',
             style: 'destructive',
             onPress: () => {
-              disconnectConnector(entry.id)
-                .then(() => load())
+              if (!isConnectorActionCurrent(account)) return;
+              const disconnect =
+                connection.source === 'custom'
+                  ? deleteCustomConnector(connection.id)
+                  : disconnectConnector(entry.id);
+              disconnect
+                .then(() => {
+                  if (isConnectorActionCurrent(account)) return load();
+                })
                 .catch(() => {
+                  if (!isConnectorActionCurrent(account)) return;
                   Alert.alert(
                     'Could not disconnect',
                     `Disconnecting ${entry.name} failed. Please try again.`,
@@ -669,6 +785,8 @@ export default function CloudConnectorsScreen({
             },
           },
         ]);
+      } else if (!availableIds.has(entry.id)) {
+        return;
       } else if (entry.id === 'github') {
         // GitHub uses a GitHub-App installation with a Clerk-cookie web flow.
         // Open that vetted flow in a browser (rather than reimplement OAuth
@@ -679,29 +797,54 @@ export default function CloudConnectorsScreen({
           } catch {
             // Browser could not open — nothing was connected; leave state as-is.
           }
-          void load();
+          if (isConnectorActionCurrent(account)) void load();
         })();
       } else {
-        // Generic third-party OAuth providers still require server-side OAuth app
-        // registration (POST /api/connectors answers 501) — be honest rather than
-        // faking a connected state.
-        Alert.alert(
-          `Connect ${entry.name}`,
-          `${entry.name} sign-in isn't available on mobile yet. It's coming soon.`,
-          [{ text: 'OK' }],
-        );
+        setConnectingId(entry.id);
+        connectConnector(entry.id)
+          .then(() => {
+            if (isConnectorActionCurrent(account)) return load();
+          })
+          .catch((err: unknown) => {
+            if (!isConnectorActionCurrent(account)) return;
+            Alert.alert(
+              `Could not connect ${entry.name}`,
+              err instanceof Error ? err.message : 'Please try again.',
+            );
+          })
+          .finally(() => {
+            if (isConnectorActionCurrent(account)) setConnectingId(null);
+          });
       }
     },
-    [connectionFor, load],
+    [availableIds, connectionFor, isConnectorActionCurrent, load],
   );
 
   // Chip options: All + Connected + every catalog category.
-  const filters = useMemo(() => ['All', 'Connected', ...CATEGORIES], []);
+  const filters = useMemo(
+    () => [
+      'All',
+      'Connected',
+      ...(connections?.some((connector) => connector.source === 'custom') ? ['Custom'] : []),
+      ...CATEGORIES,
+    ],
+    [connections],
+  );
 
   // Apply the active chip + search query to the catalog.
   const visibleEntries = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return CATALOG.filter((entry) => {
+    const customEntries: ConnectorEntry[] =
+      connections
+        ?.filter((connector) => connector.source === 'custom')
+        .map((connector) => ({
+          id: connector.connectorId,
+          name: connector.name || 'Custom MCP',
+          description: 'Your encrypted remote MCP endpoint',
+          category: 'Custom',
+          iconText: 'MC',
+        })) ?? [];
+    return [...customEntries, ...CATALOG].filter((entry) => {
       if (activeFilter === 'Connected' && !connectionFor(entry.id)) return false;
       if (activeFilter !== 'All' && activeFilter !== 'Connected' && entry.category !== activeFilter)
         return false;
@@ -713,13 +856,25 @@ export default function CloudConnectorsScreen({
         return false;
       return true;
     });
-  }, [activeFilter, search, connectionFor]);
+  }, [activeFilter, connections, search, connectionFor]);
+
+  const handleSignIn = useCallback(() => {
+    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  if (!isClerkLoaded || !isClerkSignedIn) {
+    return (
+      <SettingsScreenShell title="Connectors" backHref={backHref}>
+        <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
+      </SettingsScreenShell>
+    );
+  }
 
   return (
     <SettingsScreenShell title="Connectors" backHref={backHref}>
       <SettingsInfo
         title="Connect your tools to AGI Cloud"
-        body="Connect your apps and services so AGI can access and act on your data. Each connector uses server-side OAuth — your credentials never leave AGI Cloud."
+        body="Only providers marked Connect are configured in this deployment. Custom MCP tokens are encrypted and never shown again."
         icon={Plug}
       />
 
@@ -729,178 +884,229 @@ export default function CloudConnectorsScreen({
         <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
       )}
 
-      {FEATURES.connectors && isCloudModeActive && loading && !connections && (
-        <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-          <ActivityIndicator size="large" color={colors.teal} />
-        </View>
-      )}
-
-      {FEATURES.connectors && isCloudModeActive && error && (
+      {FEATURES.connectors && capabilityHandshakePending && (
         <View
-          style={{
-            borderRadius: 12,
-            backgroundColor: colors.dangerSurface,
-            borderWidth: 1,
-            borderColor: colors.dangerBorder,
-            padding: 12,
-            marginBottom: 18,
-          }}
+          accessibilityLabel="Checking connector access"
+          style={{ alignItems: 'center', gap: 10, paddingVertical: 32 }}
         >
-          <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
-          <Pressable
-            onPress={() => void load()}
-            disabled={loading}
-            accessibilityLabel="Retry loading connectors"
-            accessibilityRole="button"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              marginTop: 10,
-              minHeight: 32,
-            }}
-          >
-            <RefreshCw size={14} color={colors.agentError} />
-            <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
-              {loading ? 'Retrying…' : 'Retry'}
-            </Text>
-          </Pressable>
+          <ActivityIndicator size="large" color={colors.teal} />
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            Checking connector access…
+          </Text>
         </View>
       )}
 
-      {FEATURES.connectors && isCloudModeActive && !error && (
-        <>
-          {/* Search field */}
+      {FEATURES.connectors &&
+        isCloudModeActive &&
+        !capabilityHandshakePending &&
+        !canUseConnectors && (
           <View
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
               borderRadius: 12,
-              backgroundColor: colors.surfaceElevated,
+              backgroundColor: colors.neutralSurface,
               borderWidth: 1,
               borderColor: colors.border,
-              paddingHorizontal: 12,
-              height: 42,
-              marginBottom: 12,
+              padding: 14,
+              marginBottom: 18,
             }}
           >
-            <Search size={16} color={colors.textMuted} />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search connectors"
-              placeholderTextColor={colors.textMuted}
-              accessibilityLabel="Search connectors"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={{ flex: 1, color: colors.textPrimary, fontSize: 15, paddingVertical: 0 }}
-            />
-          </View>
-
-          {/* Add a user-owned custom remote-MCP connector (works today; no OAuth
-              app registration needed — server validates the HTTPS URL). */}
-          <Pressable
-            onPress={() => setAddCustomVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Add custom MCP connector"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderStyle: 'dashed',
-              paddingVertical: 12,
-              marginBottom: 14,
-            }}
-          >
-            <Link size={16} color={colors.teal} />
-            <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 15 }}>
-              Add custom MCP
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              Connectors are not available for this account.
             </Text>
-          </Pressable>
+          </View>
+        )}
 
-          {/* Filter chips (All | Connected | categories) */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingVertical: 2, marginBottom: 14 }}
+      {FEATURES.connectors &&
+        isCloudModeActive &&
+        !capabilityHandshakePending &&
+        canUseConnectors &&
+        loading &&
+        !connections && (
+          <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+            <ActivityIndicator size="large" color={colors.teal} />
+          </View>
+        )}
+
+      {FEATURES.connectors &&
+        isCloudModeActive &&
+        !capabilityHandshakePending &&
+        canUseConnectors &&
+        error && (
+          <View
+            style={{
+              borderRadius: 12,
+              backgroundColor: colors.dangerSurface,
+              borderWidth: 1,
+              borderColor: colors.dangerBorder,
+              padding: 12,
+              marginBottom: 18,
+            }}
           >
-            {filters.map((f) => {
-              const active = f === activeFilter;
-              return (
-                <Pressable
-                  key={f}
-                  onPress={() => setActiveFilter(f)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={`${f} connectors`}
-                  style={{
-                    paddingHorizontal: 14,
-                    height: 34,
-                    borderRadius: 17,
-                    justifyContent: 'center',
-                    backgroundColor: active ? colors.textPrimary : colors.surfaceElevated,
-                    borderWidth: 1,
-                    borderColor: active ? colors.textPrimary : colors.border,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: active ? colors.background : colors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: '600',
-                    }}
-                  >
-                    {f}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+            <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
+            <Pressable
+              onPress={() => void load()}
+              disabled={loading}
+              accessibilityLabel="Retry loading connectors"
+              accessibilityRole="button"
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 10,
+                minHeight: 32,
+              }}
+            >
+              <RefreshCw size={14} color={colors.agentError} />
+              <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+                {loading ? 'Retrying…' : 'Retry'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
-          {/* Filtered flat list */}
-          {visibleEntries.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
-              <Link size={28} color={colors.textMuted} />
-              <Text style={{ color: colors.textMuted, fontSize: 14 }}>No connectors found</Text>
-            </View>
-          ) : (
+      {FEATURES.connectors &&
+        isCloudModeActive &&
+        !capabilityHandshakePending &&
+        canUseConnectors &&
+        !error && (
+          <>
+            {/* Search field */}
             <View
               style={{
-                borderRadius: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                borderRadius: 12,
                 backgroundColor: colors.surfaceElevated,
                 borderWidth: 1,
                 borderColor: colors.border,
-                overflow: 'hidden',
+                paddingHorizontal: 12,
+                height: 42,
+                marginBottom: 12,
               }}
             >
-              {visibleEntries.map((entry, idx) => (
-                <View key={entry.id}>
-                  {idx > 0 && (
-                    <View
-                      style={{
-                        height: 1,
-                        backgroundColor: colors.border,
-                        marginLeft: ROW_DIVIDER_INSET,
-                      }}
-                    />
-                  )}
-                  <ConnectorCard
-                    entry={entry}
-                    connected={!!connectionFor(entry.id)}
-                    connectedAt={connectionFor(entry.id)?.connectedAt}
-                    onPress={() => handlePress(entry)}
-                  />
-                </View>
-              ))}
+              <Search size={16} color={colors.textMuted} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search connectors"
+                placeholderTextColor={colors.textMuted}
+                accessibilityLabel="Search connectors"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={{ flex: 1, color: colors.textPrimary, fontSize: 15, paddingVertical: 0 }}
+              />
             </View>
-          )}
-        </>
-      )}
+
+            {/* Add a user-owned custom remote-MCP connector (works today; no OAuth
+              app registration needed — server validates the HTTPS URL). */}
+            <Pressable
+              onPress={() => setAddCustomVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Add custom MCP connector"
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderStyle: 'dashed',
+                paddingVertical: 12,
+                marginBottom: 14,
+              }}
+            >
+              <Link size={16} color={colors.teal} />
+              <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 15 }}>
+                Add custom MCP
+              </Text>
+            </Pressable>
+
+            {/* Filter chips (All | Connected | categories) */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingVertical: 2, marginBottom: 14 }}
+            >
+              {filters.map((f) => {
+                const active = f === activeFilter;
+                return (
+                  <Pressable
+                    key={f}
+                    onPress={() => setActiveFilter(f)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${f} connectors`}
+                    style={{
+                      paddingHorizontal: 14,
+                      height: 34,
+                      borderRadius: 17,
+                      justifyContent: 'center',
+                      backgroundColor: active ? colors.textPrimary : colors.surfaceElevated,
+                      borderWidth: 1,
+                      borderColor: active ? colors.textPrimary : colors.border,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: active ? colors.background : colors.textSecondary,
+                        fontSize: 13,
+                        fontWeight: '600',
+                      }}
+                    >
+                      {f}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            {/* Filtered flat list */}
+            {visibleEntries.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
+                <Link size={28} color={colors.textMuted} />
+                <Text style={{ color: colors.textMuted, fontSize: 14 }}>No connectors found</Text>
+              </View>
+            ) : (
+              <View
+                style={{
+                  borderRadius: 14,
+                  backgroundColor: colors.surfaceElevated,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  overflow: 'hidden',
+                }}
+              >
+                {visibleEntries.map((entry, idx) => (
+                  <View key={entry.id}>
+                    {idx > 0 && (
+                      <View
+                        style={{
+                          height: 1,
+                          backgroundColor: colors.border,
+                          marginLeft: ROW_DIVIDER_INSET,
+                        }}
+                      />
+                    )}
+                    <ConnectorCard
+                      entry={entry}
+                      connected={!!connectionFor(entry.id)}
+                      connectedAt={connectionFor(entry.id)?.connectedAt}
+                      available={availableIds.has(entry.id)}
+                      busy={connectingId === entry.id}
+                      onPress={
+                        connectionFor(entry.id) || availableIds.has(entry.id)
+                          ? () => handlePress(entry)
+                          : undefined
+                      }
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
 
       <AddCustomConnectorModal
         visible={addCustomVisible}

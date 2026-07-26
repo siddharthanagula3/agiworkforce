@@ -110,17 +110,18 @@ export const FEATURES = {
   /** External messaging integrations (WhatsApp, Telegram, Slack). */
   messaging: false,
 
-  /** Connectors directory. 2026-07-06: enabled — the screen renders the real
-   *  catalog and loads/removes connection state via GET/DELETE /api/connectors.
-   *  Per-provider server-side OAuth flows are NOT live yet (POST answers 501
-   *  for OAuth providers), so the connect action shows honest coming-soon copy. */
+  /** Connectors directory. The server returns both connected rows and the
+   *  deployment's live `available` ids. Mobile offers Connect only for that
+   *  server-advertised set, opens the configured GitHub App install flow for
+   *  GitHub, and supports encrypted custom remote-MCP connectors. Catalog
+   *  entries without a real backend stay visibly unavailable. */
   connectors: true,
 
   /** Web search via server-side API.
-   *  2026-06-27: enabled — the chat-completions body now carries `web_search:true`
-   *  (chatExecutionStore → streaming.ts) when the AddToChatSheet toggle is on; the
-   *  server injects its built-in web_search tool and streams `x_search_results`,
-   *  which the tool-call accumulator already renders. */
+   *  Enabled by default for eligible Cloud turns; it is not a redundant composer
+   *  menu option. The server capability handshake and selected model still fail
+   *  closed when search is unavailable. Search results stream into the existing
+   *  tool-call timeline. */
   webSearch: true,
 
   /** Deep Research (multi-turn plan → search → cited synthesis) via the
@@ -129,8 +130,9 @@ export const FEATURES = {
    *  streaming.ts) when the toggle is on; the server runs its research loop
    *  (route.ts) and streams citations/agent activity the inline renderer already
    *  handles. Per-send it is additionally gated on the selected model's
-   *  `research` + `search` capabilities and a paid tier, so this flag alone never
-   *  makes the toggle appear for an unsupported model or a free account. */
+   *  `research` + `search` capabilities and the server-granted Max/Enterprise
+   *  entitlement, so this flag alone never makes the toggle appear for an
+   *  unsupported model or account. */
   research: true,
 
   /** Computer use (cloud execution). */

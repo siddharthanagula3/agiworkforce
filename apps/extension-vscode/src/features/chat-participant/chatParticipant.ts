@@ -34,7 +34,8 @@ import { type LocalRuntimeEvent } from '../../integrations/localRuntimeClient';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
-import { classifyDeveloperTurn } from '../../integrations/routingTask';
+import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
+import { buildMemoryContextInput } from '../../memory/memoryStore';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 
@@ -160,7 +161,7 @@ function buildRuntimeTurnInput(request: vscode.ChatRequest, ctx: EditorContext):
 export function createChatHandler(
   _secrets: vscode.SecretStorage,
   conversationTreeProvider?: ConversationTreeProvider,
-  _globalState?: vscode.ExtensionContext['globalState'],
+  globalState?: vscode.ExtensionContext['globalState'],
   localRuntimes?: LocalRuntimePool,
 ): vscode.ChatRequestHandler {
   return async (
@@ -205,6 +206,8 @@ export function createChatHandler(
     const runtime = localRuntimes.forWorkspace(cwd);
     const model = normalizeConfiguredModelId(Config.model());
     const userMessage = buildRuntimeTurnInput(request, editorCtx);
+    const memoryInput =
+      globalState === undefined ? undefined : buildMemoryContextInput(globalState);
     let threadId = localThreadIdFromHistory(context);
     let turnId: string | undefined;
     let terminal = false;
@@ -337,11 +340,14 @@ export function createChatHandler(
       const turn = await runtime.startTurn({
         threadId,
         cwd,
-        input: [{ type: 'text', text: userMessage, text_elements: [] }],
+        input: [
+          { type: 'text', text: userMessage, text_elements: [] },
+          ...(memoryInput === undefined ? [] : [memoryInput]),
+        ],
         agentMode: planOnly ? 'plan' : Config.agentMode() === 'plan' ? 'auto' : Config.agentMode(),
         reasoningEffort: Config.agentEffort(),
         ...contextFilesParam(cwd),
-        ...(model.startsWith('auto-')
+        ...(isAutoRoutingModel(model)
           ? { model, routingTaskType: classifyDeveloperTurn(userMessage) }
           : { model }),
       });

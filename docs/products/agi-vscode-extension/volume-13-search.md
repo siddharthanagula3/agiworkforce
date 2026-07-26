@@ -32,7 +32,7 @@ Symbol awareness is document-level today. The indexer extracts each file's top-l
 
 ## Documentation Search
 
-There is no in-editor documentation/knowledge search yet. The `agi-workforce.docs` command **generates** doc comments for a selection ✅ (`apps/extension-vscode/package.json` `contributes.commands`); it does not query a doc corpus. Provider documentation is an external link (`agiworkforce.com/docs/providers`) referenced from the `providerStreamProvider` setting description.
+There is no in-editor documentation/knowledge search yet. The `agi-workforce.docs` command **generates** doc comments for a selection; it does not query a doc corpus. Provider documentation remains external to this command.
 
 - Searchable in-repo docs / README / ADR index: 🔭 Planned.
 - AGI product-docs / provider-docs search from inside the editor: 🔭 Planned — parity with Codex/Claude "@docs"; must not silently call a cloud endpoint from a Local session.

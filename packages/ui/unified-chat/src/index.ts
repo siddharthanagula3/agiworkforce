@@ -97,7 +97,7 @@ export type { ChatInterfaceProps } from './components/ChatInterface';
 export { EmptyState } from './components/EmptyState';
 export type { EmptyStateProps } from './components/EmptyState';
 export { QuickChips } from './components/QuickChips';
-export type { ChipType } from './components/QuickChips';
+export type { ChipType, QuickChipAvailability } from './components/QuickChips';
 export { ChatInput } from './components/ChatInput';
 export type {
   ChatInputProps,

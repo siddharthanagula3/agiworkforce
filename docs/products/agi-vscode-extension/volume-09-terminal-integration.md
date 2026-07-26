@@ -64,5 +64,5 @@ The domain is production-ready when execution is trust-gated, AI-suggested comma
 - Auto-syncing terminal sessions or output into Web/Mobile/Desktop app chat history.
 - Reintroducing `terminal.sendText` for structured commands where `execFile` already removes shell interpretation.
 - Hardcoding a model ID for explanation or suggestion — model IDs come only from `packages/contracts/types/src/models.json`.
-- Referencing removed tiers (`Plus`, `pro_plus`, `Hobby`) or credit top-ups; note the `agiWorkforce.tier` enum in `package.json` still lists `hobby`/`pro_plus` (🟡 gap — the correct ladder is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise).
+- Referencing removed tiers (`Plus`, `pro_plus`, `Hobby`) or credit top-ups; the extension manifest exposes only current access modes.
 - Referencing Supabase (fully migrated away) or renaming Next.js `proxy.ts` back to `middleware.ts`.

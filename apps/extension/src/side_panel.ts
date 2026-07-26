@@ -1,8 +1,10 @@
-import { QueueFullError } from '@agiworkforce/client-runtime';
+import { QueueFullError, type AgentActivityToolEntry } from '@agiworkforce/client-runtime';
 import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getExtensionTokensCss } from './tokens';
 import {
+  canUseBillingPlanCapability,
+  isEntitledSubscriptionStatus,
   normalizeModelId,
   PROVIDER_DISPLAY,
   type ProviderId,
@@ -94,6 +96,7 @@ import {
 } from './features/cloud-bridge/freeTrialClient';
 import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
+  getClerkAccountProfile,
   isClerkExtensionAuthConfigured,
   observeClerkAuth,
   openClerkSignIn,
@@ -103,7 +106,6 @@ import {
   getManagedCapabilityLabel,
   getManagedModelBadgeLabel,
   getManagedModelPickerOptions,
-  isFreeManagedTier,
   reconcileManagedModelSelection,
   type ManagedModelPickerOption,
 } from './features/cloud-bridge/managedModelPicker';
@@ -137,7 +139,14 @@ let refreshModelPickerUI: () => void = () => {
 let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
 type ManagedCloudChatState = 'loading' | 'ready' | 'signed_out' | 'unavailable';
-type ManagedCloudGateAction = 'none' | 'sign_in' | 'open_web' | 'upgrade' | 'retry';
+type ManagedCloudGateAction =
+  | 'none'
+  | 'sign_in'
+  | 'open_web'
+  | 'upgrade'
+  | 'billing'
+  | 'usage'
+  | 'retry';
 let managedCloudChatState: ManagedCloudChatState = 'loading';
 let managedCloudGateMessage = 'Checking your AGI Cloud account…';
 let managedCloudGateAction: ManagedCloudGateAction = 'none';
@@ -390,6 +399,12 @@ function saveMessages(): void {
       ...(message.role === 'assistant' && message.cloudAgentRun
         ? { cloudAgentRun: message.cloudAgentRun }
         : {}),
+      ...(message.role === 'assistant' && message.cloudApprovalDecisions
+        ? { cloudApprovalDecisions: message.cloudApprovalDecisions }
+        : {}),
+      ...(message.role === 'assistant' && message.cloudApprovalError
+        ? { cloudApprovalError: message.cloudApprovalError }
+        : {}),
     }));
   upsertConversation(_ctx.conversationId, toSave, {
     selectedModel: _ctx.selectedModel,
@@ -434,6 +449,10 @@ async function loadMessages(): Promise<void> {
             }
           : {}),
         ...(message.cloudAgentRun ? { cloudAgentRun: { ...message.cloudAgentRun } } : {}),
+        ...(message.cloudApprovalDecisions
+          ? { cloudApprovalDecisions: { ...message.cloudApprovalDecisions } }
+          : {}),
+        ...(message.cloudApprovalError ? { cloudApprovalError: message.cloudApprovalError } : {}),
       };
     }),
   );
@@ -1053,6 +1072,56 @@ function injectStyles(): void {
       background: var(--agi-ext-surface);
     }
     .sp-agent-source:hover { color: var(--agi-ext-text); border-color: var(--agi-ext-focus); }
+    .sp-agent-artifact-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 8px;
+      color: var(--agi-ext-accent);
+      font-weight: 600;
+      text-decoration: none;
+      white-space: normal;
+    }
+    .sp-agent-artifact-link:hover { text-decoration: underline; }
+    .sp-agent-artifact-unavailable {
+      margin-top: 8px;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      white-space: normal;
+    }
+    .sp-agent-approval {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--agi-ext-border);
+      white-space: normal;
+    }
+    .sp-agent-approval__summary { color: var(--agi-ext-text); line-height: 1.4; }
+    .sp-agent-approval__recorded { color: var(--agi-ext-accent); font-size: 10px; }
+    .sp-agent-approval__error { color: var(--agi-ext-danger); font-size: 10px; }
+    .sp-agent-approval__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sp-agent-approval__button {
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      padding: 4px 9px;
+    }
+    .sp-agent-approval__button:hover { background: var(--agi-ext-hover); }
+    .sp-agent-approval__button--approve {
+      border-color: var(--agi-ext-accent);
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+    }
+    .sp-agent-approval__button:focus-visible {
+      outline: 2px solid var(--agi-ext-focus);
+      outline-offset: 2px;
+    }
 
     /* ── Thinking dots ── */
     .sp-thinking {
@@ -1557,97 +1626,11 @@ function injectStyles(): void {
     .sp-context-chip:hover::before { background: var(--agi-ext-accent); }
     .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
 
-    /* ── Autonomy toggle (BLOCKER-01) ── */
-    .sp-action-mode-wrapper {
-      position: relative;
-      margin-left: auto;
-      flex-shrink: 0;
-    }
-    #sp-action-mode-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: var(--agi-ext-overlay);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 12px;
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      font-weight: 500;
-      padding: 2px 8px;
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
-      white-space: nowrap;
-      flex-shrink: 0;
-      user-select: none;
-    }
-    #sp-action-mode-toggle .sp-chevron {
-      font-size: 8px;
-      transition: transform 0.15s;
-    }
-    #sp-action-mode-toggle[aria-expanded="true"] .sp-chevron { transform: rotate(180deg); }
-    #sp-action-mode-toggle:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
-    #sp-action-mode-toggle[data-mode="act"] {
-      color: var(--agi-ext-accent);
-      border-color: var(--agi-ext-accent);
-      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
-    }
-    #sp-action-mode-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    #sp-action-mode-menu {
-      display: none;
-      position: absolute;
-      right: 0;
-      bottom: calc(100% + 7px);
-      width: min(260px, calc(100vw - 28px));
-      padding: 5px;
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 10px;
-      background: var(--agi-ext-surface);
-      box-shadow: var(--agi-ext-shadow-panel);
-      z-index: 220;
-    }
-    #sp-action-mode-menu.open { display: block; }
-    .sp-action-mode-option {
-      display: grid;
-      grid-template-columns: 18px 1fr;
-      gap: 8px;
-      width: 100%;
-      padding: 8px;
-      border: 0;
-      border-radius: 7px;
-      background: transparent;
-      color: var(--agi-ext-text);
-      cursor: pointer;
-      font: inherit;
-      text-align: left;
-    }
-    .sp-action-mode-option:hover { background: var(--agi-ext-hover); }
-    .sp-action-mode-option-check {
-      color: var(--agi-ext-accent);
-      font-size: 12px;
-      line-height: 16px;
-      text-align: center;
-    }
-    .sp-action-mode-option-copy {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-    }
-    .sp-action-mode-option-title {
-      font-size: 11px;
-      font-weight: 600;
-      line-height: 1.35;
-    }
-    .sp-action-mode-option-desc {
-      color: var(--agi-ext-text-muted);
-      font-size: 10px;
-      line-height: 1.35;
-    }
-
     /* W5-06: quick mode toggle */
     #sp-quick-mode-toggle {
       display: inline-flex;
       align-items: center;
+      margin-left: auto;
       background: var(--agi-ext-overlay);
       border: 1px solid var(--agi-ext-border);
       border-radius: 12px;
@@ -1668,56 +1651,6 @@ function injectStyles(): void {
       background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
     }
     #sp-quick-mode-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-
-    /* ── Inline permission consent card (BLOCKER-02) ── */
-    .sp-permission-card {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      border: 1px solid var(--agi-ext-warning);
-      border-radius: 10px;
-      background: var(--agi-ext-warning-bg, color-mix(in srgb, var(--agi-ext-warning) 10%, var(--agi-ext-surface)));
-      padding: 10px 12px;
-      margin: 4px 0;
-      align-self: stretch;
-    }
-    .sp-permission-card-title {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--agi-ext-warning);
-    }
-    .sp-permission-card-desc {
-      font-size: 11px;
-      color: var(--agi-ext-text-muted);
-      line-height: 1.4;
-    }
-    .sp-permission-card-actions {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-    .sp-permission-btn {
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 6px;
-      border: 1px solid var(--agi-ext-border);
-      background: var(--agi-ext-surface);
-      color: var(--agi-ext-text-muted);
-      cursor: pointer;
-      transition: background 0.12s, color 0.12s, border-color 0.12s;
-    }
-    .sp-permission-btn:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
-    .sp-permission-btn-allow {
-      background: var(--agi-ext-accent);
-      color: var(--agi-ext-on-accent);
-      border-color: var(--agi-ext-accent);
-    }
-    .sp-permission-btn-allow:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
-    .sp-permission-btn-always {
-      border-color: var(--agi-ext-accent);
-      color: var(--agi-ext-accent);
-    }
-    .sp-permission-btn-always:hover { background: color-mix(in srgb, var(--agi-ext-accent) 10%, transparent); }
 
     /* ── Offline onboarding screen (BLOCKER-02b) ── */
     #sp-offline-onboarding {
@@ -1969,13 +1902,6 @@ function injectStyles(): void {
     .sp-create-shortcut-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-textarea:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
-    .sp-create-shortcut-schedule-row { display: flex; align-items: center; justify-content: space-between; }
-    .sp-create-shortcut-schedule-label { font-size: 12px; color: var(--agi-ext-text-muted); }
-    .sp-create-shortcut-toggle { appearance: none; width: 34px; height: 18px; border-radius: 9px; background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; border: none; outline: none; }
-    .sp-create-shortcut-toggle:checked { background: var(--agi-ext-accent); }
-    .sp-create-shortcut-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-create-shortcut-toggle::after { content: ''; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: white; top: 2.5px; left: 2.5px; transition: transform 0.2s; }
-    .sp-create-shortcut-toggle:checked::after { transform: translateX(16px); }
     .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
     .sp-create-shortcut-cancel { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: color 0.12s; }
     .sp-create-shortcut-cancel:hover { color: var(--agi-ext-text); }
@@ -2765,6 +2691,29 @@ function injectStyles(): void {
       transition: background 0.12s;
     }
     .sp-quota-upgrade-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent); }
+    .sp-cloud-link-hint {
+      color: var(--agi-ext-text-muted);
+      font-size: 9px;
+      line-height: 1.4;
+    }
+    .sp-cloud-link-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .sp-cloud-link-btn {
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 5px;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      font-size: 10px;
+      padding: 4px 7px;
+    }
+    .sp-cloud-link-btn:hover {
+      border-color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent);
+    }
 
     /* Sign-in prompt (when not signed in) */
     .sp-cloud-signin-prompt {
@@ -3127,6 +3076,82 @@ function scrollToBottom(): void {
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
 }
 
+function resolveManagedToolApproval(
+  assistantMessageId: string,
+  toolCallId: string,
+  decision: 'approved' | 'rejected',
+): void {
+  const assistant = _ctx.messages.find(
+    (message) => message.id === assistantMessageId && message.role === 'assistant',
+  );
+  const run = assistant?.cloudAgentRun;
+  const pendingCalls =
+    assistant?.agentActivity?.entries.filter(
+      (entry): entry is AgentActivityToolEntry =>
+        entry.kind === 'tool' &&
+        entry.status === 'awaiting-approval' &&
+        Boolean(entry.approval) &&
+        !entry.approval?.decision,
+    ) ?? [];
+  if (
+    !assistant ||
+    !run ||
+    _ctx.isStreaming ||
+    !pendingCalls.some((entry) => entry.toolCallId === toolCallId)
+  ) {
+    return;
+  }
+
+  assistant.cloudApprovalDecisions = {
+    ...(assistant.cloudApprovalDecisions ?? {}),
+    [toolCallId]: decision,
+  };
+  assistant.cloudApprovalError = undefined;
+  saveMessages();
+  _ctx.needsMessageRebuild = true;
+  renderMessages();
+
+  if (
+    pendingCalls.some((entry) => assistant.cloudApprovalDecisions?.[entry.toolCallId] === undefined)
+  ) {
+    return;
+  }
+
+  const toolApprovals = pendingCalls.map((entry) => ({
+    tool_call_id: entry.toolCallId,
+    decision: assistant.cloudApprovalDecisions?.[entry.toolCallId] ?? ('rejected' as const),
+  }));
+  assistant.streaming = true;
+  _ctx.currentStreamId = assistant.id;
+  _ctx.isStreaming = true;
+  startManagedChatKeepalive();
+  armManagedStreamInactivityWatchdog(assistant.id);
+  updateSendButton();
+  _ctx.needsMessageRebuild = true;
+  renderMessages();
+
+  chrome.runtime.sendMessage(
+    {
+      type: 'RESOLVE_CHAT_APPROVAL',
+      clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+      id: assistant.id,
+      cloudRun: run,
+      toolApprovals,
+    },
+    (response?: { success?: boolean; error?: string }) => {
+      if (_ctx.currentStreamId !== assistant.id) return;
+      if (chrome.runtime.lastError) {
+        handleStreamError(
+          assistant.id,
+          chrome.runtime.lastError.message ?? 'Approval could not be continued.',
+        );
+      } else if (response?.success !== true) {
+        handleStreamError(assistant.id, response?.error ?? 'Approval could not be continued.');
+      }
+    },
+  );
+}
+
 function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
   const chips = document.getElementById('sp-prompt-chips');
@@ -3164,7 +3189,16 @@ function renderMessages(): void {
 
   for (let i = _ctx.lastRenderedCount; i < _ctx.messages.length; i++) {
     const msg = _ctx.messages[i];
-    if (msg) container.appendChild(buildBubbleWithTools(msg));
+    if (msg) {
+      container.appendChild(
+        buildBubbleWithTools(msg, {
+          approvalDecisions: msg.cloudApprovalDecisions,
+          approvalError: msg.cloudApprovalError,
+          onResolveApproval: (toolCallId, decision) =>
+            resolveManagedToolApproval(msg.id, toolCallId, decision),
+        }),
+      );
+    }
   }
   _ctx.lastRenderedCount = _ctx.messages.length;
 
@@ -3583,13 +3617,28 @@ function handleStreamError(id: string, errorText: string): void {
     _ctx.streamTimeoutHandle = null;
   }
   removeThinking();
-  applyStreamFailure(_ctx.messages, id, errorText);
+  const existing = _ctx.messages.find((message) => message.id === id);
+  const canRetryApproval = existing?.agentActivity?.entries.some(
+    (entry) =>
+      entry.kind === 'tool' &&
+      entry.status === 'awaiting-approval' &&
+      Boolean(entry.approval) &&
+      !entry.approval?.decision,
+  );
+  if (existing && canRetryApproval) {
+    existing.streaming = false;
+    existing.cloudApprovalDecisions = undefined;
+    existing.cloudApprovalError = errorText.slice(0, 500);
+  } else {
+    applyStreamFailure(_ctx.messages, id, errorText);
+  }
   trimLiveMessages();
-  saveMessages();
-  renderMessages();
   _ctx.isStreaming = false;
   _ctx.currentStreamId = null;
   updateSendButton();
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
 }
 
 function updateConnectionStatus(): void {
@@ -3636,62 +3685,6 @@ function hideLegacyOfflineOnboarding(): void {
       (n as HTMLElement).style.display = '';
     });
   }
-}
-
-// BLOCKER-02: render inline permission consent card in the messages area
-function renderPermissionCard(requestId: string, domain: string, actionDescription: string): void {
-  const msgsEl = document.getElementById('sp-messages');
-  if (!msgsEl) return;
-
-  // Remove any existing card with the same requestId (idempotent)
-  const existing = document.querySelector(`[data-permission-id="${CSS.escape(requestId)}"]`);
-  if (existing) existing.remove();
-
-  const card = document.createElement('div');
-  card.className = 'sp-permission-card';
-  card.setAttribute('data-permission-id', requestId);
-
-  const titleEl = document.createElement('div');
-  titleEl.className = 'sp-permission-card-title';
-  titleEl.textContent = 'Permission required';
-  card.appendChild(titleEl);
-
-  const descEl = document.createElement('div');
-  descEl.className = 'sp-permission-card-desc';
-  descEl.textContent = `AGI wants to ${actionDescription}. Allow?`;
-  card.appendChild(descEl);
-
-  const actionsRow = document.createElement('div');
-  actionsRow.className = 'sp-permission-card-actions';
-
-  const sendDecision = (decision: 'allow' | 'deny' | 'always'): void => {
-    card.remove();
-    chrome.runtime
-      .sendMessage({ type: 'PERMISSION_RESPONSE', requestId, decision })
-      .catch((err: unknown) => console.warn('[SidePanel] PERMISSION_RESPONSE failed:', err));
-  };
-
-  const allowBtn = document.createElement('button');
-  allowBtn.className = 'sp-permission-btn sp-permission-btn-allow';
-  allowBtn.textContent = 'Allow this action';
-  allowBtn.addEventListener('click', () => sendDecision('allow'));
-  actionsRow.appendChild(allowBtn);
-
-  const alwaysBtn = document.createElement('button');
-  alwaysBtn.className = 'sp-permission-btn sp-permission-btn-always';
-  alwaysBtn.textContent = `Always allow on ${domain}`;
-  alwaysBtn.addEventListener('click', () => sendDecision('always'));
-  actionsRow.appendChild(alwaysBtn);
-
-  const denyBtn = document.createElement('button');
-  denyBtn.className = 'sp-permission-btn';
-  denyBtn.textContent = 'Decline';
-  denyBtn.addEventListener('click', () => sendDecision('deny'));
-  actionsRow.appendChild(denyBtn);
-
-  card.appendChild(actionsRow);
-  msgsEl.appendChild(card);
-  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 let contextBtn: HTMLButtonElement | null = null;
@@ -4014,20 +4007,16 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     <rect x="14" y="62" width="40" height="4" rx="2" fill="var(--agi-ext-surface)"/>
   </svg>`;
 
-  // Hero SVG for step 3 (slash command menu)
+  // Hero SVG for step 3 (the real Workflows shortcut surface)
   const shortcutMenuSvg = `<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <rect x="10" y="16" width="60" height="48" rx="8" fill="var(--agi-ext-overlay)" stroke="var(--agi-ext-border-strong)" stroke-width="1.5"/>
-    <rect x="14" y="22" width="52" height="12" rx="4" fill="var(--agi-ext-surface)" stroke="var(--agi-ext-accent)" stroke-width="1"/>
-    <text x="21" y="31" font-size="9" fill="var(--agi-ext-accent)" font-family="monospace" font-weight="700">/</text>
-    <text x="27" y="31" font-size="7.5" fill="var(--agi-ext-text-muted)" font-family="-apple-system,sans-serif">search shortcuts</text>
-    <rect x="14" y="38" width="52" height="8" rx="3" fill="var(--agi-ext-hover)"/>
-    <text x="21" y="44.5" font-size="7" fill="var(--agi-ext-accent)" font-family="monospace">/</text>
-    <text x="27" y="44.5" font-size="7" fill="var(--agi-ext-text)" font-family="-apple-system,sans-serif">sales-lead</text>
-    <rect x="14" y="49" width="52" height="7" rx="3" fill="transparent"/>
-    <text x="21" y="54.5" font-size="7" fill="var(--agi-ext-accent)" font-family="monospace">/</text>
-    <text x="27" y="54.5" font-size="7" fill="var(--agi-ext-text-muted)" font-family="-apple-system,sans-serif">unsubscribe</text>
-    <line x1="14" y1="58" x2="66" y2="58" stroke="var(--agi-ext-border)" stroke-width="1"/>
-    <text x="21" y="64.5" font-size="7" fill="var(--agi-ext-accent)" font-family="-apple-system,sans-serif">+ Create new shortcut</text>
+    <text x="16" y="27" font-size="7" fill="var(--agi-ext-text-muted)" font-family="-apple-system,sans-serif" font-weight="600">WORKFLOWS</text>
+    <rect x="14" y="32" width="52" height="13" rx="4" fill="var(--agi-ext-hover)"/>
+    <circle cx="21" cy="38.5" r="3" fill="var(--agi-ext-accent)" opacity="0.22"/>
+    <path d="M21.7 34.8 18.8 39h2l-.5 3.2 3-4.5h-2.1l.5-2.9z" fill="var(--agi-ext-accent)"/>
+    <text x="27" y="41" font-size="7" fill="var(--agi-ext-text)" font-family="-apple-system,sans-serif">Saved shortcuts</text>
+    <rect x="14" y="50" width="52" height="9" rx="4" fill="var(--agi-ext-surface)" stroke="var(--agi-ext-accent)" stroke-width="1"/>
+    <text x="40" y="56.5" font-size="6.5" text-anchor="middle" fill="var(--agi-ext-accent)" font-family="-apple-system,sans-serif">+ Create shortcut</text>
   </svg>`;
 
   // Hero SVG for step 4 (extension card with pin icon highlighted)
@@ -4172,12 +4161,12 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   const step3Hero = el('div', { class: 'sp-ob-hero' });
   appendSvgString(step3Hero, shortcutMenuSvg);
   step3.appendChild(step3Hero);
-  step3.appendChild(el('div', { class: 'sp-ob-title' }, 'Use shortcuts to save time'));
+  step3.appendChild(el('div', { class: 'sp-ob-title' }, 'Use Workflows to save time'));
   step3.appendChild(
     el(
       'div',
       { class: 'sp-ob-body' },
-      'Shortcuts make it easy to send instructions you repeat often. Type / in the chat to find and create shortcuts.',
+      'Shortcuts make repeated instructions one click away. Open Workflows from the AGI menu to create, run, and manage them.',
     ),
   );
   body.appendChild(step3);
@@ -5670,7 +5659,7 @@ function buildUI(): void {
     try {
       await openClerkSignIn();
       signinDescription.textContent =
-        'Finish sign-in in the new tab, then return here and reopen the side panel.';
+        'Finish sign-in in the new tab, then return here. Your account refreshes automatically.';
     } catch (error) {
       signinDescription.textContent =
         error instanceof Error ? error.message : 'Unable to open AGI account sign-in.';
@@ -5713,9 +5702,8 @@ function buildUI(): void {
     id: 'sp-quota-bar-wrap',
     style: 'display:none',
   });
-  quotaWrap.appendChild(
-    el('span', { id: 'sp-quota-label' }, 'Chrome access requires a paid plan.'),
-  );
+  const quotaLabelEl = el('span', { id: 'sp-quota-label' }, 'Chrome access requires a paid plan.');
+  quotaWrap.appendChild(quotaLabelEl);
 
   // Upgrade row (shown when quota exhausted)
   const quotaUpgradeRow = el('div', {
@@ -5740,6 +5728,37 @@ function buildUI(): void {
   cloudAccountEl.appendChild(signinPrompt);
   cloudAccountEl.appendChild(signedInView);
   cloudAccountEl.appendChild(quotaWrap);
+  const cloudLinkHint = el(
+    'div',
+    { class: 'sp-cloud-link-hint', style: 'display:none' },
+    'Cloud connectors open on Web. Browser page tools remain scoped to this extension.',
+  );
+  const cloudLinkRow = el('div', {
+    class: 'sp-cloud-link-row',
+    id: 'sp-cloud-link-row',
+    style: 'display:none',
+  });
+  const manageUsageBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Manage usage');
+  manageUsageBtn.addEventListener('click', () => {
+    void chrome.tabs.create({
+      url: 'https://agiworkforce.com/settings/usage?from=chrome-extension',
+    });
+  });
+  const connectAppsBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Connect apps');
+  connectAppsBtn.addEventListener('click', () => {
+    void chrome.tabs.create({
+      url: 'https://agiworkforce.com/connectors?from=chrome-extension',
+    });
+  });
+  const teamsBtn = el('button', { class: 'sp-cloud-link-btn' }, 'Team & Enterprise');
+  teamsBtn.addEventListener('click', () => {
+    void chrome.tabs.create({ url: 'https://agiworkforce.com/teams?from=chrome-extension' });
+  });
+  cloudLinkRow.appendChild(manageUsageBtn);
+  cloudLinkRow.appendChild(connectAppsBtn);
+  cloudLinkRow.appendChild(teamsBtn);
+  cloudAccountEl.appendChild(cloudLinkHint);
+  cloudAccountEl.appendChild(cloudLinkRow);
   cloudSection.appendChild(cloudAccountEl);
   drawerBody.appendChild(cloudSection);
 
@@ -5796,7 +5815,10 @@ function buildUI(): void {
   // over signinPrompt, signedInView, quotaWrap, quotaBadgeEl, etc.).
   refreshCloudAccountUI = async function (): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
-    const token = await getAuthToken();
+    const [token, accountProfile] = await Promise.all([
+      getAuthToken(),
+      getClerkAccountProfile().catch(() => null),
+    ]);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     if (!token) {
       // Signed out
@@ -5812,6 +5834,8 @@ function buildUI(): void {
       signinPrompt.style.display = '';
       signedInView.style.display = 'none';
       quotaWrap.style.display = 'none';
+      cloudLinkHint.style.display = 'none';
+      cloudLinkRow.style.display = 'none';
       quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
       refreshModelPickerUI();
       setManagedCloudChatState('signed_out', {
@@ -5835,6 +5859,8 @@ function buildUI(): void {
       _ctx.previousTaskType = undefined;
       refreshModelPickerUI();
       quotaWrap.style.display = 'none';
+      cloudLinkHint.style.display = 'none';
+      cloudLinkRow.style.display = 'none';
       quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
 
       if (error instanceof Error && error.message.includes('Authentication')) {
@@ -5876,10 +5902,56 @@ function buildUI(): void {
     // Signed in with server-verified admission.
     signinPrompt.style.display = 'none';
     signedInView.style.display = '';
-    userTierEl.textContent = formatManagedTierLabel(access.subscriptionTier);
+    cloudLinkHint.style.display = '';
+    cloudLinkRow.style.display = 'flex';
+    userLabelEl.textContent = accountProfile?.displayName ?? accountProfile?.email ?? 'AGI Account';
+    userLabelEl.title = accountProfile?.email ?? '';
+    avatarEl.textContent = accountProfile?.initials ?? 'A';
+    userTierEl.textContent = formatManagedTierLabel(
+      access.accountPlanTier ?? access.subscriptionTier,
+    );
 
-    if (!isFreeManagedTier(access.subscriptionTier)) {
-      quotaWrap.style.display = 'none';
+    const subscriptionNeedsAttention =
+      Boolean(access.accountPlanTier && access.accountPlanTier.toLowerCase() !== 'free') &&
+      !isEntitledSubscriptionStatus(access.subscriptionStatus);
+    if (subscriptionNeedsAttention) {
+      const subscriptionStatusLabel = (access.subscriptionStatus ?? 'inactive').replace('_', ' ');
+      quotaWrap.style.display = '';
+      quotaLabelEl.textContent =
+        access.subscriptionStatus === 'past_due'
+          ? 'Payment is past due. Update billing to restore Chrome access.'
+          : access.subscriptionStatus === 'canceled'
+            ? 'This subscription is canceled. Manage billing to restore Chrome access.'
+            : `This subscription is ${subscriptionStatusLabel}. Manage billing to restore Chrome access.`;
+      quotaExhaustedLabel.textContent = 'Paid Chrome access is paused.';
+      quotaUpgradeBtn.textContent = 'Manage billing';
+      quotaUpgradeRow.style.display = '';
+      quotaBadgeEl.classList.add('visible', 'exhausted');
+      quotaBadgeEl.classList.remove('has-prompts');
+      quotaBadgeEl.textContent = 'Billing';
+      setManagedCloudChatState('unavailable', {
+        message:
+          access.subscriptionStatus === 'past_due'
+            ? 'Update billing to restore AGI in Chrome.'
+            : `Your paid subscription is ${subscriptionStatusLabel}.`,
+        action: 'billing',
+        actionLabel: 'Manage billing',
+      });
+      return;
+    }
+
+    if (canUseBillingPlanCapability(access.subscriptionTier, 'developer_surfaces')) {
+      quotaWrap.style.display = '';
+      const usage =
+        typeof access.usagePercentage === 'number'
+          ? `${Math.round(access.usagePercentage)}% used`
+          : 'usage unavailable';
+      const resetTimestamp = access.usageResetAt ? Date.parse(access.usageResetAt) : Number.NaN;
+      const resetLabel = Number.isFinite(resetTimestamp)
+        ? ` · resets ${new Date(resetTimestamp).toLocaleDateString()}`
+        : '';
+      quotaLabelEl.textContent = `Cloud usage: ${usage}${resetLabel}`;
+      quotaUpgradeRow.style.display = 'none';
       quotaBadgeEl.classList.add('visible', 'has-prompts');
       quotaBadgeEl.classList.remove('exhausted');
       quotaBadgeEl.textContent = access.subscriptionTier.trim().toUpperCase();
@@ -5889,6 +5961,9 @@ function buildUI(): void {
     }
 
     quotaWrap.style.display = '';
+    quotaLabelEl.textContent = 'AGI in Chrome requires Pro or higher.';
+    quotaExhaustedLabel.textContent = 'Free chat remains available on Web, Mobile, and Desktop.';
+    quotaUpgradeBtn.textContent = 'Upgrade';
     quotaUpgradeRow.style.display = '';
 
     quotaBadgeEl.classList.add('visible');
@@ -5896,7 +5971,7 @@ function buildUI(): void {
     quotaBadgeEl.classList.add('exhausted');
     quotaBadgeEl.textContent = 'Upgrade';
     setManagedCloudChatState('unavailable', {
-      message: 'Chrome access requires a paid plan.',
+      message: 'AGI in Chrome requires Pro or higher.',
       action: 'upgrade',
       actionLabel: 'View plans',
     });
@@ -5910,7 +5985,11 @@ function buildUI(): void {
 
   // Upgrade button — open agiworkforce.com pricing
   quotaUpgradeBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://agiworkforce.com/pricing' }).catch(() => {});
+    const url =
+      quotaUpgradeBtn.textContent === 'Manage billing'
+        ? 'https://agiworkforce.com/settings/billing?from=chrome-extension'
+        : 'https://agiworkforce.com/pricing?from=chrome-extension&feature=developer_surfaces';
+    chrome.tabs.create({ url }).catch(() => {});
   });
 
   if (isClerkExtensionAuthConfigured()) {
@@ -6439,7 +6518,7 @@ function buildUI(): void {
   nameField.appendChild(el('div', { class: 'sp-create-shortcut-label' }, 'Name'));
   const scNameInput = el('input', {
     class: 'sp-create-shortcut-input',
-    placeholder: '/ task-name',
+    placeholder: 'e.g. Daily research',
     id: 'sp-sc-name',
   }) as HTMLInputElement;
   nameField.appendChild(scNameInput);
@@ -6455,27 +6534,6 @@ function buildUI(): void {
   promptField.appendChild(scPromptInput);
   createShortcutModal.appendChild(promptField);
 
-  const startFromField = el('div', { class: 'sp-create-shortcut-field' });
-  startFromField.appendChild(el('div', { class: 'sp-create-shortcut-label' }, 'Start from'));
-  const scStartUrlInput = el('input', {
-    class: 'sp-create-shortcut-input',
-    placeholder: 'https://example.com',
-    id: 'sp-sc-starturl',
-    type: 'url',
-  }) as HTMLInputElement;
-  startFromField.appendChild(scStartUrlInput);
-  createShortcutModal.appendChild(startFromField);
-
-  const scheduleRow = el('div', { class: 'sp-create-shortcut-schedule-row' });
-  scheduleRow.appendChild(el('div', { class: 'sp-create-shortcut-schedule-label' }, 'Schedule'));
-  const scScheduleToggle = el('input', {
-    type: 'checkbox',
-    class: 'sp-create-shortcut-toggle',
-    id: 'sp-sc-schedule',
-  }) as HTMLInputElement;
-  scheduleRow.appendChild(scScheduleToggle);
-  createShortcutModal.appendChild(scheduleRow);
-
   const modalActions = el('div', { class: 'sp-create-shortcut-actions' });
   const scCancelBtn = el('button', { class: 'sp-create-shortcut-cancel' }, 'Cancel');
   const scSaveBtn = el('button', { class: 'sp-create-shortcut-save' }, 'Create shortcut');
@@ -6488,8 +6546,6 @@ function buildUI(): void {
   function openCreateShortcutModal(): void {
     scNameInput.value = '';
     scPromptInput.value = '';
-    scStartUrlInput.value = '';
-    scScheduleToggle.checked = false;
     createShortcutOverlay.classList.add('open');
     setTimeout(() => scNameInput.focus(), 50);
   }
@@ -6521,26 +6577,21 @@ function buildUI(): void {
       }, 1500);
       return;
     }
-    const startUrl = scStartUrlInput.value.trim() || undefined;
-    const scheduled = scScheduleToggle.checked;
     (scSaveBtn as HTMLButtonElement).disabled = true;
     scSaveBtn.textContent = 'Saving...';
-    chrome.runtime.sendMessage(
-      { type: 'SAVE_SHORTCUT', name, actions: [], prompt, startUrl, scheduled },
-      () => {
-        (scSaveBtn as HTMLButtonElement).disabled = false;
-        scSaveBtn.textContent = 'Create shortcut';
-        if (chrome.runtime.lastError) {
-          scNameInput.style.borderColor = 'var(--agi-ext-danger)';
-          setTimeout(() => {
-            scNameInput.style.borderColor = '';
-          }, 2000);
-          return;
-        }
-        closeCreateShortcutModal();
-        refreshWorkflowsShortcuts();
-      },
-    );
+    chrome.runtime.sendMessage({ type: 'SAVE_SHORTCUT', name, actions: [], prompt }, () => {
+      (scSaveBtn as HTMLButtonElement).disabled = false;
+      scSaveBtn.textContent = 'Create shortcut';
+      if (chrome.runtime.lastError) {
+        scNameInput.style.borderColor = 'var(--agi-ext-danger)';
+        setTimeout(() => {
+          scNameInput.style.borderColor = '';
+        }, 2000);
+        return;
+      }
+      closeCreateShortcutModal();
+      refreshWorkflowsShortcuts();
+    });
   });
 
   scNameInput.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -6947,14 +6998,24 @@ function buildUI(): void {
       if (action === 'sign_in') {
         await openClerkSignIn();
         setManagedCloudChatState('signed_out', {
-          message: 'Finish sign-in in the new tab, then return here and reopen the side panel.',
+          message: 'Finish sign-in in the new tab, then return here.',
           action: 'retry',
           actionLabel: 'Check sign-in',
         });
       } else if (action === 'open_web') {
         await chrome.tabs.create({ url: 'https://agiworkforce.com' });
       } else if (action === 'upgrade') {
-        await chrome.tabs.create({ url: 'https://agiworkforce.com/pricing' });
+        await chrome.tabs.create({
+          url: 'https://agiworkforce.com/pricing?from=chrome-extension&feature=developer_surfaces',
+        });
+      } else if (action === 'billing') {
+        await chrome.tabs.create({
+          url: 'https://agiworkforce.com/settings/billing?from=chrome-extension',
+        });
+      } else if (action === 'usage') {
+        await chrome.tabs.create({
+          url: 'https://agiworkforce.com/settings/usage?from=chrome-extension',
+        });
       } else if (action === 'retry') {
         await refreshCloudAccountUI();
       }
@@ -7165,130 +7226,6 @@ function buildUI(): void {
     updateContextButton();
   });
   composerBar.appendChild(contextBtn);
-
-  // BLOCKER-01: explicit ask/act menu — persists to agi_action_mode in
-  // chrome.storage.local. The menu keeps the safety choice discoverable and
-  // prevents an accidental click from silently changing the autonomy mode.
-  type ActionMode = 'ask' | 'act';
-  const actionModeWrapper = el('div', { class: 'sp-action-mode-wrapper' });
-  const actionModeToggle = el('button', {
-    id: 'sp-action-mode-toggle',
-    type: 'button',
-    title: 'Choose automation permission mode',
-    'data-mode': 'ask',
-    'aria-haspopup': 'menu',
-    'aria-expanded': 'false',
-  });
-  const actionModeLabel = el('span', {}, 'Ask before acting');
-  const actionModeChevron = el('span', { class: 'sp-chevron', 'aria-hidden': 'true' }, '▾');
-  actionModeToggle.appendChild(actionModeLabel);
-  actionModeToggle.appendChild(actionModeChevron);
-
-  const actionModeMenu = el('div', {
-    id: 'sp-action-mode-menu',
-    role: 'menu',
-    'aria-label': 'Automation permission mode',
-  });
-  function buildActionModeOption(
-    mode: ActionMode,
-    title: string,
-    description: string,
-  ): HTMLButtonElement {
-    const option = el('button', {
-      class: 'sp-action-mode-option',
-      type: 'button',
-      role: 'menuitemradio',
-      'data-mode': mode,
-      'aria-checked': 'false',
-    }) as HTMLButtonElement;
-    option.appendChild(el('span', { class: 'sp-action-mode-option-check' }));
-    const copy = el('span', { class: 'sp-action-mode-option-copy' });
-    copy.appendChild(el('span', { class: 'sp-action-mode-option-title' }, title));
-    copy.appendChild(el('span', { class: 'sp-action-mode-option-desc' }, description));
-    option.appendChild(copy);
-    return option;
-  }
-  const askModeOption = buildActionModeOption(
-    'ask',
-    'Ask before acting',
-    'Confirm browser actions before they run',
-  );
-  const actModeOption = buildActionModeOption(
-    'act',
-    'Act without asking',
-    'Run approved-site actions without confirmation',
-  );
-  actionModeMenu.appendChild(askModeOption);
-  actionModeMenu.appendChild(actModeOption);
-
-  function renderActionMode(mode: ActionMode): void {
-    actionModeToggle.dataset['mode'] = mode;
-    actionModeLabel.textContent = mode === 'act' ? 'Act without asking' : 'Ask before acting';
-    for (const option of [askModeOption, actModeOption]) {
-      const selected = option.dataset['mode'] === mode;
-      option.setAttribute('aria-checked', String(selected));
-      const check = option.querySelector('.sp-action-mode-option-check');
-      if (check) check.textContent = selected ? '✓' : '';
-    }
-  }
-
-  function closeActionModeMenu(): void {
-    actionModeMenu.classList.remove('open');
-    actionModeToggle.setAttribute('aria-expanded', 'false');
-  }
-
-  async function selectActionMode(next: ActionMode): Promise<void> {
-    const current = actionModeToggle.dataset['mode'] === 'act' ? 'act' : 'ask';
-    closeActionModeMenu();
-    if (next === current) return;
-    if (
-      next === 'act' &&
-      !window.confirm(
-        'Enable “Act without asking”? AGI may interact with approved pages without confirming each action. You can switch back to “Ask before acting” at any time.',
-      )
-    ) {
-      return;
-    }
-    renderActionMode(next);
-    try {
-      const response = (await chrome.runtime.sendMessage({
-        type: 'SET_ACTION_MODE',
-        mode: next,
-      })) as { success?: boolean } | undefined;
-      if (response?.success !== true) renderActionMode(current);
-    } catch (err) {
-      renderActionMode(current);
-      console.warn('[SidePanel] Failed to set action mode:', err);
-    }
-  }
-
-  askModeOption.addEventListener('click', (event) => {
-    event.stopPropagation();
-    void selectActionMode('ask');
-  });
-  actModeOption.addEventListener('click', (event) => {
-    event.stopPropagation();
-    void selectActionMode('act');
-  });
-  actionModeToggle.addEventListener('click', (event) => {
-    event.stopPropagation();
-    const open = actionModeMenu.classList.toggle('open');
-    actionModeToggle.setAttribute('aria-expanded', String(open));
-    if (open) {
-      actionModeMenu.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
-    }
-  });
-  document.addEventListener('click', (event: MouseEvent) => {
-    if (!actionModeWrapper.contains(event.target as Node)) closeActionModeMenu();
-  });
-  chrome.storage.local.get({ agi_action_mode: 'ask' }, (items) => {
-    const stored = items['agi_action_mode'];
-    renderActionMode(stored === 'act' ? 'act' : 'ask');
-  });
-
-  actionModeWrapper.appendChild(actionModeMenu);
-  actionModeWrapper.appendChild(actionModeToggle);
-  composerBar.appendChild(actionModeWrapper);
 
   // W5-06: per-turn Auto Economy override for lower-latency replies.
   const quickModeToggle = el('button', {
@@ -7595,8 +7532,11 @@ function refreshWorkflowsShortcuts(): void {
           month: 'short',
           day: 'numeric',
         });
+        // Legacy records may still carry `scheduled`, but shortcut scheduling
+        // never had an executor. Do not present that dormant bit as a live state;
+        // actual scheduled work is managed in the Scheduled Tasks section below.
         const metaText = isPromptBased
-          ? `prompt shortcut${sc.scheduled ? ' · scheduled' : ''} · ${dateStr}`
+          ? `prompt shortcut · ${dateStr}`
           : `${actionsCount} actions · ${dateStr}`;
         info.appendChild(el('div', { class: 'sp-wf-shortcut-meta' }, metaText));
         item.appendChild(info);
@@ -7711,13 +7651,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     return;
   }
 
-  // BLOCKER-02: inline permission card
-  if (envelope.type === 'PERMISSION_REQUIRED') {
-    const permMsg = msg as { requestId: string; domain: string; actionDescription: string };
-    renderPermissionCard(permMsg.requestId, permMsg.domain, permMsg.actionDescription);
-    return;
-  }
-
   // Live connection-status updates from the background service worker.
   // Background now also broadcasts these via chrome.runtime.sendMessage so
   // extension views (side panel, popup) receive them — not just content scripts.
@@ -7771,7 +7704,28 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
   if (chunk.agentEvent) {
     removeThinking();
+    const before = _ctx.messages.find((message) => message.id === chunk.id);
+    const alreadyAwaitingApproval = before?.agentActivity?.entries.some(
+      (entry) => entry.kind === 'tool' && entry.status === 'awaiting-approval',
+    );
+    if (
+      chunk.agentEvent.event.type === 'approval-requested' &&
+      !alreadyAwaitingApproval &&
+      before
+    ) {
+      before.cloudApprovalDecisions = undefined;
+      before.cloudApprovalError = undefined;
+    }
     const assistant = applyCanonicalAgentEvent(_ctx.messages, chunk.id, chunk.agentEvent);
+    if (
+      chunk.agentEvent.event.type === 'approval-resolved' &&
+      !assistant.agentActivity?.entries.some(
+        (entry) => entry.kind === 'tool' && entry.status === 'awaiting-approval',
+      )
+    ) {
+      assistant.cloudApprovalDecisions = undefined;
+      assistant.cloudApprovalError = undefined;
+    }
     const cloudRun = cloudRunsByStreamId.get(chunk.id);
     if (cloudRun) assistant.cloudAgentRun = { ...cloudRun };
     trimLiveMessages();
@@ -7821,6 +7775,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     _ctx.isStreaming = false;
     _ctx.currentStreamId = null;
     updateSendButton();
+    _ctx.needsMessageRebuild = true;
     saveMessages();
     renderMessages();
   }

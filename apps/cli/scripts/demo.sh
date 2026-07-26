@@ -12,13 +12,12 @@ set -e
 
 CLI=${CLI:-agi}
 
-# Demo fallback-chain models. Defaults track the canonical catalog
-# (packages/contracts/types/src/models.json: claude-sonnet-4.6 + gpt-5.5 flagships; the
-# CLI resolves the dashed `claude-sonnet-4-6` form to canonical). Override when
-# the catalog IDs are renamed/retired so the demo never points at a dead model:
+# Demo fallback-chain models. Defaults track the canonical catalog in
+# packages/contracts/types/src/models.json. Override when the catalog IDs are
+# renamed or retired so the demo never points at a dead model:
 #   DEMO_PRIMARY_MODEL=… DEMO_FALLBACK_MODEL=… ./demo.sh
-DEMO_PRIMARY_MODEL=${DEMO_PRIMARY_MODEL:-claude-sonnet-4-6}
-DEMO_FALLBACK_MODEL=${DEMO_FALLBACK_MODEL:-gpt-5.5}
+DEMO_PRIMARY_MODEL=${DEMO_PRIMARY_MODEL:-claude-sonnet-5}
+DEMO_FALLBACK_MODEL=${DEMO_FALLBACK_MODEL:-gpt-5.6-terra}
 
 pause() { read -r -p "" _; }
 

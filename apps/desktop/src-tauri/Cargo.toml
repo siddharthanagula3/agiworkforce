@@ -133,8 +133,6 @@ whisper-rs = { version = "0.11", optional = true }
 # For extracting Piper binary archives
 tar = "0.4"
 
-# keyring for OS-level secure credential storage (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-keyring = "3"
 argon2 = "0.5"
 machine-uid = "0.3"  # For getting machine-unique identifiers
 hostname = "0.4"     # For getting machine hostname as part of key derivation salt
@@ -240,6 +238,7 @@ tauri-plugin-stronghold = "2.3.1"
 
 
 [target.'cfg(windows)'.dependencies]
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
 winreg = "0.55"
 windows = { version = "0.56", features = [
     "Win32_Foundation",
@@ -264,10 +263,20 @@ windows = { version = "0.56", features = [
     "Globalization"
 ] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# keyring 3 has no platform defaults. Use the persistent Secret Service +
+# kernel-keyring store instead of its process-local mock backend.
+keyring = { version = "3", default-features = false, features = ["linux-native-sync-persistent", "crypto-rust", "vendored"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
+# keyring 3 has no platform defaults. Without this feature it silently uses a
+# process-local mock and a freshly encrypted database becomes unreadable after
+# restart.
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
 accessibility-sys = "0.1.2"
 core-foundation = "0.9"
 core-graphics = "0.24"
+io-kit-sys = "0.5.0"
 objc = "0.2"
 cocoa = "0.25"
 

@@ -46,6 +46,10 @@ describe('managed-cloud conversation wire contract', () => {
         conversations: [conversation],
         hasMore: false,
         nextOffset: 1,
+        historyStats: {
+          conversationCount: 195,
+          messageCount: 842,
+        },
       }).conversations,
     ).toEqual([conversation]);
 
@@ -56,6 +60,23 @@ describe('managed-cloud conversation wire contract', () => {
       hasMore: false,
     });
     expect(parsed.messages).toEqual([message]);
+  });
+
+  it('validates owner-scoped Cloud history totals independently of list pagination', () => {
+    const parsed = ManagedCloudConversationListResponseSchema.parse({
+      conversations: [conversation],
+      hasMore: true,
+      nextOffset: 1,
+      historyStats: {
+        conversationCount: 195,
+        messageCount: 842,
+      },
+    });
+
+    expect(parsed.historyStats).toEqual({
+      conversationCount: 195,
+      messageCount: 842,
+    });
   });
 
   it('rejects response drift instead of allowing unchecked client casts', () => {

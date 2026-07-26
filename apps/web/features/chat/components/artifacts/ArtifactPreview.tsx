@@ -112,7 +112,8 @@ export interface ArtifactData {
     | 'table'
     | 'csv'
     | 'presentation'
-    | 'email';
+    | 'email'
+    | 'image';
   language?: string;
   title?: string;
   content: string;
@@ -142,6 +143,34 @@ interface ArtifactPreviewProps {
    * the chip.
    */
   versionHistory?: SharedArtifact[];
+}
+
+/**
+ * Images render through an inert `<img>`, never an iframe. Accept the sources
+ * that the product's persisted media pipeline can legitimately produce and
+ * reject executable/unknown schemes before they reach the DOM.
+ */
+function resolveArtifactImageSource(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+  if (/^data:image\/(?:png|jpe?g|webp|gif|avif);/i.test(value)) return value;
+  if (value.startsWith('blob:')) return value;
+  if (value.startsWith('/') && !value.startsWith('//')) return value;
+
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'https:') return url.href;
+    if (
+      url.protocol === 'http:' &&
+      typeof window !== 'undefined' &&
+      url.origin === window.location.origin
+    ) {
+      return url.href;
+    }
+  } catch {
+    // Opaque or malformed values are not renderable image sources.
+  }
+  return null;
 }
 
 /**
@@ -187,6 +216,8 @@ export function ArtifactPreview({
     (artifact.language?.toLowerCase() === 'docx' || artifact.language?.toLowerCase() === 'doc');
   const [docxHtml, setDocxHtml] = useState<string | null>(null);
   const [docxError, setDocxError] = useState<string | null>(null);
+  const isImage = artifact.type === 'image';
+  const [imageError, setImageError] = useState(false);
   // PDF viewer load-failure (iframe onError). Distinct from "no valid source":
   // this is set when a real source is handed to the iframe but the browser
   // fails to render it. Reset on refresh / artifact change.
@@ -398,6 +429,10 @@ export function ArtifactPreview({
     versionHistory && versionHistory[shownVersionIndex]
       ? versionHistory[shownVersionIndex]!.content
       : sideMapContent;
+  const imageSrc = useMemo(
+    () => (isImage ? resolveArtifactImageSource(activeContent) : null),
+    [isImage, activeContent],
+  );
 
   // Reset version navigation + render error when the artifact identity changes
   // or a new version lands (so we snap to the latest and clear stale errors).
@@ -411,6 +446,7 @@ export function ArtifactPreview({
     setViewedVersionIndex(null);
     setRenderError(null);
     setPdfError(false);
+    setImageError(false);
     setCopied(false);
   }, [artifact.id, versionCount]);
 
@@ -636,10 +672,12 @@ if (__AgiApp) {
         // for React artifacts the payload was ART-1's escaped `<pre><code>`
         // dump rather than runnable source. With ART-1 + ART-6 fixed,
         // getPreviewHTML() is a genuine standalone document for every type
-        // (correct DOCTYPE, the CSP envelope, real source), so it just needs
-        // the honest MIME. Downloads are saved, never navigated to, so no
-        // artifact content executes on our origin.
-        blob = new Blob([getPreviewHTML()], { type: 'text/html;charset=utf-8' });
+        // (correct DOCTYPE, the CSP envelope, real source). Keep the `.html`
+        // filename but force attachment semantics with an inert MIME. A
+        // `text/html` object URL can become an origin-XSS sink if the browser,
+        // an extension, or future code navigates to it instead of honoring the
+        // download attribute.
+        blob = new Blob([getPreviewHTML()], { type: 'application/octet-stream' });
         filename = `${artifact.title || 'artifact'}.html`;
         break;
       case 'md': {
@@ -673,6 +711,24 @@ if (__AgiApp) {
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not download this file');
+    }
+  };
+
+  const handleDownloadImage = async () => {
+    if (!imageSrc) return;
+    const language = (artifact.language || 'png').toLowerCase().replace(/^\.+/, '');
+    const extension = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif'].includes(language)
+      ? language
+      : 'png';
+    const title = artifact.title || 'generated-image';
+    const fileName = /\.[a-z0-9]{1,8}$/i.test(title) ? title : `${title}.${extension}`;
+    const mimeType =
+      artifact.generatedFile?.mimeType ??
+      (extension === 'jpg' ? 'image/jpeg' : `image/${extension}`);
+    try {
+      await downloadGeneratedFile(imageSrc, fileName, mimeType);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not download this image');
     }
   };
 
@@ -727,6 +783,7 @@ if (__AgiApp) {
     // iframe load triggers a fresh sandbox-ready + payload post.
     setRenderError(null);
     setPdfError(false);
+    setImageError(false);
     setRefreshKey((k) => k + 1);
   };
 
@@ -904,13 +961,48 @@ if (__AgiApp) {
     </div>
   );
 
+  const renderImagePreview = (containerClassName: string) => (
+    <div
+      className={cn(
+        'flex items-center justify-center overflow-auto bg-[radial-gradient(circle_at_center,hsl(var(--muted))_0,transparent_70%)] p-4',
+        containerClassName,
+      )}
+    >
+      {imageSrc && !imageError ? (
+        <img
+          key={`${imageSrc}-${refreshKey}`}
+          src={imageSrc}
+          alt={artifact.title || 'Generated image'}
+          referrerPolicy="no-referrer"
+          onError={() => setImageError(true)}
+          className="max-h-full max-w-full rounded-xl object-contain shadow-sm"
+        />
+      ) : (
+        <div
+          className="flex h-full min-h-48 w-full flex-col items-center justify-center gap-2 px-6 text-center"
+          data-testid="artifact-image-fallback"
+        >
+          <FileText className="h-8 w-8 text-muted-foreground/60" aria-hidden="true" />
+          <p className="text-sm font-medium text-foreground">
+            {imageError ? "This image couldn't be displayed." : 'Image preview unavailable'}
+          </p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            {imageError
+              ? 'The image failed to load. Retry the preview or download the file.'
+              : 'This artifact does not contain a supported image source.'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   // ============================================================================
   // PANEL VARIANT — single-toolbar, full-height flex-fill layout
   // ============================================================================
   if (variant === 'panel') {
     // Whether to show the preview content (vs source code)
     const showPreview =
-      activeTab === 'preview' && (canPreview || isPdf || isDocx || isSharedRendered);
+      activeTab === 'preview' && (canPreview || isPdf || isDocx || isSharedRendered || isImage);
     // Human-readable type label for the toolbar, e.g. "· HTML", "· MD".
     // For code/document artifacts the type alone is generic ("CODE"/"DOCUMENT");
     // prefer the language field which carries the actual format (ts, md, pdf...).
@@ -979,8 +1071,10 @@ if (__AgiApp) {
               {artifact.title || 'Artifact'}
             </span>
             <span className="shrink-0 text-sm text-muted-foreground">· {typeLabel}</span>
-            {/* Version chip — only when the artifact has real edit history. */}
-            {versionCount > 1 && (
+            {/* Version chip — visible from the first generated version so the
+                artifact panel always answers which revision is being shown.
+                Navigation remains disabled until real edit history exists. */}
+            {versionCount > 0 && (
               <div
                 className="ml-0.5 flex shrink-0 items-center gap-0.5 rounded-md border border-border/40 bg-muted/40 px-0.5"
                 data-testid="artifact-version-chip"
@@ -1024,7 +1118,7 @@ if (__AgiApp) {
               External + Fullscreen collapse on narrow (375px) widths. */}
           <div className="flex shrink-0 items-center gap-1">
             {/* Copy — not for binary docs (copying a data URI is useless). */}
-            {!isPdf && !isDocx && (
+            {!isPdf && !isDocx && !isImage && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1049,17 +1143,20 @@ if (__AgiApp) {
 
             {/* Download — binary docs save real bytes via a plain button;
                 everything else offers the format dropdown. */}
-            {isPdf || isDocx ? (
+            {isPdf || isDocx || isImage ? (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={
-                  generatedFileSummary.primaryUri
-                    ? () => void handleDownloadGeneratedFile()
-                    : handleDownloadBinaryDoc
+                  isImage
+                    ? () => void handleDownloadImage()
+                    : generatedFileSummary.primaryUri
+                      ? () => void handleDownloadGeneratedFile()
+                      : handleDownloadBinaryDoc
                 }
+                disabled={isImage && !imageSrc}
                 className="h-7 px-2"
-                aria-label="Download file"
+                aria-label={isImage ? 'Download image' : 'Download file'}
                 title="Download"
               >
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1100,7 +1197,7 @@ if (__AgiApp) {
             )}
 
             {/* Refresh — renderable previews and PDFs (re-mounts the frame). */}
-            {(canPreview || isPdf) && (
+            {(canPreview || isPdf || isImage) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1246,6 +1343,9 @@ if (__AgiApp) {
           {/* Preview: PDF */}
           {showPreview && isPdf && renderPdfPreview('h-full w-full')}
 
+          {/* Preview: generated image */}
+          {showPreview && isImage && renderImagePreview('h-full w-full')}
+
           {/* Preview: DOCX */}
           {showPreview && isDocx && (
             <>
@@ -1353,53 +1453,69 @@ if (__AgiApp) {
             </DropdownMenu>
           )}
 
-          <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2">
-            {copied ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-green-500" />
-                <span className="ml-1 text-xs">Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" />
-                <span className="ml-1 text-xs">Copy</span>
-              </>
-            )}
-          </Button>
+          {!isImage && (
+            <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2">
+              {copied ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-green-500" />
+                  <span className="ml-1 text-xs">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" />
+                  <span className="ml-1 text-xs">Copy</span>
+                </>
+              )}
+            </Button>
+          )}
 
           {/* Download Options */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2"
-                aria-label="Download artifact"
-                title="Download"
-              >
-                <Download className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {isTabular && (
-                <DropdownMenuItem onClick={handleDownloadCsv}>Download as CSV</DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => handleDownload('html')}>
-                Download as HTML
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleDownload('txt')}>
-                Download source (.{(artifact.language || 'txt').toLowerCase()})
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleDownload('md')}>
-                Download as Markdown
-              </DropdownMenuItem>
-              {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
-                <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
-                  Download generated file
+          {isImage ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleDownloadImage()}
+              disabled={!imageSrc}
+              className="h-7 px-2"
+              aria-label="Download image"
+              title="Download"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2"
+                  aria-label="Download artifact"
+                  title="Download"
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {isTabular && (
+                  <DropdownMenuItem onClick={handleDownloadCsv}>Download as CSV</DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => handleDownload('html')}>
+                  Download as HTML
                 </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem onClick={() => handleDownload('txt')}>
+                  Download source (.{(artifact.language || 'txt').toLowerCase()})
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload('md')}>
+                  Download as Markdown
+                </DropdownMenuItem>
+                {hasGeneratedFileManifest && generatedFileSummary.primaryUri && (
+                  <DropdownMenuItem onClick={() => void handleDownloadGeneratedFile()}>
+                    Download generated file
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {(onShare || hasGeneratedFileManifest) && (
             <Button
@@ -1530,6 +1646,13 @@ if (__AgiApp) {
         {isPdf && (
           <TabsContent value="preview" className="m-0 p-0">
             {renderPdfPreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]')}
+          </TabsContent>
+        )}
+
+        {/* Preview Tab · generated image */}
+        {isImage && (
+          <TabsContent value="preview" className="m-0 p-0">
+            {renderImagePreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]')}
           </TabsContent>
         )}
 

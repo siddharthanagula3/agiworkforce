@@ -147,7 +147,7 @@ describe('SettingsModal nav (web IA)', () => {
 });
 
 describe('Connectors pane (table)', () => {
-  it('renders a table with Connector/Type/Status columns and real statuses only', () => {
+  it('keeps the primary table limited to connected or genuinely connectable rows', () => {
     renderModal();
     expect(screen.getByRole('columnheader', { name: 'Connector' })).toBeTruthy();
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeTruthy();
@@ -157,10 +157,10 @@ describe('Connectors pane (table)', () => {
     // the "Connected" filter tab shares the word).
     const table = screen.getByRole('table');
     expect(within(table).getByText('Connected')).toBeTruthy();
-    // Non-connectable rows show the honest surface label — never a Connect
-    // button that is known to fail (canConnect false everywhere here).
-    expect(screen.getAllByText('Not yet available on web').length).toBeGreaterThan(0);
-    expect(screen.getByText('Coming soon')).toBeTruthy();
+    // Preview-only rows stay in Browse rather than flooding the operational
+    // table with dead actions.
+    expect(screen.queryByText('Notion')).toBeNull();
+    expect(screen.queryByText('Stripe')).toBeNull();
     expect(screen.queryByRole('button', { name: /^Connect / })).toBeNull();
 
     // Local-only (exclusive) connectors never render on this surface.
@@ -175,8 +175,7 @@ describe('Connectors pane (table)', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /^Not connected/ }));
     expect(screen.queryByText('GitHub')).toBeNull();
-    expect(screen.getByText('Notion')).toBeTruthy();
-    expect(screen.getByText('Stripe')).toBeTruthy();
+    expect(screen.getByText('No connectors match your filters.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: /^All/ }));
     expect(screen.getByText('GitHub')).toBeTruthy();
@@ -185,10 +184,25 @@ describe('Connectors pane (table)', () => {
   it('filters rows via search', () => {
     renderModal();
     fireEvent.change(screen.getByPlaceholderText('Search connectors...'), {
-      target: { value: 'notion' },
+      target: { value: 'github' },
     });
-    expect(screen.getByText('Notion')).toBeTruthy();
-    expect(screen.queryByText('GitHub')).toBeNull();
+    expect(screen.getByText('GitHub')).toBeTruthy();
+  });
+
+  it('promotes a real custom-MCP connection action when no connector is ready', () => {
+    renderModal(
+      {},
+      {
+        connectedConnectors: [],
+        addCustomConnector: vi.fn(),
+      },
+    );
+
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByText('Notion')).toBeNull();
+    expect(screen.getByText('Connect your first tool')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Connect remote MCP server' }));
+    expect(screen.getByText('Add custom connector')).toBeTruthy();
   });
 
   it('opens an in-place detail view with real metadata and Disconnect for connected rows', async () => {
@@ -282,11 +296,17 @@ describe('Connectors pane (table)', () => {
     expect(screen.getByText('Loading plugins…')).toBeTruthy();
   });
 
-  it('Add custom connector renders the BETA form and surfaces an honest error on submit', async () => {
+  it('Add custom connector can securely forward an optional bearer token and surfaces errors', async () => {
     const addCustomConnector = vi
       .fn()
       .mockRejectedValue(new Error('Custom connectors are not yet supported on web.'));
-    renderModal({}, { addCustomConnector });
+    renderModal(
+      {},
+      {
+        addCustomConnector,
+        customConnectorAuthTokenSupported: true,
+      },
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
@@ -308,10 +328,19 @@ describe('Connectors pane (table)', () => {
     fireEvent.change(screen.getByPlaceholderText('https://example.com/mcp'), {
       target: { value: 'https://mcp.example.com' },
     });
+    fireEvent.change(screen.getByPlaceholderText('Token is encrypted before storage'), {
+      target: { value: 'secret-token' },
+    });
     expect(addBtn).toHaveProperty('disabled', false);
 
     fireEvent.click(addBtn);
-    await waitFor(() => expect(addCustomConnector).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(addCustomConnector).toHaveBeenCalledWith({
+        name: 'My MCP',
+        url: 'https://mcp.example.com',
+        authToken: 'secret-token',
+      }),
+    );
     // Honest failure — the form shows the error and does NOT fake a success.
     expect(await screen.findByText('Custom connectors are not yet supported on web.')).toBeTruthy();
     expect(screen.getByText('Add custom connector')).toBeTruthy();

@@ -295,18 +295,34 @@ impl std::fmt::Display for LogEventType {
     }
 }
 
+enum WorkflowDatabase {
+    Path(String),
+    Main(crate::data::db::key_management::MainDatabaseAccess),
+}
+
 pub struct WorkflowEngine {
-    db_path: String,
+    database: WorkflowDatabase,
 }
 
 impl WorkflowEngine {
     pub fn new(db_path: String) -> Self {
-        Self { db_path }
+        Self {
+            database: WorkflowDatabase::Path(db_path),
+        }
+    }
+
+    pub fn new_main_database(access: crate::data::db::key_management::MainDatabaseAccess) -> Self {
+        Self {
+            database: WorkflowDatabase::Main(access),
+        }
     }
 
     fn get_connection(&self) -> Result<rusqlite::Connection, String> {
-        rusqlite::Connection::open(&self.db_path)
-            .map_err(|e| format!("Failed to open database: {}", e))
+        match &self.database {
+            WorkflowDatabase::Path(path) => rusqlite::Connection::open(path)
+                .map_err(|e| format!("Failed to open database: {}", e)),
+            WorkflowDatabase::Main(access) => access.open_connection(),
+        }
     }
 
     pub fn create_workflow(&self, mut definition: WorkflowDefinition) -> Result<String, String> {

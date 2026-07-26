@@ -159,6 +159,14 @@ export interface ModelReasoning {
   defaultEffort?: Effort;
   /** false for always_on reasoners that cannot turn thinking off. */
   canDisableThinking?: boolean;
+  /** Provider request shape used when callers do not explicitly choose one. */
+  thinkingDefault?: 'disabled' | 'adaptive' | 'enabled';
+  /** False when the provider rejects classic enabled+budget thinking. */
+  supportsManualThinking?: boolean;
+  /** Highest effort accepted when thinking is explicitly disabled. */
+  maxEffortWhenThinkingDisabled?: Effort;
+  /** True when temperature/top_p/top_k must be omitted for this model. */
+  rejectsSamplingParameters?: boolean;
   /** thinking_budget control only. */
   thinkingBudget?: ReasoningBudget;
   request?: ReasoningRequestPaths;
@@ -297,6 +305,12 @@ export interface ModelMetadata {
   requiresEnvironment?: 'e2b' | 'local-runtime';
   /** Additive per-model reasoning capability metadata. Absent ⇒ non-reasoning. */
   reasoning?: ModelReasoning;
+  /** Provider prompt-cache minimum for this model, in estimated input tokens. */
+  promptCacheMinimumTokens?: number;
+  /** Model-specific provider tool availability that cannot be inferred from broad capabilities. */
+  providerCompatibility?: {
+    nativeWebFetch?: boolean;
+  };
   /** Selectability axis (separate from lifecycle `status`). Absent ⇒ "live". */
   availability?: ModelAvailability;
   /** Human-readable reason shown on coming_soon/unavailable rows. */

@@ -54,8 +54,8 @@ import type { ProcessedRequest } from '../lib/request-processor';
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
     requestId: 'req-parity-001',
-    chatRequest: { model: 'claude-opus-4-8', messages: [], stream: true } as any,
-    requestedModel: 'claude-opus-4-8',
+    chatRequest: { model: 'claude-opus-5', messages: [], stream: true } as any,
+    requestedModel: 'claude-opus-5',
     provider: 'anthropic',
     estimatedCostCents: 0,
     quotaWarningHeader: null,

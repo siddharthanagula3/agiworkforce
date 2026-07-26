@@ -1,17 +1,24 @@
 import type { RoutingTaskType } from '@agiworkforce/routing';
+import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
+import {
+  ManagedCloudAgentRunReferenceSchema,
+  ToolApprovalResumeRequestSchema,
+  type ManagedCloudAgentRunReference,
+  type ToolApprovalDecisionWire,
+} from '@agiworkforce/cloud-contracts';
 import {
   createMultimodalUserContent,
   getAuthToken,
   getManagedModelAccess,
   streamFreeChat,
+  streamManagedChatApproval,
   type FreeTrialChunk,
   type FreeTrialMessage,
   type ManagedChatStreamOptions,
   type ManagedModelAccess,
 } from './freeTrialClient';
 import { resolveChromeManagedChatRoute } from './managedChatRouting';
-import { isFreeManagedTier } from './managedModelPicker';
 
 const MAX_MESSAGE_CHARS = 32_000;
 const MAX_PAGE_CONTEXT_CHARS = 64_000;
@@ -89,10 +96,41 @@ export interface ChromeManagedChatDependencies {
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
 }
 
+export interface ChromeManagedApprovalRequest {
+  id: string;
+  run: ManagedCloudAgentRunReference;
+  toolApprovals: ToolApprovalDecisionWire[];
+  signal?: AbortSignal;
+}
+
+export type ChromeManagedApprovalResult =
+  | { status: 'success' }
+  | {
+      status: 'error';
+      code:
+        | 'invalid_request'
+        | 'auth_required'
+        | Extract<FreeTrialChunk, { type: 'error' }>['code'];
+      message: string;
+    };
+
+export interface ChromeManagedApprovalDependencies {
+  getAuthToken: typeof getAuthToken;
+  streamApproval: typeof streamManagedChatApproval;
+  onText: (text: string) => void | Promise<void>;
+  onAgentEvent?: (chunk: Extract<FreeTrialChunk, { type: 'agent-event' }>) => void | Promise<void>;
+  onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
+}
+
 const DEFAULT_DEPENDENCIES: Omit<ChromeManagedChatDependencies, 'onText'> = {
   getAuthToken,
   getModelAccess: getManagedModelAccess,
   streamChat: streamFreeChat,
+};
+
+const DEFAULT_APPROVAL_DEPENDENCIES: Omit<ChromeManagedApprovalDependencies, 'onText'> = {
+  getAuthToken,
+  streamApproval: streamManagedChatApproval,
 };
 
 function validateRequest(request: ChromeManagedChatRequest): string | null {
@@ -234,12 +272,12 @@ export async function executeChromeManagedChat(
     };
   }
 
-  if (isFreeManagedTier(access.subscriptionTier)) {
+  if (!canUseBillingPlanCapability(access.subscriptionTier, 'developer_surfaces')) {
     return {
       status: 'error',
       code: 'plan_required',
       message:
-        'Chrome access requires a paid plan. Free chat is available on Web, Mobile, and Desktop.',
+        'AGI in Chrome requires Pro or higher. Managed chat remains available on Web, Mobile, and Desktop for eligible plans.',
     };
   }
 
@@ -342,9 +380,75 @@ export async function executeChromeManagedChat(
   };
 }
 
+export async function executeChromeManagedApproval(
+  request: ChromeManagedApprovalRequest,
+  dependencies: ChromeManagedApprovalDependencies,
+): Promise<ChromeManagedApprovalResult> {
+  if (
+    !STREAM_ID_PATTERN.test(request.id) ||
+    !ManagedCloudAgentRunReferenceSchema.safeParse(request.run).success ||
+    !ToolApprovalResumeRequestSchema.safeParse({
+      run_id: request.run.runId,
+      tool_approvals: request.toolApprovals,
+    }).success
+  ) {
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'Invalid Managed Cloud approval request.',
+    };
+  }
+
+  const token = await dependencies.getAuthToken();
+  if (!token) {
+    return {
+      status: 'error',
+      code: 'auth_required',
+      message: 'Sign in to continue this Managed Cloud approval.',
+    };
+  }
+
+  for await (const chunk of dependencies.streamApproval(
+    request.run.runId,
+    request.toolApprovals,
+    token,
+    { signal: request.signal },
+  )) {
+    if (chunk.type === 'text') {
+      await dependencies.onText(chunk.text);
+      continue;
+    }
+    if (chunk.type === 'agent-event') {
+      await dependencies.onAgentEvent?.(chunk);
+      continue;
+    }
+    if (chunk.type === 'run') {
+      await dependencies.onRunReference?.(chunk.run);
+      continue;
+    }
+    if (chunk.type === 'error') {
+      return { status: 'error', code: chunk.code, message: chunk.message };
+    }
+    return { status: 'success' };
+  }
+
+  return {
+    status: 'error',
+    code: 'protocol_error',
+    message: 'AGI Cloud closed the approval stream without a terminal event.',
+  };
+}
+
 export function createChromeManagedChatDependencies(
   onText: ChromeManagedChatDependencies['onText'],
   callbacks: Pick<ChromeManagedChatDependencies, 'onAgentEvent' | 'onRunReference'> = {},
 ): ChromeManagedChatDependencies {
   return { ...DEFAULT_DEPENDENCIES, onText, ...callbacks };
+}
+
+export function createChromeManagedApprovalDependencies(
+  onText: ChromeManagedApprovalDependencies['onText'],
+  callbacks: Pick<ChromeManagedApprovalDependencies, 'onAgentEvent' | 'onRunReference'> = {},
+): ChromeManagedApprovalDependencies {
+  return { ...DEFAULT_APPROVAL_DEPENDENCIES, onText, ...callbacks };
 }

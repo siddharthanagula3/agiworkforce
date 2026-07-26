@@ -106,13 +106,16 @@ async function verifyPurchase(
 }
 
 async function handleVerify(request: NextRequest) {
-  const csrfResponse = await requireCsrfToken(request);
-  if (csrfResponse) return csrfResponse;
-
   const rateLimitResponse = await withRateLimit(request, 'mobile-iap-verify');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await requireCurrentUserId();
+  // Mobile purchase verification is Bearer-authenticated. Resolve identity
+  // from this request before CSRF handling so a valid app token never falls
+  // through to cookie-only Clerk auth.
+  const userId = await requireCurrentUserId(request);
+
+  const csrfResponse = await requireCsrfToken(request, userId);
+  if (csrfResponse) return csrfResponse;
 
   const body = await request.json().catch(() => null);
   const parsed = VerifyRequestSchema.safeParse(body);

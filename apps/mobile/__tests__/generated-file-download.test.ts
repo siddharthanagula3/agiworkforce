@@ -36,7 +36,8 @@ jest.mock('@/services/authSession', () => ({
   getAuthHeaders: (...args: unknown[]) => mockGetAuthHeaders(...args),
 }));
 
-import { downloadGeneratedFile } from '@/services/fileCreation';
+import * as Sharing from 'expo-sharing';
+import { downloadGeneratedFile, shareGeneratedImage } from '@/services/fileCreation';
 
 /** FileReader stand-in: resolves every blob to a fixed base64 data URL. */
 class FakeFileReader {
@@ -58,8 +59,11 @@ describe('downloadGeneratedFile', () => {
     mockGuardedFetch.mockResolvedValue({
       ok: true,
       status: 200,
+      headers: { get: () => 'image/png' },
       blob: async () => ({}),
     });
+    (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
+    (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
   });
 
   it('fetches our-cloud urls through guardedFetch with the Bearer token and writes base64 bytes', async () => {
@@ -105,5 +109,57 @@ describe('downloadGeneratedFile', () => {
     await expect(
       downloadGeneratedFile('https://agiworkforce.com/api/files/gf-1', 'report.pdf'),
     ).rejects.toThrow(/HTTP 503/);
+  });
+
+  it('materializes an owner-scoped image to a local file before opening the share sheet', async () => {
+    const imagePath = '/api/files/22222222-2222-4222-8222-222222222222';
+
+    await shareGeneratedImage(imagePath);
+
+    expect(mockGuardedFetch).toHaveBeenCalledWith(
+      'https://agiworkforce.com/api/files/22222222-2222-4222-8222-222222222222',
+      { headers: { Authorization: 'Bearer test-jwt' } },
+    );
+    expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
+      'file:///docs/exports/generated-image.png',
+      'JVBERi0xLjc=',
+      { encoding: 'base64' },
+    );
+    expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///docs/exports/generated-image.png', {
+      mimeType: 'image/png',
+      dialogTitle: 'Share generated image',
+    });
+  });
+
+  it('never shares an external or inline image URL as if it were durable media', async () => {
+    await expect(shareGeneratedImage('https://evil.example/tracker.png')).rejects.toThrow(
+      /saved AGI Cloud images/,
+    );
+    expect(mockGuardedFetch).not.toHaveBeenCalled();
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['image/jpeg', 'jpg'],
+    ['image/webp', 'webp'],
+  ])('preserves %s bytes and extension when sharing', async (mimeType, extension) => {
+    mockGuardedFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => mimeType },
+      blob: async () => ({}),
+    });
+
+    await shareGeneratedImage('/api/files/22222222-2222-4222-8222-222222222222');
+
+    expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
+      `file:///docs/exports/generated-image.${extension}`,
+      'JVBERi0xLjc=',
+      { encoding: 'base64' },
+    );
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      `file:///docs/exports/generated-image.${extension}`,
+      expect.objectContaining({ mimeType }),
+    );
   });
 });

@@ -3,7 +3,7 @@
  *
  * POST /api/feedback — accepts feedback submitted from the desktop app's
  * feedback dialog (`apps/desktop/src-tauri/src/sys/commands/feedback.rs`,
- * `submit_feedback`).
+ * `submit_feedback`) and the web chat composer footer.
  *
  * STB-5: the Rust command has always POSTed to `{api_base}/api/feedback`, but
  * no such route existed. Every desktop feedback submission 404'd and the
@@ -36,15 +36,18 @@ import { getNeonDb } from '@/lib/server/neon-db';
 /** Cap the attached diagnostic log so one submission can't bloat the table. */
 const MAX_LOGS_CHARS = 20_000;
 
-const DesktopFeedbackSchema = z.object({
+const FeedbackSchema = z.object({
   subject: z.string().trim().min(1).max(200),
   message: z.string().trim().min(1).max(10_000),
   /** Client-claimed identity. Untrusted — see module doc. */
   user_id: z.string().trim().max(200).nullish(),
   metadata: z.object({
+    source: z.enum(['desktop', 'web']).optional(),
     platform: z.string().trim().max(100),
     version: z.string().trim().max(100),
     user_agent: z.string().trim().max(500),
+    page_path: z.string().trim().max(2_000).optional(),
+    conversation_id: z.string().trim().max(200).optional(),
   }),
   /** WARN/ERROR log lines, already filtered and truncated on the desktop side. */
   logs: z.string().max(MAX_LOGS_CHARS).nullish(),
@@ -60,7 +63,7 @@ async function handleSubmitFeedback(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const body = await request.json().catch(() => null);
-  const parsed = DesktopFeedbackSchema.safeParse(body);
+  const parsed = FeedbackSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.badRequest('Invalid feedback payload', parsed.error.flatten());
   }
@@ -80,17 +83,22 @@ async function handleSubmitFeedback(request: NextRequest) {
         subject,
         message,
         JSON.stringify({
-          source: 'desktop',
+          source: metadata.source ?? 'desktop',
           platform: metadata.platform,
           version: metadata.version,
           user_agent: metadata.user_agent,
+          ...(metadata.page_path ? { page_path: metadata.page_path } : {}),
+          ...(metadata.conversation_id ? { conversation_id: metadata.conversation_id } : {}),
           ...(claimedUserId ? { claimed_user_id: claimedUserId } : {}),
           ...(logs ? { logs } : {}),
         }),
       ],
     );
   } catch (error) {
-    logger.error({ error, userId, subject }, 'Failed to store desktop feedback');
+    logger.error(
+      { error, userId, subject, source: metadata.source ?? 'desktop' },
+      'Failed to store feedback',
+    );
     throw createError.internal('Failed to submit feedback');
   }
 

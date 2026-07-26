@@ -63,13 +63,16 @@ const mockDeleteItemAsync = _SecureStoreMock.deleteItemAsync;
 // Create mock fns inside the factory to avoid TDZ issues from Jest hoisting.
 jest.mock('../services/authSession', () => ({
   clearAuthSession: jest.fn(),
+  getAuthToken: jest.fn(),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const _cloudAuthMock = require('../services/authSession') as {
   clearAuthSession: jest.Mock;
+  getAuthToken: jest.Mock;
 };
 const mockClearAuthSession = _cloudAuthMock.clearAuthSession;
+const mockGetAuthToken = _cloudAuthMock.getAuthToken;
 
 // Settings teardown mocks — intercepted by the lazy require() calls inside
 // signOut's try block. Jest resolves @/ → <rootDir> so these relative paths
@@ -96,9 +99,8 @@ jest.mock('../stores/settings/cloudSettingsStore', () => ({
   },
 }));
 
-// Tier store is reset to 'free' on sign-out so a previously-signed-in
-// Pro/Max account's cached tier doesn't survive sign-out and get shown to a
-// signed-out (or different) user on the Billing screen.
+// Every account-scoped entitlement/capability cache is reset on sign-out so
+// account B cannot inherit account A's plan, provider, or tool grants.
 jest.mock('../src/features/billing/store', () => ({
   useTierStore: {
     getState: jest.fn(),
@@ -112,6 +114,7 @@ jest.mock('../src/features/artifacts/store', () => ({
   useArtifactStore: {
     getState: jest.fn(),
   },
+  clearAccountScopedArtifactState: jest.fn(),
 }));
 
 // Platform integration connection status (connected/lastSynced/accountName)
@@ -124,12 +127,136 @@ jest.mock('../src/features/integrations/store', () => ({
   },
 }));
 
-// mobile_devices push tokens are keyed by deviceId (not session) — the token
-// must be cleared server-side on sign-out so a subsequent different account
-// on this device doesn't receive push notifications addressed to the prior
-// account.
+// Persisted Cloud mode is account-bound UI state. Sign-out must return the
+// app to Local before any signed-out Cloud settings surface can render.
+jest.mock('../src/features/chat/store/appModeStore', () => ({
+  useChatAppModeStore: {
+    setState: jest.fn(),
+  },
+}));
+
+// Sign-out has one narrowly-scoped Local-mode egress exception: it captures the
+// current Clerk token and revokes this device's push token through the exact,
+// TLS-pinned endpoint before clearing Clerk credentials.
+jest.mock('../src/features/auth/services/signOutPushTokenCleanup', () => ({
+  unregisterPushTokenForSignOut: jest.fn(),
+}));
+
+jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
+  invalidateCloudAccount: jest.fn(),
+}));
+
+// Keep the sign-out unit tests isolated from the full cloud-sync dependency
+// graph. Loading these real modules through signOut's lazy requires takes
+// longer than Jest's default test timeout on a cold transform cache.
+jest.mock('../services/cloudSyncEngine', () => ({
+  stopCloudSyncLoop: jest.fn(),
+}));
+
+jest.mock('../stores/chat/cloudSyncStateStore', () => ({
+  useCloudSyncStateStore: {
+    getState: jest.fn(() => ({ reset: jest.fn() })),
+  },
+}));
+
+jest.mock('../stores/chat/chatCloudMessageStore', () => ({
+  useChatCloudMessageStore: {
+    getState: jest.fn(() => ({ conversations: [], clearCloudData: jest.fn() })),
+  },
+}));
+
+jest.mock('../stores/chat/chatExecutionStore', () => ({
+  clearCloudExecutionState: jest.fn(),
+}));
+
+jest.mock('../src/features/chat/actions/runImageGenerationTurn', () => ({
+  clearCloudImageGenerationState: jest.fn(),
+}));
+
+jest.mock('../stores/chat/chatMessageStore', () => ({
+  useChatMessageStore: {
+    getState: jest.fn(() => ({ clearCloudConversationSelection: jest.fn() })),
+  },
+}));
+
+jest.mock('../services/offlineQueue', () => ({
+  clearAccountScopedOfflineQueue: jest.fn(),
+}));
+
+jest.mock('../src/features/chat/draftStore', () => ({
+  clearAccountScopedDrafts: jest.fn(),
+}));
+
+jest.mock('../stores/memory/cloudMemoryStore', () => ({
+  useCloudMemoryStore: {
+    getState: jest.fn(() => ({ clearCloudMemoryData: jest.fn() })),
+  },
+}));
+
+jest.mock('../stores/memory/memorySyncStateStore', () => ({
+  useMemorySyncStateStore: {
+    getState: jest.fn(() => ({ resetMemorySync: jest.fn() })),
+  },
+}));
+
+jest.mock('../stores/projects/cloudProjectStore', () => ({
+  useCloudProjectStore: {
+    getState: jest.fn(() => ({ projects: [], clearCloudProjectData: jest.fn() })),
+  },
+}));
+
+jest.mock('../stores/projects/projectSyncStateStore', () => ({
+  useProjectSyncStateStore: {
+    getState: jest.fn(() => ({ resetProjectSync: jest.fn() })),
+  },
+}));
+
+jest.mock('../stores/agentControlStore', () => ({
+  useAgentControlStore: {
+    getState: jest.fn(() => ({ clearCloudOverrides: jest.fn() })),
+  },
+}));
+
+jest.mock('../src/features/schedules/store', () => ({
+  useScheduleStore: {
+    getState: jest.fn(() => ({ clearAccountSchedules: jest.fn() })),
+  },
+}));
+
+jest.mock('../src/features/messaging/store', () => ({
+  useMessagingStore: {
+    getState: jest.fn(() => ({ clearAccountMessaging: jest.fn() })),
+  },
+}));
+
+jest.mock('../services/api', () => ({
+  resetApiAccountState: jest.fn(),
+}));
+
 jest.mock('../services/notifications', () => ({
-  unregisterPushToken: jest.fn(),
+  notificationCenterStore: { clear: jest.fn() },
+}));
+
+jest.mock('../services/backgroundFetch', () => ({
+  resetBackgroundFetchAccountState: jest.fn(),
+}));
+
+jest.mock('../src/features/billing/iapStore', () => ({
+  useIapStore: {
+    getState: jest.fn(() => ({ reset: jest.fn() })),
+  },
+}));
+
+jest.mock('../stores/chat/chatViewStore', () => ({
+  useChatViewStore: {
+    getState: jest.fn(() => ({ clearCloudSearchState: jest.fn() })),
+  },
+}));
+
+jest.mock('../src/features/waitlist/store', () => ({
+  useWaitlistStore: {
+    getState: jest.fn(() => ({ clear: jest.fn() })),
+  },
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -151,13 +278,14 @@ const mockCloudSettingsSetState = _cloudSettingsMock.useCloudSettingsStore.setSt
 const _tierMock = require('../src/features/billing/store') as {
   useTierStore: { getState: jest.Mock };
 };
-const mockSetTier = jest.fn();
+const mockClearAccountEntitlements = jest.fn();
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const _artifactMock = require('../src/features/artifacts/store') as {
   useArtifactStore: { getState: jest.Mock };
+  clearAccountScopedArtifactState: jest.Mock;
 };
-const mockClearCloudArtifacts = jest.fn();
+const mockClearCloudArtifacts = _artifactMock.clearAccountScopedArtifactState;
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const _integrationMock = require('../src/features/integrations/store') as {
@@ -166,8 +294,13 @@ const _integrationMock = require('../src/features/integrations/store') as {
 const mockClearPlatformConnections = jest.fn();
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const _notificationsMock = require('../services/notifications') as {
-  unregisterPushToken: jest.Mock;
+const _appModeMock = require('../src/features/chat/store/appModeStore') as {
+  useChatAppModeStore: { setState: jest.Mock };
+};
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _pushTokenCleanupMock = require('../src/features/auth/services/signOutPushTokenCleanup') as {
+  unregisterPushTokenForSignOut: jest.Mock;
 };
 
 // mmkv is not used by authStore but may be imported transitively.
@@ -408,6 +541,8 @@ describe('authStore — secure storage persistence', () => {
     resetAuthStore();
 
     mockClearAuthSession.mockResolvedValue(undefined);
+    mockGetAuthToken.mockResolvedValue('captured-clerk-jwt');
+    _pushTokenCleanupMock.unregisterPushTokenForSignOut.mockResolvedValue(undefined);
 
     // Default secure-store: succeed silently
     mockSetItemAsync.mockResolvedValue(undefined);
@@ -419,7 +554,9 @@ describe('authStore — secure storage persistence', () => {
       resetSettingsSync: mockResetSettingsSync,
     });
     _settingsMock.useSettingsStore.getState.mockReturnValue({});
-    _tierMock.useTierStore.getState.mockReturnValue({ setTier: mockSetTier });
+    _tierMock.useTierStore.getState.mockReturnValue({
+      clearAccountEntitlements: mockClearAccountEntitlements,
+    });
     _artifactMock.useArtifactStore.getState.mockReturnValue({
       clearCloudArtifacts: mockClearCloudArtifacts,
     });
@@ -518,7 +655,7 @@ describe('authStore — secure storage persistence', () => {
     );
   });
 
-  it('signOut resets the cached billing tier to free (no stale Pro/Max plan after sign-out)', async () => {
+  it('signOut clears every cached account entitlement (no stale plan/tool grants)', async () => {
     // Regression: the Billing screen reads useTierStore().tier with no auth check.
     // Before this fix, a previously-signed-in Pro/Max account's cached tier
     // survived sign-out in MMKV and a signed-out (or different) user would see
@@ -529,7 +666,43 @@ describe('authStore — secure storage persistence', () => {
       await getState().signOut();
     });
 
-    expect(mockSetTier).toHaveBeenCalledWith('free');
+    expect(mockClearAccountEntitlements).toHaveBeenCalledTimes(1);
+  });
+
+  it('signOut atomically returns the persisted app mode to Local', async () => {
+    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+
+    await act(async () => {
+      await getState().signOut();
+    });
+
+    expect(_appModeMock.useChatAppModeStore.setState).toHaveBeenCalledWith({ appMode: 'local' });
+  });
+
+  it('fails closed immediately while external Clerk sign-out is still pending', async () => {
+    let resolveExternalSignOut: (() => void) | undefined;
+    mockClearAuthSession.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveExternalSignOut = resolve;
+      }),
+    );
+    useAuthStore.setState({
+      session: makeSession() as never,
+      user: {} as never,
+      isClerkSignedIn: true,
+    });
+
+    const pendingSignOut = getState().signOut();
+
+    expect(getState().session).toBeNull();
+    expect(getState().user).toBeNull();
+    expect(getState().isClerkSignedIn).toBe(false);
+    expect(_appModeMock.useChatAppModeStore.setState).toHaveBeenCalledWith({ appMode: 'local' });
+
+    resolveExternalSignOut?.();
+    await act(async () => {
+      await pendingSignOut;
+    });
   });
 
   it('signOut clears platform integration connections (account-B isolation)', async () => {
@@ -573,7 +746,22 @@ describe('authStore — secure storage persistence', () => {
       await getState().signOut();
     });
 
-    expect(_notificationsMock.unregisterPushToken).toHaveBeenCalledTimes(1);
+    expect(_pushTokenCleanupMock.unregisterPushTokenForSignOut).toHaveBeenCalledWith(
+      'captured-clerk-jwt',
+    );
+  });
+
+  it('attempts the authenticated push-token DELETE before clearing Clerk credentials', async () => {
+    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+
+    await act(async () => {
+      await getState().signOut();
+    });
+
+    const cleanupOrder =
+      _pushTokenCleanupMock.unregisterPushTokenForSignOut.mock.invocationCallOrder[0];
+    const clerkClearOrder = mockClearAuthSession.mock.invocationCallOrder[0];
+    expect(cleanupOrder).toBeLessThan(clerkClearOrder);
   });
 
   it('onRehydrateStorage clears session and marks store uninitialized (biometric gate)', () => {

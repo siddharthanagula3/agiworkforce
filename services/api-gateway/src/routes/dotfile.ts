@@ -71,7 +71,7 @@ interface DotfileStatusResponse {
 
 const DEFAULT_CONFIG: DotfileConfigResponse = {
   default: {
-    model: 'claude-opus-4.8',
+    model: 'claude-opus-5',
     provider: 'anthropic',
     stream: true,
     approval_mode: 'suggest',

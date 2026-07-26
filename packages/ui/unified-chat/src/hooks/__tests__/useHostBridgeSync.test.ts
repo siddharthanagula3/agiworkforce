@@ -15,7 +15,7 @@ function resetStore() {
     searchResults: [],
     draftContent: '',
     activeMode: null,
-    webSearchEnabled: false,
+    webSearchEnabled: true,
   });
 }
 

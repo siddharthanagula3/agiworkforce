@@ -1,29 +1,6 @@
 {
   "source": "models.dev",
   "models": {
-    "claude-opus-4.8": {
-      "contextWindow": 1000000,
-      "inputCost": 5,
-      "outputCost": 25,
-      "cached_input": 0.5,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speed": "slow",
-      "released": "May 2026"
-    },
     "claude-sonnet-4.6": {
       "contextWindow": 200000,
       "inputCost": 3,

@@ -4,7 +4,7 @@ Status: Current
 
 Owner role: Extension lead
 
-Last updated: 2026-07-14
+Last updated: 2026-07-26
 
 Kind: app
 
@@ -33,6 +33,19 @@ IDE-native access to AGI developer sessions. Chat is workspace scoped and runs t
 
 No AGI Cloud sign-in or extension API key is required for the local developer-session transport. Provider credentials and routing are owned by the local runtime configuration. Inline completions and older cloud-backed utility commands have separate credential requirements.
 
+## Cloud account and Web handoffs
+
+`AGI Workforce: Sign In to AGI Cloud` uses the shared browser-approved device
+flow and stores its revocable developer credential in VS Code `SecretStorage`.
+The Account & Usage command reads `/api/usage`, applies both plan and
+subscription status before caching an effective tier, and exposes explicit Web
+links for usage, billing recovery, Cloud connectors, and Team or Enterprise
+administration.
+
+Cloud connector setup remains a Web Managed Cloud capability. It does not
+replace the workspace's local MCP configuration, and signing in never silently
+moves a local developer session across a trust boundary.
+
 ## Current surfaces
 
 - `@agi` chat participant with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, and `/model`.
@@ -40,19 +53,24 @@ No AGI Cloud sign-in or extension API key is required for the local developer-se
 - Runtime-owned developer-session history.
 - Explicit approval prompts for privileged runtime actions.
 - Editor selection and surrounding-code context wrapped as untrusted data.
-- Editor context, model selection, diagnostics sharing, and diff proposals.
-- Inline completions, CodeLens, hover, diagnostics, terminal helpers, memory UI, and Desktop bridge integrations.
+- Editor context, catalog-driven model selection, diagnostics sharing, and reviewable diff proposals.
+- The editor-panel Apply action opens the proposed change in VS Code's native diff view.
+- Workspace-file attachments are validated against traversal, symlinks, folders, and sensitive filenames.
+- User-curated memory is bounded and injected as untrusted context for future turns.
+- Visible Local host and resolved provider/Auto-routing labels, including in narrow sidebars.
+- Inline completions, CodeLens, hover, diagnostics, terminal helpers, memory UI, and optional Desktop bridge integrations.
 
 ## Configuration highlights
 
-| Setting                                  | Default            | Purpose                                                                                    |
-| ---------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------ |
-| `agiWorkforce.cliPath`                   | `agi`              | Local CLI binary used to launch `app-server`.                                              |
-| `agiWorkforce.model`                     | catalog default    | Model selection forwarded to the runtime when explicit.                                    |
-| `agiWorkforce.inlineCompletions.enabled` | `true`             | Enables the separate inline-completion path.                                               |
-| `agiWorkforce.mcp.enabled`               | configured default | Enables MCP-related extension integration. Runtime MCP discovery remains app-server owned. |
-| `agiWorkforce.desktopBridge.enabled`     | configured default | Enables the explicit Desktop bridge.                                                       |
-| `agiWorkforce.telemetryEnabled`          | `false`            | Extension telemetry opt-in, also subject to VS Code telemetry settings.                    |
+| Setting                                  | Default | Purpose                                                                                    |
+| ---------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `agiWorkforce.cliPath`                   | `agi`   | Local CLI binary used to launch `app-server`.                                              |
+| `agiWorkforce.model`                     | `auto`  | Routes each turn using the task and the models available to the resolved plan.             |
+| `agiWorkforce.inlineCompletions.enabled` | `false` | Explicit opt-in for sending surrounding code to the cloud completion utility.              |
+| `agiWorkforce.mcp.enabled`               | `false` | Enables MCP-related extension integration. Runtime MCP discovery remains app-server owned. |
+| `agiWorkforce.desktopBridge.enabled`     | `false` | Enables the explicit Desktop bridge.                                                       |
+| `agiWorkforce.useProviderStream`         | `false` | Opt-in account-authenticated transport for cloud-backed editor utilities only.             |
+| `agiWorkforce.telemetryEnabled`          | `false` | Extension telemetry opt-in, also subject to VS Code telemetry settings.                    |
 
 ## Verification
 
@@ -60,7 +78,9 @@ No AGI Cloud sign-in or extension API key is required for the local developer-se
 pnpm --filter agi-workforce typecheck
 pnpm --filter agi-workforce test
 pnpm --filter agi-workforce test:webview
+pnpm --filter agi-workforce test:integration
 pnpm --filter agi-workforce lint
+pnpm --filter agi-workforce check:vscode-theme-tokens
 pnpm --filter agi-workforce build
 ```
 
@@ -70,6 +90,7 @@ pnpm --filter agi-workforce build
 - Webview messages are runtime validated before dispatch.
 - Local runtime processes are isolated by workspace root.
 - Editor and file content is untrusted model input.
+- Switching a live session across a provider boundary starts a new runtime thread; the earlier transcript is not forwarded and a visible session notice explains the reset.
 - The local runtime owns approval requests for destructive, external, privileged, or expensive actions.
 
 ## License

@@ -25,6 +25,7 @@ jest.mock('@/src/ui/theme', () => {
     borderLight: '#2a2a2a',
     background: '#080808',
     surfaceBase: '#111',
+    surfaceHover: '#111',
     surfaceElevated: '#1a1a1a',
     neutralSurface: '#242424',
     accentSurface: '#162b31',

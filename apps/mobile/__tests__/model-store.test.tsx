@@ -29,6 +29,7 @@ jest.mock('../lib/mmkv', () => ({
 // ---------------------------------------------------------------------------
 
 import {
+  AUTO_MODES,
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
   LOCAL_MODEL_LIST,
@@ -45,6 +46,7 @@ const LITE_MODEL_ID = 'llama-3.2-1b-instruct-spinquant';
 const CLOUD_MODEL_ID = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
 const SELECTABLE_MODEL_IDS = LOCAL_MODEL_LIST.map((model) => model.id);
 const SECOND_SELECTABLE_MODEL_ID = SELECTABLE_MODEL_IDS.find((id) => id !== LITE_MODEL_ID);
+const SELECTABLE_AUTO_MODE_ID = AUTO_MODES[0]?.id;
 
 function getState() {
   return useModelStore.getState();
@@ -89,10 +91,11 @@ describe('modelStore', () => {
       expect(getState().selectedProvider).toBe('local');
     });
 
-    it('updates selectedModel for local auto modes', () => {
-      getState().setModel('auto-balanced');
+    it('updates selectedModel for the registry-owned Auto mode', () => {
+      expect(SELECTABLE_AUTO_MODE_ID).toBeDefined();
+      getState().setModel(SELECTABLE_AUTO_MODE_ID!);
 
-      expect(getState().selectedModel).toBe('auto-balanced');
+      expect(getState().selectedModel).toBe(SELECTABLE_AUTO_MODE_ID);
       expect(getState().selectedProvider).toBe('local');
     });
 
@@ -151,12 +154,10 @@ describe('modelStore', () => {
       const localIds = LOCAL_MODEL_LIST.map((model) => model.id);
       const manyIds = [
         ...localIds,
-        'auto-balanced',
-        'auto-economy',
-        'auto-premium',
+        ...AUTO_MODES.map((mode) => mode.id),
         // Second pass — duplicates should be deduped before capping.
         ...localIds,
-        'auto-balanced',
+        ...AUTO_MODES.map((mode) => mode.id),
       ].filter((id): id is string => id !== undefined);
       for (const id of manyIds) {
         getState().setModel(id);

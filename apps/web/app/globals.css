@@ -7723,3 +7723,24 @@
   background: transparent;
   padding: 0;
 }
+
+/*
+ * The composer can become narrow even on a wide viewport when both the chat
+ * sidebar and Artifacts panel are open. Viewport breakpoints cannot see that
+ * constraint, so make the composer its own query container and move the
+ * Chat/AGI Work selector into the + menu before it crowds the model, voice,
+ * and Send controls.
+ */
+.chat-composer-container {
+  container-type: inline-size;
+}
+
+@container (max-width: 560px) {
+  .chat-composer-mode-inline {
+    display: none !important;
+  }
+
+  .chat-composer-mode-in-menu {
+    display: block !important;
+  }
+}

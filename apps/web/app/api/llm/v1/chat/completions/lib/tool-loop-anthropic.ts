@@ -93,16 +93,12 @@ export interface ToolLoopStepSink {
  * throws a plain `Error` (via the provider's `mapError`) if it's an error
  * chunk (same peek-and-throw pattern as the standard path). That throw
  * propagates out of this function and is caught by `runToolLoop`'s EXISTING
- * try/catch around its provider-call site -- which already does exactly the
- * right thing for tool-loop specifically: yield an inline `Error: ...` SSE
- * content chunk and stop (no `[DONE]`, no attempt at
- * `buildUpstreamErrorResponse`). That matters because by step 2+ a 200
- * response is already committed -- there is no HTTP-error-response path
- * available mid-loop, and step 1 failing this way matches the OLD
- * `LLMProviderFactory.streamRequest` behavior too (it threw synchronously on
- * a failed fetch, before any body streaming began). This function does NOT
- * duplicate that error-UX decision -- it only supplies the throw; the loop's
- * unchanged catch block decides what to do with it.
+ * try/catch around its provider-call site. The loop reports the failure on its
+ * canonical error event and `x_stream_error` channels, then flushes `[DONE]`;
+ * it deliberately does not turn provider errors into assistant content. That
+ * matters because by step 2+ a 200 response is already committed -- there is
+ * no HTTP-error-response path available mid-loop. This function does not
+ * duplicate that error-UX decision; it only supplies the throw.
  *
  * ABORTSIGNAL THREADING (AUDIT-FIX BUG-1): this function used to hand the
  * adapter a fresh, NEVER-TRIGGERED `AbortController().signal`, because

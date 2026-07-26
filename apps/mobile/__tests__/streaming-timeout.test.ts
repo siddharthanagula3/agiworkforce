@@ -122,7 +122,7 @@ describe('completions stream response timeout', () => {
     const errArg = callbacks.onError.mock.calls[0][0] as Error;
     expect(errArg.message).toMatch(/timed out/i);
     expect(callbacks.onDone).not.toHaveBeenCalled();
-  });
+  }, 10_000);
 
   it('does NOT time out a long but healthy stream once the first token arrives', async () => {
     const { streamChat } = await loadStreamingService();

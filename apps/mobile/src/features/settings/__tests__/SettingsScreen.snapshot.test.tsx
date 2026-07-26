@@ -142,13 +142,31 @@ jest.mock('@/lib/safeOpenURL', () => ({
   openExternalUrl: jest.fn(),
 }));
 
+jest.mock('@clerk/expo', () => ({
+  useUser: () => ({ user: null, isLoaded: true }),
+}));
+
 jest.mock('@/lib/v1FeatureFlags', () => ({
-  FEATURES: { companion: false, connectors: false },
+  FEATURES: { companion: false, connectors: false, iap: false },
 }));
 
 jest.mock('@/src/features/auth/store', () => ({
-  useAuthStore: (selector: (s: { user: null; signOut: jest.Mock }) => unknown) =>
-    selector({ user: null, signOut: jest.fn() }),
+  useAuthStore: (
+    selector: (s: {
+      user: null;
+      signOut: jest.Mock;
+      isClerkLoaded: boolean;
+      isClerkSignedIn: boolean;
+      clerkUserId: null;
+    }) => unknown,
+  ) =>
+    selector({
+      user: null,
+      signOut: jest.fn(),
+      isClerkLoaded: true,
+      isClerkSignedIn: false,
+      clerkUserId: null,
+    }),
 }));
 
 jest.mock('@/src/features/waitlist/store', () => ({

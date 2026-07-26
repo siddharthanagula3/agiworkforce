@@ -343,7 +343,7 @@ async function attemptStream(
         if (parsed && parsed.kind === 'paywall') {
           throw new ApiPaywallError(
             typeof parsed.feature === 'string' ? parsed.feature : 'token_cap',
-            typeof parsed.requiredTier === 'string' ? parsed.requiredTier : 'hobby',
+            typeof parsed.requiredTier === 'string' ? parsed.requiredTier : 'basic',
             typeof parsed.reason === 'string' ? parsed.reason : '',
           );
         }

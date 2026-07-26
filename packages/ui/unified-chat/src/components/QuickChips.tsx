@@ -6,9 +6,16 @@ export type ChipType = NonNullable<ActiveMode>;
 
 export type QuickChipsMode = 'four' | 'six';
 
+export type QuickChipAvailability = Partial<Record<ChipType, boolean>>;
+
 interface QuickChipsProps {
   onChipClick: (chip: NonNullable<ActiveMode>) => void;
   mode?: QuickChipsMode;
+  /**
+   * An explicitly false capability hides its quick action. Missing values
+   * preserve the existing defaults for hosts that have not declared support.
+   */
+  availability?: QuickChipAvailability;
 }
 
 type ChipDef = { type: NonNullable<ActiveMode>; label: string; icon: React.ReactNode };
@@ -24,10 +31,12 @@ const SIX_CHIPS: ChipDef[] = [
 
 const FOUR_CHIPS: ChipDef[] = SIX_CHIPS.slice(0, 4);
 
-export function QuickChips({ onChipClick, mode = 'six' }: QuickChipsProps) {
+export function QuickChips({ onChipClick, mode = 'six', availability }: QuickChipsProps) {
   const activeMode = useChatStore((s) => s.activeMode);
   const setActiveMode = useChatStore((s) => s.setActiveMode);
-  const chips = mode === 'four' ? FOUR_CHIPS : SIX_CHIPS;
+  const chips = (mode === 'four' ? FOUR_CHIPS : SIX_CHIPS).filter(
+    (chip) => availability?.[chip.type] !== false,
+  );
 
   const handleClick = (type: NonNullable<ActiveMode>) => {
     const next = activeMode === type ? null : type;

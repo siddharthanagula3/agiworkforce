@@ -88,7 +88,7 @@ import {
 // short-circuits without re-registering. Register once for the whole
 // suite; reset only the per-test router spy.
 beforeAll(() => {
-  setupNotificationListeners();
+  setupNotificationListeners(null);
   setNavigatorReady(true);
 });
 

@@ -18,6 +18,7 @@ import {
   normalizeManagedCloudConversation,
   normalizeManagedCloudMessage,
   type ManagedCloudConversation,
+  type ManagedCloudConversationHistoryStats,
   type ManagedCloudConversationListQuery,
   type ManagedCloudCreateConversationRequest,
   type ManagedCloudCreateMessageRequest,
@@ -41,6 +42,7 @@ export interface ManagedCloudConversationPage {
   conversations: ManagedCloudConversation[];
   hasMore: boolean;
   nextOffset: number;
+  historyStats?: ManagedCloudConversationHistoryStats;
 }
 
 export interface ManagedCloudConversationDetail {
@@ -176,6 +178,7 @@ export function createManagedCloudChatClient(
       if (parsedQuery.q) params.set('q', parsedQuery.q);
       if (parsedQuery.limit !== undefined) params.set('limit', String(parsedQuery.limit));
       if (parsedQuery.offset !== undefined) params.set('offset', String(parsedQuery.offset));
+      if (parsedQuery.includeHistoryStats) params.set('includeHistoryStats', '1');
       const suffix = params.size > 0 ? `?${params.toString()}` : '';
       const response = await request(`${MANAGED_CLOUD_CHAT_BASE_PATH}${suffix}`, {
         headers: await readHeaders(),
@@ -189,6 +192,7 @@ export function createManagedCloudChatClient(
         conversations: body.conversations.map(normalizeManagedCloudConversation),
         hasMore: body.hasMore,
         nextOffset: body.nextOffset,
+        ...(body.historyStats ? { historyStats: body.historyStats } : {}),
       };
     },
 

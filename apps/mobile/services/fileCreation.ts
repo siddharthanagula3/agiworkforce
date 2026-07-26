@@ -24,6 +24,7 @@ import * as Print from 'expo-print';
 // our-cloud hosts (never leaked to arbitrary URLs).
 import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
+import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
 
 /**
  * All user-initiated chat exports are written here (not the documentDirectory
@@ -359,7 +360,9 @@ function blobToBase64(blob: Blob): Promise<string> {
  * @returns The local `file://` URI of the downloaded file.
  * @throws {Error} On HTTP failure (surfaced honestly to the caller's alert).
  */
-export async function downloadGeneratedFile(url: string, fileName: string): Promise<string> {
+async function fetchGeneratedFileBytes(
+  url: string,
+): Promise<{ base64: string; contentType: string | null }> {
   let host: string | undefined;
   try {
     host = new URL(url).hostname;
@@ -377,7 +380,13 @@ export async function downloadGeneratedFile(url: string, fileName: string): Prom
     );
   }
   const base64 = await blobToBase64(await res.blob());
+  return {
+    base64,
+    contentType: res.headers.get('Content-Type')?.split(';', 1)[0]?.trim().toLowerCase() ?? null,
+  };
+}
 
+async function writeGeneratedFileBytes(fileName: string, base64: string): Promise<string> {
   await ensureExportsDir();
   // Preserve the real extension so the share sheet picks a sensible UTI/mime.
   const dotIdx = fileName.lastIndexOf('.');
@@ -386,6 +395,50 @@ export async function downloadGeneratedFile(url: string, fileName: string): Prom
   const destUri = `${EXPORTS_DIR}${sanitizeFileName(baseName)}${ext}`;
   await writeAsStringAsync(destUri, base64, { encoding: EncodingType.Base64 });
   return destUri;
+}
+
+export async function downloadGeneratedFile(url: string, fileName: string): Promise<string> {
+  const { base64 } = await fetchGeneratedFileBytes(url);
+  return writeGeneratedFileBytes(fileName, base64);
+}
+
+const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeType: string }>> = {
+  'image/png': { extension: 'png', mimeType: 'image/png' },
+  'image/jpeg': { extension: 'jpg', mimeType: 'image/jpeg' },
+  'image/webp': { extension: 'webp', mimeType: 'image/webp' },
+};
+
+/**
+ * Share a durable generated image as local bytes, never as an authenticated
+ * cloud URL. Other apps cannot use the Clerk bearer token and must not receive
+ * an owner-scoped `/api/files` identity that looks public but returns 401.
+ */
+export async function shareGeneratedImage(
+  imagePath: string,
+  fileName = 'generated-image',
+): Promise<void> {
+  const url = resolveGeneratedImageUri(imagePath);
+  if (!url) {
+    throw new Error('Only saved AGI Cloud images can be shared.');
+  }
+  const downloaded = await fetchGeneratedFileBytes(url);
+  const imageType = downloaded.contentType ? SHAREABLE_IMAGE_TYPES[downloaded.contentType] : null;
+  if (!imageType) {
+    throw new Error('The saved image format is not supported for sharing.');
+  }
+  const dotIndex = fileName.lastIndexOf('.');
+  const baseName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+  const localUri = await writeGeneratedFileBytes(
+    `${baseName}.${imageType.extension}`,
+    downloaded.base64,
+  );
+  if (!(await Sharing.isAvailableAsync())) {
+    throw new Error('Sharing is not available on this device.');
+  }
+  await Sharing.shareAsync(localUri, {
+    mimeType: imageType.mimeType,
+    dialogTitle: 'Share generated image',
+  });
 }
 
 // ---------------------------------------------------------------------------

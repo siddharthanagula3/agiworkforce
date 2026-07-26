@@ -82,6 +82,7 @@ describe('POST /api/mobile/push-token', () => {
     );
 
     expect(res.status).toBe(200);
+    expect(mockRequireCurrentUserId).toHaveBeenCalledWith(expect.any(Request));
     const body = (await res.json()) as Record<string, unknown>;
     expect(body['success']).toBe(true);
   });
@@ -114,6 +115,7 @@ describe('DELETE /api/mobile/push-token', () => {
     const res = await DELETE(makeDeleteRequest(DEVICE_ID));
 
     expect(res.status).toBe(200);
+    expect(mockRequireCurrentUserId).toHaveBeenCalledWith(expect.any(Request));
     const body = (await res.json()) as Record<string, unknown>;
     expect(body['success']).toBe(true);
 

@@ -18,7 +18,7 @@ vi.mock('@agiworkforce/types', () => ({
         cached_write: 3.75,
         cached_write_1h: 6.0,
       },
-      'claude-opus-4.8': {
+      'claude-opus-5': {
         provider: 'anthropic',
         inputCost: 5.0,
         outputCost: 25.0,
@@ -125,16 +125,16 @@ describe('cost calculation', () => {
   });
 
   it('uses catalog cached_input price when present', () => {
-    // claude-opus-4.8: inputCost=$5, cached_input=$0.5
+    // claude-opus-5: inputCost=$5, cached_input=$0.5
     // 1M input + 1M cache_read = $5 + $0.5 = $5.5
-    recordModelUsage(SESSION_A, 'claude-opus-4.8', {
+    recordModelUsage(SESSION_A, 'claude-opus-5', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('claude-opus-4.8')!.costUsd;
+    const cost = report.get('claude-opus-5')!.costUsd;
     expect(cost).toBeCloseTo(5.5, 4);
   });
 
@@ -236,20 +236,20 @@ describe('worked cost examples — all token classes, per provider', () => {
   });
 
   it('anthropic (catalog cached_input): read billed at explicit rate, write at 1.25x', () => {
-    // claude-opus-4.8: input=$5/M, output=$25/M, cache-read=$0.5/M,
+    // claude-opus-5: input=$5/M, output=$25/M, cache-read=$0.5/M,
     // cache-write=$6.25/M.
     //   input       1M * 5    /1e6 = $5.00
     //   output      1M * 25   /1e6 = $25.00
     //   cache-read  1M * 0.50 /1e6 = $0.50
     //   cache-write 1M * 6.25 /1e6 = $6.25
     //   total = $36.75
-    recordModelUsage(SESSION_A, 'claude-opus-4.8', {
+    recordModelUsage(SESSION_A, 'claude-opus-5', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
       cacheReadInputTokens: 1_000_000,
       cacheCreationInputTokens: 1_000_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('claude-opus-4.8')!.costUsd).toBeCloseTo(36.75, 6);
+    expect(getModelUsageReport(SESSION_A).get('claude-opus-5')!.costUsd).toBeCloseTo(36.75, 6);
   });
 
   it('anthropic 1h cache write bills at 2x input; the 5m remainder at 1.25x', () => {

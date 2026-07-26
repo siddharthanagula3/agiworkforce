@@ -1,15 +1,40 @@
 # Public-Alpha Cutover Runbook (private beta → public alpha)
 
-Status: Active · founder decision 2026-06-28
+Status: Implemented in source; production credential proof still required · founder decision
+2026-06-28 · implementation checkpoint 2026-07-25
 Owner: Founder
-Decision: **Web + Mobile managed cloud go public alpha now. Desktop cloud is a fast-follow** — wire it to the same shared backend as web (DESK-CLOUD below), then flip its copy. Until DESK-CLOUD verifies, desktop shows honest interim copy (PA-3), never "available." Desktop keeps Local + BYOK throughout. Resolves DESK-CLOUD-COPY-01.
+Decision: **Web + Mobile managed cloud went public alpha first. Desktop Cloud was the
+fast-follow and is now wired to the same shared backend in source.** Desktop keeps Local + BYOK
+throughout. Resolves DESK-CLOUD-COPY-01.
 
-Why desktop is a fast-follow, not "never": the Rust `ERR_CLOUD_NOT_IMPLEMENTED` in `cloud.rs:42` is an orphaned placeholder (no caller); cloud was always meant to go through the web API boundary. Streaming is already shared (`packages/ai/provider-runtime`) and desktop already has Cloud-mode plumbing + auth + egress guard, so desktop cloud ≈ web cloud. The only missing piece is the persistence client (web-only today).
+Why desktop was a fast-follow, not "never": managed Desktop Cloud goes through the Web API
+boundary rather than a client-driven Rust credit-deduction endpoint. Streaming and persistence
+now run through the shared Cloud contracts, with Local + BYOK still on their separate trust
+boundaries.
 Companion: `docs/spec/AGI_CODE_MASTER_SPEC.md` (invariants), `11-execution-playbook.md` (loop), `03` (risks).
 
 Guardrail (non-negotiable): never claim a surface's managed cloud is "available" where its runtime doesn't serve. Copy ≤ shipped scope. The kill-switch `AGI_MANAGED_COMPUTE_PRIVATE_BETA` stays as the instant rollback.
 
-## Current state (verified 2026-06-28)
+## 2026-07-25 implementation checkpoint
+
+- Web, Mobile, and Desktop expose signed-in managed Cloud as public alpha rather than an
+  invite-only surface.
+- Desktop's runtime selector now chooses `CloudRuntime` for a signed-in Tauri Cloud session.
+  Conversation CRUD, durable messages, Cloud streaming, generated images/files, account state,
+  plan display, usage/upgrade handoffs, and supported connector tools use the same Web boundary.
+- The obsolete Rust `report_llm_usage` client-driven deduction command and its registration are
+  removed. Server-side managed-usage accounting remains authoritative.
+- Desktop Cloud has regression coverage, TypeScript checks, Rust checks, trust-boundary checks,
+  and WebdriverIO coverage. A signed release build with production Clerk and backend credentials
+  still needs the supervised pre-deploy roundtrip described below; source verification is not a
+  substitute for that credentialed proof.
+- The incident-response kill-switch remains `AGI_MANAGED_COMPUTE_PRIVATE_BETA=0|false|off`.
+
+The remaining sections preserve the original cutover sequence and dated implementation notes.
+Statements written as future work describe their historical checkpoint unless the 2026-07-25
+checkpoint above says they remain open.
+
+## Original state (verified 2026-06-28)
 
 - Gate is already kill-switch/open-by-default: `apps/web/lib/managed-compute-gate.ts`, `services/api-gateway/src/middleware/managedComputeGate.ts`. (`apps/web/test/setup.ts` forces `=1` — test-only, leave it.)
 - Mobile cloud chat **already enabled**: `apps/mobile/lib/v1FeatureFlags.ts` `cloudChat: true`; gated by entitlement (`access`) in `apps/mobile/services/remoteChatGate.ts`. Copy/comments still say invite/waitlist.
@@ -79,6 +104,9 @@ Sequencing: ship Web + Mobile public alpha now (PA-1/PA-2); run DCL-1→DCL-4 as
 
 Set `AGI_MANAGED_COMPUTE_PRIVATE_BETA=0` (Vercel + api-gateway) and redeploy — instantly re-gates managed cloud without code changes. Accepted kill values are `0`, `false`, or `off`; ANY other value (including unset or `1`) keeps managed compute OPEN. (CORRECTED 2026-07-15: this line previously said `=1`, which re-gated only the api-gateway's old inverted check and was a NO-OP on web; the gateway gate was aligned to web's kill-switch semantics the same day — see SVC-GATEWAY-MANAGED-GATE-INVERTED-01 in known-flaws. Following the old instruction during an incident would have left managed compute open while appearing to close it.)
 
-## Definition of done
+## Original definition of done
 
-Web + Mobile: signed-in users use managed cloud with no invite; copy says public alpha; gates green. Desktop: honest "coming soon," no path to the not-implemented error. No "private beta/invite-only/waitlist" copy remains for managed cloud on any surface. Kill-switch verified working.
+Web + Mobile: signed-in users use managed cloud with no invite; copy says public alpha; gates
+green. Desktop originally showed honest "coming soon" until its runtime existed. That interim
+Desktop condition is superseded by the 2026-07-25 implementation checkpoint above. Production
+completion still requires the signed, credentialed cross-surface roundtrip and kill-switch drill.

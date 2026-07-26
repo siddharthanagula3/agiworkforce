@@ -148,9 +148,9 @@ describe('billing catalog', () => {
       expect(getBillingPlanProductLimits(undefined)).toBeNull();
     });
 
-    // GOV-3 / GOV-4 / GOV-7: paid tiers must buy real compute headroom, and an
-    // unknown tier must resolve to 0 (deny) rather than to a Free allowance.
-    it('scales the compute dimensions monotonically across paid tiers', () => {
+    // GOV-3 / GOV-4 / GOV-7: paid tiers buy real compute headroom. Sandboxes
+    // intentionally plateau at the absolute five-per-user safety ceiling.
+    it('scales compute dimensions across paid tiers without exceeding five sandboxes', () => {
       const tiers = ['free', 'basic', 'pro', 'max', 'max_15x'] as const;
       const turns = tiers.map((tier) => getPlanMaxConcurrentTurns(tier) ?? Number.MAX_SAFE_INTEGER);
       const sandboxes = tiers.map((tier) => getPlanMaxSandboxes(tier) ?? Number.MAX_SAFE_INTEGER);
@@ -158,21 +158,26 @@ describe('billing catalog', () => {
       const tools = tiers.map((tier) => getPlanMaxConnectorTools(tier) ?? Number.MAX_SAFE_INTEGER);
       const tasks = tiers.map((tier) => getPlanMaxScheduledTasks(tier) ?? Number.MAX_SAFE_INTEGER);
 
-      for (const series of [turns, sandboxes, ttls, tools, tasks]) {
+      for (const series of [turns, ttls, tools, tasks]) {
         for (let index = 1; index < series.length; index += 1) {
           expect(series[index]!).toBeGreaterThan(series[index - 1]!);
         }
       }
+
+      for (let index = 1; index < sandboxes.length; index += 1) {
+        expect(sandboxes[index]!).toBeGreaterThanOrEqual(sandboxes[index - 1]!);
+      }
+      expect(Math.max(...sandboxes)).toBe(5);
     });
 
-    it('fails unknown tiers closed and leaves negotiated Enterprise uncapped', () => {
+    it('fails unknown tiers closed and keeps Enterprise at the per-user sandbox ceiling', () => {
       expect(getPlanMaxConcurrentTurns('hobby')).toBe(0);
       expect(getPlanMaxSandboxes(undefined)).toBe(0);
       expect(getPlanMaxScheduledTasks(null)).toBe(0);
       expect(getPlanSandboxTtlMs('hobby')).toBe(0);
 
       expect(getPlanMaxConcurrentTurns('enterprise')).toBeNull();
-      expect(getPlanMaxSandboxes('enterprise')).toBeNull();
+      expect(getPlanMaxSandboxes('enterprise')).toBe(5);
       expect(getPlanMaxConnectorTools('enterprise')).toBeNull();
       expect(getPlanMaxScheduledTasks('enterprise')).toBeNull();
       expect(getPlanSandboxTtlMs('enterprise')).toBeGreaterThan(0);

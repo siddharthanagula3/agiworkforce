@@ -25,9 +25,18 @@ import {
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
   reconcileManagedCloudPublicText,
+  ToolApprovalResumeErrorResponseSchema,
+  ToolApprovalResumeRequestSchema,
   type ManagedCloudAgentRunReference,
+  type ToolApprovalDecisionWire,
+  type ToolApprovalResumeRequest,
 } from '@agiworkforce/cloud-contracts';
-import { getRoutingSlotModel, MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import {
+  effectivePlanTier,
+  getRoutingSlotModel,
+  MAX_ATTACHMENT_BYTES,
+  parseManagedUsageSummaryResponse,
+} from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
 import { getFreshClerkToken, signOutClerk } from './clerkAuth';
@@ -66,14 +75,23 @@ const MANAGED_CHAT_MAX_ERROR_BODY_CHARS = 65_536;
  */
 export const FREE_TRIAL_GATEWAY = 'https://agiworkforce.com';
 export const FREE_TRIAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/chat/completions`;
+export const MANAGED_APPROVAL_ENDPOINT = `${FREE_TRIAL_ENDPOINT}/approve`;
 export const MANAGED_MODELS_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/models`;
+export const MANAGED_USAGE_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/usage`;
 
 /** Retired hand-pasted token keys retained only for cleanup during sign-out. */
 const SESSION_TOKEN_KEY = 'agi_clerk_session_token';
 const DEV_TOKEN_KEY = 'agi_dev_bearer_token';
 
 export interface ManagedModelAccess {
+  /** Effective tier after subscription-status enforcement. */
   subscriptionTier: string;
+  /** Recorded plan, retained for canceled/past-due recovery UI. */
+  accountPlanTier?: string;
+  subscriptionStatus?: string;
+  usagePercentage?: number;
+  usageResetAt?: string | null;
+  hasUsageRemaining?: boolean;
   modelIds: string[];
   allowedAutoModes: string[];
 }
@@ -106,7 +124,7 @@ export async function getManagedModelAccess(
   signal?: AbortSignal,
 ): Promise<ManagedModelAccess> {
   if (!token.trim()) throw new Error('Authentication is required');
-  const response = await fetch(MANAGED_MODELS_ENDPOINT, {
+  const requestOptions: RequestInit = {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -114,16 +132,19 @@ export async function getManagedModelAccess(
       'X-AGI-Surface': 'chrome',
     },
     signal,
-  });
-  if (!response.ok) {
+  };
+  const [response, usageResponse] = await Promise.all([
+    fetch(MANAGED_MODELS_ENDPOINT, requestOptions),
+    fetch(MANAGED_USAGE_ENDPOINT, requestOptions),
+  ]);
+  if (!response.ok || !usageResponse.ok) {
+    const status = !response.ok ? response.status : usageResponse.status;
     throw new Error(
-      response.status === 401
-        ? 'Authentication is required'
-        : `Model access is unavailable (${response.status})`,
+      status === 401 ? 'Authentication is required' : `Account access is unavailable (${status})`,
     );
   }
 
-  const body = (await response.json()) as unknown;
+  const [body, usageBody] = await Promise.all([response.json(), usageResponse.json()]);
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new Error('Invalid model-access response');
   }
@@ -139,6 +160,13 @@ export async function getManagedModelAccess(
   const normalizedTier = normalizeAccessString(subscriptionTier, 64);
   if (!normalizedTier || !Array.isArray(autoModes)) {
     throw new Error('Invalid model-access response');
+  }
+
+  let usageSummary: ReturnType<typeof parseManagedUsageSummaryResponse>;
+  try {
+    usageSummary = parseManagedUsageSummaryResponse(usageBody);
+  } catch {
+    throw new Error('Invalid account-access response');
   }
 
   const modelIds: string[] = [];
@@ -171,7 +199,12 @@ export async function getManagedModelAccess(
   }
 
   return {
-    subscriptionTier: normalizedTier,
+    subscriptionTier: effectivePlanTier(usageSummary.plan_tier, usageSummary.subscription_status),
+    accountPlanTier: usageSummary.plan_tier,
+    subscriptionStatus: usageSummary.subscription_status,
+    usagePercentage: usageSummary.usage_percentage,
+    usageResetAt: usageSummary.usage_reset_at,
+    hasUsageRemaining: usageSummary.has_usage_remaining,
     modelIds,
     allowedAutoModes,
   };
@@ -421,6 +454,8 @@ export interface ManagedChatStreamOptions {
   extendedThinking?: boolean;
   /** Paid Chrome agent mode. Chat remains available for non-agent transports. */
   workMode?: 'chat' | 'agiwork';
+  /** Internal continuation body validated by the shared approval contract. */
+  approvalResume?: ToolApprovalResumeRequest;
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -669,25 +704,38 @@ export async function* streamFreeChat(
     yield { type: 'error', message: 'Sign in to use AGI Cloud chat.', code: 'auth_required' };
     return;
   }
-  if (!model || messages.length === 0) {
-    yield {
-      type: 'error',
-      message: 'The managed chat request is incomplete.',
-      code: 'protocol_error',
-    };
-    return;
-  }
-
-  let cappedMessages: FreeTrialMessage[];
-  try {
-    cappedMessages = capRequestMessages(messages);
-  } catch (error) {
-    yield {
-      type: 'error',
-      message: error instanceof Error ? error.message : 'Invalid managed chat request.',
-      code: 'protocol_error',
-    };
-    return;
+  let cappedMessages: FreeTrialMessage[] = [];
+  let approvalResume: ToolApprovalResumeRequest | undefined;
+  if (options.approvalResume) {
+    const parsed = ToolApprovalResumeRequestSchema.safeParse(options.approvalResume);
+    if (!parsed.success) {
+      yield {
+        type: 'error',
+        message: 'The managed tool approval request is invalid.',
+        code: 'protocol_error',
+      };
+      return;
+    }
+    approvalResume = parsed.data;
+  } else {
+    if (!model || messages.length === 0) {
+      yield {
+        type: 'error',
+        message: 'The managed chat request is incomplete.',
+        code: 'protocol_error',
+      };
+      return;
+    }
+    try {
+      cappedMessages = capRequestMessages(messages);
+    } catch (error) {
+      yield {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Invalid managed chat request.',
+        code: 'protocol_error',
+      };
+      return;
+    }
   }
 
   const controller = new AbortController();
@@ -729,7 +777,7 @@ export async function* streamFreeChat(
 
     let response: Response;
     try {
-      response = await fetch(FREE_TRIAL_ENDPOINT, {
+      response = await fetch(approvalResume ? MANAGED_APPROVAL_ENDPOINT : FREE_TRIAL_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -737,13 +785,15 @@ export async function* streamFreeChat(
           'X-Requested-With': 'XMLHttpRequest',
           'X-AGI-Surface': 'chrome',
         },
-        body: JSON.stringify({
-          model,
-          messages: cappedMessages,
-          stream: true,
-          ...(options.workMode ? { work_mode: options.workMode } : {}),
-          ...(options.extendedThinking ? { thinking_mode: true } : {}),
-        }),
+        body: JSON.stringify(
+          approvalResume ?? {
+            model,
+            messages: cappedMessages,
+            stream: true,
+            ...(options.workMode ? { work_mode: options.workMode } : {}),
+            ...(options.extendedThinking ? { thinking_mode: true } : {}),
+          },
+        ),
         signal: controller.signal,
       });
     } catch {
@@ -800,6 +850,22 @@ export async function* streamFreeChat(
     }
 
     if (!response.ok) {
+      if (approvalResume) {
+        const body = await readBoundedErrorBody(response);
+        try {
+          const parsed = ToolApprovalResumeErrorResponseSchema.safeParse(JSON.parse(body));
+          if (parsed.success) {
+            yield {
+              type: 'error',
+              message: parsed.data.error.message,
+              code: 'server_error',
+            };
+            return;
+          }
+        } catch {
+          // Fall through to the bounded generic status message.
+        }
+      }
       yield {
         type: 'error',
         message: `AGI Cloud is temporarily unavailable (${response.status}).`,
@@ -1114,4 +1180,24 @@ export async function* streamFreeChat(
     if (timeoutHandle) clearTimeout(timeoutHandle);
     options.signal?.removeEventListener('abort', abortFromCaller);
   }
+}
+
+/**
+ * Continue one suspended server-owned tool boundary. The client submits only
+ * the stable run id and explicit per-tool decisions; private transcript,
+ * arguments, and provider continuity remain server-owned.
+ */
+export function streamManagedChatApproval(
+  runId: string,
+  toolApprovals: ToolApprovalDecisionWire[],
+  token: string,
+  options: Omit<ManagedChatStreamOptions, 'approvalResume' | 'model' | 'workMode'> = {},
+): AsyncGenerator<FreeTrialChunk> {
+  return streamFreeChat([], token, {
+    ...options,
+    approvalResume: {
+      run_id: runId,
+      tool_approvals: toolApprovals,
+    },
+  });
 }

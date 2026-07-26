@@ -88,6 +88,7 @@ export const ManagedCloudConversationListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE).optional(),
   offset: z.coerce.number().int().min(0).optional(),
+  includeHistoryStats: z.boolean().optional(),
 });
 export type ManagedCloudConversationListQuery = z.infer<
   typeof ManagedCloudConversationListQuerySchema
@@ -142,10 +143,23 @@ export type ManagedCloudCreateMessageRequest = z.input<
   typeof ManagedCloudCreateMessageRequestSchema
 >;
 
+export const ManagedCloudConversationHistoryStatsSchema = z.object({
+  conversationCount: z.number().int().nonnegative(),
+  messageCount: z.number().int().nonnegative(),
+});
+export type ManagedCloudConversationHistoryStats = z.infer<
+  typeof ManagedCloudConversationHistoryStatsSchema
+>;
+
 export const ManagedCloudConversationListResponseSchema = z.object({
   conversations: z.array(ManagedCloudConversationWireSchema),
   hasMore: z.boolean(),
   nextOffset: z.number().int().nonnegative(),
+  /**
+   * Owner-scoped totals for non-temporary Cloud history. Optional so older
+   * deployed servers remain readable during a rolling app/API rollout.
+   */
+  historyStats: ManagedCloudConversationHistoryStatsSchema.optional(),
 });
 export type ManagedCloudConversationListResponse = z.infer<
   typeof ManagedCloudConversationListResponseSchema

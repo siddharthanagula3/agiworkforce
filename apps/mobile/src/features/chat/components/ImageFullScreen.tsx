@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { View, Pressable, Modal, Share, Platform, useWindowDimensions } from 'react-native';
+import { View, Pressable, Modal, Alert, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { X, Share2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -8,22 +8,33 @@ import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-g
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
+import { shareGeneratedImage } from '@/services/fileCreation';
 
 interface ImageFullScreenProps {
   imageUrl: string | null;
   prompt?: string;
   visible: boolean;
   onClose: () => void;
+  /** Display-only fallback for a response explicitly marked persisted:false. */
+  allowEphemeral?: boolean;
 }
 
 /**
  * Full-screen image viewer with pinch-to-zoom and double-tap toggle.
  * Overlay pattern matching ArtifactFullScreen.
  */
-export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFullScreenProps) {
+export function ImageFullScreen({
+  imageUrl,
+  prompt,
+  visible,
+  onClose,
+  allowEphemeral = false,
+}: ImageFullScreenProps) {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const { width: screenWidth } = useWindowDimensions();
+  const { source, status: sourceStatus } = useGeneratedImageSource(imageUrl ?? '', allowEphemeral);
 
   // Zoom state via reanimated shared values
   const scale = useSharedValue(1);
@@ -100,17 +111,14 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
     if (!imageUrl) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      // Android does not support the `url` field in Share.share — use `message` instead.
-      // iOS supports `url` natively for sharing image links.
-      await Share.share({
-        title: 'Generated Image',
-        message: Platform.OS === 'android' ? imageUrl : (prompt ?? ''),
-        url: Platform.OS !== 'android' ? imageUrl : undefined,
-      });
-    } catch {
-      // User cancelled
+      await shareGeneratedImage(imageUrl);
+    } catch (error) {
+      Alert.alert(
+        'Could not share image',
+        error instanceof Error ? error.message : 'Save the image and try again.',
+      );
     }
-  }, [imageUrl, prompt]);
+  }, [imageUrl]);
 
   const handleClose = useCallback(() => {
     // Reset zoom before closing
@@ -195,17 +203,36 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
           >
             <GestureDetector gesture={composedGesture}>
               <Animated.View style={animatedImageStyle}>
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={{
-                    width: screenWidth - 32,
-                    height: screenWidth - 32,
-                    borderRadius: 4,
-                  }}
-                  contentFit="contain"
-                  cachePolicy="memory-disk"
-                  accessibilityLabel={prompt ?? 'Full screen generated image'}
-                />
+                {sourceStatus === 'ready' && source ? (
+                  <Image
+                    source={source}
+                    style={{
+                      width: screenWidth - 32,
+                      height: screenWidth - 32,
+                      borderRadius: 4,
+                    }}
+                    contentFit="contain"
+                    cachePolicy="memory"
+                    accessibilityLabel={prompt ?? 'Full screen generated image'}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: screenWidth - 32,
+                      height: screenWidth - 32,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: colors.textMuted, textAlign: 'center' }}>
+                      {sourceStatus === 'signed-out'
+                        ? 'Sign in to view this generated image'
+                        : sourceStatus === 'authorizing'
+                          ? 'Loading generated image…'
+                          : 'Generated image unavailable'}
+                    </Text>
+                  </View>
+                )}
               </Animated.View>
             </GestureDetector>
           </View>

@@ -1,157 +1,100 @@
 # VS Code extension surface
 
-> **Path:** `apps/extension-vscode/` · **Stack:** VS Code extension API + TypeScript · **Owner:** founder · **Status:** v0.3.0; Marketplace submission pending. **Updated:** 2026-05-18.
+> **Path:** `apps/extension-vscode/` · **Stack:** VS Code Extension API + TypeScript · **Owner:** extension lead · **Status:** v0.3.0; Marketplace publication not proven in-repo · **Updated:** 2026-07-25.
 
 ## Mission
 
-The VS Code extension brings AGI's chat into the editor as a `@agi` chat participant, plus standalone sidebar webview, History tree, Context Files tree, model picker, inline completions, code lens, hover, and telemetry. Bridges to the desktop app via port 8787.
+AGI's IDE-native, workspace-scoped developer surface. `@agi`, the activity-bar sidebar, and the editor chat panel use the local `agi app-server`; they never synchronize consumer Web/Mobile/Desktop chat history.
 
-## Status at HEAD
+## Runtime and trust
 
-| Item                | State                                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Version             | v0.3.0                                                                                                       |
-| `out/extension.js`  | ✅ compiled                                                                                                  |
-| Audit P0s           | ✅ all closed (verified 2026-05-05)                                                                          |
-| Marketplace listing | ⏳ no listing yet                                                                                            |
-| Description copy    | ✅ "Multi-provider AI coding assistant — 10+ providers (GPT, Claude, Gemini, and more) in VS Code"           |
-| Brand name          | ⚠ `package.json:displayName` may still read "AGI Workforce"; public brand is "AGI" (V5 lock from 2026-05-15) |
+- `LocalRuntimePool` launches one lazy `agi app-server` per workspace root.
+- The app-server owns threads, turns, streaming, approvals, cancellation, provider credentials, local-model discovery, and session history.
+- Local, BYOK, and Managed Cloud remain separate trust boundaries. Provider-boundary changes start a new thread and do not forward the prior transcript.
+- The sidebar always shows the Local host plus the resolved provider or “Auto routing.”
+- Workspace Trust gates developer sessions and all privileged write/execute paths.
+- The Desktop bridge is optional and defaults off; it is not required for local chat.
+- IDE sessions do not enter Neon/app-chat sync. Any Desktop handoff is explicit and redacted.
 
-## Verified codebase numbers (2026-05-17 audit)
+## Shipped surfaces
 
-- **50** source `.ts` files in `apps/extension-vscode/src/`
-- **27** test `.ts` files
-- **15,322** LOC
-- **62** commands — was claimed 55-56 in older memory (understated)
-- **25** configuration settings — was claimed 23 (understated)
-- **13** keybindings
-- **6** `@agi` chat participant slash commands: `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, `/model`
-- **352** tests across **20** suites (per older audit; reverify with `pnpm --filter agi-workforce test`)
+- `@agi` participant with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, and `/model`.
+- Sidebar and chat-in-editor webviews with sanitized Markdown, code-copy controls, model/mode/effort chips, attachments, usage state, and cancellation.
+- Catalog-driven model picker plus app-server-discovered Ollama/LM Studio rows.
+- Tier-aware Auto/manual model locking, including forged-message rejection.
+- Context Files, History, and Memory trees.
+- Bounded, untrusted editor/workspace/memory context.
+- Editor Apply routed through native diff review, with accept/reject and patch provenance.
+- Inline completions (explicit opt-in), CodeLens, hover, diagnostics, terminal helpers, checkpoints, and optional Desktop bridge.
 
-## Stack
+## Manifest facts
 
-| Item                   | Choice                                                 |
-| ---------------------- | ------------------------------------------------------ |
-| Language               | TypeScript                                             |
-| Test runner            | Mocha + vscode-test                                    |
-| Bundler                | esbuild                                                |
-| Settings               | `agi-workforce.*` namespace                            |
-| Bridge                 | port 8787 to desktop (`desktopBridge.enabled` setting) |
-| Marketplace package id | `agi-workforce`                                        |
+Read counts from `package.json`; as of this update it contributes:
+
+- 67 commands.
+- 24 configuration properties.
+- 14 keybindings.
+- 1 activity-bar container with 4 views.
+
+Important defaults:
+
+| Setting                                  | Default | Meaning                                                          |
+| ---------------------------------------- | ------- | ---------------------------------------------------------------- |
+| `agiWorkforce.cliPath`                   | `agi`   | CLI binary used to start the workspace app-server.               |
+| `agiWorkforce.model`                     | `auto`  | Task- and tier-aware runtime routing alias.                      |
+| `agiWorkforce.inlineCompletions.enabled` | `false` | Cloud completion context requires explicit opt-in.               |
+| `agiWorkforce.mcp.enabled`               | `false` | MCP integration is opt-in.                                       |
+| `agiWorkforce.desktopBridge.enabled`     | `false` | Desktop bridge is optional.                                      |
+| `agiWorkforce.useProviderStream`         | `false` | Account-authenticated cloud transport for editor utilities only. |
+| `agiWorkforce.telemetryEnabled`          | `false` | Extension telemetry opt-in.                                      |
+
+The extension access-mode override preserves every canonical plan value: `local`, `byok`, `free`, `basic`, `pro`, `team`, `max`, `max_15x`, and `enterprise`. Concrete model IDs come from `packages/contracts/types/src/models.json`.
 
 ## File layout
 
-```
+```text
 apps/extension-vscode/
-├── package.json                    ⚠ contributes.commands (62), contributes.configuration.properties (25), contributes.keybindings (13)
-├── src/                            50 source files / 15,322 LOC
-│   ├── extension.ts                entry; activate / deactivate
-│   ├── chatParticipant.ts          @agi chat participant; 6 slash commands
-│   ├── sidebar/                    webview-based sidebar
-│   ├── history/                    History tree provider
-│   ├── contextFiles/               Context Files tree provider
-│   ├── modelPicker.ts              auto-balanced model picker (selects across 13 providers)
-│   ├── inlineCompletions.ts       inline completion provider
-│   ├── codeLens.ts
-│   ├── hover.ts
-│   ├── telemetry.ts                off by default
-│   ├── desktopBridge.ts            port 8787 client
-│   ├── subsystemHealth.ts          line 38: registers `agi-workforce.showSubsystemHealth` (was a ghost command per older audit — closed)
-│   └── ...
-├── __tests__/                      27 test files / 352 tests / 20 suites
-├── out/                            esbuild output; out/extension.js is loaded by VS Code
-└── README.md                       Marketplace listing copy
+├── package.json
+├── src/
+│   ├── extension.ts
+│   ├── core/
+│   ├── features/
+│   │   ├── account-auth/
+│   │   ├── chat-participant/
+│   │   ├── desktop-bridge/
+│   │   ├── inline-completions/
+│   │   ├── model-picker/
+│   │   ├── sidebar-webview/
+│   │   └── trees/
+│   ├── integrations/
+│   │   ├── localRuntimeClient.ts
+│   │   ├── patchEngine.ts
+│   │   ├── providerStreamClient.ts
+│   │   └── tierResolver.ts
+│   ├── memory/
+│   ├── platform/
+│   ├── protocol/
+│   ├── providers/
+│   └── __tests__/
+├── scripts/
+└── README.md
 ```
 
-## 62 commands (high-level groups)
-
-Per `package.json:contributes.commands`:
-
-- Chat: open chat, new conversation, switch model, clear history, show subsystem health
-- Code actions: explain, fix, refactor, write tests, write docs (mirrors chat slash commands)
-- Editor: insert response, replace selection, accept diff, reject diff
-- Model: switch provider, switch model, configure provider, show usage
-- Sidebar: focus sidebar, toggle sidebar, refresh
-- Context: add file to context, remove from context, clear context
-- Plus ~40 more — full list in `package.json` (62 total per 2026-05-17 audit)
-
-## 25 settings
-
-Per `package.json:contributes.configuration.properties` (25 keys in `agi-workforce.*` namespace). Notable:
-
-- `agi-workforce.desktopBridge.enabled` (port 8787 to desktop)
-- `agi-workforce.telemetry.enabled` (default false)
-- `agi-workforce.defaultProvider` (read from models.json)
-- `agi-workforce.defaultModel`
-- Plus ~21 more
-
-## 13 keybindings
-
-Per `package.json:contributes.keybindings`. Notable:
-
-- `ctrl+shift+a` — dual-binding with mutually-exclusive `when` clauses (`!agi-workforce.hasDiff` for chat / `agi-workforce.hasDiff && editorTextFocus` for accept-diff). **Intentional** per audit; not a duplicate-binding bug.
-
-## Build + test commands
+## Build and verification
 
 ```bash
-# Build
-pnpm --filter agi-workforce build
-# Output: apps/extension-vscode/out/extension.js
-
-# Package as .vsix
-pnpm --filter agi-workforce package
-# Output: apps/extension-vscode/agi-workforce-0.3.0.vsix
-
-# Tests (Mocha + vscode-test)
-pnpm --filter agi-workforce test
-
-# Typecheck
 pnpm --filter agi-workforce typecheck
-
-# Lint
 pnpm --filter agi-workforce lint
+pnpm --filter agi-workforce test
+pnpm --filter agi-workforce test:webview
+pnpm --filter agi-workforce test:integration
+pnpm --filter agi-workforce check:vscode-theme-tokens
+pnpm --filter agi-workforce build
+pnpm --filter agi-workforce package
 ```
 
-## Release process
+The integration suite runs in a real VS Code Extension Host and verifies activation, extension identity/version, manifest-command registration, and New Conversation dispatch. Deeper live model turns require a current `agi` binary plus configured local/BYOK provider access.
 
-1. Bump `package.json` version
-2. `pnpm --filter agi-workforce package` → `.vsix`
-3. Upload to VS Code Marketplace via `vsce publish` (requires Publisher account + Personal Access Token)
-4. Marketplace processes (~1-24 hours)
-5. Auto-updates push to users with the extension installed
+## Distribution
 
-## Provider integrations on VS Code ext
-
-Same 10+ providers. Per audit, the extension knows about **13 providers** (matches CLI's 12 named + Custom). Model picker is "auto-balanced" — selects across providers based on context (file type, query type, current model usage).
-
-## Current open work (Wave 6)
-
-1. **W6 #14** — VS Code ext finalization (Marketplace submission package)
-2. **Brand rename** — verify `package.json:displayName` reads "AGI" not "AGI Workforce" before Marketplace listing
-3. **Marketplace icon** — 128×128 PNG required
-4. **Marketplace screenshots** — 4-6 screenshots required
-5. **Publisher account setup** — VS Code Marketplace Publisher ID + PAT (one-time founder action)
-
-## Gotchas
-
-- **`ctrl+shift+a` is intentionally dual-bound**, not a bug. The `when` clauses make it mutually exclusive.
-- **Test count is 352 (not 314 as older docs claimed).** Verify with `pnpm --filter agi-workforce test`.
-- **Description copy must read "10+ providers" not "10+ models"** per V5 §10 lock #1 expansion. Audit confirmed correct copy 2026-05-05.
-- **`subsystemHealth.ts:38` registers a command** (`agi-workforce.showSubsystemHealth`) — but older `commandParity.test.ts` gave false GREEN due to module-level state pollution. Closed 2026-05-05.
-- **No `GPT-5.4` hardcoded strings in production source** — only in test fixtures (`src/__tests__/extension.test.ts:182-184`). Confirmed clean.
-
-## Current References
-
-- [docs/current/product-suite.md](../current/product-suite.md) - six-surface product role and developer-surface sync boundary.
-- [docs/current/technical-architecture.md](../current/technical-architecture.md) - provider, runtime, and contract ownership.
-- [docs/current/agent-and-repo-operability.md](../current/agent-and-repo-operability.md) - current docs and agent workflow rules.
-- [docs/decisions/CURRENT_DECISIONS.md](../decisions/CURRENT_DECISIONS.md) - no hardcoded model IDs and current trust-boundary rules.
-- Historical extension layout details live in `docs/archive/2026-05-21-docs-consolidation/`.
-
-## Memory references
-
-- `memory/audits/ui-cross-surface-2026-05-05.md` — cross-surface audit findings (VS Code section)
-
-## Operational owner
-
-Founder. VS Code Marketplace Publisher account: pending setup.
+The repository can build a versioned `.vsix` through the package script. A live VS Code Marketplace or Open VSX listing is not proven by repository files; publishing still requires the external publisher credentials and release action. Do not claim either listing until independently verified.

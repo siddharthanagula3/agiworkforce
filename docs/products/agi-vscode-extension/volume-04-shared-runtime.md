@@ -1,23 +1,24 @@
 # AGI VS Code Extension — Volume 04 — Shared Runtime
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: Grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/extension.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/providers/agentMode/{agentLoop,agentUI}.ts`, `apps/extension-vscode/src/providers/agentModeProvider.ts`, `apps/extension-vscode/src/integrations/{providerStreamClient,providerSwitchGuard,tierResolver,patchEngine}.ts`, `apps/extension-vscode/src/data/{contextBuilder,contextBudget,workspaceIndexer,projectInstructions,conversationStore,checkpointManager,sendQueue,tokenCounter,usageMeter}.ts`, `apps/extension-vscode/src/memory/memoryStore.ts`, `packages/client/client-runtime/src/index.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies how the VS Code extension **consumes** the shared AGI Runtime rather than reimplementing the agent loop, storage, or dispatch inside the extension. The extension is the IDE-native, **workspace-scoped** developer surface. Its trust exposure is **Local + BYOK + Managed Cloud**, each selected explicitly with a visible provider label. Local sessions never route silently to BYOK or Cloud; a Local→BYOK move is an explicit fork (context selection, secret scan, payload preview, consent, visible label). Conversation data stays device/workspace-local — there is **no automatic sync into Web/Mobile/Desktop app chat**; any handoff is explicit and redacted over the desktop bridge. The shared localhost bridge (`desktopBridge.ts`, `ws://127.0.0.1:8787/ws`, token at `~/.agiworkforce/bridge-token`, `0600`) is the same transport the Chrome extension uses ✅.
+This volume specifies how VS Code consumes the shared `agi app-server` rather than reimplementing developer-session inference. The extension is workspace-scoped and exposes Local + BYOK + Managed Cloud with visible host/provider labels. Conversation data does not enter consumer app-chat sync; optional Desktop handoff is explicit and redacted.
 
 ## Session Engine
 
 A "session" is a chat/agent thread bound to the active workspace. Requirements: (1) every session records its trust mode and provider label; (2) the message pipeline is queued and backpressured; (3) provider streaming flows through one client, not per-feature ad-hoc `fetch`.
 
-- **Message queue / backpressure** — ✅ Consumed from shared runtime: `createMessageQueue`, `MessageQueue`, `QueueFullError`, `QueuedCommand` from `@agiworkforce/client-runtime` (`packages/client/client-runtime/src/index.ts`), used in `apps/extension-vscode/src/data/sendQueue.ts`.
-- **Agent orchestration** — 🟡 The extension runs a local `AgentLoop` (`apps/extension-vscode/src/providers/agentMode/agentLoop.ts`) wired by `agentModeProvider.ts`. Gap: this is a surface-local loop; the target is to drive it from the shared task runtime (`crates/agiworkforce-task-runtime`, `crates/agiworkforce-command-registry`) so CLI and VS Code share one engine.
-- **Provider streaming** — 🟡 `apps/extension-vscode/src/integrations/providerStreamClient.ts` mirrors the web SSE client, but `agiWorkforce.useProviderStream` defaults `false` and the setting notes web auth is **not yet wired** (`apps/extension-vscode/package.json`).
-- **Shared CLI sessions** — 🔭 A common developer-session schema in `packages/contracts/types` is the target; not wired.
+- **App-server process pool** — ✅ `LocalRuntimePool` starts one lazy process per workspace root and disposes/restarts it when `agiWorkforce.cliPath` changes.
+- **Developer-session protocol** — ✅ the app-server owns thread creation, turns, streaming, approvals, cancellation, history, provider credentials, and `model/list`.
+- **Message queue / backpressure** — ✅ utility command queues still consume `@agiworkforce/client-runtime`; chat turn serialization is app-server-owned.
+- **Legacy agent utilities** — 🟡 surface-local agent/edit helpers remain for editor commands, while primary chat orchestration is app-server-owned.
+- **Cloud-utility provider streaming** — ✅ the default-off account-authenticated path is wired for older editor utilities and remains separate from developer sessions.
 
 ## Context Engine
 
@@ -27,7 +28,7 @@ Context assembly is workspace-scoped and budget-bounded. Requirements: determini
 - **Workspace index** — ✅ `apps/extension-vscode/src/data/workspaceIndexer.ts`.
 - **Project instructions** — ✅ `apps/extension-vscode/src/data/projectInstructions.ts`.
 - **Pinned Context Files + @ references** — ✅ Context Files tree and `@agi` file mentions via `apps/extension-vscode/src/features/trees` and commands `agi-workforce.addToContext` / `mentionFileInChat` (`apps/extension-vscode/package.json`).
-- **Memory** — 🟡 `apps/extension-vscode/src/memory/memoryStore.ts` exists; cross-surface memory sync (Neon) is **not** wired for VS Code and stays out of scope (🔭).
+- **Memory** — ✅ device-local facts are bounded, trust-tag escaped, and injected as user-role untrusted context into future sidebar/editor/`@agi` turns. Cross-surface memory sync remains intentionally out of scope.
 
 ## Tool Engine
 
@@ -44,7 +45,7 @@ Tools mutate the workspace or shell and must be discrete, previewable, and rever
 Every mutating action is gated by workspace trust and an explicit agent mode.
 
 - **Agent modes** — ✅ `agiWorkforce.agent.mode` enum `ask` | `auto` | `plan` | `bypass` (`apps/extension-vscode/package.json`); approvals + diff previews in `apps/extension-vscode/src/providers/agentMode/agentUI.ts`.
-- **Untrusted workspaces** — ✅ `capabilities.untrustedWorkspaces` limits endpoint/gateway/CLI-path/system-prompt/auto-apply overrides and disables agent file writes until trusted (`apps/extension-vscode/package.json`).
+- **Untrusted workspaces** — ✅ restrictions cover endpoint, gateway, CLI path, auto-apply, telemetry endpoint, and tier; agent file writes stay disabled until trusted.
 - **Bridge command allowlist + rate limit** — ✅ `ALLOWED_BRIDGE_COMMANDS`, 30 cmd/min limit, and workspace-folder file-open guard in `desktopBridge.ts`.
 - **Local→BYOK fork** — 🔭 The explicit fork ceremony (secret scan, payload preview, consent, visible label) is a spec requirement not yet implemented as a single gated flow.
 
@@ -52,8 +53,8 @@ Every mutating action is gated by workspace trust and an explicit agent mode.
 
 Settings live in the `agiWorkforce.*` namespace.
 
-- **Settings surface** — ✅ `contributes.configuration.properties` (`apps/extension-vscode/package.json`): endpoint, gateway URL, model, streaming, context lines, agent mode/effort/thinking/maxIterations, inline completions, desktop bridge port/enabled, telemetry (default off).
-- **Tier resolution** — 🟡 `apps/extension-vscode/src/integrations/tierResolver.ts` and the `agiWorkforce.tier` enum still encode removed tiers (`hobby`, `pro_plus`). Canon tiers are **Free / Basic $8 (₹399) / Pro $20 / Max $100 & $200 / Enterprise**; Local + BYOK are free access modes. Reconciling `packages/contracts/types/src/billing-catalog.ts` and this enum is a separate tracked task.
+- **Settings surface** — ✅ 24 contributed settings cover endpoint/gateway/model/CLI, context, agent mode/effort, opt-in utilities, bridge, and telemetry.
+- **Tier resolution** — ✅ `tierResolver.ts` preserves every canonical plan value; retired values are accepted only as legacy normalization inputs.
 - **Settings sync** — 🔭 Allowlist-gated cross-device settings sync lands last; not wired here.
 
 ## Conversation Storage
@@ -72,6 +73,7 @@ Settings live in the `agiWorkforce.*` namespace.
 ## Repository map
 
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — localhost bridge transport, auth, allowlists.
+- `apps/extension-vscode/src/integrations/localRuntimeClient.ts` — app-server process pool and developer-session protocol.
 - `apps/extension-vscode/src/providers/agentMode/{agentLoop,agentUI}.ts`, `providers/agentModeProvider.ts` — session/tool/approval orchestration.
 - `apps/extension-vscode/src/data/{contextBuilder,contextBudget,workspaceIndexer,projectInstructions,conversationStore,checkpointManager,sendQueue,tokenCounter,usageMeter}.ts` — context + storage.
 - `apps/extension-vscode/src/integrations/{providerStreamClient,providerSwitchGuard,tierResolver,patchEngine}.ts` — provider + tier + patch.

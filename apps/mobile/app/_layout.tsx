@@ -25,6 +25,15 @@ import { Fingerprint } from 'lucide-react-native';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
+import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
+import {
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
+import {
+  beginPushTokenAccountSession,
+  clearPushTokenAccountSession,
+} from '@/src/features/auth/services/pushTokenAccountLifecycle';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
@@ -39,7 +48,8 @@ import {
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
-import { startCloudSyncLoop, stopCloudSyncLoop } from '@/services/cloudSyncEngine';
+import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloudSyncEngine';
+import { getAuthToken } from '@/services/authSession';
 
 // Expo Router only wires up a route's error boundary when the route file
 // itself has a named `ErrorBoundary` export — a separate ./error.tsx file is
@@ -80,6 +90,22 @@ LogBox.ignoreLogs([
   'Ignoring DevTools app debug target',
 ]);
 
+let backgroundFetchLifecycle: Promise<void> = Promise.resolve();
+
+/**
+ * Serialize OS background-task ownership changes.
+ *
+ * React runs account-A cleanup before account-B's effect, but both native
+ * register/unregister calls are asynchronous. Without a queue, B can observe
+ * the task as still registered and return, followed by A's late unregister —
+ * leaving B with no background task at all.
+ */
+function queueBackgroundFetchLifecycle(operation: () => Promise<void>): Promise<void> {
+  const transition = backgroundFetchLifecycle.catch(() => undefined).then(operation);
+  backgroundFetchLifecycle = transition;
+  return transition;
+}
+
 /**
  * Registers Clerk's React `useAuth().getToken()` with the non-React token
  * bridge (lib/clerk.ts) so the cloud streaming path can authenticate against
@@ -93,6 +119,7 @@ LogBox.ignoreLogs([
 function ClerkTokenBridge() {
   const { getToken, userId, isSignedIn, isLoaded } = useAuth(CLERK_NATIVE_AUTH_OPTIONS);
   const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
+  const setClerkUserId = useAuthStore((s) => s.setClerkUserId);
   const setClerkLoaded = useAuthStore((s) => s.setClerkLoaded);
   const setCloudAccess = useWaitlistStore((s) => s.setCloudAccess);
 
@@ -105,7 +132,20 @@ function ClerkTokenBridge() {
   }, [isLoaded, setClerkLoaded]);
 
   useEffect(() => {
+    if (!isLoaded) return;
     if (isSignedIn) {
+      if (!userId) {
+        // A signed-in state without a stable Clerk owner cannot safely adopt
+        // persisted Cloud caches. Wait for the identity-bearing render.
+        return;
+      }
+      const owner = activateCloudAccount(userId);
+      if (owner.changed) {
+        clearLocalCloudAccountState();
+        // Teardown stops account A's interval. Keep a fresh account-B loop
+        // armed; its immediate call no-ops while the fail-closed mode is Local.
+        startCloudSyncLoop();
+      }
       setClerkTokenGetter(
         () => getToken(),
         () => userId ?? null,
@@ -114,6 +154,7 @@ function ClerkTokenBridge() {
         // cached token that was just rejected by the server.
         () => getToken({ skipCache: true }),
       );
+      setClerkUserId(userId);
       setClerkSignedIn(true);
       // Public alpha: the signed-in entitlement IS the Managed Cloud gate. Reflect it
       // in cloudUnlocked so every UI consumer (mode toggle, model picker, settings)
@@ -121,25 +162,30 @@ function ClerkTokenBridge() {
       setCloudAccess(true);
     } else {
       setClerkTokenGetter(null, null, null);
+      setClerkUserId(null);
       setClerkSignedIn(false);
+      invalidateCloudAccount();
+      // Clerk can expire or revoke a session without the explicit auth-store
+      // signOut action running. Once Clerk has definitively loaded signed-out,
+      // fail the persisted privacy boundary back to Local as well. The
+      // `if (!isLoaded) return` guard above prevents a cold-start pending state
+      // from changing the user's mode prematurely.
       // Signing out re-locks Cloud access, closing any stale invite-redeemed unlock.
       setCloudAccess(false);
-      // Signing out must also drop the cached subscription tier — otherwise a
-      // previously-signed-in Pro/Max user's plan survives sign-out in MMKV and
-      // the Billing screen shows a stale "You are on the Pro plan" to a
-      // signed-out (or different) user. Tier is read-only plan metadata with
-      // no server-side session to re-validate once signed out, so the only
-      // honest state is 'free'.
-      useTierStore.getState().setTier('free');
+      // Session expiry/revocation does not pass through authStore.signOut().
+      // Use the same network-free, idempotent teardown so account B can never
+      // inherit account A's Cloud chats, artifacts, memories, projects,
+      // personalization, sync cursors, plan grants, or connector badges.
+      clearLocalCloudAccountState();
     }
-  }, [getToken, userId, isSignedIn, setClerkSignedIn, setCloudAccess]);
+  }, [getToken, userId, isLoaded, isSignedIn, setClerkSignedIn, setClerkUserId, setCloudAccess]);
 
   useEffect(() => {
     return () => {
       setClerkTokenGetter(null, null, null);
+      useAuthStore.getState().setClerkUserId(null);
       useAuthStore.getState().setClerkSignedIn(false);
       useWaitlistStore.getState().setCloudAccess(false);
-      useTierStore.getState().setTier('free');
     };
   }, []);
 
@@ -153,6 +199,7 @@ export default function RootLayout() {
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const initialize = useAuthStore((s) => s.initialize);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const authEnabled = FEATURES.auth;
   const refreshTier = useTierStore((s) => s.refreshTier);
@@ -169,6 +216,7 @@ export default function RootLayout() {
   const backPressCount = useRef(0);
   const { colors: themeColors, statusBarStyle } = useTheme();
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const previousIsCloudRef = useRef(isCloud);
   const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
   const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
   const themeMode = isCloud ? cloudThemeMode : localThemeMode;
@@ -234,10 +282,10 @@ export default function RootLayout() {
   // self-gates on cloud mode (no network I/O in Local), so this is safe to keep
   // running; it stops on sign-out / unmount. The sidecar is reset by signOut().
   useEffect(() => {
-    if (!isMmkvReady || !isClerkSignedIn) return;
+    if (!isMmkvReady || !isClerkSignedIn || !clerkUserId) return;
     startCloudSyncLoop();
     return () => stopCloudSyncLoop();
-  }, [isMmkvReady, isClerkSignedIn]);
+  }, [isMmkvReady, isClerkSignedIn, clerkUserId]);
 
   // Tier refresh — fetch /api/auth/me once after the Clerk session is available
   // and persist the result to MMKV-backed tierStore. The persisted value is used
@@ -246,17 +294,17 @@ export default function RootLayout() {
   // #386: gated on isClerkSignedIn (real signal) instead of the legacy
   // useAuthStore.session (always null in v1 — initialize() never sets it).
   useEffect(() => {
-    if (!isClerkSignedIn || !isInitialized) return;
+    if (!isClerkSignedIn || !clerkUserId || !isInitialized) return;
     refreshTier().catch((err) => {
       console.warn('[RootLayout] Tier refresh failed:', err);
     });
-  }, [isClerkSignedIn, isInitialized, refreshTier]);
+  }, [isClerkSignedIn, clerkUserId, isInitialized, refreshTier]);
 
   // Tier refresh on app foreground — invalidate cached tier when the user
   // returns to the app (e.g. after completing a subscription upgrade in the
   // browser). Mirrors the model-catalog TTL invalidation pattern.
   useEffect(() => {
-    if (!isClerkSignedIn) return;
+    if (!isClerkSignedIn || !clerkUserId) return;
 
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
@@ -268,7 +316,7 @@ export default function RootLayout() {
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [isClerkSignedIn, refreshTier]);
+  }, [isClerkSignedIn, clerkUserId, refreshTier]);
 
   // Tier refresh on Local -> Cloud mode entry. The app always launches into
   // Local mode, so the sign-in+init refresh above fires while `/api/me` is
@@ -281,11 +329,20 @@ export default function RootLayout() {
   // switches to Cloud and just starts chatting would keep seeing free-tier
   // model presets and gates for the entire session despite being entitled.
   useEffect(() => {
-    if (!isClerkSignedIn || !isCloud) return;
+    const enteredCloud = isCloud && !previousIsCloudRef.current;
+    previousIsCloudRef.current = isCloud;
+    if (!isClerkSignedIn || !clerkUserId || !isCloud) return;
     refreshTier().catch((err) => {
       console.warn('[RootLayout] Cloud-mode-entry tier refresh failed:', err);
     });
-  }, [isClerkSignedIn, isCloud, refreshTier]);
+    // The periodic loop starts while the app is Local and its immediate pull
+    // correctly no-ops. Do not make users wait for the next 30s tick after
+    // explicitly entering Cloud. On a persisted-Cloud cold start, enteredCloud
+    // is false and startCloudSyncLoop owns the single initial pull; on a real
+    // Local→Cloud transition this call is immediate. syncNow itself is
+    // single-flight, so a hydration-time transition cannot duplicate a pull.
+    if (enteredCloud && isMmkvReady) void syncNow();
+  }, [isClerkSignedIn, clerkUserId, isCloud, isMmkvReady, refreshTier]);
 
   // LOW-MOB-3 fix: tell notifications.ts the navigator is mounted. Slot is
   // rendered on every render of this component, so on the first render we
@@ -313,41 +370,94 @@ export default function RootLayout() {
   // device record created on the backend — push tokens carry account identity
   // and route through Vercel/cloud infrastructure.
   useEffect(() => {
-    if (!FEATURES.auth || !FEATURES.cloudChat || !isClerkSignedIn || !isInitialized) return;
+    if (
+      !FEATURES.auth ||
+      !FEATURES.cloudChat ||
+      !isClerkSignedIn ||
+      !clerkUserId ||
+      !isInitialized
+    ) {
+      if (isInitialized && (!isClerkSignedIn || !clerkUserId)) {
+        void clearPushTokenAccountSession().catch((err) => {
+          console.warn('[RootLayout] Push-token account cleanup failed:', err);
+        });
+      }
+      return;
+    }
 
-    registerForPushNotifications();
-    const removeListeners = setupNotificationListeners();
+    let disposed = false;
+    let removeListeners: (() => void) | undefined;
+    void beginPushTokenAccountSession(clerkUserId, getAuthToken)
+      .then(async (accountContext) => {
+        if (!accountContext || disposed || !accountContext.isCurrent()) return;
+        // Registration is managed-cloud egress. Bind/cache the Clerk owner in
+        // every signed-in mode so A can be deleted during a direct A -> B
+        // switch, but only POST B's device row while the user is in Cloud.
+        if (!isCloud) return;
+        await registerForPushNotifications(accountContext);
+        if (disposed || !accountContext.isCurrent()) return;
 
-    // Handle the notification that cold-started the app
-    handleInitialNotification();
+        removeListeners = setupNotificationListeners(accountContext);
+        await handleInitialNotification();
+      })
+      .catch((err) => {
+        if (!disposed) {
+          console.warn('[RootLayout] Push notification setup failed:', err);
+        }
+      });
 
-    return removeListeners;
-  }, [isClerkSignedIn, isInitialized]);
+    return () => {
+      disposed = true;
+      removeListeners?.();
+    };
+  }, [isClerkSignedIn, clerkUserId, isCloud, isInitialized]);
 
   // Background fetch — register agent status polling on login
   // #386: gated on isClerkSignedIn instead of the legacy session (always null).
   useEffect(() => {
-    if (!FEATURES.dispatch || !isClerkSignedIn) return;
+    if (!FEATURES.dispatch || !isClerkSignedIn || !clerkUserId) return;
 
-    registerBackgroundFetch().catch((err) => {
-      console.warn('[RootLayout] Background fetch registration failed:', err);
+    let disposed = false;
+    const ownerId = clerkUserId;
+    void queueBackgroundFetchLifecycle(async () => {
+      // Establish one deterministic OS-task state for this owner. This also
+      // recovers if the previous process died between registration and cleanup.
+      await unregisterBackgroundFetch();
+      if (
+        disposed ||
+        useAuthStore.getState().clerkUserId !== ownerId ||
+        !useAuthStore.getState().isClerkSignedIn
+      ) {
+        return;
+      }
+      await registerBackgroundFetch();
+    }).catch((err) => {
+      if (!disposed) {
+        console.warn('[RootLayout] Background fetch registration failed:', err);
+      }
     });
 
     return () => {
-      unregisterBackgroundFetch().catch((err) => {
+      disposed = true;
+      void queueBackgroundFetchLifecycle(() => unregisterBackgroundFetch()).catch((err) => {
         console.warn('[RootLayout] Background fetch unregister failed:', err);
       });
     };
-  }, [isClerkSignedIn]);
+  }, [isClerkSignedIn, clerkUserId]);
 
   // Cloud realtime — cross-surface sync of conversations/messages
   // #386: gated on isClerkSignedIn instead of the legacy session (always null).
   useEffect(() => {
-    if (!FEATURES.cloudChat || !isClerkSignedIn) return;
+    if (!FEATURES.cloudChat || !isClerkSignedIn || !clerkUserId) return;
 
+    let disposed = false;
     let unsubscribe: (() => void) | undefined;
     subscribeToRealtime()
       .then((unsub) => {
+        if (disposed) {
+          unsub();
+          return;
+        }
         unsubscribe = unsub;
       })
       .catch((err) => {
@@ -355,19 +465,25 @@ export default function RootLayout() {
       });
 
     return () => {
+      disposed = true;
       unsubscribe?.();
       unsubscribeFromRealtime();
     };
-  }, [isClerkSignedIn]);
+  }, [isClerkSignedIn, clerkUserId]);
 
   // Dispatch Realtime — desktop→mobile task updates
   // #386: gated on isClerkSignedIn instead of the legacy session (always null).
   useEffect(() => {
-    if (!FEATURES.dispatch || !isClerkSignedIn) return;
+    if (!FEATURES.dispatch || !isClerkSignedIn || !clerkUserId) return;
 
+    let disposed = false;
     let unsubscribe: (() => void) | undefined;
     subscribeToDispatch()
       .then((unsub) => {
+        if (disposed) {
+          unsub();
+          return;
+        }
         unsubscribe = unsub;
       })
       .catch((err) => {
@@ -375,18 +491,19 @@ export default function RootLayout() {
       });
 
     return () => {
+      disposed = true;
       unsubscribe?.();
       unsubscribeFromDispatch();
     };
-  }, [isClerkSignedIn]);
+  }, [isClerkSignedIn, clerkUserId]);
 
   // Desktop liveness polling — catch missed Realtime heartbeat updates
   // #386: gated on isClerkSignedIn instead of the legacy session (always null).
   useEffect(() => {
-    if (!FEATURES.dispatch || !isClerkSignedIn) return;
+    if (!FEATURES.dispatch || !isClerkSignedIn || !clerkUserId) return;
     const cleanup = startDesktopStatusPolling();
     return cleanup;
-  }, [isClerkSignedIn]);
+  }, [isClerkSignedIn, clerkUserId]);
 
   // NOTE: cross-device conversation sync runs through `cloudSyncEngine`
   // (`startCloudSyncLoop`, wired above). The legacy `conversationSync` facade

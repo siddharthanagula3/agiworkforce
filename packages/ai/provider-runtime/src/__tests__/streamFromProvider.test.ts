@@ -48,7 +48,7 @@ function fetchMockResolving(response: Response) {
 const BASE: Omit<StreamFromProviderOptions<{ model: string }>, 'fetchImpl'> = {
   providerId: 'anthropic',
   authToken: 'test-token',
-  request: { model: 'claude-opus-4.8' },
+  request: { model: 'claude-opus-5' },
   clientTag: 'agiworkforce-test',
 };
 
@@ -127,7 +127,7 @@ describe('streamFromProvider — request construction', () => {
           authorization: 'Bearer test-token',
           'x-requested-with': 'agiworkforce-test',
         }),
-        body: JSON.stringify({ model: 'claude-opus-4.8' }),
+        body: JSON.stringify({ model: 'claude-opus-5' }),
       }),
     );
   });

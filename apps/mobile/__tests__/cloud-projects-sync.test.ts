@@ -20,6 +20,11 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
 jest.mock('../services/api', () => ({
@@ -52,6 +57,10 @@ import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useMemorySyncStateStore } from '../stores/memory/memorySyncStateStore';
 import { syncNow, markProjectForSync } from '../services/cloudSyncEngine';
 import { useProjectStore } from '../src/features/projects/store';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
@@ -117,6 +126,8 @@ function seedCloudProject(id: string, name = 'test project', deletedAt: string |
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('project-sync-test-user');
   useCloudSyncStateStore.getState().reset();
   useCloudProjectStore.getState().clearCloudProjectData();
   useProjectSyncStateStore.getState().resetProjectSync();

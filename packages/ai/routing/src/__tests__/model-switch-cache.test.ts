@@ -4,7 +4,7 @@ import { assessModelSwitchCache } from '../model-switch-cache';
 describe('assessModelSwitchCache', () => {
   it('does NOT warn for a brand-new conversation (no prior turns)', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-4-8',
+      priorModelId: 'claude-opus-5',
       nextModelId: 'gpt-5',
       priorTurnCount: 0,
     });
@@ -26,8 +26,8 @@ describe('assessModelSwitchCache', () => {
 
   it('does NOT warn when re-selecting the same model', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-4-8',
-      nextModelId: 'claude-opus-4-8',
+      priorModelId: 'claude-opus-5',
+      nextModelId: 'claude-opus-5',
       priorTurnCount: 5,
     });
     expect(a.warn).toBe(false);
@@ -36,7 +36,7 @@ describe('assessModelSwitchCache', () => {
 
   it('WARNS when switching to a different model with prior turns (cache reset)', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-4-8',
+      priorModelId: 'claude-opus-5',
       nextModelId: 'gpt-5',
       priorTurnCount: 2,
     });
@@ -49,20 +49,20 @@ describe('assessModelSwitchCache', () => {
 
   it('uses human labels in the message when provided', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-4-8',
+      priorModelId: 'claude-opus-5',
       nextModelId: 'gpt-5',
       priorTurnCount: 1,
-      priorModelLabel: 'Opus 4.8',
+      priorModelLabel: 'Opus 5',
       nextModelLabel: 'GPT-5',
     });
-    expect(a.message).toContain('Opus 4.8');
+    expect(a.message).toContain('Opus 5');
     expect(a.message).toContain('GPT-5');
-    expect(a.message).not.toContain('claude-opus-4-8');
+    expect(a.message).not.toContain('claude-opus-5');
   });
 
   it('treats same-provider different-model as a reset too (per-model cache key)', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-4-8',
+      priorModelId: 'claude-opus-5',
       nextModelId: 'claude-haiku-4-5',
       priorTurnCount: 4,
     });

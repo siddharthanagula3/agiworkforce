@@ -174,7 +174,7 @@ export async function resetLocalInMemoryState(): Promise<void> {
     searchResults: [],
     isSearching: false,
     chatMode: 'chat',
-    chatStyle: 'normal',
+    chatStyle: 'concise',
     toolAccess: 'auto',
     features: {
       webSearch: true,

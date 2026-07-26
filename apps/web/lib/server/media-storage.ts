@@ -1,15 +1,18 @@
 import 'server-only';
 
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { logger } from '@/lib/logger';
-import { putObject, deleteObject, isObjectStorageConfigured } from './object-storage';
+import { putObject, getObject, deleteObject, isObjectStorageConfigured } from './object-storage';
 
 /**
- * Durable object storage for AI-generated media, backed by Cloudflare R2.
+ * Object storage for AI-generated media.
  *
- * When R2 is not configured (e.g. a local dev branch without credentials)
- * callers should treat persistence as best-effort and fall back to returning
- * media inline, so missing config never breaks generation.
+ * Production is backed by Cloudflare R2. Local development gets an
+ * owner-scoped filesystem fallback under `.next/agi-local-media`, allowing
+ * generated images/files to survive a browser reload without weakening the
+ * production storage contract or requiring cloud credentials for a demo.
  */
 
 export interface StoredMedia {
@@ -19,9 +22,40 @@ export interface StoredMedia {
   contentType: string;
 }
 
-/** True when Cloudflare R2 is configured. */
+const LOCAL_MEDIA_PREFIX = 'local-dev-media/';
+
+function isLocalDevelopmentMediaStorageEnabled(): boolean {
+  return process.env['NODE_ENV'] === 'development';
+}
+
+function localMediaRoot(): string {
+  return path.resolve(process.cwd(), '.next', 'agi-local-media');
+}
+
+/**
+ * Turn only our own generated local locator into a filesystem path.
+ * The strict shape and containment check prevent traversal even if a database
+ * row is tampered with.
+ */
+function localPathForStoragePathname(pathname: string): string | null {
+  if (!isLocalDevelopmentMediaStorageEnabled()) return null;
+  if (
+    !/^local-dev-media\/(?:image|video|file)\/[a-f0-9]{32}\/[0-9a-f-]{36}\.[a-z0-9]+$/i.test(
+      pathname,
+    )
+  ) {
+    return null;
+  }
+
+  const root = localMediaRoot();
+  const relative = pathname.slice(LOCAL_MEDIA_PREFIX.length);
+  const resolved = path.resolve(root, relative);
+  return resolved.startsWith(`${root}${path.sep}`) ? resolved : null;
+}
+
+/** True when production R2 or the development-only local fallback is available. */
 export function isMediaStorageConfigured(): boolean {
-  return isObjectStorageConfigured();
+  return isObjectStorageConfigured() || isLocalDevelopmentMediaStorageEnabled();
 }
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -55,7 +89,7 @@ export async function bytesFromUrl(url: string): Promise<{ data: Buffer; content
   return { data, contentType };
 }
 
-/** Upload bytes to durable, user-scoped object storage. */
+/** Store bytes in production R2 or the development-only local fallback. */
 export async function storeMedia(params: {
   userId: string;
   kind: 'image' | 'video' | 'file';
@@ -63,9 +97,33 @@ export async function storeMedia(params: {
   contentType: string;
 }): Promise<StoredMedia> {
   const { userId, kind, data, contentType } = params;
-  const pathname = `media/${kind}/${userId}/${randomUUID()}.${extForMime(contentType)}`;
-  const { url } = await putObject({ key: pathname, data, contentType });
-  return { url, pathname, byteSize: data.byteLength, contentType };
+  const extension = extForMime(contentType);
+
+  if (isObjectStorageConfigured()) {
+    const pathname = `media/${kind}/${userId}/${randomUUID()}.${extension}`;
+    const { url } = await putObject({ key: pathname, data, contentType });
+    return { url, pathname, byteSize: data.byteLength, contentType };
+  }
+
+  if (!isLocalDevelopmentMediaStorageEnabled()) {
+    throw new Error('Media storage is not configured.');
+  }
+
+  const ownerHash = createHash('sha256').update(userId).digest('hex').slice(0, 32);
+  const pathname = `${LOCAL_MEDIA_PREFIX}${kind}/${ownerHash}/${randomUUID()}.${extension}`;
+  const localPath = localPathForStoragePathname(pathname);
+  if (!localPath) throw new Error('Could not resolve the local media storage path.');
+
+  await mkdir(path.dirname(localPath), { recursive: true });
+  await writeFile(localPath, data);
+  return {
+    // This is an internal locator only. Clients receive the authenticated
+    // `/api/files/{assetId}` URL after the media_assets row is created.
+    url: pathname,
+    pathname,
+    byteSize: data.byteLength,
+    contentType,
+  };
 }
 
 /**
@@ -83,8 +141,38 @@ export function authenticatedMediaUrl(mediaAssetId: string): string {
   return `/api/files/${mediaAssetId}`;
 }
 
+/** Read stored bytes from the matching production or local-development backend. */
+export async function readStoredMedia(
+  pathname: string,
+): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+  if (pathname.startsWith(LOCAL_MEDIA_PREFIX)) {
+    const localPath = localPathForStoragePathname(pathname);
+    if (!localPath) return null;
+    try {
+      return { data: await readFile(localPath), contentType: undefined };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw error;
+    }
+  }
+
+  if (!isObjectStorageConfigured()) return null;
+  return getObject(pathname);
+}
+
 /** Remove a previously stored object by pathname. Throws on failure. */
 export async function deleteStoredMedia(pathname: string): Promise<void> {
+  if (pathname.startsWith(LOCAL_MEDIA_PREFIX)) {
+    const localPath = localPathForStoragePathname(pathname);
+    if (!localPath) throw new Error('Invalid local media storage path.');
+    try {
+      await unlink(localPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    return;
+  }
+
   await deleteObject(pathname);
 }
 
@@ -103,7 +191,7 @@ export async function deleteStoredMediaObjects(
   pathnames: ReadonlyArray<string | null | undefined>,
 ): Promise<{ deleted: number; failedPathnames: string[] }> {
   const present = pathnames.filter((p): p is string => typeof p === 'string' && p.length > 0);
-  if (!isObjectStorageConfigured()) {
+  if (!isMediaStorageConfigured()) {
     // The bytes exist but this deployment cannot reach them. Report every
     // pathname as failed so the caller retains its pointers instead of
     // deleting the only record of an object it can no longer address.
@@ -119,7 +207,7 @@ export async function deleteStoredMediaObjects(
   const failedPathnames: string[] = [];
   for (const pathname of present) {
     try {
-      await deleteObject(pathname);
+      await deleteStoredMedia(pathname);
       deleted++;
     } catch (error) {
       failedPathnames.push(pathname);

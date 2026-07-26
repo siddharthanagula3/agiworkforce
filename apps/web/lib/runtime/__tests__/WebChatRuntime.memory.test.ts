@@ -106,6 +106,17 @@ describe('WebChatRuntime memory injection', () => {
     expect(completionsBody(fetchMock)).toEqual(expect.objectContaining({ research: true }));
   });
 
+  it('sends the browser time zone with managed chat requests', async () => {
+    const fetchMock = stubFetch();
+
+    const runtime = new WebChatRuntime();
+    await runtime.sendMessage('conv-1', 'What date is it?', { messageHistory: [] });
+
+    expect(completionsBody(fetchMock)['client_timezone']).toBe(
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    );
+  });
+
   it('keeps permission mode separate from the managed Cloud work mode', async () => {
     const fetchMock = stubFetch();
 

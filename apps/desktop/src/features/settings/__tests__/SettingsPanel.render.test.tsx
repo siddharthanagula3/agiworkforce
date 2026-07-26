@@ -246,10 +246,13 @@ describe('SettingsPanel render stability', () => {
     expect(await screen.findByRole('textbox', { name: 'Model to install' })).toBeInTheDocument();
   });
 
-  it('labels the profile and response-style tab as Personalization', async () => {
-    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="general" />);
+  it('labels the profile and response-style tab as Personalization', () => {
+    // This assertion covers the navigation shell, not GeneralTab. Start on a
+    // lightweight mocked section so the check stays deterministic when the
+    // complete Desktop suite is running many workers in parallel.
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="plugins" />);
 
-    expect(await screen.findByRole('button', { name: /Personalization/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Personalization/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Appearance$/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Customize')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Directory/i })).not.toBeInTheDocument();

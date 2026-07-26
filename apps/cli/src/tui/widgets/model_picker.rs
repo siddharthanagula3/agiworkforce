@@ -813,7 +813,7 @@ mod tests {
         // Mirrors the live path: catalog models + OpenRouter models (as
         // openrouter_models::load_cached_models() produces, provider="openrouter").
         let models = vec![
-            model("claude-opus-4-8", "anthropic"),
+            model("claude-opus-5", "anthropic"),
             model("qwen/qwen3-max", "openrouter"),
             model("openai/gpt-4o-mini", "openrouter"),
         ];
@@ -1001,10 +1001,10 @@ mod tests {
         );
     }
 
-    /// The Rust gate must agree with the TypeScript rule it mirrors: Free and
-    /// BYOK carry no managed-cloud entitlement.
+    /// The CLI composes the model roster with the Pro-or-higher developer
+    /// surface gate. Free, Basic, and BYOK therefore reach no managed model.
     #[test]
-    fn free_and_byok_tiers_reach_no_managed_cloud_model() {
+    fn free_basic_and_byok_tiers_reach_no_managed_cloud_model() {
         use crate::model_catalog::can_access_model_for_tier;
         use crate::tier_cache::UserTier;
 
@@ -1017,14 +1017,25 @@ mod tests {
                 !can_access_model_for_tier(&economy_id, &UserTier::Byok),
                 "BYOK must not reach managed-cloud model {economy_id}"
             );
+            assert!(
+                !can_access_model_for_tier(&economy_id, &UserTier::Basic),
+                "Basic must not reach CLI managed-cloud model {economy_id}"
+            );
         }
     }
 
-    /// Flagship models are Max/Enterprise-only; Pro must not reach them.
+    /// Team inherits the Pro roster. Flagships stay Max/Max 15x/Enterprise.
     #[test]
-    fn pro_does_not_reach_flagship_additions() {
+    fn team_uses_pro_roster_and_max_15x_reaches_flagships() {
         use crate::model_catalog::can_access_model_for_tier;
         use crate::tier_cache::UserTier;
+
+        for pro_id in crate::model_catalog::tier_allowed_models("pro_additions") {
+            assert!(
+                can_access_model_for_tier(&pro_id, &UserTier::Team),
+                "Team must reach Pro model {pro_id}"
+            );
+        }
 
         for flagship_id in crate::model_catalog::tier_allowed_models("flagship_additions") {
             assert!(
@@ -1034,6 +1045,14 @@ mod tests {
             assert!(
                 can_access_model_for_tier(&flagship_id, &UserTier::Max),
                 "Max must reach flagship model {flagship_id}"
+            );
+            assert!(
+                can_access_model_for_tier(&flagship_id, &UserTier::Max15x),
+                "Max 15x must reach flagship model {flagship_id}"
+            );
+            assert!(
+                !can_access_model_for_tier(&flagship_id, &UserTier::Team),
+                "Team must not silently inherit individual Max flagship access for {flagship_id}"
             );
         }
     }

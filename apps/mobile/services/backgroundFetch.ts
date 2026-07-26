@@ -29,6 +29,11 @@ interface AgentStatusResponse {
 const BG_FETCH_MAX_RETRIES = 2;
 let lastApprovalNotificationKey: string | null = null;
 
+/** Forget account-scoped notification dedupe state on sign-out/account switch. */
+export function resetBackgroundFetchAccountState(): void {
+  lastApprovalNotificationKey = null;
+}
+
 function approvalNotificationKey(approvals: AgentStatusResponse['pendingApprovals']): string {
   return approvals
     .map((approval) => approval.id)

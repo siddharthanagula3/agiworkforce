@@ -98,7 +98,7 @@ describe('tier2 vision: image attachment on generate', () => {
       content: string;
       mediaPath?: string;
     }>;
-    const userMessage = messages.at(-1)!;
+    const userMessage = messages[messages.length - 1]!;
     expect(userMessage.role).toBe('user');
     expect(userMessage.mediaPath).toBe('file:///tmp/photo.jpg');
   });
@@ -120,7 +120,7 @@ describe('tier2 vision: image attachment on generate', () => {
     });
 
     const messages = mockInstance.generate.mock.calls[0]![0] as Array<{ mediaPath?: string }>;
-    expect(messages.at(-1)!.mediaPath).toBe('file:///tmp/real.png');
+    expect(messages[messages.length - 1]!.mediaPath).toBe('file:///tmp/real.png');
   });
 });
 

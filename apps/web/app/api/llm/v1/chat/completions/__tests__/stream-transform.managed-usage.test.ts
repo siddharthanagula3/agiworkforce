@@ -38,9 +38,9 @@ import type { ProcessedRequest } from '../lib/request-processor';
 function managedProcessed(): ProcessedRequest {
   return {
     requestId: 'agi.chat.web.send.assistant-001',
-    chatRequest: { model: 'claude-opus-4-8', messages: [], stream: true } as never,
+    chatRequest: { model: 'claude-opus-5', messages: [], stream: true } as never,
     conversationId: undefined,
-    requestedModel: 'claude-opus-4-8',
+    requestedModel: 'claude-opus-5',
     provider: 'anthropic',
     estimatedCostCents: 2,
     estimatedPromptTokens: 4,
@@ -50,7 +50,7 @@ function managedProcessed(): ProcessedRequest {
     isFlagshipRequest: false,
     usedFallback: false,
     fallbackReason: undefined,
-    originalModel: 'claude-opus-4-8',
+    originalModel: 'claude-opus-5',
     resolvedTaskType: 'general' as never,
     classifierConfidence: 1,
     resolvedSlot: null,
@@ -80,7 +80,7 @@ function managedProcessed(): ProcessedRequest {
       estimatedCostCents: 2,
     },
     llmRequest: {
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-5',
       messages: [],
       max_tokens: 2,
       stream: true,

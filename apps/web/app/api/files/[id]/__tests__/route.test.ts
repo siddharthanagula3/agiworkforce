@@ -41,9 +41,9 @@ vi.mock('@/lib/server/media-assets', () => ({
   getMediaAssetById: mockGetMediaAssetById,
 }));
 
-vi.mock('@/lib/server/object-storage', () => ({
-  getObject: mockGetObject,
-  isObjectStorageConfigured: mockIsConfigured,
+vi.mock('@/lib/server/media-storage', () => ({
+  readStoredMedia: mockGetObject,
+  isMediaStorageConfigured: mockIsConfigured,
 }));
 
 import { GET } from '../route';
@@ -193,7 +193,7 @@ describe('GET /api/files/[id]', () => {
     expect(mockGetObject).not.toHaveBeenCalled();
   });
 
-  it('returns 404 when object storage is not configured', async () => {
+  it('returns 404 when media storage is not configured', async () => {
     mockIsConfigured.mockReturnValue(false);
     mockGetMediaAssetById.mockResolvedValue(makeAsset());
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));

@@ -1542,6 +1542,23 @@ describe('useChatStream', () => {
     );
   });
 
+  it('sends the browser time zone so the server can derive the local date', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }]);
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('What date is it?', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+
+    const llmCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+    const body = JSON.parse(String(llmCall?.[1]?.body)) as Record<string, unknown>;
+    expect(body['client_timezone']).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
   it('sends the AGI Work execution mode to the managed cloud engine', async () => {
     mockSseStream([{ choices: [{ delta: { content: 'done' }, finish_reason: 'stop' }] }]);
     const { result } = renderHook(() => useChatStream());

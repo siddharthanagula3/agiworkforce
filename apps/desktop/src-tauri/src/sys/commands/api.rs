@@ -10,6 +10,7 @@ use crate::sys::api::{
 
 pub struct ApiState {
     client: OnceCell<ApiClient>,
+    single_attempt_client: OnceCell<ApiClient>,
     oauth_clients: Mutex<HashMap<String, OAuth2Client>>,
     pkce_challenges: Mutex<HashMap<String, PkceChallenge>>,
 }
@@ -18,6 +19,7 @@ impl Default for ApiState {
     fn default() -> Self {
         Self {
             client: OnceCell::new(),
+            single_attempt_client: OnceCell::new(),
             oauth_clients: Mutex::new(HashMap::new()),
             pkce_challenges: Mutex::new(HashMap::new()),
         }
@@ -36,6 +38,15 @@ impl ApiState {
     pub fn get_client(&self) -> Result<&ApiClient, String> {
         self.client.get_or_try_init(|| {
             ApiClient::new().map_err(|e| format!("Failed to initialize API client: {}", e))
+        })
+    }
+
+    /// Return the shared client for non-idempotent requests that must never be
+    /// replayed by either reqwest or the generic transient-retry middleware.
+    pub fn get_single_attempt_client(&self) -> Result<&ApiClient, String> {
+        self.single_attempt_client.get_or_try_init(|| {
+            ApiClient::single_attempt()
+                .map_err(|e| format!("Failed to initialize single-attempt API client: {}", e))
         })
     }
 

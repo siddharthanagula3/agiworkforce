@@ -43,6 +43,7 @@ import {
   getSlotForModel,
   normalizeModelId,
   canUseBillingPlanCapability,
+  isValidIanaTimeZone,
 } from '@agiworkforce/types';
 import type { RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
 import {
@@ -189,6 +190,14 @@ export const ChatCompletionRequestSchema = z.object({
     .optional(),
   effort: z.string().optional(),
   use_prompt_cache: z.boolean().optional(),
+  // Browser-reported IANA zone is a display/context hint only. The server's
+  // clock remains authoritative and derives the corresponding local instant.
+  client_timezone: z
+    .string()
+    .trim()
+    .max(64)
+    .refine(isValidIanaTimeZone, 'client_timezone must be a valid IANA time zone')
+    .optional(),
   // Optional, additive: identifies the owned cloud conversation this request belongs to.
   // The processor verifies it against web_conversations.user_id before billing, provider,
   // tool, or E2B work. A conversation id is never an authorization token.
@@ -298,6 +307,25 @@ export function applyImplicitManagedToolIntent(
   if (request.code_execution === undefined && hasExplicitCodeExecutionIntent) {
     request.code_execution = true;
   }
+}
+
+/**
+ * Make explicit tool modes part of Auto's route decision. The classifier only
+ * sees message prose, so without this step a user could enable Deep Research,
+ * Office creation, or Run code and still be routed to a model that cannot
+ * execute the selected mode.
+ */
+export function resolveToolAwareTaskType(
+  classifiedTaskType: RoutingTaskType,
+  request: Pick<
+    ChatCompletionRequest,
+    'research' | 'work_mode' | 'office_creation' | 'code_execution'
+  >,
+): RoutingTaskType {
+  if (request.research === true) return 'research';
+  if (request.work_mode === 'agiwork' || request.office_creation === true) return 'agentic';
+  if (request.code_execution === true) return 'coding';
+  return classifiedTaskType;
 }
 
 /**
@@ -565,29 +593,45 @@ export function resolveRequestEffort(
 
 /**
  * Whether an Anthropic model uses the NEW adaptive-thinking + `output_config.effort`
- * API generation (Opus 4.8, Sonnet 4.6) vs the classic manual
+ * API generation (Opus 5, Sonnet 4.6) vs the classic manual
  * `thinking:{type:"enabled",budget_tokens}` generation (Haiku 4.5).
  *
  * CRITICAL: keys off the per-model `reasoning.control`, NOT just
- * `capabilities.thinking`. Opus 4.8 REJECTS the classic enabled+budget shape with
+ * `capabilities.thinking`. Opus 5 REJECTS the classic enabled+budget shape with
  * a 400; Haiku 4.5 is classic-only. Before this was control-aware, flipping
  * Haiku's `capabilities.thinking` to true (correct — it does think) would have
  * routed Haiku through `{type:"adaptive"}`, which is unverified on Haiku. Matrix
  * flag 3 + docs/research/reasoning-effort-capability-matrix-2026-07-10.md.
  *
- * The lookup uses `getModelMetadataById`, which resolves BOTH the catalog id
- * (`claude-opus-4.8`) AND the apiModelId (`claude-opus-4-8`) via modelIdAliases —
- * so the route can pass either form without falling through to enabled+budget
- * (which would 400 live on Opus). Matrix flag 3 (Opus id-resolution).
+ * The lookup uses `getModelMetadataById`, so request behavior comes from the
+ * canonical catalog instead of model-family string matching. This matters for
+ * Opus 5 because a manual enabled+budget block would be rejected by the live
+ * provider contract.
  */
 export function anthropicUsesAdaptiveThinking(model: string): boolean {
   const metadata = getModelMetadataById(model);
   if (metadata?.provider !== 'anthropic' || !metadata.capabilities.thinking) return false;
+  if (metadata.reasoning?.thinkingDefault === 'adaptive') return true;
   const control = metadata.reasoning?.control;
-  // effort_levels ⇒ adaptive+output_config.effort (Opus 4.8 / Sonnet 5).
+  // effort_levels ⇒ adaptive+output_config.effort (Opus 5 / Sonnet 5).
   // thinking_budget ⇒ classic enabled+budget (Haiku 4.5) — NOT adaptive.
   if (control === 'thinking_budget') return false;
   return true;
+}
+
+const EFFORT_ORDER: readonly Effort[] = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
+
+function effortExceeds(effort: Effort | undefined, maximum: Effort | undefined): boolean {
+  if (!effort || !maximum) return false;
+  return EFFORT_ORDER.indexOf(effort) > EFFORT_ORDER.indexOf(maximum);
 }
 
 export function buildThinkingConfig({
@@ -605,16 +649,35 @@ export function buildThinkingConfig({
 }): { type: string; budget_tokens?: number } | undefined {
   if (provider !== 'anthropic') return undefined;
 
+  const reasoning = getModelReasoning(model);
   const usesAdaptive = anthropicUsesAdaptiveThinking(model);
+  const explicitlyDisabled =
+    explicitThinking?.type === 'disabled' ||
+    (explicitThinking === undefined && thinkingMode === false);
+
+  if (explicitlyDisabled) {
+    if (reasoning.canDisableThinking === false) {
+      throw new Error(`Thinking cannot be disabled for ${model}.`);
+    }
+    if (effortExceeds(effort, reasoning.maxEffortWhenThinkingDisabled)) {
+      throw new Error(
+        `Thinking is disabled for ${model}; effort must be ${reasoning.maxEffortWhenThinkingDisabled} or lower.`,
+      );
+    }
+    return { type: 'disabled' };
+  }
 
   if (explicitThinking) {
-    if (usesAdaptive && explicitThinking.type !== 'adaptive') {
+    if (
+      usesAdaptive &&
+      (reasoning.supportsManualThinking === false || explicitThinking.type !== 'adaptive')
+    ) {
       return { type: 'adaptive' };
     }
     return explicitThinking;
   }
 
-  if (!thinkingMode) return undefined;
+  if (thinkingMode !== true) return undefined;
 
   if (usesAdaptive) return { type: 'adaptive' };
 
@@ -763,6 +826,44 @@ export function appendWebSearchTool(
     return [...(tools ?? []), { type: 'web_search' }];
   }
   return tools;
+}
+
+function modelHasNativeAnthropicWebFetch(model: string): boolean {
+  const metadata = getModelMetadataById(model);
+  return (
+    metadata?.provider === 'anthropic' && metadata.providerCompatibility?.nativeWebFetch !== false
+  );
+}
+
+/**
+ * Resolve URL-fetch tooling without pretending every Anthropic model supports
+ * Anthropic's native server tool. Models that explicitly opt out use AGI's
+ * platform-executed, SSRF-guarded `url_fetch` function in the streaming tool
+ * loop, just like non-Anthropic providers.
+ */
+export function resolveWebFetchTools({
+  providerLower,
+  model,
+  tools,
+  toolsCapable,
+  stream,
+}: {
+  providerLower: string;
+  model: string;
+  tools: unknown[] | undefined;
+  toolsCapable: boolean;
+  stream: boolean | undefined;
+}): unknown[] | undefined {
+  if (!toolsCapable) return tools;
+
+  if (providerLower === 'anthropic' && modelHasNativeAnthropicWebFetch(model)) {
+    return [
+      ...(tools ?? []),
+      { type: 'web_fetch_20260209', name: 'web_fetch', allowed_callers: ['direct'] },
+    ];
+  }
+
+  return stream ? [...(tools ?? []), urlFetchToolDef()] : tools;
 }
 
 /**
@@ -1439,13 +1540,14 @@ export async function processRequest(
     });
   }
 
-  const resolvedTaskType: RoutingTaskType = classifierResult.type;
+  let resolvedTaskType: RoutingTaskType = classifierResult.type;
 
   applyImplicitManagedToolIntent(chatRequest, {
     prompt: lastUserText,
     taskType: resolvedTaskType,
     planTier: subscription.plan_tier,
   });
+  resolvedTaskType = resolveToolAwareTaskType(resolvedTaskType, chatRequest);
 
   const indicResult = detectIndicScript(lastUserText);
   if (indicResult.isIndic && indicResult.dominantScript) {
@@ -1876,19 +1978,57 @@ export async function processRequest(
       ),
     };
   }
+  if (
+    chatRequest.web_fetch &&
+    !chatRequest.stream &&
+    !(providerLower === 'anthropic' && modelHasNativeAnthropicWebFetch(chatRequest.model))
+  ) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: 'Web fetch on this model requires a streaming chat request. Set stream: true.',
+            type: 'invalid_request_error',
+            code: 'web_fetch_stream_required',
+            param: 'stream',
+          },
+        },
+        { status: 422 },
+      ),
+    };
+  }
 
   const effectiveEffort = resolveRequestEffort(
     providerLower,
     chatRequest.model,
     chatRequest.effort,
   );
-  const thinkingConfig = buildThinkingConfig({
-    provider: providerLower,
-    model: chatRequest.model,
-    explicitThinking: chatRequest.thinking,
-    thinkingMode: chatRequest.thinking_mode,
-    effort: effectiveEffort,
-  });
+  let thinkingConfig: ReturnType<typeof buildThinkingConfig>;
+  try {
+    thinkingConfig = buildThinkingConfig({
+      provider: providerLower,
+      model: chatRequest.model,
+      explicitThinking: chatRequest.thinking,
+      thinkingMode: chatRequest.thinking_mode,
+      effort: effectiveEffort,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: error instanceof Error ? error.message : 'Invalid thinking configuration.',
+            type: 'invalid_request_error',
+            code: 'invalid_thinking_configuration',
+            param: 'thinking_mode',
+          },
+        },
+        { status: 422 },
+      ),
+    };
+  }
 
   // Default output cap when the client doesn't specify one. 1000 was far too low: it
   // truncated HTML/code artifacts mid-stream, so the closing ``` fence never arrived, the
@@ -2116,33 +2256,14 @@ export async function processRequest(
     }
   }
 
-  if (
-    chatRequest.web_fetch &&
-    providerLower === 'anthropic' &&
-    (resolvedModelCaps?.search ?? true)
-  ) {
-    resolvedTools = [
-      ...(resolvedTools ?? []),
-      { type: 'web_fetch_20260209', name: 'web_fetch', allowed_callers: ['direct'] },
-    ];
-  }
-
-  // Platform url_fetch tool: URL-fetch parity for every provider WITHOUT a native
-  // web-fetch server tool (Anthropic keeps its native tool above). Executed by the
-  // agentic tool loop (SSRF-guarded, read-only — auto-approved like E2B tools).
-  //
-  // Offer ⊆ run constraint (same as E2B): only offered on streaming requests
-  // because only that path enters the tool loop in route.ts; offering it
-  // elsewhere would inject a tool_call nothing executes. Gated on the resolved
-  // model's `tools` capability (unknown models default to allowed so a missing
-  // catalog entry never silently drops the tool).
-  if (
-    chatRequest.web_fetch &&
-    providerLower !== 'anthropic' &&
-    chatRequest.stream &&
-    (resolvedModelCaps?.tools ?? true)
-  ) {
-    resolvedTools = [...(resolvedTools ?? []), urlFetchToolDef()];
+  if (chatRequest.web_fetch) {
+    resolvedTools = resolveWebFetchTools({
+      providerLower,
+      model: chatRequest.model,
+      tools: resolvedTools,
+      toolsCapable: resolvedModelCaps?.tools ?? true,
+      stream: chatRequest.stream,
+    });
   }
 
   if (chatRequest.code_execution) {
@@ -2200,7 +2321,10 @@ export async function processRequest(
   // where a third-party integrator owns their own prompt and would not expect
   // us to prepend one.
   if (resolveCloudChatSurface(request) !== 'api') {
-    const capabilityPreamble = buildCapabilityPreamble({ tools: resolvedTools });
+    const capabilityPreamble = buildCapabilityPreamble({
+      tools: resolvedTools,
+      timeZone: chatRequest.client_timezone,
+    });
 
     // PER-7: append the user's standing "Instructions for AGI" to the base
     // preamble. Settings persists them and tells the user "AGI will keep these

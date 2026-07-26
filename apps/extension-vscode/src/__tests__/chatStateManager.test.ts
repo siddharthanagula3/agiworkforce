@@ -4,12 +4,18 @@ import {
   ChatStateManager,
   type ExtToWebviewMessage,
 } from '../features/sidebar-webview/ChatStateManager';
+import {
+  MODEL_PICKER_OPTIONS,
+  buildGroupedQuickPickItems,
+  getModelProviderInfo,
+} from '../features/model-picker/modelConstants';
 import type { LocalRuntimeClient, LocalRuntimeEvent } from '../integrations/localRuntimeClient';
 import type { LocalRuntimePool } from '../integrations/localRuntimePool';
 import {
   setContextPanelInstance,
   type ContextPanelProvider,
 } from '../features/trees/contextPanelProvider';
+import { MEMORY_STORE_KEY } from '../memory/memoryStore';
 
 function makeHarness(
   options: {
@@ -51,6 +57,7 @@ function makeHarness(
     pool,
   );
   return {
+    context,
     manager,
     runtime,
     posted,
@@ -92,7 +99,10 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     expect(harness.posted).toContainEqual({
       type: 'providerBadge',
-      payload: { providerLabel: '', brandColor: 'transparent' },
+      payload: {
+        providerLabel: 'Auto routing',
+        brandColor: 'var(--vscode-descriptionForeground)',
+      },
     });
     expect(harness.posted).not.toContainEqual(
       expect.objectContaining({
@@ -100,6 +110,66 @@ describe('ChatStateManager local turn lifecycle', () => {
         payload: expect.objectContaining({ providerLabel: 'AGI Cloud' }),
       }),
     );
+  });
+
+  it('announces the unavoidable context reset when switching local provider boundaries', async () => {
+    const harness = makeHarness({
+      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+    });
+    await harness.context.globalState.update('tierStatus.cachedTier', 'max');
+    harness.runtime.startThread
+      .mockResolvedValueOnce({ id: 'thread-1' })
+      .mockResolvedValueOnce({ id: 'thread-2' });
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+    await harness.manager.handleMessage({
+      type: 'selectModel',
+      payload: { modelId: 'gemma4:e4b' },
+    });
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect locally' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(1));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+
+    const catalogModel = MODEL_PICKER_OPTIONS.find((option) => option.id !== 'auto')!;
+    await harness.manager.handleMessage({
+      type: 'selectModel',
+      payload: { modelId: catalogModel.id },
+    });
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const second = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Continue with the cloud-capable model' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+
+    expect(harness.posted).toContainEqual({
+      type: 'sessionNotice',
+      payload: {
+        message:
+          'Provider boundary changed. AGI started a new developer session; earlier transcript context was not forwarded.',
+      },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-2',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await second;
   });
 
   it('shows CLI-discovered local models in the inline picker', async () => {
@@ -140,6 +210,21 @@ describe('ChatStateManager local turn lifecycle', () => {
         message: 'Install or update the AGI CLI, then configure its path in Settings.',
       },
     });
+  });
+
+  it('opens a workspace-file picker without claiming folder support', async () => {
+    const harness = makeHarness();
+    vi.mocked(vscode.window.showOpenDialog).mockResolvedValueOnce(undefined);
+
+    await harness.manager.handleMessage({ type: 'openFilePicker' });
+
+    expect(vscode.window.showOpenDialog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        title: 'Attach Workspace Files to Chat',
+      }),
+    );
   });
 
   it('passes the trusted discovered provider with a selected local model', async () => {
@@ -235,6 +320,45 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('includes user-curated memory as untrusted turn data', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update(MEMORY_STORE_KEY, [
+      {
+        id: 'memory-1',
+        text: 'Prefer Rust for command-line tools',
+        createdAt: '2026-07-25T00:00:00.000Z',
+      },
+    ]);
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Implement the CLI command' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'text',
+            text: expect.stringContaining(
+              '<untrusted_memory_context>\n- Prefer Rust for command-line tools',
+            ),
+          }),
+        ]),
+      }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
   it('sends the shared self-routing Auto model to the Rust session owner', async () => {
     const harness = makeHarness();
     const send = harness.manager.handleMessage({
@@ -249,10 +373,8 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'auto',
+        routingTaskType: 'research',
       }),
-    );
-    expect(harness.runtime.startTurn).not.toHaveBeenCalledWith(
-      expect.objectContaining({ routingTaskType: expect.anything() }),
     );
     harness.emit({
       type: 'turn_completed',
@@ -264,6 +386,200 @@ describe('ChatStateManager local turn lifecycle', () => {
       outputTokens: 1,
     });
     await send;
+  });
+
+  it('keeps the same runtime thread when a model changes within one catalog provider', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'max');
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto');
+    const firstModel = manualModels.find(
+      (option) => getModelProviderInfo(option.id).providerId !== null,
+    );
+    const secondModel = manualModels.find(
+      (option) =>
+        option.id !== firstModel?.id &&
+        getModelProviderInfo(option.id).providerId ===
+          getModelProviderInfo(firstModel?.id ?? '').providerId,
+    );
+    expect(firstModel).toBeDefined();
+    expect(secondModel).toBeDefined();
+
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project', model: firstModel!.id },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(1));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const second = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Now make the change', model: secondModel!.id },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    expect(harness.runtime.startThread).toHaveBeenCalledTimes(1);
+    expect(harness.runtime.startTurn).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        threadId: 'thread-1',
+        model: secondModel!.id,
+      }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await second;
+  });
+
+  it('starts a fresh runtime thread when catalog providers change', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'max');
+    const manualModels = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto');
+    const firstModel = manualModels.find(
+      (option) => getModelProviderInfo(option.id).providerId !== null,
+    );
+    const secondModel = manualModels.find(
+      (option) =>
+        getModelProviderInfo(option.id).providerId !== null &&
+        getModelProviderInfo(option.id).providerId !==
+          getModelProviderInfo(firstModel?.id ?? '').providerId,
+    );
+    expect(firstModel).toBeDefined();
+    expect(secondModel).toBeDefined();
+    harness.runtime.startThread
+      .mockResolvedValueOnce({ id: 'thread-1' })
+      .mockResolvedValueOnce({ id: 'thread-2' });
+
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project', model: firstModel!.id },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(1));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const second = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Continue with another provider', model: secondModel!.id },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+
+    expect(harness.runtime.startThread).toHaveBeenCalledTimes(2);
+    expect(harness.runtime.startTurn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ threadId: 'thread-2', model: secondModel!.id }),
+    );
+    expect(harness.posted).toContainEqual({
+      type: 'sessionNotice',
+      payload: {
+        message:
+          'Provider boundary changed. AGI started a new developer session; earlier transcript context was not forwarded.',
+      },
+    });
+
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-2',
+      turnId: 'turn-2',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await second;
+  });
+
+  it('marks tier-locked catalog rows disabled in the inline picker', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    const lockedModel = buildGroupedQuickPickItems('local').find(
+      (item) => item.modelId !== undefined && item.disabled === true,
+    );
+    expect(lockedModel).toBeDefined();
+
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+
+    expect(harness.posted).toContainEqual({
+      type: 'modelPickerData',
+      payload: expect.objectContaining({
+        groups: expect.arrayContaining([
+          expect.objectContaining({
+            models: expect.arrayContaining([
+              expect.objectContaining({ id: lockedModel!.modelId, disabled: true }),
+            ]),
+          }),
+        ]),
+      }),
+    });
+  });
+
+  it('rejects a forged selection of a tier-locked catalog model', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    const lockedModel = buildGroupedQuickPickItems('local').find(
+      (item) => item.modelId !== undefined && item.disabled === true,
+    );
+    expect(lockedModel).toBeDefined();
+
+    await harness.manager.handleMessage({
+      type: 'selectModel',
+      payload: { modelId: lockedModel!.modelId! },
+    });
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: {
+        message: 'This model is not available for your current plan or provider setup.',
+      },
+    });
+    expect(harness.posted).not.toContainEqual({
+      type: 'model',
+      payload: { model: lockedModel!.modelId! },
+    });
+  });
+
+  it('rejects a forged send with a tier-locked catalog model', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    const lockedModel = buildGroupedQuickPickItems('local').find(
+      (item) => item.modelId !== undefined && item.disabled === true,
+    );
+    expect(lockedModel).toBeDefined();
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Bypass the picker', model: lockedModel!.modelId! },
+    });
+
+    expect(harness.runtime.startThread).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: {
+        message: 'This model is not available for your current plan or provider setup.',
+      },
+    });
   });
 
   it('forwards dropped image attachments as image turn input', async () => {

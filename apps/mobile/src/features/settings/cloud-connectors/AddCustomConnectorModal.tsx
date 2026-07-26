@@ -7,11 +7,18 @@
  * works today. Client-side we only do cheap pre-checks; the server is
  * authoritative and its error message is surfaced verbatim.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useLayoutEffect, useRef } from 'react';
 import { Modal, View, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { addCustomConnector, type CustomConnectorResult } from '@/services/connectors';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import {
+  captureAccountScopedUiState,
+  isAccountScopedUiStateCurrent,
+  type AccountScopedUiState,
+} from '@/src/features/auth/services/accountScopedUiState';
 
 export interface AddCustomConnectorModalProps {
   visible: boolean;
@@ -30,11 +37,15 @@ export function AddCustomConnectorModal({
   onAdded,
 }: AddCustomConnectorModalProps) {
   const colors = useThemeColors();
+  const appMode = useChatAppModeStore((state) => state.appMode);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formScopeRef = useRef<AccountScopedUiState | null>(null);
+  const wasVisibleRef = useRef(false);
 
   const reset = useCallback(() => {
     setName('');
@@ -44,8 +55,40 @@ export function AddCustomConnectorModal({
     setSubmitting(false);
   }, []);
 
+  const isFormScopeCurrent = useCallback((scope: AccountScopedUiState | null) => {
+    return (
+      scope?.scope === 'cloud' &&
+      isAccountScopedUiStateCurrent(scope, useChatAppModeStore.getState().appMode)
+    );
+  }, []);
+
+  // The auth token is a secret. Clear every field before paint when the modal
+  // closes or its captured Cloud owner becomes stale, even if the parent keeps
+  // this mounted and later opens it for another account.
+  useLayoutEffect(() => {
+    const opened = visible && !wasVisibleRef.current;
+    wasVisibleRef.current = visible;
+
+    if (opened) {
+      reset();
+      formScopeRef.current = appMode === 'cloud' ? captureAccountScopedUiState('cloud') : null;
+    }
+
+    if (!visible) {
+      formScopeRef.current = null;
+      reset();
+      return;
+    }
+
+    if (isFormScopeCurrent(formScopeRef.current)) return;
+    formScopeRef.current = null;
+    reset();
+    onClose();
+  }, [appMode, clerkUserId, isFormScopeCurrent, onClose, reset, visible]);
+
   const handleClose = useCallback(() => {
     if (submitting) return;
+    formScopeRef.current = null;
     reset();
     onClose();
   }, [submitting, reset, onClose]);
@@ -54,18 +97,28 @@ export function AddCustomConnectorModal({
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit) return;
+    const requestScope = formScopeRef.current;
+    if (!isFormScopeCurrent(requestScope)) {
+      formScopeRef.current = null;
+      reset();
+      onClose();
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const connector = await addCustomConnector({ name, url, authToken });
+      if (!isFormScopeCurrent(requestScope)) return;
+      formScopeRef.current = null;
       reset();
       onAdded(connector);
       onClose();
     } catch (err) {
+      if (!isFormScopeCurrent(requestScope)) return;
       setError(err instanceof Error ? err.message : 'Could not add this connector.');
       setSubmitting(false);
     }
-  }, [canSubmit, name, url, authToken, reset, onAdded, onClose]);
+  }, [authToken, canSubmit, isFormScopeCurrent, name, onAdded, onClose, reset, url]);
 
   const inputStyle = {
     borderRadius: 10,

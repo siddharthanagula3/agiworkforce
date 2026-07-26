@@ -5,7 +5,7 @@
  * Cloud-only — shown when FEATURES.auth is true and user is signed in.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import { Alert, Clipboard, Image, View } from 'react-native';
 import { Copy, Check, LogOut, Smartphone, Trash2, UserRound } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
@@ -19,6 +19,11 @@ import {
 } from '@/src/features/settings/common';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();
@@ -36,6 +41,26 @@ export default function CloudAccountScreen() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  useLayoutEffect(() => {
+    // Expo Router can retain this screen instance across a direct Clerk A→B
+    // switch. Clear transient account-A UI before account B paints.
+    setCopied(false);
+    setLoggingOut(false);
+    setDeleting(false);
+  }, [userId]);
+
+  const captureVisibleAccount = useCallback((): CloudAccountEpoch | null => {
+    const account = captureCloudAccountEpoch();
+    if (!account || !userId || account.ownerId !== userId) {
+      Alert.alert(
+        'Account changed',
+        'This action belongs to a different AGI Cloud account. Open it again to continue.',
+      );
+      return null;
+    }
+    return account;
+  }, [userId]);
+
   const handleCopyId = useCallback(() => {
     if (!userId) return;
     Clipboard.setString(userId);
@@ -44,12 +69,21 @@ export default function CloudAccountScreen() {
   }, [userId]);
 
   const handleSignOut = useCallback(() => {
+    const account = captureVisibleAccount();
+    if (!account) return;
     Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
         style: 'destructive',
         onPress: () => {
+          if (!isCloudAccountEpochCurrent(account)) {
+            Alert.alert(
+              'Account changed',
+              'This log-out confirmation is no longer valid. Open it again for the current account.',
+            );
+            return;
+          }
           setLoggingOut(true);
           signOut()
             .catch(() => {
@@ -59,9 +93,11 @@ export default function CloudAccountScreen() {
         },
       },
     ]);
-  }, [signOut]);
+  }, [captureVisibleAccount, signOut]);
 
   const handleDeleteAccount = useCallback(() => {
+    const account = captureVisibleAccount();
+    if (!account) return;
     Alert.alert(
       'Delete Account',
       'This permanently deletes your AGI Cloud account and all cloud data (chats, projects, ' +
@@ -75,12 +111,26 @@ export default function CloudAccountScreen() {
           text: 'Delete Account',
           style: 'destructive',
           onPress: () => {
+            if (!isCloudAccountEpochCurrent(account)) {
+              Alert.alert(
+                'Account changed',
+                'This deletion confirmation is no longer valid. Open it again for the current account.',
+              );
+              return;
+            }
             setDeleting(true);
             // Server derives the user from the Clerk Bearer token; no body needed.
             // CSRF is bypassed for Bearer-authenticated requests server-side.
             api
               .delete<{ message?: string }>('/api/user/delete-account')
               .then(async (res) => {
+                if (!isCloudAccountEpochCurrent(account)) {
+                  Alert.alert(
+                    'Account changed',
+                    'The active account changed before deletion completed. No action was applied to the new account.',
+                  );
+                  return;
+                }
                 // Sign out to clear cloud-scoped local state on this device.
                 // (Local Mode on-device data is intentionally preserved — it is
                 // not tied to the deleted cloud account.)
@@ -92,6 +142,13 @@ export default function CloudAccountScreen() {
                 );
               })
               .catch((err: unknown) => {
+                if (!isCloudAccountEpochCurrent(account)) {
+                  Alert.alert(
+                    'Account changed',
+                    'The deletion request did not apply to the current account.',
+                  );
+                  return;
+                }
                 const is401 = err instanceof Error && err.message.includes('401');
                 Alert.alert(
                   'Could not delete account',
@@ -106,7 +163,7 @@ export default function CloudAccountScreen() {
         },
       ],
     );
-  }, [signOut]);
+  }, [captureVisibleAccount, signOut]);
 
   return (
     <SettingsScreenShell title="Account">

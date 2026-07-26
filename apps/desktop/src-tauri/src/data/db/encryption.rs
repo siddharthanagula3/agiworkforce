@@ -16,7 +16,50 @@
 //! let conn = encryption::open_encrypted_connection("/path/to/db", &key)?;
 //! ```
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
+use std::path::Path;
+
+/// The formats that can be proven without writing to the database file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatabaseFormat {
+    /// The path does not exist yet, or is a zero-byte SQLite placeholder.
+    New,
+    /// The database schema is readable with the supplied SQLCipher key.
+    Keyed,
+    /// The schema is readable without a key and is therefore legacy plaintext.
+    Plaintext,
+}
+
+/// Source-backed failures from database format inspection/opening.
+///
+/// SQLCipher intentionally reports the same error for an incorrect key and
+/// invalid ciphertext. Once both a keyed read and a plaintext read fail, those
+/// cases cannot be distinguished safely. The error therefore keeps both source
+/// messages and never guesses that migration is appropriate.
+#[derive(Debug, thiserror::Error)]
+pub enum DatabaseOpenError {
+    #[error("failed to inspect the database file: {source}")]
+    Inspection {
+        #[source]
+        source: std::io::Error,
+    },
+    #[error(
+        "encrypted database key did not match or the file is corrupt; no data was changed \
+         (keyed read: {keyed_read}; plaintext read: {plaintext_read})"
+    )]
+    EncryptedOrCorrupt {
+        keyed_read: String,
+        plaintext_read: String,
+    },
+    #[error("failed to open a new encrypted database: {0}")]
+    NewDatabase(String),
+    #[error("failed to reopen the proven encrypted database: {0}")]
+    KeyedDatabase(String),
+    #[error("proven plaintext database migration failed without replacing the source: {0}")]
+    PlaintextMigration(String),
+    #[error("plaintext migration succeeded but the encrypted database could not be reopened: {0}")]
+    MigratedDatabase(String),
+}
 
 /// Apply SQLCipher encryption PRAGMA to an opened connection.
 ///
@@ -91,8 +134,58 @@ pub fn open_encrypted_connection(path: &str, key: &[u8]) -> Result<Connection, S
     Ok(conn)
 }
 
-/// Open an encrypted database, migrating a legacy plaintext file only when the
-/// keyed open proves that migration is actually necessary.
+fn open_read_only(path: &Path) -> Result<Connection, rusqlite::Error> {
+    Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+}
+
+/// Inspect an existing database without creating files, journals, or migration
+/// sidecars.
+///
+/// The keyed and plaintext checks both use read-only SQLite handles. A failed
+/// keyed check followed by a successful plaintext check is the only evidence
+/// that authorizes automatic plaintext migration.
+pub fn inspect_database_format(
+    path: impl AsRef<Path>,
+    key: &[u8],
+) -> Result<DatabaseFormat, DatabaseOpenError> {
+    let path = path.as_ref();
+    if !path.exists() {
+        return Ok(DatabaseFormat::New);
+    }
+
+    let metadata =
+        std::fs::metadata(path).map_err(|source| DatabaseOpenError::Inspection { source })?;
+    if metadata.len() == 0 {
+        return Ok(DatabaseFormat::New);
+    }
+
+    let keyed_read = match open_read_only(path) {
+        Ok(conn) => match apply_encryption_key(&conn, key) {
+            Ok(()) => return Ok(DatabaseFormat::Keyed),
+            Err(error) => error,
+        },
+        Err(error) => format!("failed to open read-only handle: {error}"),
+    };
+
+    let plaintext_read = match open_read_only(path) {
+        Ok(conn) => match conn.execute_batch("SELECT count(*) FROM sqlite_master;") {
+            Ok(()) => return Ok(DatabaseFormat::Plaintext),
+            Err(error) => error.to_string(),
+        },
+        Err(error) => format!("failed to open read-only handle: {error}"),
+    };
+
+    Err(DatabaseOpenError::EncryptedOrCorrupt {
+        keyed_read,
+        plaintext_read,
+    })
+}
+
+/// Open an encrypted database, migrating a legacy plaintext file only after a
+/// read-only plaintext schema probe proves that migration is appropriate.
 ///
 /// Older startup code called [`migrate_to_encrypted`] before every open. For an
 /// already-encrypted SQLCipher database that performs a deliberately failing
@@ -100,35 +193,27 @@ pub fn open_encrypted_connection(path: &str, key: &[u8]) -> Result<Connection, S
 /// connections, so repeating that probe made the Desktop window wait many
 /// seconds before its webview could render.
 ///
-/// The keyed open is both the normal production path and the cheapest reliable
-/// format check:
+/// Both probes are read-only, so evaluating a wrong key or a corrupt file never
+/// creates journals, migration sidecars, or replacement files:
 ///
-/// 1. encrypted/new database -> return immediately;
-/// 2. legacy plaintext database -> keyed verification fails, migrate once,
-///    then reopen with the key;
-/// 3. corrupt/wrong-key database -> migration and the final keyed open fail
-///    closed with both causes preserved.
-pub fn open_or_migrate_encrypted_connection(path: &str, key: &[u8]) -> Result<Connection, String> {
-    match open_encrypted_connection(path, key) {
-        Ok(conn) => Ok(conn),
-        Err(open_error) => {
-            if key.is_empty() || !std::path::Path::new(path).exists() {
-                return Err(open_error);
-            }
-
-            migrate_to_encrypted(path, key).map_err(|migration_error| {
-                format!(
-                    "Encrypted database open failed: {}. Legacy migration also failed: {}",
-                    open_error, migration_error
-                )
-            })?;
-
-            open_encrypted_connection(path, key).map_err(|retry_error| {
-                format!(
-                    "Database migration completed but keyed reopen failed: {}",
-                    retry_error
-                )
-            })
+/// 1. new database -> create it with the supplied key;
+/// 2. keyed database -> reopen it with the proven key;
+/// 3. legacy plaintext database -> migrate once, then reopen with the key;
+/// 4. corrupt/wrong-key database -> fail closed with both read errors.
+pub fn open_or_migrate_encrypted_connection(
+    path: &str,
+    key: &[u8],
+) -> Result<Connection, DatabaseOpenError> {
+    match inspect_database_format(path, key)? {
+        DatabaseFormat::New => {
+            open_encrypted_connection(path, key).map_err(DatabaseOpenError::NewDatabase)
+        }
+        DatabaseFormat::Keyed => {
+            open_encrypted_connection(path, key).map_err(DatabaseOpenError::KeyedDatabase)
+        }
+        DatabaseFormat::Plaintext => {
+            migrate_to_encrypted(path, key).map_err(DatabaseOpenError::PlaintextMigration)?;
+            open_encrypted_connection(path, key).map_err(DatabaseOpenError::MigratedDatabase)
         }
     }
 }
@@ -141,8 +226,9 @@ pub fn open_or_migrate_encrypted_connection(path: &str, key: &[u8]) -> Result<Co
 /// the original file, and then deletes the plaintext backup. If the backup
 /// cannot be deleted a warning is logged but the migration still succeeds.
 ///
-/// If the database is already encrypted (i.e., cannot be read without a key),
-/// this function returns `Ok(())` without making changes.
+/// Callers must prove the source is plaintext with [`inspect_database_format`]
+/// before invoking this function. Encrypted or corrupt files must never reach
+/// this mutation path.
 ///
 /// # Arguments
 /// * `db_path` - Filesystem path to the database to migrate
@@ -268,7 +354,7 @@ pub fn open_keyed_connection(path: impl AsRef<std::path::Path>) -> Result<Connec
 
     let key = derive_key(KeyPurpose::DatabaseEncryption);
 
-    open_or_migrate_encrypted_connection(&path_str, &key)
+    open_or_migrate_encrypted_connection(&path_str, &key).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
@@ -388,5 +474,144 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}.unencrypted.bak", path));
         let _ = std::fs::remove_file(format!("{}.encrypting", path));
+    }
+
+    #[test]
+    fn wrong_key_is_not_reported_as_a_completed_legacy_migration_and_preserves_bytes() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("encrypted.db");
+        let path = db_path.to_string_lossy().to_string();
+        let original_key = [0x31u8; 32];
+        let wrong_key = [0x72u8; 32];
+
+        {
+            let conn =
+                open_encrypted_connection(&path, &original_key).expect("create encrypted database");
+            conn.execute_batch(
+                "CREATE TABLE secret (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO secret (id, value) VALUES (1, 'preserve-me');",
+            )
+            .expect("seed encrypted database");
+        }
+
+        let before = std::fs::read(&db_path).expect("snapshot encrypted database");
+        let error = open_or_migrate_encrypted_connection(&path, &wrong_key)
+            .expect_err("a wrong key must fail closed")
+            .to_string();
+
+        assert!(
+            error.contains("encrypted database key did not match or the file is corrupt"),
+            "the error must preserve the honest, non-distinguishable classification: {error}"
+        );
+        assert!(
+            !error.contains("migration completed"),
+            "a wrong key must never be described as a completed migration: {error}"
+        );
+        assert_eq!(
+            std::fs::read(&db_path).expect("re-read encrypted database"),
+            before,
+            "a wrong-key probe must not mutate database bytes"
+        );
+        assert!(!db_path.with_extension("db.unencrypted.bak").exists());
+        assert!(!db_path.with_extension("db.encrypting").exists());
+    }
+
+    #[test]
+    fn corrupt_file_is_not_reported_as_a_completed_legacy_migration_and_preserves_bytes() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("corrupt.db");
+        let path = db_path.to_string_lossy().to_string();
+        let key = [0x55u8; 32];
+        let corrupt_bytes = b"not sqlite and not valid sqlcipher ciphertext";
+        std::fs::write(&db_path, corrupt_bytes).expect("seed corrupt file");
+
+        let error = open_or_migrate_encrypted_connection(&path, &key)
+            .expect_err("a corrupt database must fail closed")
+            .to_string();
+
+        assert!(
+            error.contains("encrypted database key did not match or the file is corrupt"),
+            "the error must avoid claiming corruption can be distinguished from a wrong key: {error}"
+        );
+        assert!(
+            !error.contains("migration completed"),
+            "corruption must never be described as a completed migration: {error}"
+        );
+        assert_eq!(
+            std::fs::read(&db_path).expect("re-read corrupt database"),
+            corrupt_bytes,
+            "a corrupt-file probe must not mutate database bytes"
+        );
+        assert!(!db_path.with_extension("db.unencrypted.bak").exists());
+        assert!(!db_path.with_extension("db.encrypting").exists());
+    }
+
+    #[test]
+    fn proven_plaintext_is_the_only_existing_format_that_migrates() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("plaintext.db");
+        let path = db_path.to_string_lossy().to_string();
+        let key = [0x44u8; 32];
+
+        {
+            let conn = Connection::open(&db_path).expect("create plaintext database");
+            conn.execute_batch(
+                "CREATE TABLE legacy (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO legacy (id, value) VALUES (1, 'preserved');",
+            )
+            .expect("seed plaintext database");
+        }
+
+        let plaintext_before = std::fs::read(&db_path).expect("snapshot plaintext database");
+        let conn = open_or_migrate_encrypted_connection(&path, &key)
+            .expect("proven plaintext database should migrate");
+        let value: String = conn
+            .query_row("SELECT value FROM legacy WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .expect("read migrated row");
+        assert_eq!(value, "preserved");
+        drop(conn);
+
+        let encrypted_after = std::fs::read(&db_path).expect("read migrated database");
+        assert_ne!(
+            encrypted_after, plaintext_before,
+            "a successful plaintext migration must replace the plaintext bytes"
+        );
+        assert!(
+            !encrypted_after.starts_with(b"SQLite format 3\0"),
+            "the migrated database must not retain a plaintext SQLite header"
+        );
+        assert!(!db_path.with_extension("db.unencrypted.bak").exists());
+        assert!(!db_path.with_extension("db.encrypting").exists());
+    }
+
+    #[test]
+    fn plaintext_format_probe_is_read_only_and_preserves_every_byte() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("plaintext-probe.db");
+        {
+            let conn = Connection::open(&db_path).expect("create plaintext database");
+            conn.execute_batch(
+                "CREATE TABLE legacy (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+                 INSERT INTO legacy (id, value) VALUES (1, 'unchanged');",
+            )
+            .expect("seed plaintext database");
+        }
+        let before = std::fs::read(&db_path).expect("snapshot plaintext database");
+
+        assert_eq!(
+            inspect_database_format(&db_path, &[0x19u8; 32]).expect("inspect plaintext"),
+            DatabaseFormat::Plaintext
+        );
+        assert_eq!(
+            std::fs::read(&db_path).expect("re-read plaintext database"),
+            before
+        );
+        assert!(!db_path.with_extension("db-journal").exists());
+        assert!(!db_path.with_extension("db-wal").exists());
+        assert!(!db_path.with_extension("db-shm").exists());
+        assert!(!db_path.with_extension("db.unencrypted.bak").exists());
+        assert!(!db_path.with_extension("db.encrypting").exists());
     }
 }

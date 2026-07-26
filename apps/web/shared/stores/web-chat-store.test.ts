@@ -1,5 +1,70 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useChatStore, selectIsActiveConversationStreaming } from './web-chat-store';
+import {
+  useChatStore,
+  selectConversationMessages,
+  selectIsActiveConversationStreaming,
+  selectIsConversationLoading,
+  selectIsConversationStreaming,
+} from './web-chat-store';
+
+describe('chatStore — ambient managed search', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  it('enables Web search for every new managed conversation by default', () => {
+    expect(useChatStore.getState().getComposerToggles('conv-new').webSearchEnabled).toBe(true);
+  });
+
+  it('drops the legacy persisted opt-out during the v3 migration', async () => {
+    const migrate = useChatStore.persist.getOptions().migrate;
+    expect(migrate).toBeDefined();
+
+    const migrated = await migrate!(
+      { webSearchByDefault: false, sidebarCollapsed: true } as never,
+      2,
+    );
+
+    expect(migrated).toMatchObject({ sidebarCollapsed: true });
+    expect(migrated).not.toHaveProperty('webSearchByDefault');
+  });
+});
+
+describe('chatStore — per-conversation transcript scope', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  it("keeps a background conversation's message updates out of the active transcript", () => {
+    const { setActiveConversationWithMessages, updateMessage, setActiveConversation } =
+      useChatStore.getState();
+    const createdAt = '2026-07-25T00:00:00.000Z';
+
+    setActiveConversationWithMessages('conv-a', [
+      { id: 'assistant-1', role: 'assistant', content: 'A partial', createdAt },
+    ]);
+    setActiveConversationWithMessages('conv-b', [
+      { id: 'assistant-1', role: 'assistant', content: 'B answer', createdAt },
+    ]);
+
+    // Conversation A finishes after the user has navigated to B. The ids are
+    // deliberately identical so only the explicit conversation scope can
+    // prevent the background update from touching B's visible message.
+    updateMessage('assistant-1', { content: 'A complete' }, 'conv-a');
+
+    const stateWhileBIsActive = useChatStore.getState();
+    expect(stateWhileBIsActive.messages).toEqual([
+      { id: 'assistant-1', role: 'assistant', content: 'B answer', createdAt },
+    ]);
+    expect(selectConversationMessages('conv-a')(stateWhileBIsActive)[0]?.content).toBe(
+      'A complete',
+    );
+    expect(selectConversationMessages('conv-b')(stateWhileBIsActive)[0]?.content).toBe('B answer');
+
+    setActiveConversation('conv-a');
+    expect(useChatStore.getState().messages[0]?.content).toBe('A complete');
+  });
+});
 
 /**
  * Regression coverage for the cross-conversation streaming-flag leak
@@ -31,6 +96,19 @@ describe('chatStore — per-conversation streaming scope', () => {
     expect(useChatStore.getState().isLoading).toBe(false);
     // A's stream is still genuinely running in the background.
     expect(useChatStore.getState().streamingConversationIds).toEqual(['conv-a']);
+  });
+
+  it("keys route UI to the URL conversation before the store's active id catches up", () => {
+    const { startStreaming, setLoading } = useChatStore.getState();
+
+    useChatStore.setState({ activeConversationId: 'conv-a' });
+    startStreaming('msg-a', 'conv-a');
+    setLoading(true, 'conv-a');
+
+    const stateDuringRouteTransition = useChatStore.getState();
+    expect(selectIsActiveConversationStreaming(stateDuringRouteTransition)).toBe(true);
+    expect(selectIsConversationStreaming('conv-b')(stateDuringRouteTransition)).toBe(false);
+    expect(selectIsConversationLoading('conv-b')(stateDuringRouteTransition)).toBe(false);
   });
 
   it("an orphaned background stream's completion does not wipe a genuinely-active new stream's flag", () => {

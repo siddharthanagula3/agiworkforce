@@ -15,6 +15,16 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 
+const mockPush = jest.fn();
+const mockAuthState = {
+  isClerkLoaded: true,
+  isClerkSignedIn: true,
+};
+
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
 jest.mock('@gorhom/bottom-sheet', () => {
   const ReactLib = require('react');
   const mockBottomSheet = ReactLib.forwardRef(
@@ -69,6 +79,20 @@ jest.mock('@/src/features/settings/common', () => {
         <RN.Text>Chat is set to Local Mode</RN.Text>
       </RN.Pressable>
     ),
+    CloudAccountRequired: ({
+      isLoading,
+      onSignIn,
+    }: {
+      isLoading: boolean;
+      onSignIn: () => void;
+    }) =>
+      isLoading ? (
+        <RN.Text>Checking AGI Cloud account…</RN.Text>
+      ) : (
+        <RN.Pressable accessibilityLabel="Sign in to AGI Cloud" onPress={onSignIn}>
+          <RN.Text>Sign in to AGI Cloud</RN.Text>
+        </RN.Pressable>
+      ),
   };
 });
 
@@ -90,18 +114,50 @@ jest.mock('@/src/features/billing/iapStore', () => ({
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { iap: false, billing: false } }));
 
 const mockRefreshTier = jest.fn().mockResolvedValue(undefined);
+const mockTierState = {
+  tier: 'free',
+  billingTier: 'free',
+  billingStatus: 'none',
+  refreshTier: mockRefreshTier,
+};
 jest.mock('@/src/features/billing/store', () => ({
-  useTierStore: (selector: (s: { tier: string; refreshTier: () => Promise<void> }) => unknown) =>
-    selector({ tier: 'free', refreshTier: mockRefreshTier }),
+  useTierStore: (selector: (s: typeof mockTierState) => unknown) => selector(mockTierState),
+}));
+
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (s: typeof mockAuthState) => unknown) => selector(mockAuthState),
 }));
 
 import CloudBillingScreen from '../src/features/settings/cloud-billing/index';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { openExternalUrl } from '../lib/safeOpenURL';
 
 describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRefreshTier.mockResolvedValue(undefined);
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'free',
+      billingStatus: 'none',
+    });
+    Object.assign(mockAuthState, {
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+    });
+  });
+
+  it('does not expose or fetch billing state while signed out', () => {
+    Object.assign(mockAuthState, { isClerkSignedIn: false });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByLabelText, queryByText } = render(<CloudBillingScreen />);
+
+    expect(getByLabelText('Sign in to AGI Cloud')).toBeTruthy();
+    expect(queryByText('Free plan')).toBeNull();
+    expect(mockRefreshTier).not.toHaveBeenCalled();
+    fireEvent.press(getByLabelText('Sign in to AGI Cloud'));
+    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
   });
 
   it('shows the Local Mode banner and does not refresh the tier while chat is set to Local', async () => {
@@ -156,5 +212,75 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     // Free plan feature list is a reliable proxy that the plan card rendered
     // its full content immediately, not a loading placeholder.
     expect(queryByText('Chat on web, iOS, Android, and desktop')).toBeTruthy();
+  });
+
+  it('shows a canceled recorded plan without granting paid feature status', () => {
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'pro',
+      billingStatus: 'canceled',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByText } = render(<CloudBillingScreen />);
+
+    expect(getByText('Pro plan')).toBeTruthy();
+    expect(getByText(/Canceled/i)).toBeTruthy();
+  });
+
+  it('does not advertise a billing-management action while mobile billing is disabled', () => {
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { queryByText } = render(<CloudBillingScreen />);
+
+    expect(queryByText('Manage billing')).toBeNull();
+  });
+
+  it('does not offer Team or Enterprise customers a fake downgrade to Basic', () => {
+    Object.assign(mockTierState, {
+      tier: 'team',
+      billingTier: 'team',
+      billingStatus: 'active',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByLabelText, queryByText } = render(<CloudBillingScreen />);
+
+    expect(queryByText('Adjust plan')).toBeNull();
+    expect(queryByText('Upgrade plan')).toBeNull();
+    expect(getByLabelText('Workspace administration')).toBeTruthy();
+  });
+
+  it('does not advertise workspace administration for an inactive Team subscription', () => {
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'team',
+      billingStatus: 'canceled',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByLabelText, queryByText } = render(<CloudBillingScreen />);
+
+    expect(queryByText('Workspace administration')).toBeNull();
+    expect(getByLabelText('Choose plan')).toBeTruthy();
+  });
+
+  it('hands Team and Enterprise admins to the authenticated web control plane', () => {
+    Object.assign(mockTierState, {
+      tier: 'enterprise',
+      billingTier: 'enterprise',
+      billingStatus: 'active',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByLabelText } = render(<CloudBillingScreen />);
+    fireEvent.press(getByLabelText('Workspace administration'));
+
+    expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/team');
   });
 });

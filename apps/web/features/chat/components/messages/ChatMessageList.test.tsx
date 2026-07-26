@@ -228,6 +228,26 @@ describe('ChatMessageList rendering', () => {
     expect(screen.getByText('Hi there')).toBeInTheDocument();
   });
 
+  it('aligns follow-up suggestions to the composer content column', () => {
+    const messagesWithSuggestions = [
+      messages[0]!,
+      makeMessage({
+        id: 'm2',
+        role: 'assistant',
+        content: 'Here is a concrete plan with the next steps you can follow.',
+      }),
+    ];
+
+    render(<ChatMessageList messages={messagesWithSuggestions} onSendMessage={vi.fn()} />);
+
+    expect(screen.getByTestId('follow-up-suggestions-shell')).toHaveClass(
+      'mx-auto',
+      'w-full',
+      'max-w-3xl',
+      'px-4',
+    );
+  });
+
   it('forwards persisted attachments to the transcript bubble after reload', () => {
     const withAttachment = makeMessage({
       id: 'm-attachment',

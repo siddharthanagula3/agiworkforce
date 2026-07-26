@@ -192,14 +192,14 @@ mod tests {
     }
 
     #[test]
-    fn test_anthropic_opus_4_8_cost() {
+    fn test_anthropic_opus_5_cost() {
         let calc = CostCalculator::new();
-        // claude-opus-4.8: $5.00/M input, $25.00/M output
+        // claude-opus-5: $5.00/M input, $25.00/M output
         // 1_000_000 + 1_000_000 = $30.00
-        let cost = calc.calculate(Provider::Anthropic, "claude-opus-4.8", 1_000_000, 1_000_000);
+        let cost = calc.calculate(Provider::Anthropic, "claude-opus-5", 1_000_000, 1_000_000);
         assert!(
             (cost - 30.0).abs() < 1e-9,
-            "Expected $30.00 for opus-4.8 1M+1M tokens, got ${}",
+            "Expected $30.00 for Opus 5 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -304,10 +304,10 @@ mod tests {
     fn test_more_expensive_model_costs_more() {
         let calc = CostCalculator::new();
         let cheap = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 100_000, 100_000);
-        let expensive = calc.calculate(Provider::Anthropic, "claude-opus-4.8", 100_000, 100_000);
+        let expensive = calc.calculate(Provider::Anthropic, "claude-opus-5", 100_000, 100_000);
         assert!(
             expensive > cheap,
-            "Opus-4.8 (${}) must cost more than deepseek-v4-flash (${}) for equal tokens",
+            "Opus-5 (${}) must cost more than deepseek-v4-flash (${}) for equal tokens",
             expensive,
             cheap
         );

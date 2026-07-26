@@ -22,6 +22,7 @@ import {
   getAllowedAutoModesForTier,
   getModelMetadata,
   isModelAllowedForTier,
+  normalizeModelId,
   normalizeSubscriptionTier,
 } from '../constants/llm';
 
@@ -413,7 +414,14 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v23: Added terminalSandbox execution preferences
 // v24: Added lmstudioUrl/llamacppUrl to llmConfig (LM Studio/llama.cpp local runtimes)
 // v25: Added vllmUrl to llmConfig (vLLM local runtime)
-const SETTINGS_STORE_VERSION = 25;
+const SETTINGS_STORE_VERSION = 26;
+
+function normalizeKnownCatalogModelId(modelId: string | undefined): string | null {
+  if (!modelId) return null;
+  const canonical = normalizeModelId(modelId) ?? modelId;
+  if (canonical === 'auto' || canonical.startsWith('auto-')) return canonical;
+  return getModelMetadata(canonical) ? canonical : null;
+}
 
 export function isTaskRoutingModelAllowedForTier(
   category: TaskCategory,
@@ -1970,6 +1978,30 @@ export const useSettingsStore = create<SettingsState>()(
             const llmConfig = state.llmConfig as Partial<LLMConfig>;
             if (llmConfig.vllmUrl === undefined) {
               llmConfig.vllmUrl = 'http://localhost:8000/v1';
+            }
+          }
+
+          // Migration from v25 to v26: purge selections that refer to models
+          // removed by latest-family-only catalog updates.
+          if (version < 26 && state.llmConfig) {
+            const llmConfig = state.llmConfig as Partial<LLMConfig>;
+            if (llmConfig.defaultModels) {
+              llmConfig.defaultModels.managed_cloud =
+                normalizeKnownCatalogModelId(llmConfig.defaultModels.managed_cloud) ?? 'auto';
+            }
+            llmConfig.favoriteModels = (llmConfig.favoriteModels ?? [])
+              .map((modelId) => normalizeKnownCatalogModelId(modelId))
+              .filter((modelId): modelId is string => modelId !== null);
+            if (llmConfig.taskRouting) {
+              for (const [category, route] of Object.entries(llmConfig.taskRouting)) {
+                const model = normalizeKnownCatalogModelId(route.model);
+                llmConfig.taskRouting[category as TaskCategory] = model
+                  ? {
+                      provider: getModelMetadata(model)?.provider ?? route.provider,
+                      model,
+                    }
+                  : { provider: 'managed_cloud', model: 'auto' };
+              }
             }
           }
 

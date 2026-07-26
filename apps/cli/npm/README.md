@@ -23,15 +23,30 @@ from source.
 
 The unique slice: **multi-provider + BYOK + local LLM**. No competitor offers all three in their CLI.
 
-## Pricing
+## Managed Cloud plans
 
-| Tier           | Price         | What                                                           |
-| -------------- | ------------- | -------------------------------------------------------------- |
-| **Local**      | Free forever  | Self-hosted, no cloud (Ollama / LMStudio)                      |
-| **BYOK**       | Free forever  | Bring your own API keys                                        |
-| **Hobby**      | Coming soon   | Managed cloud, limited credits ($5/mo target)                  |
-| **Pro / Max**  | Waitlist      | Full models (post-security-audit)                              |
-| **Enterprise** | Contact sales | SSO, SCIM, custom retention — https://agiworkforce.com/contact |
+Managed Cloud is available to signed-in users and remains a separate trust
+boundary from Local and BYOK. CLI access is a managed developer-surface
+benefit on Pro, Max 5x, Max 15x, Team, and Enterprise. Free and Basic accounts
+can keep using Local/BYOK, but the CLI does not present managed models as
+unlocked.
+
+| Plan           | Public price                     | CLI Managed Cloud |
+| -------------- | -------------------------------- | ----------------- |
+| **Free**       | Free                             | No                |
+| **Basic**      | $7/month                         | No                |
+| **Pro**        | $20/month or $200/year           | Yes               |
+| **Max 5x**     | $100/month                       | Yes               |
+| **Max 15x**    | $200/month                       | Yes               |
+| **Team**       | $25/seat/month or $240/seat/year | Yes               |
+| **Enterprise** | Contract                         | Contract          |
+
+Account, billing, Team administration, connector setup, and Enterprise sales
+remain in the Web control plane at
+[agiworkforce.com](https://agiworkforce.com). The CLI inherits the same
+server-enforced identity, subscription status, model roster, and usage limits.
+Do not infer SSO or SCIM availability from the Enterprise label; those
+integrations are not shipped.
 
 ## Installation
 
@@ -81,7 +96,7 @@ agi exec "what files are in this directory?"
 agi
 
 # 5. Multi-provider with fallback chain
-agi exec -m "claude-opus-4.8,gpt-5.5,llama3.1:8b" "explain this code"
+agi exec -m "claude-opus-5,gpt-5.6-terra,llama3.1:8b" "explain this code"
 ```
 
 ## 26 subcommands
@@ -109,7 +124,7 @@ ollama pull llama3.1:8b
 
 # Use it via AGI Workforce
 agi -m llama3.1:8b exec "hello"
-agi -m "claude-sonnet-4-6,llama3.1:8b" exec "..."  # cloud first, fallback local
+agi -m "claude-sonnet-5,llama3.1:8b" exec "..."  # cloud first, fallback local
 ```
 
 ## MCP support

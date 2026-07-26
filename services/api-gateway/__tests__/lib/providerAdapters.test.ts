@@ -11,7 +11,11 @@ vi.mock('@agiworkforce/providers-factory', () => ({
     mocks.createProviderAdapter(providerId, config),
 }));
 
-import { buildProviderAdapter } from '../../src/lib/providerAdapters';
+import {
+  buildProviderAdapter,
+  isSupportedProviderId,
+  SUPPORTED_PROVIDER_IDS,
+} from '../../src/lib/providerAdapters';
 
 const MANAGED_ENV_KEYS = [
   'ANTHROPIC_API_KEY',
@@ -28,6 +32,7 @@ const MANAGED_ENV_KEYS = [
   'MOONSHOT_BASE_URL',
   'OLLAMA_API_KEY',
   'OLLAMA_BASE_URL',
+  'MINIMAX_API_KEY',
 ] as const;
 
 describe('API Gateway provider construction boundary', () => {
@@ -99,6 +104,23 @@ describe('API Gateway provider construction boundary', () => {
 
     expect(mocks.createProviderAdapter).toHaveBeenCalledWith('qwen', {
       apiKey: 'gateway-dashscope-key',
+    });
+  });
+
+  it('matches the current leaf-adapter roster after Groq and Mistral removal', () => {
+    expect(SUPPORTED_PROVIDER_IDS).toContain('minimax');
+    expect(isSupportedProviderId('minimax')).toBe(true);
+    expect(isSupportedProviderId('groq')).toBe(false);
+    expect(isSupportedProviderId('mistral')).toBe(false);
+  });
+
+  it('constructs the current MiniMax adapter from its documented managed key', () => {
+    vi.stubEnv('MINIMAX_API_KEY', 'gateway-minimax-key');
+
+    buildProviderAdapter('minimax');
+
+    expect(mocks.createProviderAdapter).toHaveBeenCalledWith('minimax', {
+      apiKey: 'gateway-minimax-key',
     });
   });
 

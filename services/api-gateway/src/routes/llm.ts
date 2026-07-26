@@ -20,9 +20,11 @@ import { z } from 'zod';
 import {
   canAccessModelForSubscriptionTier,
   canUseBillingPlanCapability,
+  effectivePlanTier,
   getAllowedModelsForTier,
   getMinimumRequiredTier,
   getModelMetadataById,
+  isEntitledSubscriptionStatus,
   type Provider as CatalogProvider,
   type ProviderAdapter,
   type StreamChunk,
@@ -152,8 +154,7 @@ const PROXIED_PROVIDERS: ReadonlySet<CatalogProvider> = new Set<CatalogProvider>
   'deepseek',
   'xai',
   'perplexity',
-  'groq',
-  'mistral',
+  'minimax',
   'moonshot',
   'qwen',
   'zhipu',
@@ -167,8 +168,8 @@ const PROXIED_PROVIDERS: ReadonlySet<CatalogProvider> = new Set<CatalogProvider>
  * `getModelMetadataById()` so a model rename or provider re-attribution
  * lands here without code edits. Fails closed with a 400 if (a) the
  * model is not in the catalog at all or (b) the model belongs to a
- * provider this gateway cannot proxy yet (BYOK-only providers like xAI,
- * DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, LM Studio, Ollama).
+ * provider without a registered managed-gateway adapter (for example,
+ * local-device-only LM Studio).
  *
  * Exported for unit tests; not part of the route API.
  */
@@ -180,7 +181,7 @@ export function resolveProvider(model: string): Provider {
 
   if (!PROXIED_PROVIDERS.has(metadata.provider)) {
     throw new AppError(
-      `Model "${model}" belongs to provider "${metadata.provider}" which the api-gateway does not proxy. Use the desktop BYOK path for this provider.`,
+      `Model "${model}" belongs to provider "${metadata.provider}" which the api-gateway does not proxy.`,
       400,
     );
   }
@@ -209,7 +210,7 @@ export async function enforcePlanTier(
   const userDb = getUserScopedClient({ userId, token });
   const { data: subscription, error } = await userDb
     .from('subscriptions')
-    .select('plan_tier')
+    .select('plan_tier, status')
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -218,7 +219,29 @@ export async function enforcePlanTier(
     throw new AppError('Service temporarily unavailable', 503);
   }
 
-  const tier = subscription?.plan_tier ?? 'free';
+  const rawTier = subscription?.plan_tier ?? 'free';
+  if (
+    subscription &&
+    rawTier.toLowerCase() !== 'free' &&
+    !isEntitledSubscriptionStatus(subscription.status)
+  ) {
+    logger.warn(
+      { userId, tier: rawTier, status: subscription.status, surface },
+      'LLM proxy: paid subscription is inactive, failing closed',
+    );
+    throw new AppError(
+      `Subscription is ${subscription.status ?? 'inactive'}. Please update your payment method.`,
+      403,
+    );
+  }
+
+  // Preserve the existing fail-closed behavior for a corrupt empty-string
+  // database tier. A missing row/null tier is the legitimate Free case, but
+  // an explicitly stored empty tier must not silently gain Free admission.
+  const tier =
+    subscription?.plan_tier === ''
+      ? subscription.plan_tier
+      : effectivePlanTier(rawTier, subscription?.status);
   // Bind the required capability to the trusted surface class. Developer
   // surfaces (CLI/IDE device tokens) require Pro-or-higher developer_surfaces;
   // app surfaces require managed_chat. This closes the header-forgeable

@@ -4,7 +4,7 @@ import { translateChatRequest } from '../translate';
 
 function baseReq(overrides: Partial<ChatRequest> = {}): ChatRequest {
   return {
-    model: 'claude-opus-4-8',
+    model: 'claude-opus-5',
     messages: [{ role: 'user', content: 'hi' }],
     ...overrides,
   };
@@ -16,11 +16,11 @@ describe('translateChatRequest · adaptive thinking', () => {
     expect(out.thinking).toEqual({ type: 'adaptive' });
   });
 
-  it('still maps enabled/disabled as before', () => {
+  it('normalizes legacy enabled thinking to adaptive and preserves disabled', () => {
     expect(
       translateChatRequest(baseReq({ thinking: { type: 'enabled', budgetTokens: 16384 } }))
         .thinking,
-    ).toEqual({ type: 'enabled', budget_tokens: 16384 });
+    ).toEqual({ type: 'adaptive' });
     expect(translateChatRequest(baseReq({ thinking: { type: 'disabled' } })).thinking).toEqual({
       type: 'disabled',
     });
@@ -41,7 +41,7 @@ describe('translateChatRequest · effort / output_config', () => {
     const out = translateChatRequest(
       baseReq({ thinking: { type: 'enabled', budgetTokens: 32768 }, effort: 'high' }),
     );
-    expect(out.thinking).toEqual({ type: 'enabled', budget_tokens: 32768 });
+    expect(out.thinking).toEqual({ type: 'adaptive' });
     expect(out.output_config).toEqual({ effort: 'high' });
   });
 
@@ -49,4 +49,29 @@ describe('translateChatRequest · effort / output_config', () => {
     const out = translateChatRequest(baseReq());
     expect(out.output_config).toBeUndefined();
   });
+});
+
+describe('translateChatRequest · model request constraints', () => {
+  it('suppresses forbidden sampling parameters for Opus 5', () => {
+    const out = translateChatRequest(
+      baseReq({
+        temperature: 0.2,
+        topP: 0.8,
+        topK: 20,
+      }),
+    );
+
+    expect(out.temperature).toBeUndefined();
+    expect(out.top_p).toBeUndefined();
+    expect(out.top_k).toBeUndefined();
+  });
+
+  it.each(['xhigh', 'max'] as const)(
+    'rejects disabled thinking with %s effort before the API call',
+    (effort) => {
+      expect(() =>
+        translateChatRequest(baseReq({ thinking: { type: 'disabled' }, effort })),
+      ).toThrow(/high or lower/i);
+    },
+  );
 });

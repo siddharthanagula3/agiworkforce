@@ -63,7 +63,7 @@ Both incumbents bake caching/batch tiers and autoscaling inference into the plat
 - [ ] Prompt caching enabled where `models.json` `caching` is true; cache hit ratio monitored.
 - [ ] Batch used for eligible non-interactive workloads (≈50% off).
 - [ ] Default routing sends casual traffic to economy; frontier reserved for need.
-- [ ] Tokenizer drift budgeted in estimates (Claude Opus 4.8 +0–35%) to avoid overshoot + waste.
+- [ ] Tokenizer drift is budgeted only for models that declare a verified factor.
 - [ ] Cache keys tenant-scoped; Local prompts never cached on AGI infra.
 
 ### Reliability targets (`04` §7)

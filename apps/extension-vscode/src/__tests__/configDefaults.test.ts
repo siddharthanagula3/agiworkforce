@@ -19,12 +19,25 @@ interface PkgConfigContrib {
   description?: string;
 }
 
-function readPkgConfigSettings(): Record<string, PkgConfigContrib> {
-  const pkgPath = path.resolve(__dirname, '../../package.json');
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as {
-    contributes?: { configuration?: { properties?: Record<string, PkgConfigContrib> } };
+interface ExtensionPackageJson {
+  contributes?: {
+    configuration?: { properties?: Record<string, PkgConfigContrib> };
+    commands?: Array<{ command: string; title: string }>;
   };
-  return pkg.contributes?.configuration?.properties ?? {};
+  capabilities?: {
+    untrustedWorkspaces?: {
+      restrictedConfigurations?: string[];
+    };
+  };
+}
+
+function readPackageJson(): ExtensionPackageJson {
+  const pkgPath = path.resolve(__dirname, '../../package.json');
+  return JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as ExtensionPackageJson;
+}
+
+function readPkgConfigSettings(): Record<string, PkgConfigContrib> {
+  return readPackageJson().contributes?.configuration?.properties ?? {};
 }
 
 /** Map from DEFAULTS key → package.json `agiWorkforce.<x>` setting key. */
@@ -45,7 +58,6 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
   telemetryEndpoint: 'agiWorkforce.telemetryEndpoint',
   useProviderStream: 'agiWorkforce.useProviderStream',
-  providerStreamProvider: 'agiWorkforce.providerStreamProvider',
   desktopBridgeEnabled: 'agiWorkforce.desktopBridge.enabled',
   desktopBridgePort: 'agiWorkforce.desktopBridge.port',
   tier: 'agiWorkforce.tier',
@@ -106,5 +118,63 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     expect(description).toContain('safe, read-only');
     expect(description).toContain('writes and commands still require approval');
     expect(commandSetup).not.toContain('Edits run without confirmation');
+  });
+
+  it('keeps Thinking scoped to cloud utilities and out of the local action sheet', () => {
+    const commandSetup = fs.readFileSync(
+      path.resolve(__dirname, '../core/commandSetup.ts'),
+      'utf8',
+    );
+
+    expect(pkgSettings['agiWorkforce.agent.thinking']?.description).toContain(
+      'cloud-backed editor utilities',
+    );
+    expect(commandSetup).not.toContain('label: `$(lightbulb) Thinking:');
+    expect(commandSetup).not.toContain("case 'thinking':");
+  });
+
+  it('distinguishes the extension MCP toggle from app-server MCP configuration', () => {
+    const description = pkgSettings['agiWorkforce.mcp.enabled']?.description ?? '';
+
+    expect(description).toContain('cloud-backed editor utilities');
+    expect(description).toContain('does not control the local app-server');
+  });
+
+  it('exposes only canonical shipped tier names', () => {
+    const tier = pkgSettings['agiWorkforce.tier'] as PkgConfigContrib & { enum?: string[] };
+    expect(tier.enum).toEqual([
+      'local',
+      'byok',
+      'free',
+      'basic',
+      'pro',
+      'max',
+      'max_15x',
+      'team',
+      'enterprise',
+    ]);
+  });
+
+  it('labels the opt-in provider stream as a cloud utility transport', () => {
+    expect(pkgSettings['agiWorkforce.useProviderStream']?.description).toContain(
+      'cloud-backed editor utilities',
+    );
+    expect(pkgSettings['agiWorkforce.providerStreamProvider']).toBeUndefined();
+  });
+
+  it('restricts only settings that the extension actually contributes', () => {
+    const restricted =
+      readPackageJson().capabilities?.untrustedWorkspaces?.restrictedConfigurations ?? [];
+
+    expect(restricted.length).toBeGreaterThan(0);
+    expect(restricted.filter((key) => pkgSettings[key] === undefined)).toEqual([]);
+  });
+
+  it('presents the legacy invite command id as sign-in, not a private-beta gate', () => {
+    const command = readPackageJson().contributes?.commands?.find(
+      (entry) => entry.command === 'agi-workforce.openInviteCodeModal',
+    );
+
+    expect(command?.title).toBe('AGI Workforce: Sign In to AGI Cloud');
   });
 });

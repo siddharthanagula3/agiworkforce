@@ -8,15 +8,29 @@
  * same way.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renderHook, act } from '@testing-library/react-native';
+jest.mock('@/lib/mmkv', () => ({
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
+
+import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { useIapPurchaseFlow } from '@/src/features/billing/useIapPurchaseFlow';
 import { useIapStore } from '@/src/features/billing/iapStore';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const mockRequestPurchase = jest.fn();
 const mockRestorePurchases = jest.fn();
 const mockFinishTransaction = jest.fn();
 const mockFetchProducts = jest.fn();
 const mockDeepLinkToSubscriptions = jest.fn();
+const mockGetAvailablePurchases = jest.fn();
+const mockRefreshTier = jest.fn();
 
 let mockCapturedOptions: {
   onPurchaseSuccess: (p: any) => void;
@@ -39,11 +53,18 @@ jest.mock('react-native-iap', () => ({
     };
   },
   deepLinkToSubscriptions: (...args: unknown[]) => mockDeepLinkToSubscriptions(...args),
+  getAvailablePurchases: (...args: unknown[]) => mockGetAvailablePurchases(...args),
 }));
 
 const mockApiPost = jest.fn();
 jest.mock('@/services/api', () => ({
   api: { post: (...args: unknown[]) => mockApiPost(...args) },
+}));
+
+jest.mock('@/src/features/billing/store', () => ({
+  useTierStore: {
+    getState: () => ({ refreshTier: mockRefreshTier }),
+  },
 }));
 
 function iosPurchase(overrides: Partial<Record<string, unknown>> = {}) {
@@ -55,11 +76,25 @@ function iosPurchase(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function currentIosAttemptToken(): string {
+  const request = mockRequestPurchase.mock.calls.at(-1)?.[0] as
+    | { request?: { apple?: { appAccountToken?: string } } }
+    | undefined;
+  const token = request?.request?.apple?.appAccountToken;
+  if (!token) throw new Error('Test purchase did not include an iOS app-account token');
+  return token;
+}
+
 describe('useIapPurchaseFlow — server reconciliation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAvailablePurchases = [];
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('iap-test-user-a');
     useIapStore.getState().reset();
+    mockRequestPurchase.mockResolvedValue(undefined);
+    mockGetAvailablePurchases.mockImplementation(async () => mockAvailablePurchases);
+    mockRefreshTier.mockResolvedValue(undefined);
   });
 
   it('reports a completed purchase to /api/mobile/iap/verify before finishing the transaction', async () => {
@@ -71,57 +106,139 @@ describe('useIapPurchaseFlow — server reconciliation', () => {
     });
     mockFinishTransaction.mockResolvedValue(undefined);
 
-    renderHook(() => useIapPurchaseFlow());
-    const purchase = iosPurchase();
+    const { result } = renderHook(() => useIapPurchaseFlow());
+    let purchase!: ReturnType<typeof iosPurchase>;
 
     await act(async () => {
+      await result.current.purchase('pro', 'monthly');
+      purchase = iosPurchase({ appAccountToken: currentIosAttemptToken() });
       mockCapturedOptions.onPurchaseSuccess(purchase);
-      // onPurchaseSuccess fires an internal async IIFE — flush microtasks.
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
-    expect(mockApiPost).toHaveBeenCalledWith('/api/mobile/iap/verify', {
-      platform: 'ios',
-      productId: 'com.agiworkforce.app.sub.pro.monthly',
-      receipt: 'jws-representation-abc',
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith('/api/mobile/iap/verify', {
+        platform: 'ios',
+        productId: 'com.agiworkforce.app.sub.pro.monthly',
+        receipt: 'jws-representation-abc',
+      });
+      expect(mockFinishTransaction).toHaveBeenCalledWith({ purchase, isConsumable: false });
+      expect(mockRefreshTier).toHaveBeenCalledTimes(1);
+      expect(useIapStore.getState().status).toBe('success');
     });
-    expect(mockFinishTransaction).toHaveBeenCalledWith({ purchase, isConsumable: false });
-    expect(useIapStore.getState().status).toBe('success');
   });
 
   it('does not finish the transaction and surfaces an error when verification fails', async () => {
     mockApiPost.mockRejectedValue(new Error('Unknown product id'));
 
-    renderHook(() => useIapPurchaseFlow());
-    const purchase = iosPurchase();
+    const { result } = renderHook(() => useIapPurchaseFlow());
+    let purchase!: ReturnType<typeof iosPurchase>;
 
     await act(async () => {
+      await result.current.purchase('pro', 'monthly');
+      purchase = iosPurchase({ appAccountToken: currentIosAttemptToken() });
       mockCapturedOptions.onPurchaseSuccess(purchase);
-      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockFinishTransaction).not.toHaveBeenCalled();
+      expect(useIapStore.getState().status).toBe('error');
+      expect(useIapStore.getState().errorMessage).toBe('Unknown product id');
+    });
+  });
+
+  it('cannot verify or repopulate purchase state after the account changes', async () => {
+    let resolveVerification!: (value: unknown) => void;
+    mockApiPost.mockReturnValue(
+      new Promise((resolve) => {
+        resolveVerification = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useIapPurchaseFlow());
+    let purchase!: ReturnType<typeof iosPurchase>;
+
+    await act(async () => {
+      await result.current.purchase('pro', 'monthly');
+      purchase = iosPurchase({ appAccountToken: currentIosAttemptToken() });
+      mockCapturedOptions.onPurchaseSuccess(purchase);
+    });
+    await waitFor(() => expect(mockApiPost).toHaveBeenCalledTimes(1));
+
+    activateCloudAccount('iap-test-user-b');
+    useIapStore.getState().reset();
+    await act(async () => {
+      resolveVerification({ success: true });
       await Promise.resolve();
     });
 
     expect(mockFinishTransaction).not.toHaveBeenCalled();
-    expect(useIapStore.getState().status).toBe('error');
-    expect(useIapStore.getState().errorMessage).toBe('Unknown product id');
+    expect(useIapStore.getState()).toMatchObject({
+      status: 'idle',
+      pendingRequest: null,
+      errorMessage: null,
+    });
+  });
+
+  it('does not verify account A’s callback after account B starts the same SKU purchase', async () => {
+    mockApiPost.mockResolvedValue({ success: true });
+    mockFinishTransaction.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useIapPurchaseFlow());
+
+    await act(async () => {
+      await result.current.purchase('pro', 'monthly');
+    });
+    const accountAToken = currentIosAttemptToken();
+
+    activateCloudAccount('iap-test-user-b');
+    useIapStore.getState().reset();
+    await act(async () => {
+      await result.current.purchase('pro', 'monthly');
+    });
+    const accountBToken = currentIosAttemptToken();
+    expect(accountBToken).not.toBe(accountAToken);
+    mockApiPost.mockClear();
+
+    await act(async () => {
+      mockCapturedOptions.onPurchaseSuccess(
+        iosPurchase({ appAccountToken: accountAToken, purchaseToken: 'account-a-receipt' }),
+      );
+      await Promise.resolve();
+    });
+    expect(mockApiPost).not.toHaveBeenCalled();
+    expect(useIapStore.getState().status).toBe('purchasing');
+
+    await act(async () => {
+      mockCapturedOptions.onPurchaseSuccess(
+        iosPurchase({ appAccountToken: accountBToken, purchaseToken: 'account-b-receipt' }),
+      );
+    });
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith(
+        '/api/mobile/iap/verify',
+        expect.objectContaining({ receipt: 'account-b-receipt' }),
+      );
+      expect(useIapStore.getState().status).toBe('success');
+    });
   });
 
   it('reconciles every restored purchase with the server on restore()', async () => {
-    mockAvailablePurchases = [
-      iosPurchase({ productId: 'com.agiworkforce.app.sub.pro.monthly', purchaseToken: 'tok-1' }),
-      iosPurchase({ productId: 'com.agiworkforce.app.sub.max.monthly', purchaseToken: 'tok-2' }),
-    ];
     mockRestorePurchases.mockResolvedValue(undefined);
     mockApiPost.mockResolvedValue({ success: true });
 
     const { result } = renderHook(() => useIapPurchaseFlow());
+    // The hook rendered with an empty reactive list. StoreKit results arrive
+    // during restore, so a correct implementation must query the returned
+    // snapshot instead of reading that stale render closure.
+    mockAvailablePurchases = [
+      iosPurchase({ productId: 'com.agiworkforce.app.sub.pro.monthly', purchaseToken: 'tok-1' }),
+      iosPurchase({ productId: 'com.agiworkforce.app.sub.max.monthly', purchaseToken: 'tok-2' }),
+    ];
 
     await act(async () => {
       await result.current.restore();
     });
 
     expect(mockRestorePurchases).toHaveBeenCalled();
+    expect(mockGetAvailablePurchases).toHaveBeenCalledTimes(1);
     expect(mockApiPost).toHaveBeenCalledTimes(2);
     expect(mockApiPost).toHaveBeenCalledWith('/api/mobile/iap/verify', {
       platform: 'ios',
@@ -133,6 +250,7 @@ describe('useIapPurchaseFlow — server reconciliation', () => {
       productId: 'com.agiworkforce.app.sub.max.monthly',
       receipt: 'tok-2',
     });
+    expect(mockRefreshTier).toHaveBeenCalledTimes(1);
     expect(useIapStore.getState().status).toBe('success');
   });
 

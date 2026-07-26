@@ -20,6 +20,7 @@ import type {
   ToolDef,
   ToolChoice,
 } from '@agiworkforce/types';
+import { getModelMetadataById } from '@agiworkforce/types';
 
 interface AnthropicTranslatedRequest {
   model: string;
@@ -230,6 +231,20 @@ function translateToolChoice(choice: ToolChoice | undefined): AnthropicToolChoic
 }
 
 export function translateChatRequest(req: ChatRequest): AnthropicTranslatedRequest {
+  const reasoning = getModelMetadataById(req.model)?.reasoning;
+  const effortOrder = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+  const maximumDisabledEffort = reasoning?.maxEffortWhenThinkingDisabled;
+  if (
+    req.thinking?.type === 'disabled' &&
+    req.effort &&
+    maximumDisabledEffort &&
+    effortOrder.indexOf(req.effort) > effortOrder.indexOf(maximumDisabledEffort)
+  ) {
+    throw new Error(
+      `Thinking is disabled for ${req.model}; effort must be ${maximumDisabledEffort} or lower.`,
+    );
+  }
+
   const messages = req.messages
     .map(translateMessage)
     .filter((m): m is AnthropicMessageParam => m !== null);
@@ -241,16 +256,23 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
   const toolChoice = translateToolChoice(req.toolChoice);
 
   const thinking =
-    req.thinking?.type === 'enabled'
-      ? {
-          type: 'enabled' as const,
-          budget_tokens: req.thinking.budgetTokens ?? 8000,
-        }
-      : req.thinking?.type === 'disabled'
-        ? { type: 'disabled' as const }
-        : req.thinking?.type === 'adaptive'
-          ? { type: 'adaptive' as const }
-          : undefined;
+    reasoning?.thinkingDefault === 'adaptive' &&
+    reasoning.supportsManualThinking === false &&
+    req.thinking?.type !== 'disabled' &&
+    req.thinking !== undefined
+      ? { type: 'adaptive' as const }
+      : req.thinking?.type === 'enabled'
+        ? {
+            type: 'enabled' as const,
+            budget_tokens: req.thinking.budgetTokens ?? 8000,
+          }
+        : req.thinking?.type === 'disabled'
+          ? { type: 'disabled' as const }
+          : req.thinking?.type === 'adaptive'
+            ? { type: 'adaptive' as const }
+            : undefined;
+
+  const rejectsSamplingParameters = reasoning?.rejectsSamplingParameters === true;
 
   return {
     model: req.model,
@@ -259,9 +281,11 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
     ...(tools && tools.length > 0 ? { tools } : {}),
     ...(toolChoice ? { tool_choice: toolChoice } : {}),
     max_tokens: req.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-    ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
-    ...(req.topP !== undefined ? { top_p: req.topP } : {}),
-    ...(req.topK !== undefined ? { top_k: req.topK } : {}),
+    ...(!rejectsSamplingParameters && req.temperature !== undefined
+      ? { temperature: req.temperature }
+      : {}),
+    ...(!rejectsSamplingParameters && req.topP !== undefined ? { top_p: req.topP } : {}),
+    ...(!rejectsSamplingParameters && req.topK !== undefined ? { top_k: req.topK } : {}),
     ...(req.stopSequences ? { stop_sequences: req.stopSequences } : {}),
     ...(thinking ? { thinking } : {}),
     // Independent of `thinking` -- matches the old web-internal adapter

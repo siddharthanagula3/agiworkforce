@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getObject } from '@/lib/server/object-storage';
+import { readStoredMedia } from '@/lib/server/media-storage';
 import { getMediaAssetById } from '@/lib/server/media-assets';
 import {
   isChatImageMimeType,
@@ -128,7 +128,7 @@ export async function hydrateChatAttachments(
         );
       }
 
-      const object = await getObject(asset.storagePathname);
+      const object = await readStoredMedia(asset.storagePathname);
       if (!object) {
         throw new ChatAttachmentHydrationError(
           404,

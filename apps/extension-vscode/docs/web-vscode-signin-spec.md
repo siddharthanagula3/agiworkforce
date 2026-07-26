@@ -1,69 +1,59 @@
-# Web spec — VS Code (cloud-only) sign-in endpoint
+# Web/VS Code Device Sign-In Contract
 
-Status: **TODO — owned by the WEB surface.** The VS Code extension side is built and
-waiting on this. Auth/session-sensitive → requires security review.
+Status: Implemented
 
-## Why
+Owners: Web + VS Code
 
-The VS Code extension is AGI-Managed-Cloud-only. It cannot reuse the desktop's
-`/api/auth/desktop-token` flow because that hands back an **encrypted** token the
-client decrypts with a **shared server secret** (`TOTP_ENCRYPTION_KEY`). A VS Code
-extension ships to public marketplaces (and to Cursor/Windsurf/Antigravity via Open
-VSX), so embedding that secret would let anyone forge logins.
+Last updated: 2026-07-26
 
-Instead the extension uses a **secretless device flow** (RFC-8628 style): it polls
-`POST /api/device/poll` and receives a **plaintext** Clerk token only after explicit
-in-browser approval. `/api/device/{link,poll,approve}` already exist; the only missing
-piece is a browser page that performs link + approve for a device the extension names.
+VS Code uses the shared, secretless RFC 8628-style device authorization flow.
+No client secret, shared encryption key, custom URI scheme, or
+`/connect/vscode` route is required.
 
-## What the extension already does (no web action needed)
+## Contract
 
-1. Derives a stable `device_id` (`vscode-<sha256(machineId:salt)[:48]>`, matches the
-   server's `^[a-zA-Z0-9-_]{1,128}$`) and a `device_fingerprint`.
-2. Opens `GET {webOrigin}/connect/vscode?device_id=<id>&device_fingerprint=<fp>&device_type=vscode`.
-3. Polls `POST /api/device/poll {device_id, device_fingerprint}` every 4s for ~5 min,
-   then stores the returned `access_token` as the account token (Bearer for all calls).
+1. The extension calls `POST /api/auth/device/code` with
+   `{ "surface": "vscode" }`.
+2. Web creates a 15-minute pending authorization and returns
+   `device_code`, `user_code`, `verification_uri`,
+   `verification_uri_complete`, `interval`, and `expires_in`.
+3. The extension opens the same-origin `/auth/device` page. The page requires a
+   signed-in user and an explicit approval click.
+4. The extension polls `POST /api/auth/device/token` with the opaque
+   `device_code`.
+5. After approval, Web atomically consumes the code and returns a seven-day,
+   revocable Bearer credential. The extension stores it in VS Code
+   `SecretStorage`.
+6. Sign-out calls the shared logout route and clears the local credential.
 
-Source: `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`.
+The Web route maps the `vscode` surface to **AGI for VS Code**, so the browser
+approval page identifies the requesting client correctly.
 
-## What the WEB must build: `GET /connect/vscode`
+## Security properties
 
-A page (mirror the existing `/verify` UX + security) that:
+- Approval is explicit and occurs in the user's normal browser session.
+- The opaque device code is the polling secret and must never be logged.
+- Codes expire, are single-use, rate-limited, and stored server-side.
+- The verification URL must remain on the configured AGI Web origin.
+- A marketplace extension contains no reusable client secret.
+- Authentication is separate from model entitlement and trust-boundary
+  selection; successful sign-in does not silently move a Local session to
+  Managed Cloud.
 
-1. Reads `device_id`, `device_fingerprint`, `device_type` from the query.
-   - Validate `device_id` against `^[a-zA-Z0-9-_]{1,128}$`; require `device_fingerprint`.
-2. If the user is **not signed in** → redirect to
-   `/login?redirectTo=/connect/vscode?...` (Clerk), same as `/verify`.
-3. If **signed in** → show an explicit **"Connect VS Code to AGI Cloud"** approval
-   screen (anti-phishing: do NOT auto-approve; require a click, like `/verify`).
-4. On **Approve** (authenticated, same-origin → CSRF token available):
-   1. `POST /api/device/link` `{ device_id, device_name: "VS Code", device_type: "vscode", device_fingerprint }`
-      → returns `{ link_code }` (creates a pending code bound to this device_id).
-   2. `POST /api/device/approve` `{ code: link_code }` → attaches the caller's Clerk
-      session token (encrypted at rest) to the code.
-   3. Show "✅ VS Code connected — return to your editor." The extension's poll then
-      consumes the token exactly once.
+## Product behavior
 
-## Also: add a `"vscode"` device-type label
+Managed Cloud is public alpha and open by default for signed-in users. There is
+no Hobby tier and no private-beta/waitlist front door. Plan, usage, provider,
+and model admission remain server-authoritative at inference time. The editor
+hydrates plan and subscription status from `/api/usage`; only active and
+trialing paid subscriptions retain paid client capabilities. Account actions
+link to the existing Web usage, billing, connector, and Team surfaces.
 
-`/api/device/link` `resolvedDeviceType` and the approve UI currently label devices
-desktop/CLI. Add a `vscode` case so the approval screen reads "VS Code", not "desktop".
+## Source paths
 
-## Security (already enforced by existing endpoints — keep)
-
-- Explicit user approval (no silent grant); device fingerprint binding (poll 403 on
-  mismatch); 15-min code expiry; one-time atomic consume; tokens encrypted at rest.
-- No client secret anywhere in the extension. The token only leaves the server after
-  the signed-in user approves, and only to the fingerprint-bound device.
-
-## Managed-cloud gate
-
-Signed-in users should resolve to the **free Hobby tier by default** (the live web
-free tier) so the extension answers immediately; premium stays gated by the existing
-`buildManagedComputeGateResponse` / paywall (no change needed here).
-
-## Done = the extension answers
-
-Once `/connect/vscode` is live, installing the extension → "Sign in to AGI Cloud" →
-approve in browser → chat answers on the free Hobby tier, identically in VS Code,
-Cursor, Windsurf, and Antigravity.
+- `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`
+- `apps/web/app/api/auth/device/code/route.ts`
+- `apps/web/app/api/auth/device/approve/route.ts`
+- `apps/web/app/api/auth/device/token/route.ts`
+- `apps/web/app/auth/device/page.tsx`
+- `packages/contracts/types/src/auth.ts`

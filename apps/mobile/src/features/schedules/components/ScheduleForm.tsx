@@ -11,6 +11,8 @@ import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPi
 import { getDisplayName } from '@/src/features/model-picker/service';
 import { colors } from '@/src/ui/theme';
 import type { CreateScheduleInput, Schedule, RecurrenceType } from '../store';
+import { isMobileScheduleRecurrenceSupported } from '../policy';
+import { isoToZonedDateInput, zonedDateAndTimeToIso } from '../timing';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -22,6 +24,7 @@ interface ScheduleFormProps {
   onCancel: () => void;
   onDelete?: () => void;
   isLoading?: boolean;
+  submitError?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,8 +49,10 @@ export function ScheduleForm({
   onCancel,
   onDelete,
   isLoading = false,
+  submitError,
 }: ScheduleFormProps) {
   const isEditing = Boolean(initialData?.id);
+  const initialTimezone = initialData?.timezone ?? getDeviceTimezone();
 
   // Form state
   const [name, setName] = useState(initialData?.name ?? '');
@@ -58,16 +63,20 @@ export function ScheduleForm({
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(initialData?.daysOfWeek ?? []);
   const [dayOfMonth, setDayOfMonth] = useState(initialData?.dayOfMonth ?? 1);
   const [timeOfDay, setTimeOfDay] = useState(initialData?.timeOfDay ?? '09:00');
-  const [scheduledAt, setScheduledAt] = useState<string | null>(initialData?.scheduledAt ?? null);
-  const [cronExpression, setCronExpression] = useState(initialData?.cronExpression ?? '');
-  const [intervalMs, setIntervalMs] = useState(initialData?.intervalMs ?? 60 * 60 * 1000);
-  const [timezone, setTimezone] = useState(initialData?.timezone ?? getDeviceTimezone());
+  const [scheduledDate, setScheduledDate] = useState(
+    isoToZonedDateInput(initialData?.scheduledAt, initialTimezone),
+  );
+  const [timezone, setTimezone] = useState(initialTimezone);
 
   // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const validate = useCallback((): boolean => {
+  const validate = useCallback((): {
+    valid: boolean;
+    oneTimeInstant: string | null;
+  } => {
     const newErrors: Record<string, string> = {};
+    let oneTimeInstant: string | null = null;
 
     if (!name.trim()) {
       newErrors.name = 'Name is required';
@@ -75,27 +84,39 @@ export function ScheduleForm({
     if (!prompt.trim()) {
       newErrors.prompt = 'Prompt is required';
     }
-    if (recurrence === 'once' && !scheduledAt) {
-      newErrors.scheduledAt = 'Date is required for one-time schedules';
+    if (!isMobileScheduleRecurrenceSupported(recurrence)) {
+      newErrors.recurrence = 'Choose Once, Daily, Weekly, or Monthly';
+    }
+    if (recurrence === 'once') {
+      if (!scheduledDate) {
+        newErrors.scheduledAt = 'Date is required for one-time schedules';
+      } else {
+        try {
+          oneTimeInstant = zonedDateAndTimeToIso(scheduledDate, timeOfDay, timezone);
+          if (new Date(oneTimeInstant).getTime() <= Date.now()) {
+            newErrors.scheduledAt = 'Choose a date and time in the future';
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Enter a valid date and time';
+          if (message.includes('timezone')) newErrors.timezone = message;
+          else newErrors.scheduledAt = message;
+        }
+      }
+    } else {
+      try {
+        // Validate timezone even when no one-time instant needs conversion.
+        new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format();
+      } catch {
+        newErrors.timezone = 'Enter a valid IANA timezone, such as America/Chicago.';
+      }
     }
     if (recurrence === 'weekly' && daysOfWeek.length === 0) {
       newErrors.daysOfWeek = 'Select at least one day';
     }
-    if (recurrence === 'custom' && !cronExpression.trim()) {
-      newErrors.cronExpression = 'Cron expression is required';
-    }
-    if (
-      recurrence === 'interval' &&
-      (!Number.isInteger(intervalMs) ||
-        intervalMs < 60_000 ||
-        intervalMs > 365 * 24 * 60 * 60 * 1000)
-    ) {
-      newErrors.intervalMs = 'Interval must be between 1 minute and 365 days';
-    }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [name, prompt, recurrence, scheduledAt, daysOfWeek, cronExpression, intervalMs]);
+    return { valid: Object.keys(newErrors).length === 0, oneTimeInstant };
+  }, [name, prompt, recurrence, scheduledDate, timeOfDay, timezone, daysOfWeek]);
 
   // Handle recurrence picker changes
   const handleRecurrenceChange = useCallback(
@@ -105,25 +126,22 @@ export function ScheduleForm({
         daysOfWeek?: number[];
         dayOfMonth?: number;
         timeOfDay?: string;
-        scheduledAt?: string;
-        cronExpression?: string;
-        intervalMs?: number;
+        scheduledDate?: string;
       },
     ) => {
       setRecurrence(rec);
       if (options?.daysOfWeek !== undefined) setDaysOfWeek(options.daysOfWeek);
       if (options?.dayOfMonth !== undefined) setDayOfMonth(options.dayOfMonth);
       if (options?.timeOfDay !== undefined) setTimeOfDay(options.timeOfDay);
-      if (options?.scheduledAt !== undefined) setScheduledAt(options.scheduledAt);
-      if (options?.cronExpression !== undefined) setCronExpression(options.cronExpression);
-      if (options?.intervalMs !== undefined) setIntervalMs(options.intervalMs);
+      if (options?.scheduledDate !== undefined) setScheduledDate(options.scheduledDate);
     },
     [],
   );
 
   // Submit
   const handleSubmit = useCallback(() => {
-    if (!validate()) return;
+    const validation = validate();
+    if (!validation.valid) return;
 
     onSubmit({
       name: name.trim(),
@@ -133,9 +151,9 @@ export function ScheduleForm({
       daysOfWeek: recurrence === 'weekly' ? daysOfWeek : undefined,
       dayOfMonth: recurrence === 'monthly' ? dayOfMonth : undefined,
       timeOfDay,
-      scheduledAt: recurrence === 'once' ? scheduledAt : null,
-      cronExpression: recurrence === 'custom' ? cronExpression : undefined,
-      intervalMs: recurrence === 'interval' ? intervalMs : undefined,
+      scheduledAt: recurrence === 'once' ? validation.oneTimeInstant : null,
+      cronExpression: undefined,
+      intervalMs: undefined,
       timezone,
       isActive: initialData?.isActive ?? true,
     });
@@ -149,9 +167,6 @@ export function ScheduleForm({
     daysOfWeek,
     dayOfMonth,
     timeOfDay,
-    scheduledAt,
-    cronExpression,
-    intervalMs,
     timezone,
     initialData?.isActive,
   ]);
@@ -232,19 +247,17 @@ export function ScheduleForm({
             daysOfWeek={daysOfWeek}
             dayOfMonth={dayOfMonth}
             timeOfDay={timeOfDay}
-            scheduledAt={scheduledAt}
-            cronExpression={cronExpression}
-            intervalMs={intervalMs}
+            scheduledDate={scheduledDate}
             onChange={handleRecurrenceChange}
           />
+          {errors.recurrence ? (
+            <Text className="text-xs text-red-400 mt-1">{errors.recurrence}</Text>
+          ) : null}
           {errors.daysOfWeek ? (
             <Text className="text-xs text-red-400 mt-1">{errors.daysOfWeek}</Text>
           ) : null}
           {errors.scheduledAt ? (
             <Text className="text-xs text-red-400 mt-1">{errors.scheduledAt}</Text>
-          ) : null}
-          {errors.cronExpression ? (
-            <Text className="text-xs text-red-400 mt-1">{errors.cronExpression}</Text>
           ) : null}
         </View>
 
@@ -255,12 +268,22 @@ export function ScheduleForm({
           <Input
             label="Timezone"
             value={timezone}
-            onChangeText={setTimezone}
+            onChangeText={(text) => {
+              setTimezone(text);
+              if (errors.timezone) setErrors((current) => ({ ...current, timezone: '' }));
+            }}
             placeholder="America/New_York"
             autoCapitalize="none"
             autoCorrect={false}
+            error={errors.timezone}
           />
         </View>
+
+        {submitError ? (
+          <View className="mb-4 rounded-lg bg-red-500/10 p-3">
+            <Text className="text-sm text-red-400">{submitError}</Text>
+          </View>
+        ) : null}
 
         {/* Action buttons */}
         <View className="gap-3">
@@ -300,7 +323,7 @@ export function ScheduleForm({
       </ScrollView>
 
       {/* Model picker bottom sheet */}
-      <ModelPickerSheet sheetRef={modelPickerRef} onSelect={setModel} />
+      <ModelPickerSheet sheetRef={modelPickerRef} modelScope="cloud" onSelect={setModel} />
     </KeyboardAvoidingView>
   );
 }

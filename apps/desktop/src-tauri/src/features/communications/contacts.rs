@@ -12,6 +12,12 @@ pub struct ContactManager {
 }
 
 impl ContactManager {
+    pub fn from_connection(connection: rusqlite::Connection) -> Self {
+        Self {
+            conn: Connection::from_connection(connection),
+        }
+    }
+
     pub async fn new(path: impl AsRef<str>) -> Result<Self> {
         let conn = Connection::open(path.as_ref())
             .await

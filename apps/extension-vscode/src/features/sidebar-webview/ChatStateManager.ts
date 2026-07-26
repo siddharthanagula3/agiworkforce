@@ -13,6 +13,8 @@ import {
   normalizeConfiguredModelId,
   getModelProviderInfo,
   buildGroupedQuickPickItems,
+  isModelReachableForTier,
+  UNKNOWN_PROVIDER_BRAND_COLOR,
 } from '../model-picker/modelConstants';
 import {
   PROVIDER_DISPLAY,
@@ -33,8 +35,9 @@ import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { resolveTier } from '../../integrations/tierResolver';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
-import { classifyDeveloperTurn } from '../../integrations/routingTask';
+import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import { getAccountAuthState } from '../../utils/api';
+import { buildMemoryContextInput } from '../../memory/memoryStore';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -79,6 +82,7 @@ export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
   | { type: 'done'; payload?: { model?: string; providerLabel?: string; brandColor?: string } }
   | { type: 'error'; payload: { message: string } }
+  | { type: 'sessionNotice'; payload: { message: string } }
   | { type: 'model'; payload: { model: string } }
   | { type: 'providerBadge'; payload: { providerLabel: string; brandColor: string } }
   | {
@@ -169,7 +173,7 @@ export class ChatStateManager {
     id: string;
     cwd: string;
     model: string;
-    provider?: LocalModelSummary['provider'];
+    providerBoundary: string;
     runtime: LocalRuntimeClient;
   };
   private _activeTurn?: {
@@ -277,10 +281,6 @@ export class ChatStateManager {
       }
 
       case 'sendMessage': {
-        const incomingModel = msg.payload.model?.trim();
-        if (incomingModel !== undefined && incomingModel !== '') {
-          this._activeModel = this._normalizeModelSelection(incomingModel);
-        }
         await this._handleSendMessage(msg.payload.text, msg.payload.model);
         break;
       }
@@ -483,6 +483,7 @@ export class ChatStateManager {
               id: item.modelId,
               label: item.label.replace(/^\$\([^)]+\)\s*/, ''),
               description: item.description ?? '',
+              ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
             });
           }
         }
@@ -496,6 +497,19 @@ export class ChatStateManager {
         const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
         if (modelId === '__local_setup__') break;
         const normalized = this._normalizeModelSelection(modelId);
+        const tier = await resolveTier(this._context);
+        if (
+          !this._localModelProviders.has(normalized) &&
+          !isModelReachableForTier(normalized, tier)
+        ) {
+          this._post({
+            type: 'error',
+            payload: {
+              message: 'This model is not available for your current plan or provider setup.',
+            },
+          });
+          break;
+        }
         await vscode.workspace
           .getConfiguration('agiWorkforce')
           .update('model', normalized, vscode.ConfigurationTarget.Global);
@@ -516,8 +530,10 @@ export class ChatStateManager {
       case 'openFilePicker': {
         const uris = await vscode.window.showOpenDialog({
           canSelectMany: true,
+          canSelectFiles: true,
+          canSelectFolders: false,
           openLabel: 'Add to Context',
-          title: 'Attach File to Chat',
+          title: 'Attach Workspace Files to Chat',
         });
         if (uris !== undefined && uris.length > 0) {
           for (const uri of uris) {
@@ -745,7 +761,10 @@ export class ChatStateManager {
     if (modelId === 'auto' || modelId.startsWith('auto-')) {
       this._post({
         type: 'providerBadge',
-        payload: { providerLabel: '', brandColor: 'transparent' },
+        payload: {
+          providerLabel: 'Auto routing',
+          brandColor: UNKNOWN_PROVIDER_BRAND_COLOR,
+        },
       });
       return;
     }
@@ -760,6 +779,14 @@ export class ChatStateManager {
     }
     const { providerLabel, brandColor } = getModelProviderInfo(modelId);
     this._post({ type: 'providerBadge', payload: { providerLabel, brandColor } });
+  }
+
+  private _providerBoundaryForModel(modelId: string): string {
+    if (isAutoRoutingModel(modelId)) return 'auto';
+    const localProvider = this._localModelProviders.get(modelId);
+    if (localProvider !== undefined) return `local:${localProvider}`;
+    const { providerId, providerLabel } = getModelProviderInfo(modelId);
+    return providerId === null ? `catalog:${providerLabel}` : `catalog:${providerId}`;
   }
 
   private async _handleSendMessage(text: string, model?: string): Promise<void> {
@@ -789,28 +816,53 @@ export class ChatStateManager {
     const requestedModel = this._normalizeModelSelection(
       model?.trim() === '' || model === undefined ? this._activeModel : model,
     );
-    const requestedProvider = this._localModelProviders.get(requestedModel);
+    const tier = await resolveTier(this._context);
+    if (
+      !this._localModelProviders.has(requestedModel) &&
+      !isModelReachableForTier(requestedModel, tier)
+    ) {
+      this._post({
+        type: 'error',
+        payload: {
+          message: 'This model is not available for your current plan or provider setup.',
+        },
+      });
+      return;
+    }
+    this._activeModel = requestedModel;
+    const requestedLocalProvider = this._localModelProviders.get(requestedModel);
+    const requestedProviderBoundary = this._providerBoundaryForModel(requestedModel);
     this._cancelRequested = false;
 
     try {
+      const providerBoundaryChanged =
+        this._thread !== undefined && this._thread.providerBoundary !== requestedProviderBoundary;
       if (
         this._thread === undefined ||
         this._thread.cwd !== cwd ||
         this._thread.runtime !== runtime ||
-        this._thread.model !== requestedModel ||
-        this._thread.provider !== requestedProvider
+        this._thread.providerBoundary !== requestedProviderBoundary
       ) {
         const thread = await runtime.startThread({
           cwd,
           title: text.trim().slice(0, 80) || 'Developer session',
           model: requestedModel,
-          ...(requestedProvider === undefined ? {} : { provider: requestedProvider }),
+          ...(requestedLocalProvider === undefined ? {} : { provider: requestedLocalProvider }),
         });
+        if (providerBoundaryChanged) {
+          this._post({
+            type: 'sessionNotice',
+            payload: {
+              message:
+                'Provider boundary changed. AGI started a new developer session; earlier transcript context was not forwarded.',
+            },
+          });
+        }
         this._thread = {
           id: thread.id,
           cwd,
           model: requestedModel,
-          ...(requestedProvider === undefined ? {} : { provider: requestedProvider }),
+          providerBoundary: requestedProviderBoundary,
           runtime,
         };
       }
@@ -850,21 +902,27 @@ export class ChatStateManager {
       try {
         const attachmentEntries = [...this._pendingAttachments];
         const attachmentInputs = attachmentEntries.map((entry) => entry.input);
+        const memoryInput = buildMemoryContextInput(this._context.globalState);
         const contextFiles = contextFilesForWorkspace(cwd);
         const turn = await runtime.startTurn({
           threadId: thread.id,
           cwd,
-          input: [{ type: 'text', text, text_elements: [] }, ...attachmentInputs],
+          input: [
+            { type: 'text', text, text_elements: [] },
+            ...(memoryInput === undefined ? [] : [memoryInput]),
+            ...attachmentInputs,
+          ],
           agentMode: this._mode ?? Config.agentMode(),
           reasoningEffort: this._effort ?? Config.agentEffort(),
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
-          ...(requestedModel.startsWith('auto-')
+          ...(isAutoRoutingModel(requestedModel)
             ? {
                 model: requestedModel,
                 routingTaskType: classifyDeveloperTurn(text, attachmentInputs),
               }
             : { model: requestedModel }),
         });
+        thread.model = requestedModel;
         this._pendingAttachments.splice(0, attachmentEntries.length);
         if (attachmentInputs.length > 0) this._post({ type: 'attachmentsConsumed' });
         activeTurnId = turn.id;
@@ -1018,8 +1076,12 @@ export class ChatStateManager {
       const resolvedModel =
         this._thread?.id === event.threadId ? this._activeModel : Config.model();
       const localProvider = this._localModelProviders.get(resolvedModel);
-      const { providerLabel, brandColor } =
-        localProvider === undefined
+      const { providerLabel, brandColor } = isAutoRoutingModel(resolvedModel)
+        ? {
+            providerLabel: 'Auto routing',
+            brandColor: UNKNOWN_PROVIDER_BRAND_COLOR,
+          }
+        : localProvider === undefined
           ? getModelProviderInfo(resolvedModel)
           : {
               providerLabel: PROVIDER_DISPLAY[localProvider].label,

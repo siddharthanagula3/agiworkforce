@@ -1,8 +1,8 @@
 # AGI VS Code Extension — Volume 01 — Product Overview
 
-Status: Draft spec
+Status: Current implementation notes
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-25
 
 Authority: `AGENTS.md`, `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts`, `apps/extension-vscode/src/integrations/`, `apps/extension-vscode/src/providers/`, `packages/contracts/types/src/models.json`.
 
@@ -12,7 +12,7 @@ This volume defines the product vision, mission, goals, personas, principles, an
 
 ## Vision
 
-Make the editor the highest-leverage place to run AGI: multi-provider, trust-mode-aware coding help that keeps local work local, lets developers bring their own keys with no markup, and offers Managed Cloud when they want hosted compute — all inside VS Code, never forcing data across a trust boundary. ✅ Multi-provider surface exists today (`apps/extension-vscode/package.json` `contributes.configuration` `agiWorkforce.providerStreamProvider` enum; `apps/extension-vscode/src/integrations/providerStreamClient.ts`).
+Make the editor the highest-leverage place to run AGI: multi-provider, trust-mode-aware coding help that keeps local work local, lets developers bring their own keys with no markup, and offers Managed Cloud when they want hosted compute — all inside VS Code, never forcing data across a trust boundary. ✅ Developer-session routing is owned by the multi-provider `agi app-server`; managed models come from the governed catalog and installed local models from `model/list`.
 
 ## Mission
 
@@ -20,7 +20,7 @@ Ship an IDE extension that brings AGI chat, edit, and agent workflows to the wor
 
 ## Product Goals
 
-- **Trust-mode clarity**: every session shows its active mode (Local / BYOK / Managed Cloud) and provider label; switching Local→BYOK is an explicit fork. 🟡 A provider-switch guard exists (`apps/extension-vscode/src/integrations/providerSwitchGuard.ts`); the full fork ceremony (context selection, secret scan, payload preview, consent) is not yet fully wired — treat missing pieces as 🔭.
+- **Trust-mode clarity**: the sidebar shows the Local host plus the resolved provider or Auto routing. Same-provider model changes preserve the runtime thread; a provider-boundary change starts a new thread, does not forward the earlier transcript, and emits a visible notice. The full context-selection/payload-preview ceremony remains required before any future feature forwards an existing Local transcript.
 - **Workspace-scoped, no silent sync**: IDE context never lands in Web/Mobile/Desktop app chat automatically. ✅ Enforced by scope rules in `apps/extension-vscode/AGENTS.md`; handoff commands are explicit (`agi-workforce.sendToDesktop`, `agi-workforce.syncContextToDesktop` in `package.json`).
 - **Reviewable edits**: all agent edits are diff-gated with accept/reject and checkpoints. ✅ `apps/extension-vscode/src/providers/diffDecorationProvider.ts`, `apps/extension-vscode/src/integrations/patchEngine.ts`, checkpoint commands in `package.json`.
 - **Correct model catalog**: model IDs resolve only from the SSOT. ✅ `packages/contracts/types/src/models.json`; never hardcoded.
@@ -28,20 +28,20 @@ Ship an IDE extension that brings AGI chat, edit, and agent workflows to the wor
 ## User Personas
 
 - **Repo developer (BYOK)**: uses own provider keys, no markup, in a trusted workspace. ✅ `agi-workforce.setApiKey` / `clearApiKey` (`package.json`).
-- **Local-first / privacy engineer**: on-device runtime only (Ollama / LM Studio), no cloud egress. 🟡 Local providers are referenced (`agiWorkforce.providerStreamProvider` enum includes `ollama`, `ollama-cloud`, `lmstudio`); full local-only isolation guarantees are still hardening.
+- **Local-first / privacy engineer**: on-device runtime only (Ollama / LM Studio), no cloud egress. ✅ The app-server owns local inference and returns installed local models to the extension.
 - **Managed Cloud subscriber**: signs in for hosted compute and higher limits. ✅ `agi-workforce.signIn` / `signOut` (`apps/extension-vscode/src/features/account-auth/deviceAuth.ts`).
 - **Enterprise/admin**: needs org controls and untrusted-workspace safety. 🟡 Restricted-config gating exists (`package.json` `capabilities.untrustedWorkspaces`); org admin is 🔭.
 
 ## Product Principles
 
-- **Local, BYOK, Managed Cloud are separate trust boundaries** — never silently routed. ✅ mirrored in `AGENTS.md`; guard in `providerSwitchGuard.ts`.
+- **Local, BYOK, Managed Cloud are separate trust boundaries** — never silently routed. ✅ mirrored in `AGENTS.md`; prior context is not forwarded across provider resets.
 - **Explicit, labeled, consent-gated crossings.** 🔭/🟡 as above.
 - **Reviewable by default** — diffs, checkpoints, approval-gated agent modes (`ask`/`auto`/`plan`/`bypass`). ✅ `agiWorkforce.agent.mode` in `package.json`; `apps/extension-vscode/src/providers/agentModeProvider.ts`.
 - **Grounded truth, not invention** — model IDs from `models.json`; no fabricated routes/prices.
 
 ## Shared Runtime Architecture — thin client over shared crates/packages
 
-The extension is a **thin client** over the internal AGI Runtime layer, not a standalone engine. It depends on shared workspace packages `@agiworkforce/client-runtime`, `@agiworkforce/types`, `@agiworkforce/utils`, and `@agiworkforce/design-tokens`. ✅ declared in `apps/extension-vscode/package.json` `dependencies`. Cross-surface protocol/session schemas live in `packages/contracts/types` and Rust crates, never in extension-only files (`apps/extension-vscode/AGENTS.md` Lane Contract). Shared developer sessions with the CLI are a **target direction** — 🔭 where unwired.
+The extension is a **thin client** over the `agi app-server`, not a standalone inference engine. `LocalRuntimePool` maintains one lazy runtime per workspace root; the app-server owns threads, turns, streamed output, approvals, cancellation, history, provider configuration, and local-model discovery. Shared TypeScript packages provide the catalog and UI contracts, while protocol/session schemas live in shared contract/Rust owners rather than extension-only files.
 
 ## VS Code Architecture
 
@@ -55,23 +55,23 @@ The extension is a **thin client** over the internal AGI Runtime layer, not a st
 
 ## Inference Providers — three trust modes
 
-- **Local**: on-device runtime (e.g. `ollama`, `lmstudio` in `agiWorkforce.providerStreamProvider`). 🟡 present; strict no-egress isolation still hardening.
-- **BYOK**: user keys, direct, no markup — Desktop/CLI/VS Code only. ✅ `agi-workforce.setApiKey`; Local→BYOK guarded by `providerSwitchGuard.ts` (fork ceremony partially 🔭).
-- **Managed Cloud**: public alpha, open by default for signed-in users. ✅ device auth (`deviceAuth.ts`); provider-stream path 🟡 — `agiWorkforce.useProviderStream` defaults `false` and account web auth is "not wired in the VS Code extension yet" (`package.json` description). Model IDs resolve only from `packages/contracts/types/src/models.json`.
+- **Local**: on-device Ollama/LM Studio inference owned by the app-server; installed models arrive through `model/list`.
+- **BYOK**: provider credentials configured through the CLI runtime, direct/no-markup, on Desktop/CLI/VS Code only. The legacy extension API-key command stores an AGI gateway credential, not a third-party provider vault.
+- **Managed Cloud**: public alpha, open by default for signed-in users. Device auth is wired. The default-off provider-stream setting is an account-authenticated transport for cloud-backed editor utilities only; it does not affect local developer sessions. Model IDs resolve only from `packages/contracts/types/src/models.json`.
 
 ## Constraints
 
 - Workspace-scoped; no automatic app-chat sync (`apps/extension-vscode/AGENTS.md`). ✅
-- Untrusted workspaces restrict `apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, auto-apply, and `tier` overrides; agent file writes disabled until trusted (`package.json` `capabilities.untrustedWorkspaces`). ✅
-- No credit top-ups; pricing is Free / Basic $8 (₹399) / Pro $20 / Max $100 and $200 / Enterprise. 🟡 **Reconciliation gap**: `package.json` `agiWorkforce.tier` enum still encodes removed tiers (`hobby`, `pro_plus`) — a separate tracked billing-catalog task.
+- Untrusted workspaces restrict `apiEndpoint`, `gatewayUrl`, `cliPath`, `autoApplyFixes`, `telemetryEndpoint`, and `tier` overrides; agent file writes are disabled until trusted. ✅
+- No credit top-ups. The extension access-mode enum preserves every canonical plan value.
 - Auth/DB/billing stack is Clerk + Neon + Stripe; never Supabase.
 
 ## Risks
 
 - **Trust-boundary leak** — Local/BYOK data silently reaching Cloud. Mitigation: explicit fork + label; complete the fork ceremony (🔭) and audit `providerSwitchGuard.ts`.
 - **Bridge same-user exposure** — TCP `8787` is reachable by same-user processes despite the 0600 token; socket migration is 🔭.
-- **Stale tier/pricing UI** — removed tiers in the manifest could surface to users; track against canon pricing.
-- **Provider-stream half-wired** — `useProviderStream` off and unauthenticated could confuse Cloud users; keep labels honest until wired.
+- **Local runtime packaging** — the `.vsix` does not bundle `agi`; demo/release setup must install the CLI or configure `agiWorkforce.cliPath`.
+- **Provider-stream scope confusion** — keep `useProviderStream` explicitly labeled as cloud-utility-only; developer chat remains app-server-owned.
 
 ## Repository map
 
@@ -85,7 +85,7 @@ The extension is a **thin client** over the internal AGI Runtime layer, not a st
 
 ## Competitor notes
 
-Claude Code and Codex IDE extensions offer chat/edit/agent modes, `@`-file references, editor/diagnostics context, inline diff review, approvals, and cloud handoff preview. Both are single-vendor. **AGI's deliberate divergence**: multi-provider by design (`providerStreamProvider` enum), **BYOK with no markup where the trust matrix allows it** (Desktop/CLI/VS Code), **per-surface trust modes** with visible labels, and **local-first** privacy — local work never silently leaves the machine. Remote control mirrors Claude Code's remote-window model (compute stays on host, outbound-only, QR + HMAC, approval-gated) rather than moving sessions to the cloud.
+Claude Code and Codex IDE extensions offer chat/edit/agent modes, `@`-file references, editor/diagnostics context, inline diff review, approvals, and cloud handoff preview. Both are single-vendor. **AGI's deliberate divergence**: catalog-driven multi-provider selection, **BYOK with no markup where the trust matrix allows it**, **per-surface trust modes** with visible labels, and **local-first** privacy. Remote control remains a planned remote-window model rather than moving sessions to the cloud.
 
 ## Acceptance / Definition of Done
 
@@ -101,5 +101,5 @@ Production-ready when the trust modes are explicit and labeled, no IDE context s
 - Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Reintroducing removed tiers (`Plus`, `pro_plus`, `Hobby`) or adding credit top-ups; inventing Pro/Max INR prices.
 - Referencing Supabase, or renaming Next.js `proxy.ts` back to `middleware.ts`.
-- Claiming shipped state without a real repo path, or presenting `useProviderStream`/remote control as live.
+- Claiming shipped state without a real repo path, or presenting remote control as live.
 - Using `agiworkforce <cmd>` in examples — the binary is `agi`.

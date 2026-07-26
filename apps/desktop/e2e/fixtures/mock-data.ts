@@ -229,8 +229,8 @@ export const MOCK_MODELS: ModelInfo[] = [
     capabilities: ['chat', 'code', 'vision', 'tools'],
   },
   {
-    id: 'claude-opus-4.8',
-    name: 'Claude 4.8 Opus',
+    id: 'claude-opus-5',
+    name: 'Claude Opus 5',
     provider: 'anthropic',
     contextWindow: 1000000,
     inputCost: 5.0,

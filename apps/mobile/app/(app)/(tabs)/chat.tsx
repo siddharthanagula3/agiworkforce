@@ -44,9 +44,10 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
-import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
+import { useAuthStore } from '@/src/features/auth/store';
+import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 
 function getTimeOfDayGreeting(): string {
   const hour = new Date().getHours();
@@ -89,6 +90,7 @@ export default function ChatTabScreen() {
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const clearError = useChatStore((s) => s.clearError);
   const setSendError = useChatStore((s) => s.setSendError);
+  const imageGenerationEnabled = useChatStore((s) => s.features.imageGen);
 
   // Error state lives in the shared chat store, not scoped per-conversation --
   // without this, a stale error banner from a previous conversation (e.g. "no
@@ -106,9 +108,12 @@ export default function ChatTabScreen() {
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const waitlistJoined = useWaitlistStore((s) => s.joined);
   const waitlistRank = useWaitlistStore((s) => s.rank);
   const subscriptionTier = useTierStore((s) => s.tier);
+  const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
   const activeMode = appMode;
@@ -190,58 +195,41 @@ export default function ChatTabScreen() {
               : DEFAULT_LOCAL_MODEL_ID;
         if (!modelForSend) return false;
         const trimmed = text.trim();
-        const cloudDispatch =
-          activeMode === 'cloud' && !attachments?.length
-            ? resolveMobileCloudDispatch({
-                selection: modelForSend,
-                message: trimmed,
-                subscriptionTier,
-              })
-            : null;
-        const slashImageRequest = trimmed.startsWith('/image');
-        const routedImageRequest =
-          cloudDispatch?.status === 'selected' && cloudDispatch.dispatch === 'media';
+        const imageRequest = resolveMobileImageGenerationRequest({
+          executionMode: activeMode,
+          text: trimmed,
+          selection: modelForSend,
+          subscriptionTier,
+          hasAttachments: Boolean(attachments?.length),
+          globalImageGenerationEnabled: FEATURES.imageGen,
+          imageGenerationEnabled,
+          isClerkSignedIn,
+          ownerId: clerkUserId,
+          grantedCapabilities,
+          isOnline,
+        });
 
         // Image output is a specialist media route, not a chat-completions
         // response. The canonical classifier handles both /image and natural
         // language; Local remains isolated and never reaches this resolver.
-        if (slashImageRequest || routedImageRequest) {
-          const prompt = slashImageRequest ? trimmed.slice('/image'.length).trim() : trimmed;
-          if (!prompt) {
-            Alert.alert('Add an image prompt', 'Type what you want AGI to create after /image.');
-            return false;
-          }
-          if (activeMode !== 'cloud') {
-            Alert.alert(
-              'Image generation uses AGI Cloud',
-              'Start an AGI Cloud chat to generate images. Local Mode can attach and inspect images without uploading them.',
-            );
-            return false;
-          }
-          if (!FEATURES.imageGen) {
-            Alert.alert(
-              'Image generation uses AGI Cloud',
-              'You can attach and inspect local images now. Image generation is available with Cloud access.',
-            );
-            return false;
-          }
-          if (!isOnline) {
-            Alert.alert(
-              'Network connection required',
-              'Image generation needs AGI Cloud. Connect to the internet and try again.',
-            );
-            return false;
-          }
-
-          const title = prompt.length > 40 ? prompt.slice(0, 40).trim() + '...' : prompt;
+        if (imageRequest.status === 'blocked') {
+          Alert.alert(imageRequest.alert.title, imageRequest.alert.message);
+          return false;
+        }
+        if (imageRequest.status === 'ready') {
+          const title =
+            imageRequest.prompt.length > 40
+              ? imageRequest.prompt.slice(0, 40).trim() + '...'
+              : imageRequest.prompt;
           const conversationId = await createConversation(title);
           router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
 
           const imageTurn = runImageGenerationTurn({
             conversationId,
             displayText: trimmed,
-            prompt,
-            model: cloudDispatch?.status === 'selected' ? cloudDispatch.modelKey : modelForSend,
+            prompt: imageRequest.prompt,
+            model: imageRequest.model,
+            ownerId: imageRequest.ownerId,
             begin: beginImageGeneration,
             complete: completeImageGeneration,
             fail: failImageGeneration,
@@ -303,6 +291,10 @@ export default function ChatTabScreen() {
       sendMessage,
       selectedModel,
       subscriptionTier,
+      grantedCapabilities,
+      imageGenerationEnabled,
+      isClerkSignedIn,
+      clerkUserId,
       router,
       isOnline,
       beginImageGeneration,
@@ -614,6 +606,13 @@ export default function ChatTabScreen() {
           attachRef={chatInputAttachRef}
           attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
           draftKey="new-chat"
+          draftProvenance={
+            activeMode === 'local'
+              ? { scope: 'local' }
+              : clerkUserId
+                ? { scope: 'cloud', ownerId: clerkUserId }
+                : undefined
+          }
         />
       </KeyboardAvoidingView>
 

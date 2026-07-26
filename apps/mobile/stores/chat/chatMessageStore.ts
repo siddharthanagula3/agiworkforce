@@ -1,6 +1,7 @@
 import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { agiNativeColors } from '@agiworkforce/design-tokens';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { api } from '@/services/api';
@@ -31,7 +32,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import { setCloudMessageReactionRemote } from '@/src/features/chat/services/cloudMessageMutations';
+import { getDurableGeneratedImagePath } from '@/src/features/image/services/imagegen';
+import { generatedImageToMobileArtifact, useArtifactStore } from '@/src/features/artifacts/store';
 import { getConversationMessageStore } from './conversationRepository';
+import { useCloudSyncStateStore } from './cloudSyncStateStore';
 // SEPARATION-FIX: cloud conversations are physically separated into their own store.
 // Lazy import to avoid circular dependency at module initialisation time.
 function getCloudStore() {
@@ -56,6 +60,8 @@ interface MessageState {
   isLoadingMessages: boolean;
 
   setCurrentConversationId: (id: string | null) => void;
+  /** Clear shared UI selection only when it points at an outgoing Cloud account. */
+  clearCloudConversationSelection: (cloudConversationIds: string[]) => void;
   loadConversations: () => Promise<void>;
   createConversation: (title?: string, projectId?: string) => Promise<string>;
   forkConversation: (
@@ -89,7 +95,13 @@ interface MessageState {
   completeImageGeneration: (
     conversationId: string,
     assistantMessageId: string,
-    result: { imageUrl: string; revisedPrompt?: string; model?: string },
+    result: {
+      imageUrl: string;
+      persisted?: boolean;
+      persistenceWarning?: string;
+      revisedPrompt?: string;
+      model?: string;
+    },
   ) => void;
   failImageGeneration: (
     conversationId: string,
@@ -113,6 +125,15 @@ export const useChatMessageStore = create<MessageState>()(
         set({ currentConversationId: id });
       },
 
+      clearCloudConversationSelection: (cloudConversationIds) => {
+        const cloudIds = new Set(cloudConversationIds);
+        set((state) =>
+          state.currentConversationId && cloudIds.has(state.currentConversationId)
+            ? { currentConversationId: null }
+            : {},
+        );
+      },
+
       loadConversations: async () => {
         set({ isLoadingConversations: true });
         try {
@@ -121,7 +142,7 @@ export const useChatMessageStore = create<MessageState>()(
           // This store only holds Local Mode conversations.
           if (shouldLoadCloudConversationList()) {
             const data = ManagedCloudConversationListResponseSchema.parse(
-              await api.get<unknown>('/api/chat/conversations'),
+              await api.get<unknown>('/api/chat/conversations?includeHistoryStats=1'),
             );
             getCloudStore()
               .getState()
@@ -129,6 +150,7 @@ export const useChatMessageStore = create<MessageState>()(
                 data.conversations
                   .map(normalizeManagedCloudConversation)
                   .map(normalizeManagedCloudConversationForMobile),
+                data.historyStats,
               );
           }
         } catch {
@@ -293,6 +315,13 @@ export const useChatMessageStore = create<MessageState>()(
         const existingCloudMsgs = cloudStore.getState().messages[conversationId];
         const existing = localConversation ? existingLocalMsgs : existingCloudMsgs;
         if (existing && existing.length > 0 && !existing.some((m) => m.isStreaming)) return;
+        // A new-chat navigation and its first send run concurrently: the screen
+        // mounts and starts this read while sendMessage is still committing the
+        // optimistic user/assistant rows. Keep the exact request-start objects
+        // so the response can be reconciled against mutations that happened
+        // while the network request was in flight instead of blindly replacing
+        // the transcript with an older (often empty) server snapshot.
+        const cloudMessagesAtRequestStart = cloudConversation ? (existingCloudMsgs ?? []) : [];
 
         set({ isLoadingMessages: true });
         try {
@@ -305,7 +334,28 @@ export const useChatMessageStore = create<MessageState>()(
           ) as ChatMessage[];
           // Route messages to the correct store.
           if (cloudConversation) {
-            cloudStore.getState().setCloudMessages(conversationId, normalizedMessages);
+            const cloudState = cloudStore.getState();
+            // Account teardown clears the owning conversation synchronously.
+            // Never let an old account's late response recreate its transcript.
+            if (!cloudState.conversations.some((candidate) => candidate.id === conversationId)) {
+              return;
+            }
+            const currentMessages = cloudState.messages[conversationId] ?? [];
+            const dirtyMessageIds = new Set(
+              useCloudSyncStateStore
+                .getState()
+                .dirtyMessages.filter((dirty) => dirty.conversationId === conversationId)
+                .map((dirty) => dirty.messageId),
+            );
+            cloudState.setCloudMessages(
+              conversationId,
+              reconcileLoadedCloudMessages({
+                serverMessages: normalizedMessages,
+                requestStartMessages: cloudMessagesAtRequestStart,
+                currentMessages,
+                dirtyMessageIds,
+              }),
+            );
           } else {
             set((state) => ({
               messages: { ...state.messages, [conversationId]: normalizedMessages },
@@ -508,7 +558,6 @@ export const useChatMessageStore = create<MessageState>()(
           model,
           isGeneratingImage: true,
           imageGenStatus: 'generating',
-          imageGenProgress: 0,
           imageGenPrompt: prompt,
         };
 
@@ -569,12 +618,13 @@ export const useChatMessageStore = create<MessageState>()(
                       ...message,
                       type: 'image',
                       imageUrl: result.imageUrl,
+                      imageGenPersisted: result.persisted !== false,
                       revisedPrompt: result.revisedPrompt,
                       content: finalContent,
                       isGeneratingImage: false,
                       imageGenStatus: 'completed',
                       imageGenProgress: 100,
-                      imageGenError: undefined,
+                      imageGenError: result.persistenceWarning,
                       model: result.model ?? message.model,
                     }
                   : message,
@@ -593,6 +643,31 @@ export const useChatMessageStore = create<MessageState>()(
             ),
           };
         });
+        const durableImagePath =
+          result.persisted === false
+            ? null
+            : getDurableGeneratedImagePath({ url: result.imageUrl });
+        const cloudOwnerId = isCloudConversation
+          ? useAuthStore.getState().clerkUserId?.trim()
+          : null;
+        if (durableImagePath && cloudOwnerId) {
+          const conversationTitle =
+            ownerStore
+              .getState()
+              .conversations.find((conversation) => conversation.id === conversationId)?.title ??
+            'AGI Cloud';
+          useArtifactStore.getState().addArtifacts([
+            generatedImageToMobileArtifact({
+              messageId: assistantMessageId,
+              imagePath: durableImagePath,
+              prompt: result.revisedPrompt,
+              createdAt: now,
+              conversationTitle,
+              provenance: { scope: 'cloud', ownerId: cloudOwnerId },
+              accentColor: agiNativeColors.dark.terraCotta,
+            }),
+          ]);
+        }
         if (isCloudConversation) {
           markConversationForSync(conversationId);
           markMessageForSync(conversationId, assistantMessageId);
@@ -793,6 +868,53 @@ function shouldLoadRemoteMessages(conversation: ConversationSummary | undefined)
   if (!isCloudChatEnabled()) return false;
   if (conversation) return isCloudConversation(conversation);
   return useChatAppModeStore.getState().appMode === 'cloud';
+}
+
+interface ReconcileLoadedCloudMessagesInput {
+  serverMessages: ChatMessage[];
+  requestStartMessages: ChatMessage[];
+  currentMessages: ChatMessage[];
+  dirtyMessageIds: Set<string>;
+}
+
+/**
+ * Three-way reconciliation for a conversation read that races local activity.
+ *
+ * The server is authoritative for rows untouched during the request. Local
+ * additions, edits, deletions, dirty writes, and streaming placeholders win
+ * until their own sync completes. This prevents the common first-send race:
+ * GET starts against an empty conversation, the turn streams locally, then
+ * the stale empty GET response arrives and erases the visible transcript.
+ */
+function reconcileLoadedCloudMessages({
+  serverMessages,
+  requestStartMessages,
+  currentMessages,
+  dirtyMessageIds,
+}: ReconcileLoadedCloudMessagesInput): ChatMessage[] {
+  const requestStartById = new Map(requestStartMessages.map((message) => [message.id, message]));
+  const currentById = new Map(currentMessages.map((message) => [message.id, message]));
+  const reconciled = new Map(serverMessages.map((message) => [message.id, message]));
+
+  // A row present when the request began but missing now was deleted locally
+  // while the request was in flight. Do not resurrect it from a stale response.
+  for (const message of requestStartMessages) {
+    if (!currentById.has(message.id)) reconciled.delete(message.id);
+  }
+
+  for (const message of currentMessages) {
+    const requestStartMessage = requestStartById.get(message.id);
+    const changedDuringRequest =
+      requestStartMessage === undefined || requestStartMessage !== message;
+    if (changedDuringRequest || message.isStreaming || dirtyMessageIds.has(message.id)) {
+      reconciled.set(message.id, message);
+    }
+  }
+
+  return Array.from(reconciled.values()).sort((a, b) => {
+    const createdAtOrder = a.createdAt.localeCompare(b.createdAt);
+    return createdAtOrder === 0 ? a.id.localeCompare(b.id) : createdAtOrder;
+  });
 }
 
 // mergeCloudConversations removed: cloud conversations no longer write into
