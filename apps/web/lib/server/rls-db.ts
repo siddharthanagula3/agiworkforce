@@ -31,6 +31,29 @@ export interface UserScopedDb {
   db: DatabaseAdapter;
   /** The bound RLS subject (Clerk user id) — write a user_id that matches this. */
   userId: string;
+  /** The active organization bound for tenancy policies, or null for personal scope. */
+  organizationId: string | null;
+}
+
+/**
+ * Header carrying the workspace the client is currently acting in. Surfaces set
+ * it when the user has switched into an organization.
+ *
+ * This is a SCOPE SELECTOR, not a grant. Migration 0073 resolves the caller's
+ * role from `organization_members` inside the database, so a client that sends
+ * an organization it does not belong to gets exactly personal scope: the role
+ * lookup returns NULL, org visibility denies, and `app_row_is_writable` refuses
+ * the write. The value is still shape-validated here so a malformed header
+ * cannot reach a uuid cast in a policy.
+ */
+export const ACTIVE_ORG_HEADER = 'x-agi-organization-id';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function readActiveOrgId(request: NextRequest): string | null {
+  const raw = request.headers.get(ACTIVE_ORG_HEADER)?.trim();
+  if (!raw) return null;
+  return UUID_RE.test(raw) ? raw : null;
 }
 
 /**
@@ -58,7 +81,12 @@ export async function getUserScopedDb(request: NextRequest): Promise<UserScopedD
       throw createError.unauthorized();
     }
     const { userId } = await getClerkAuthUser(request);
-    return { db: getRlsCapableDb().withUser(token), userId };
+    const organizationId = readActiveOrgId(request);
+    return {
+      db: getRlsCapableDb().withUser(token).withOrg(organizationId),
+      userId,
+      organizationId,
+    };
   }
 
   // Path 2: Clerk session (browser) — getToken() returns a signed session JWT.
@@ -67,7 +95,12 @@ export async function getUserScopedDb(request: NextRequest): Promise<UserScopedD
     const token = await getToken();
     if (token) {
       await assertAccountActive(userId);
-      return { db: getRlsCapableDb().withUser(token), userId };
+      const organizationId = readActiveOrgId(request);
+      return {
+        db: getRlsCapableDb().withUser(token).withOrg(organizationId),
+        userId,
+        organizationId,
+      };
     }
   }
 
