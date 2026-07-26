@@ -295,3 +295,73 @@ export function getNextExecutionAt(timing: ScheduleTiming, after: Date, now: Dat
   const searchAfter = after > now ? after : now;
   return nextCronOccurrence(expression, timing.timezone, searchAfter);
 }
+
+/**
+ * Due schedules are only swept when the platform's `/api/cron/run-schedules`
+ * entry in `vercel.json` fires. A task can therefore never run more often than
+ * that sweep, whatever cadence the user asks for. Accepting a finer cadence
+ * would be a promise the platform cannot keep.
+ *
+ * Pinned to `vercel.json` by `schedule-cadence.test.ts` — if the deployed cron
+ * gets faster, that test fails until this constant follows it.
+ */
+export const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** Occurrences to sample when measuring the tightest gap a cron can produce. */
+const CADENCE_SAMPLE_OCCURRENCES = 8;
+
+/**
+ * Smallest gap between consecutive firings, or null when fewer than two
+ * occurrences exist inside the sampled horizon (a schedule that rare is always
+ * deliverable).
+ */
+function tightestCronGapMs(expression: string, timezone: string, from: Date): number | null {
+  let previous = nextCronOccurrence(expression, timezone, from);
+  let tightest: number | null = null;
+  for (let index = 1; index < CADENCE_SAMPLE_OCCURRENCES; index += 1) {
+    let next: Date;
+    try {
+      next = nextCronOccurrence(expression, timezone, previous);
+    } catch {
+      // No further occurrence inside the supported horizon; what we have is the
+      // whole story.
+      break;
+    }
+    const gap = next.getTime() - previous.getTime();
+    if (tightest === null || gap < tightest) tightest = gap;
+    previous = next;
+  }
+  return tightest;
+}
+
+/**
+ * Reject a cadence the sweep cannot deliver, so the product never shows an
+ * availability it does not have.
+ *
+ * Deliberately NOT called from `getNextExecutionAt`: that function also runs on
+ * the read/finalize path, where a throw escapes `processClaimedScheduleRun` and
+ * aborts the entire batch for every other user. This belongs at the write
+ * boundary only, so rows created under the old contract keep running.
+ */
+export function assertDeliverableCadence(timing: ScheduleTiming, now: Date): void {
+  if (timing.scheduleType === 'once') return;
+
+  if (timing.scheduleType === 'interval') {
+    const intervalMs = timing.intervalMs;
+    if (typeof intervalMs === 'number' && intervalMs < SWEEP_INTERVAL_MS) {
+      throw new Error(
+        'Scheduled tasks are swept once a day, so the shortest supported interval is 1 day',
+      );
+    }
+    return;
+  }
+
+  const expression = timing.cronExpression?.trim();
+  if (!expression) return;
+  const gap = tightestCronGapMs(expression, timing.timezone, now);
+  if (gap !== null && gap < SWEEP_INTERVAL_MS) {
+    throw new Error(
+      'Scheduled tasks are swept once a day, so a cron expression cannot fire more than once per day',
+    );
+  }
+}

@@ -14,6 +14,7 @@ import {
   listSchedules,
   listScheduleRuns,
   processClaimedScheduleRun,
+  processDueScheduleRuns,
   setScheduleEnabled,
   updateSchedule,
   type ClaimedScheduleRun,
@@ -719,5 +720,58 @@ describe('schedule run lifecycle', () => {
     controller.abort(new DOMException('client disconnected', 'AbortError'));
 
     await expect(pending).resolves.toMatchObject({ status: 'cancelled' });
+  });
+});
+
+describe('due-schedule batch isolation', () => {
+  it('keeps sweeping after one claim fails to finalize', async () => {
+    // processClaimedScheduleRun finalizes its own executor failures, so the only
+    // way it throws is finalization itself failing — an unparseable stored
+    // timing, or the database rejecting the write. Before the guard in
+    // processDueScheduleRuns, that single rejection propagated through
+    // Promise.all(workers) and every other due task in the batch went unrun.
+    const claimRow = (runId: string) => ({
+      ...taskRow,
+      run_id: runId,
+      run_started_at: claim.scheduledFor,
+      scheduled_for: claim.scheduledFor,
+      trigger_source: 'schedule',
+    });
+
+    const query = vi.fn(async (sql: string) => {
+      // findExpiredClaims: nothing stranded from a previous invocation.
+      if (sql.includes('lease_expires_at < now()')) return [];
+      // claimDueScheduleRuns: two tasks are due in this sweep.
+      if (sql.includes('expired_candidates')) return [claimRow('run-1'), claimRow('run-2')];
+      return [];
+    });
+
+    const db = database(query);
+    // processClaimedScheduleRun already retries finalization once from its own
+    // catch, so a single failure recovers. The batch only dies when the same row
+    // fails to finalize persistently — an unparseable stored timing throws on
+    // both attempts, because both compute the next occurrence.
+    let finalizeCalls = 0;
+    vi.spyOn(db, 'transaction').mockImplementation(async () => {
+      finalizeCalls += 1;
+      if (finalizeCalls <= 2) throw new Error('stored timing is unparseable');
+      return { id: 'run-2', status: 'success' } as never;
+    });
+
+    const executor = vi.fn().mockResolvedValue({ text: 'ok', model: 'model-1' });
+
+    const summary = await processDueScheduleRuns({
+      limit: 2,
+      concurrency: 1,
+      timeoutMs: 1000,
+      db,
+      executor: executor as unknown as ScheduledTaskExecutor,
+    });
+
+    // The poisoned claim is skipped, not fatal: the second claim still executed
+    // and finalized (two failed attempts on run-1, then run-1's own success).
+    expect(finalizeCalls).toBe(3);
+    expect(executor).toHaveBeenCalledTimes(2);
+    expect(summary.claimed).toBe(2);
   });
 });
