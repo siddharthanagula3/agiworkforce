@@ -37,3 +37,27 @@ describe('computer-use default = ask-before-acting (trust-boundary P0)', () => {
     expect(panel).not.toMatch(/askCheckbox\.checked\s*=\s*false/);
   });
 });
+
+describe('computer-use ask gate persists and rehydrates', () => {
+  const panel = read('src/features/side-panel/computerUsePanel.ts');
+
+  it('rehydrates the stored gate instead of always rendering the default', () => {
+    // Before this, `askCheckbox.checked = true` was the only write in the file:
+    // after an autopilot opt-out was persisted, reopening the panel showed
+    // "Ask before acting" checked while background.ts ran with no gate.
+    expect(panel).toMatch(/storage\?\.local\?\.get\('agi_cu_ask_before_acting'/);
+    expect(panel).toMatch(
+      /askCheckbox\.checked\s*=\s*items\?\.\['agi_cu_ask_before_acting'\]\s*!==\s*false/,
+    );
+  });
+
+  it('writes the gate on toggle, not only when Run Autofill escalates', () => {
+    expect(panel).toMatch(/askCheckbox\.addEventListener\('change'/);
+    expect(panel).toMatch(/set\(\{\s*agi_cu_ask_before_acting:\s*askCheckbox\.checked\s*\}\)/);
+  });
+
+  it('rehydration still uses the default-deny rule, never a bare false assignment', () => {
+    // Guards the same invariant as the block above: an unset pref must gate.
+    expect(panel).not.toMatch(/askCheckbox\.checked\s*=\s*false/);
+  });
+});
