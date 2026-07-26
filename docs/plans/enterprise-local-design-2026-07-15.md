@@ -46,7 +46,7 @@ provable to an org's security team.
 
 Selling surfaces: Desktop, CLI, VS Code (the three all-mode surfaces).
 Web/Chrome are cloud-only, out of scope. Mobile has no BYOK and is
-consumer-first (`docs/spec/volumes/03-modes-and-trust.md:43`);
+consumer-first (`docs/current/trust-mode-surface-matrix.md:43`);
 Local-mode enterprise features are a v1 non-goal (§7).
 
 Design constraints (unchanged from the prior draft, still correct):

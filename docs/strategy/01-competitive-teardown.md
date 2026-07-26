@@ -3,9 +3,9 @@
 Status: Strategy analysis (not source-of-truth)
 Owner: Founder
 Last updated: 2026-06-27
-Companion docs: `02-gap-analysis.md`, `05-gtm-pricing-business-model.md`
+Companion docs: `05-gtm-pricing-business-model.md`
 
-This is the anatomy of the two suites AGI is benchmarked against, as of June 2026. It answers the first half of the brief: _what features, runtimes, architecture, and operational machinery make these applications exist?_ Read it with `02-gap-analysis.md`, which maps each capability to AGI's actual code.
+This is the anatomy of the two suites AGI is benchmarked against, as of June 2026. It answers the first half of the brief: _what features, runtimes, architecture, and operational machinery make these applications exist?_ The per-capability mapping to AGI's actual code now lives in `docs/current/parity-implementation-matrix.md`.
 
 All competitor facts are web-sourced (June 2026) with the most load-bearing claims cited inline. Anything flagged **[unverified]** could not be confirmed against a primary source — do not repeat it in investor materials without checking.
 

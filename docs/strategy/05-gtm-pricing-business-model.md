@@ -2,9 +2,15 @@
 
 Status: Strategy analysis (not source-of-truth)
 Owner: Founder
-Last updated: 2026-06-27
+Last updated: 2026-06-27 (pricing tables superseded 2026-07-26 — see banner below)
 Companion docs: `06-fundraising-and-financial-plan.md`, `08-brand-and-narrative.md`
 Framing: honest and ambitious (per your request)
+
+> **SUPERSEDED PRICING (2026-07-26):** the tier table in §"Charge for the software
+> layer" predates the current tier lock and omits Basic and Max entirely. The
+> canonical ladder is Free $0 / Basic $8 (₹399) / Pro $20 / Max $100 and $200 /
+> Team per-seat / Enterprise custom — see `docs/current/unit-economics-and-pricing-model.md`.
+> Everything here remains valid as market analysis, not as price truth.
 
 This is the hardest doc in the package, because it contains the finding you most need to hear: **the product as currently framed — a horizontal, multi-provider, BYOK, zero-markup consumer chat app — is the single most defunded category in the mid-2026 market.** That is not a reason to stop. It is a reason to _reposition the same assets_ toward where the money and the moat actually are. This doc shows how.
 

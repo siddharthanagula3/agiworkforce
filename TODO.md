@@ -12,7 +12,7 @@ structure ruling and sequence live in
 
 ## Active Queue (locked order; behavior lanes may run in parallel with disjoint write sets)
 
-1. DONE 2026-07-15 — Frontend handoff P0s (`docs/plans/frontend-ui-ux-and-restructure-handoff-2026-07-15.md` §12–13):
+1. DONE 2026-07-15 — Frontend handoff P0s (handoff doc retired 2026-07-26; all three items landed):
    - VS Code: turn the intentional RED green — `if (options[i].disabled) continue;`
      in `fallbackModelGroups()` (`apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts`;
      failing assertion at `src/__tests__/webviewContent.webview.test.ts:180`).

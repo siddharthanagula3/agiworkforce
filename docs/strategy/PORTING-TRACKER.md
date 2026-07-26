@@ -2,7 +2,7 @@
 
 Status: Active (single source of truth for the execution loop)
 Owner: Platform lead
-Last updated: 2026-06-28
+Last updated: 2026-07-26
 Drives: `11-execution-playbook.md`. Update this after every increment.
 
 This file tracks (a) increment status for the resumable loop, and (b) the license/attribution record for every adaptation, so the codebase stays diligence-clean. Rule: **no ported file lands without a row here** plus a `THIRD_PARTY_NOTICES.md` entry and preserved upstream headers.
@@ -117,8 +117,10 @@ Legend: ⬜ todo · 🔄 in progress · ✅ done · ⏸ blocked
 
 ## 4. Next action
 
-**INC-0.3** (trust-boundary contract tests) is the next increment, per the loop in
-`11-execution-playbook.md`. INC-0.1 (license gate) is ✅. INC-0.2 (tracker) is now tracked + maintained.
+INC-0.1 (license gate), INC-0.2 (this tracker) and INC-0.3 (trust-boundary contract
+tests, `d84bbf8d8`) are all ✅ — see §2. What remains from INC-0.3 is a unified
+`pnpm` gate over the per-surface trust-boundary tests that already exist on web,
+extension and desktop. Next increments run per the loop in `11-execution-playbook.md`.
 
 ## 5. Session progress log
 
