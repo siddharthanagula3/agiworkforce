@@ -248,6 +248,9 @@ export function ScheduleForm({
                 aria-describedby={describedBy('intervalValue', errors)}
               />
               <FieldError field="intervalValue" errors={errors} />
+              <p id="schedule-cadence-helper" className="text-xs text-muted-foreground">
+                Scheduled tasks are swept once a day, so a task runs at most daily.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor={fieldId('intervalUnit')}>Interval Unit</Label>
@@ -260,9 +263,10 @@ export function ScheduleForm({
                 onChange={(event) =>
                   set({ intervalUnit: event.target.value as ScheduleDraft['intervalUnit'] })
                 }
+                aria-describedby="schedule-cadence-helper"
               >
-                <option value="minutes">Minutes</option>
-                <option value="hours">Hours</option>
+                {/* Minutes and hours are not offered: due tasks are swept once a
+                    day, so the server rejects any interval under 1 day. */}
                 <option value="days">Days</option>
               </select>
             </div>
@@ -352,7 +356,8 @@ export function ScheduleForm({
               aria-describedby={describedBy('cronExpression', errors, 'schedule-cron-helper')}
             />
             <p id="schedule-cron-helper" className="text-xs text-muted-foreground">
-              Five fields only: minute, hour, day of month, month, and day of week.
+              Five fields only: minute, hour, day of month, month, and day of week. Tasks are swept
+              once a day, so an expression that fires more often than daily is rejected.
             </p>
             <FieldError field="cronExpression" errors={errors} />
           </div>
