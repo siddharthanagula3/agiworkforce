@@ -34,7 +34,11 @@ vi.mock('@/lib/server/iap-verify-apple', () => ({
 }));
 vi.mock('@/lib/server/iap-verify-google', () => ({ verifyGoogleSubscription: vi.fn() }));
 vi.mock('@/lib/services/subscription-service', () => ({
-  SubscriptionService: { allocateCreditsForPeriod: (...args: unknown[]) => mockAllocate(...args) },
+  SubscriptionService: {
+    allocateCreditsForPeriod: (...args: unknown[]) => mockAllocate(...args),
+    // Cross-channel guard reads the existing row before upserting.
+    getSubscription: async () => null,
+  },
 }));
 
 import { POST } from '@/app/api/mobile/iap/verify/route';

@@ -13,13 +13,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createError } from '@agiworkforce/utils';
 
-const { mockRequireCurrentUserId, mockNeonQuery, mockAllocateCredits, mockVerifyAppleTransaction } =
-  vi.hoisted(() => ({
-    mockRequireCurrentUserId: vi.fn(),
-    mockNeonQuery: vi.fn(),
-    mockAllocateCredits: vi.fn(),
-    mockVerifyAppleTransaction: vi.fn(),
-  }));
+const {
+  mockRequireCurrentUserId,
+  mockNeonQuery,
+  mockAllocateCredits,
+  mockVerifyAppleTransaction,
+  mockGetSubscription,
+} = vi.hoisted(() => ({
+  mockRequireCurrentUserId: vi.fn(),
+  mockNeonQuery: vi.fn(),
+  mockAllocateCredits: vi.fn(),
+  mockVerifyAppleTransaction: vi.fn(),
+  mockGetSubscription: vi.fn(),
+}));
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
@@ -46,6 +52,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: {
     allocateCreditsForPeriod: (...args: unknown[]) => mockAllocateCredits(...args),
+    // Cross-channel guard reads the existing row before upserting.
+    getSubscription: (...args: unknown[]) => mockGetSubscription(...args),
   },
 }));
 
@@ -88,6 +96,8 @@ describe('POST /api/mobile/iap/verify', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireCurrentUserId.mockResolvedValue('user-1');
+    // Default: no existing subscription, so the cross-channel guard is inert.
+    mockGetSubscription.mockResolvedValue(null);
     defaultVerifyAppleTransactionMock();
     delete process.env['APPLE_APP_STORE_KEY_ID'];
     delete process.env['APPLE_APP_STORE_ISSUER_ID'];
@@ -149,6 +159,81 @@ describe('POST /api/mobile/iap/verify', () => {
       process.env['APPLE_APP_STORE_ISSUER_ID'] = 'issuer-id';
       process.env['APPLE_APP_STORE_BUNDLE_ID'] = 'com.agiworkforce.app';
       process.env['APPLE_APP_STORE_PRIVATE_KEY'] = 'dGVzdA=='; // base64 placeholder
+    });
+
+    it('refuses a store purchase when Stripe already owns the subscription row', async () => {
+      // Both channels upsert the same row on `on conflict (user_id)`. Without
+      // this guard the upsert overwrote plan_tier/status while
+      // stripe_subscription_id survived, so Stripe kept charging and the next
+      // customer.subscription.updated flipped the tier back — double billing
+      // with an oscillating tier. Must reject BEFORE the upsert so the client
+      // never calls finishTransaction and the purchase stays refundable.
+      mockGetSubscription.mockResolvedValue({
+        id: 'sub-1',
+        user_id: 'user-1',
+        plan_tier: 'pro',
+        status: 'active',
+        stripe_subscription_id: 'sub_stripe_123',
+        stripe_price_id: 'price_1',
+        current_period_start: new Date(),
+        current_period_end: new Date(Date.now() + 30 * 86400000),
+      });
+      mockVerifyAppleTransaction.mockResolvedValue({
+        transactionId: 'txn-1',
+        originalTransactionId: 'orig-txn-1',
+        productId: 'com.agiworkforce.app.sub.pro.monthly',
+        purchaseDate: Date.parse('2026-07-01T00:00:00.000Z'),
+        expiresDate: Date.parse('2026-08-01T00:00:00.000Z'),
+        revocationDate: null,
+        environment: 'Production',
+      });
+
+      const res = await POST(
+        makeRequest({
+          platform: 'ios',
+          productId: 'com.agiworkforce.app.sub.pro.monthly',
+          receipt: 'header.payload.sig',
+        }),
+      );
+
+      expect(res.status).toBe(409);
+      expect(mockNeonQuery).not.toHaveBeenCalled();
+      expect(mockAllocateCredits).not.toHaveBeenCalled();
+    });
+
+    it('still accepts the purchase when the existing Stripe row is not entitled', async () => {
+      // A cancelled Stripe subscription must not block moving to the store.
+      mockGetSubscription.mockResolvedValue({
+        id: 'sub-1',
+        user_id: 'user-1',
+        plan_tier: 'pro',
+        status: 'canceled',
+        stripe_subscription_id: 'sub_stripe_123',
+        stripe_price_id: 'price_1',
+        current_period_start: new Date(),
+        current_period_end: new Date(),
+      });
+      mockVerifyAppleTransaction.mockResolvedValue({
+        transactionId: 'txn-1',
+        originalTransactionId: 'orig-txn-1',
+        productId: 'com.agiworkforce.app.sub.pro.monthly',
+        purchaseDate: Date.parse('2026-07-01T00:00:00.000Z'),
+        expiresDate: Date.parse('2026-08-01T00:00:00.000Z'),
+        revocationDate: null,
+        environment: 'Production',
+      });
+      mockNeonQuery.mockResolvedValue([{ id: 'sub-123' }]);
+      mockAllocateCredits.mockResolvedValue(undefined);
+
+      const res = await POST(
+        makeRequest({
+          platform: 'ios',
+          productId: 'com.agiworkforce.app.sub.pro.monthly',
+          receipt: 'header.payload.sig',
+        }),
+      );
+
+      expect(res.status).toBe(200);
     });
 
     it('upserts a subscription and allocates credits for a verified active transaction', async () => {
