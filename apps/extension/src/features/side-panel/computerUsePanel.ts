@@ -516,6 +516,23 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   // is in background.ts (an unset pref is treated as ask-before-acting).
   askCheckbox.checked = true;
 
+  // Rehydrate the persisted gate. The synchronous default above stays ON so the
+  // control is never briefly wrong during this async round-trip; only an
+  // explicit stored `false` (the autopilot opt-out) unchecks it, which is the
+  // same rule the authoritative gate in background.ts applies. Without this the
+  // panel rendered "ask before acting" checked while background.ts ran the agent
+  // with no approval gate — a control misreporting the trust boundary it names.
+  chrome.storage?.local?.get('agi_cu_ask_before_acting', (items) => {
+    if (chrome.runtime?.lastError) return;
+    askCheckbox.checked = items?.['agi_cu_ask_before_acting'] !== false;
+  });
+
+  // Persist on toggle rather than only when Run Autofill escalates, so closing
+  // the panel without running anything cannot drop the user's choice.
+  askCheckbox.addEventListener('change', () => {
+    void chrome.storage?.local?.set({ agi_cu_ask_before_acting: askCheckbox.checked });
+  });
+
   const askText = document.createTextNode('Ask before acting');
   askLabel.appendChild(askCheckbox);
   askLabel.appendChild(askText);
