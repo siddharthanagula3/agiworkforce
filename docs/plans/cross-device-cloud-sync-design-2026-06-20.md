@@ -4,7 +4,7 @@ Status: APPROVED 2026-06-20 — Phase 0 authorized (build schema + sync API)
 Owner: Founder + platform lead
 Date: 2026-06-20
 Spec: `docs/current/trust-mode-surface-matrix.md`
-Supersedes: `docs/decisions/2026-05-22-cross-surface-sync-v1-stance.md` (which intentionally deferred this)
+Supersedes: `the retired 2026-05-22 cross-surface-sync v1 stance` (which intentionally deferred this)
 
 ## Locked decisions (founder, 2026-06-20)
 

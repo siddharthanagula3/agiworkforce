@@ -21,7 +21,7 @@ We optimise for independent shippability. Architectural patterns this drives:
 
 - `@agiworkforce/llm-runtime` declares only `@agiworkforce/types` (for `models.json`) as an internal dependency. No telemetry, auth, or state imports.
 - `LatchedHeaderStore` (§5) is per-process, not persisted — persistence would couple it to a storage backend.
-- `WorkSecret` codec lives in `types.ts` as functions, not a class — the codec round-trips cleanly across any FFI without `instanceof` semantics. (See `2026-05-09-worksecret-codec-in-types.md`.)
+- `WorkSecret` codec lives in `types.ts` as functions, not a class — the codec round-trips cleanly across any FFI without `instanceof` semantics. (See `the retired WorkSecret-codec ADR (now `packages/contracts/types`)`.)
 - `dispatch.ts` accepts `rotateKey: () => Promise<...>` as injection rather than importing Supabase. (See `2026-05-09-dispatch-supabase-rpc-injection.md`.)
 - `@agiworkforce/client-runtime` (state + queue + context) has zero application-specific imports — `AppStateStore.ts` is generic over its domain shape.
 
@@ -43,5 +43,5 @@ We optimise for independent shippability. Architectural patterns this drives:
 ## References
 
 - `docs/architecture/foundation-2026.md` §10 row 5.
-- ADRs `2026-05-09-worksecret-codec-in-types.md`, `2026-05-09-dispatch-supabase-rpc-injection.md`, `2026-05-09-sticky-retry-context.md`.
+- ADRs `the retired WorkSecret-codec ADR (now `packages/contracts/types`)`, `2026-05-09-dispatch-supabase-rpc-injection.md`, `2026-05-09-sticky-retry-context.md`.
 - Team config description.

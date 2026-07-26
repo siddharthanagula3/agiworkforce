@@ -44,8 +44,8 @@ Strategic:
 
 - `2026-05-20-openai-anthropic-application-suite-thesis.md` — the suite thesis (anchors #1). Current.
 - `2026-05-21-unified-chat-as-suite-spine.md` — `unified-chat` as the shared engine. Current.
-- `2026-05-22-cross-surface-sync-v1-stance.md` — sync boundary stance. Current.
-- `2026-05-21-signed-upload-contract-pre-managed.md` — pre-managed upload contract. Current.
+- Cross-surface sync boundary stance — superseded by the delta-sync design now recorded in `architecture-manifest.md` §6 and implemented in `packages/client/sync`.
+- Signed-upload contract — executed; the contract itself now lives in `packages/contracts/types/src/chat.ts` (`SignedUploadRequest`, `MAX_ATTACHMENT_BYTES`).
 - `2026-05-09-strategic-*` — acquisition optionality, customer focus, foundation-first sprint, maximalist surface coverage, 3-VM parallel. Current (strategic posture).
 
 Tactical (engineering decisions): `2026-05-09-bridge-over-rewrite-store-migration.md`, `depth-counter-circularity.md`, `dispatch-supabase-rpc-injection.md`, `dispatch-two-layer-dedup.md`, `onchange-fires-before-listeners.md`, `per-endpoint-auth-ladder.md`, `per-surface-queue-factory.md`, `sticky-retry-context.md`, `stream-watchdog-promise-race.md`, `try-with-rust-context.md`, `worksecret-codec-in-types.md`, `zoom-unsupported-until-tabs-permission.md`.

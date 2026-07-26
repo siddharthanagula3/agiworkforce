@@ -6,7 +6,7 @@ Last updated: 2026-07-15
 Extends: `docs/plans/monorepo-restructure-2026-07-08.md` (Appendix B and
 `docs/agent-context/repo-map.json#workspaceUnits` remain the unit-disposition
 source of truth)
-Related: `docs/plans/frontend-ui-ux-and-restructure-handoff-2026-07-15.md`,
+Related:
 `docs/research/competitor-capability-session-architecture-2026-07-15.md`
 
 ## 1. Purpose And Ruling Summary
@@ -506,7 +506,7 @@ horizon, not demo velocity):
    deletion to founder; log the WebAppShell mobile P0 into known-flaws and
    reconcile the stale rows in §7.
 2. Frontend handoff P0s (behavior lanes, from
-   `frontend-ui-ux-and-restructure-handoff-2026-07-15.md` §12–13): VS Code
+   the retired 2026-07-15 frontend/restructure handoff §12–13): VS Code
    disabled-option guard (intentional RED at
    `webviewContent.webview.test.ts:180`) plus attachment-chip host-deletion
    contract; `WebAppShell` responsive drawer with TDD and rendered checks at

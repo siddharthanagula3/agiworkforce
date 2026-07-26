@@ -3,7 +3,7 @@
 Status: Strategy analysis (not source-of-truth)
 Owner: Platform lead
 Last updated: 2026-06-27
-Companion docs: `03-code-reality-and-tech-debt.md`, `06-fundraising-and-financial-plan.md`, your `docs/current/technical-architecture.md`
+Companion docs: `06-fundraising-and-financial-plan.md`, `docs/current/technical-architecture.md`
 
 This answers "what would it take to build this for 1 million users from this point?" It is a systems-design doc plus a cost model plus four architecture decision records (ADRs). It assumes the trust-mode model from your source-of-truth is non-negotiable.
 

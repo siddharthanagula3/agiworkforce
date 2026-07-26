@@ -3,7 +3,7 @@
 Status: DESIGN — awaiting founder sign-off before the migration. Owner: this session.
 Last updated: 2026-06-21. Decision: founder chose "new managed-only synced artifact
 entity" (Option A) for desktop's first-class editable artifacts. See
-`artifacts-splitview-parity-2026-06-21.md` for the conflict that motivated this.
+the retired 2026-06-21 artifacts split-view parity plan for the conflict that motivated this.
 
 Extends the P2 cross-device chat sync (`cross-device-cloud-sync-design-2026-06-20.md`,
 migration `0038_cloud_sync_versioning.sql`, endpoint `/api/chat/sync`). This is the same
