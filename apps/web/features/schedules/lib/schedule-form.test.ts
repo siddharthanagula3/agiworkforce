@@ -145,10 +145,10 @@ describe('schedule form contract', () => {
   it('builds bounded interval input and rejects intervals outside server limits', () => {
     expect(
       validateAndBuildScheduleRequest(
-        draft({ recurrence: 'interval', intervalValue: '6', intervalUnit: 'hours' }),
+        draft({ recurrence: 'interval', intervalValue: '3', intervalUnit: 'days' }),
         new Date('2026-07-15T12:00:00.000Z'),
       ),
-    ).toMatchObject({ ok: true, payload: { intervalMs: 21_600_000 } });
+    ).toMatchObject({ ok: true, payload: { intervalMs: 259_200_000 } });
 
     expect(
       validateAndBuildScheduleRequest(
@@ -158,9 +158,45 @@ describe('schedule form contract', () => {
     ).toEqual({
       ok: false,
       errors: expect.objectContaining({
-        intervalValue: 'Use an interval from 1 minute to 365 days.',
+        intervalValue: 'Use an interval from 1 day to 365 days.',
       }),
     });
+  });
+
+  // The sweep that runs due tasks fires once a day, so anything finer is an
+  // availability the platform does not have. The client refuses it here so the
+  // user is not told "every 6 hours" and then served one run a day.
+  it('refuses a cadence finer than the daily sweep, on both interval and cron', () => {
+    expect(
+      validateAndBuildScheduleRequest(
+        draft({ recurrence: 'interval', intervalValue: '6', intervalUnit: 'hours' }),
+        new Date('2026-07-15T12:00:00.000Z'),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: expect.objectContaining({
+        intervalValue: 'Use an interval from 1 day to 365 days.',
+      }),
+    });
+
+    expect(
+      validateAndBuildScheduleRequest(
+        draft({ recurrence: 'custom', cronExpression: '*/5 * * * *' }),
+        new Date('2026-07-15T12:00:00.000Z'),
+      ),
+    ).toMatchObject({
+      ok: false,
+      errors: expect.objectContaining({
+        cronExpression: expect.stringContaining('once per day'),
+      }),
+    });
+
+    expect(
+      validateAndBuildScheduleRequest(
+        draft({ recurrence: 'custom', cronExpression: '30 9 * * *' }),
+        new Date('2026-07-15T12:00:00.000Z'),
+      ),
+    ).toMatchObject({ ok: true });
   });
 
   it('round-trips canonical task metadata into an editable draft', () => {

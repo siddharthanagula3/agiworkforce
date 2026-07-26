@@ -1,5 +1,7 @@
 import {
+  assertDeliverableCadence,
   buildCronExpression,
+  SWEEP_INTERVAL_MS,
   validateTimeZone,
   type ProductRecurrence,
 } from '@/lib/schedules/schedule-time';
@@ -178,7 +180,7 @@ function intervalFields(
   intervalMs: number | null,
 ): Pick<ScheduleDraft, 'intervalValue' | 'intervalUnit'> {
   if (!intervalMs || intervalMs < MIN_INTERVAL_MS)
-    return { intervalValue: '1', intervalUnit: 'hours' };
+    return { intervalValue: '1', intervalUnit: 'days' };
   if (intervalMs % UNIT_MS.days === 0) {
     return { intervalValue: String(intervalMs / UNIT_MS.days), intervalUnit: 'days' };
   }
@@ -297,10 +299,10 @@ export function validateAndBuildScheduleRequest(
       !Number.isInteger(intervalValue) ||
       intervalValue <= 0 ||
       !Number.isSafeInteger(intervalMs) ||
-      intervalMs < MIN_INTERVAL_MS ||
+      intervalMs < SWEEP_INTERVAL_MS ||
       intervalMs > MAX_INTERVAL_MS
     ) {
-      addError(errors, 'intervalValue', 'Use an interval from 1 minute to 365 days.');
+      addError(errors, 'intervalValue', 'Use an interval from 1 day to 365 days.');
     }
   } else {
     try {
@@ -316,6 +318,12 @@ export function validateAndBuildScheduleRequest(
               daysOfWeek,
               dayOfMonth: draft.dayOfMonth,
             });
+      // Agree with the server's cadence floor here rather than letting the user
+      // submit and receive a 400 they had no way to anticipate.
+      assertDeliverableCadence(
+        { scheduleType: 'cron', cronExpression, timezone: draft.timezone },
+        new Date(),
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Enter a valid schedule.';
       if (draft.recurrence === 'weekly' && daysOfWeek.length === 0) {

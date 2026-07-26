@@ -14,6 +14,7 @@ import {
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import {
+  assertDeliverableCadence,
   buildCronExpression,
   getNextExecutionAt,
   validateTimeZone,
@@ -318,7 +319,12 @@ const SCHEDULE_INPUT_KEYS = new Set([
   'notificationSettings',
 ]);
 
-function validateScheduleInput(input: ScheduleInput, now: Date): ValidatedScheduleDefinition {
+function validateScheduleInput(
+  input: ScheduleInput,
+  now: Date,
+  options: { enforceCadence?: boolean } = {},
+): ValidatedScheduleDefinition {
+  const enforceCadence = options.enforceCadence ?? true;
   return validation(() => {
     const unknownKeys = Object.keys(input).filter((key) => !SCHEDULE_INPUT_KEYS.has(key));
     if (unknownKeys.length > 0) {
@@ -389,6 +395,11 @@ function validateScheduleInput(input: ScheduleInput, now: Date): ValidatedSchedu
       });
       timing = { scheduleType, cronExpression, timezone };
     }
+
+    // GOV-9: the sweep that runs due tasks fires once a day, so a finer cadence
+    // is an availability the platform does not have. Enforced here, at the only
+    // write boundary create and update share, and never on the execution path.
+    if (enforceCadence) assertDeliverableCadence(timing, now);
 
     const isEnabled = input.isActive !== false;
     const firstExecutionAt = getNextExecutionAt(timing, now, now);
@@ -612,10 +623,6 @@ export async function updateSchedule(
     if (current.status === 'completed' || current.status === 'expired') {
       throw new ScheduleConflictError('A terminal schedule cannot be edited');
     }
-    const definition = validateScheduleInput(
-      { ...inputFromTask(current), ...patch } as ScheduleInput,
-      options.now ?? new Date(),
-    );
     const timingKeys: ReadonlyArray<keyof ScheduleUpdateInput> = [
       'recurrence',
       'cronExpression',
@@ -627,6 +634,14 @@ export async function updateSchedule(
       'timezone',
     ];
     const timingChanged = timingKeys.some((key) => Object.hasOwn(patch, key));
+    const definition = validateScheduleInput(
+      { ...inputFromTask(current), ...patch } as ScheduleInput,
+      options.now ?? new Date(),
+      // A row created before the cadence floor existed keeps running at whatever
+      // cadence it was stored with. Renaming it must not become impossible; the
+      // floor only applies when the caller is actually changing the timing.
+      { enforceCadence: timingChanged },
+    );
     const activationChanged =
       Object.hasOwn(patch, 'isActive') && patch.isActive !== current.isEnabled;
     if (!timingChanged && !activationChanged) {
@@ -1170,9 +1185,26 @@ export async function processDueScheduleRuns(options: {
       const index = cursor++;
       const claim = claims[index];
       if (!claim) continue;
-      results.push(
-        await processClaimedScheduleRun(db, claim, executor, { timeoutMs: options.timeoutMs }),
-      );
+      try {
+        results.push(
+          await processClaimedScheduleRun(db, claim, executor, { timeoutMs: options.timeoutMs }),
+        );
+      } catch (error) {
+        // processClaimedScheduleRun finalizes its own failures, so reaching here
+        // means finalization itself threw — an unparseable stored timing, or the
+        // database rejecting the write. Without this guard that single row
+        // rejects Promise.all(workers) and every other user's due task in the
+        // batch silently goes unrun. The claim keeps its lease and the next
+        // sweep terminalizes it through findExpiredClaims.
+        logger.error(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            taskId: claim.task.id,
+            runId: claim.runId,
+          },
+          'Scheduled task could not be finalized; leaving the claim for lease expiry',
+        );
+      }
     }
   });
   await Promise.all(workers);
