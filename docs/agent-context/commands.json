@@ -67,7 +67,8 @@
     "llmFailuresChanged": "pnpm check:llm-failures:changed",
     "llmFailuresStrict": "pnpm check:llm-failures:strict",
     "llmOperability": "pnpm check:llm-operability",
-    "docsCheck": "pnpm docs:check"
+    "docsCheck": "pnpm docs:check",
+    "dbIsolation": "pnpm check:db-isolation"
   },
   "surfaces": {
     "desktop": {
