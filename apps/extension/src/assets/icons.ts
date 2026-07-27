@@ -12,6 +12,19 @@ function svg(inner: string): string {
   return `<svg ${ATTRS}>${inner}</svg>`;
 }
 
+/** X — close / dismiss. Replaces the "✕" glyph, which rendered in the system
+ *  emoji font beside stroke-only SVGs at a different weight and baseline. */
+export const X = svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>');
+
+/** Play — start a recording or replay a shortcut. Replaces "▶". */
+export const Play = svg('<polygon points="6 3 20 12 6 21 6 3"/>');
+
+/** ChevronDown — disclosure. Replaces "▾". */
+export const ChevronDown = svg('<path d="m6 9 6 6 6-6"/>');
+
+/** Check — selected state. Replaces "✓". */
+export const Check = svg('<path d="M20 6 9 17l-5-5"/>');
+
 /** Terminal — bash/shell tool */
 export const Terminal = svg(
   '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
