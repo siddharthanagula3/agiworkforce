@@ -68,6 +68,86 @@ export const agiPalette = {
   },
 } as const;
 
+/**
+ * ChatGPT-leaning "cool" palette. Founder decision 2026-07-27: desktop and both
+ * extensions follow ChatGPT colors (apps/web's chat surface already did, via
+ * `[data-chat-theme='cool']`).
+ *
+ * Values are the same ones `chat.css` already ships under that attribute, so
+ * the two stay in lockstep and the WCAG work recorded there (AUDIT-FIX GOV-34)
+ * carries over instead of being re-derived. Do not drift one without the other.
+ *
+ * `state.warning` in dark is the one addition: #ef8c57 sampled from the
+ * "Full access" permission chip in the reference capture, which is exactly what
+ * our own permission chips render.
+ */
+export const agiCoolPalette = {
+  light: {
+    surface: {
+      base: '#ffffff',
+      raised: '#ffffff',
+      overlay: '#ffffff',
+      hover: '#f0f0f0',
+      sidebar: '#f9f9f9',
+      input: '#ffffff',
+      code: '#f7f7f8',
+    },
+    text: {
+      primary: '#0d0d0d',
+      secondary: '#5d5d5d',
+      muted: '#6a6a6a',
+      placeholder: '#6a6a6a',
+    },
+    border: {
+      subtle: 'rgba(0, 0, 0, 0.1)',
+      strong: 'rgba(0, 0, 0, 0.16)',
+    },
+    accent: {
+      primary: '#0b84ff',
+      secondary: '#0a6ed1',
+      secondarySoft: 'rgba(11, 132, 255, 0.12)',
+    },
+    state: {
+      danger: '#dc2626',
+      info: '#0b84ff',
+      success: '#16a34a',
+      warning: '#b45309',
+    },
+  },
+  dark: {
+    surface: {
+      base: '#212121',
+      raised: '#2f2f2f',
+      overlay: '#2a2a2d',
+      hover: '#2f2f2f',
+      sidebar: '#171717',
+      input: '#2f2f2f',
+      code: '#1e1e1e',
+    },
+    text: {
+      primary: '#ececec',
+      secondary: '#b4b4b4',
+      muted: '#999999',
+      placeholder: '#999999',
+    },
+    border: {
+      subtle: 'rgba(255, 255, 255, 0.1)',
+      strong: 'rgba(255, 255, 255, 0.16)',
+    },
+    accent: {
+      primary: '#0b84ff',
+      secondary: '#0a6ed1',
+      secondarySoft: 'rgba(11, 132, 255, 0.16)',
+    },
+    state: {
+      danger: '#ef4444',
+      info: '#0b84ff',
+      success: '#22c55e',
+      warning: '#ef8c57',
+    },
+  },
+} as const;
+
 export const agiRadii = {
   sm: '6px',
   md: '8px',
@@ -242,79 +322,105 @@ export const agiNativeColors = {
   },
 } as const;
 
+/**
+ * Chrome extension surface. Uses {@link agiCoolPalette} — see the founder
+ * decision recorded there; the panel sits beside ChatGPT-colored browser chrome
+ * and previously shipped the warm Claude ramp.
+ */
 export const agiExtensionCssVars = {
   dark: {
-    '--agi-ext-bg': agiPalette.dark.surface.base,
-    '--agi-ext-surface': agiPalette.dark.surface.raised,
-    '--agi-ext-overlay': agiPalette.dark.surface.overlay,
-    '--agi-ext-hover': agiPalette.dark.surface.hover,
-    '--agi-ext-text': agiPalette.dark.text.primary,
-    '--agi-ext-text-muted': agiPalette.dark.text.secondary,
-    '--agi-ext-border': agiPalette.dark.border.subtle,
-    '--agi-ext-border-strong': agiPalette.dark.border.strong,
-    '--agi-ext-accent': agiPalette.dark.accent.primary,
-    '--agi-ext-accent-secondary': agiPalette.dark.accent.secondary,
-    '--agi-ext-focus': agiPalette.dark.accent.primary,
+    '--agi-ext-bg': agiCoolPalette.dark.surface.base,
+    '--agi-ext-surface': agiCoolPalette.dark.surface.raised,
+    '--agi-ext-overlay': agiCoolPalette.dark.surface.overlay,
+    '--agi-ext-hover': agiCoolPalette.dark.surface.hover,
+    '--agi-ext-text': agiCoolPalette.dark.text.primary,
+    '--agi-ext-text-muted': agiCoolPalette.dark.text.secondary,
+    '--agi-ext-border': agiCoolPalette.dark.border.subtle,
+    '--agi-ext-border-strong': agiCoolPalette.dark.border.strong,
+    '--agi-ext-accent': agiCoolPalette.dark.accent.primary,
+    '--agi-ext-accent-secondary': agiCoolPalette.dark.accent.secondary,
+    '--agi-ext-focus': agiCoolPalette.dark.accent.primary,
+    // Brand identity, deliberately NOT part of the cool ramp. The chrome
+    // (surfaces, text, borders, buttons) follows ChatGPT; the AGI mark keeps
+    // its own colors, the same way ChatGPT and Claude each keep their logo
+    // against neutral UI. Mirrors packages/ui/ui/src/AgiMark.tsx.
+    '--agi-ext-brand': agiPalette.dark.accent.secondary,
+    '--agi-ext-brand-alt': agiPalette.dark.accent.primary,
     '--agi-ext-on-accent': '#ffffff',
     '--agi-ext-shadow-panel': 'rgba(0, 0, 0, 0.12)',
-    '--agi-ext-danger': agiPalette.dark.state.danger,
+    '--agi-ext-danger': agiCoolPalette.dark.state.danger,
     '--agi-ext-danger-bg': 'rgba(239, 68, 68, 0.12)',
     '--agi-ext-danger-border': 'rgba(239, 68, 68, 0.3)',
     '--agi-ext-danger-shadow': 'rgba(220, 38, 38, 0.4)',
     '--agi-ext-transparent-shadow': 'rgba(220, 38, 38, 0)',
-    '--agi-ext-success': agiPalette.dark.state.success,
+    '--agi-ext-success': agiCoolPalette.dark.state.success,
     '--agi-ext-success-bg': 'rgba(34, 197, 94, 0.12)',
     '--agi-ext-success-border': 'rgba(34, 197, 94, 0.32)',
-    '--agi-ext-warning': agiPalette.dark.state.warning,
-    '--agi-ext-info': agiPalette.dark.state.info,
+    '--agi-ext-warning': agiCoolPalette.dark.state.warning,
+    '--agi-ext-warning-bg': 'rgba(239, 140, 87, 0.12)',
+    '--agi-ext-warning-border': 'rgba(239, 140, 87, 0.32)',
+    '--agi-ext-info': agiCoolPalette.dark.state.info,
     '--agi-ext-modal-shadow': 'rgba(0, 0, 0, 0.5)',
     '--agi-ext-scrim': 'rgba(0, 0, 0, 0.6)',
   },
   light: {
-    '--agi-ext-bg': agiPalette.light.surface.base,
-    '--agi-ext-surface': agiPalette.light.surface.raised,
-    '--agi-ext-overlay': agiPalette.light.surface.overlay,
-    '--agi-ext-hover': agiPalette.light.surface.hover,
-    '--agi-ext-text': agiPalette.light.text.primary,
-    '--agi-ext-text-muted': agiPalette.light.text.secondary,
-    '--agi-ext-border': agiPalette.light.border.subtle,
-    '--agi-ext-border-strong': agiPalette.light.border.strong,
-    '--agi-ext-accent': agiPalette.light.accent.primary,
-    '--agi-ext-accent-secondary': agiPalette.light.accent.secondary,
-    '--agi-ext-focus': agiPalette.light.accent.primary,
+    '--agi-ext-bg': agiCoolPalette.light.surface.base,
+    '--agi-ext-surface': agiCoolPalette.light.surface.raised,
+    '--agi-ext-overlay': agiCoolPalette.light.surface.overlay,
+    '--agi-ext-hover': agiCoolPalette.light.surface.hover,
+    '--agi-ext-text': agiCoolPalette.light.text.primary,
+    '--agi-ext-text-muted': agiCoolPalette.light.text.secondary,
+    '--agi-ext-border': agiCoolPalette.light.border.subtle,
+    '--agi-ext-border-strong': agiCoolPalette.light.border.strong,
+    '--agi-ext-accent': agiCoolPalette.light.accent.primary,
+    '--agi-ext-accent-secondary': agiCoolPalette.light.accent.secondary,
+    '--agi-ext-focus': agiCoolPalette.light.accent.primary,
+    // See the dark block: brand identity stays off the cool ramp.
+    '--agi-ext-brand': agiPalette.light.accent.secondary,
+    '--agi-ext-brand-alt': agiPalette.light.accent.primary,
     '--agi-ext-on-accent': '#ffffff',
     '--agi-ext-shadow-panel': 'rgba(0, 0, 0, 0.12)',
-    '--agi-ext-danger': agiPalette.light.state.danger,
+    '--agi-ext-danger': agiCoolPalette.light.state.danger,
     '--agi-ext-danger-bg': 'rgba(220, 38, 38, 0.08)',
     '--agi-ext-danger-border': 'rgba(220, 38, 38, 0.24)',
     '--agi-ext-danger-shadow': 'rgba(220, 38, 38, 0.3)',
     '--agi-ext-transparent-shadow': 'rgba(220, 38, 38, 0)',
-    '--agi-ext-success': agiPalette.light.state.success,
+    '--agi-ext-success': agiCoolPalette.light.state.success,
     '--agi-ext-success-bg': 'rgba(22, 163, 74, 0.08)',
     '--agi-ext-success-border': 'rgba(22, 163, 74, 0.24)',
-    '--agi-ext-warning': agiPalette.light.state.warning,
-    '--agi-ext-info': agiPalette.light.state.info,
+    '--agi-ext-warning': agiCoolPalette.light.state.warning,
+    '--agi-ext-warning-bg': 'rgba(180, 83, 9, 0.08)',
+    '--agi-ext-warning-border': 'rgba(180, 83, 9, 0.24)',
+    '--agi-ext-info': agiCoolPalette.light.state.info,
     '--agi-ext-modal-shadow': 'rgba(0, 0, 0, 0.32)',
     '--agi-ext-scrim': 'rgba(0, 0, 0, 0.45)',
   },
 } as const satisfies Record<AgiThemeMode, CssVariableMap>;
 
 export const agiVsCodeCssVars = {
-  // AGI-branded panel palette (founder-approved 2026-06-13): the website's
-  // Linear-style cool-neutral set + indigo accent (#5e6ad2). Fixed (not
-  // theme-derived) so the panel carries the AGI brand identity consistently
-  // across VS Code + Cursor + Windsurf + Antigravity. Single source of truth.
-  '--agi-vscode-bg': '#09090b',
-  '--agi-vscode-surface': '#151518',
-  '--agi-vscode-overlay': '#202024',
-  '--agi-vscode-text': '#fafafa',
-  '--agi-vscode-text-muted': '#a1a1aa',
-  '--agi-vscode-border': '#242428',
-  '--agi-vscode-button': '#5e6ad2',
+  // Panel palette. Fixed (not theme-derived) so the panel looks the same across
+  // VS Code + Cursor + Windsurf + Antigravity.
+  //
+  // Founder decision 2026-07-27 replaced the Linear-style indigo set approved
+  // 2026-06-13 (#09090b / #5e6ad2) with {@link agiCoolPalette}, so this panel,
+  // the Chrome panel and desktop now share one ChatGPT-leaning ramp instead of
+  // three different ones. The diff tokens below stay theme-derived — they must
+  // agree with the host editor's own diff colors, not with our brand.
+  '--agi-vscode-bg': agiCoolPalette.dark.surface.base,
+  '--agi-vscode-surface': agiCoolPalette.dark.surface.sidebar,
+  '--agi-vscode-overlay': agiCoolPalette.dark.surface.overlay,
+  '--agi-vscode-text': agiCoolPalette.dark.text.primary,
+  '--agi-vscode-text-muted': agiCoolPalette.dark.text.secondary,
+  '--agi-vscode-border': agiCoolPalette.dark.border.strong,
+  '--agi-vscode-button': agiCoolPalette.dark.accent.primary,
   '--agi-vscode-button-text': '#ffffff',
-  '--agi-vscode-focus': '#5e6ad2',
-  '--agi-vscode-hover': '#26262b',
-  '--agi-vscode-terra': '#828fff',
+  '--agi-vscode-focus': agiCoolPalette.dark.accent.primary,
+  '--agi-vscode-hover': agiCoolPalette.dark.surface.hover,
+  '--agi-vscode-terra': agiCoolPalette.dark.accent.secondary,
+  '--agi-vscode-success': agiCoolPalette.dark.state.success,
+  '--agi-vscode-warning': agiCoolPalette.dark.state.warning,
+  '--agi-vscode-warning-bg': 'rgba(239, 140, 87, 0.12)',
+  '--agi-vscode-warning-border': 'rgba(239, 140, 87, 0.32)',
   '--agi-vscode-danger': 'var(--vscode-errorForeground, #ef4444)',
   '--agi-vscode-danger-bg': 'rgba(239, 68, 68, 0.12)',
   '--agi-vscode-danger-border': 'rgba(239, 68, 68, 0.3)',

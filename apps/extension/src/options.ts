@@ -9,7 +9,7 @@
  * Styles injected via Constructable Stylesheets (CSP-compliant, same pattern as side_panel.ts).
  */
 
-import { getExtensionTokensCss } from './tokens';
+import { getExtensionTokensCssAuto } from './tokens';
 import { clearAuthToken, getAuthToken } from './features/cloud-bridge/freeTrialClient';
 import { isClerkExtensionAuthConfigured, openClerkSignIn } from './features/cloud-bridge/clerkAuth';
 
@@ -23,7 +23,7 @@ const DEV_BEARER_KEY = 'agi_dev_bearer_token';
 function injectStyles(): void {
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(`
-    ${getExtensionTokensCss('dark')}
+    ${getExtensionTokensCssAuto()}
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

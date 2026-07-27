@@ -17,5 +17,5 @@
 html,
 body {
   height: 100%;
-  background: var(--agi-ext-bg, #1a1915);
+  background: var(--agi-ext-bg, #212121);
 }

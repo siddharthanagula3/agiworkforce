@@ -11,5 +11,5 @@
 html,
 body {
   min-height: 100vh;
-  background: var(--agi-ext-bg, #1a1915);
+  background: var(--agi-ext-bg, #212121);
 }
