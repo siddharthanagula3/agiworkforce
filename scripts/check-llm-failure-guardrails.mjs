@@ -31,7 +31,12 @@ const SKIP_DIRS = new Set([
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.rs', '.ts', '.tsx']);
 const MANIFEST_BASENAMES = new Set(['package.json', 'Cargo.toml']);
 const EXEMPT_FILES = new Set(['scripts/check-llm-failure-guardrails.mjs']);
-const EXEMPT_PATH_PREFIXES = ['docs/archive/'];
+// Archived material: superseded implementations retained for reference. These
+// are excluded from tsconfig, from the test run, and from the bundle, so their
+// sinks cannot execute — the guard's findings would be about code the product
+// cannot reach. Restoring a file means git mv-ing it back under src/, which
+// puts it back in scope here.
+const EXEMPT_PATH_PREFIXES = ['docs/archive/', 'apps/desktop/archive/'];
 const TAXONOMY_PATH = 'docs/agent-context/llm-failure-taxonomy.json';
 
 const TEST_THEATER_PATTERNS = [

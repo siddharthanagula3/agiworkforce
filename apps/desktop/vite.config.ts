@@ -308,14 +308,23 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/contracts/cloud-contracts/src/index.ts',
         ),
-        '@agiworkforce/artifacts': path.resolve(__dirname, '../../packages/platform/artifacts/src/index.ts'),
+        '@agiworkforce/artifacts': path.resolve(
+          __dirname,
+          '../../packages/platform/artifacts/src/index.ts',
+        ),
         '@agiworkforce/sync': path.resolve(__dirname, '../../packages/client/sync/src/index.ts'),
         '@agiworkforce/trust-boundaries': path.resolve(
           __dirname,
           '../../packages/contracts/trust-boundaries/src/index.ts',
         ),
-        '@agiworkforce/utils/uuidv7': path.resolve(__dirname, '../../packages/platform/utils/src/uuidv7.ts'),
-        '@agiworkforce/utils': path.resolve(__dirname, '../../packages/platform/utils/src/index.ts'),
+        '@agiworkforce/utils/uuidv7': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/uuidv7.ts',
+        ),
+        '@agiworkforce/utils': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/index.ts',
+        ),
         ...webTauriAliases,
       },
     },
@@ -395,6 +404,10 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         '**/playwright/**',
         '**/src-tauri/**',
         '**/wdio/**',
+        // Superseded implementations kept for reference under archive/. They are
+        // outside tsconfig's `include` and unreachable from main.tsx, so their
+        // tests would assert against code the app cannot run.
+        '**/archive/**',
       ],
       // Coverage configuration
       coverage: {
