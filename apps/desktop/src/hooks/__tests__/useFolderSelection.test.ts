@@ -87,3 +87,91 @@ describe('useFolderSelection', () => {
     expect(result.current.currentFolderLabel).toBe('~/Projects/agiworkforce');
   });
 });
+
+describe('useFolderSelection — cloud mode grants no capability', () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    openDialogMock.mockReset();
+    toastInfoMock.mockReset();
+    toastSuccessMock.mockReset();
+    useProjectStore.getState().setCurrentFolder(null);
+  });
+
+  /**
+   * The whole point of the cloud mode. `project_context_set_folder` persists the
+   * path into settings.allowed_directories, writes settings.json, reloads MCP
+   * config to project-local scope and repoints the MCP filesystem root. Calling
+   * it from Managed Cloud would widen filesystem permissions with no consent
+   * step and leave them in place after switching back to Local.
+   */
+  it('never invokes the backend folder-scope command', async () => {
+    openDialogMock.mockResolvedValue('/Users/x/repo');
+
+    const { result } = renderHook(() => useFolderSelection('cloud'));
+    await act(async () => {
+      await result.current.selectFolder();
+    });
+
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('still records the folder for display and returns the picked path', async () => {
+    openDialogMock.mockResolvedValue('/Users/x/repo');
+
+    const { result } = renderHook(() => useFolderSelection('cloud'));
+    let picked: string | null = null;
+    await act(async () => {
+      picked = await result.current.selectFolder();
+    });
+
+    expect(picked).toBe('/Users/x/repo');
+    await waitFor(() => {
+      expect(useProjectStore.getState().currentFolder).toBe('/Users/x/repo');
+    });
+  });
+
+  it('tells the user files stay on the device until approved', async () => {
+    openDialogMock.mockResolvedValue('/Users/x/repo');
+
+    const { result } = renderHook(() => useFolderSelection('cloud'));
+    await act(async () => {
+      await result.current.selectFolder();
+    });
+
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      expect.stringContaining('stay on this device until you approve them'),
+    );
+  });
+
+  it('clears without revoking a capability it never granted', async () => {
+    openDialogMock.mockResolvedValue('/Users/x/repo');
+    const { result } = renderHook(() => useFolderSelection('cloud'));
+    await act(async () => {
+      await result.current.selectFolder();
+    });
+    invokeMock.mockReset();
+
+    act(() => {
+      result.current.clearFolder();
+    });
+
+    expect(invokeMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(useProjectStore.getState().currentFolder).toBeNull();
+    });
+  });
+
+  it('local mode still grants the working scope', async () => {
+    openDialogMock.mockResolvedValue('/Users/x/repo');
+    invokeMock.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useFolderSelection('local'));
+    await act(async () => {
+      await result.current.selectFolder();
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('project_context_set_folder', {
+      path: '/Users/x/repo',
+    });
+  });
+});
