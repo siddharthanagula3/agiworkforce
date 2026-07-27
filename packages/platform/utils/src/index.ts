@@ -126,7 +126,7 @@ export type { MeasureResult, PerformanceMetrics } from './performance';
 export { SENSITIVE_FILE_PATTERNS, isSensitiveFile, matchSensitivePattern } from './sensitiveFiles';
 
 // Local -> BYOK handoff preview builder with redaction and hash evidence.
-export { buildLocalToByokHandoffDraft } from './privacyHandoff';
+export { buildLocalToByokHandoffDraft, type HandoffTarget } from './privacyHandoff';
 export type {
   BuildLocalToByokHandoffDraftParams,
   HandoffPreviewContextItem,

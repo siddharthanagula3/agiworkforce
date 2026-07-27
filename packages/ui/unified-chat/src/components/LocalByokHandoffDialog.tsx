@@ -24,7 +24,7 @@
 // surfaces that auto-include context without letting the user pick
 // (desktop's current flow: last 20 messages, no selection UI).
 
-import type { LocalToByokHandoffPreview } from '@agiworkforce/utils';
+import type { HandoffTarget, LocalToByokHandoffPreview } from '@agiworkforce/utils';
 import type { HandoffContextItem } from '@agiworkforce/types';
 import { formatPrivacyModeLabel, formatProviderModeLabel } from '@agiworkforce/types';
 import { AlertTriangle, CheckCircle2, FileCheck2, Fingerprint, ShieldCheck } from 'lucide-react';
@@ -69,6 +69,14 @@ export interface LocalByokHandoffDialogProps {
   confirmingLabel?: string;
   /** Concrete destination provider shown during consent (for example, OpenAI). */
   targetProviderLabel?: string;
+  /**
+   * Where the context is going. Defaults to `'byok'`, which is what this
+   * ceremony was originally built for. Managed Cloud reuses the identical
+   * flow — the same scan, preview, hash and consent — so the only thing that
+   * changes is the destination this dialog names. Mislabelling it would show
+   * the user a boundary they are not actually crossing.
+   */
+  target?: HandoffTarget;
 }
 
 function formatBytes(bytes: number | undefined): string {
@@ -94,13 +102,16 @@ export function LocalByokHandoffDialog({
   selectedContextIds = [],
   onToggleContext,
   confirmLabel,
-  confirmingLabel = 'Creating fork...',
+  confirmingLabel,
   targetProviderLabel,
+  target = 'byok',
 }: LocalByokHandoffDialogProps) {
   const localLabel = formatProviderModeLabel('Local');
-  const byokLabel = formatProviderModeLabel('DirectByok');
+  const isManagedTarget = target === 'managed';
+  const targetLabel = formatProviderModeLabel(isManagedTarget ? 'ManagedGateway' : 'DirectByok');
+  const targetPrivacyLabel = formatPrivacyModeLabel(isManagedTarget ? 'managed' : 'byok');
   const localPrivacyLabel = formatPrivacyModeLabel('local');
-  const byokPrivacyLabel = formatPrivacyModeLabel('byok');
+  const flowNoun = isManagedTarget ? 'handoff' : 'fork';
   const findings = preview?.redactionReport.findings ?? [];
   const blocked = Boolean(preview?.redactionReport.blocked);
   const canConfirm = Boolean(preview) && !blocked && !isBuilding && !isConfirming && !error;
@@ -119,14 +130,19 @@ export function LocalByokHandoffDialog({
               <span className="text-muted-foreground">to</span>
               <Badge variant="outline" className="gap-1 border-cyan-500/40 text-cyan-300">
                 <FileCheck2 className="h-3 w-3" />
-                {targetProviderLabel ? `${byokLabel} · ${targetProviderLabel}` : byokLabel}
+                {targetProviderLabel ? `${targetLabel} · ${targetProviderLabel}` : targetLabel}
               </Badge>
             </div>
-            <DialogTitle>Review BYOK fork</DialogTitle>
+            <DialogTitle>
+              {isManagedTarget ? 'Review what leaves this device' : 'Review BYOK fork'}
+            </DialogTitle>
             <DialogDescription>
-              This creates a separate {byokPrivacyLabel} conversation. The original{' '}
-              {localPrivacyLabel} thread is left unchanged.
-              {targetProviderLabel ? ` Context will be sent directly to ${targetProviderLabel}.` : ''}
+              {isManagedTarget
+                ? `These files are read on this device and sent to ${targetPrivacyLabel}. Nothing else in the folder is included.`
+                : `This creates a separate ${targetPrivacyLabel} conversation. The original ${localPrivacyLabel} thread is left unchanged.`}
+              {targetProviderLabel
+                ? ` Context will be sent directly to ${targetProviderLabel}.`
+                : ''}
             </DialogDescription>
           </DialogHeader>
 
@@ -217,7 +233,7 @@ export function LocalByokHandoffDialog({
                 <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    Secret findings block this BYOK fork.{' '}
+                    Secret findings block this {flowNoun}.{' '}
                     {showContextPanel
                       ? 'Deselect the flagged context or edit the outgoing prompt before continuing.'
                       : 'Edit the outgoing prompt before continuing.'}
@@ -265,7 +281,9 @@ export function LocalByokHandoffDialog({
                   )}
                 </div>
                 <pre className="max-h-[22rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border/60 bg-black/30 p-3 font-mono text-xs leading-relaxed">
-                  {isBuilding ? 'Building redacted BYOK preview...' : preview?.redactedPayload}
+                  {isBuilding
+                    ? `Building redacted ${targetLabel} preview...`
+                    : preview?.redactedPayload}
                 </pre>
               </div>
             </section>
@@ -276,7 +294,10 @@ export function LocalByokHandoffDialog({
               Cancel
             </Button>
             <Button onClick={onConfirm} disabled={!canConfirm}>
-              {isConfirming ? confirmingLabel : (confirmLabel ?? `Create ${byokLabel} fork`)}
+              {isConfirming
+                ? (confirmingLabel ?? (isManagedTarget ? 'Attaching...' : 'Creating fork...'))
+                : (confirmLabel ??
+                  (isManagedTarget ? 'Attach these files' : `Create ${targetLabel} fork`))}
             </Button>
           </DialogFooter>
         </div>
