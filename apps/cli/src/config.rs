@@ -37,6 +37,12 @@ pub struct UiConfig {
     /// Privacy boundary to apply to new sessions: local, byok, or managed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub privacy_mode: Option<String>,
+
+    /// Terminal theme slug: dark | light | ansi | solarized-dark | solarized-light
+    /// | colorblind. Read at startup so a theme chosen in the picker or via
+    /// `/theme` survives a restart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -634,6 +640,9 @@ impl CliConfig {
                 toml::Value::String(mode.clone()),
             );
         }
+        if let Some(theme) = &self.ui.theme {
+            ui.insert("theme".to_string(), toml::Value::String(theme.clone()));
+        }
 
         let contents = toml::to_string_pretty(&toml::Value::Table(root))
             .context("Failed to serialize project config")?;
@@ -655,6 +664,13 @@ impl CliConfig {
 
     pub fn persist_privacy_mode_project(&mut self, mode: &str) -> Result<PathBuf> {
         self.ui.privacy_mode = Some(mode.to_ascii_lowercase());
+        self.save_project_ui_settings()
+    }
+
+    /// Persist the chosen terminal theme so it survives a restart. Without this
+    /// the picker recolours the running TUI and the choice dies with the process.
+    pub fn persist_theme_project(&mut self, slug: &str) -> Result<PathBuf> {
+        self.ui.theme = Some(slug.to_ascii_lowercase());
         self.save_project_ui_settings()
     }
 

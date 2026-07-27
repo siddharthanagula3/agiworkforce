@@ -279,6 +279,16 @@ const FALLBACK_BANNER_TTL: Duration = Duration::from_secs(5);
 
 impl TuiApp {
     fn new(session: AgentSession, config: CliConfig, sandbox_disabled: bool) -> Self {
+        // Restore the persisted theme before the first frame. Without this the
+        // picker recoloured the running TUI and the choice died at restart.
+        let theme_choice = config
+            .ui
+            .theme
+            .as_deref()
+            .and_then(super::widgets::theme_picker::ThemeChoice::from_arg)
+            .unwrap_or(super::widgets::theme_picker::ThemeChoice::Dark);
+        crate::tui::terminal_palette::set_active_theme(theme_choice as u8);
+
         let model_name = session.model.clone();
         let provider_name = format!("{:?}", session.provider).to_lowercase();
 
@@ -392,7 +402,7 @@ impl TuiApp {
                 super::widgets::terminal_title_setup::TerminalTitleConfig::default(),
             effort: crate::design_system::Effort::Medium,
             theme_picker: super::widgets::theme_picker::ThemePickerState::default(),
-            theme_choice: super::widgets::theme_picker::ThemeChoice::Dark,
+            theme_choice,
             mode_banner_shown_at: None,
             stream_buffer: String::new(),
             stream_start: None,
@@ -2285,6 +2295,8 @@ fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             // Apply the theme: re-routes every `ui_*` semantic token so the whole
             // TUI recolors on the next frame.
             crate::tui::terminal_palette::set_active_theme(choice as u8);
+            // Persist so the choice survives a restart.
+            let _ = app.config.persist_theme_project(choice.slug());
             app.input.clear();
             app.cursor = 0;
             app.chat_messages.push(ChatMessage {
@@ -2933,6 +2945,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     Some(choice) => {
                         app.theme_choice = choice;
                         crate::tui::terminal_palette::set_active_theme(choice as u8);
+                        let _ = app.config.persist_theme_project(choice.slug());
                         SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
                     }
                     None => SlashResult::SystemMessage(format!(
