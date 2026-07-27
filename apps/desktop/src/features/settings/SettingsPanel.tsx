@@ -37,7 +37,6 @@ import {
   DialogTitle,
 } from '@/components/ui/Dialog';
 import { useConnectorsStore } from '../../stores/connectorsStore';
-import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 
 import { GeneralTab } from './tabs/General';
 import { AccountTab } from './tabs/Account';
@@ -421,11 +420,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<CanonicalTab>(() => resolveVisibleTab(initialTab));
 
-  const openGovernanceWorkspace = useCallback(() => {
-    onOpenChange(false);
-    useUnifiedChatStore.getState().openSidecar('governance');
-  }, [onOpenChange]);
-
   const requiresDeferredSave = !SELF_SAVING_TABS.has(activeTab);
 
   useEffect(() => {
@@ -655,7 +649,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       case 'appearance':
         return <AppearanceTab />;
       case 'privacy':
-        return <PrivacyTab onOpenGovernanceWorkspace={openGovernanceWorkspace} />;
+        return <PrivacyTab />;
       case 'models-keys':
         return (
           <ModelsKeysTab
