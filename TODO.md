@@ -134,8 +134,17 @@ Founder rule: Cloud is a complete UI copy of web.
   **DCL-07** no conversation share · **DCL-09** no Notifications section ·
   **DCL-04** scheduled tasks say "Local mode only" — which inverts the pitch,
   since cloud schedules are the ones that should run with the laptop closed.
-- **MOBCLOUD-01** tier-locked model row exits chat into a Billing screen whose
-  only CTA is a dead upgrade sheet.
+- ~~**MOBCLOUD-01**~~ — **disproven 2026-07-27.** The sheet has no dead CTA.
+  `PaywallBottomSheet.tsx:187` resolves the required tier to a purchasable IAP
+  product and renders three distinct branches: a native IAP button when
+  `FEATURES.iap` is on, a Contact Sales handoff for team/enterprise (exact
+  match, so an unrecognised future tier fails closed rather than becoming an
+  external-navigation CTA), and otherwise informational copy with no button at
+  all. `models.tsx:73` is likewise public-alpha aware — unlocking Cloud routes
+  to sign-in, not to a waitlist. The "Upgrades aren't available in the app yet"
+  copy is deliberate: Apple Guideline 3.1.1 forbids steering to an external
+  purchase for digital goods, so pointing at web billing would risk rejection.
+  Do not "fix" it that way.
 - ~~**MOBCLOUD-04**~~ — CLOSED 2026-07-27, and **the ledger entry was wrong**:
   sharing is not "a feature no surface has". Web ships `/share/[token]`,
   `/shared/[id]`, `POST /api/share` and `DELETE /api/share/:token`. The only
