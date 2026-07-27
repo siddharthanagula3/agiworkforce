@@ -76,6 +76,26 @@ export const COMPUTER_USE_PANEL_CSS = `
     color: var(--agi-ext-text-muted);
   }
 
+  /* Outcome tinting. The banner reports three different endings and used one
+     accent for all of them, so a completed run was styled as an escalation. */
+  .sp-cu-banner[data-kind='success'] {
+    background: var(--agi-ext-success-bg);
+    border-bottom-color: var(--agi-ext-success-border);
+  }
+
+  .sp-cu-banner[data-kind='success'] .sp-cu-banner-title {
+    color: var(--agi-ext-success);
+  }
+
+  .sp-cu-banner[data-kind='error'] {
+    background: var(--agi-ext-danger-bg);
+    border-bottom-color: var(--agi-ext-danger-border);
+  }
+
+  .sp-cu-banner[data-kind='error'] .sp-cu-banner-title {
+    color: var(--agi-ext-danger);
+  }
+
   /* Controls bar */
   .sp-cu-controls {
     display: flex;
@@ -417,13 +437,38 @@ const KIND_EMOJI: Record<string, string> = {
 
 // ─── Public API ────────────────────────────────────────────────────────────────
 
+/** How a Run Autofill attempt ended. */
+export type AutofillOutcome = 'escalation' | 'success' | 'error';
+
+const AUTOFILL_OUTCOME_PRESENTATION: Record<AutofillOutcome, { title: string; icon: string }> = {
+  escalation: {
+    title: 'Autofill stalled — switching to computer use',
+    icon: '\u{26A1}', // lightning bolt
+  },
+  success: {
+    title: 'Autofill complete',
+    icon: '\u{2713}', // check mark
+  },
+  error: {
+    title: 'Autofill could not run',
+    icon: '\u{26A0}', // warning sign
+  },
+};
+
 export interface ComputerUsePanelAPI {
   /** The panel root element — append to document.body and show via CSS class. */
   panelEl: HTMLElement;
   /** Append a step to the live action log. */
   appendStep(step: AgentLoopStep & { screenshotBase64?: string }): void;
-  /** Show the escalation handoff banner. */
-  showHandoffBanner(reason: string): void;
+  /**
+   * Show the outcome banner.
+   *
+   * `kind` picks the headline and icon: an escalation, a completed autofill and
+   * a failure are three different endings. They previously shared the single
+   * build-time headline "Autofill stalled — switching to computer use", so a
+   * successful run announced itself as a stall.
+   */
+  showHandoffBanner(reason: string, kind?: AutofillOutcome): void;
   /** Hide the handoff banner. */
   hideHandoffBanner(): void;
   /** Clear all log entries. */
@@ -475,14 +520,16 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
 
   const bannerIcon = document.createElement('div');
   bannerIcon.className = 'sp-cu-banner-icon';
-  bannerIcon.textContent = '\u{26A1}'; // lightning bolt
+  // Both are set per outcome by showHandoffBanner(); the banner is hidden until
+  // then, so there is no build-time headline to contradict the result.
+  bannerIcon.textContent = '';
 
   const bannerText = document.createElement('div');
   bannerText.className = 'sp-cu-banner-text';
 
   const bannerTitle = document.createElement('div');
   bannerTitle.className = 'sp-cu-banner-title';
-  bannerTitle.textContent = 'Autofill stalled — switching to computer use';
+  bannerTitle.textContent = '';
 
   const bannerSub = document.createElement('div');
   bannerSub.className = 'sp-cu-banner-sub';
@@ -792,7 +839,11 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     logEl.scrollTop = logEl.scrollHeight;
   }
 
-  function showHandoffBanner(reason: string): void {
+  function showHandoffBanner(reason: string, kind: AutofillOutcome = 'escalation'): void {
+    const presentation = AUTOFILL_OUTCOME_PRESENTATION[kind];
+    bannerTitle.textContent = presentation.title;
+    bannerIcon.textContent = presentation.icon;
+    banner.setAttribute('data-kind', kind);
     bannerSub.textContent = reason;
     banner.classList.add('visible');
   }
