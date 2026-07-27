@@ -643,6 +643,50 @@ fn load_mcp_config_file_into_result(
     Ok(())
 }
 
+/// Normalize an MCP server entry written in the nested-transport shape.
+///
+/// `McpTransport` is internally tagged on a **string** `transport` field
+/// (`"stdio" | "sse" | "http"`) with the transport's own fields alongside it.
+/// Some entries on disk instead carry an *object* under `transport`, tagged on
+/// `type`, next to a vestigial `command: ""`:
+///
+/// ```json
+/// { "command": "", "args": [], "transport": { "type": "http", "url": "..." } }
+/// ```
+///
+/// Because `McpServerConfig` is `#[serde(untagged)]`, that shape fails the
+/// Tagged variant (no string `transport`) and falls through to Legacy, which
+/// matches on `command` — so a working HTTP server was loaded as a stdio server
+/// with an empty command. Every such entry then failed `agi doctor` with
+/// "stdio command is empty", and would never have connected.
+///
+/// Rewrites the entry into the canonical shape. Anything unrecognised is
+/// returned untouched so normal configs take no new code path.
+fn normalize_nested_transport(value: &serde_json::Value) -> Option<serde_json::Value> {
+    let object = value.as_object()?;
+    let transport = object.get("transport")?.as_object()?;
+    let kind = transport.get("type")?.as_str()?;
+
+    let mut normalized = serde_json::Map::new();
+    normalized.insert(
+        "transport".to_string(),
+        serde_json::Value::String(kind.to_string()),
+    );
+    for (key, entry) in transport {
+        if key == "type" {
+            continue;
+        }
+        // Nulls are absent-optional in the nested shape; carrying them over
+        // would fail the typed fields they map onto.
+        if entry.is_null() {
+            continue;
+        }
+        normalized.insert(key.clone(), entry.clone());
+    }
+
+    Some(serde_json::Value::Object(normalized))
+}
+
 fn parse_mcp_config_contents(
     contents: &str,
     path: &std::path::Path,
@@ -683,7 +727,8 @@ fn parse_mcp_config_contents(
             return Ok(configs);
         };
         for (name, config) in servers {
-            match serde_json::from_value::<McpServerConfig>(config.clone()) {
+            let config = normalize_nested_transport(config).unwrap_or_else(|| config.clone());
+            match serde_json::from_value::<McpServerConfig>(config) {
                 Ok(server_config) => {
                     configs.insert(name.clone(), server_config);
                 }
@@ -700,7 +745,21 @@ fn parse_mcp_config_contents(
             }
         }
     } else {
-        match serde_json::from_value::<HashMap<String, McpServerConfig>>(parsed) {
+        // Flat `{ "name": {...} }` map. Normalize each entry for the same
+        // reason the mcpServers branch does.
+        let normalized = match parsed {
+            serde_json::Value::Object(entries) => serde_json::Value::Object(
+                entries
+                    .into_iter()
+                    .map(|(name, entry)| {
+                        let entry = normalize_nested_transport(&entry).unwrap_or(entry);
+                        (name, entry)
+                    })
+                    .collect(),
+            ),
+            other => other,
+        };
+        match serde_json::from_value::<HashMap<String, McpServerConfig>>(normalized) {
             Ok(parsed_configs) => configs.extend(parsed_configs),
             Err(err) if strict => {
                 return Err(err).with_context(|| {
@@ -1302,6 +1361,51 @@ mod tests {
         assert!(configs.contains_key("remote"));
         assert_eq!(configs["docs"].transport_kind(), "stdio");
         assert_eq!(configs["remote"].transport_kind(), "sse");
+    }
+
+    #[test]
+    fn nested_transport_entries_resolve_to_their_real_transport() {
+        // Shape found in real ~/.agiworkforce/mcp.json entries written by the
+        // ecosystem import: an object under `transport` tagged on `type`, with
+        // a vestigial empty `command` beside it. Untagged deserialization used
+        // to fall through to Legacy and load these as stdio servers with an
+        // empty command, so `agi doctor` reported overall Fail and the servers
+        // could never have connected.
+        let configs = parse_mcp_config_contents(
+            r#"{"mcpServers":{"claude:stripe":{"args":[],"command":"","enabled":true,"env":{},"transport":{"api_key":null,"bearer_token":null,"headers":{},"timeout_secs":30,"type":"http","url":"https://mcp.stripe.com/","verify_ssl":true}}}}"#,
+            std::path::Path::new("test.json"),
+            false,
+        )
+        .expect("config parses");
+
+        match configs
+            .get("claude:stripe")
+            .expect("server present")
+            .as_transport()
+        {
+            McpTransport::Http { url, .. } => assert_eq!(url, "https://mcp.stripe.com/"),
+            other => panic!("expected Http transport, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn canonical_entries_are_untouched_by_normalization() {
+        // The normalizer must be inert for configs that were already correct.
+        let configs = parse_mcp_config_contents(
+            r#"{"mcpServers":{"docs":{"command":"node","args":["server.js"]},"remote":{"transport":"sse","url":"https://example.com/sse"}}}"#,
+            std::path::Path::new("test.json"),
+            false,
+        )
+        .expect("config parses");
+
+        assert!(matches!(
+            configs.get("docs").expect("stdio server").as_transport(),
+            McpTransport::Stdio { .. }
+        ));
+        assert!(matches!(
+            configs.get("remote").expect("sse server").as_transport(),
+            McpTransport::Sse { .. }
+        ));
     }
 
     #[test]
