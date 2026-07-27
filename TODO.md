@@ -68,24 +68,38 @@ founder's per-surface specs in `~/Downloads/0*-benchmark-spec.md` (01 mobile,
   `apps/extension-vscode/src/__tests__/runtimePill.webview.test.ts` (7 tests).
   Two older tests asserted the hardcoded string and were pinning the defect —
   both rewritten to their actual intent.
-- **EXT-03** — success and error outcomes both render under the build-time
-  headline "Autofill stalled", so the primary flow contradicts itself on screen.
+- ~~**EXT-03**~~ — CLOSED 2026-07-27. The banner headline was set once at build
+  time, so a completed autofill announced itself as a stall under a lightning
+  bolt. `showHandoffBanner` now takes an outcome (escalation / success / error)
+  that picks headline, icon and tint; the banner ships with no headline at all
+  until an outcome exists. `__tests__/autofill-outcome-banner.test.ts` (5).
 
 ### 3. Visible on screen
 
 - **DCL-03** — Cmd+K in Cloud matches conversation titles only; cloud message
   bodies are unreachable, so searching a remembered phrase returns nothing.
-- **EXT-04** — typing `/` does nothing while three separate strings promise a
-  command menu; the claimed chip fallback is also absent.
-- **EXT-08** — panel is hardcoded dark-only although a light token set already
-  ships in the same package; on a light-mode machine it is a dark slab.
+- ~~**EXT-04**~~ — CLOSED 2026-07-27. Slash autocomplete ships: 6 commands with
+  hints, arrow/Enter/Tab/Escape handling, verified in the e2e smoke
+  (`[slash-menu]` block).
+- ~~**EXT-08**~~ — CLOSED 2026-07-27. `getExtensionTokensCssAuto()` emits both
+  ramps under `prefers-color-scheme`; verified rendering light and dark.
 - **VSCX-14 / VSCX-15** — composer popovers expose `role="menu"` without Escape
   or arrow-key roving focus (a keyboard trap that also lies to screen readers),
   and the webview body bypasses `--vscode-font-family` / `--vscode-font-size`.
-- **EXT-06 / EXT-09 / EXT-05 / EXT-07 / EXT-12** — mixed icon vocabulary
-  (lucide SVG beside emoji), stream errors as plain `Error:` text with no retry,
-  a Shortcuts row with three silent-failure paths, an unreachable options page,
-  and debug telemetry in a user-facing drawer footer.
+- ~~**EXT-09**~~ — CLOSED 2026-07-27. The provider error was concatenated into
+  message content as "Error: <string>" and rendered as assistant prose. It now
+  lives in `errorText`, renders as a failure footer with the reason and a Retry
+  that re-sends the preceding user turn, on both the plain and tool-activity
+  paths. `__tests__/stream-error-retry.test.ts` (5).
+- ~~**EXT-05**~~ — CLOSED 2026-07-27. Replay discarded its callback outright,
+  delete acted only on success, and Save had three silent returns (including
+  pressing Save with nothing recorded). All now report into a status line.
+  `__tests__/shortcuts-failure-feedback.test.ts` (7).
+- ~~**EXT-12**~~ — CLOSED 2026-07-27. The Chrome-internal tab id ("#1873492")
+  is gone from the drawer footer, and the URL line no longer renders a raw
+  extension id on browser-internal pages.
+- **EXT-06 / EXT-07** — mixed icon vocabulary (lucide SVG beside emoji) and an
+  unreachable options page.
 
 ### 4. Cloud parity gaps — web ships these, Desktop/Mobile Cloud do not
 

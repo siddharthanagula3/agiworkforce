@@ -16,6 +16,15 @@ export interface SidePanelChatMessage {
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   /** Retryable, display-only failure from the most recent approval continuation. */
   cloudApprovalError?: string;
+  /**
+   * Why the stream failed, kept out of `content`.
+   *
+   * The failure used to be concatenated into `content` as "Error: <text>", so a
+   * provider string was rendered as markdown assistant prose with no way to
+   * distinguish it from a real answer and no way to act on it. Keeping it
+   * separate lets the bubble present it as a failure and offer a retry.
+   */
+  errorText?: string;
   timestamp: number;
 }
 
@@ -119,19 +128,21 @@ export function applyStreamFailure(
   errorText: string,
   timestamp = Date.now(),
 ): void {
-  const content = `Error: ${errorText}`;
   const existing = messages.find((message) => message.id === streamId);
   if (existing) {
-    existing.content = existing.content ? `${existing.content}\n\n${content}` : content;
+    // Any partial answer already streamed stays as content; the failure is
+    // recorded alongside it rather than appended to it.
     existing.streaming = false;
     existing.error = true;
+    existing.errorText = errorText;
     return;
   }
   messages.push({
     id: streamId,
     role: 'assistant',
-    content,
+    content: '',
     error: true,
+    errorText,
     timestamp,
   });
 }
