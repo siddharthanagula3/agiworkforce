@@ -1690,7 +1690,8 @@ pub async fn run_main() -> Result<()> {
                 }
             }
             Command::Sandbox { full_auto, command } => {
-                let cmd_str = command.join(" ");
+                // argv must survive the sh -c round-trip; a plain join loses quoting.
+                let cmd_str = sandbox::shell_join(command);
                 let cwd = std::env::current_dir()?;
                 let mgr = if *full_auto {
                     sandbox::SandboxManager::full_auto(cwd.clone())
