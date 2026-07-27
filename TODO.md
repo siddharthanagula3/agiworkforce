@@ -174,7 +174,7 @@ Founder rule: Cloud is a complete UI copy of web.
   demo concludes features ship when they don't — and it is the repo's biggest
   wrong-edit risk.
 - **VSCX-02** Open Chat in Editor forks the session · **VSCX-11** no in-IDE MCP
-  surface · **EXT-11** no autonomy-mode picker or per-site permission prompt.
+  surface · ~~**EXT-11**~~ — autonomy chip CLOSED 2026-07-27 (per-site prompt still open).
 
 ## Standing constraints
 

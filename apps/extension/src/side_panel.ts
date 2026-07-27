@@ -68,6 +68,7 @@ import {
   FileEdit,
   Square,
   Settings,
+  Shield,
   X,
   Play,
   ChevronDown,
@@ -1703,6 +1704,34 @@ function injectStyles(): void {
     .sp-context-chip:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-context-chip:hover::before { background: var(--agi-ext-accent); }
     .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
+
+    /* Autonomy chip (EXT-11). Reads the same agi_cu_ask_before_acting pref the
+       background's authoritative gate reads — it reports that gate, it does not
+       own it. Amber for the permissive state, matching how the reference
+       products surface a permission mode: the risky setting is the one that
+       gets the warning colour, not the safe one. */
+    .sp-autonomy-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 22px;
+      padding: 0 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 999px;
+      cursor: pointer;
+      white-space: nowrap;
+      background: var(--agi-ext-success-bg);
+      border: 1px solid var(--agi-ext-success-border);
+      color: var(--agi-ext-success);
+    }
+    .sp-autonomy-chip[data-mode='full'] {
+      background: var(--agi-ext-warning-bg);
+      border-color: var(--agi-ext-warning-border);
+      color: var(--agi-ext-warning);
+    }
+    .sp-autonomy-chip:hover { filter: brightness(1.12); }
+    .sp-autonomy-chip .agi-icon { flex-shrink: 0; }
 
     /* W5-06: quick mode toggle */
     #sp-quick-mode-toggle {
@@ -7522,6 +7551,60 @@ function buildUI(): void {
     updateContextButton();
   });
   composerBar.appendChild(contextBtn);
+
+  // ── Autonomy chip (EXT-11) ────────────────────────────────────────────────
+  // The panel had no visible autonomy control: the ask-before-acting gate lived
+  // only in the Computer Use tab, so from the composer there was no way to see
+  // — let alone change — whether the agent would act without asking. This chip
+  // reports and toggles the same `agi_cu_ask_before_acting` pref that
+  // background.ts treats as authoritative; it does not own the gate.
+  const autonomyChip = el('button', {
+    class: 'sp-autonomy-chip',
+    id: 'sp-autonomy-chip',
+    type: 'button',
+  }) as HTMLButtonElement;
+  const autonomyLabel = el('span', { id: 'sp-autonomy-label' });
+  autonomyChip.appendChild(renderIcon(Shield, 11));
+  autonomyChip.appendChild(autonomyLabel);
+
+  function renderAutonomyChip(askFirst: boolean): void {
+    autonomyChip.setAttribute('data-mode', askFirst ? 'ask' : 'full');
+    autonomyLabel.textContent = askFirst ? 'Ask first' : 'Full access';
+    autonomyChip.title = askFirst
+      ? 'Every browser action is confirmed before it runs. Click to allow the agent to act without asking.'
+      : 'The agent can act in your browser without asking. Click to require confirmation for each action.';
+    autonomyChip.setAttribute('aria-pressed', String(!askFirst));
+    autonomyChip.setAttribute(
+      'aria-label',
+      askFirst ? 'Permission mode: ask before acting' : 'Permission mode: full access',
+    );
+  }
+
+  // Default to the safe state until storage answers, matching the rule
+  // background.ts applies: only an explicit stored `false` disables the gate.
+  renderAutonomyChip(true);
+  chrome.storage.local.get('agi_cu_ask_before_acting', (items) => {
+    if (chrome.runtime.lastError) return;
+    renderAutonomyChip(items['agi_cu_ask_before_acting'] !== false);
+  });
+
+  autonomyChip.addEventListener('click', () => {
+    const askFirst = autonomyChip.getAttribute('data-mode') === 'ask';
+    const next = !askFirst;
+    renderAutonomyChip(next);
+    void chrome.storage.local.set({ agi_cu_ask_before_acting: next });
+  });
+
+  // Keep the chip and the Computer Use checkbox from drifting apart — they are
+  // two views of one stored value.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    const change = changes['agi_cu_ask_before_acting'];
+    if (!change) return;
+    renderAutonomyChip(change.newValue !== false);
+  });
+
+  composerBar.appendChild(autonomyChip);
 
   // W5-06: per-turn Auto Economy override for lower-latency replies.
   const quickModeToggle = el('button', {
