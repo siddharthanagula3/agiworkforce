@@ -1,4 +1,4 @@
--- 0067 — Keep the subscription constraint aligned with the shared billing catalog.
+-- 0074 — Keep the subscription constraint aligned with the shared billing catalog.
 --
 -- Max 15x is a self-serve paid tier. Stripe can successfully charge and update
 -- the subscription, but the legacy constraint from 0046 predates this tier and

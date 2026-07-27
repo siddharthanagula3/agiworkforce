@@ -8,6 +8,11 @@ vi.mock('@/lib/services/waitlistServiceClient', () => ({
   joinPublicWaitlist: (...args: unknown[]) => mockJoinPublicWaitlist(...args),
 }));
 
+const mockPathname = vi.fn(() => '/');
+vi.mock('next/navigation', () => ({
+  usePathname: () => mockPathname(),
+}));
+
 describe('WaitlistModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -138,5 +143,36 @@ describe('WaitlistModal', () => {
         referralSource: 'byok',
       });
     });
+  });
+
+  // Regression: the blocklist is default-OPEN — any route not named in it gets
+  // a marketing capture over the product. `/connect/[deviceType]` was missing,
+  // so the modal opened on top of the "Connect VS Code to AGI?" approval prompt
+  // and stole focus from the Deny/Approve decision. Reproduced in a real
+  // browser before this test was written.
+  it.each([
+    ['/connect/vscode', 'a device-pairing approval prompt'],
+    ['/share/abc123', 'a public share recipient'],
+    ['/shared/abc123', 'a public share recipient'],
+    ['/status', 'the status page during an incident'],
+    ['/tasks', 'a signed-in product surface'],
+    ['/library', 'a signed-in product surface'],
+  ])('never auto-opens over %s (%s)', (pathname) => {
+    vi.useFakeTimers();
+    mockPathname.mockReturnValue(pathname);
+    try {
+      render(
+        <WaitlistModalProvider>
+          <span>app</span>
+        </WaitlistModalProvider>,
+      );
+      act(() => {
+        vi.advanceTimersByTime(120_000);
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+    } finally {
+      mockPathname.mockReturnValue('/');
+      vi.useRealTimers();
+    }
   });
 });

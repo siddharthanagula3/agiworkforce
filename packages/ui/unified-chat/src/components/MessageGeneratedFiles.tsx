@@ -422,7 +422,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="min-h-0 overflow-auto bg-[var(--chat-surface)] p-4">
+            <div className="min-h-0 overflow-auto bg-[var(--chat-surface-overlay)] p-4">
               {previewState.status === 'loading' ? (
                 <div className="flex h-full min-h-72 items-center justify-center gap-2 text-sm text-[var(--chat-text-muted)]">
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

@@ -131,7 +131,7 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request early access
           style={{
             padding: '8px 12px',
             background: 'var(--bg-elev)',
-            border: '1px solid var(--border)',
+            border: '1px solid hsl(var(--border))',
             borderRadius: 'var(--radius-md, 6px)',
             color: 'var(--text-1)',
             fontSize: 14,

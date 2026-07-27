@@ -250,9 +250,13 @@ export default function IntegrationsScreen() {
       setSelectedPlatformId(platformId);
       setupSheetRef.current?.expand();
     } else {
+      // Previously promised "available in the next update. OAuth flow will open
+      // in your browser." There is no such OAuth flow on mobile and no release
+      // it is scheduled for — describing a browser hand-off that never happens
+      // is worse than saying nothing. Connectors are managed on web.
       Alert.alert(
-        'Coming Soon',
-        `${platformId.charAt(0).toUpperCase() + platformId.slice(1)} integration will be available in the next update. OAuth flow will open in your browser.`,
+        'Manage this on web',
+        `${platformId.charAt(0).toUpperCase() + platformId.slice(1)} cannot be connected from the mobile app. Sign in on the web app to connect it; it will then be available here.`,
         [{ text: 'OK' }],
       );
     }
