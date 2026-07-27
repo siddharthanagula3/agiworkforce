@@ -1,4 +1,4 @@
-import { getExtensionTokensCss } from '../../tokens';
+import { getExtensionTokensCssAuto } from '../../tokens';
 import { waitlistService } from '../../lib/waitlistService';
 import { setCloudUnlocked } from './desktopBridge';
 import type { InviteCodeError, InviteCodeModalProps, InviteCodeTab } from './types';
@@ -40,7 +40,7 @@ function friendlyInviteError(code?: InviteCodeError): string {
 
 function buildModalStyles(): string {
   return `
-    ${getExtensionTokensCss('dark').replace(':root', ':host')}
+    ${getExtensionTokensCssAuto(':host')}
 
     :host { display:block; position:fixed; inset:0; z-index:2147483645; pointer-events:none; }
 
