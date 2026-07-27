@@ -479,8 +479,6 @@ export {
   emailSend,
   emailSendMessage,
   emailSearch,
-  emailCheckKeyringStatus,
-  emailMigrateCredentials,
   contactCreate,
   contactGet,
   contactList,
@@ -491,8 +489,6 @@ export {
   contactExportVcard,
   type SendEmailRequest,
   type EmailSearchResult as EmailApiSearchResult,
-  type KeyringStatus,
-  type MigrationResult,
 } from './email';
 
 // OCR - Tesseract-based text recognition

@@ -55,11 +55,20 @@ impl StartupRecoveryInfo {
         }
     }
 
+    /// The database key lives in OS secure storage because it is what decrypts
+    /// the database. A *denied* permission prompt is by far the most common way
+    /// to reach this screen and is fully recoverable, so the copy names that
+    /// case and the fix instead of stopping at "unavailable" — which reads like
+    /// a broken install and gives the user nothing to do.
     fn secure_storage() -> Self {
         Self {
             code: "DB_SECURE_STORAGE".to_string(),
-            title: "Secure storage is unavailable".to_string(),
-            message: "AGI could not access the operating system's protected database key. Your local data was left in place.".to_string(),
+            title: "AGI needs permission to unlock local data".to_string(),
+            message: "AGI could not read its database key from the system credential store \
+                      (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux). \
+                      This usually means a permission prompt was dismissed or denied. \
+                      Choose Retry and allow access when prompted. Your local data was left in place."
+                .to_string(),
             data_preserved: true,
         }
     }
@@ -244,6 +253,32 @@ mod tests {
         assert!(!info.title.contains(raw_secret));
         assert!(!info.message.contains(raw_secret));
         assert!(!info.message.contains("/Users/private-user"));
+    }
+
+    #[test]
+    fn denied_credential_prompt_tells_the_user_how_to_recover() {
+        // Reaching this screen by dismissing a Keychain prompt is recoverable,
+        // and the previous copy ("Secure storage is unavailable") gave no way
+        // back — it read like a broken install for a one-click fix.
+        let info = StartupRecoveryInfo::from_database_error(&DatabaseKeyError::SecureStorage(
+            "User denied access".to_string(),
+        ));
+
+        assert!(
+            info.message.contains("Retry"),
+            "message must point at the Retry control: {}",
+            info.message
+        );
+        assert!(
+            info.message.to_lowercase().contains("permission")
+                || info.message.to_lowercase().contains("denied"),
+            "message must name the likely cause: {}",
+            info.message
+        );
+        assert!(
+            info.data_preserved,
+            "a denied prompt must never imply data loss"
+        );
     }
 
     #[test]
