@@ -374,7 +374,12 @@ pub(super) async fn handle_slash_command(
             } else {
                 use crate::tui::widgets::theme_picker::ThemeChoice;
                 match ThemeChoice::from_arg(arg) {
-                    Some(choice) => output::print_info(&format!("Theme set to {}", choice.label())),
+                    Some(choice) => {
+                        // Apply it. This used to print a confirmation and change
+                        // nothing, so the message was simply untrue.
+                        crate::tui::terminal_palette::set_active_theme(choice as u8);
+                        output::print_info(&format!("Theme set to {}", choice.label()))
+                    }
                     None => output::print_warn(&format!(
                         "Unknown theme: '{arg}'. Available: dark | light | ansi | solarized-dark | solarized-light | colorblind"
                     )),
@@ -537,6 +542,13 @@ fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config
         "/output-style" if !arg.trim().is_empty() => {
             if let Err(err) = config.persist_output_style_project(&session.output_style) {
                 output::print_warn(&format!("Failed to persist output style: {err}"));
+            }
+        }
+        "/theme" if !arg.trim().is_empty() => {
+            if let Some(choice) = crate::tui::widgets::theme_picker::ThemeChoice::from_arg(arg) {
+                if let Err(err) = config.persist_theme_project(choice.slug()) {
+                    output::print_warn(&format!("Failed to persist theme: {err}"));
+                }
             }
         }
         "/privacy-mode" | "/trust-boundary" => {

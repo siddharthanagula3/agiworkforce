@@ -94,6 +94,19 @@ impl ThemeChoice {
         }
     }
 
+    /// Stable slug for `/theme <name>` and the `[ui] theme` config key. Inverse
+    /// of `from_arg`, so a persisted value always round-trips.
+    pub fn slug(self) -> &'static str {
+        match self {
+            ThemeChoice::Dark => "dark",
+            ThemeChoice::Light => "light",
+            ThemeChoice::Ansi => "ansi",
+            ThemeChoice::SolarizedDark => "solarized-dark",
+            ThemeChoice::SolarizedLight => "solarized-light",
+            ThemeChoice::Colorblind => "colorblind",
+        }
+    }
+
     /// Accent color used by the picker row highlight for this theme.
     fn accent(self) -> Color {
         match self {
@@ -336,6 +349,40 @@ mod tests {
         let area = Rect::new(0, 0, width, height);
         terminal.draw(|f| render(f, area, state)).expect("draw");
         terminal
+    }
+
+    /// `slug()` is what gets written to `[ui] theme` and read back at startup.
+    /// If it ever stops round-tripping through `from_arg`, a persisted theme
+    /// silently reverts to Dark on the next launch — which is exactly the bug
+    /// this pair was added to fix.
+    #[test]
+    fn every_theme_slug_round_trips_through_from_arg() {
+        for choice in ThemeChoice::ALL {
+            let slug = choice.slug();
+            assert_eq!(
+                ThemeChoice::from_arg(slug),
+                Some(*choice),
+                "slug {slug:?} did not round-trip"
+            );
+        }
+    }
+
+    /// The config key is user-facing and appears in `/theme <name>` help text,
+    /// so the accepted spellings must stay stable.
+    #[test]
+    fn slugs_are_the_documented_spellings() {
+        let slugs: Vec<&str> = ThemeChoice::ALL.iter().map(|c| c.slug()).collect();
+        assert_eq!(
+            slugs,
+            vec![
+                "dark",
+                "light",
+                "ansi",
+                "solarized-dark",
+                "solarized-light",
+                "colorblind"
+            ]
+        );
     }
 
     #[test]

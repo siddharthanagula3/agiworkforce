@@ -147,10 +147,25 @@ fn expand_home(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, MutexGuard};
+
+    /// `ADDITIONAL_WORKSPACE_ROOTS` is process-global, and cargo runs tests in
+    /// parallel threads. Without this, one test's
+    /// `clear_additional_workspace_roots_for_tests()` races another's
+    /// `register_additional_workspace_root_path`, and the registered-root test
+    /// fails intermittently — roughly one run in three.
+    static ROOTS_GUARD: Mutex<()> = Mutex::new(());
+
+    /// Serialize access to the global. Recovers from a poisoned lock so one
+    /// failing test does not cascade into every sibling.
+    fn lock_roots() -> MutexGuard<'static, ()> {
+        ROOTS_GUARD.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     #[cfg(unix)]
     #[test]
     fn validate_workspace_path_rejects_new_file_under_symlinked_parent_outside_workspace() {
+        let _guard = lock_roots();
         clear_additional_workspace_roots_for_tests();
         let workspace = tempfile::tempdir().expect("workspace tempdir");
         let outside = tempfile::tempdir().expect("outside tempdir");
@@ -167,6 +182,7 @@ mod tests {
 
     #[test]
     fn validate_workspace_path_allows_new_file_under_real_workspace_dir() {
+        let _guard = lock_roots();
         clear_additional_workspace_roots_for_tests();
         let workspace = tempfile::tempdir().expect("workspace tempdir");
         std::fs::create_dir(workspace.path().join("real")).expect("create real dir");
@@ -179,6 +195,7 @@ mod tests {
 
     #[test]
     fn validate_workspace_path_allows_existing_file_under_workspace() {
+        let _guard = lock_roots();
         clear_additional_workspace_roots_for_tests();
         let workspace = tempfile::tempdir().expect("workspace tempdir");
         let file = workspace.path().join("existing.txt");
@@ -195,6 +212,7 @@ mod tests {
 
     #[test]
     fn validate_workspace_path_rejects_parent_traversal_outside_workspace() {
+        let _guard = lock_roots();
         clear_additional_workspace_roots_for_tests();
         let root = tempfile::tempdir().expect("root tempdir");
         let workspace = root.path().join("workspace");
@@ -219,6 +237,7 @@ mod tests {
 
     #[test]
     fn validate_workspace_path_allows_registered_additional_root() {
+        let _guard = lock_roots();
         clear_additional_workspace_roots_for_tests();
         let workspace = tempfile::tempdir().expect("workspace tempdir");
         let outside = tempfile::tempdir().expect("outside tempdir");

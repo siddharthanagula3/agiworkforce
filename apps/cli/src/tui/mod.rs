@@ -12,7 +12,7 @@ pub(crate) mod pane_view;
 #[allow(dead_code, unused_imports)]
 mod shimmer;
 #[allow(dead_code, unused_imports)]
-mod terminal_palette;
+pub(crate) mod terminal_palette;
 pub(crate) mod transcript_cell;
 
 mod markdown_renderer;
