@@ -77,6 +77,7 @@
       "projects": "Projects",
       "artifacts": "Artifacts",
       "library": "Library",
+      "tasks": "Tasks",
       "customize": "Customize",
       "scheduled": "Scheduled",
       "liveArtifacts": "Live artifacts",

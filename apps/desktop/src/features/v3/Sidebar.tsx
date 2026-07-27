@@ -9,6 +9,7 @@ import {
   FolderPlus,
   Box,
   Library,
+  ListChecks,
   RefreshCw,
   LogIn,
   PanelLeftClose,
@@ -112,7 +113,10 @@ function navItemsForMode(
   // surface — the files live in cloud storage — so it belongs here and only
   // here: local sessions keep their files on the device and are not cataloged.
   if (privacyMode === 'managed') {
-    return [{ id: 'library', label: t('sidebar.nav.library'), icon: Library }];
+    return [
+      { id: 'library', label: t('sidebar.nav.library'), icon: Library },
+      { id: 'tasks', label: t('sidebar.nav.tasks'), icon: ListChecks },
+    ];
   }
   // Projects moved to its own ChatGPT-style folder section below; the rest
   // stay as flat nav entries.
@@ -148,6 +152,7 @@ function railItems(
   const items = [{ id: 'projects', icon: FolderOpen, title: t('sidebar.nav.projects') }];
   if (privacyMode === 'managed') {
     items.push({ id: 'library', icon: Library, title: t('sidebar.nav.library') });
+    items.push({ id: 'tasks', icon: ListChecks, title: t('sidebar.nav.tasks') });
   } else {
     items.push({ id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') });
   }
@@ -245,6 +250,7 @@ export function Sidebar({
         projects: 'projects',
         artifacts: 'artifacts',
         library: 'library',
+        tasks: 'tasks',
         scheduled: 'work-scheduled',
       };
       const view = viewMap[id];
