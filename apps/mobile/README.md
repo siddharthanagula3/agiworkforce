@@ -124,6 +124,33 @@ iOS min: **17.0** (AppShortcuts.xcstrings + local-LLM native runtime floor). Bun
 
 ## Build & test
 
+### If the iOS build dies in the Hermes script phase
+
+`ios/.xcode.env.local` is local-only and gitignored, and it pins `NODE_BINARY`
+to an absolute Homebrew Cellar path. When Homebrew later upgrades a dependency
+of that exact Node build, the pinned binary stops working and **every** React
+Native script phase fails, because they all shell out to Node.
+
+The failure is misleading: the build aborts after ~9s inside
+`[Hermes] Replace Hermes for the right configuration`, so it reads as a Hermes
+problem. The real error is further down the log:
+
+```
+dyld: Library not loaded: /opt/homebrew/opt/simdjson/lib/libsimdjson.29.dylib
+  Referenced from: /opt/homebrew/Cellar/node@22/22.21.1_4/bin/node
+```
+
+Check the pinned binary directly — `<pinned path> -v` — and if it aborts,
+repoint `NODE_BINARY` at a working Node (the repo standardises on Node 24):
+
+```bash
+echo 'export NODE_BINARY=/opt/homebrew/opt/node@24/bin/node' > ios/.xcode.env.local
+```
+
+Prefer a version-symlink path (`/opt/homebrew/opt/node@24/bin/node`) over a
+Cellar path (`.../Cellar/node@24/24.x.y/bin/node`): the symlink survives patch
+upgrades, the Cellar path does not.
+
 ```bash
 # Dev
 pnpm --filter @agiworkforce/mobile dev        # Metro
