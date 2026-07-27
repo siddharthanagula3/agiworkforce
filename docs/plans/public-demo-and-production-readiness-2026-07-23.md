@@ -8,8 +8,14 @@
 ## Purpose
 
 This file is the release-order overlay for the exhaustive parity inventory in
-`docs/plans/chatgpt-claude-parity-gap-audit-2026-07-21.md` and the implementation-backed
+`docs/plans/chatgpt-claude-parity-gap-ledger-2026-07-27.md` and the implementation-backed
 ledger in `docs/agent-context/known-flaws.md`.
+
+> **2026-07-27:** the former target of this pointer
+> (`chatgpt-claude-parity-gap-audit-2026-07-21.md`) was deleted — nine of its
+> fourteen ranked blockers were already closed at HEAD and one was never real.
+> Rows below that were inherited from it should be re-checked against the new
+> ledger before being treated as open.
 
 It does not replace or duplicate every row in those documents. It records:
 
