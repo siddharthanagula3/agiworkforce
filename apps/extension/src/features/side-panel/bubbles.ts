@@ -40,6 +40,40 @@ export interface BubbleInteractionOptions {
   approvalDecisions?: Readonly<Record<string, ManagedApprovalDecision>>;
   approvalError?: string;
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
+  /** Re-send the request that produced a failed assistant message. */
+  onRetry?: (messageId: string) => void;
+}
+
+/**
+ * Failure footer for an assistant message whose stream ended in an error.
+ *
+ * The failure text used to be concatenated into the message content as
+ * "Error: <provider string>" and rendered as ordinary markdown prose, so it was
+ * visually indistinguishable from an answer and offered nothing to do about it.
+ */
+function buildErrorFooter(
+  msg: ChatMessage,
+  onRetry?: (messageId: string) => void,
+): HTMLElement | null {
+  if (!msg.error || !msg.errorText) return null;
+
+  const footer = el('div', { class: 'sp-bubble-error-footer', role: 'alert' });
+  footer.appendChild(el('div', { class: 'sp-bubble-error-text' }, msg.errorText));
+
+  if (onRetry) {
+    const retryBtn = el(
+      'button',
+      { class: 'sp-bubble-retry-btn', type: 'button' },
+      'Retry',
+    ) as HTMLButtonElement;
+    retryBtn.addEventListener('click', () => {
+      retryBtn.disabled = true;
+      onRetry(msg.id);
+    });
+    footer.appendChild(retryBtn);
+  }
+
+  return footer;
 }
 
 /**
@@ -61,7 +95,7 @@ export function resolveManagedArtifactUrl(uri: string): string | null {
   }
 }
 
-function buildBubble(msg: ChatMessage): HTMLElement {
+function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): HTMLElement {
   const isUser = msg.role === 'user';
   const wrapper = el('div', { class: `sp-msg sp-msg-${msg.role}`, 'data-id': msg.id });
 
@@ -77,6 +111,9 @@ function buildBubble(msg: ChatMessage): HTMLElement {
   }
 
   wrapper.appendChild(bubble);
+
+  const errorFooter = buildErrorFooter(msg, options.onRetry);
+  if (errorFooter) bubble.appendChild(errorFooter);
 
   // Action row: timestamp + copy button (assistant only)
   const actionRow = el('div', { class: 'sp-bubble-actions' });
@@ -479,7 +516,7 @@ export function buildBubbleWithTools(
   const segments = parseToolCalls(msg.content);
   const hasTools = segments.some((s) => typeof s !== 'string');
   const hasAgentActivity = msg.role === 'assistant' && Boolean(msg.agentActivity);
-  if (!hasTools && !hasAgentActivity) return buildBubble(msg);
+  if (!hasTools && !hasAgentActivity) return buildBubble(msg, options);
 
   const wrapper = document.createElement('div');
   wrapper.className = `sp-msg sp-msg-${msg.role}`;
@@ -518,6 +555,11 @@ export function buildBubbleWithTools(
       wrapper.appendChild(stack);
     }
   }
+
+  // A failed run that produced tool activity gets the same failure footer as a
+  // plain one; the error must not be reachable only on the no-tools path.
+  const toolsErrorFooter = buildErrorFooter(msg, options.onRetry);
+  if (toolsErrorFooter) wrapper.appendChild(toolsErrorFooter);
 
   const actionRow = document.createElement('div');
   actionRow.className = 'sp-bubble-actions';

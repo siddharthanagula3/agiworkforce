@@ -808,6 +808,36 @@ function injectStyles(): void {
       border-color: var(--agi-ext-danger-border);
       color: var(--agi-ext-danger);
     }
+    /* Failure footer: the reason plus a way to act on it. Previously the
+       reason was concatenated into the message text as "Error: <string>". */
+    .sp-bubble-error-footer {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--agi-ext-danger-border);
+    }
+    .sp-bubble-error-text {
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--agi-ext-danger);
+      overflow-wrap: anywhere;
+    }
+    .sp-bubble-retry-btn {
+      flex-shrink: 0;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--agi-ext-text);
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .sp-bubble-retry-btn:hover:not(:disabled) { background: var(--agi-ext-hover); }
+    .sp-bubble-retry-btn:disabled { opacity: 0.5; cursor: default; }
     /* ── Bubble action row (timestamp + copy) ── */
     .sp-bubble-actions {
       display: flex;
@@ -1284,6 +1314,16 @@ function injectStyles(): void {
       transition: background 0.12s;
     }
     .sp-shortcut-action-btn:hover { background: var(--agi-ext-overlay); }
+    .sp-shortcuts-status {
+      padding: 6px 10px;
+      font-size: 11px;
+      line-height: 1.4;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+    .sp-shortcuts-status[data-kind='error'] { color: var(--agi-ext-danger); }
+    .sp-shortcuts-status[data-kind='success'] { color: var(--agi-ext-success); }
+    .sp-shortcuts-status:empty { display: none; }
+
     .sp-shortcuts-empty {
       padding: 10px 8px;
       color: var(--agi-ext-text-muted);
@@ -3229,6 +3269,7 @@ function renderMessages(): void {
           approvalError: msg.cloudApprovalError,
           onResolveApproval: (toolCallId, decision) =>
             resolveManagedToolApproval(msg.id, toolCallId, decision),
+          onRetry: (messageId) => retryFailedMessage(messageId),
         }),
       );
     }
@@ -3670,6 +3711,41 @@ function sendMessage(text: string): void {
       }
     },
   );
+}
+
+/**
+ * Re-send the request that produced a failed assistant message.
+ *
+ * A failed stream previously left a dead end: the provider error was rendered
+ * as message text and the only way forward was to retype the prompt. The user
+ * turn is still in history, so retrying means dropping the failed assistant
+ * message and sending that turn again.
+ */
+function retryFailedMessage(messageId: string): void {
+  if (_ctx.isStreaming) return;
+
+  const failedIndex = _ctx.messages.findIndex((message) => message.id === messageId);
+  if (failedIndex < 0) return;
+
+  // The prompt to repeat is the nearest preceding user turn.
+  let promptText = '';
+  for (let i = failedIndex - 1; i >= 0; i--) {
+    const candidate = _ctx.messages[i];
+    if (candidate?.role === 'user') {
+      promptText = candidate.content;
+      break;
+    }
+  }
+  if (!promptText) return;
+
+  // Drop the failed assistant turn so the retry does not stack a second
+  // failure underneath the first.
+  _ctx.messages.splice(failedIndex, 1);
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+
+  sendMessage(promptText);
 }
 
 function handleStreamError(id: string, errorText: string): void {
@@ -6108,8 +6184,9 @@ function buildUI(): void {
   aboutRow.appendChild(el('span', {}, `v${chrome.runtime.getManifest().version}`));
   const aboutUrlSpan = el('span', { class: 'sp-drawer-about-url', id: 'sp-drawer-about-url' }, '—');
   aboutRow.appendChild(aboutUrlSpan);
-  const aboutTabId = el('span', { id: 'sp-drawer-tab-id' }, '');
-  aboutRow.appendChild(aboutTabId);
+  // The Chrome-internal tab id used to render here as "#1873492". It is a
+  // process-local integer with no meaning to a user and no way to act on it —
+  // debug telemetry in a shipped surface.
   drawerFooter.appendChild(aboutRow);
   drawer.appendChild(drawerFooter);
 
@@ -6131,15 +6208,21 @@ function buildUI(): void {
       if (tab?.url) {
         try {
           const url = new URL(tab.url);
-          const chars = [...`${url.hostname}${url.pathname}`];
-          aboutUrlSpan.textContent =
-            chars.length > 28 ? chars.slice(0, 28).join('') + '…' : chars.join('');
-          aboutUrlSpan.title = tab.url;
+          if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+            // Browser-internal pages have no hostname worth showing; `hostname`
+            // is the raw extension id there. Same reason as pageChipLabel().
+            aboutUrlSpan.textContent = 'Browser page';
+            aboutUrlSpan.removeAttribute('title');
+          } else {
+            const chars = [...`${url.hostname}${url.pathname}`];
+            aboutUrlSpan.textContent =
+              chars.length > 28 ? chars.slice(0, 28).join('') + '…' : chars.join('');
+            aboutUrlSpan.title = tab.url;
+          }
         } catch {
           aboutUrlSpan.textContent = 'Unknown';
         }
       }
-      if (tab?.id != null) aboutTabId.textContent = `#${tab.id}`;
     } catch {
       /* ignore */
     }
@@ -6888,7 +6971,7 @@ function buildUI(): void {
       const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const activeTabId = activeTab?.id;
       if (!activeTabId) {
-        cuPanel.showHandoffBanner('Could not determine the active tab. Please try again.');
+        cuPanel.showHandoffBanner('Could not determine the active tab. Please try again.', 'error');
         return;
       }
 
@@ -6899,13 +6982,13 @@ function buildUI(): void {
         })) as Record<string, unknown> | null;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        cuPanel.showHandoffBanner(`Autofill failed: ${msg}`);
+        cuPanel.showHandoffBanner(`Autofill failed: ${msg}`, 'error');
         return;
       }
 
       if (!resp || !resp['success']) {
         const errMsg = typeof resp?.['error'] === 'string' ? resp['error'] : 'Autofill failed';
-        cuPanel.showHandoffBanner(String(errMsg));
+        cuPanel.showHandoffBanner(String(errMsg), 'error');
         return;
       }
 
@@ -6915,7 +6998,7 @@ function buildUI(): void {
 
       if (!escalation?.shouldEscalate) {
         // Fast-path completed cleanly — no agent loop needed.
-        cuPanel.showHandoffBanner('Autofill complete. No agent escalation needed.');
+        cuPanel.showHandoffBanner('No agent escalation needed.', 'success');
         switchTab('computer-use');
         return;
       }
@@ -7566,6 +7649,17 @@ function refreshShortcuts(): void {
       const dropdown = document.getElementById('sp-shortcuts-dropdown');
       if (!dropdown) return;
       clearChildren(dropdown);
+
+      // Every control in this dropdown previously returned silently on failure:
+      // replay discarded its callback entirely, delete only acted on success,
+      // and Save had three separate silent returns — including the common case
+      // of pressing Save with nothing recorded. A click that does nothing and
+      // says nothing is indistinguishable from a dead control.
+      const statusEl = el('div', { class: 'sp-shortcuts-status', role: 'status' });
+      const setStatus = (message: string, kind: 'error' | 'success'): void => {
+        statusEl.textContent = message;
+        statusEl.setAttribute('data-kind', kind);
+      };
       const shortcuts = response.shortcuts ?? [];
       if (shortcuts.length === 0) {
         setChild(dropdown, {
@@ -7581,15 +7675,36 @@ function refreshShortcuts(): void {
           const playBtn = el('button', { class: 'sp-shortcut-action-btn', title: 'Replay' }, '▶');
           playBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            chrome.runtime.sendMessage({ type: 'REPLAY_SHORTCUT', shortcutId: sc.id }, () => {});
+            chrome.runtime.sendMessage(
+              { type: 'REPLAY_SHORTCUT', shortcutId: sc.id },
+              (replayResponse: { success?: boolean; error?: string } | undefined) => {
+                if (chrome.runtime.lastError || !replayResponse?.success) {
+                  const reason =
+                    replayResponse?.error ??
+                    chrome.runtime.lastError?.message ??
+                    'the page may have changed since it was recorded';
+                  setStatus(`Could not replay "${sc.name}": ${reason}`, 'error');
+                  dropdown.classList.add('open');
+                }
+              },
+            );
             dropdown.classList.remove('open');
           });
           const delBtn = el('button', { class: 'sp-shortcut-action-btn', title: 'Delete' }, '✕');
           delBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            chrome.runtime.sendMessage({ type: 'DELETE_SHORTCUT', shortcutId: sc.id }, () => {
-              if (!chrome.runtime.lastError) refreshShortcuts();
-            });
+            chrome.runtime.sendMessage(
+              { type: 'DELETE_SHORTCUT', shortcutId: sc.id },
+              (deleteResponse: { success?: boolean; error?: string } | undefined) => {
+                if (chrome.runtime.lastError || !deleteResponse?.success) {
+                  const reason =
+                    deleteResponse?.error ?? chrome.runtime.lastError?.message ?? 'unknown error';
+                  setStatus(`Could not delete "${sc.name}": ${reason}`, 'error');
+                  return;
+                }
+                refreshShortcuts();
+              },
+            );
           });
           actions.appendChild(playBtn);
           actions.appendChild(delBtn);
@@ -7606,25 +7721,46 @@ function refreshShortcuts(): void {
       const saveBtn = el('button', { class: 'sp-save-shortcut-btn' }, 'Save Recording');
       saveBtn.addEventListener('click', () => {
         const name = nameInput.value.trim();
-        if (!name) return;
+        if (!name) {
+          setStatus('Give the shortcut a name before saving it.', 'error');
+          nameInput.focus();
+          return;
+        }
         // Get recorded actions from content script
         chrome.runtime.sendMessage(
           { type: 'GET_RECORDED_ACTIONS' },
           (recResponse: { success?: boolean; actions?: unknown[] } | undefined) => {
-            if (chrome.runtime.lastError || !recResponse?.success) return;
+            if (chrome.runtime.lastError || !recResponse?.success) {
+              setStatus(
+                `Could not read the recording: ${
+                  chrome.runtime.lastError?.message ?? 'no response from the page'
+                }`,
+                'error',
+              );
+              return;
+            }
             const recActions = recResponse.actions ?? [];
-            if (recActions.length === 0) return;
+            if (recActions.length === 0) {
+              // The most common silent failure: Save was pressed before
+              // anything was recorded, and the row simply did nothing.
+              setStatus('Nothing recorded yet — start a recording first.', 'error');
+              return;
+            }
             chrome.runtime.sendMessage(
               {
                 type: 'SAVE_SHORTCUT',
                 name,
                 actions: recActions,
               },
-              () => {
-                if (!chrome.runtime.lastError) {
-                  nameInput.value = '';
-                  refreshShortcuts();
+              (saveResponse: { success?: boolean; error?: string } | undefined) => {
+                if (chrome.runtime.lastError || !saveResponse?.success) {
+                  const reason =
+                    saveResponse?.error ?? chrome.runtime.lastError?.message ?? 'unknown error';
+                  setStatus(`Could not save "${name}": ${reason}`, 'error');
+                  return;
                 }
+                nameInput.value = '';
+                refreshShortcuts();
               },
             );
           },
@@ -7633,6 +7769,7 @@ function refreshShortcuts(): void {
       saveRow.appendChild(nameInput);
       saveRow.appendChild(saveBtn);
       dropdown.appendChild(saveRow);
+      dropdown.appendChild(statusEl);
     },
   );
 }

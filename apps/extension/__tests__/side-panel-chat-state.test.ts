@@ -131,10 +131,15 @@ describe('side-panel chat state', () => {
 
     expect(messages.filter((entry) => entry.id === 'stream-1')).toHaveLength(1);
     expect(messages.at(-1)).toMatchObject({
-      content: 'partial\n\nError: network lost',
+      // The partial answer survives untouched; the failure is recorded beside
+      // it rather than appended into it as "Error: <provider string>", which
+      // rendered a provider message as assistant prose.
+      content: 'partial',
+      errorText: 'network lost',
       streaming: false,
       error: true,
     });
+    expect(messages.at(-1)?.content).not.toContain('Error:');
   });
 
   it('creates a terminal error when no assistant stream was rendered yet', () => {
@@ -145,9 +150,11 @@ describe('side-panel chat state', () => {
     expect(messages.at(-1)).toMatchObject({
       id: 'stream-2',
       role: 'assistant',
-      content: 'Error: request rejected',
+      content: '',
+      errorText: 'request rejected',
       error: true,
     });
+    expect(messages.at(-1)?.content).not.toContain('Error:');
   });
 
   it('bounds the live conversation to the newest messages', () => {
