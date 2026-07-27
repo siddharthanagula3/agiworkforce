@@ -143,14 +143,14 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
               key={i}
               style={{
                 padding: '10px 14px 8px',
-                borderBottom: '1px solid var(--border)',
+                borderBottom: '1px solid var(--chat-border)',
                 marginBottom: 4,
               }}
             >
               <div
                 style={{
                   fontSize: 13,
-                  color: 'var(--text-1)',
+                  color: 'var(--chat-text-primary)',
                   fontWeight: 500,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -163,8 +163,8 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
                 <div
                   style={{
                     fontSize: 11,
-                    color: 'var(--text-3)',
-                    fontFamily: 'var(--mono)',
+                    color: 'var(--chat-text-muted)',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -179,7 +179,7 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
         }
         if (it.kind === 'divider') {
           return (
-            <div key={i} style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+            <div key={i} style={{ height: 1, background: 'var(--chat-border)', margin: '4px 0' }} />
           );
         }
         const { icon: Icon, label, kbd, chev, action, danger } = it;
@@ -195,13 +195,13 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
               padding: '7px 14px',
               border: 'none',
               background: 'transparent',
-              color: danger ? '#e05c4a' : 'var(--text-2)',
+              color: danger ? 'var(--chat-destructive)' : 'var(--chat-text-secondary)',
               fontSize: 13,
               cursor: 'pointer',
               textAlign: 'left',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-soft)';
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--chat-surface-hover)';
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
@@ -213,9 +213,9 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
               <span
                 style={{
                   fontSize: 11,
-                  color: 'var(--text-3)',
-                  fontFamily: 'var(--mono)',
-                  background: 'var(--bg-soft)',
+                  color: 'var(--chat-text-muted)',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  background: 'var(--chat-surface-hover)',
                   padding: '1px 5px',
                   borderRadius: 4,
                 }}
@@ -223,7 +223,7 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
                 {kbd}
               </span>
             )}
-            {chev && <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />}
+            {chev && <ChevronRight size={13} style={{ color: 'var(--chat-text-muted)' }} />}
           </button>
         );
       })}
