@@ -9,6 +9,9 @@ Chrome's native messaging API. The host name is `com.agiworkforce.browser`.
 - The `native_messaging_host` helper must be bundled with the desktop app.
   Desktop release builds create this helper with
   `pnpm --filter @agiworkforce/desktop run build:native-host`.
+- Launch AGI Desktop once before manual installation. On macOS it prepares an
+  external, ad-hoc-signed helper without the app sandbox entitlements inherited
+  by the bundled sidecar.
 
 ## Installation
 
@@ -27,10 +30,10 @@ apps/extension/native-host/install.sh <EXTENSION_ID> [HOST_PATH]
 
 Default helper paths:
 
-- macOS: `/Applications/AGI Workforce.app/Contents/MacOS/native_messaging_host`
+- macOS: `~/Library/Application Support/com.agiworkforce.desktop/native_messaging_host`
 - Linux: `/opt/agiworkforce/native_messaging_host`
 
-The script writes manifests for Chrome and Edge.
+The script writes manifests for Chrome, Chromium, and Edge.
 
 ### Windows
 
@@ -88,7 +91,7 @@ Windows uses the registry keys above. The JSON files live under
 {
   "name": "com.agiworkforce.browser",
   "description": "AGI Workforce Browser Automation Host",
-  "path": "/Applications/AGI Workforce.app/Contents/MacOS/native_messaging_host",
+  "path": "/Users/<user>/Library/Application Support/com.agiworkforce.desktop/native_messaging_host",
   "type": "stdio",
   "allowed_origins": ["chrome-extension://<EXTENSION_ID>/"]
 }

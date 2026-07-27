@@ -1,3 +1,5 @@
+import { createClerkClient } from '@clerk/chrome-extension/client';
+
 const publishableKey = process.env.CLERK_PUBLISHABLE_KEY?.trim() ?? '';
 const configuredSyncHost = process.env.CLERK_SYNC_HOST?.trim() ?? '';
 const WEB_SIGN_IN_URL = 'https://agiworkforce.com/sign-in?redirectTo=%2Fauth%2Fchrome-extension';
@@ -40,22 +42,12 @@ function parseClerkOrigin(value: string): ClerkOriginResult {
 
 const syncHost = parseClerkOrigin(configuredSyncHost);
 
-type CreateClerkClient = (typeof import('@clerk/chrome-extension/client'))['createClerkClient'];
-type ClerkClient = Awaited<ReturnType<CreateClerkClient>>;
+type ClerkClient = Awaited<ReturnType<typeof createClerkClient>>;
 
 export interface ClerkAccountProfile {
   displayName: string | null;
   email: string | null;
   initials: string;
-}
-
-let createClientFactory: Promise<CreateClerkClient> | null = null;
-
-async function getCreateClientFactory(): Promise<CreateClerkClient> {
-  createClientFactory ??= import('@clerk/chrome-extension/client').then(
-    (module) => module.createClerkClient,
-  );
-  return createClientFactory;
 }
 
 function getExtensionPageUrl(): string {
@@ -89,7 +81,6 @@ async function getForegroundClient(): Promise<ClerkClient> {
   assertClerkExtensionAuthConfigured();
   if (foregroundLoad) return foregroundLoad;
 
-  const createClerkClient = await getCreateClientFactory();
   foregroundClient ??= createClerkClient(getClientOptions());
   const client = foregroundClient;
   const pageUrl = getExtensionPageUrl();
@@ -108,9 +99,9 @@ async function getForegroundClient(): Promise<ClerkClient> {
   return foregroundLoad;
 }
 
-async function getBackgroundClient(): Promise<ClerkClient> {
+async function getBackgroundClient(forceRefresh = false): Promise<ClerkClient> {
   assertClerkExtensionAuthConfigured();
-  const createClerkClient = await getCreateClientFactory();
+  if (forceRefresh) backgroundClient = null;
   backgroundClient ??= createClerkClient({ ...getClientOptions(), background: true }).catch(
     (error: unknown) => {
       backgroundClient = null;
@@ -124,12 +115,43 @@ function isBackgroundServiceWorker(): boolean {
   return typeof document === 'undefined';
 }
 
-/** Retrieve a fresh Clerk token in both MV3 workers and visible extension pages. */
-export async function getFreshClerkToken(): Promise<string | null> {
+interface CloudAuthTokenResponse {
+  success?: boolean;
+  token?: unknown;
+  error?: unknown;
+}
+
+async function requestBackgroundToken(forceRefresh: boolean): Promise<string | null> {
+  const response = (await chrome.runtime.sendMessage({
+    type: 'GET_CLOUD_AUTH_TOKEN',
+    refresh: forceRefresh,
+  })) as CloudAuthTokenResponse | undefined;
+  if (response?.success !== true) {
+    throw new Error(
+      typeof response?.error === 'string'
+        ? response.error
+        : 'Unable to read the AGI Cloud session from the extension background.',
+    );
+  }
+  if (response.token === undefined || response.token === null) return null;
+  if (typeof response.token !== 'string' || response.token.length === 0) {
+    throw new Error('AGI Cloud returned an invalid extension session.');
+  }
+  return response.token;
+}
+
+/**
+ * Retrieve a fresh Clerk token.
+ *
+ * Visible extension pages delegate token loading to the MV3 background client:
+ * @clerk/chrome-extension's Sync Host support is background-owned, while its
+ * foreground vanilla client does not refresh a side panel after web sign-in.
+ */
+export async function getFreshClerkToken(forceRefresh = false): Promise<string | null> {
   if (!isClerkExtensionAuthConfigured()) return null;
-  const clerk = isBackgroundServiceWorker()
-    ? await getBackgroundClient()
-    : await getForegroundClient();
+  if (!isBackgroundServiceWorker()) return requestBackgroundToken(forceRefresh);
+
+  const clerk = await getBackgroundClient(forceRefresh);
   return clerk.session ? await clerk.session.getToken() : null;
 }
 

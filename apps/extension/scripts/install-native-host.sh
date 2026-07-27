@@ -8,7 +8,7 @@
 #
 # EXTENSION_ID  Chrome extension ID (find in chrome://extensions)
 # HOST_PATH     Optional path to native_messaging_host.
-#               Defaults to /Applications/AGI Workforce.app/Contents/MacOS/native_messaging_host (macOS)
+#               Defaults to the external helper prepared by the AGI desktop app.
 
 set -euo pipefail
 
@@ -29,11 +29,13 @@ fi
 case "$(uname -s)" in
   Darwin)
     HOST_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+    CHROMIUM_HOST_DIR="$HOME/Library/Application Support/Chromium/NativeMessagingHosts"
     EDGE_HOST_DIR="$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts"
-    DEFAULT_HOST="/Applications/AGI Workforce.app/Contents/MacOS/native_messaging_host"
+    DEFAULT_HOST="$HOME/Library/Application Support/com.agiworkforce.desktop/native_messaging_host"
     ;;
   Linux)
     HOST_DIR="$HOME/.config/google-chrome/NativeMessagingHosts"
+    CHROMIUM_HOST_DIR="$HOME/.config/chromium/NativeMessagingHosts"
     EDGE_HOST_DIR="$HOME/.config/microsoft-edge/NativeMessagingHosts"
     DEFAULT_HOST="/opt/agiworkforce/native_messaging_host"
     ;;
@@ -44,18 +46,27 @@ case "$(uname -s)" in
 esac
 
 HOST_PATH="${2:-$DEFAULT_HOST}"
+if [ ! -x "$HOST_PATH" ]; then
+  echo "Native host helper is missing or not executable: $HOST_PATH" >&2
+  echo "Launch AGI Desktop once so it can prepare the external native host helper." >&2
+  exit 1
+fi
 OUT="$HOST_DIR/com.agiworkforce.browser.json"
+CHROMIUM_OUT="$CHROMIUM_HOST_DIR/com.agiworkforce.browser.json"
 EDGE_OUT="$EDGE_HOST_DIR/com.agiworkforce.browser.json"
 
 mkdir -p "$HOST_DIR"
+mkdir -p "$CHROMIUM_HOST_DIR"
 mkdir -p "$EDGE_HOST_DIR"
 
 sed \
   -e "s|<EXTENSION_ID_PLACEHOLDER>|$EXT_ID|g" \
-  -e "s|/Applications/AGI Workforce.app/Contents/MacOS/native_messaging_host|$HOST_PATH|g" \
+  -e "s|<NATIVE_HOST_PATH_PLACEHOLDER>|$HOST_PATH|g" \
   "$TEMPLATE" > "$OUT"
+cp "$OUT" "$CHROMIUM_OUT"
 cp "$OUT" "$EDGE_OUT"
 
 echo "Installed: $OUT"
+echo "Installed: $CHROMIUM_OUT"
 echo "Installed: $EDGE_OUT"
 echo "Reload the extension in chrome://extensions to apply."
