@@ -549,7 +549,14 @@ enum Command {
         full_auto: bool,
         command: Vec<String>,
     },
-    /// Run as MCP server (stdio).
+    /// Run as MCP server (stdio). Exposes no tools yet — see `agi app-server`.
+    ///
+    /// The handler speaks the protocol and answers initialize/tools/list, but
+    /// advertises an empty tool list on purpose: one-shot agent exec over stdio
+    /// MCP needs provider/model session, approval plumbing and event streaming,
+    /// and advertising a tool before it is callable would be fake wiring. Stated
+    /// here so the command's help matches what it does — the behaviour itself is
+    /// deliberate, not a defect.
     McpServer,
     /// Generate shell completion scripts.
     #[command(alias = "completions")]
