@@ -57,7 +57,6 @@ import {
   type Language,
   type GlobalHotkeyPreferences,
 } from '../../stores/settingsStore';
-import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { getCloudUsage, type CloudUsage } from '../../api/cloudApi';
 import { openBillingPortal } from '../../lib/stripeCheckout';
 import { selectPlan, useAuthStore } from '../../stores/auth';
@@ -832,12 +831,6 @@ export function DesktopCloudSettingsModal({
     [globalHotkeyPreferences, defaultGlobalHotkeyCombo],
   );
 
-  // ── Governance workspace opener (for PrivacyTab) ─────────────────────────
-  const openGovernanceWorkspace = useCallback(() => {
-    onClose();
-    useUnifiedChatStore.getState().openSidecar('governance');
-  }, [onClose]);
-
   const openPlans = useCallback(() => {
     // Close Settings before opening Pricing so two modal focus traps never
     // overlap. This keeps keyboard focus and animation behavior deterministic.
@@ -882,7 +875,7 @@ export function DesktopCloudSettingsModal({
       team: <DesktopTeamSection />,
       privacy: (
         <Suspense fallback={<SectionSkeleton />}>
-          <LazyPrivacyTab scope="cloud" onOpenGovernanceWorkspace={openGovernanceWorkspace} />
+          <LazyPrivacyTab scope="cloud" />
         </Suspense>
       ),
       billing: <DesktopBillingSection onOpenPlans={openPlans} />,
@@ -900,7 +893,6 @@ export function DesktopCloudSettingsModal({
       resolvedWindowPreferences,
       resolvedGlobalHotkeyPreferences,
       defaultGlobalHotkeyCombo,
-      openGovernanceWorkspace,
       openPlans,
       setTheme,
       setLanguage,
