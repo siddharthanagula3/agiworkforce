@@ -266,7 +266,7 @@ export function TimeFocusSection() {
                       height: 36,
                       borderRadius: 18,
                       border: '1px solid var(--settings-border)',
-                      background: selected ? 'var(--accent)' : 'var(--bg-base)',
+                      background: selected ? 'hsl(var(--accent))' : 'var(--bg-base)',
                       color: selected ? 'white' : 'var(--text-2)',
                       cursor: 'pointer',
                     }}

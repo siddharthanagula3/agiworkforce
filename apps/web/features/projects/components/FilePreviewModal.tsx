@@ -417,7 +417,13 @@ export function FilePreviewModal({ file, onClose }: Props) {
               <p style={{ fontSize: 14, color: 'var(--agi-ink-2)', margin: 0 }}>
                 Preview is not available for this file type.
               </p>
-              <p style={{ fontSize: 12, color: 'var(--agi-ink-3)', margin: '8px 0 0' }}>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: 'color-mix(in srgb, var(--agi-ink) 58%, transparent)',
+                  margin: '8px 0 0',
+                }}
+              >
                 {file.mimeType}
               </p>
             </div>
