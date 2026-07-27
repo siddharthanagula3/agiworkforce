@@ -1286,7 +1286,7 @@ export function DynamicCanvas({
                 top: bounds.position.y,
                 width: bounds.size.width,
                 height: bounds.size.height,
-                backgroundColor: element.style?.backgroundColor ?? 'var(--background)',
+                backgroundColor: element.style?.backgroundColor ?? 'hsl(var(--background))',
                 borderColor: isSelected ? undefined : element.style?.borderColor,
                 borderRadius: element.style?.borderRadius ?? 6,
                 opacity: element.style?.opacity ?? 1,

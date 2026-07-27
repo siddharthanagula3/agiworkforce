@@ -44,7 +44,7 @@ export function FileTreeWithChanges({
       {/* Custom styling for changed files */}
       <style>{`
         .file-tree-node[data-changed="true"] {
-          background-color: rgba(var(--primary-rgb), 0.1);
+          background-color: hsl(var(--primary) / 0.1);
         }
       `}</style>
     </div>
