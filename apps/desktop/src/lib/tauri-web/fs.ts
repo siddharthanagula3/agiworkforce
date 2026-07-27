@@ -32,6 +32,22 @@ export async function readTextFile(): Promise<string> {
 }
 
 /**
+ * Binary read. Rejects for the same reason `readTextFile` does — the browser
+ * has no access to an arbitrary local path.
+ *
+ * This export was missing while `features/context-handoff/readFolderFiles.ts`
+ * imported it, and because the module is aliased in place of
+ * `@tauri-apps/plugin-fs`, the absent binding was a *module-level* failure:
+ * Vite threw "does not provide an export named 'readFile'" before any component
+ * rendered, so Desktop Local mode in the browser dev target died at the error
+ * boundary with "Chat interface encountered an error". Throwing here degrades
+ * one call instead of the whole shell.
+ */
+export async function readFile(_path: string): Promise<Uint8Array> {
+  throw new Error('Reading local files requires the desktop application');
+}
+
+/**
  * Web has no persistent filesystem, so directory creation is a no-op. Artifact
  * writes degrade to a browser download in writeTextFile(), which needs no dir.
  */

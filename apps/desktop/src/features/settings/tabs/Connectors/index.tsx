@@ -15,6 +15,12 @@ const LazyMCPServerSettings = lazy(() =>
 // Its data source (useMcpStore refreshServers/refreshHealth + the
 // mcp_connect_server / mcp_disconnect_server commands) was already live, but
 // the component was mounted nowhere — connector health was invisible.
+// Client-side MCP: the servers this app connects TO, their tools, credentials
+// and config editor. Distinct from MCPServerSettings above, which configures
+// the MCP server AGI itself exposes (port + bearer token). Every component
+// under features/mcp/ was unreachable from any nav even though mcpStore and
+// each backing command in sys/commands/mcp_extensions.rs are live.
+const LazyMcpWorkspace = lazy(() => import('@/features/mcp/MCPWorkspace'));
 const LazyConnectorHealthDashboard = lazy(() =>
   import('@/features/connectors/ConnectorHealthDashboard').then((m) => ({
     default: m.ConnectorHealthDashboard,
@@ -44,6 +50,11 @@ export function ConnectorsTab() {
       <div className="pt-6 border-t border-border">
         <Suspense fallback={<Fallback label="Loading MCP servers..." />}>
           <LazyMCPServerSettings />
+        </Suspense>
+      </div>
+      <div className="pt-6 border-t border-border">
+        <Suspense fallback={<Fallback label="Loading MCP workspace..." />}>
+          <LazyMcpWorkspace />
         </Suspense>
       </div>
     </div>
