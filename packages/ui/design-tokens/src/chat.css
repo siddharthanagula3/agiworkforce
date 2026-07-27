@@ -1,5 +1,14 @@
 @layer base {
   :root {
+    /* Font families. These already existed in `agiChatCssVars` (index.ts) but
+       had never been emitted into the stylesheet the surfaces actually load, so
+       any shared component referencing them rendered unstyled. Fonts do not
+       vary by theme, so they are declared once here rather than per palette. */
+    --chat-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --chat-font-serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+    --chat-font-display:
+      'Crimson Pro', 'Inter Display', 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+    --chat-font-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
     --chat-bg: #faf9f7;
     --chat-fg: #1a1915;
     --chat-surface-base: #faf9f7;
