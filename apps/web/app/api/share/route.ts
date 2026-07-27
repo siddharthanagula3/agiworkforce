@@ -1,8 +1,12 @@
 /**
- * Share API - POST /api/share
+ * Share API
  *
- * Creates a shareable link for a conversation session.
- * Returns a token, URL, expiry, and message count.
+ * POST /api/share — create a shareable link for a conversation session.
+ * GET  /api/share — list the caller's own share links.
+ *
+ * The GET was missing, so a user could mint share links and revoke a link they
+ * still had the URL for, but had no way to see what they had published. Surfaces
+ * wanting a "Shared links" screen had nothing to call.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -119,4 +123,61 @@ async function handleCreateShare(request: NextRequest) {
   );
 }
 
+type SharedSessionListRow = {
+  token: string;
+  title: string | null;
+  model_id: string | null;
+  provider: string | null;
+  total_messages: number;
+  expires_at: string;
+  created_at: string;
+};
+
+/**
+ * GET /api/share — the caller's own share links, newest first.
+ *
+ * Owner-scoped: `owner_id = $1` is the access control, matching the DELETE in
+ * [token]/route.ts. Never selects `messages` — this is an index, and returning
+ * every shared conversation body would be both large and needless.
+ *
+ * Expired rows are returned rather than filtered out, with `expired` computed
+ * so the caller can show and revoke them. Hiding them would leave a user unable
+ * to clean up links they can still see referenced elsewhere, and it is the same
+ * conflation GOV-28 called out on the read path.
+ */
+async function handleListShares(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, 'share-view');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
+
+  const rows = await db.query<SharedSessionListRow>(
+    `select token, title, model_id, provider, total_messages, expires_at, created_at
+     from shared_sessions
+     where owner_id = $1
+     order by created_at desc
+     limit 200`,
+    [userId],
+  );
+
+  const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
+  const now = Date.now();
+
+  return NextResponse.json({
+    shares: rows.map((row) => ({
+      token: row.token,
+      title: row.title ?? 'Shared Session',
+      shareUrl: `${appUrl}/share/${row.token}`,
+      modelId: row.model_id,
+      provider: row.provider,
+      messageCount: row.total_messages,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      expired: new Date(row.expires_at).getTime() <= now,
+    })),
+  });
+}
+
 export const POST = withErrorHandler(handleCreateShare);
+export const GET = withErrorHandler(handleListShares);
