@@ -126,29 +126,73 @@ built (it was greenfield in the note above), so a key is all it needs.
 `QWEN_API_KEY`/`DASHSCOPE_API_KEY`, `ZHIPU_API_KEY` in `.env.local` and Vercel
 prod. Qwen additionally needs the endpoint change already described above.
 
-### Still unproven live: the web tool-loop (needs you, not code)
+### DECIDE — should Managed Cloud fail over when _our_ key is the broken one?
 
-Provider streaming is now proven live on both the Rust and TypeScript paths.
-The **agentic tool loop** on the TypeScript side is not, and cannot be from
-here.
+Found while chasing what a demo viewer sees if they pick one of the four dead
+providers. Not a bug — a deliberate, tested design choice that your standing
+"no single-model dependency" directive now pulls against. Your call.
 
-It lives only in the web route (`apps/web/app/api/llm/v1/chat/completions/
-lib/tool-loop.ts`) — there is no shared package for it, so unlike the provider
-adapters there is no seam to exercise it from a test without the route. The
-route authenticates Bearer-only against Clerk, and obtaining a token means
-either signing in as you or reading `CLERK_SECRET_KEY`, which this environment
-correctly refuses.
+Today an `auth` error (401/403) is **not** failover-eligible.
+`FAILOVER_ELIGIBLE_CATEGORIES` in
+`apps/web/app/api/llm/v1/chat/completions/lib/managed-failover.ts` lists six
+availability classes; `auth` is excluded on purpose, mirroring the API gateway
+(`services/api-gateway/src/lib/providerStreamSafety.ts`), and
+`managed-failover.test.ts` asserts it: _"never rotates on credential failure
+(401)"_.
 
-So its ~10 test files all mock `buildToolLoopStream`, which is the provider
-call. They prove the orchestration logic; they cannot prove a real model
-drives real tools through the real route. The Rust loop _is_ proven live (two
-iterations, real `Bash` execution, correct output), so the capability exists —
-it is the TS implementation of it that is unverified.
+The tension is that the rule is right for BYOK and questionable for managed. On
+BYOK the key is the user's, so a 401 is their problem and burning other
+providers on it would be wrong. On Managed Cloud the key is **ours**, so a 401
+is our infrastructure fault — and right now an Auto request that lands on
+Moonshot, xAI, Qwen or Zhipu dies with the provider's raw message instead of
+rotating to a model that works. Explicit selections are rotation-free by
+construction (empty plan), so only Auto is affected.
 
-**To close it, one of:** sign in on localhost and run one agentic chat while
-watching for tool events; or provide a test Clerk JWT for the smoke to use. It
-is worth doing before the demo, since the tool loop is the thing the demo is
-about.
+Also relevant: `/api/models` serves the whole catalog and never filters by
+whether the server can actually serve it, so the picker offers all nine
+providers regardless.
+
+**Options.** (a) Leave it — a dead key stays loud and discoverable, and the
+gateway and web keep identical semantics. (b) Make `auth` failover-eligible in
+the managed path only, logged at error level so the misconfiguration is still
+visible; matches "fallbacks for every model" and the demo never breaks. (c)
+Fix the keys and leave the code alone.
+
+I did not change it: it is a deliberate invariant spanning two systems and
+touching billing paths, which is a product decision rather than a defect. (c)
+alone is enough for the demo.
+
+### Now proven live: the web tool-loop
+
+Nothing needed from you here — recorded because I first reported it as blocked
+on you, and it was not.
+
+I had claimed the TS tool loop could only be proven through the web route,
+which is Bearer-only against Clerk, so it needed either your sign-in or
+`CLERK_SECRET_KEY`. That was wrong. The Clerk gate is a **route** concern
+(`auth-gate.ts`); `runToolLoop` is exported and the adapter reads its key from
+server env, so the loop can be driven directly. Treating the route's auth as
+the loop's dependency is what made a testable thing look untestable.
+
+`tool-loop.live.test.ts` now does it with no mocks: a real Anthropic model gets
+the real `url_fetch` tool and a prompt it cannot answer without calling it.
+Real completion → real tool decision → real DNS → real HTTP → real result fed
+back → real second completion. Observed:
+
+    "name":"url_fetch"  "url":"https://example.com/"
+    "status":"running"  "status_phrase":"Fetching example.com"
+    "status":"completed"
+
+and `Example Domain` in the final answer — a string absent from both the prompt
+and the tool definition, so it can only have come over the wire.
+
+This mattered because the loop's ~10 existing test files all mock the provider.
+`tool-loop.url-fetch.test.ts` describes itself as testing "the REAL tool-loop
+dispatch" and does — of the orchestration — but it also mocks DNS and global
+`fetch`, so nothing real happened anywhere in it.
+
+Run it with `AGI_LIVE_PROVIDER_SMOKE=1 pnpm vitest run
+app/api/llm/v1/chat/completions/lib/tool-loop.live.test.ts` from `apps/web`.
 
 Re-run the command to confirm; it prints per-provider status and never prints
 key values. Worth doing before recording demo video, since a model picker
