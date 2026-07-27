@@ -168,11 +168,7 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
     const prompt = data?.prompt ?? '';
     const provider = data?.provider as string | undefined;
     const mappedProvider =
-      provider === 'runway'
-        ? 'runway'
-        : provider === 'google'
-          ? 'google'
-          : undefined;
+      provider === 'runway' ? 'runway' : provider === 'google' ? 'google' : undefined;
     return (
       <div className="mt-3">
         <MediaGenerationProgress
