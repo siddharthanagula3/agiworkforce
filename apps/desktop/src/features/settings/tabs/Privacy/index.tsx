@@ -28,6 +28,16 @@ const LazyAllowedDirectoriesSettings = lazy(() =>
 const LazyAnalyticsSettings = lazy(() =>
   import('../../AnalyticsSettings').then((m) => ({ default: m.AnalyticsSettings })),
 );
+// The governance workspace this section pointed at never rendered: its only
+// host was DynamicSidecar, which was reachable solely from the orphaned
+// AppLayout, so openSidecar('governance') set store state nothing read and
+// "Open Workspace" did nothing at all. The dashboard itself is complete, so it
+// is shown here on demand instead of behind a destination that does not exist.
+const LazyGovernanceDashboard = lazy(() =>
+  import('@/features/governance/GovernanceDashboard').then((m) => ({
+    default: m.GovernanceDashboard,
+  })),
+);
 const LazySafetyPolicies = lazy(() =>
   import('@/features/governance/SafetyPolicies').then((m) => ({ default: m.SafetyPolicies })),
 );
@@ -376,7 +386,6 @@ function DataPrivacySection() {
 }
 
 interface PrivacyTabProps {
-  onOpenGovernanceWorkspace: () => void;
   scope?: 'local' | 'cloud';
 }
 
@@ -394,13 +403,8 @@ function AnalyticsPrivacySection() {
   );
 }
 
-function GovernancePrivacySection({
-  onOpenGovernanceWorkspace,
-  scope,
-}: {
-  onOpenGovernanceWorkspace: () => void;
-  scope: 'local' | 'cloud';
-}) {
+function GovernancePrivacySection({ scope }: { scope: 'local' | 'cloud' }) {
+  const [governanceOpen, setGovernanceOpen] = useState(false);
   if (scope === 'cloud') {
     return (
       <div className="pt-6 border-t border-border">
@@ -418,23 +422,32 @@ function GovernancePrivacySection({
     <div className="pt-6 border-t border-border">
       <h3 className="text-lg font-semibold mb-1">Governance &amp; Compliance</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Governance lives in a dedicated workspace for approvals, audit events, and execution
-        history.
+        Approvals, audit events, and execution history for this device.
       </p>
       <div className="rounded-lg border border-border bg-card/60 p-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h4 className="text-sm font-medium">Open governance workspace</h4>
+            <h4 className="text-sm font-medium">Approvals, audit and tool history</h4>
             <p className="text-sm text-muted-foreground mt-1">
-              Review pending approvals, audit integrity, and tool history without duplicating those
-              views inside Settings.
+              Review pending approvals, audit integrity, and execution history.
             </p>
           </div>
-          <Button variant="outline" onClick={onOpenGovernanceWorkspace}>
-            Open Workspace
+          <Button
+            variant="outline"
+            onClick={() => setGovernanceOpen((open) => !open)}
+            aria-expanded={governanceOpen}
+          >
+            {governanceOpen ? 'Hide' : 'Show'}
           </Button>
         </div>
       </div>
+      {governanceOpen && (
+        <div className="pt-4">
+          <Suspense fallback={<Fallback label="Loading governance..." />}>
+            <LazyGovernanceDashboard />
+          </Suspense>
+        </div>
+      )}
       <div className="pt-6">
         <Suspense fallback={<Fallback label="Loading governance policies..." />}>
           <LazySafetyPolicies />
@@ -444,7 +457,7 @@ function GovernancePrivacySection({
   );
 }
 
-export function PrivacyTab({ onOpenGovernanceWorkspace, scope = 'local' }: PrivacyTabProps) {
+export function PrivacyTab({ scope = 'local' }: PrivacyTabProps) {
   const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
 
   if (scope === 'cloud') {
@@ -464,10 +477,7 @@ export function PrivacyTab({ onOpenGovernanceWorkspace, scope = 'local' }: Priva
           </Suspense>
         </div>
         <AnalyticsPrivacySection />
-        <GovernancePrivacySection
-          scope="cloud"
-          onOpenGovernanceWorkspace={onOpenGovernanceWorkspace}
-        />
+        <GovernancePrivacySection scope="cloud" />
       </>
     );
   }
@@ -504,10 +514,7 @@ export function PrivacyTab({ onOpenGovernanceWorkspace, scope = 'local' }: Priva
         </Suspense>
       </div>
       <AnalyticsPrivacySection />
-      <GovernancePrivacySection
-        scope="local"
-        onOpenGovernanceWorkspace={onOpenGovernanceWorkspace}
-      />
+      <GovernancePrivacySection scope="local" />
     </>
   );
 }

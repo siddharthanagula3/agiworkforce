@@ -71,7 +71,7 @@ describe('PrivacyTab local data path', () => {
   });
 
   it('shows the app data directory resolved by Tauri instead of a guessed OS path', async () => {
-    render(<PrivacyTab onOpenGovernanceWorkspace={vi.fn()} scope="local" />);
+    render(<PrivacyTab scope="local" />);
 
     expect(
       await screen.findByText('/Users/test/Library/Application Support/com.agiworkforce.desktop'),
