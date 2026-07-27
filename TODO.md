@@ -62,9 +62,12 @@ founder's per-surface specs in `~/Downloads/0*-benchmark-spec.md` (01 mobile,
   to `false`; the same actions remain in the context menu and sidebar.
   `src/__tests__/codeLensTargetRange.test.ts` (9). **Still open:** the answer
   opens in an untitled scratch tab rather than the panel.
-- **VSCX-03** — every right-click / lightbulb / inline action demands AGI Cloud
-  sign-in that sidebar chat never needed; the error toast's only button says
-  "Set API Key", contradicting its own message.
+- ~~**VSCX-03**~~ (toast half) — CLOSED 2026-07-27. Every failure offered one
+  button, "Set API Key", so a dropped connection or a rate limit told the user
+  to change working credentials. The key dialog is now offered only for
+  failures `isCredentialFailure()` recognises; everything else offers Retry.
+  `src/__tests__/inlineCommandFailure.test.ts` (14). **Still open:** whether
+  these paths should require cloud sign-in at all when sidebar chat does not.
 - ~~**VSCX-06**~~ — CLOSED 2026-07-27. The pill was hardcoded in the markup, so
   it claimed a workspace-local runtime on BYOK and Managed Cloud too. Now driven
   by the live `usageMeter.source` via `updateRuntimePill()`: Local (green) /
@@ -89,9 +92,13 @@ founder's per-surface specs in `~/Downloads/0*-benchmark-spec.md` (01 mobile,
   (`[slash-menu]` block).
 - ~~**EXT-08**~~ — CLOSED 2026-07-27. `getExtensionTokensCssAuto()` emits both
   ramps under `prefers-color-scheme`; verified rendering light and dark.
-- **VSCX-14 / VSCX-15** — composer popovers expose `role="menu"` without Escape
-  or arrow-key roving focus (a keyboard trap that also lies to screen readers),
-  and the webview body bypasses `--vscode-font-family` / `--vscode-font-size`.
+- ~~**VSCX-14 / VSCX-15**~~ — CLOSED 2026-07-27. Both popovers declare
+  `role="menu"` but had no keydown handler at all. Arrow/Home/End roving focus,
+  Escape-to-close with focus returned to the opener, and a roving tabindex so
+  Tab leaves the menu; the model popover opens on the current model. Body now
+  inherits `--vscode-font-family` / `--vscode-font-size` (a size the user set
+  for accessibility, not decoration). Verified in a real browser.
+  `src/__tests__/popoverKeyboard.webview.test.ts` (5).
 - ~~**EXT-09**~~ — CLOSED 2026-07-27. The provider error was concatenated into
   message content as "Error: <string>" and rendered as assistant prose. It now
   lives in `errorText`, renders as a failure footer with the reason and a Retry

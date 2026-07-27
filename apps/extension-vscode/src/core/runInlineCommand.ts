@@ -24,6 +24,28 @@ export function commandLabel(command: string): string {
   return labels[command] ?? command;
 }
 
+/**
+ * Whether a failure is one that setting an API key would fix.
+ *
+ * Deliberately narrow: anything unrecognised is treated as *not* a credential
+ * problem, because offering the key dialog for an unrelated failure is the
+ * defect being fixed. A missed auth case costs one extra click through
+ * settings; a false positive sends the user to change working credentials.
+ */
+export function isCredentialFailure(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('api key') ||
+    normalized.includes('apikey') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('unauthenticated') ||
+    normalized.includes('authentication') ||
+    normalized.includes('invalid_api_key') ||
+    normalized.includes('401') ||
+    normalized.includes('403')
+  );
+}
+
 export async function runInlineCommand(
   context: vscode.ExtensionContext,
   command: InlineCommand,
@@ -127,9 +149,14 @@ export async function runInlineCommand(
 
         progress.report({ increment: 100 });
 
+        // Apply against the range the prompt was built from. This previously
+        // collapsed to Selection(0,0,0,0) whenever the selection was empty,
+        // which now matters: a CodeLens supplies a range without selecting
+        // anything, so the result would have been applied at the top of the
+        // file instead of at the declaration it describes.
         await applyLlmEdit(
           editor,
-          selection.isEmpty ? new vscode.Selection(0, 0, 0, 0) : selection,
+          new vscode.Selection(explicitRange.start, explicitRange.end),
           result,
           commandLabel(command),
           { autoApply: autoApplyFixes && command === 'fix' },
@@ -144,11 +171,26 @@ export async function runInlineCommand(
         const message = err instanceof Error ? err.message : String(err);
         telemetry.logError(err instanceof Error ? err : message, { command });
 
-        vscode.window
-          .showErrorMessage(`AGI Workforce error: ${message}`, 'Set API Key')
+        // Every failure used to offer a single "Set API Key" button, so a
+        // network drop or a rate limit told the user to fix their credentials —
+        // the action contradicted the message it sat next to. Offer the key
+        // dialog only for failures a key can actually resolve.
+        if (isCredentialFailure(message)) {
+          void vscode.window
+            .showErrorMessage(`AGI Workforce error: ${message}`, 'Set API Key')
+            .then((choice) => {
+              if (choice === 'Set API Key') {
+                void vscode.commands.executeCommand('agi-workforce.setApiKey');
+              }
+            });
+          return;
+        }
+
+        void vscode.window
+          .showErrorMessage(`AGI Workforce error: ${message}`, 'Retry')
           .then((choice) => {
-            if (choice === 'Set API Key') {
-              vscode.commands.executeCommand('agi-workforce.setApiKey');
+            if (choice === 'Retry') {
+              void runInlineCommand(context, command, targetRange);
             }
           });
       }
