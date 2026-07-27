@@ -28,6 +28,7 @@ import {
   SelectedContextReview,
   type SelectedContextHandoff,
 } from '../context-handoff/SelectedContextReview';
+import { CloudFolderAttachSheet } from '../context-handoff/CloudFolderAttachSheet';
 import {
   canUseDesktopCloudAgiWork,
   canUseDesktopCloudImageGeneration,
@@ -107,6 +108,25 @@ export function DesktopShellV3({
     ? { image: canUseDesktopCloudImageGeneration(accountPlan) }
     : undefined;
 
+  // Cloud folder flow: picking a folder opens the consent sheet rather than
+  // scoping the session. Approved files are injected into the composer as an
+  // ordinary attachment set, keyed so a re-render cannot double-append.
+  const [cloudFolderPath, setCloudFolderPath] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<{
+    id: string;
+    files: File[];
+  } | null>(null);
+
+  const handleSelectFolder = useCallback(async () => {
+    const picked = await selectFolder();
+    if (picked && privacyMode === 'managed') setCloudFolderPath(picked);
+  }, [selectFolder, privacyMode]);
+
+  const handleFolderFilesApproved = useCallback((files: File[]) => {
+    if (files.length === 0) return;
+    setPendingAttachments({ id: `folder-${Date.now()}-${files.length}`, files });
+  }, []);
+
   useEffect(() => {
     if (
       privacyMode === 'managed' &&
@@ -135,6 +155,7 @@ export function DesktopShellV3({
     () => projects.filter((p) => !p.isArchived).map((p) => ({ id: p.id, name: p.name })),
     [projects],
   );
+  const activeCloudConversationId = useChatStore((s) => s.activeConversationId);
   const activeComposerProjectId = useChatStore(
     (s) => s.conversations.find((c) => c.id === s.activeConversationId)?.projectId ?? null,
   );
@@ -276,7 +297,8 @@ export function DesktopShellV3({
               enableShortcuts={true}
               hostBridge={hostBridge}
               onModelSelectorClick={onModelSelectorClick}
-              onSelectFolder={folderSeamEnabled ? selectFolder : undefined}
+              onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
+              pendingAttachments={pendingAttachments}
               onRecordSkill={
                 privacyMode === 'local' ? () => setActivePanel('record-skill') : undefined
               }
@@ -334,6 +356,12 @@ export function DesktopShellV3({
             </div>
           )}
           <SelectedContextReview onAccept={handleSelectedContextAccept} />
+          <CloudFolderAttachSheet
+            folderPath={cloudFolderPath}
+            sourceSessionId={activeCloudConversationId ?? 'new-conversation'}
+            onClose={() => setCloudFolderPath(null)}
+            onApprove={handleFolderFilesApproved}
+          />
           <ProjectSettingsDialog
             open={createProjectOpen}
             onOpenChange={setCreateProjectOpen}
