@@ -10,8 +10,13 @@ export default function VoiceSettingsPage() {
   const subscription = useBillingStore((s) => s.subscription);
   const tier = subscription?.tier ?? 'free';
   void tier;
-  // Voice transcription quotas and managed Whisper are not yet enforced or
-  // billed, so we do not advertise tier minute caps or live capabilities.
+  // MANAGED transcription only: quotas, tier minute caps and provider controls
+  // are not enforced or billed yet, so the controls below stay inert.
+  //
+  // This is deliberately NOT a claim that voice is unavailable — composer
+  // dictation ships today via VoiceInputButton + /api/voice/transcribe. The
+  // banner said "Voice transcription is coming soon", which contradicted a
+  // microphone the user had just used one screen over.
   const hasVoice = false;
 
   return (
@@ -33,7 +38,7 @@ export default function VoiceSettingsPage() {
         </p>
       </div>
 
-      {/* Honest "coming soon" banner: voice transcription is not yet available */}
+      {/* Scoped banner: managed transcription is unavailable; dictation is not. */}
       {!hasVoice && (
         <div
           style={{
@@ -50,11 +55,13 @@ export default function VoiceSettingsPage() {
         >
           <div>
             <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', marginBottom: 4 }}>
-              Voice transcription is coming soon
+              Dictation works today — these settings do not apply yet
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
-              Managed voice transcription is not available yet. When it ships you will be able to
-              bring your own provider key on Desktop and CLI via {byokLabel}.
+              You can already dictate a message with the microphone in the composer. What is not
+              available yet is <em>managed</em> transcription — metered minutes, tier caps, and the
+              provider controls below. When that ships you will also be able to bring your own
+              provider key on Desktop and CLI via {byokLabel}.
             </div>
           </div>
           <span
@@ -131,9 +138,9 @@ export default function VoiceSettingsPage() {
         </div>
         <div style={{ padding: '16px 20px' }}>
           <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 12px' }}>
-            When voice ships, you will be able to plug in your own OpenAI API key on Desktop and CLI
-            to use Whisper transcription directly, with requests going to OpenAI without any proxy.
-            BYOK lives on Desktop and CLI today.
+            When managed transcription ships, you will be able to plug in your own OpenAI API key on
+            Desktop and CLI to use Whisper directly, with requests going to OpenAI without any
+            proxy. BYOK itself already lives on Desktop and CLI today.
           </p>
           <Link
             href="/byok"

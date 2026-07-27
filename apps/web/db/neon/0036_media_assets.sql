@@ -1,7 +1,9 @@
 -- User-scoped catalog of AI-generated media (images, video). Generated artifacts
 -- must persist across the cloud suite — web/desktop/mobile cloud all read by
--- user_id — and survive a refresh. The bytes live in object storage (Vercel
--- Blob); this table holds the durable URL + provenance so any surface can list,
+-- user_id — and survive a refresh. The bytes live in object storage (Cloudflare
+-- R2, via the S3 API — see lib/server/object-storage.ts; this comment said
+-- "Vercel Blob" until 2026-07-27, but no such dependency has ever existed in
+-- this repo); this table holds the durable URL + provenance so any surface can list,
 -- preview, and re-use what the user created.
 
 create table if not exists public.media_assets (

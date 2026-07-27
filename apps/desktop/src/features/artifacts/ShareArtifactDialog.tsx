@@ -33,16 +33,18 @@ export function ShareArtifactDialog({ artifact, isOpen, onClose }: ShareArtifact
             <Lock className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-foreground">Cloud publishing is gated</h2>
+            <h2 className="text-sm font-semibold text-foreground">
+              Local artifacts cannot be shared
+            </h2>
             <p className="truncate text-xs text-muted-foreground">{artifact.title}</p>
           </div>
         </div>
 
         <div className="rounded-lg border border-border bg-muted/40 p-4">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Local desktop artifacts are not encoded into share links. Copy or download this artifact
-            locally. Managed cloud publishing will be available after release controls are enabled
-            for your account.
+            A Local-mode artifact never leaves this device, so there is nothing for a share link to
+            point at. Copy or download it here instead. To publish an artifact, create it in Cloud
+            mode — publishing is not built for Local artifacts, and no account setting unlocks it.
           </p>
         </div>
 

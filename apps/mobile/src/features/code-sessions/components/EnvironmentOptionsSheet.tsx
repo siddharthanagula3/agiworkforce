@@ -1,10 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { Modal, Pressable, Text as NativeText, View } from 'react-native';
+import { Alert, Modal, Pressable, Text as NativeText, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Cloud, Monitor, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { useThemeColors } from '@/src/ui/theme';
 
 interface EnvironmentOptionsSheetProps {
@@ -20,16 +19,23 @@ export function EnvironmentOptionsSheet({
 }: EnvironmentOptionsSheetProps) {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
-  const [waitlistVisible, setWaitlistVisible] = useState(false);
 
   const openDesktop = useCallback(() => {
     onClose();
     onOpenDesktop();
   }, [onClose, onOpenDesktop]);
 
-  const openWaitlist = useCallback(() => {
+  // Was a waitlist + invitation-code modal. Managed cloud went to public alpha
+  // on 2026-06-27 and the invite gate was removed, so asking for an invitation
+  // code offered access that no longer needs granting. Hosted code environments
+  // genuinely are not on mobile — say that, and point at where they do run.
+  const showHostedInfo = useCallback(() => {
     onClose();
-    setWaitlistVisible(true);
+    Alert.alert(
+      'Hosted code environments',
+      'Code sessions do not run on mobile yet. Start one from AGI Desktop or the web app and it will appear here.',
+      [{ text: 'OK' }],
+    );
   }, [onClose]);
 
   return (
@@ -113,22 +119,13 @@ export function EnvironmentOptionsSheet({
             />
             <EnvironmentOption
               icon={<Cloud size={22} color={c.agentActive} />}
-              title="AGI Cloud waitlist"
-              body="Join the waitlist for hosted code environments."
-              onPress={openWaitlist}
+              title="Hosted code environments"
+              body="Not available on mobile. Run code sessions from Desktop or the web app."
+              onPress={showHostedInfo}
             />
           </Pressable>
         </Pressable>
       </Modal>
-
-      <InviteCodeModal
-        open={waitlistVisible}
-        onClose={() => setWaitlistVisible(false)}
-        source="other"
-        defaultTab="waitlist"
-        title="Hosted code environments"
-        body="Cloud code execution isn’t available on mobile yet. Join the waitlist to get notified, or enter your invitation code if you have early access."
-      />
     </>
   );
 }
