@@ -122,8 +122,12 @@ export function getWebviewContent(
     body {
       background: var(--bg-base);
       color: var(--text-primary);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 13px;
+      /* VSCX-15: follow the editor's own typography. A hardcoded stack ignored
+         the user's font choice and, more importantly, their font *size* —
+         which is an accessibility setting, not a preference. The literals stay
+         as fallbacks for a host that does not define these. */
+      font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+      font-size: var(--vscode-font-size, 13px);
       height: 100vh;
       display: flex;
       flex-direction: column;
@@ -1635,6 +1639,12 @@ export function getWebviewContent(
 
       modelPopoverEl.classList.add('open');
       if (modelPill) modelPill.setAttribute('aria-expanded', 'true');
+      // Land on the current model so arrow keys start somewhere meaningful.
+      var options = menuItemsOf(modelPopoverEl);
+      var activeIndex = options.findIndex(function (option) {
+        return option.getAttribute('aria-checked') === 'true';
+      });
+      focusMenuItem(modelPopoverEl, activeIndex >= 0 ? activeIndex : 0);
     }
 
     // ── Markdown rendering — delegated to window.agiRender ────────────────
@@ -1813,18 +1823,94 @@ export function getWebviewContent(
       });
     }
 
+    // ── Popover keyboard support (VSCX-14) ────────────────────────────────────
+    // These containers claim role="menu", which tells a screen-reader user that
+    // arrow keys move between items and Escape closes. Neither was implemented,
+    // so the markup described navigation the widget did not have and keyboard
+    // users could not reach the items at all.
+    function menuItemsOf(container) {
+      // The model popover uses menuitemradio; a selector limited to menuitem
+      // would silently skip every entry in it.
+      return Array.prototype.slice.call(
+        container.querySelectorAll(
+          '[role="menuitem"]:not([disabled]),[role="menuitemradio"]:not([disabled]),[role="menuitemcheckbox"]:not([disabled])',
+        ),
+      );
+    }
+
+    function focusMenuItem(container, index) {
+      var items = menuItemsOf(container);
+      if (items.length === 0) return;
+      var bounded = ((index % items.length) + items.length) % items.length;
+      items.forEach(function (item, i) {
+        // Roving tabindex: exactly one item is tabbable at a time, so Tab
+        // leaves the menu rather than walking every entry.
+        item.setAttribute('tabindex', i === bounded ? '0' : '-1');
+      });
+      items[bounded].focus();
+    }
+
+    function wireMenuKeyboard(container, opener, close) {
+      container.addEventListener('keydown', function (e) {
+        var items = menuItemsOf(container);
+        if (items.length === 0) return;
+        var current = items.indexOf(document.activeElement);
+
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          close();
+          if (opener) opener.focus();
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          focusMenuItem(container, current + 1);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          focusMenuItem(container, current <= 0 ? items.length - 1 : current - 1);
+          return;
+        }
+        if (e.key === 'Home') {
+          e.preventDefault();
+          focusMenuItem(container, 0);
+          return;
+        }
+        if (e.key === 'End') {
+          e.preventDefault();
+          focusMenuItem(container, items.length - 1);
+        }
+      });
+    }
+
     // ── Plus-menu toggle ──────────────────────────────────────────────────────
     if (plusBtn && plusMenu) {
+      var closePlusMenu = function () {
+        plusMenu.classList.remove('open');
+        plusBtn.setAttribute('aria-expanded', 'false');
+      };
+
       plusBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         closeModelPopover();
         var isOpen = plusMenu.classList.contains('open');
         plusMenu.classList.toggle('open', !isOpen);
         plusBtn.setAttribute('aria-expanded', String(!isOpen));
+        if (!isOpen) focusMenuItem(plusMenu, 0);
       });
+      plusBtn.addEventListener('keydown', function (e) {
+        // Opening with the keyboard should land on the first item, which is
+        // what role="menu" already promises.
+        if (e.key === 'ArrowDown' && plusMenu.classList.contains('open')) {
+          e.preventDefault();
+          focusMenuItem(plusMenu, 0);
+        }
+      });
+      wireMenuKeyboard(plusMenu, plusBtn, closePlusMenu);
       document.addEventListener('click', () => {
-        plusMenu.classList.remove('open');
-        plusBtn.setAttribute('aria-expanded', 'false');
+        closePlusMenu();
       });
       // "Add file" opens file picker via extension
       var plusMenuUpload = document.getElementById('plusMenuUpload');
@@ -1868,6 +1954,7 @@ export function getWebviewContent(
     }
 
     if (modelPopoverEl) {
+      wireMenuKeyboard(modelPopoverEl, modelPill, closeModelPopover);
       modelPopoverEl.addEventListener('click', function(e) {
         e.stopPropagation();
       });
