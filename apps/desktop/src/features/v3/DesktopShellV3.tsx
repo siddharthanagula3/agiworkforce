@@ -18,6 +18,8 @@ import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
 // Library is the Managed Cloud counterpart to Local's Artifacts: cloud-stored
 // files, shared with web through @agiworkforce/unified-chat.
 const DesktopLibrary = lazy(() => import('@/features/library/DesktopLibrary'));
+// Durable Cloud agent runs — the same list web shows at /tasks.
+const DesktopTasks = lazy(() => import('@/features/tasks/DesktopTasks'));
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/projectStore';
@@ -48,7 +50,14 @@ function useV3Mode() {
   return { mode };
 }
 
-type V3Panel = 'chat' | 'projects' | 'artifacts' | 'library' | 'scheduled' | 'record-skill';
+type V3Panel =
+  | 'chat'
+  | 'projects'
+  | 'artifacts'
+  | 'library'
+  | 'tasks'
+  | 'scheduled'
+  | 'record-skill';
 
 // ─── shell props ───────────────────────────────────────────────────────────────
 
@@ -133,7 +142,7 @@ export function DesktopShellV3({
   useEffect(() => {
     if (
       privacyMode === 'managed' &&
-      ['artifacts', 'library', 'scheduled', 'record-skill'].includes(activePanel)
+      ['artifacts', 'library', 'tasks', 'scheduled', 'record-skill'].includes(activePanel)
     ) {
       setActivePanel('chat');
     }
@@ -255,6 +264,16 @@ export function DesktopShellV3({
         setActivePanel('library');
         return;
       }
+      if (view === 'tasks') {
+        if (privacyMode === 'local') {
+          // Tasks are Cloud runs that survive the app closing; a local session
+          // has none, and Scheduled is the device-side equivalent.
+          toast.info('Tasks lists Cloud runs. Device schedules are under Scheduled.');
+          return;
+        }
+        setActivePanel('tasks');
+        return;
+      }
       if (view === 'artifacts') {
         if (privacyMode !== 'local') {
           toast.info('Device artifacts are available in Local mode.');
@@ -340,6 +359,10 @@ export function DesktopShellV3({
           ) : activePanel === 'library' && privacyMode !== 'local' ? (
             <Suspense fallback={null}>
               <DesktopLibrary />
+            </Suspense>
+          ) : activePanel === 'tasks' && privacyMode !== 'local' ? (
+            <Suspense fallback={null}>
+              <DesktopTasks onOpenConversation={handleOpenProjectConversation} />
             </Suspense>
           ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
             <AgiWorkArtifacts />
