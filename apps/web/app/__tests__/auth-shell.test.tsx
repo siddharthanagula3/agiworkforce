@@ -63,6 +63,11 @@ describe('AuthShell', () => {
     for (const point of shellProps.points) {
       expect(screen.getByText(point)).toBeInTheDocument();
     }
+    expect(screen.getByText('One account. Three surfaces.')).toBeInTheDocument();
+    const surfaceList = screen.getByRole('list', { name: 'AGI account surfaces' });
+    expect(surfaceList).toHaveTextContent('Web');
+    expect(surfaceList).toHaveTextContent('Desktop');
+    expect(surfaceList).toHaveTextContent('Mobile');
     expect(screen.getByText('Web · Desktop · Mobile · CLI · Chrome · VS Code')).toBeInTheDocument();
   });
 
@@ -88,5 +93,8 @@ describe('AuthShell', () => {
     expect(screen.queryByTestId('header')).not.toBeInTheDocument();
     expect(screen.queryByTestId('footer')).not.toBeInTheDocument();
     expect(screen.queryByRole('complementary', { name: 'Why AGI' })).not.toBeInTheDocument();
+    expect(screen.getByText('AGI Desktop')).toBeInTheDocument();
+    expect(screen.getByText('Secure Cloud sign-in')).toBeInTheDocument();
+    expect(screen.getByText('Local Mode stays available without an account.')).toBeInTheDocument();
   });
 });
