@@ -431,21 +431,40 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(picker.activeProjectId).toBeNull();
   });
 
-  it('withholds the folder seam in non-local privacy mode so the folder rows are hidden', () => {
+  it('offers the folder seam in Cloud mode, but as a scan root rather than a capability grant', () => {
+    // SUPERSEDED CONTRACT: this used to assert Cloud withheld the folder seam
+    // entirely. Cloud now offers it, because the desktop is the local-private
+    // compute host and folder selection is the differentiator over web.
+    //
+    // The safety property moved rather than disappearing: useFolderSelection is
+    // constructed in 'cloud' mode, where it performs no `invoke` at all — see
+    // useFolderSelection.test.ts, which asserts the backend folder-scope command
+    // is never called. That command persists allowed_directories to settings.json
+    // and repoints the MCP filesystem root, so calling it from Cloud would widen
+    // filesystem permissions with no consent step.
     useAppModeStore.setState({ mode: 'cloud' });
 
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
 
     const props = unifiedChatMock.chatInterfaceProps[0];
-    expect(props?.['onSelectFolder']).toBeUndefined();
-    expect(props?.['onClearFolder']).toBeUndefined();
+    expect(props?.['onSelectFolder']).toBeTypeOf('function');
+    expect(props?.['onClearFolder']).toBeTypeOf('function');
+    // Record-a-skill stays Local-only: it captures the screen, which Cloud has
+    // no consent surface for.
     expect(props?.['onRecordSkill']).toBeUndefined();
-    expect(props?.['currentFolderLabel']).toBeNull();
     expect(screen.queryByText('Artifacts')).not.toBeInTheDocument();
     expect(screen.queryByText('Scheduled')).not.toBeInTheDocument();
-    // Projects remain selectable in Cloud mode — only the LOCAL folder seam
-    // is privacy-gated.
     expect(props?.['projectPicker']).toBeTruthy();
+  });
+
+  it('keeps the folder seam a capability grant in Local mode', () => {
+    useAppModeStore.setState({ mode: 'local' });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    const props = unifiedChatMock.chatInterfaceProps[0];
+    expect(props?.['onSelectFolder']).toBeTypeOf('function');
+    expect(props?.['onRecordSkill']).toBeTypeOf('function');
   });
 
   it('projects Cloud AGI Work and image affordances from the hydrated account tier', () => {

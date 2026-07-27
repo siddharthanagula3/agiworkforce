@@ -21,7 +21,6 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { selectPlan, useUnifiedAuthStore } from '../../stores/auth';
-import { invoke } from '../../lib/tauri-mock';
 import { ActionRecorder } from '@/features/automation/ActionRecorder';
 import { ProjectSettingsDialog } from '@/features/chat/ProjectSettingsDialog';
 import {
@@ -91,13 +90,16 @@ export function DesktopShellV3({
   // conversationId is optional on ArtifactPanel so it works in the gallery context.
   const artifactPanelOpen = useArtifactStore((s) => s.panelOpen);
   const closeArtifactPanel = useArtifactStore((s) => s.closePanel);
-  const { selectFolder, currentFolderLabel } = useFolderSelection();
-
-  // Local folder scoping is a Local-mode trust feature: in non-local privacy
-  // modes the folder seam is withheld entirely, which hides the folder rows
-  // in both the attachment menu and the composer scope picker.
+  // The folder seam is available in BOTH Local and Managed Cloud, but they mean
+  // different things. Local grants the folder as a working scope (a persistent
+  // capability — see useFolderSelection's docstring). Cloud treats it as a
+  // display label and scan root only, and any file that leaves the device does
+  // so through the composer attachment path after an explicit consent ceremony.
   const privacyMode = useAppModeStore(selectPrivacyMode);
-  const folderSeamEnabled = privacyMode === 'local';
+  const folderSeamEnabled = privacyMode === 'local' || privacyMode === 'managed';
+  const { selectFolder, currentFolderLabel, clearFolder } = useFolderSelection(
+    privacyMode === 'managed' ? 'cloud' : 'local',
+  );
   const accountPlan = useUnifiedAuthStore(selectPlan);
   const isManagedCloud = privacyMode === 'managed';
   const canUseAgiWork = !isManagedCloud || canUseDesktopCloudAgiWork(accountPlan);
@@ -122,18 +124,6 @@ export function DesktopShellV3({
     };
     window.addEventListener('desktop:navigate-panel', navigate);
     return () => window.removeEventListener('desktop:navigate-panel', navigate);
-  }, []);
-
-  // Clear mirrors FolderSelector's flow: reset the backend folder context,
-  // then the store label (project/folder mutual exclusion + chip clear).
-  const clearFolder = useCallback(() => {
-    void invoke('project_context_set_folder', { path: null })
-      .catch((error) => {
-        console.error('[DesktopShellV3] Failed to clear folder context:', error);
-      })
-      .finally(() => {
-        useProjectStore.getState().setCurrentFolder(null);
-      });
   }, []);
 
   // Composer "Project or folder" picker (web ChatComposerNew parity).
