@@ -112,7 +112,10 @@ describe('getWebviewContent — structural smoke', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
-    expect(doc.body.textContent).toContain('Local host');
+    // Previously asserted a hardcoded "Local host" label here. That label was
+    // the VSCX-06 defect (it claimed a local runtime on every trust boundary),
+    // and the absence of cloud-auth gating is what this test is actually about.
+    // The live boundary is covered by runtimePill.webview.test.ts.
     expect(doc.querySelector('#apiKeyBanner')).toBeNull();
     expect(doc.querySelector('#signInBtn')).toBeNull();
     expect(doc.querySelector('#cloudHistoryBtn')).toBeNull();
@@ -134,7 +137,10 @@ describe('getWebviewContent — structural smoke', () => {
       .map((style) => style.textContent ?? '')
       .join('\n');
 
-    expect(doc.querySelector('.runtime-pill')?.textContent).toContain('Local host');
+    // The pill's label and title are populated by updateRuntimePill() from the
+    // live usageMeter source (VSCX-06) — the markup no longer hardcodes a
+    // boundary, so this only asserts the element survives the narrow layout.
+    expect(doc.querySelector('.runtime-pill')).not.toBeNull();
     expect(styles).not.toContain('.runtime-pill { display: none; }');
     expect(styles).not.toContain('.provider-badge { display: none !important; }');
     expect(styles).toContain(
@@ -142,14 +148,11 @@ describe('getWebviewContent — structural smoke', () => {
     );
     expect(styles).toContain('.runtime-pill { max-width: 66px;');
     expect(styles).toContain('.provider-badge { max-width: 54px;');
-    expect(doc.querySelector('.runtime-pill')?.getAttribute('title')).toBe(
-      'Workspace-local runtime',
-    );
-
     const scriptBody = Array.from(doc.querySelectorAll('script'))
       .map((script) => script.textContent ?? '')
       .join('\n');
     expect(scriptBody).toContain('providerBadgeEl.title = providerLabel');
+    expect(scriptBody).toContain('updateRuntimePill(payload.source)');
   });
 
   it('labels model, mode, effort, and the actual Enter shortcut without ambiguity', () => {

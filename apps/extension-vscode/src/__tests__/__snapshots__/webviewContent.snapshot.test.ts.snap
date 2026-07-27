@@ -17,17 +17,21 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <style nonce="NONCE">
     :root {
       /* VS Code theme variables with AGI dark-mode fallbacks */
-      --agi-vscode-bg: #09090b;
---agi-vscode-surface: #151518;
---agi-vscode-overlay: #202024;
---agi-vscode-text: #fafafa;
---agi-vscode-text-muted: #a1a1aa;
---agi-vscode-border: #242428;
---agi-vscode-button: #5e6ad2;
+      --agi-vscode-bg: #212121;
+--agi-vscode-surface: #171717;
+--agi-vscode-overlay: #2a2a2d;
+--agi-vscode-text: #ececec;
+--agi-vscode-text-muted: #b4b4b4;
+--agi-vscode-border: rgba(255, 255, 255, 0.16);
+--agi-vscode-button: #0b84ff;
 --agi-vscode-button-text: #ffffff;
---agi-vscode-focus: #5e6ad2;
---agi-vscode-hover: #26262b;
---agi-vscode-terra: #828fff;
+--agi-vscode-focus: #0b84ff;
+--agi-vscode-hover: #2f2f2f;
+--agi-vscode-terra: #0a6ed1;
+--agi-vscode-success: #22c55e;
+--agi-vscode-warning: #ef8c57;
+--agi-vscode-warning-bg: rgba(239, 140, 87, 0.12);
+--agi-vscode-warning-border: rgba(239, 140, 87, 0.32);
 --agi-vscode-danger: var(--vscode-errorForeground, #ef4444);
 --agi-vscode-danger-bg: rgba(239, 68, 68, 0.12);
 --agi-vscode-danger-border: rgba(239, 68, 68, 0.3);
@@ -114,6 +118,24 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       border-radius: 50%;
       background: var(--accent-teal);
       flex-shrink: 0;
+    }
+    /* Trust boundary carried on the pill as data-boundary, so the colour lives
+       in CSS rather than in inline styles the script has to write. Managed
+       cloud is the only boundary whose prompts leave the machine, so it is the
+       only one tinted as a warning. */
+    .runtime-pill[data-boundary='local'] .runtime-pill-dot {
+      background: var(--agi-vscode-success);
+    }
+    .runtime-pill[data-boundary='byok'] .runtime-pill-dot {
+      background: var(--agi-vscode-button);
+    }
+    .runtime-pill[data-boundary='cloud'] .runtime-pill-dot {
+      background: var(--agi-vscode-warning);
+    }
+    .runtime-pill[data-boundary='cloud'] {
+      color: var(--agi-vscode-warning);
+      border-color: var(--agi-vscode-warning-border);
+      background: var(--agi-vscode-warning-bg);
     }
     .runtime-pill-label,
     .provider-badge > span:last-child {
@@ -1102,7 +1124,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     <div class="header-left">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
       <span class="header-title">AGI</span>
-      <span class="runtime-pill" title="Workspace-local runtime"><span class="runtime-pill-dot"></span><span class="runtime-pill-label">Local host</span></span>
+      <!-- Trust-boundary pill (VSCX-06). Hidden until renderUsageMeter()
+           reports a real source. It previously carried a fixed label and teal
+           dot asserting a workspace-local runtime on every boundary, including
+           BYOK and Managed Cloud. -->
+      <span class="runtime-pill" id="runtimePill" style="display:none"><span class="runtime-pill-dot" id="runtimePillDot"></span><span class="runtime-pill-label" id="runtimePillLabel"></span></span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
@@ -1307,7 +1333,32 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
     }
 
+    // Trust boundary shown in the header pill. Local / BYOK / Managed Cloud are
+    // separate boundaries, so the pill names the live one rather than asserting
+    // a fixed local-runtime label. Managed Cloud is the only one that leaves the
+    // machine, so it is the only one styled as a warning.
+    var RUNTIME_PILL_BY_SOURCE = {
+      'unbounded': { label: 'Local', boundary: 'local', title: 'Workspace-local runtime - nothing leaves this machine' },
+      'user-api-key': { label: 'BYOK', boundary: 'byok', title: 'Your own API key - requests go straight to the provider' },
+      'managed-plan': { label: 'Cloud', boundary: 'cloud', title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
+    };
+
+    function updateRuntimePill(source) {
+      var pill = document.getElementById('runtimePill');
+      var label = document.getElementById('runtimePillLabel');
+      if (!pill || !label) return;
+      // An unrecognised source falls back to the cloud label on purpose: never
+      // claim "Local" for a boundary this webview cannot identify.
+      var spec = RUNTIME_PILL_BY_SOURCE[source] || RUNTIME_PILL_BY_SOURCE['managed-plan'];
+      label.textContent = spec.label;
+      pill.setAttribute('data-boundary', spec.boundary);
+      pill.title = spec.title;
+      pill.style.display = 'inline-flex';
+    }
+
     function renderUsageMeter(payload) {
+      updateRuntimePill(payload.source);
+
       if (!usageMeterBanner || !meterFill || !meterText || !meterReset || !upgradeBtn ||
           !meterBarWrap || !meterByokIcon || !meterLocalIcon) return;
 
@@ -2493,17 +2544,21 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <style nonce="NONCE">
     :root {
       /* VS Code theme variables with AGI dark-mode fallbacks */
-      --agi-vscode-bg: #09090b;
---agi-vscode-surface: #151518;
---agi-vscode-overlay: #202024;
---agi-vscode-text: #fafafa;
---agi-vscode-text-muted: #a1a1aa;
---agi-vscode-border: #242428;
---agi-vscode-button: #5e6ad2;
+      --agi-vscode-bg: #212121;
+--agi-vscode-surface: #171717;
+--agi-vscode-overlay: #2a2a2d;
+--agi-vscode-text: #ececec;
+--agi-vscode-text-muted: #b4b4b4;
+--agi-vscode-border: rgba(255, 255, 255, 0.16);
+--agi-vscode-button: #0b84ff;
 --agi-vscode-button-text: #ffffff;
---agi-vscode-focus: #5e6ad2;
---agi-vscode-hover: #26262b;
---agi-vscode-terra: #828fff;
+--agi-vscode-focus: #0b84ff;
+--agi-vscode-hover: #2f2f2f;
+--agi-vscode-terra: #0a6ed1;
+--agi-vscode-success: #22c55e;
+--agi-vscode-warning: #ef8c57;
+--agi-vscode-warning-bg: rgba(239, 140, 87, 0.12);
+--agi-vscode-warning-border: rgba(239, 140, 87, 0.32);
 --agi-vscode-danger: var(--vscode-errorForeground, #ef4444);
 --agi-vscode-danger-bg: rgba(239, 68, 68, 0.12);
 --agi-vscode-danger-border: rgba(239, 68, 68, 0.3);
@@ -2590,6 +2645,24 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       border-radius: 50%;
       background: var(--accent-teal);
       flex-shrink: 0;
+    }
+    /* Trust boundary carried on the pill as data-boundary, so the colour lives
+       in CSS rather than in inline styles the script has to write. Managed
+       cloud is the only boundary whose prompts leave the machine, so it is the
+       only one tinted as a warning. */
+    .runtime-pill[data-boundary='local'] .runtime-pill-dot {
+      background: var(--agi-vscode-success);
+    }
+    .runtime-pill[data-boundary='byok'] .runtime-pill-dot {
+      background: var(--agi-vscode-button);
+    }
+    .runtime-pill[data-boundary='cloud'] .runtime-pill-dot {
+      background: var(--agi-vscode-warning);
+    }
+    .runtime-pill[data-boundary='cloud'] {
+      color: var(--agi-vscode-warning);
+      border-color: var(--agi-vscode-warning-border);
+      background: var(--agi-vscode-warning-bg);
     }
     .runtime-pill-label,
     .provider-badge > span:last-child {
@@ -3578,7 +3651,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     <div class="header-left">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
       <span class="header-title">AGI</span>
-      <span class="runtime-pill" title="Workspace-local runtime"><span class="runtime-pill-dot"></span><span class="runtime-pill-label">Local host</span></span>
+      <!-- Trust-boundary pill (VSCX-06). Hidden until renderUsageMeter()
+           reports a real source. It previously carried a fixed label and teal
+           dot asserting a workspace-local runtime on every boundary, including
+           BYOK and Managed Cloud. -->
+      <span class="runtime-pill" id="runtimePill" style="display:none"><span class="runtime-pill-dot" id="runtimePillDot"></span><span class="runtime-pill-label" id="runtimePillLabel"></span></span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
@@ -3783,7 +3860,32 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
     }
 
+    // Trust boundary shown in the header pill. Local / BYOK / Managed Cloud are
+    // separate boundaries, so the pill names the live one rather than asserting
+    // a fixed local-runtime label. Managed Cloud is the only one that leaves the
+    // machine, so it is the only one styled as a warning.
+    var RUNTIME_PILL_BY_SOURCE = {
+      'unbounded': { label: 'Local', boundary: 'local', title: 'Workspace-local runtime - nothing leaves this machine' },
+      'user-api-key': { label: 'BYOK', boundary: 'byok', title: 'Your own API key - requests go straight to the provider' },
+      'managed-plan': { label: 'Cloud', boundary: 'cloud', title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
+    };
+
+    function updateRuntimePill(source) {
+      var pill = document.getElementById('runtimePill');
+      var label = document.getElementById('runtimePillLabel');
+      if (!pill || !label) return;
+      // An unrecognised source falls back to the cloud label on purpose: never
+      // claim "Local" for a boundary this webview cannot identify.
+      var spec = RUNTIME_PILL_BY_SOURCE[source] || RUNTIME_PILL_BY_SOURCE['managed-plan'];
+      label.textContent = spec.label;
+      pill.setAttribute('data-boundary', spec.boundary);
+      pill.title = spec.title;
+      pill.style.display = 'inline-flex';
+    }
+
     function renderUsageMeter(payload) {
+      updateRuntimePill(payload.source);
+
       if (!usageMeterBanner || !meterFill || !meterText || !meterReset || !upgradeBtn ||
           !meterBarWrap || !meterByokIcon || !meterLocalIcon) return;
 
@@ -4969,17 +5071,21 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <style nonce="NONCE">
     :root {
       /* VS Code theme variables with AGI dark-mode fallbacks */
-      --agi-vscode-bg: #09090b;
---agi-vscode-surface: #151518;
---agi-vscode-overlay: #202024;
---agi-vscode-text: #fafafa;
---agi-vscode-text-muted: #a1a1aa;
---agi-vscode-border: #242428;
---agi-vscode-button: #5e6ad2;
+      --agi-vscode-bg: #212121;
+--agi-vscode-surface: #171717;
+--agi-vscode-overlay: #2a2a2d;
+--agi-vscode-text: #ececec;
+--agi-vscode-text-muted: #b4b4b4;
+--agi-vscode-border: rgba(255, 255, 255, 0.16);
+--agi-vscode-button: #0b84ff;
 --agi-vscode-button-text: #ffffff;
---agi-vscode-focus: #5e6ad2;
---agi-vscode-hover: #26262b;
---agi-vscode-terra: #828fff;
+--agi-vscode-focus: #0b84ff;
+--agi-vscode-hover: #2f2f2f;
+--agi-vscode-terra: #0a6ed1;
+--agi-vscode-success: #22c55e;
+--agi-vscode-warning: #ef8c57;
+--agi-vscode-warning-bg: rgba(239, 140, 87, 0.12);
+--agi-vscode-warning-border: rgba(239, 140, 87, 0.32);
 --agi-vscode-danger: var(--vscode-errorForeground, #ef4444);
 --agi-vscode-danger-bg: rgba(239, 68, 68, 0.12);
 --agi-vscode-danger-border: rgba(239, 68, 68, 0.3);
@@ -5066,6 +5172,24 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       border-radius: 50%;
       background: var(--accent-teal);
       flex-shrink: 0;
+    }
+    /* Trust boundary carried on the pill as data-boundary, so the colour lives
+       in CSS rather than in inline styles the script has to write. Managed
+       cloud is the only boundary whose prompts leave the machine, so it is the
+       only one tinted as a warning. */
+    .runtime-pill[data-boundary='local'] .runtime-pill-dot {
+      background: var(--agi-vscode-success);
+    }
+    .runtime-pill[data-boundary='byok'] .runtime-pill-dot {
+      background: var(--agi-vscode-button);
+    }
+    .runtime-pill[data-boundary='cloud'] .runtime-pill-dot {
+      background: var(--agi-vscode-warning);
+    }
+    .runtime-pill[data-boundary='cloud'] {
+      color: var(--agi-vscode-warning);
+      border-color: var(--agi-vscode-warning-border);
+      background: var(--agi-vscode-warning-bg);
     }
     .runtime-pill-label,
     .provider-badge > span:last-child {
@@ -6054,7 +6178,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     <div class="header-left">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
       <span class="header-title">AGI</span>
-      <span class="runtime-pill" title="Workspace-local runtime"><span class="runtime-pill-dot"></span><span class="runtime-pill-label">Local host</span></span>
+      <!-- Trust-boundary pill (VSCX-06). Hidden until renderUsageMeter()
+           reports a real source. It previously carried a fixed label and teal
+           dot asserting a workspace-local runtime on every boundary, including
+           BYOK and Managed Cloud. -->
+      <span class="runtime-pill" id="runtimePill" style="display:none"><span class="runtime-pill-dot" id="runtimePillDot"></span><span class="runtime-pill-label" id="runtimePillLabel"></span></span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
@@ -6259,7 +6387,32 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
     }
 
+    // Trust boundary shown in the header pill. Local / BYOK / Managed Cloud are
+    // separate boundaries, so the pill names the live one rather than asserting
+    // a fixed local-runtime label. Managed Cloud is the only one that leaves the
+    // machine, so it is the only one styled as a warning.
+    var RUNTIME_PILL_BY_SOURCE = {
+      'unbounded': { label: 'Local', boundary: 'local', title: 'Workspace-local runtime - nothing leaves this machine' },
+      'user-api-key': { label: 'BYOK', boundary: 'byok', title: 'Your own API key - requests go straight to the provider' },
+      'managed-plan': { label: 'Cloud', boundary: 'cloud', title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
+    };
+
+    function updateRuntimePill(source) {
+      var pill = document.getElementById('runtimePill');
+      var label = document.getElementById('runtimePillLabel');
+      if (!pill || !label) return;
+      // An unrecognised source falls back to the cloud label on purpose: never
+      // claim "Local" for a boundary this webview cannot identify.
+      var spec = RUNTIME_PILL_BY_SOURCE[source] || RUNTIME_PILL_BY_SOURCE['managed-plan'];
+      label.textContent = spec.label;
+      pill.setAttribute('data-boundary', spec.boundary);
+      pill.title = spec.title;
+      pill.style.display = 'inline-flex';
+    }
+
     function renderUsageMeter(payload) {
+      updateRuntimePill(payload.source);
+
       if (!usageMeterBanner || !meterFill || !meterText || !meterReset || !upgradeBtn ||
           !meterBarWrap || !meterByokIcon || !meterLocalIcon) return;
 
