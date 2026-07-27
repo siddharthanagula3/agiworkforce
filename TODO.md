@@ -111,8 +111,15 @@ founder's per-surface specs in `~/Downloads/0*-benchmark-spec.md` (01 mobile,
 - ~~**EXT-12**~~ — CLOSED 2026-07-27. The Chrome-internal tab id ("#1873492")
   is gone from the drawer footer, and the URL line no longer renders a raw
   extension id on browser-internal pages.
-- **EXT-06 / EXT-07** — mixed icon vocabulary (lucide SVG beside emoji) and an
-  unreachable options page.
+- ~~**EXT-06 / EXT-07**~~ — CLOSED 2026-07-27. Emoji ("✕", "▶", "▾", "✓", "🎤")
+  sat beside stroke-only Lucide SVGs; emoji ignore `currentColor` and render in
+  the system emoji font, so a single row showed two vocabularies. Replaced with
+  X / Play / ChevronDown / Check / Mic / Trash2, guarded by a lint-style test.
+  The options page was declared in the manifest but never opened from the
+  product — a Settings entry now sits in the drawer's Tools row.
+  `__tests__/icon-vocabulary.test.ts` (6). Also fixed the Site allowlist
+  offering to allowlist `chrome-extension://<id>` — an entry that could never
+  match, since automation needs a content script.
 
 ### 4. Cloud parity gaps — web ships these, Desktop/Mobile Cloud do not
 
