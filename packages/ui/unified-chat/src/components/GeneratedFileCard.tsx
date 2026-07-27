@@ -133,7 +133,11 @@ export function GeneratedFileCard({
       data-testid="generated-file-card"
       data-generated-file-id={presentation.generatedFileId ?? undefined}
       className={cn(
-        'flex flex-col gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)]',
+        // h-full so cards in a grid row share a height, and the action row
+        // below is pushed to the bottom with mt-auto. Without it a card with
+        // more badges grows taller and its Download sits lower than its
+        // neighbours', which reads as a ragged, unfinished grid.
+        'flex h-full flex-col gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)]',
         'bg-[var(--chat-surface-elevated)] p-3',
         className,
       )}
@@ -193,7 +197,7 @@ export function GeneratedFileCard({
       </div>
 
       {(downloadEnabled || shareEnabled || previewEnabled || onOpenSourceSession) && (
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-[var(--chat-border)] pt-2">
+        <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-[var(--chat-border)] pt-2">
           {previewEnabled ? (
             <Button
               variant="ghost"

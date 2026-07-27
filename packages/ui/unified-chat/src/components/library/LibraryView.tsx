@@ -370,7 +370,7 @@ export function LibraryView({ transport }: { transport: LibraryTransport }) {
           className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
           {cards.map(({ item, presentation }) => (
-            <div key={item.id} className="flex flex-col gap-1">
+            <div key={item.id} className="flex h-full flex-col gap-1">
               <GeneratedFileCard
                 presentation={{
                   ...presentation,
