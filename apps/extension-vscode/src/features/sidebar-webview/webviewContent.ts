@@ -182,6 +182,24 @@ export function getWebviewContent(
       background: var(--accent-teal);
       flex-shrink: 0;
     }
+    /* Trust boundary carried on the pill as data-boundary, so the colour lives
+       in CSS rather than in inline styles the script has to write. Managed
+       cloud is the only boundary whose prompts leave the machine, so it is the
+       only one tinted as a warning. */
+    .runtime-pill[data-boundary='local'] .runtime-pill-dot {
+      background: var(--agi-vscode-success);
+    }
+    .runtime-pill[data-boundary='byok'] .runtime-pill-dot {
+      background: var(--agi-vscode-button);
+    }
+    .runtime-pill[data-boundary='cloud'] .runtime-pill-dot {
+      background: var(--agi-vscode-warning);
+    }
+    .runtime-pill[data-boundary='cloud'] {
+      color: var(--agi-vscode-warning);
+      border-color: var(--agi-vscode-warning-border);
+      background: var(--agi-vscode-warning-bg);
+    }
     .runtime-pill-label,
     .provider-badge > span:last-child {
       min-width: 0;
@@ -1169,7 +1187,11 @@ export function getWebviewContent(
     <div class="header-left">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
       <span class="header-title">AGI</span>
-      <span class="runtime-pill" title="Workspace-local runtime"><span class="runtime-pill-dot"></span><span class="runtime-pill-label">Local host</span></span>
+      <!-- Trust-boundary pill (VSCX-06). Hidden until renderUsageMeter()
+           reports a real source. It previously carried a fixed label and teal
+           dot asserting a workspace-local runtime on every boundary, including
+           BYOK and Managed Cloud. -->
+      <span class="runtime-pill" id="runtimePill" style="display:none"><span class="runtime-pill-dot" id="runtimePillDot"></span><span class="runtime-pill-label" id="runtimePillLabel"></span></span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
@@ -1374,7 +1396,32 @@ export function getWebviewContent(
       }
     }
 
+    // Trust boundary shown in the header pill. Local / BYOK / Managed Cloud are
+    // separate boundaries, so the pill names the live one rather than asserting
+    // a fixed local-runtime label. Managed Cloud is the only one that leaves the
+    // machine, so it is the only one styled as a warning.
+    var RUNTIME_PILL_BY_SOURCE = {
+      'unbounded': { label: 'Local', boundary: 'local', title: 'Workspace-local runtime - nothing leaves this machine' },
+      'user-api-key': { label: 'BYOK', boundary: 'byok', title: 'Your own API key - requests go straight to the provider' },
+      'managed-plan': { label: 'Cloud', boundary: 'cloud', title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
+    };
+
+    function updateRuntimePill(source) {
+      var pill = document.getElementById('runtimePill');
+      var label = document.getElementById('runtimePillLabel');
+      if (!pill || !label) return;
+      // An unrecognised source falls back to the cloud label on purpose: never
+      // claim "Local" for a boundary this webview cannot identify.
+      var spec = RUNTIME_PILL_BY_SOURCE[source] || RUNTIME_PILL_BY_SOURCE['managed-plan'];
+      label.textContent = spec.label;
+      pill.setAttribute('data-boundary', spec.boundary);
+      pill.title = spec.title;
+      pill.style.display = 'inline-flex';
+    }
+
     function renderUsageMeter(payload) {
+      updateRuntimePill(payload.source);
+
       if (!usageMeterBanner || !meterFill || !meterText || !meterReset || !upgradeBtn ||
           !meterBarWrap || !meterByokIcon || !meterLocalIcon) return;
 
