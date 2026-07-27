@@ -7,6 +7,8 @@
 
 import * as vscode from 'vscode';
 
+import { declarationSpan } from './declarationSpan';
+
 interface CachedLensesEntry {
   version: number;
   lenses: vscode.CodeLens[];
@@ -56,37 +58,47 @@ function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (isFunctionOrClassLine(line, document.languageId)) {
-      const range = new vscode.Range(i, 0, i, line.length);
+      // The lens sits on the declaration line, but the command needs the whole
+      // declaration. This range used to be computed and then dropped — the
+      // commands took no arguments, so they fell back to the editor selection,
+      // and an empty selection means "the entire document".
+      const lensRange = new vscode.Range(i, 0, i, line.length);
+      const span = declarationSpan(lines, i);
+      const targetRange = new vscode.Range(span.startLine, 0, span.endLine, span.endCharacter);
 
       lenses.push(
-        new vscode.CodeLens(range, {
+        new vscode.CodeLens(lensRange, {
           title: '$(hubot) Ask AI',
           tooltip: 'Explain this with AGI Workforce',
           command: 'agi-workforce.explain',
+          arguments: [targetRange],
         }),
       );
 
       lenses.push(
-        new vscode.CodeLens(range, {
+        new vscode.CodeLens(lensRange, {
           title: '$(beaker) Tests',
           tooltip: 'Generate tests with AGI Workforce',
           command: 'agi-workforce.generateTests',
+          arguments: [targetRange],
         }),
       );
 
       lenses.push(
-        new vscode.CodeLens(range, {
+        new vscode.CodeLens(lensRange, {
           title: '$(edit) Refactor',
           tooltip: 'Refactor this with AGI Workforce',
           command: 'agi-workforce.refactor',
+          arguments: [targetRange],
         }),
       );
 
       lenses.push(
-        new vscode.CodeLens(range, {
+        new vscode.CodeLens(lensRange, {
           title: '$(book) Docs',
           tooltip: 'Generate documentation with AGI Workforce',
           command: 'agi-workforce.docs',
+          arguments: [targetRange],
         }),
       );
     }
