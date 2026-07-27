@@ -9,8 +9,8 @@
  */
 export const agiClerkAppearance = {
   variables: {
-    // accent (indigo): actions, links, focus accents
-    colorPrimary: '#5e6ad2',
+    // AGI signal amber: actions, links, and focus accents
+    colorPrimary: '#f0a84a',
     // --agi-card dark default; CSS overrides handle light mode
     colorBackground: '#0e0f10',
     // --agi-ink dark default
@@ -25,10 +25,14 @@ export const agiClerkAppearance = {
     borderRadius: '0.75rem',
     fontFamily: 'var(--font-geist-sans), system-ui, sans-serif',
   },
+  options: {
+    socialButtonsVariant: 'blockButton',
+    socialButtonsPlacement: 'top',
+  },
   elements: {
     rootBox: 'w-full',
     cardBox: 'mx-auto w-full max-w-[28.5rem]',
-    card: 'shadow-2xl shadow-black/30 sm:rounded-2xl',
+    card: 'shadow-2xl shadow-black/30 sm:rounded-[1.25rem]',
     socialButtonsBlockButton: 'border',
     formFieldInput: 'focus:ring-2',
     formButtonPrimary: 'font-semibold shadow-none',

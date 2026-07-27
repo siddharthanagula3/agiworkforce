@@ -68,6 +68,10 @@ describe('LoginScreen', () => {
 
     // Cloud sign-in is the native AuthView, not a web/credential form.
     expect(getByText('AuthView:signInOrUp')).toBeTruthy();
+    expect(getByText('One account. Every surface.')).toBeTruthy();
+    expect(getByText('Web')).toBeTruthy();
+    expect(getByText('Desktop')).toBeTruthy();
+    expect(getByText('Mobile')).toBeTruthy();
     expect(lastAuthViewProps.mode).toBe('signInOrUp');
     expect(mockUseAuth).toHaveBeenCalledWith({ treatPendingAsSignedOut: false });
   });

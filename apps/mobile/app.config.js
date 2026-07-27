@@ -209,7 +209,12 @@ const config = {
     ],
     // Clerk cloud auth (native AuthView + secure token cache). Adds the Clerk
     // iOS/Android native modules; requires a native rebuild (expo run:ios).
-    '@clerk/expo',
+    [
+      '@clerk/expo',
+      {
+        theme: './clerk-theme.json',
+      },
+    ],
     ...conditionalPlugins,
     // AUDIT-FIX: STT-WIRE — on-device speech recognition via iOS Speech
     // framework / Android SpeechRecognizer. Microphone usage description is
