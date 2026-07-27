@@ -1,24 +1,102 @@
 /**
- * Shared Links screen — v1 placeholder.
- * Cloud feature gated via InviteCodeModal (invite code + waitlist tabs).
+ * Shared Links screen.
+ *
+ * Lists the conversations this account has published and lets them be revoked.
+ * This shipped as a "Coming soon" placeholder, which was wrong twice: sharing
+ * has been live on web (/share/[token], /api/share) for some time, and the
+ * invite gate it referenced was removed by the 2026-06-27 public-alpha
+ * decision. The only piece genuinely missing was a list endpoint — now
+ * GET /api/share.
  */
-import { useCallback } from 'react';
-import { View, ScrollView, Pressable } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, ScrollView, Pressable, Share, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Link2, Lock } from 'lucide-react-native';
+import { ArrowLeft, Link2, Trash2, AlertCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
+import { fetchSharedLinks, revokeSharedLink, type SharedLink } from '@/src/features/shared-links';
+
+type LoadState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; links: SharedLink[] }
+  | { kind: 'error'; message: string };
+
+function formatDate(value: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString();
+}
 
 export default function SharedLinksScreen() {
   const router = useRouter();
   const { colors: c, statusBarStyle } = useTheme();
+  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const [refreshing, setRefreshing] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const links = await fetchSharedLinks();
+      setState({ kind: 'ready', links });
+    } catch (error) {
+      setState({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Could not load shared links.',
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const handleBack = useCallback(() => {
     router.navigate('/(app)/settings/data-controls' as Parameters<typeof router.navigate>[0]);
   }, [router]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
+
+  const handleRevoke = useCallback(
+    (link: SharedLink) => {
+      // Revoking breaks a URL other people may already hold, so it is confirmed
+      // rather than immediate.
+      Alert.alert(
+        'Revoke this link?',
+        `"${link.title}" will stop opening for anyone who has the URL.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Revoke',
+            style: 'destructive',
+            onPress: () => {
+              void (async () => {
+                setRevoking(link.token);
+                try {
+                  await revokeSharedLink(link.token);
+                  await load();
+                } catch (error) {
+                  Alert.alert(
+                    'Could not revoke',
+                    error instanceof Error ? error.message : 'Please try again.',
+                  );
+                } finally {
+                  setRevoking(null);
+                }
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [load],
+  );
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
@@ -43,13 +121,7 @@ export default function SharedLinksScreen() {
           <ArrowLeft size={22} color={c.textPrimary} />
         </Pressable>
         <Text
-          style={{
-            flex: 1,
-            color: c.textPrimary,
-            fontSize: 20,
-            fontWeight: '700',
-            marginLeft: 4,
-          }}
+          style={{ flex: 1, color: c.textPrimary, fontSize: 20, fontWeight: '700', marginLeft: 4 }}
         >
           Shared Links
         </Text>
@@ -59,71 +131,144 @@ export default function SharedLinksScreen() {
         className="flex-1 px-4"
         contentContainerStyle={{ paddingTop: 10, paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={c.teal} />
+        }
       >
-        {/* Cloud gate banner */}
-        <View
-          style={{
-            marginBottom: 20,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: c.warningBorder,
-            backgroundColor: c.warningSurface,
-            padding: 14,
-          }}
-          accessible
-          accessibilityLabel="Shared Links isn't available on mobile yet."
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <Lock size={14} color={c.agentWarning} />
-            <Text style={{ color: c.agentWarning, fontSize: 13, fontWeight: '600' }}>
-              Coming soon
-            </Text>
-          </View>
-          <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
-            Shared Links lets you publish conversations and invite collaborators. This feature isn’t
-            available on mobile yet.
+        {state.kind === 'loading' && (
+          <Text style={{ color: c.textSecondary, fontSize: 13, paddingVertical: 24 }}>
+            Loading your shared links…
           </Text>
-        </View>
+        )}
 
-        {/* Placeholder card */}
-        <Card>
-          <View className="items-center py-8 gap-3">
-            <View
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 14,
-                backgroundColor: c.accentSurface,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Link2 size={26} color={c.teal} strokeWidth={1.5} />
+        {state.kind === 'error' && (
+          <View
+            style={{
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: c.warningBorder,
+              backgroundColor: c.warningSurface,
+              padding: 14,
+            }}
+            accessible
+            accessibilityLabel={`Could not load shared links. ${state.message}`}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <AlertCircle size={14} color={c.agentWarning} />
+              <Text style={{ color: c.agentWarning, fontSize: 13, fontWeight: '600' }}>
+                Could not load shared links
+              </Text>
             </View>
-            <Text
-              style={{
-                fontSize: 17,
-                fontWeight: '600',
-                color: c.textPrimary,
-                textAlign: 'center',
-              }}
-            >
-              No shared links yet
+            <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
+              {state.message}
             </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                color: c.textSecondary,
-                textAlign: 'center',
-                lineHeight: 18,
-                maxWidth: 260,
-              }}
+            <Pressable
+              onPress={() => void load()}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading shared links"
+              style={{ marginTop: 10, alignSelf: 'flex-start' }}
             >
-              Shared conversations will appear here once this feature ships.
-            </Text>
+              <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>Retry</Text>
+            </Pressable>
           </View>
-        </Card>
+        )}
 
+        {state.kind === 'ready' && state.links.length === 0 && (
+          <Card>
+            <View className="items-center py-8 gap-3">
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 14,
+                  backgroundColor: c.accentSurface,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Link2 size={26} color={c.teal} strokeWidth={1.5} />
+              </View>
+              <Text
+                style={{
+                  fontSize: 17,
+                  fontWeight: '600',
+                  color: c.textPrimary,
+                  textAlign: 'center',
+                }}
+              >
+                No shared links yet
+              </Text>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: c.textSecondary,
+                  textAlign: 'center',
+                  lineHeight: 18,
+                  maxWidth: 280,
+                }}
+              >
+                Share a conversation to publish a read-only link. It will appear here so you can
+                revoke it later.
+              </Text>
+            </View>
+          </Card>
+        )}
+
+        {state.kind === 'ready' &&
+          state.links.map((link) => (
+            <Card key={link.token}>
+              <View style={{ padding: 14, gap: 8 }}>
+                <Text
+                  style={{ color: c.textPrimary, fontSize: 15, fontWeight: '600' }}
+                  numberOfLines={2}
+                >
+                  {link.title}
+                </Text>
+                <Text style={{ color: c.textSecondary, fontSize: 12 }}>
+                  {link.messageCount} message{link.messageCount === 1 ? '' : 's'}
+                  {formatDate(link.createdAt) ? ` · shared ${formatDate(link.createdAt)}` : ''}
+                </Text>
+                <Text
+                  style={{ color: link.expired ? c.agentWarning : c.textMuted, fontSize: 12 }}
+                  accessibilityLabel={
+                    link.expired ? 'This link has expired' : `Expires ${formatDate(link.expiresAt)}`
+                  }
+                >
+                  {link.expired
+                    ? 'Expired — no longer opens'
+                    : `Expires ${formatDate(link.expiresAt)}`}
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
+                  {/* An expired link no longer opens, so offering to share it
+                      again would hand someone a dead URL. */}
+                  {!link.expired && (
+                    <Pressable
+                      onPress={() => void Share.share({ message: link.shareUrl })}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Share link to ${link.title}`}
+                    >
+                      <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+                        Share link
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={() => handleRevoke(link)}
+                    disabled={revoking === link.token}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Revoke link to ${link.title}`}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                  >
+                    <Trash2 size={13} color={c.agentError} />
+                    <Text style={{ color: c.agentError, fontSize: 13, fontWeight: '600' }}>
+                      {revoking === link.token ? 'Revoking…' : 'Revoke'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </Card>
+          ))}
       </ScrollView>
     </SafeAreaView>
   );
