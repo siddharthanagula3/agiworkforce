@@ -669,8 +669,8 @@
         },
         "agiWorkforce.codeLensEnabled": {
           "type": "boolean",
-          "default": true,
-          "description": "Show 'Ask AI', 'Tests', 'Docs' lenses above functions and classes"
+          "default": false,
+          "description": "Show AGI Workforce action lenses above every function and class. Off by default: the lenses render on every declaration in every open file, which competes with the editor's own lenses (references, implementations, test status). The same actions are always available from the right-click menu and the sidebar."
         },
         "agiWorkforce.autoApplyFixes": {
           "type": "boolean",

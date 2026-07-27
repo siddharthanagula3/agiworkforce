@@ -265,24 +265,24 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
-    register('agi-workforce.explain', async () => {
-      await runInlineCommand(context, 'explain');
+    register('agi-workforce.explain', async (targetRange?: vscode.Range) => {
+      await runInlineCommand(context, 'explain', targetRange);
     }),
 
-    register('agi-workforce.fix', async () => {
-      await runInlineCommand(context, 'fix');
+    register('agi-workforce.fix', async (targetRange?: vscode.Range) => {
+      await runInlineCommand(context, 'fix', targetRange);
     }),
 
-    register('agi-workforce.refactor', async () => {
-      await runInlineCommand(context, 'refactor');
+    register('agi-workforce.refactor', async (targetRange?: vscode.Range) => {
+      await runInlineCommand(context, 'refactor', targetRange);
     }),
 
-    register('agi-workforce.generateTests', async () => {
-      await runInlineCommand(context, 'tests');
+    register('agi-workforce.generateTests', async (targetRange?: vscode.Range) => {
+      await runInlineCommand(context, 'tests', targetRange);
     }),
 
-    register('agi-workforce.docs', async () => {
-      await runInlineCommand(context, 'docs');
+    register('agi-workforce.docs', async (targetRange?: vscode.Range) => {
+      await runInlineCommand(context, 'docs', targetRange);
     }),
 
     register('agi-workforce.codeReview', async () => {
