@@ -110,9 +110,45 @@ All four are credential rejections from the provider, not our code — the
 request was built and sent correctly and the provider refused the key. Nothing
 here is fixable in the repo.
 
+**Confirmed twice, independently.** The TypeScript adapters (a separate
+implementation, shared by web + mobile + Chrome + VS Code) were then given the
+same treatment — `AGI_LIVE_PROVIDER_SMOKE=1 pnpm vitest run
+packages/ai/providers/factory/src/live-stream-smoke.test.ts` — and returned the
+same verdict: the same five green, the same four rejected, with the providers'
+own messages (`[error, stop]` chunks). Two unrelated codebases agreeing that
+the keys are refused is what rules out a bug on our side.
+
+Also missing entirely from `.env.local`, so they were never attempted:
+**`MINIMAX_API_KEY`** and **`OPENROUTER_API_KEY`**. The MiniMax adapter is now
+built (it was greenfield in the note above), so a key is all it needs.
+
 **FOUNDER, env only:** replace `MOONSHOT_API_KEY`, `XAI_API_KEY`,
 `QWEN_API_KEY`/`DASHSCOPE_API_KEY`, `ZHIPU_API_KEY` in `.env.local` and Vercel
 prod. Qwen additionally needs the endpoint change already described above.
+
+### Still unproven live: the web tool-loop (needs you, not code)
+
+Provider streaming is now proven live on both the Rust and TypeScript paths.
+The **agentic tool loop** on the TypeScript side is not, and cannot be from
+here.
+
+It lives only in the web route (`apps/web/app/api/llm/v1/chat/completions/
+lib/tool-loop.ts`) — there is no shared package for it, so unlike the provider
+adapters there is no seam to exercise it from a test without the route. The
+route authenticates Bearer-only against Clerk, and obtaining a token means
+either signing in as you or reading `CLERK_SECRET_KEY`, which this environment
+correctly refuses.
+
+So its ~10 test files all mock `buildToolLoopStream`, which is the provider
+call. They prove the orchestration logic; they cannot prove a real model
+drives real tools through the real route. The Rust loop _is_ proven live (two
+iterations, real `Bash` execution, correct output), so the capability exists —
+it is the TS implementation of it that is unverified.
+
+**To close it, one of:** sign in on localhost and run one agentic chat while
+watching for tool events; or provide a test Clerk JWT for the smoke to use. It
+is worth doing before the demo, since the tool loop is the thing the demo is
+about.
 
 Re-run the command to confirm; it prints per-provider status and never prints
 key values. Worth doing before recording demo video, since a model picker
