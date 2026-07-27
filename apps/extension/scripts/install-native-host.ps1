@@ -26,7 +26,7 @@ New-Item -ItemType Directory -Force -Path $edgeManifestDir | Out-Null
 $escapedHostPath = $HostPath.Replace('\', '\\')
 $json = Get-Content -Raw $template
 $json = $json.Replace('<EXTENSION_ID_PLACEHOLDER>', $ExtensionId)
-$json = $json.Replace('/Applications/AGI Workforce.app/Contents/MacOS/native_messaging_host', $escapedHostPath)
+$json = $json.Replace('<NATIVE_HOST_PATH_PLACEHOLDER>', $escapedHostPath)
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($manifestPath, $json, $utf8NoBom)
 [System.IO.File]::WriteAllText($edgeManifestPath, $json, $utf8NoBom)

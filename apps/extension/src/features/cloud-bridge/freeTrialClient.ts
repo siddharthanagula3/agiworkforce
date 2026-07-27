@@ -224,11 +224,12 @@ export async function getManagedModelAccess(
  * This is the single credential contract for Managed Cloud chat and computer
  * use. Production always uses Clerk; the manual fallback is development-only.
  */
-export async function getAuthToken(): Promise<string | null> {
+export async function getAuthToken(forceRefresh = false): Promise<string | null> {
   try {
-    const token = await getFreshClerkToken();
+    const token = await getFreshClerkToken(forceRefresh);
     if (token) return token;
-  } catch {
+  } catch (error) {
+    if (forceRefresh) throw error;
     // Native API may be unavailable in a misconfigured development build. The
     // dev-only token below remains an explicit local escape hatch for tests.
   }

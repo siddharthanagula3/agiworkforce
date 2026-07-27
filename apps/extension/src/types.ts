@@ -22,6 +22,7 @@ export type NativeMessageType =
   | 'FILL_FORM'
   | 'SUBMIT_FORM'
   | 'GET_CONNECTION_STATUS'
+  | 'GET_CLOUD_AUTH_TOKEN'
   | 'RECONNECT_NATIVE'
   | 'CONNECTION_STATUS_CHANGED'
   | 'TAB_READY'
@@ -364,6 +365,17 @@ export interface AutoFillJobApplicationResponse {
 
 export interface ConnectionStatusMessage extends BaseMessage {
   type: 'GET_CONNECTION_STATUS';
+}
+
+export interface GetCloudAuthTokenMessage extends BaseMessage {
+  type: 'GET_CLOUD_AUTH_TOKEN';
+  refresh: boolean;
+}
+
+export interface GetCloudAuthTokenResponse {
+  success: boolean;
+  token?: string;
+  error?: string;
 }
 
 export interface ReconnectNativeMessage extends BaseMessage {
@@ -1008,6 +1020,7 @@ export type ExtensionMessage =
   | FillFormMessage
   | SubmitFormMessage
   | ConnectionStatusMessage
+  | GetCloudAuthTokenMessage
   | ReconnectNativeMessage
   | ConnectionStatusChangedMessage
   | TabReadyMessage
@@ -1084,6 +1097,7 @@ export type ExtensionResponse =
   | FillFormResponse
   | SubmitFormResponse
   | ConnectionStatusResponse
+  | GetCloudAuthTokenResponse
   | TabReadyResponse
   | RunPageActionsResponse
   | ElementInfoResponse

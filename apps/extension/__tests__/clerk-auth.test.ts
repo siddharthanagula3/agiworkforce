@@ -20,6 +20,7 @@ describe('Clerk Chrome Extension auth', () => {
     vi.stubGlobal('chrome', {
       runtime: {
         getURL: vi.fn((path: string) => `chrome-extension://stable-extension/${path}`),
+        sendMessage: vi.fn(),
       },
       tabs: {
         create: vi.fn().mockResolvedValue({ id: 42 }),
@@ -52,11 +53,14 @@ describe('Clerk Chrome Extension auth', () => {
   it('loads a foreground client with the validated Sync Host and extension redirects', async () => {
     process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
     process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
-    const getToken = vi.fn().mockResolvedValue('fresh-token');
     const load = vi.fn().mockResolvedValue(undefined);
     createClerkClient.mockReturnValue({
       load,
-      session: { getToken },
+      session: { getToken: vi.fn().mockResolvedValue('fresh-token') },
+      user: {
+        fullName: 'Ada Lovelace',
+        primaryEmailAddress: { emailAddress: 'ada@example.com' },
+      },
       addListener: vi.fn(),
       openSignIn: vi.fn(),
       signOut: vi.fn(),
@@ -64,7 +68,10 @@ describe('Clerk Chrome Extension auth', () => {
 
     const auth = await importClerkAuth();
 
-    await expect(auth.getFreshClerkToken()).resolves.toBe('fresh-token');
+    await expect(auth.getClerkAccountProfile()).resolves.toMatchObject({
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+    });
     expect(createClerkClient).toHaveBeenCalledWith({
       publishableKey: 'pk_test_repo_contract',
       syncHost: 'https://clerk.agiworkforce.com',
@@ -75,6 +82,41 @@ describe('Clerk Chrome Extension auth', () => {
         allowedRedirectProtocols: ['chrome-extension:'],
       }),
     );
+  });
+
+  it('gets foreground tokens from the background Sync Host client', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
+    vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({
+      success: true,
+      token: 'background-sync-token',
+    });
+
+    const auth = await importClerkAuth();
+
+    await expect(auth.getFreshClerkToken()).resolves.toBe('background-sync-token');
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'GET_CLOUD_AUTH_TOKEN',
+      refresh: false,
+    });
+    expect(createClerkClient).not.toHaveBeenCalled();
+  });
+
+  it('forces the background Sync Host client to reload after web sign-in', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
+    vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({
+      success: true,
+      token: 'newly-synced-token',
+    });
+
+    const auth = await importClerkAuth();
+
+    await expect(auth.getFreshClerkToken(true)).resolves.toBe('newly-synced-token');
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'GET_CLOUD_AUTH_TOKEN',
+      refresh: true,
+    });
   });
 
   it('hydrates the signed-in account identity on first render', async () => {
@@ -141,5 +183,20 @@ describe('Clerk Chrome Extension auth', () => {
       syncHost: 'http://localhost',
       background: true,
     });
+  });
+
+  it('recreates the background client when a web sign-in refresh is requested', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'http://localhost';
+    vi.stubGlobal('document', undefined);
+    createClerkClient.mockResolvedValueOnce({ session: null }).mockResolvedValueOnce({
+      session: { getToken: vi.fn().mockResolvedValue('refreshed-background-token') },
+    });
+
+    const auth = await importClerkAuth();
+
+    await expect(auth.getFreshClerkToken()).resolves.toBeNull();
+    await expect(auth.getFreshClerkToken(true)).resolves.toBe('refreshed-background-token');
+    expect(createClerkClient).toHaveBeenCalledTimes(2);
   });
 });

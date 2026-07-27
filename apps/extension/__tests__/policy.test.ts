@@ -20,6 +20,7 @@ import {
   ORIGIN_EXTENSION_PAGE,
   generateRecordId,
   getMessagePolicy,
+  isTrustedExtensionPageSender,
   validateBridgeUrl,
   validateShortcutActions,
 } from '../src/background/policy';
@@ -67,6 +68,72 @@ describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
     for (const t of EXTENSION_PAGE_ONLY_MESSAGE_TYPES) {
       expect(DOM_MUTATION_MESSAGE_TYPES.has(t)).toBe(false);
     }
+  });
+});
+
+describe('policy — trusted extension page senders', () => {
+  const extensionOrigin = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+  const extensionId = 'abcdefghijklmnopabcdefghijklmnop';
+
+  it('trusts a side panel or options page even when Chrome associates it with a tab', () => {
+    expect(
+      isTrustedExtensionPageSender(
+        {
+          id: extensionId,
+          url: `${extensionOrigin}/src/side_panel.html`,
+          origin: extensionOrigin,
+          tabUrl: `${extensionOrigin}/src/side_panel.html`,
+        },
+        extensionId,
+        extensionOrigin,
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects a content script even though Chrome reports the owning extension id', () => {
+    expect(
+      isTrustedExtensionPageSender(
+        {
+          id: extensionId,
+          url: 'https://example.com/page',
+          origin: 'https://example.com',
+          tabUrl: 'https://example.com/page',
+        },
+        extensionId,
+        extensionOrigin,
+      ),
+    ).toBe(false);
+  });
+
+  it('fails closed when a tab sender has no document URL', () => {
+    expect(
+      isTrustedExtensionPageSender({ id: extensionId, hasTab: true }, extensionId, extensionOrigin),
+    ).toBe(false);
+  });
+
+  it('rejects another extension and lookalike origins', () => {
+    expect(
+      isTrustedExtensionPageSender(
+        {
+          id: 'ponmlkjihgfedcbaponmlkjihgfedcba',
+          url: `${extensionOrigin}/src/options.html`,
+          origin: extensionOrigin,
+        },
+        extensionId,
+        extensionOrigin,
+      ),
+    ).toBe(false);
+    expect(
+      isTrustedExtensionPageSender(
+        {
+          id: extensionId,
+          url: `${extensionOrigin}.evil.example/src/options.html`,
+          origin: `${extensionOrigin}.evil.example`,
+        },
+        extensionId,
+        extensionOrigin,
+      ),
+    ).toBe(false);
   });
 });
 

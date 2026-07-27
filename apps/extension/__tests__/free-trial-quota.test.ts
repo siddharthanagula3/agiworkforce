@@ -436,6 +436,14 @@ describe('getAuthToken', () => {
     chromeMock._localStore['agi_dev_bearer_token'] = '';
     expect(await getAuthToken()).toBeNull();
   });
+
+  it('surfaces Clerk failures when the user explicitly checks sign-in', async () => {
+    clerkAuthMock.getFreshClerkToken.mockRejectedValueOnce(
+      new Error('Extension origin is not allowed by Clerk'),
+    );
+
+    await expect(getAuthToken(true)).rejects.toThrow('Extension origin is not allowed by Clerk');
+  });
 });
 
 // ---------------------------------------------------------------------------

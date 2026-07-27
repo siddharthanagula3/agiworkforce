@@ -63,6 +63,7 @@ import {
   DOM_MUTATION_MESSAGE_TYPES,
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
   ORIGIN_EXTENSION_PAGE,
+  isTrustedExtensionPageSender,
   validateBridgeUrl,
 } from './background/policy';
 import {
@@ -86,6 +87,7 @@ import {
   cancelChromeManagedRun,
   resumeChromeManagedRun,
 } from './features/cloud-bridge/managedRunControl';
+import { getFreshClerkToken } from './features/cloud-bridge/clerkAuth';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -1016,7 +1018,21 @@ function isAllowlistedSender(
   messageType: string | undefined,
 ): boolean {
   // Extension pages (popup, side panel, options) are always trusted.
-  if (sender.id === chrome.runtime.id && !sender.tab) return true;
+  if (
+    isTrustedExtensionPageSender(
+      {
+        id: sender.id,
+        url: sender.url,
+        origin: sender.origin,
+        tabUrl: sender.tab?.url,
+        hasTab: sender.tab != null,
+      },
+      chrome.runtime.id,
+      chrome.runtime.getURL('/').replace(/\/+$/, ''),
+    )
+  ) {
+    return true;
+  }
 
   // Reject anything without tab info.
   if (!sender.tab || !sender.tab.url) return false;
@@ -1081,7 +1097,19 @@ function handleMessage(
   // These must originate from a trusted extension page (popup / side panel /
   // options), never from a content script — even on an allowlisted origin.
   if (EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(msg.type)) {
-    if (sender.tab || sender.id !== chrome.runtime.id) {
+    if (
+      !isTrustedExtensionPageSender(
+        {
+          id: sender.id,
+          url: sender.url,
+          origin: sender.origin,
+          tabUrl: sender.tab?.url,
+          hasTab: sender.tab != null,
+        },
+        chrome.runtime.id,
+        chrome.runtime.getURL('/').replace(/\/+$/, ''),
+      )
+    ) {
       logger.warn('Rejected extension-page-only message from non-UI sender', {
         url: sender?.tab?.url,
         type: msg.type,
@@ -1156,6 +1184,14 @@ async function handleMessageAsync(
   }
 
   switch (message.type) {
+    case 'GET_CLOUD_AUTH_TOKEN': {
+      const token = await getFreshClerkToken(message.refresh);
+      return {
+        success: true,
+        ...(token ? { token } : {}),
+      } as ExtensionResponse;
+    }
+
     case 'GET_CONNECTION_STATUS':
       if (
         !state.isNativeConnected &&
