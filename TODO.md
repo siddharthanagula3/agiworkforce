@@ -136,11 +136,20 @@ Founder rule: Cloud is a complete UI copy of web.
   since cloud schedules are the ones that should run with the laptop closed.
 - **MOBCLOUD-01** tier-locked model row exits chat into a Billing screen whose
   only CTA is a dead upgrade sheet.
-- **MOBCLOUD-02 / 03 / 04** — Code sessions is a mock with no data source
-  anywhere in the repo (delete, do not graft), an orphaned Skills route still
-  renders the invite gate the 2026-06-27 public-alpha decision removed, and an
-  unreachable Shared Links screen ships a "Coming soon" card for a feature no
-  surface has.
+- ~~**MOBCLOUD-04**~~ — CLOSED 2026-07-27, and **the ledger entry was wrong**:
+  sharing is not "a feature no surface has". Web ships `/share/[token]`,
+  `/shared/[id]`, `POST /api/share` and `DELETE /api/share/:token`. The only
+  missing piece was a way to list your own links, so `GET /api/share` was added
+  (owner-scoped, never selects message bodies, marks expired rows rather than
+  hiding them so they stay revocable). The mobile screen now lists real shares
+  with share/revoke. `apps/web/app/api/share/route.test.ts` (6),
+  `apps/mobile/__tests__/shared-links{,-honesty}.test.tsx` (11).
+- ~~**MOBCLOUD-03**~~ — CLOSED 2026-07-27. `app/(app)/skills/` had no inbound
+  route reference anywhere and its whole content was the waitlist + invite-code
+  gate removed on 2026-06-27. Deleted. A real mobile Skills surface is unbuilt —
+  the Managed Cloud Skill tool itself ships.
+- **MOBCLOUD-02** — Code sessions is a mock with no data source anywhere in the
+  repo (delete, do not graft).
 
 ### 5. Larger, scope before starting
 
