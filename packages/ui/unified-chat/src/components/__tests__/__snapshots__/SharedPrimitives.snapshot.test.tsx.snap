@@ -2,7 +2,7 @@
 
 exports[`shared-primitive DOM snapshots > locks the GeneratedFileCard rendered structure for a completed Local PDF 1`] = `
 <div
-  class="flex flex-col gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3"
+  class="flex h-full flex-col gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3"
   data-generated-file-id="gf_snapshot"
   data-testid="generated-file-card"
 >
