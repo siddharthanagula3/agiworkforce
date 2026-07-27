@@ -1,7 +1,8 @@
 import { QueueFullError, type AgentActivityToolEntry } from '@agiworkforce/client-runtime';
 import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
-import { getExtensionTokensCss } from './tokens';
+import { getExtensionTokensCssAuto } from './tokens';
+import { pageChipLabel } from './utils';
 import {
   canUseBillingPlanCapability,
   isEntitledSubscriptionStatus,
@@ -129,7 +130,7 @@ let _drawerSessionTimer: ReturnType<typeof setInterval> | null = null;
  * buildUI's closure) can call it to update account access after authentication
  * or plan changes.
  */
-let refreshCloudAccountUI: () => Promise<void> = async () => {
+let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async () => {
   /* no-op until buildUI() initialises the real implementation */
 };
 
@@ -511,7 +512,7 @@ function injectStyles(): void {
   // supports them; manifest minimum_chrome_version is 132 so we're safe.
   const cssText = `
     /* ── AGI design tokens (dark) ── */
-    ${getExtensionTokensCss('dark')}
+    ${getExtensionTokensCssAuto()}
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1464,6 +1465,38 @@ function injectStyles(): void {
       overflow-y: auto;
     }
     #sp-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.78; }
+    /* Slash-command autocomplete. Anchored above the composer because the panel
+       is short and a downward menu would fall outside the viewport. */
+    #sp-slash-menu {
+      display: none;
+      flex-direction: column;
+      gap: 1px;
+      margin-bottom: 6px;
+      padding: 4px;
+      background: var(--agi-ext-surface);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 10px;
+      box-shadow: var(--agi-ext-modal-shadow);
+      max-height: 214px;
+      overflow-y: auto;
+    }
+    #sp-slash-menu.visible { display: flex; }
+    .sp-slash-item {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding: 7px 9px;
+      border-radius: 7px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      text-align: left;
+      font-family: inherit;
+    }
+    .sp-slash-item:hover, .sp-slash-item.active { background: var(--agi-ext-hover); }
+    .sp-slash-item.active { outline: 1px solid var(--agi-ext-focus); outline-offset: -1px; }
+    .sp-slash-name { color: var(--agi-ext-text); font-size: 13px; font-weight: 600; }
+    .sp-slash-hint { color: var(--agi-ext-text-muted); font-size: 11.5px; line-height: 1.35; }
     #sp-send-btn {
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
@@ -3266,51 +3299,81 @@ async function capturePageContext(): Promise<string | null> {
   });
 }
 
+interface SlashCommandMeta {
+  display: string;
+  prompt: string;
+  captureContext: boolean;
+  /** One-line description shown in the autocomplete menu. */
+  hint: string;
+}
+
+/**
+ * The panel's slash commands, in menu order.
+ *
+ * Single source of truth: both `expandSlashCommand` (submit-time) and the
+ * autocomplete menu read this. Four separate strings promised "/ for commands"
+ * while nothing listened for the key, so the commands were undiscoverable
+ * unless you already knew them.
+ */
+const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
+  '/summarize': {
+    display: '/summarize',
+    prompt:
+      'Summarize this page concisely. Include key points, main arguments, and any important details.',
+    captureContext: true,
+    hint: 'Key points and main arguments of this page',
+  },
+  '/tldr': {
+    display: '/tldr',
+    prompt: 'Give me a TL;DR of this page in 2-3 sentences.',
+    captureContext: true,
+    hint: 'Two or three sentences, nothing more',
+  },
+  '/explain': {
+    display: '/explain',
+    prompt: 'Explain the content of this page in simple terms. Break down any complex concepts.',
+    captureContext: true,
+    hint: 'Plain-language explanation of this page',
+  },
+  '/translate': {
+    display: '/translate',
+    prompt:
+      'Translate the main content of this page to English. If already in English, translate to Spanish.',
+    captureContext: true,
+    hint: 'Translate the page — add a language to choose',
+  },
+  '/extract': {
+    display: '/extract',
+    prompt:
+      'Extract the key structured data from this page: names, dates, numbers, prices, and any tabular information.',
+    captureContext: true,
+    hint: 'Pull out names, dates, numbers and tables',
+  },
+  '/code': {
+    display: '/code',
+    prompt:
+      'Extract and explain all code snippets on this page. For each snippet, describe what it does and suggest improvements.',
+    captureContext: true,
+    hint: 'Find and explain code on this page',
+  },
+};
+
+/** Commands whose name starts with `fragment` (`/tr` -> `/translate`). */
+function matchSlashCommands(fragment: string): Array<[string, SlashCommandMeta]> {
+  const q = fragment.trim().toLowerCase();
+  if (!q.startsWith('/') || q.includes(' ')) return [];
+  return Object.entries(SLASH_COMMANDS).filter(([name]) => name.startsWith(q));
+}
+
 function expandSlashCommand(
   raw: string,
 ): { display: string; prompt: string; captureContext: boolean } | null {
   const trimmed = raw.trim();
-  const commands: Record<string, { display: string; prompt: string; captureContext: boolean }> = {
-    '/summarize': {
-      display: '/summarize',
-      prompt:
-        'Summarize this page concisely. Include key points, main arguments, and any important details.',
-      captureContext: true,
-    },
-    '/explain': {
-      display: '/explain',
-      prompt: 'Explain the content of this page in simple terms. Break down any complex concepts.',
-      captureContext: true,
-    },
-    '/translate': {
-      display: '/translate',
-      prompt:
-        'Translate the main content of this page to English. If already in English, translate to Spanish.',
-      captureContext: true,
-    },
-    '/extract': {
-      display: '/extract',
-      prompt:
-        'Extract the key structured data from this page: names, dates, numbers, emails, URLs, addresses, and any other notable entities. Format as a bulleted list.',
-      captureContext: true,
-    },
-    '/code': {
-      display: '/code',
-      prompt:
-        'Extract and explain all code snippets on this page. For each snippet, describe what it does and suggest improvements.',
-      captureContext: true,
-    },
-    '/tldr': {
-      display: '/tldr',
-      prompt: 'Give me a TL;DR of this page in 2-3 sentences.',
-      captureContext: true,
-    },
-  };
-
-  if (commands[trimmed]) return commands[trimmed]!;
+  const exact = SLASH_COMMANDS[trimmed];
+  if (exact) return exact;
 
   // e.g. "/translate to French"
-  for (const [cmd, meta] of Object.entries(commands)) {
+  for (const [cmd, meta] of Object.entries(SLASH_COMMANDS)) {
     if (trimmed.startsWith(cmd + ' ')) {
       const extra = trimmed.slice(cmd.length + 1).trim();
       return {
@@ -3931,11 +3994,7 @@ function refreshPageHostname(): void {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (chrome.runtime.lastError) return;
       const url = tabs[0]?.url ?? '';
-      try {
-        currentPageHostname = url ? new URL(url).hostname : '';
-      } catch {
-        currentPageHostname = '';
-      }
+      currentPageHostname = pageChipLabel(url);
       setBlockedState(isRestrictedUrl(url));
       updateContextButton();
     });
@@ -4325,7 +4384,7 @@ function buildUI(): void {
   // Spoke at index 0 (12 o'clock) uses amber/terra accent; others inherit text
   // color via currentColor. Geometry mirrors packages/ui/ui/src/AgiMark.tsx.
   const logoSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="AGI" role="img">
-    <line x1="12" y1="7.4" x2="12" y2="3" stroke="var(--agi-ext-accent-secondary,#da7756)" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="12" y1="7.4" x2="12" y2="3" stroke="var(--agi-ext-brand,#da7756)" stroke-width="1.5" stroke-linecap="round"/>
     <line x1="14.3" y1="8.016" x2="16.5" y2="4.206" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     <line x1="15.984" y1="9.7" x2="19.794" y2="7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     <line x1="16.6" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -5652,20 +5711,26 @@ function buildUI(): void {
   signinPrompt.appendChild(signinDescription);
 
   const signinBtn = el('button', { class: 'sp-cloud-signin-btn', id: 'sp-cloud-signin-btn' });
+  let signInAwaitingCompletion = false;
   signinBtn.textContent = 'Sign in to AGI Cloud';
   signinBtn.addEventListener('click', async () => {
     signinBtn.setAttribute('disabled', '');
-    signinBtn.textContent = 'Opening sign in…';
+    signinBtn.textContent = signInAwaitingCompletion ? 'Checking…' : 'Opening sign in…';
     try {
-      await openClerkSignIn();
-      signinDescription.textContent =
-        'Finish sign-in in the new tab, then return here. Your account refreshes automatically.';
+      if (signInAwaitingCompletion) {
+        await refreshCloudAccountUI(true);
+      } else {
+        await openClerkSignIn();
+        signInAwaitingCompletion = true;
+        signinDescription.textContent =
+          'Finish sign-in in the new tab, then return here and click Check sign-in.';
+      }
     } catch (error) {
       signinDescription.textContent =
         error instanceof Error ? error.message : 'Unable to open AGI account sign-in.';
     } finally {
       signinBtn.removeAttribute('disabled');
-      signinBtn.textContent = 'Sign in to AGI Cloud';
+      signinBtn.textContent = signInAwaitingCompletion ? 'Check sign-in' : 'Sign in to AGI Cloud';
     }
   });
   signinPrompt.appendChild(signinBtn);
@@ -5813,10 +5878,10 @@ function buildUI(): void {
   // ── Cloud UI state helpers ───────────────────────────────────────────────
   // Wire the module-level placeholder to the real implementation (which closes
   // over signinPrompt, signedInView, quotaWrap, quotaBadgeEl, etc.).
-  refreshCloudAccountUI = async function (): Promise<void> {
+  refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
     const [token, accountProfile] = await Promise.all([
-      getAuthToken(),
+      getAuthToken(forceAuthRefresh),
       getClerkAccountProfile().catch(() => null),
     ]);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
@@ -5827,7 +5892,9 @@ function buildUI(): void {
       _ctx.currentModelKey = undefined;
       _ctx.previousTaskType = undefined;
       signinDescription.textContent = isClerkExtensionAuthConfigured()
-        ? 'Sign in to use AGI Managed Cloud chat.'
+        ? signInAwaitingCompletion
+          ? 'Finish sign-in in the new tab, then click Check sign-in.'
+          : 'Sign in to use AGI Managed Cloud chat.'
         : 'AGI account sign-in is not configured in this build.';
       if (isClerkExtensionAuthConfigured()) signinBtn.removeAttribute('disabled');
       else signinBtn.setAttribute('disabled', '');
@@ -5890,6 +5957,7 @@ function buildUI(): void {
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
 
     managedModelAccess = access;
+    signInAwaitingCompletion = false;
     const reconciledSelection = reconcileManagedModelSelection(_ctx.selectedModel, access);
     if (reconciledSelection !== _ctx.selectedModel) {
       _ctx.conversationGeneration += 1;
@@ -7017,7 +7085,7 @@ function buildUI(): void {
           url: 'https://agiworkforce.com/settings/usage?from=chrome-extension',
         });
       } else if (action === 'retry') {
-        await refreshCloudAccountUI();
+        await refreshCloudAccountUI(true);
       }
     } catch (error) {
       setManagedCloudChatState('unavailable', {
@@ -7042,6 +7110,92 @@ function buildUI(): void {
     name: 'message',
     'aria-label': 'Message AGI',
   }) as HTMLTextAreaElement;
+
+  // ── Slash-command autocomplete ────────────────────────────────────────────
+  // Registered BEFORE the send handler below so an open menu consumes Enter
+  // instead of dispatching the raw "/su" text as a message.
+  const slashMenu = el('div', {
+    id: 'sp-slash-menu',
+    role: 'listbox',
+    'aria-label': 'Slash commands',
+  });
+  let slashMatches: Array<[string, SlashCommandMeta]> = [];
+  let slashActive = 0;
+
+  const slashOpen = (): boolean => slashMatches.length > 0;
+
+  function renderSlashMenu(): void {
+    slashMenu.textContent = '';
+    if (!slashOpen()) {
+      slashMenu.classList.remove('visible');
+      inputEl.removeAttribute('aria-activedescendant');
+      return;
+    }
+    slashMatches.forEach(([name, meta], i) => {
+      const item = el('button', {
+        class: `sp-slash-item${i === slashActive ? ' active' : ''}`,
+        type: 'button',
+        role: 'option',
+        id: `sp-slash-opt-${i}`,
+        'aria-selected': i === slashActive ? 'true' : 'false',
+      });
+      item.appendChild(el('span', { class: 'sp-slash-name' }, name));
+      item.appendChild(el('span', { class: 'sp-slash-hint' }, meta.hint));
+      // mousedown, not click: click fires after the textarea blurs.
+      item.addEventListener('mousedown', (ev: Event) => {
+        ev.preventDefault();
+        acceptSlash(i);
+      });
+      slashMenu.appendChild(item);
+    });
+    slashMenu.classList.add('visible');
+    inputEl.setAttribute('aria-activedescendant', `sp-slash-opt-${slashActive}`);
+  }
+
+  function closeSlashMenu(): void {
+    slashMatches = [];
+    slashActive = 0;
+    renderSlashMenu();
+  }
+
+  function acceptSlash(index: number): void {
+    const picked = slashMatches[index];
+    if (!picked) return;
+    // Trailing space so an argument can follow, e.g. "/translate to French".
+    inputEl.value = `${picked[0]} `;
+    closeSlashMenu();
+    inputEl.focus();
+    autoResizeInput(inputEl);
+    updateSendButton();
+  }
+
+  function refreshSlashMenu(): void {
+    slashMatches = matchSlashCommands(inputEl.value);
+    if (slashActive >= slashMatches.length) slashActive = 0;
+    renderSlashMenu();
+  }
+
+  inputEl.addEventListener('input', refreshSlashMenu);
+  inputEl.addEventListener('blur', () => closeSlashMenu());
+  inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!slashOpen()) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      slashActive = (slashActive + 1) % slashMatches.length;
+      renderSlashMenu();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      slashActive = (slashActive - 1 + slashMatches.length) % slashMatches.length;
+      renderSlashMenu();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      e.stopImmediatePropagation(); // keep the send handler below from firing
+      acceptSlash(slashActive);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeSlashMenu();
+    }
+  });
 
   inputEl.addEventListener('input', () => autoResizeInput(inputEl));
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -7194,6 +7348,8 @@ function buildUI(): void {
   inputRow.appendChild(inputEl);
   inputRow.appendChild(sendBtn);
 
+  // Above the input row: the panel is short, so a downward menu would clip.
+  composerShell.appendChild(slashMenu);
   composerShell.appendChild(inputRow);
 
   // Persistent page-context chip in the composer bottom bar
