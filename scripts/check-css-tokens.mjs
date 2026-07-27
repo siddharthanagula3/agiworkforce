@@ -36,13 +36,49 @@ const root = process.cwd();
 const SURFACES = [
   {
     name: 'desktop',
-    source: 'apps/desktop/src',
+    // packages/ui is scanned under BOTH desktop and web: a shared component
+    // must resolve against every surface that renders it, and the two surfaces
+    // load different stylesheets. A --chat-surface typo (the family is
+    // --chat-surface-base/-elevated/-overlay/-hover) shipped here unnoticed.
+    source: ['apps/desktop/src', 'packages/ui'],
     stylesheets: ['apps/desktop/src/styles/globals.css', 'packages/ui/design-tokens/src/chat.css'],
   },
   {
     name: 'web',
-    source: 'apps/web/features',
+    // Whole surface, not just features/: the first pass scanned features/ only,
+    // which left app/ and shared/ unguarded — and two live `1px solid
+    // var(--border)` borders were silently dropped there (--border is an HSL
+    // triplet, valid only as hsl(var(--border))).
+    source: ['apps/web', 'packages/ui'],
     stylesheets: ['apps/web/app/globals.css', 'packages/ui/design-tokens/src/chat.css'],
+  },
+  {
+    // Chrome is the odd surface: almost none of its CSS is a stylesheet. The
+    // side panel builds its token block at runtime from `agiExtensionCssVars`
+    // and adopts it via Constructable Stylesheets (CSP forbids <style>), so the
+    // TS token source IS the stylesheet here. Listing it keeps the 863 var()
+    // references in side_panel.ts/options.ts guarded instead of unverifiable.
+    name: 'chrome',
+    source: 'apps/extension/src',
+    stylesheets: [
+      'apps/extension/src/side_panel.css',
+      'apps/extension/src/options.css',
+      'packages/ui/design-tokens/src/index.ts',
+    ],
+  },
+  {
+    // VS Code's webview has no stylesheet either: getWebviewContent emits an
+    // inline <style nonce> block, so that TS file IS the stylesheet. Its own
+    // --agi-vscode-* / --bg-* / --text-* families are defined there; the
+    // --vscode-* family is injected by the host and is in EXTERNALLY_PROVIDED.
+    name: 'vscode',
+    source: 'apps/extension-vscode/src',
+    stylesheets: [
+      'apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts',
+      // `${cssVarsToString(agiVsCodeCssVars)}` interpolated into that :root
+      // block — the --agi-vscode-* values live here, exactly as Chrome's do.
+      'packages/ui/design-tokens/src/index.ts',
+    ],
   },
 ];
 
@@ -100,7 +136,13 @@ function declaredTokens(files) {
     const abs = path.join(root, file);
     if (!fs.existsSync(abs)) continue;
     const css = fs.readFileSync(abs, 'utf8');
-    for (const m of css.matchAll(/(--[a-zA-Z0-9-]+)\s*:\s*([^;}]+)/g)) {
+    // The optional quote before `:` lets one regex read both a CSS declaration
+    // (`--x: value;`) and a TS token-map entry (`'--x': value,`). Chrome's
+    // tokens only exist in the latter form.
+    // Value capture is newline-bounded. Unbounded `[^;}]+` was greedy across
+    // lines in a TS token map (entries end in `,`, not `;`), so one match
+    // swallowed the next several tokens and they read as undeclared.
+    for (const m of css.matchAll(/(--[a-zA-Z0-9-]+)["'`]?\s*:\s*([^;}\n]+)/g)) {
       declared.add(m[1]);
       if (HSL_TRIPLET_RE.test(m[2])) hslTriplets.add(m[1]);
     }
@@ -119,7 +161,7 @@ for (const surface of SURFACES) {
     continue;
   }
 
-  for (const file of walk(surface.source)) {
+  for (const file of [surface.source].flat().flatMap((dir) => walk(dir))) {
     const source = fs.readFileSync(path.join(root, file), 'utf8');
     const lines = source.split('\n');
 
@@ -128,9 +170,15 @@ for (const surface of SURFACES) {
     // app host, for example, emits a sandboxed document and injects its own
     // theme tokens into it. Skipping these keeps the gate honest — a gate that
     // reports correct code gets switched off.
-    const runtimeDefined = new Set(
-      [...source.matchAll(/setProperty\(\s*[\"'`](--[a-zA-Z0-9-]+)/g)].map((m) => m[1]),
-    );
+    // Two ways a file can define a token for its own use without a stylesheet:
+    // `element.style.setProperty('--x', …)`, and a React inline style object
+    // (`style={{ '--x': value }}`) — the latter is how shadcn's sidebar sizes
+    // itself and how global-error.tsx themes the crash page, which replaces the
+    // root layout and therefore loads no stylesheet at all.
+    const runtimeDefined = new Set([
+      ...[...source.matchAll(/setProperty\(\s*["'`](--[a-zA-Z0-9-]+)/g)].map((m) => m[1]),
+      ...[...source.matchAll(/["'`](--[a-zA-Z0-9-]+)["'`]\s*:/g)].map((m) => m[1]),
+    ]);
 
     lines.forEach((line, index) => {
       for (const m of line.matchAll(/var\(\s*(--[a-zA-Z0-9-]+)\s*(?:,[^)]*)?\)/g)) {
