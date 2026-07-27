@@ -129,9 +129,20 @@ Founder rule: Cloud is a complete UI copy of web.
   `DesktopCloudSettingsModal.tsx:23-24,61-62` ships `DesktopBillingSection` +
   `DesktopUsageSection` (wrapping `UsageDashboard`) with `getCloudUsage`,
   `openBillingPortal`, `PlansModal`, and a `CapModal` top-up. ·
-  **DCL-05** no Library · **DCL-08** bare chat header (no title menu, artifacts or
-  research toggle) · **DCL-06** cloud artifact edits lost on reload ·
-  **DCL-07** no conversation share · **DCL-09** no Notifications section ·
+  ~~**DCL-05** no Library~~ — CLOSED 2026-07-27: `LibraryView` lifted into
+  `@agiworkforce/unified-chat` behind a `LibraryTransport`; web became an
+  adapter, desktop gained the surface. Same for **Tasks**. ·
+  ~~**DCL-06** cloud artifact edits lost on reload~~ — **re-scoped 2026-07-27.**
+  Not a desktop parity gap: web's only artifact endpoint is
+  `POST /api/artifacts/publish`, and no web feature calls `/api/artifacts` at
+  all, so cloud artifact _edit_ persistence does not exist on any surface.
+  Desktop's `artifactUpdate` writes to local SQLite via the `artifact_update`
+  Tauri command, which is correct for Local and simply has no cloud
+  counterpart. Building one means a new table + migration + endpoints + two
+  clients — founder-scale, not an unattended fix. ·
+  **DCL-08** bare chat header (no title menu, artifacts or
+  research toggle) · **DCL-07** no conversation share · **DCL-09** no
+  Notifications section ·
   **DCL-04** scheduled tasks say "Local mode only" — which inverts the pitch,
   since cloud schedules are the ones that should run with the laptop closed.
 - ~~**MOBCLOUD-01**~~ — **disproven 2026-07-27.** The sheet has no dead CTA.
@@ -159,6 +170,13 @@ Founder rule: Cloud is a complete UI copy of web.
   the Managed Cloud Skill tool itself ships.
 - **MOBCLOUD-02** — Code sessions is a mock with no data source anywhere in the
   repo (delete, do not graft).
+
+**Skills is not a gap** (checked 2026-07-27): web's `/skills` is
+`SettingsModalRedirect section="skills"`, i.e. it opens the settings modal —
+exactly where desktop already has `SkillsPluginsSettings` (832 lines, live in
+the Plugins tab). **Shared links is not a parity gap either**: web ships
+`/shared/[id]` for _viewing_ a shared conversation but has no page listing your
+own links. Mobile got one today because `GET /api/share` was added for it.
 
 ### 5. Larger, scope before starting
 
