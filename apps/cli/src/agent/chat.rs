@@ -86,7 +86,8 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
             None,
             Box::new(|_| {}),
             None,
-        )
+        None,
+    )
         .await
         .context("context summarization failed")?;
         if let Ok(mut usage) = self.usage.lock() {
@@ -911,8 +912,9 @@ message -- revise and call `update_plan` again.\n\n",
             max_tokens,
             None,
             on_chunk,
-            None, // send_btw never uses extended thinking
-        )
+            None, // send_btw never uses extended thinking,
+        None,
+    )
         .await?;
 
         Ok(result.text)
@@ -976,7 +978,8 @@ impl TurnHostAdapter<'_> {
                 Some(&self.tool_defs),
                 on_chunk,
                 self.session.thinking_budget_tokens,
-            )
+            self.session.effort,
+        )
             .await
         };
 
@@ -1019,7 +1022,8 @@ impl TurnHostAdapter<'_> {
                                 Some(&self.tool_defs),
                                 self.session.continuation_sink(),
                                 self.session.thinking_budget_tokens,
-                            )
+                            self.session.effort,
+                        )
                             .await
                             {
                                 Ok(r) => recovered = Some(r),
@@ -1110,7 +1114,8 @@ impl TurnHostAdapter<'_> {
                                         Some(&self.tool_defs),
                                         self.session.continuation_sink(),
                                         self.session.thinking_budget_tokens,
-                                    )
+                                    self.session.effort,
+                                )
                                     .await
                                 };
                                 match fallback_call {
@@ -1149,7 +1154,8 @@ impl TurnHostAdapter<'_> {
             Some(&self.tool_defs),
             self.session.continuation_sink(),
             self.session.thinking_budget_tokens,
-        )
+        self.session.effort,
+    )
         .await
         {
             Ok(r) => r,
@@ -1179,7 +1185,8 @@ impl TurnHostAdapter<'_> {
                             Some(&self.tool_defs),
                             self.session.continuation_sink(),
                             self.session.thinking_budget_tokens,
-                        )
+                        self.session.effort,
+                    )
                         .await?
                     } else {
                         return Err(e);

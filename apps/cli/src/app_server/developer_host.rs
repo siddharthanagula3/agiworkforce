@@ -62,6 +62,7 @@ struct TurnSetupSnapshot {
     skip_permissions: bool,
     auto_approve_safe: bool,
     thinking_budget_tokens: Option<u32>,
+    effort: Option<crate::design_system::Effort>,
     message_count: usize,
     attachment_count: usize,
     fallback_chain: Option<crate::routing::fallback::FallbackChain>,
@@ -80,6 +81,7 @@ impl TurnSetupSnapshot {
             skip_permissions: agent.skip_permissions,
             auto_approve_safe: agent.auto_approve_safe,
             thinking_budget_tokens: agent.thinking_budget_tokens,
+            effort: agent.effort,
             message_count: agent.messages.len(),
             attachment_count: agent.attached_context_files.len(),
             fallback_chain: agent.fallback_chain.clone(),
@@ -97,6 +99,7 @@ impl TurnSetupSnapshot {
         agent.skip_permissions = self.skip_permissions;
         agent.auto_approve_safe = self.auto_approve_safe;
         agent.thinking_budget_tokens = self.thinking_budget_tokens;
+        agent.effort = self.effort;
         agent.messages.truncate(self.message_count);
         agent.attached_context_files.truncate(self.attachment_count);
         agent.fallback_chain = self.fallback_chain;
@@ -1678,6 +1681,7 @@ fn apply_agent_controls(
             DeveloperReasoningEffort::Max => crate::design_system::Effort::Max,
         };
         agent.thinking_budget_tokens = effort.thinking_budget_for_anthropic();
+        agent.effort = Some(effort);
     }
 }
 
@@ -1812,6 +1816,34 @@ mod tests {
 
         apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium));
         assert_eq!(agent.thinking_budget_tokens, None);
+    }
+
+    /// Regression: the Effort picker used to be stored ONLY as its Anthropic
+    /// projection, which collapses Low and Medium to the same `None`. Every
+    /// non-Anthropic provider therefore ran at its own default no matter what
+    /// the user selected. The level itself must survive so the request boundary
+    /// can derive the OpenAI and Gemini forms too.
+    #[test]
+    fn developer_effort_survives_for_non_anthropic_providers() {
+        let mut agent = test_agent();
+
+        // Low and Medium are indistinguishable in the Anthropic projection...
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Low));
+        assert_eq!(agent.thinking_budget_tokens, None);
+        let low = agent.effort.expect("effort retained");
+
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium));
+        assert_eq!(agent.thinking_budget_tokens, None);
+        let medium = agent.effort.expect("effort retained");
+
+        // ...but must stay distinct for the providers that read a string.
+        assert_eq!(low.openai_effort_str(), "low");
+        assert_eq!(medium.openai_effort_str(), "medium");
+        assert_ne!(low.gemini_thinking_budget(), medium.gemini_thinking_budget());
+
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Max));
+        let max = agent.effort.expect("effort retained");
+        assert_eq!(max.openai_effort_str(), "high");
     }
 
     #[test]
@@ -2346,6 +2378,7 @@ mod tests {
             agent.skip_permissions = false;
             agent.auto_approve_safe = false;
             agent.thinking_budget_tokens = None;
+            agent.effort = None;
             agent.set_privacy_mode(crate::agent::PrivacyMode::Byok);
             agent.messages.push(crate::models::Message::text(
                 "system",
