@@ -6439,6 +6439,53 @@
   gap: 12px;
 }
 
+[data-design='agi'] .agi-auth-orbit {
+  position: relative;
+  display: inline-grid;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  place-items: center;
+  border: 1px solid var(--agi-rule-strong);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--agi-amber-soft) 0 2px, transparent 3px),
+    color-mix(in srgb, var(--agi-card) 86%, transparent);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--agi-amber) 5%, transparent);
+}
+
+[data-design='agi'] .agi-auth-orbit::before,
+[data-design='agi'] .agi-auth-orbit::after {
+  position: absolute;
+  content: '';
+  border: 1px solid var(--agi-rule);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+[data-design='agi'] .agi-auth-orbit::before {
+  inset: -9px;
+  border-right-color: var(--agi-amber);
+  transform: rotate(-24deg);
+}
+
+[data-design='agi'] .agi-auth-orbit::after {
+  top: -3px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-color: var(--agi-card);
+  background: var(--agi-amber);
+  box-shadow: 0 0 16px var(--agi-amber);
+}
+
+[data-design='agi'] .agi-auth-orbit--compact {
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--agi-amber) 5%, transparent);
+}
+
 /* Wordmark sits a full step below the headline so the two never compete;
    the sticky header above already carries the small AGI mark. */
 [data-design='agi'] .agi-auth-logo-name {
@@ -6469,6 +6516,88 @@
   font-size: 16px;
   line-height: 1.65;
   color: var(--agi-ink-2);
+}
+
+[data-design='agi'] .agi-auth-continuity {
+  width: min(100%, 31rem);
+  margin-top: 28px;
+  padding: 18px 20px 20px;
+  overflow: hidden;
+  border: 1px solid var(--agi-rule);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, var(--agi-glow-soft), transparent 42%),
+    color-mix(in srgb, var(--agi-card) 92%, transparent);
+}
+
+[data-design='agi'] .agi-auth-continuity-title {
+  margin: 0 0 17px;
+  font-family: var(--agi-font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--agi-ink-quiet);
+}
+
+[data-design='agi'] .agi-auth-surface-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-design='agi'] .agi-auth-surface-list li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-height: 52px;
+}
+
+[data-design='agi'] .agi-auth-surface-list li:not(:last-child)::after {
+  position: absolute;
+  top: 13px;
+  bottom: -1px;
+  left: 4px;
+  width: 1px;
+  content: '';
+  background: linear-gradient(var(--agi-amber), var(--agi-rule-strong));
+}
+
+[data-design='agi'] .agi-auth-surface-node {
+  position: relative;
+  z-index: 1;
+  width: 9px;
+  height: 9px;
+  margin-top: 3px;
+  border: 2px solid var(--agi-card);
+  border-radius: 50%;
+  background: var(--agi-amber);
+  box-shadow:
+    0 0 0 1px var(--agi-amber),
+    0 0 12px var(--agi-glow-soft);
+}
+
+[data-design='agi'] .agi-auth-surface-list strong,
+[data-design='agi'] .agi-auth-surface-list small {
+  display: block;
+}
+
+[data-design='agi'] .agi-auth-surface-list strong {
+  color: var(--agi-ink);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+[data-design='agi'] .agi-auth-surface-list small {
+  margin-top: 4px;
+  color: var(--agi-ink-quiet);
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 [data-design='agi'] .agi-auth-points {
@@ -6540,6 +6669,36 @@
   [data-design='agi'] .agi-auth-points li {
     text-align: left;
   }
+  [data-design='agi'] .agi-auth-continuity {
+    max-width: 31rem;
+    padding: 16px;
+    text-align: left;
+  }
+  [data-design='agi'] .agi-auth-continuity-title {
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  [data-design='agi'] .agi-auth-surface-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  [data-design='agi'] .agi-auth-surface-list li {
+    grid-template-columns: 10px minmax(0, 1fr);
+    gap: 7px;
+    min-height: auto;
+  }
+  [data-design='agi'] .agi-auth-surface-list li:not(:last-child)::after {
+    top: 7px;
+    right: -2px;
+    bottom: auto;
+    left: 5px;
+    width: auto;
+    height: 1px;
+    background: linear-gradient(90deg, var(--agi-amber), var(--agi-rule-strong));
+  }
+  [data-design='agi'] .agi-auth-surface-list small {
+    margin-top: 3px;
+    font-size: 10.5px;
+  }
 }
 
 /* ── device authorization (/auth/device) ─────────────────────────────
@@ -6566,11 +6725,95 @@
   place-items: center;
   padding: clamp(1rem, 4vw, 2rem);
   background:
+    linear-gradient(var(--agi-line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--agi-line-soft) 1px, transparent 1px),
     radial-gradient(circle at 50% -10%, var(--agi-glow-soft), transparent 44%), var(--agi-bg);
+  background-size:
+    32px 32px,
+    32px 32px,
+    auto;
+}
+
+[data-design='agi'] .agi-auth-embedded-frame {
+  width: min(100%, 34rem);
+  padding: clamp(14px, 3vw, 22px);
+  border: 1px solid var(--agi-rule-strong);
+  border-radius: 24px;
+  background:
+    linear-gradient(145deg, var(--agi-glow-soft), transparent 28%),
+    color-mix(in srgb, var(--agi-bg-2) 94%, transparent);
+  box-shadow: 0 32px 100px var(--agi-shadow);
+}
+
+[data-design='agi'] .agi-auth-embedded-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 4px 20px;
+}
+
+[data-design='agi'] .agi-auth-embedded-brand {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  color: var(--agi-ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+[data-design='agi'] .agi-auth-secure-badge {
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--agi-success) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--agi-success) 9%, transparent);
+  color: color-mix(in srgb, var(--agi-success) 82%, var(--agi-ink));
+  font-family: var(--agi-font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
 [data-design='agi'] .agi-auth-embedded-shell .agi-auth-card {
-  width: min(100%, 30rem);
+  width: 100%;
+}
+
+[data-design='agi'] .agi-auth-embedded-shell :where(.cl-rootBox, .cl-cardBox) {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+[data-design='agi'] .agi-auth-embedded-shell :where(.cl-card) {
+  border: 1px solid var(--agi-rule-strong) !important;
+  border-radius: 18px !important;
+  background: var(--agi-card) !important;
+  box-shadow: 0 20px 60px var(--agi-shadow) !important;
+}
+
+[data-design='agi'] .agi-auth-embedded-note {
+  margin: 16px 0 0;
+  color: var(--agi-ink-quiet);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  [data-design='agi'] .agi-auth-embedded-header {
+    align-items: flex-start;
+  }
+  [data-design='agi'] .agi-auth-secure-badge {
+    max-width: 9rem;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design='agi'] .agi-auth-orbit svg {
+    animation: none !important;
+  }
 }
 
 [data-design='agi'] .agi-device-auth-desktop-shell .agi-device-auth-stage {
