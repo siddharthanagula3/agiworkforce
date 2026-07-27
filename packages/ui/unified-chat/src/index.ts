@@ -149,6 +149,12 @@ export type {
 export { DownloadCard } from './components/DownloadCard';
 export type { DownloadCardProps } from './components/DownloadCard';
 export { GeneratedFileCard } from './components/GeneratedFileCard';
+export {
+  LibraryView,
+  iconKindFor,
+  generatedFileFromLibraryItem,
+} from './components/library/LibraryView';
+export type { LibraryTransport } from './components/library/LibraryView';
 export type { GeneratedFileCardProps } from './components/GeneratedFileCard';
 export {
   MessageGeneratedFiles,

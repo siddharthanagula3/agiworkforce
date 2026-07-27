@@ -12,8 +12,9 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
-  authUser: vi.fn(async () => ({ userId: 'user-1' })),
-  rateLimit: vi.fn(async () => null),
+  // Typed as rest-arg fns so the module factories below can forward through.
+  authUser: vi.fn(async (..._args: unknown[]) => ({ userId: 'user-1' })),
+  rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
 }));
 
 vi.mock('server-only', () => ({}));
