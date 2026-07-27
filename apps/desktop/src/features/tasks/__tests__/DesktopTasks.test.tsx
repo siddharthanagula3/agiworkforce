@@ -24,13 +24,25 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 
-const captured: { transport?: Record<string, unknown> } = {};
+interface CapturedTasksTransport {
+  client: { marker?: string };
+  openConversation(conversationId: string): void;
+  notifyError(message: string): void;
+}
+
+const captured: { transport?: CapturedTasksTransport } = {};
 vi.mock('@agiworkforce/unified-chat', () => ({
-  TasksPage: (props: { transport: Record<string, unknown> }) => {
+  TasksPage: (props: { transport: CapturedTasksTransport }) => {
     captured.transport = props.transport;
     return <div data-testid="shared-tasks" />;
   },
 }));
+
+/** Fail loudly rather than optional-chaining past a transport that never arrived. */
+function transport(): CapturedTasksTransport {
+  if (!captured.transport) throw new Error('TasksPage was never rendered with a transport');
+  return captured.transport;
+}
 
 const { DesktopTasks } = await import('../DesktopTasks');
 
@@ -53,21 +65,21 @@ describe('DesktopTasks transport', () => {
     render(<DesktopTasks onOpenConversation={vi.fn()} />);
 
     expect(mocks.createClient).toHaveBeenCalled();
-    expect(captured.transport!.client).toMatchObject({ marker: 'desktop-run-client' });
+    expect(transport().client).toMatchObject({ marker: 'desktop-run-client' });
   });
 
   it('opens a conversation through the shell rather than a route', () => {
     const onOpenConversation = vi.fn();
     render(<DesktopTasks onOpenConversation={onOpenConversation} />);
 
-    (captured.transport!.openConversation as (id: string) => void)('conv-1');
+    transport().openConversation('conv-1');
     expect(onOpenConversation).toHaveBeenCalledWith('conv-1');
   });
 
   it('surfaces a failure to the user instead of swallowing it', () => {
     render(<DesktopTasks onOpenConversation={vi.fn()} />);
 
-    (captured.transport!.notifyError as (m: string) => void)('Could not stop the task.');
+    transport().notifyError('Could not stop the task.');
     expect(mocks.toastError).toHaveBeenCalledWith('Could not stop the task.');
   });
 });

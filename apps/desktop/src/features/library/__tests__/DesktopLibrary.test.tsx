@@ -33,13 +33,27 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 
-const captured: { transport?: Record<string, (...a: never[]) => unknown> } = {};
+interface CapturedLibraryTransport {
+  isSignedIn: boolean;
+  listPage(params: URLSearchParams): Promise<unknown>;
+  fetchAsset(uri: string): Promise<unknown>;
+  restoreItem(id: string): Promise<unknown>;
+  openPreview(uri: string): void;
+}
+
+const captured: { transport?: CapturedLibraryTransport } = {};
 vi.mock('@agiworkforce/unified-chat', () => ({
-  LibraryView: (props: { transport: Record<string, (...a: never[]) => unknown> }) => {
+  LibraryView: (props: { transport: CapturedLibraryTransport }) => {
     captured.transport = props.transport;
     return <div data-testid="shared-library" />;
   },
 }));
+
+/** Fail loudly rather than optional-chaining past a transport that never arrived. */
+function transport(): CapturedLibraryTransport {
+  if (!captured.transport) throw new Error('LibraryView was never rendered with a transport');
+  return captured.transport;
+}
 
 const { DesktopLibrary } = await import('../DesktopLibrary');
 
@@ -62,7 +76,7 @@ describe('DesktopLibrary transport', () => {
 
   it('lists against the Cloud origin through cloudFetch', async () => {
     render(<DesktopLibrary />);
-    await captured.transport!.listPage(new URLSearchParams({ limit: '30' }) as never);
+    await transport().listPage(new URLSearchParams({ limit: '30' }));
 
     const [url] = mocks.cloudFetch.mock.calls[0]!;
     expect(url).toBe('https://agiworkforce.com/api/library?limit=30');
@@ -70,7 +84,7 @@ describe('DesktopLibrary transport', () => {
 
   it('resolves a relative asset uri against Cloud', async () => {
     render(<DesktopLibrary />);
-    await captured.transport!.fetchAsset('/api/files/a1' as never);
+    await transport().fetchAsset('/api/files/a1');
 
     // A relative URL inside a Tauri webview resolves to tauri://localhost.
     expect(mocks.cloudFetch.mock.calls[0]![0]).toBe('https://agiworkforce.com/api/files/a1');
@@ -78,14 +92,14 @@ describe('DesktopLibrary transport', () => {
 
   it('leaves an absolute asset uri alone', async () => {
     render(<DesktopLibrary />);
-    await captured.transport!.fetchAsset('https://cdn.example.com/a2.png' as never);
+    await transport().fetchAsset('https://cdn.example.com/a2.png');
 
     expect(mocks.cloudFetch.mock.calls[0]![0]).toBe('https://cdn.example.com/a2.png');
   });
 
   it('posts a restore for the encoded id', async () => {
     render(<DesktopLibrary />);
-    await captured.transport!.restoreItem('a/b' as never);
+    await transport().restoreItem('a/b');
 
     const [url, init] = mocks.cloudFetch.mock.calls[0]!;
     expect(url).toBe('https://agiworkforce.com/api/media?id=a%2Fb');
@@ -94,7 +108,7 @@ describe('DesktopLibrary transport', () => {
 
   it('opens a preview in the OS browser, not a tab', () => {
     render(<DesktopLibrary />);
-    captured.transport!.openPreview('/api/files/a1' as never);
+    transport().openPreview('/api/files/a1');
 
     expect(mocks.openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/api/files/a1');
   });
