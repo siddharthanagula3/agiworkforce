@@ -1,4 +1,5 @@
-import { setText, setChild } from '../../dom-helpers';
+import { setChild } from '../../dom-helpers';
+import { Mic, renderIcon } from '../../assets/icons';
 
 type SpeechRecognitionCtor = new () => {
   lang: string;
@@ -67,7 +68,9 @@ export function setupVoiceInput(
       // Memory-leak guard: only update DOM if document is still active
       if (document.body) {
         micBtn.classList.remove('active');
-        setText(micBtn, '🎤');
+        // EXT-06: was the "🎤" emoji, which renders in the system emoji font
+        // beside stroke-only SVG icons in the same composer row.
+        micBtn.replaceChildren(renderIcon(Mic, 14));
         micBtn.title = 'Voice input';
       }
       recognition = null;

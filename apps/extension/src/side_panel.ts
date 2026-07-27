@@ -67,6 +67,11 @@ import {
   Zap,
   FileEdit,
   Square,
+  Settings,
+  X,
+  Play,
+  ChevronDown,
+  Check,
   renderIcon,
 } from './assets/icons';
 import {
@@ -3225,6 +3230,19 @@ function resolveManagedToolApproval(
   );
 }
 
+/**
+ * Button whose only content is an icon.
+ *
+ * EXT-06: these were emoji literals ("✕", "▶") sitting beside stroke-only
+ * Lucide SVGs. Emoji render in the system emoji font at a different weight,
+ * colour and baseline, so a row mixed two icon vocabularies.
+ */
+function iconButton(attrs: Record<string, string>, icon: string): HTMLElement {
+  const button = el('button', attrs);
+  button.appendChild(renderIcon(icon, 12));
+  return button;
+}
+
 function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
   const chips = document.getElementById('sp-prompt-chips');
@@ -4493,7 +4511,7 @@ function buildUI(): void {
   modelBadge.textContent = 'AI Assistant';
   const chevron = document.createElement('span');
   chevron.className = 'sp-chevron';
-  chevron.textContent = '▾';
+  chevron.replaceChildren(renderIcon(ChevronDown, 12));
   modelSelectorBtn.replaceChildren(modelBadge, chevron);
   const modelDropdownEl = el('div', {
     id: 'sp-model-dropdown',
@@ -4623,7 +4641,9 @@ function buildUI(): void {
     // Every rendered model came from authenticated server admission intersected
     // with this extension build's capability catalog, so there is no second,
     // stale client-side plan gate here.
-    opt.appendChild(el('span', { class: 'sp-model-option-check' }, isSelected ? '✓' : ''));
+    const checkCell = el('span', { class: 'sp-model-option-check' });
+    if (isSelected) checkCell.appendChild(renderIcon(Check, 12));
+    opt.appendChild(checkCell);
     opt.addEventListener('click', () => {
       if (_ctx.selectedModel !== m.value) {
         _ctx.conversationGeneration += 1;
@@ -4936,7 +4956,8 @@ function buildUI(): void {
   // ── Drawer header ──────────────────────────────────────────────────────────
   const drawerHeader = el('div', { id: 'sp-drawer-header' });
   drawerHeader.appendChild(el('div', { id: 'sp-drawer-title' }, 'AGI in Chrome'));
-  const drawerClose = el('button', { id: 'sp-drawer-close', 'aria-label': 'Close AGI menu' }, '✕');
+  const drawerClose = el('button', { id: 'sp-drawer-close', 'aria-label': 'Close AGI menu' });
+  drawerClose.appendChild(renderIcon(X, 14));
   drawerClose.addEventListener('click', closeDrawer);
   drawerHeader.appendChild(drawerClose);
   drawer.appendChild(drawerHeader);
@@ -4978,7 +4999,7 @@ function buildUI(): void {
       textCol.appendChild(date);
       item.appendChild(textCol);
 
-      const delBtn = el('button', { class: 'sp-drawer-history-delete', title: 'Delete' }, '✕');
+      const delBtn = iconButton({ class: 'sp-drawer-history-delete', title: 'Delete' }, Trash2);
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const deletingCurrentConversation = entry.id === _ctx.conversationId;
@@ -5199,6 +5220,27 @@ function buildUI(): void {
     );
   });
   toolsRow.appendChild(drawerGroupBtn);
+
+  // EXT-07: manifest.json declares options_page, but nothing in the product
+  // ever called chrome.runtime.openOptionsPage(), so the settings page was
+  // reachable only via chrome://extensions → Details → Extension options.
+  const drawerOptionsBtn = el('button', {
+    class: 'sp-drawer-tool-btn',
+    id: 'sp-drawer-options-btn',
+    title: 'Open AGI settings',
+  });
+  drawerOptionsBtn.appendChild(renderIcon(Settings, 13));
+  drawerOptionsBtn.appendChild(document.createTextNode(' Settings'));
+  drawerOptionsBtn.addEventListener('click', () => {
+    if (typeof chrome.runtime.openOptionsPage === 'function') {
+      chrome.runtime.openOptionsPage();
+      return;
+    }
+    // Older hosts without openOptionsPage still resolve the manifest entry.
+    void chrome.tabs.create({ url: chrome.runtime.getURL('src/options.html') });
+  });
+  toolsRow.appendChild(drawerOptionsBtn);
+
   toolsSection.appendChild(toolsRow);
   drawerBody.appendChild(toolsSection);
 
@@ -5410,13 +5452,26 @@ function buildUI(): void {
     cleaned.sort();
     await chrome.storage.local.set({ [SP_SITE_ALLOWLIST_KEY]: cleaned });
   }
+  /**
+   * Origin of the active tab, or null when there is nothing allowlistable.
+   *
+   * The allowlist governs which sites may run AGI automation in their tab, and
+   * automation needs a content script. Browser-internal pages cannot host one,
+   * so their origin is not a candidate — this used to return
+   * `chrome-extension://<32-char id>` and offer an "Add" button for it, which
+   * would have written a permanently inert entry.
+   */
   function drawerCurrentTabOrigin(): Promise<string | null> {
     return new Promise((resolve) => {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const url = tabs[0]?.url;
         if (!url) return resolve(null);
         try {
-          resolve(new URL(url).origin);
+          const parsed = new URL(url);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return resolve(null);
+          }
+          resolve(parsed.origin);
         } catch {
           resolve(null);
         }
@@ -5459,7 +5514,9 @@ function buildUI(): void {
   }
   async function refreshDrawerAllowlist(): Promise<void> {
     const [list, origin] = await Promise.all([drawerReadAllowlist(), drawerCurrentTabOrigin()]);
-    allowlistOriginLabel.textContent = origin ?? 'No active tab';
+    // Distinguish "no tab" from "this tab can never be automated"; both
+    // disable the button, but only one of them is the user's mistake.
+    allowlistOriginLabel.textContent = origin ?? 'No site to add on this page';
     (allowlistToggleBtn as HTMLButtonElement).disabled = !origin;
     if (origin) {
       const present = list.includes(origin);
@@ -7672,7 +7729,7 @@ function refreshShortcuts(): void {
           const item = el('div', { class: 'sp-shortcut-item' });
           item.appendChild(el('span', { class: 'sp-shortcut-name' }, sc.name));
           const actions = el('div', { class: 'sp-shortcut-actions' });
-          const playBtn = el('button', { class: 'sp-shortcut-action-btn', title: 'Replay' }, '▶');
+          const playBtn = iconButton({ class: 'sp-shortcut-action-btn', title: 'Replay' }, Play);
           playBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             chrome.runtime.sendMessage(
@@ -7690,7 +7747,7 @@ function refreshShortcuts(): void {
             );
             dropdown.classList.remove('open');
           });
-          const delBtn = el('button', { class: 'sp-shortcut-action-btn', title: 'Delete' }, '✕');
+          const delBtn = iconButton({ class: 'sp-shortcut-action-btn', title: 'Delete' }, Trash2);
           delBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             chrome.runtime.sendMessage(
@@ -7837,18 +7894,18 @@ function refreshWorkflowsShortcuts(): void {
         const playBtn = el(
           'button',
           { class: 'sp-wf-btn-replay', title: 'Replay workflow' },
-          '▶ Play',
+          ' Play',
         );
         playBtn.addEventListener('click', () => {
           playBtn.textContent = '...';
           (playBtn as HTMLButtonElement).disabled = true;
           chrome.runtime.sendMessage({ type: 'REPLAY_SHORTCUT', shortcutId: sc.id }, () => {
-            playBtn.textContent = '▶ Play';
+            playBtn.textContent = ' Play';
             (playBtn as HTMLButtonElement).disabled = false;
           });
         });
         btns.appendChild(playBtn);
-        const delBtn = el('button', { class: 'sp-wf-btn-delete', title: 'Delete' }, '✕');
+        const delBtn = iconButton({ class: 'sp-wf-btn-delete', title: 'Delete' }, Trash2);
         delBtn.addEventListener('click', () => {
           chrome.runtime.sendMessage({ type: 'DELETE_SHORTCUT', shortcutId: sc.id }, () => {
             if (!chrome.runtime.lastError) refreshWorkflowsShortcuts();
@@ -7918,7 +7975,7 @@ function refreshWorkflowsTasks(): void {
         info.appendChild(el('div', { class: 'sp-wf-task-name' }, task.name));
         info.appendChild(el('span', { class: 'sp-wf-task-schedule-badge' }, task.scheduleType));
         item.appendChild(info);
-        const delBtn = el('button', { class: 'sp-wf-task-delete', title: 'Delete task' }, '✕');
+        const delBtn = iconButton({ class: 'sp-wf-task-delete', title: 'Delete task' }, Trash2);
         delBtn.addEventListener('click', () => {
           chrome.runtime.sendMessage({ type: 'DELETE_SCHEDULED_TASK', taskId: task.id }, () => {
             if (!chrome.runtime.lastError) refreshWorkflowsTasks();
