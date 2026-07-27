@@ -211,6 +211,22 @@ pub fn print_user_prompt() {
 /// Print assistant text chunk. Called incrementally during streaming (raw mode).
 pub fn print_assistant_chunk(text: &str) {
     print!("{}", text);
+    flush_stdout();
+}
+
+/// Push buffered stdout out now.
+///
+/// Rust line-buffers stdout, so a `print!` with no trailing newline sits in the
+/// buffer. Streaming assistant text is exactly that: partial lines. Two things
+/// break without this flush. Streaming stops looking like streaming — a
+/// paragraph appears all at once when its newline finally arrives. Worse, the
+/// agent loop's progress banners go to stderr, which is unbuffered, so they
+/// overtake the buffered text and the transcript comes out in the wrong order:
+/// "Running `echo alpha` first" printed *after* the `[run_command]` line it was
+/// written to introduce, and two turns' text fused with no break between them.
+fn flush_stdout() {
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
 }
 
 /// Print a newline after assistant response completes.
@@ -461,6 +477,7 @@ pub fn print_assistant_chunk_formatted(renderer: &mut MarkdownRenderer, chunk: &
     let formatted = renderer.process_chunk(chunk);
     if !formatted.is_empty() {
         print!("{}", formatted);
+        flush_stdout();
     }
 }
 
@@ -470,6 +487,7 @@ pub fn flush_markdown(renderer: &mut MarkdownRenderer) {
     let remaining = renderer.flush();
     if !remaining.is_empty() {
         print!("{}", remaining);
+        flush_stdout();
     }
 }
 
@@ -481,6 +499,64 @@ pub fn flush_markdown(renderer: &mut MarkdownRenderer) {
 mod tests {
     use super::*;
     use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    /// Assistant text must only reach stdout through this module, because only
+    /// this module flushes.
+    ///
+    /// The original defect was not a missing flush in one function — it was a
+    /// *second* streaming sink. `continuation_sink` printed chunks with a bare
+    /// `print!`, so the first completion streamed correctly while every
+    /// follow-up completion sat in the line buffer and lost its race with the
+    /// unbuffered stderr progress banners. The transcript came out reordered
+    /// ("Running `echo alpha` first" printed after the `[run_command]` line it
+    /// introduced) and consecutive turns fused with no break.
+    ///
+    /// Fixing the one call site does not stop a third sink appearing, so the
+    /// guard is on the shape: no `print!` of a stream chunk outside `output`.
+    #[test]
+    fn no_streaming_sink_bypasses_this_module() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut offenders = Vec::new();
+        let mut stack = vec![src.clone()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("read src dir").flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+                // This module is the one place allowed to print chunks: it flushes.
+                if path.file_name().and_then(|n| n.to_str()) == Some("output.rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("read source");
+                for (i, line) in text.lines().enumerate() {
+                    let line = line.trim();
+                    if line.starts_with("//") {
+                        continue;
+                    }
+                    if line.contains("print!(\"{}\", chunk)")
+                        || line.contains("print!(\"{}\", text)")
+                    {
+                        offenders.push(format!(
+                            "{}:{}",
+                            path.strip_prefix(&src).unwrap_or(&path).display(),
+                            i + 1
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "streaming chunks printed outside `output` (unflushed, so they \
+             reorder against stderr progress output): {offenders:?}. Call \
+             `output::print_assistant_chunk` instead."
+        );
+    }
 
     fn env_test_lock() -> MutexGuard<'static, ()> {
         static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
