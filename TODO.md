@@ -17,6 +17,22 @@ Green and re-verifiable: `pnpm typecheck:all`, `pnpm lint`,
 **10,272 passing tests** — web 4,453 · desktop 1,894 · mobile 2,121 · Chrome
 1,168 · VS Code 644. Do not open work on a red baseline; re-run first.
 
+## Closed since this queue was written (2026-07-27 re-verification)
+
+This queue was committed at `5f29fcdde`, **07-26 16:05**. Two of its top items
+were fixed within hours and are removed from the sections below:
+
+- **EXT-10** — closed at `8801412ff`, **16:07** (two minutes later).
+- **DCL-01** — closed at `3cf7761f7`, **19:55**, and closed _better than
+  specified_: instead of patching the one call site it added
+  `scripts/check-css-tokens.mjs`, which resolves every `var()` reference against
+  the stylesheets each surface actually loads.
+
+The other ~28 items have **not** been re-verified individually — commit messages
+do not carry the `DCL-*`/`VSCX-*`/`EXT-*` IDs. Open the cited file before
+starting any of them. Full re-verification of the parity claims is in
+`docs/plans/chatgpt-claude-parity-gap-ledger-2026-07-27.md`.
+
 ## Active queue — surface production quality
 
 Founder directive 2026-07-26: **Desktop Cloud and Mobile Cloud to the production
@@ -32,10 +48,7 @@ founder's per-surface specs in `~/Downloads/0*-benchmark-spec.md` (01 mobile,
 
 ### 1. Trust and safety — before anything cosmetic
 
-- **EXT-10** — Chrome "Ask before acting" never rehydrates from storage, so the
-  panel can display human-in-the-loop while the agent loop runs unattended on a
-  prompt-injectable page. A control that misreports the gate it governs is a
-  trust-boundary defect, not a UI bug.
+- _(EXT-10 closed — see the section above.)_
 
 ### 2. Default-on breakages — fire without anyone opting in
 
@@ -46,18 +59,20 @@ founder's per-surface specs in `~/Downloads/0*-benchmark-spec.md` (01 mobile,
 - **VSCX-03** — every right-click / lightbulb / inline action demands AGI Cloud
   sign-in that sidebar chat never needed; the error toast's only button says
   "Set API Key", contradicting its own message.
-- **VSCX-06** — static green "Local host" pill renders above a
-  runtime-unavailable banner. Fake availability badge; CLAUDE.md names this class.
+- ~~**VSCX-06**~~ — CLOSED 2026-07-27. The pill was hardcoded in the markup, so
+  it claimed a workspace-local runtime on BYOK and Managed Cloud too. Now driven
+  by the live `usageMeter.source` via `updateRuntimePill()`: Local (green) /
+  BYOK (blue) / Cloud (amber), hidden until a real source arrives, and an
+  unrecognised source falls back to Cloud rather than claiming Local. Verified
+  in a real browser across all three states;
+  `apps/extension-vscode/src/__tests__/runtimePill.webview.test.ts` (7 tests).
+  Two older tests asserted the hardcoded string and were pinning the defect —
+  both rewritten to their actual intent.
 - **EXT-03** — success and error outcomes both render under the build-time
   headline "Autofill stalled", so the primary flow contradicts itself on screen.
 
 ### 3. Visible on screen
 
-- **DCL-01** — desktop account/plan popover uses CSS custom properties defined
-  only in `apps/web`: dividers never draw, hover is a no-op (CSSOM discards the
-  invalid `style.background` assignment), text colours fall back. Fix the token
-  definitions once for desktop, not this one call site — grep the five property
-  names first.
 - **DCL-03** — Cmd+K in Cloud matches conversation titles only; cloud message
   bodies are unreachable, so searching a remembered phrase returns nothing.
 - **EXT-04** — typing `/` does nothing while three separate strings promise a
@@ -76,7 +91,10 @@ founder's per-surface specs in `~/Downloads/0*-benchmark-spec.md` (01 mobile,
 
 Founder rule: Cloud is a complete UI copy of web.
 
-- **DCL-02** usage/quota invisible in Cloud and the hard-cap modal can never fire ·
+- ~~**DCL-02** usage/quota invisible in Cloud~~ — **disproven 2026-07-27.**
+  `DesktopCloudSettingsModal.tsx:23-24,61-62` ships `DesktopBillingSection` +
+  `DesktopUsageSection` (wrapping `UsageDashboard`) with `getCloudUsage`,
+  `openBillingPortal`, `PlansModal`, and a `CapModal` top-up. ·
   **DCL-05** no Library · **DCL-08** bare chat header (no title menu, artifacts or
   research toggle) · **DCL-06** cloud artifact edits lost on reload ·
   **DCL-07** no conversation share · **DCL-09** no Notifications section ·
@@ -92,10 +110,17 @@ Founder rule: Cloud is a complete UI copy of web.
 
 ### 5. Larger, scope before starting
 
-- **DCL-10** — 50 of 76 desktop feature directories (230 files, ~62k lines) are
-  unreachable from `main.tsx`, including `features/cloud`. This is why several
-  items above read as "missing" while plausible code exists: grepping the repo
-  before a demo concludes they ship.
+- **DCL-10** — **corrected 2026-07-27, it is worse than recorded.** An import-graph
+  BFS from `main.tsx` finds **444 of 576 feature files orphaned (77%)**, ~50 fully
+  dead directories — not "230 files". The live shell
+  (`App.tsx:1698 → features/v3/DesktopShellV3.tsx`) mounts only
+  chat/projects/artifacts/scheduled/record-skill, so Desktop Local has **no
+  terminal, git, MCP-tools, notifications, computer-use observability, or
+  workflows UI** — all of it hangs off `AppLayout`/`DynamicSidecar`, which have
+  zero importers. A 175-file legacy `features/chat/` tree _shadows_ the live v3
+  components (two Sidebars, two settings shells). This is why grepping before a
+  demo concludes features ship when they don't — and it is the repo's biggest
+  wrong-edit risk.
 - **VSCX-02** Open Chat in Editor forks the session · **VSCX-11** no in-IDE MCP
   surface · **EXT-11** no autonomy-mode picker or per-site permission prompt.
 
