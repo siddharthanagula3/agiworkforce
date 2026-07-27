@@ -2275,8 +2275,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'design_get_element_styles':
     case 'design_suggest_improvements':
     case 'design_tokens_to_css':
-    case 'email_check_keyring_status':
-    case 'email_migrate_credentials':
     case 'approve_operation':
     case 'reject_operation':
     case 'coord_get_pending_approvals':
