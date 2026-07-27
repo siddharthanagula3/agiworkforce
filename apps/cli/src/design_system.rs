@@ -349,7 +349,6 @@ impl Effort {
 
     /// OpenAI `reasoning.effort` string (mirrors `OPENAI_REASONING_EFFORT`).
     /// Note: `Max` falls back to `"high"` for o-series.
-    #[allow(dead_code)]
     pub fn openai_effort_str(self) -> &'static str {
         match self {
             Effort::Low => "low",
@@ -359,7 +358,6 @@ impl Effort {
     }
 
     /// Gemini `thinkingConfig.thinkingBudget` value (mirrors `GEMINI_THINKING_BUDGET`).
-    #[allow(dead_code)]
     pub fn gemini_thinking_budget(self) -> u32 {
         match self {
             Effort::Low => 4_096,

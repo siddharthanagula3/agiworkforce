@@ -159,8 +159,9 @@ pub async fn consult(req: AdvisorRequest) -> Result<AdvisorResponse> {
         Box::new(move |chunk: &str| {
             chunks_cb.lock().unwrap().push(chunk.to_string());
         }),
-        None, // Advisor queries don't use extended thinking
-    )
+        None, // Advisor queries don't use extended thinking,
+    None,
+)
     .await?;
 
     // Prefer the accumulated streaming text; fall back to result.text.

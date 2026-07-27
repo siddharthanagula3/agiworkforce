@@ -268,6 +268,7 @@ async fn run_spec(
     tools: Option<&[ToolDefinition]>,
     on_chunk: &mut StreamCallback,
     thinking_budget: Option<u32>,
+    effort: Option<crate::design_system::Effort>,
 ) -> Result<CompletionResult> {
     // Resolve the (possibly dotted display) model id to the provider wire id
     // (`apiModelId`) ONLY here, at the request boundary. This lets `-m
@@ -288,8 +289,12 @@ async fn run_spec(
         top_p: None,
         top_k: None,
         metadata: None,
-        reasoning_effort: None,
-        gemini_thinking_budget: None,
+        // The Effort picker used to be projected to an Anthropic thinking
+        // budget and nothing else, so o-series/GPT-5 and Gemini silently ran at
+        // provider default no matter what the user chose. Each dialect reads
+        // only its own field and ignores the others, so all three are passed.
+        reasoning_effort: effort.map(|e| e.openai_effort_str()),
+        gemini_thinking_budget: effort.map(|e| e.gemini_thinking_budget()),
         num_ctx: None,
         ollama_think: None,
         idle_timeout: STREAM_IDLE_TIMEOUT,
@@ -321,6 +326,7 @@ pub async fn stream_completion(
     tools: Option<&[ToolDefinition]>,
     mut on_chunk: StreamCallback,
     thinking_budget: Option<u32>,
+    effort: Option<crate::design_system::Effort>,
 ) -> Result<CompletionResult> {
     let client = Client::new();
     let temperature = config.default.temperature;
@@ -338,6 +344,7 @@ pub async fn stream_completion(
             tools,
             &mut on_chunk,
             None,
+                effort,
         )
         .await?;
         result.via_subscription = true;
@@ -361,6 +368,7 @@ pub async fn stream_completion(
                 tools,
                 &mut on_chunk,
                 thinking_budget,
+                effort,
             )
             .await
         }
@@ -375,6 +383,7 @@ pub async fn stream_completion(
                 tools,
                 &mut on_chunk,
                 thinking_budget,
+                effort,
             )
             .await
         }
@@ -389,6 +398,7 @@ pub async fn stream_completion(
                 tools,
                 &mut on_chunk,
                 None,
+                effort,
             )
             .await
         }
@@ -446,6 +456,7 @@ pub async fn stream_completion(
                 effective_tools,
                 &mut on_chunk,
                 None,
+                effort,
             )
             .await
         }
@@ -464,6 +475,7 @@ pub async fn stream_completion(
                 tools,
                 &mut on_chunk,
                 None,
+                effort,
             )
             .await
         }
@@ -484,6 +496,7 @@ pub async fn stream_completion(
                 tools,
                 &mut on_chunk,
                 None,
+                effort,
             )
             .await
         }
@@ -498,6 +511,7 @@ pub async fn stream_completion(
                 tools,
                 &mut on_chunk,
                 None,
+                effort,
             )
             .await
         }
