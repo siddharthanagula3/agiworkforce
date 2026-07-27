@@ -83,3 +83,38 @@ Remaining reuse work (ranked):
 4. **Web-search provider-native** — Qwen declares native web-search but it's unwired (falls to Perplexity). Wire native (harness `implemented` + `appendWebSearchTool` branch), and make the generic backend pluggable (one file `apps/web/lib/web-search/web-search-tool.ts`) to add **firecrawl** alongside Perplexity. **DECIDE:** primary generic backend = firecrawl or Perplexity?
 5. **Tool-loop lift (bigger, defer)** — tool-loop orchestration is web-route-only; lift `apps/web/.../lib/tool-loop*.ts` into `packages/ai` so mobile/vscode can run it in-process (offline). Defer unless a thin surface needs offline tool-loop.
 6. **Rust (desktop-local + cli)** — can't share TS. Either route through the gateway HTTP API (cloud path, zero dup) or accept parallel Rust reading the SAME env-driven base-url/fallback config. Crate extraction (`agiworkforce-mcp-client` via official `rmcp`, then a shared provider-client crate) = founder-gated consolidation.
+
+## Provider keys — 4 of 9 are invalid (blocks demo breadth, 2026-07-27)
+
+Evidence, not inference. `cargo test -p agiworkforce-desktop --test
+live_provider_stream_smoke -- --ignored` drives the same path
+`chat_send_message` uses (`DirectApiProvider::send_message_streaming` →
+provider adapter → HTTP → shared `agiworkforce-llm` decoder → desktop
+`StreamChunk`) against the live APIs, using the keys in `apps/web/.env.local`.
+
+Result: **5 green, 4 rejected at the door.**
+
+| provider   | model                 | result                                             |
+| ---------- | --------------------- | -------------------------------------------------- |
+| anthropic  | claude-haiku-4.5      | GREEN — streamed, finish `end_turn`, usage present |
+| deepseek   | deepseek-v4-flash     | GREEN — 9 deltas                                   |
+| google     | gemini-3.5-flash-lite | GREEN                                              |
+| openai     | gpt-5.4-nano          | GREEN — 9 deltas                                   |
+| perplexity | sonar                 | GREEN                                              |
+| moonshot   | kimi-k2.6             | **401 Invalid Authentication**                     |
+| xai        | grok-4.3              | **400 Incorrect API key**                          |
+| qwen       | qwen-flash            | **401 Incorrect API key** (DashScope)              |
+| zhipu      | glm-5.2               | **401 身份验证失败** (auth failed)                 |
+
+All four are credential rejections from the provider, not our code — the
+request was built and sent correctly and the provider refused the key. Nothing
+here is fixable in the repo.
+
+**FOUNDER, env only:** replace `MOONSHOT_API_KEY`, `XAI_API_KEY`,
+`QWEN_API_KEY`/`DASHSCOPE_API_KEY`, `ZHIPU_API_KEY` in `.env.local` and Vercel
+prod. Qwen additionally needs the endpoint change already described above.
+
+Re-run the command to confirm; it prints per-provider status and never prints
+key values. Worth doing before recording demo video, since a model picker
+offering nine providers where four 401 is the kind of defect a viewer hits
+first.
