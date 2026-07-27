@@ -38,19 +38,34 @@ const server = createServer((_req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const formPort = server.address().port;
+const hostResolverRules = [
+  `MAP boards.greenhouse.io 127.0.0.1:${formPort}`,
+  process.env.AGI_EXTENSION_E2E_HOST_RESOLVER_RULES?.trim(),
+]
+  .filter(Boolean)
+  .join(',');
 
 const context = await chromium.launchPersistentContext('', {
   channel: 'chromium',
   args: [
     `--disable-extensions-except=${DIST}`,
     `--load-extension=${DIST}`,
-    `--host-resolver-rules=MAP boards.greenhouse.io 127.0.0.1:${formPort}`,
+    `--host-resolver-rules=${hostResolverRules}`,
   ],
 });
 
 try {
   let [sw] = context.serviceWorkers();
   if (!sw) sw = await context.waitForEvent('serviceworker', { timeout: 20000 });
+  sw.on('console', (message) => {
+    if (message.type() === 'error' || message.type() === 'warning') {
+      console.log(
+        `[service-worker ${message.type()}]`,
+        message.text(),
+        JSON.stringify(message.location()),
+      );
+    }
+  });
   const extId = new URL(sw.url()).host;
   console.log('extension id:', extId);
   console.log('service worker booted:', sw.url());
@@ -113,6 +128,12 @@ try {
     page.setDefaultTimeout(8000);
     await page.setViewportSize({ width: 400, height: 800 });
     const errors = [];
+    const warnings = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning' || message.type() === 'warn') {
+        warnings.push(message.text());
+      }
+    });
     page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
     await page.goto(`chrome-extension://${extId}/src/side_panel.html`, {
       waitUntil: 'domcontentloaded',
@@ -160,6 +181,586 @@ try {
       fail(
         `signed-out chat: expected an actionable sign-in gate and disabled composer, got ${JSON.stringify(signedOutGate)}`,
       );
+    }
+
+    // Auth sync is background-owned. A side-panel document opened in a tab is
+    // still an extension-owned UI context and must be allowed to request a
+    // freshly loaded Sync Host session (signed-out is a successful null token,
+    // not an allowlist/policy failure).
+    const authBridge = await page.evaluate(() =>
+      Promise.race([
+        chrome.runtime.sendMessage({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: true }),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'auth probe timed out' }), 10_000),
+        ),
+      ]),
+    );
+    if (!authBridge || authBridge.success !== true) {
+      fail(`auth bridge: background Sync Host probe failed: ${JSON.stringify(authBridge)}`);
+    }
+    const extensionPageRejections = warnings.filter(
+      (warning) =>
+        /Rejected (message from non-allowlisted sender|extension-page-only message)/.test(
+          warning,
+        ) && warning.includes(`chrome-extension://${extId}/src/side_panel.html`),
+    );
+    if (extensionPageRejections.length > 0) {
+      fail(`auth bridge: extension-owned side panel was rejected by policy`);
+    }
+
+    const composerMetrics = await page.evaluate(() => {
+      const shell = document.getElementById('sp-composer-shell');
+      const history = document.getElementById('sp-history-btn');
+      return {
+        shellHeight: shell?.getBoundingClientRect().height ?? 0,
+        historyVisible:
+          !!history &&
+          getComputedStyle(history).display !== 'none' &&
+          getComputedStyle(history).visibility !== 'hidden',
+      };
+    });
+    if (composerMetrics.shellHeight < 100 || !composerMetrics.historyVisible) {
+      fail(
+        `chat surface: expected a full composer and visible history, got ${JSON.stringify(composerMetrics)}`,
+      );
+    }
+
+    // Managed authenticated chat needs a live gateway and account, which this
+    // offline harness intentionally does not provide. Re-enable the textarea
+    // only to verify its local interaction behavior after the signed-out state
+    // above has been asserted.
+    await page.evaluate(() => {
+      const input = document.getElementById('sp-input');
+      if (input instanceof HTMLTextAreaElement) input.disabled = false;
+    });
+    await page.fill('#sp-input', 'hello from the smoke');
+    const typed = await page.inputValue('#sp-input');
+    if (typed !== 'hello from the smoke')
+      fail(`composer: input did not accept text (got "${typed}")`);
+
+    await page.click('#sp-history-btn');
+    await page.waitForTimeout(300);
+    const historyDrawer = await page.evaluate(() => ({
+      drawerOpen: document.getElementById('sp-drawer')?.classList.contains('open') === true,
+      historyOpen: !document.getElementById('sp-drawer-history-list')?.hasAttribute('hidden'),
+      title: document.getElementById('sp-drawer-title')?.textContent,
+      unfinishedActions: [
+        document.getElementById('sp-drawer-console-btn'),
+        document.getElementById('sp-drawer-open-desktop-btn'),
+      ].filter(Boolean).length,
+    }));
+    if (
+      !historyDrawer.drawerOpen ||
+      !historyDrawer.historyOpen ||
+      historyDrawer.title !== 'AGI in Chrome' ||
+      historyDrawer.unfinishedActions !== 0
+    ) {
+      fail(`history drawer: unexpected public surface ${JSON.stringify(historyDrawer)}`);
+    }
+    await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
+    await page.waitForTimeout(200);
+
+    await page.click('#sp-menu-btn');
+    const drawerOpen = await page.evaluate(
+      () => document.getElementById('sp-drawer')?.classList.contains('open') === true,
+    );
+    if (!drawerOpen) fail('drawer: menu button did not open the navigation drawer');
+    await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
+
+    await page.click('#sp-model-selector-btn');
+    await page.waitForTimeout(300);
+    const modelOpen = await page.evaluate(() => {
+      const d = document.getElementById('sp-model-dropdown');
+      return !!d && (d.classList.contains('open') || getComputedStyle(d).display !== 'none');
+    });
+    if (!modelOpen) fail('model picker: selector button did not open the model dropdown');
+    const signedOutModelLabel = await page
+      .locator('#sp-model-dropdown .provider-count-badge')
+      .textContent();
+    if (signedOutModelLabel !== 'Sign in for models') {
+      fail(`model picker: expected an honest signed-out label, got "${signedOutModelLabel}"`);
+    }
+    await page.click('#sp-model-selector-btn');
+
+    const composerModes = await page.evaluate(() => ({
+      inertAutonomyControlPresent: Boolean(document.getElementById('sp-action-mode-toggle')),
+      quickModePresent: Boolean(document.getElementById('sp-quick-mode-toggle')),
+    }));
+    if (composerModes.inertAutonomyControlPresent || !composerModes.quickModePresent) {
+      fail(`composer modes: unexpected controls ${JSON.stringify(composerModes)}`);
+    }
+
+    // Workflows exposes only controls that execute today. The previous shortcut
+    // modal advertised Start from + Schedule fields with no replay/scheduler
+    // consumer, and onboarding advertised a slash finder that did not exist.
+    await page.click('#sp-menu-btn');
+    await page.click('#sp-drawer-wf-btn');
+    await page.click('#sp-wf-create-shortcut-btn');
+    const shortcutSurface = await page.evaluate(() => {
+      const onboardingStep = document.querySelector('.sp-ob-step[data-step="3"]');
+      return {
+        modalOpen:
+          document.getElementById('sp-create-shortcut-overlay')?.classList.contains('open') ===
+          true,
+        namePresent: Boolean(document.getElementById('sp-sc-name')),
+        promptPresent: Boolean(document.getElementById('sp-sc-prompt')),
+        deadStartFromPresent: Boolean(document.getElementById('sp-sc-starturl')),
+        deadSchedulePresent: Boolean(document.getElementById('sp-sc-schedule')),
+        onboardingCopy: onboardingStep?.textContent ?? '',
+      };
+    });
+    if (
+      !shortcutSurface.modalOpen ||
+      !shortcutSurface.namePresent ||
+      !shortcutSurface.promptPresent ||
+      shortcutSurface.deadStartFromPresent ||
+      shortcutSurface.deadSchedulePresent ||
+      !shortcutSurface.onboardingCopy.includes('Open Workflows') ||
+      shortcutSurface.onboardingCopy.includes('search shortcuts')
+    ) {
+      fail(
+        `workflows: misleading or unfinished shortcut controls ${JSON.stringify(shortcutSurface)}`,
+      );
+    }
+
+    // ── Slash-command autocomplete ──
+    // Four strings promised "/ for commands" while nothing in the panel listened
+    // for the key, so the commands only worked for someone who already knew them.
+    //
+    // Driven with synthetic key events rather than page.keyboard: signed out, the
+    // cloud gate is up and the composer collapses to a 0x0 box, so it cannot be
+    // clicked or focused. That is correct product behaviour, and it is the same
+    // live-gateway limitation this harness already documents at the top. The
+    // events below still run the real listeners registered on the real textarea.
+    const slashOpened = await page.evaluate(() => {
+      const input = document.getElementById('sp-input');
+      if (!input) return null;
+      input.value = '/su';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const menu = document.getElementById('sp-slash-menu');
+      const items = Array.from(document.querySelectorAll('.sp-slash-item'));
+      return {
+        visible: menu?.classList.contains('visible') === true,
+        names: items.map((i) => i.querySelector('.sp-slash-name')?.textContent ?? ''),
+        hasHint: items.some((i) => (i.querySelector('.sp-slash-hint')?.textContent ?? '') !== ''),
+        activeDescendant: input.getAttribute('aria-activedescendant'),
+      };
+    });
+    if (
+      !slashOpened?.visible ||
+      slashOpened.names.length !== 1 ||
+      slashOpened.names[0] !== '/summarize' ||
+      !slashOpened.hasHint ||
+      !slashOpened.activeDescendant
+    ) {
+      fail(`slash menu: did not open on "/su" ${JSON.stringify(slashOpened)}`);
+    }
+
+    const press = (key) => `
+      document.getElementById('sp-input').dispatchEvent(
+        new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true })
+      );`;
+
+    const messagesBefore = await page.evaluate(
+      () => document.querySelectorAll('#sp-messages > *').length,
+    );
+    const slashAfter = await page.evaluate(`(() => {${press('Enter')}
+      return {
+        value: document.getElementById('sp-input').value,
+        menuVisible: document.getElementById('sp-slash-menu').classList.contains('visible'),
+        messageCount: document.querySelectorAll('#sp-messages > *').length,
+      };
+    })()`);
+    if (slashAfter.value !== '/summarize ' || slashAfter.menuVisible) {
+      fail(`slash menu: Enter did not complete the command ${JSON.stringify(slashAfter)}`);
+    }
+    if (slashAfter.messageCount !== messagesBefore) {
+      fail('slash menu: Enter sent the raw fragment instead of completing the command');
+    }
+
+    // ArrowDown moves the selection when a fragment matches more than one command.
+    const slashArrow = await page.evaluate(`(() => {
+      const input = document.getElementById('sp-input');
+      input.value = '/t';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const opened = document.querySelectorAll('.sp-slash-item').length;
+      ${press('ArrowDown')}
+      const items = Array.from(document.querySelectorAll('.sp-slash-item'));
+      return { opened, activeIndex: items.findIndex((i) => i.classList.contains('active')) };
+    })()`);
+    if (slashArrow.opened < 2 || slashArrow.activeIndex !== 1) {
+      fail(`slash menu: ArrowDown did not move selection ${JSON.stringify(slashArrow)}`);
+    }
+
+    // Escape dismisses without completing.
+    const slashEscape = await page.evaluate(`(() => {${press('Escape')}
+      return {
+        closed: !document.getElementById('sp-slash-menu').classList.contains('visible'),
+        value: document.getElementById('sp-input').value,
+      };
+    })()`);
+    if (!slashEscape.closed || slashEscape.value !== '/t') {
+      fail(`slash menu: Escape behaviour wrong ${JSON.stringify(slashEscape)}`);
+    }
+    await page.evaluate(() => {
+      const input = document.getElementById('sp-input');
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    console.log(
+      `\n[slash-menu] opened=${slashOpened.names[0]} enterCompleted="${slashAfter.value.trim()}" arrowNav=ok escapeDismissed=${slashEscape.closed} noStrayMessage=true`,
+    );
+
+    const pageExceptions = errors.filter((e) => e.startsWith('pageerror:'));
+    if (pageExceptions.length)
+      fail(`${name}: uncaught page exception(s): ${pageExceptions.join(' | ')}`);
+    const csp = errors.filter((e) => /Content Security Policy/i.test(e));
+    if (csp.length)
+      fail(`${name}: CSP violation(s): ${csp.map((e) => e.slice(0, 120)).join(' | ')}`);
+    await page.close();
+  }
+
+  // ── Signed-out account state: options must not offer a fake Log out action ──
+  {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extId}/src/options.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
+    });
+    await page.waitForTimeout(1500);
+    const accountState = await page.evaluate(() => ({
+      signInVisible: Boolean(document.getElementById('opt-signin-btn')),
+      logOutVisible: Boolean(document.getElementById('opt-logout-btn')),
+    }));
+    if (!accountState.signInVisible || accountState.logOutVisible) {
+      fail(`signed-out options account: unexpected controls ${JSON.stringify(accountState)}`);
+    }
+    await page.close();
+  }
+
+  // ── Side-panel interactions: composer input, drawer nav, model picker ──
+  {
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    await page.setViewportSize({ width: 400, height: 800 });
+    const errors = [];
+    const warnings = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning' || message.type() === 'warn') {
+        warnings.push(message.text());
+      }
+    });
+    page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+    await page.goto(`chrome-extension://${extId}/src/side_panel.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
+    });
+    await page.evaluate(
+      () => new Promise((res) => chrome.storage.local.set({ agi_onboarding_completed: true }, res)),
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1000);
+
+    const visibleSecondaryChrome = await page.evaluate(() =>
+      [
+        'sp-auth-bar',
+        'sp-toolbar',
+        'sp-prompt-chips',
+        'sp-empty-icon',
+        'sp-empty-headline',
+        'sp-empty-subtext',
+      ].filter((id) => {
+        const element = document.getElementById(id);
+        if (!element) return false;
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      }),
+    );
+    if (visibleSecondaryChrome.length > 0) {
+      fail(
+        `chat surface: secondary controls should stay behind menus, but these are visible: ${visibleSecondaryChrome.join(', ')}`,
+      );
+    }
+
+    const signedOutGate = await page.evaluate(() => {
+      const gate = document.getElementById('sp-cloud-gate');
+      const input = document.getElementById('sp-input');
+      return {
+        gateVisible:
+          !!gate &&
+          getComputedStyle(gate).display !== 'none' &&
+          getComputedStyle(gate).visibility !== 'hidden',
+        inputDisabled: input instanceof HTMLTextAreaElement && input.disabled,
+      };
+    });
+    if (!signedOutGate.gateVisible || !signedOutGate.inputDisabled) {
+      fail(
+        `signed-out chat: expected an actionable sign-in gate and disabled composer, got ${JSON.stringify(signedOutGate)}`,
+      );
+    }
+
+    // Auth sync is background-owned. A side-panel document opened in a tab is
+    // still an extension-owned UI context and must be allowed to request a
+    // freshly loaded Sync Host session (signed-out is a successful null token,
+    // not an allowlist/policy failure).
+    const authBridge = await page.evaluate(() =>
+      Promise.race([
+        chrome.runtime.sendMessage({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: true }),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'auth probe timed out' }), 10_000),
+        ),
+      ]),
+    );
+    if (!authBridge || authBridge.success !== true) {
+      fail(`auth bridge: background Sync Host probe failed: ${JSON.stringify(authBridge)}`);
+    }
+    const extensionPageRejections = warnings.filter(
+      (warning) =>
+        /Rejected (message from non-allowlisted sender|extension-page-only message)/.test(
+          warning,
+        ) && warning.includes(`chrome-extension://${extId}/src/side_panel.html`),
+    );
+    if (extensionPageRejections.length > 0) {
+      fail(`auth bridge: extension-owned side panel was rejected by policy`);
+    }
+
+    const composerMetrics = await page.evaluate(() => {
+      const shell = document.getElementById('sp-composer-shell');
+      const history = document.getElementById('sp-history-btn');
+      return {
+        shellHeight: shell?.getBoundingClientRect().height ?? 0,
+        historyVisible:
+          !!history &&
+          getComputedStyle(history).display !== 'none' &&
+          getComputedStyle(history).visibility !== 'hidden',
+      };
+    });
+    if (composerMetrics.shellHeight < 100 || !composerMetrics.historyVisible) {
+      fail(
+        `chat surface: expected a full composer and visible history, got ${JSON.stringify(composerMetrics)}`,
+      );
+    }
+
+    // Managed authenticated chat needs a live gateway and account, which this
+    // offline harness intentionally does not provide. Re-enable the textarea
+    // only to verify its local interaction behavior after the signed-out state
+    // above has been asserted.
+    await page.evaluate(() => {
+      const input = document.getElementById('sp-input');
+      if (input instanceof HTMLTextAreaElement) input.disabled = false;
+    });
+    await page.fill('#sp-input', 'hello from the smoke');
+    const typed = await page.inputValue('#sp-input');
+    if (typed !== 'hello from the smoke')
+      fail(`composer: input did not accept text (got "${typed}")`);
+
+    await page.click('#sp-history-btn');
+    await page.waitForTimeout(300);
+    const historyDrawer = await page.evaluate(() => ({
+      drawerOpen: document.getElementById('sp-drawer')?.classList.contains('open') === true,
+      historyOpen: !document.getElementById('sp-drawer-history-list')?.hasAttribute('hidden'),
+      title: document.getElementById('sp-drawer-title')?.textContent,
+      unfinishedActions: [
+        document.getElementById('sp-drawer-console-btn'),
+        document.getElementById('sp-drawer-open-desktop-btn'),
+      ].filter(Boolean).length,
+    }));
+    if (
+      !historyDrawer.drawerOpen ||
+      !historyDrawer.historyOpen ||
+      historyDrawer.title !== 'AGI in Chrome' ||
+      historyDrawer.unfinishedActions !== 0
+    ) {
+      fail(`history drawer: unexpected public surface ${JSON.stringify(historyDrawer)}`);
+    }
+    await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
+    await page.waitForTimeout(200);
+
+    await page.click('#sp-menu-btn');
+    const drawerOpen = await page.evaluate(
+      () => document.getElementById('sp-drawer')?.classList.contains('open') === true,
+    );
+    if (!drawerOpen) fail('drawer: menu button did not open the navigation drawer');
+    await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
+
+    await page.click('#sp-model-selector-btn');
+    await page.waitForTimeout(300);
+    const modelOpen = await page.evaluate(() => {
+      const d = document.getElementById('sp-model-dropdown');
+      return !!d && (d.classList.contains('open') || getComputedStyle(d).display !== 'none');
+    });
+    if (!modelOpen) fail('model picker: selector button did not open the model dropdown');
+    const signedOutModelLabel = await page
+      .locator('#sp-model-dropdown .provider-count-badge')
+      .textContent();
+    if (signedOutModelLabel !== 'Sign in for models') {
+      fail(`model picker: expected an honest signed-out label, got "${signedOutModelLabel}"`);
+    }
+    await page.click('#sp-model-selector-btn');
+
+    const composerModes = await page.evaluate(() => ({
+      inertAutonomyControlPresent: Boolean(document.getElementById('sp-action-mode-toggle')),
+      quickModePresent: Boolean(document.getElementById('sp-quick-mode-toggle')),
+    }));
+    if (composerModes.inertAutonomyControlPresent || !composerModes.quickModePresent) {
+      fail(`composer modes: unexpected controls ${JSON.stringify(composerModes)}`);
+    }
+
+    // Workflows exposes only controls that execute today. The previous shortcut
+    // modal advertised Start from + Schedule fields with no replay/scheduler
+    // consumer, and onboarding advertised a slash finder that did not exist.
+    await page.click('#sp-menu-btn');
+    await page.click('#sp-drawer-wf-btn');
+    await page.click('#sp-wf-create-shortcut-btn');
+    const shortcutSurface = await page.evaluate(() => {
+      const onboardingStep = document.querySelector('.sp-ob-step[data-step="3"]');
+      return {
+        modalOpen:
+          document.getElementById('sp-create-shortcut-overlay')?.classList.contains('open') ===
+          true,
+        namePresent: Boolean(document.getElementById('sp-sc-name')),
+        promptPresent: Boolean(document.getElementById('sp-sc-prompt')),
+        deadStartFromPresent: Boolean(document.getElementById('sp-sc-starturl')),
+        deadSchedulePresent: Boolean(document.getElementById('sp-sc-schedule')),
+        onboardingCopy: onboardingStep?.textContent ?? '',
+      };
+    });
+    if (
+      !shortcutSurface.modalOpen ||
+      !shortcutSurface.namePresent ||
+      !shortcutSurface.promptPresent ||
+      shortcutSurface.deadStartFromPresent ||
+      shortcutSurface.deadSchedulePresent ||
+      !shortcutSurface.onboardingCopy.includes('Open Workflows') ||
+      shortcutSurface.onboardingCopy.includes('search shortcuts')
+    ) {
+      fail(
+        `workflows: misleading or unfinished shortcut controls ${JSON.stringify(shortcutSurface)}`,
+      );
+    }
+
+    // The workflows step above leaves the create-shortcut overlay and the drawer
+    // open, which cover the composer. Dismiss them so the next block drives the
+    // composer the way a user would reach it.
+    await page.evaluate(() => {
+      document.getElementById('sp-create-shortcut-overlay')?.classList.remove('open');
+      document.getElementById('sp-drawer')?.classList.remove('open');
+      document.querySelectorAll('.sp-overlay.open, .sp-modal.open').forEach((n) => {
+        n.classList.remove('open');
+      });
+    });
+
+    const pageExceptions = errors.filter((e) => e.startsWith('pageerror:'));
+    if (pageExceptions.length)
+      fail(`${name}: uncaught page exception(s): ${pageExceptions.join(' | ')}`);
+    const csp = errors.filter((e) => /Content Security Policy/i.test(e));
+    if (csp.length)
+      fail(`${name}: CSP violation(s): ${csp.map((e) => e.slice(0, 120)).join(' | ')}`);
+    await page.close();
+  }
+
+  // ── Signed-out account state: options must not offer a fake Log out action ──
+  {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extId}/src/options.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
+    });
+    await page.waitForTimeout(1500);
+    const accountState = await page.evaluate(() => ({
+      signInVisible: Boolean(document.getElementById('opt-signin-btn')),
+      logOutVisible: Boolean(document.getElementById('opt-logout-btn')),
+    }));
+    if (!accountState.signInVisible || accountState.logOutVisible) {
+      fail(`signed-out options account: unexpected controls ${JSON.stringify(accountState)}`);
+    }
+    await page.close();
+  }
+
+  // ── Side-panel interactions: composer input, drawer nav, model picker ──
+  {
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    await page.setViewportSize({ width: 400, height: 800 });
+    const errors = [];
+    const warnings = [];
+    page.on('console', (message) => {
+      if (message.type() === 'warning' || message.type() === 'warn') {
+        warnings.push(message.text());
+      }
+    });
+    page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+    await page.goto(`chrome-extension://${extId}/src/side_panel.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
+    });
+    await page.evaluate(
+      () => new Promise((res) => chrome.storage.local.set({ agi_onboarding_completed: true }, res)),
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1000);
+
+    const visibleSecondaryChrome = await page.evaluate(() =>
+      [
+        'sp-auth-bar',
+        'sp-toolbar',
+        'sp-prompt-chips',
+        'sp-empty-icon',
+        'sp-empty-headline',
+        'sp-empty-subtext',
+      ].filter((id) => {
+        const element = document.getElementById(id);
+        if (!element) return false;
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      }),
+    );
+    if (visibleSecondaryChrome.length > 0) {
+      fail(
+        `chat surface: secondary controls should stay behind menus, but these are visible: ${visibleSecondaryChrome.join(', ')}`,
+      );
+    }
+
+    const signedOutGate = await page.evaluate(() => {
+      const gate = document.getElementById('sp-cloud-gate');
+      const input = document.getElementById('sp-input');
+      return {
+        gateVisible:
+          !!gate &&
+          getComputedStyle(gate).display !== 'none' &&
+          getComputedStyle(gate).visibility !== 'hidden',
+        inputDisabled: input instanceof HTMLTextAreaElement && input.disabled,
+      };
+    });
+    if (!signedOutGate.gateVisible || !signedOutGate.inputDisabled) {
+      fail(
+        `signed-out chat: expected an actionable sign-in gate and disabled composer, got ${JSON.stringify(signedOutGate)}`,
+      );
+    }
+
+    // Auth sync is background-owned. A side-panel document opened in a tab is
+    // still an extension-owned UI context and must be allowed to request a
+    // freshly loaded Sync Host session (signed-out is a successful null token,
+    // not an allowlist/policy failure).
+    const authBridge = await page.evaluate(() =>
+      Promise.race([
+        chrome.runtime.sendMessage({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: true }),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ success: false, error: 'auth probe timed out' }), 10_000),
+        ),
+      ]),
+    );
+    if (!authBridge || authBridge.success !== true) {
+      fail(`auth bridge: background Sync Host probe failed: ${JSON.stringify(authBridge)}`);
+    }
+    const extensionPageRejections = warnings.filter(
+      (warning) =>
+        /Rejected (message from non-allowlisted sender|extension-page-only message)/.test(
+          warning,
+        ) && warning.includes(`chrome-extension://${extId}/src/side_panel.html`),
+    );
+    if (extensionPageRejections.length > 0) {
+      fail(`auth bridge: extension-owned side panel was rejected by policy`);
     }
 
     const composerMetrics = await page.evaluate(() => {
@@ -281,7 +882,7 @@ try {
     if (pageExceptions.length)
       fail(`interactions: uncaught page exception(s): ${pageExceptions.join(' | ')}`);
     console.log(
-      `\n[interactions] composer=ok drawer=${drawerOpen} modelPicker=${modelOpen} quickMode=${composerModes.quickModePresent}`,
+      `\n[interactions] composer=ok drawer=${drawerOpen} modelPicker=${modelOpen} quickMode=${composerModes.quickModePresent} authBridge=${authBridge.success === true}`,
     );
     await page.close();
   }
