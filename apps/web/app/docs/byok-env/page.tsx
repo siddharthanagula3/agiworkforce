@@ -85,7 +85,7 @@ export default function ByokEnvDocsPage() {
               fontFamily: 'var(--mono)',
               fontSize: 13,
               background: 'var(--bg-elev)',
-              border: '1px solid var(--border)',
+              border: '1px solid hsl(var(--border))',
               borderRadius: 'var(--radius-lg)',
               padding: '16px 20px',
               overflowX: 'auto',

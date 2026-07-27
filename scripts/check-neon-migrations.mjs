@@ -24,9 +24,27 @@ if (!fs.existsSync(absolute(migrationsDir))) {
     errors.push(`${migrationsDir} must contain at least one SQL migration.`);
   }
 
+  // Ordinals must be unique. Two files sharing one number apply in an order
+  // decided by the rest of the filename, which is not the order anyone reading
+  // `0067` expects, and it silently diverges from any tracker keyed on the
+  // ordinal alone. Two files both shipped as `0067` before this check existed;
+  // the later-authored one was renumbered to 0074 when the guard caught it.
+  const byOrdinal = new Map();
   for (const filename of files) {
     if (!/^\d{4}_.+\.sql$/.test(filename)) {
       errors.push(`${migrationsDir}/${filename} must use <sequence>_<name>.sql naming.`);
+      continue;
+    }
+    const ordinal = filename.slice(0, 4);
+    if (!byOrdinal.has(ordinal)) byOrdinal.set(ordinal, []);
+    byOrdinal.get(ordinal).push(filename);
+  }
+  for (const [ordinal, group] of byOrdinal) {
+    if (group.length > 1) {
+      errors.push(
+        `${migrationsDir} has ${group.length} migrations sharing ordinal ${ordinal}: ` +
+          `${group.join(', ')}. Renumber all but one — apply order must be unambiguous.`,
+      );
     }
   }
 

@@ -195,6 +195,22 @@ const AUTO_PROMPT_BLOCKLIST = [
   '/customize',
   '/projects',
   '/pricing',
+  // Added 2026-07-27. This list is default-OPEN: any route not named here shows
+  // a marketing capture over the product. `/device-auth` was blocked but the
+  // other device-pairing route, `/connect/[deviceType]`, was not — so the modal
+  // opened on top of a "Connect VS Code to AGI?" approval prompt and took focus
+  // from the Deny/Approve decision. Verified in a real browser, not inferred.
+  '/connect',
+  // Public share recipients are not prospects to capture mid-read, and a
+  // marketing popup during an incident is the worst possible time for one.
+  '/share',
+  '/shared',
+  '/status',
+  // Signed-in product surfaces.
+  '/tasks',
+  '/library',
+  '/connectors',
+  '/skills',
 ];
 
 const AUTO_PROMPT_KEY = 'agi-waitlist-auto-prompted';

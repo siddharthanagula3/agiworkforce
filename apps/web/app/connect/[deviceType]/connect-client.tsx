@@ -6,6 +6,24 @@ import { useState } from 'react';
 import { Button } from '@agiworkforce/ui';
 
 /** Human label for a device_type slug (falls back to the raw slug). */
+/// Device types that can actually complete a pairing. The route is dynamic, so
+/// without this list `/connect/<anything>` rendered a full "Connect X to AGI?"
+/// approval screen — including the security notice — for a device that does not
+/// exist. An approval prompt for a made-up device is a phishing primitive, not
+/// just a cosmetic 404.
+export const KNOWN_DEVICE_TYPES = [
+  'vscode',
+  'cursor',
+  'windsurf',
+  'antigravity',
+  'desktop',
+  'cli',
+] as const;
+
+export function isKnownDeviceType(deviceType: string): boolean {
+  return (KNOWN_DEVICE_TYPES as readonly string[]).includes(deviceType.toLowerCase());
+}
+
 export function friendlyDeviceName(deviceType: string): string {
   switch (deviceType.toLowerCase()) {
     case 'vscode':

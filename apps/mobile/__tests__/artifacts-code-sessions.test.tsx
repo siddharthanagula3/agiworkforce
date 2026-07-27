@@ -330,7 +330,10 @@ describe('Code Sessions screens', () => {
 
     expect(getByTestId('code-environment-sheet')).toBeTruthy();
     expect(getByText('Use AGI Desktop')).toBeTruthy();
-    expect(getByText('AGI Cloud waitlist')).toBeTruthy();
+    // Was 'AGI Cloud waitlist'. Managed cloud reached public alpha on
+    // 2026-06-27 and the invite gate was removed, so this option no longer
+    // offers a waitlist — it states where code sessions actually run.
+    expect(getByText('Hosted code environments')).toBeTruthy();
   });
 
   it('renders session-unavailable state for an unknown session id', () => {
