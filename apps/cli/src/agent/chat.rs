@@ -295,7 +295,10 @@ impl AgentSession {
                 .emit_stdout();
             })
         } else {
-            Box::new(|chunk: &str| print!("{}", chunk))
+            // Must go through `output`, not a bare `print!`: continuation text
+            // is a partial line, and unflushed it loses its race with the
+            // unbuffered stderr progress banners printed by the next iteration.
+            Box::new(|chunk: &str| crate::output::print_assistant_chunk(chunk))
         }
     }
 
