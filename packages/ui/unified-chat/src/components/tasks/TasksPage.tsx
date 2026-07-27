@@ -134,7 +134,10 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
   );
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-4 py-6">
+    <div
+      data-testid="tasks-view"
+      className="mx-auto flex h-full w-full max-w-3xl flex-col px-4 py-6"
+    >
       <header className="mb-4 flex items-center gap-2">
         <ListChecks className="h-5 w-5 text-primary" />
         <h1 className="text-lg font-semibold">Tasks</h1>

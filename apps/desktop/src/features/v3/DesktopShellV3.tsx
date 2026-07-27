@@ -140,10 +140,17 @@ export function DesktopShellV3({
     setPendingAttachments({ id: `folder-${Date.now()}-${files.length}`, files });
   }, []);
 
+  // Evict Local-only panels when the user switches to Cloud, so a device
+  // surface never lingers over a cloud session.
+  //
+  // `library` and `tasks` are deliberately absent: they are Cloud-only, and
+  // listing them here made them unreachable — the nav click set the panel and
+  // this effect reset it to chat on the same tick, so the buttons rendered and
+  // did nothing. Their Local counterparts are `artifacts` and `scheduled`.
   useEffect(() => {
     if (
       privacyMode === 'managed' &&
-      ['artifacts', 'library', 'tasks', 'scheduled', 'record-skill'].includes(activePanel)
+      ['artifacts', 'scheduled', 'record-skill'].includes(activePanel)
     ) {
       setActivePanel('chat');
     }
@@ -380,13 +387,22 @@ export function DesktopShellV3({
               onOpenConversation={handleOpenProjectConversation}
             />
           ) : activePanel === 'library' && privacyMode !== 'local' ? (
-            <Suspense fallback={null}>
-              <DesktopLibrary />
-            </Suspense>
+            // The shell clips overflow, so the panel owns its own scrolling or
+            // a long grid is simply unreachable.
+            <div className="h-full overflow-y-auto px-6 py-6">
+              <Suspense fallback={null}>
+                <DesktopLibrary />
+              </Suspense>
+            </div>
           ) : activePanel === 'tasks' && privacyMode !== 'local' ? (
-            <Suspense fallback={null}>
-              <DesktopTasks onOpenConversation={handleOpenProjectConversation} />
-            </Suspense>
+            // TasksPage's root is h-full, which collapses to zero unless it is
+            // given a parent with a resolved height. Without this wrapper the
+            // panel mounted and rendered nothing at all.
+            <div className="h-full overflow-y-auto">
+              <Suspense fallback={null}>
+                <DesktopTasks onOpenConversation={handleOpenProjectConversation} />
+              </Suspense>
+            </div>
           ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
             <AgiWorkArtifacts />
           ) : activePanel === 'scheduled' && privacyMode === 'local' ? (
