@@ -26,7 +26,10 @@ const DEFAULTS = {
   agentMode: 'auto',
   agentEffort: 'medium',
   agentThinking: false,
-  codeLensEnabled: true,
+  // Off by default: four lenses above every declaration in every open file is
+  // more chrome than the editor's own lenses, and the same actions are reachable
+  // from the context menu and the sidebar. Opt-in via agiWorkforce.codeLensEnabled.
+  codeLensEnabled: false,
   hoverEnabled: false,
   inlineCompletionsEnabled: false,
   inlineCompletionsDebounceMs: 300,

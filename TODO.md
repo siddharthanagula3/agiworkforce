@@ -52,10 +52,16 @@ founder's per-surface specs in `~/Downloads/0*-benchmark-spec.md` (01 mobile,
 
 ### 2. Default-on breakages — fire without anyone opting in
 
-- **VSCX-01** — CodeLens is ungated and `codeLensEnabled` defaults true, so
-  lenses sit above every function in every open file; clicking one sends the
-  whole file (the lens range is computed then discarded) and the answer opens in
-  an untitled scratch tab instead of the panel.
+- ~~**VSCX-01**~~ — CLOSED 2026-07-27 (range + default). The lens range was
+  computed then dropped: the commands took no arguments, so `runInlineCommand`
+  fell back to `editor.selection`, and `getText(undefined)` on an empty
+  selection returns the whole document — so a lens click silently sent the
+  entire file and the "Select some code first" guard never fired. Lenses now
+  pass a `declarationSpan()` range (brace-counting / indentation, erring toward
+  the declaration line when unsure) and the commands accept it. Default flipped
+  to `false`; the same actions remain in the context menu and sidebar.
+  `src/__tests__/codeLensTargetRange.test.ts` (9). **Still open:** the answer
+  opens in an untitled scratch tab rather than the panel.
 - **VSCX-03** — every right-click / lightbulb / inline action demands AGI Cloud
   sign-in that sidebar chat never needed; the error toast's only button says
   "Set API Key", contradicting its own message.

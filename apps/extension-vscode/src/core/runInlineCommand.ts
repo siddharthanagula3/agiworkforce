@@ -27,6 +27,16 @@ export function commandLabel(command: string): string {
 export async function runInlineCommand(
   context: vscode.ExtensionContext,
   command: InlineCommand,
+  /**
+   * Explicit target range, supplied by callers that already know what the user
+   * pointed at — a CodeLens above a function, for example.
+   *
+   * Without it this fell back to `editor.selection`, and an empty selection
+   * makes `getText(undefined)` return the *entire document*. So the
+   * "Select some code first" guard below never fired for a lens click, and
+   * asking about one function silently sent the whole file to the model.
+   */
+  targetRange?: vscode.Range,
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (editor === undefined) {
@@ -35,7 +45,14 @@ export async function runInlineCommand(
   }
 
   const selection = editor.selection;
-  const selectedText = editor.document.getText(selection.isEmpty ? undefined : selection);
+  const explicitRange = targetRange ?? (selection.isEmpty ? undefined : selection);
+
+  if (explicitRange === undefined) {
+    vscode.window.showWarningMessage('AGI Workforce: Select some code first.');
+    return;
+  }
+
+  const selectedText = editor.document.getText(explicitRange);
 
   if (selectedText.trim() === '') {
     vscode.window.showWarningMessage('AGI Workforce: Select some code first.');
