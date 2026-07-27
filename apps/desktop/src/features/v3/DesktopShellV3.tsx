@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { toast } from 'sonner';
 import {
   ChatInterface,
@@ -15,6 +15,9 @@ import { AgiWorkProjects } from './AgiWorkProjects';
 import { AgiWorkArtifacts } from './AgiWorkArtifacts';
 import { AgiWorkScheduled } from './AgiWorkScheduled';
 import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
+// Library is the Managed Cloud counterpart to Local's Artifacts: cloud-stored
+// files, shared with web through @agiworkforce/unified-chat.
+const DesktopLibrary = lazy(() => import('@/features/library/DesktopLibrary'));
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/projectStore';
@@ -45,7 +48,7 @@ function useV3Mode() {
   return { mode };
 }
 
-type V3Panel = 'chat' | 'projects' | 'artifacts' | 'scheduled' | 'record-skill';
+type V3Panel = 'chat' | 'projects' | 'artifacts' | 'library' | 'scheduled' | 'record-skill';
 
 // ─── shell props ───────────────────────────────────────────────────────────────
 
@@ -130,7 +133,7 @@ export function DesktopShellV3({
   useEffect(() => {
     if (
       privacyMode === 'managed' &&
-      ['artifacts', 'scheduled', 'record-skill'].includes(activePanel)
+      ['artifacts', 'library', 'scheduled', 'record-skill'].includes(activePanel)
     ) {
       setActivePanel('chat');
     }
@@ -242,6 +245,16 @@ export function DesktopShellV3({
         setActivePanel('projects');
         return;
       }
+      if (view === 'library') {
+        if (privacyMode === 'local') {
+          // Local files are not cataloged in the cloud Library; Artifacts is
+          // the device-side equivalent.
+          toast.info('Library lists cloud files. Device files are under Artifacts.');
+          return;
+        }
+        setActivePanel('library');
+        return;
+      }
       if (view === 'artifacts') {
         if (privacyMode !== 'local') {
           toast.info('Device artifacts are available in Local mode.');
@@ -324,6 +337,10 @@ export function DesktopShellV3({
               onNewChat={(projectId) => handleNewChat(projectId)}
               onOpenConversation={handleOpenProjectConversation}
             />
+          ) : activePanel === 'library' && privacyMode !== 'local' ? (
+            <Suspense fallback={null}>
+              <DesktopLibrary />
+            </Suspense>
           ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
             <AgiWorkArtifacts />
           ) : activePanel === 'scheduled' && privacyMode === 'local' ? (

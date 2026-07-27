@@ -8,6 +8,7 @@ import {
   FolderOpen,
   FolderPlus,
   Box,
+  Library,
   RefreshCw,
   LogIn,
   PanelLeftClose,
@@ -107,7 +108,12 @@ function navItemsForMode(
   t: TFunction,
 ): NavItem[] {
   void mode;
-  if (privacyMode === 'managed') return [];
+  // Cloud mode had no nav destinations at all. Library is a Managed Cloud
+  // surface — the files live in cloud storage — so it belongs here and only
+  // here: local sessions keep their files on the device and are not cataloged.
+  if (privacyMode === 'managed') {
+    return [{ id: 'library', label: t('sidebar.nav.library'), icon: Library }];
+  }
   // Projects moved to its own ChatGPT-style folder section below; the rest
   // stay as flat nav entries.
   return [
@@ -140,7 +146,9 @@ function railItems(
   t: TFunction,
 ): { id: string; icon: React.ElementType; title: string }[] {
   const items = [{ id: 'projects', icon: FolderOpen, title: t('sidebar.nav.projects') }];
-  if (privacyMode !== 'managed') {
+  if (privacyMode === 'managed') {
+    items.push({ id: 'library', icon: Library, title: t('sidebar.nav.library') });
+  } else {
     items.push({ id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') });
   }
   return items;
@@ -236,6 +244,7 @@ export function Sidebar({
       const viewMap: Record<string, string> = {
         projects: 'projects',
         artifacts: 'artifacts',
+        library: 'library',
         scheduled: 'work-scheduled',
       };
       const view = viewMap[id];

@@ -53,6 +53,7 @@
     "nav": {
       "projects": "Proyectos",
       "artifacts": "Artefactos",
+      "library": "Biblioteca",
       "customize": "Personalizar",
       "scheduled": "Programado",
       "liveArtifacts": "Artefactos en vivo",

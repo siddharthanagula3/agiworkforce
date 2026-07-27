@@ -53,6 +53,7 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
+      "library": "Bibliothèque",
       "customize": "Customize",
       "scheduled": "Scheduled",
       "liveArtifacts": "Live artifacts",
