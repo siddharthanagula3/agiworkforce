@@ -66,3 +66,61 @@ describe('privacy handoff utilities', () => {
     ]);
   });
 });
+
+describe('handoff target', () => {
+  const baseParams = {
+    sourceSessionId: 'sess-1',
+    sourceSurface: 'desktop' as const,
+    targetSurface: 'desktop' as const,
+    expiresAt: '2026-01-01T00:00:00.000Z',
+    selectedContext: [
+      {
+        id: 'ctx-1',
+        kind: 'file' as const,
+        label: 'notes.md',
+        sourceUri: 'file://notes.md',
+        content: 'plain notes',
+      },
+    ],
+  };
+
+  it('defaults to BYOK so existing callers are unchanged', async () => {
+    const preview = await buildLocalToByokHandoffDraft(baseParams);
+    expect(preview.draft.targetPrivacyMode).toBe('byok');
+    expect(preview.draft.targetProviderMode).toBe('DirectByok');
+  });
+
+  it('labels a Managed Cloud handoff as managed, not BYOK', async () => {
+    const preview = await buildLocalToByokHandoffDraft({ ...baseParams, target: 'managed' });
+    expect(preview.draft.targetPrivacyMode).toBe('managed');
+    expect(preview.draft.targetProviderMode).toBe('ManagedGateway');
+  });
+
+  it('carries the target into the hashed payload, so consent attests to the destination', async () => {
+    // The preview hash is what the user approves. If the target were only a
+    // display string, the same hash would cover two different destinations.
+    const byok = await buildLocalToByokHandoffDraft(baseParams);
+    const managed = await buildLocalToByokHandoffDraft({ ...baseParams, target: 'managed' });
+
+    expect(managed.redactedPayload).toContain('"targetPrivacyMode": "managed"');
+    expect(byok.redactedPayload).toContain('"targetPrivacyMode": "byok"');
+    expect(managed.draft.previewHashSha256).not.toBe(byok.draft.previewHashSha256);
+  });
+
+  it('still blocks on findings regardless of target', async () => {
+    const preview = await buildLocalToByokHandoffDraft({
+      ...baseParams,
+      target: 'managed',
+      selectedContext: [
+        {
+          id: 'ctx-1',
+          kind: 'file' as const,
+          label: '.env',
+          sourceUri: 'file://.env',
+          content: 'AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE0000',
+        },
+      ],
+    });
+    expect(preview.redactionReport.blocked).toBe(true);
+  });
+});

@@ -20,10 +20,27 @@ export interface RedactedHandoffContextItem extends HandoffContextItem {
   redactedContent: string;
 }
 
+/**
+ * Where the selected context is going. The pair is carried into the hashed
+ * payload AND the draft, so it is part of what the user's consent attests to —
+ * a preview hash that names the wrong destination is worse than no hash.
+ *
+ * `byok` is the default because that was this builder's only target when it was
+ * written; Managed Cloud reuses the identical ceremony with a different label.
+ */
+export type HandoffTarget = 'byok' | 'managed';
+
+const HANDOFF_TARGETS = {
+  byok: { targetPrivacyMode: 'byok', targetProviderMode: 'DirectByok' },
+  managed: { targetPrivacyMode: 'managed', targetProviderMode: 'ManagedGateway' },
+} as const;
+
 export interface BuildLocalToByokHandoffDraftParams {
   sourceSessionId: string;
   sourceSurface: DeveloperSessionSurface | SyncedAppSurface;
   targetSurface: SyncedAppSurface;
+  /** Defaults to `'byok'`, preserving every existing caller's behaviour. */
+  target?: HandoffTarget;
   selectedContext: HandoffPreviewContextItem[];
   createdAt?: string;
   expiresAt: string;
@@ -74,13 +91,14 @@ export async function buildLocalToByokHandoffDraft(
     }),
   );
 
+  const resolvedTarget = HANDOFF_TARGETS[params.target ?? 'byok'];
   const redactedPayload = JSON.stringify(
     {
       sourceSessionId: params.sourceSessionId,
       sourceSurface: params.sourceSurface,
       targetSurface: params.targetSurface,
-      targetPrivacyMode: 'byok',
-      targetProviderMode: 'DirectByok',
+      targetPrivacyMode: resolvedTarget.targetPrivacyMode,
+      targetProviderMode: resolvedTarget.targetProviderMode,
       selectedContext: redactedContext.map((item) => ({
         id: item.id,
         kind: item.kind,
@@ -111,8 +129,8 @@ export async function buildLocalToByokHandoffDraft(
     sourceSessionId: params.sourceSessionId,
     sourceSurface: params.sourceSurface,
     targetSurface: params.targetSurface,
-    targetPrivacyMode: 'byok',
-    targetProviderMode: 'DirectByok',
+    targetPrivacyMode: resolvedTarget.targetPrivacyMode,
+    targetProviderMode: resolvedTarget.targetProviderMode,
     selectedContext: redactedContext.map(({ redactedContent: _redactedContent, ...item }) => item),
     redactionReport,
     previewHashSha256,
