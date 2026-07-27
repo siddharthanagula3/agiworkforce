@@ -123,6 +123,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   // current design decision, see the policy.test.ts carve-out; tightening it is a
   // separate security-review call, tracked in known-flaws.)
   CHAT_MESSAGE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  GET_CLOUD_AUTH_TOKEN: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_ALL_TABS: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CREATE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CLOSE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
@@ -141,6 +142,40 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
  */
 export function getMessagePolicy(type: string): MessageTypePolicy {
   return MESSAGE_POLICY[type] ?? DEFAULT_POLICY;
+}
+
+export interface ExtensionPageSenderIdentity {
+  id?: string;
+  url?: string;
+  origin?: string;
+  tabUrl?: string;
+  hasTab?: boolean;
+}
+
+/**
+ * Authenticate extension-owned UI documents without assuming they are tabless.
+ *
+ * Chrome can associate an options page or a side-panel document with a tab.
+ * Content scripts also report this extension's id, so id equality alone is not
+ * sufficient: at least one document URL/origin must exactly match the extension
+ * origin. The tabless fallback preserves service-worker initiated UI messages.
+ */
+export function isTrustedExtensionPageSender(
+  sender: ExtensionPageSenderIdentity,
+  extensionId: string,
+  extensionOrigin: string,
+): boolean {
+  if (sender.id !== extensionId) return false;
+
+  const candidates = [sender.url, sender.origin, sender.tabUrl].filter(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+  if (candidates.length === 0) return sender.hasTab !== true;
+
+  const normalizedOrigin = extensionOrigin.replace(/\/+$/, '');
+  return candidates.some(
+    (value) => value === normalizedOrigin || value.startsWith(`${normalizedOrigin}/`),
+  );
 }
 
 // ─── Backwards-compatible Set exports (derived from MESSAGE_POLICY) ─────────
