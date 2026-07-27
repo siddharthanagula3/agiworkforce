@@ -148,6 +148,18 @@ export interface ChatInputProps {
   supportsResearch?: boolean;
   /** Runtime-specific limits layered over the suite-wide local attachment policy. */
   attachmentPolicy?: ChatAttachmentPolicy;
+  /**
+   * One-shot attachment injection from outside the composer, keyed by `id` so a
+   * re-render cannot double-append. Used by the desktop cloud folder sheet,
+   * which has already run its own consent ceremony and hands over the approved
+   * files.
+   *
+   * Deliberately routed through `appendFiles` rather than exposing
+   * `setAttachedFiles`: an injected file must clear exactly the same validation
+   * and the same count/byte caps as one the user dragged in, or the composer
+   * would have two different definitions of an acceptable attachment.
+   */
+  pendingAttachments?: { id: string; files: File[] } | null;
 }
 
 export function ChatInput({
@@ -172,6 +184,7 @@ export function ChatInput({
   supportsCodeExecution = false,
   supportsResearch = false,
   attachmentPolicy,
+  pendingAttachments = null,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const aggregateIsStreaming = useChatStore((s) => s.isStreaming);
@@ -428,6 +441,14 @@ export function ChatInput({
     },
     [attachedFiles, attachmentPolicy],
   );
+
+  // Consume an external one-shot injection exactly once per id.
+  const consumedAttachmentIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingAttachments || consumedAttachmentIdRef.current === pendingAttachments.id) return;
+    consumedAttachmentIdRef.current = pendingAttachments.id;
+    appendFiles(pendingAttachments.files);
+  }, [pendingAttachments, appendFiles]);
 
   // Drag-drop + paste-image — parity-gap round-2 P0 #3 (2026-05-21). Mirrors
   // Claude / ChatGPT: dropping files anywhere on the composer or pasting an

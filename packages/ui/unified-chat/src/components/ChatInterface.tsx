@@ -234,6 +234,12 @@ export interface ChatInterfaceProps {
    * same shared model admission, optimistic transcript, and runtime pipeline
    * as composer submissions.
    */
+  /**
+   * One-shot attachment injection forwarded to the composer, keyed by `id`.
+   * The desktop cloud folder sheet uses this to hand over files it has already
+   * put through the consent ceremony.
+   */
+  pendingAttachments?: { id: string; files: File[] } | null;
   externalSendRequest?: {
     id: string;
     content: string;
@@ -328,6 +334,7 @@ export function ChatInterface({
   runtime,
   className,
   externalSendRequest = null,
+  pendingAttachments = null,
   manageTheme = false,
   enableShortcuts = true,
   enableSearchOverlay = true,
@@ -770,6 +777,7 @@ export function ChatInterface({
                 supportsCodeExecution={runtime?.supportsCodeExecution ?? false}
                 supportsResearch={runtime?.supportsResearch ?? false}
                 attachmentPolicy={runtime?.attachmentPolicy}
+                pendingAttachments={pendingAttachments}
               />
               {/* Sample-prompt mode chips below the composer (claude.ai parity —
                   ref: claude_reference/015). This is a composer-area element shown
