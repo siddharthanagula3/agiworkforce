@@ -353,3 +353,25 @@ export const validators = {
     return div.innerHTML;
   },
 };
+
+/**
+ * Label for the composer's page-context chip.
+ *
+ * Only http(s) pages have a hostname worth showing. `new URL()` on a
+ * browser-internal URL still yields a `hostname`, but it is the raw
+ * chrome-extension id (a 32-character string) or an internal page name, and
+ * that was rendering verbatim in the chip. Those are also precisely the URLs
+ * `isRestrictedUrl()` blocks, so there is no page context to attach either way.
+ */
+export function pageChipLabel(url: string): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.hostname;
+    }
+    return 'Browser page';
+  } catch {
+    return '';
+  }
+}
