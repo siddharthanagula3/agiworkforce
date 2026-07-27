@@ -125,6 +125,7 @@ export { MessageList } from './components/MessageList';
 export { MessageBubble, MarkdownLite } from './components/MessageBubble';
 export { ActionBar } from './components/ActionBar';
 export { ConversationHeader } from './components/ConversationHeader';
+export type { ConversationHeaderProps } from './components/ConversationHeader';
 
 // Rich message components
 export { ThinkingBlock } from './components/ThinkingBlock';

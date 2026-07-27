@@ -21,7 +21,7 @@ import { ChatInput, type ChatInputProjectPicker, type ChatWorkScope } from './Ch
 import { QuickChips } from './QuickChips';
 import { Disclaimer } from './Disclaimer';
 import { MessageList } from './MessageList';
-import { ConversationHeader } from './ConversationHeader';
+import { ConversationHeader, type ConversationHeaderProps } from './ConversationHeader';
 import { useChatStore } from '../stores/chatStore';
 import { useUIStore } from '../stores/uiStore';
 import { useChat } from '../hooks/useChat';
@@ -323,6 +323,13 @@ export interface ChatInterfaceProps {
    */
   artifactMode?: 'split' | 'fullscreen';
   /**
+   * Conversation-scoped header actions. Forwarded to {@link ConversationHeader};
+   * an action with no handler is not rendered, so a host never shows a control
+   * it cannot perform. Desktop supplies rename/share; web keeps its own richer
+   * page header and passes none of these.
+   */
+  conversationActions?: ConversationHeaderProps;
+  /**
    * When true (default), assistant messages render a `ProvenanceFooter`
    * below them showing model id + latency + token counts. Pass `false` to
    * suppress on hosts that don't want the footer.
@@ -354,6 +361,7 @@ export function ChatInterface({
   emptyStateSlot,
   composerSlot,
   artifactMode = 'split',
+  conversationActions,
   showProvenanceFooter = true,
 }: ChatInterfaceProps) {
   // Side-effect hooks — theme management is opt-in; shortcuts are opt-out
@@ -702,7 +710,12 @@ export function ChatInterface({
     return (
       <div className="flex h-full flex-col">
         {/* Header — only rendered when a conversation with messages is active */}
-        {hasMessages && activeConversationId && <ConversationHeader />}
+        {hasMessages && activeConversationId && (
+          <ConversationHeader
+            {...conversationActions}
+            artifactsOpen={conversationActions?.artifactsOpen ?? artifactOpen}
+          />
+        )}
 
         {/* Content area — grows to fill remaining vertical space, hides overflow for
             MessageList's own internal scroll container */}

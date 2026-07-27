@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { toast } from 'sonner';
+import { updateCloudConversationTitle } from '@/api/cloudApi';
 import {
   ChatInterface,
   CapabilityProvider,
@@ -240,6 +241,27 @@ export function DesktopShellV3({
     [hostBridge],
   );
 
+  // DCL-08: the conversation header offered no actions at all. Rename is the
+  // one both modes can honour — Cloud persists through the API, Local titles
+  // are already owned by the local store, so there is nothing to round-trip.
+  const handleRenameConversation = useCallback(
+    async (conversationId: string, title: string) => {
+      if (privacyMode === 'local') return;
+      try {
+        await updateCloudConversationTitle(conversationId, title);
+      } catch (error) {
+        console.error('[DesktopShellV3] Failed to rename conversation:', error);
+        toast.error('Could not rename the conversation. The new title was not saved.');
+      }
+    },
+    [privacyMode],
+  );
+
+  const conversationActions = useMemo(
+    () => ({ onRename: handleRenameConversation }),
+    [handleRenameConversation],
+  );
+
   const handleOpenProjectConversation = useCallback(
     (conversationId: string) => {
       hostBridge?.selectConversation?.(conversationId);
@@ -329,6 +351,7 @@ export function DesktopShellV3({
               enableShortcuts={true}
               hostBridge={hostBridge}
               onModelSelectorClick={onModelSelectorClick}
+              conversationActions={conversationActions}
               onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
               pendingAttachments={pendingAttachments}
               onRecordSkill={
