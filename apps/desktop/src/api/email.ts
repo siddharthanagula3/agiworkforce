@@ -37,20 +37,6 @@ export interface EmailSearchResult {
   query: string;
 }
 
-export interface KeyringStatus {
-  keyringAvailable: boolean;
-  totalAccounts: number;
-  accountsInKeyring: number;
-  accountsInSqlite: number;
-  accountsLegacy: number;
-}
-
-export interface MigrationResult {
-  email: string;
-  success: boolean;
-  error: string | null;
-}
-
 // ---------------------------------------------------------------------------
 // Email Account Commands
 // ---------------------------------------------------------------------------
@@ -249,26 +235,6 @@ export async function emailSearch(
 }
 
 // ---------------------------------------------------------------------------
-// Keyring / Credential Migration Commands
-// ---------------------------------------------------------------------------
-
-export async function emailCheckKeyringStatus(): Promise<KeyringStatus> {
-  try {
-    return await invoke<KeyringStatus>('email_check_keyring_status');
-  } catch (error) {
-    throw new Error(`Failed to check keyring status: ${(error as Error).message}`);
-  }
-}
-
-export async function emailMigrateCredentials(): Promise<MigrationResult[]> {
-  try {
-    return await invoke<MigrationResult[]>('email_migrate_credentials');
-  } catch (error) {
-    throw new Error(`Failed to migrate credentials: ${(error as Error).message}`);
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Contact Commands
 // ---------------------------------------------------------------------------
 
@@ -372,8 +338,6 @@ export const EmailClient = {
   search: emailSearch,
 
   // Keyring
-  checkKeyringStatus: emailCheckKeyringStatus,
-  migrateCredentials: emailMigrateCredentials,
 } as const;
 
 export const ContactClient = {

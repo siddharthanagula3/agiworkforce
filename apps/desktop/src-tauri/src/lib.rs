@@ -2615,8 +2615,6 @@ pub fn run() {
             crate::sys::commands::design_suggest_improvements,
             crate::sys::commands::design_tokens_to_css,
             crate::sys::commands::detect_use_case,
-            crate::sys::commands::email_check_keyring_status,
-            crate::sys::commands::email_migrate_credentials,
             crate::sys::commands::enhance_and_route_prompt,
             crate::sys::commands::error_clear_logs,
             crate::sys::commands::error_export_logs,

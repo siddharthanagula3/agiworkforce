@@ -2,7 +2,7 @@ use chrono::Utc;
 use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use crate::features::communications::{
     contacts::ContactManager,
@@ -20,91 +20,21 @@ use mailparse::parse_mail;
 
 const DEFAULT_FOLDER: &str = "INBOX";
 
-// =============================================================================
-// OS Keyring Email Credential Storage
-// =============================================================================
-
-/// Service name for OS keyring storage
-const KEYRING_SERVICE: &str = "agiworkforce-email";
-
-/// Marker value stored in database to indicate password is in keyring
-const KEYRING_MARKER: &str = "__KEYRING__";
-
-/// Store an email password in the OS keyring
-///
-/// Uses the platform's secure credential storage:
-/// - macOS: Keychain
-/// - Windows: Credential Manager
-/// - Linux: Secret Service (via D-Bus)
-fn store_email_credential(email: &str, password: &str) -> Result<()> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, email)
-        .map_err(|e| Error::Generic(format!("Failed to create keyring entry: {}", e)))?;
-
-    entry
-        .set_password(password)
-        .map_err(|e| Error::Generic(format!("Failed to store password in keyring: {}", e)))?;
-
-    debug!("Stored password in OS keyring for email: {}", email);
-    Ok(())
-}
-
-/// Retrieve an email password from the OS keyring
-fn get_email_credential(email: &str) -> Result<String> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, email)
-        .map_err(|e| Error::Generic(format!("Failed to create keyring entry: {}", e)))?;
-
-    entry
-        .get_password()
-        .map_err(|e| Error::Generic(format!("Failed to retrieve password from keyring: {}", e)))
-}
-
-/// Delete an email password from the OS keyring
-fn delete_email_credential(email: &str) -> Result<()> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, email)
-        .map_err(|e| Error::Generic(format!("Failed to create keyring entry: {}", e)))?;
-
-    // Ignore error if credential doesn't exist
-    match entry.delete_credential() {
-        Ok(_) => {
-            debug!("Deleted password from OS keyring for email: {}", email);
-            Ok(())
-        }
-        Err(keyring::Error::NoEntry) => {
-            debug!(
-                "No keyring entry found for email: {} (already deleted)",
-                email
-            );
-            Ok(())
-        }
-        Err(e) => Err(Error::Generic(format!(
-            "Failed to delete password from keyring: {}",
-            e
-        ))),
-    }
-}
-
-/// Check if OS keyring is available on this system
-fn is_keyring_available() -> bool {
-    // Try to create a test entry to verify keyring is accessible
-    match keyring::Entry::new(KEYRING_SERVICE, "__keyring_test__") {
-        Ok(_) => true,
-        Err(e) => {
-            warn!("OS keyring not available: {}", e);
-            false
-        }
-    }
-}
+/// Value an earlier build wrote to `password_encrypted` when the secret lived
+/// in the OS keyring. Retained only to recognise those rows and ask for the
+/// password again — nothing writes it any more.
+const LEGACY_KEYRING_MARKER: &str = "__KEYRING__";
 
 // =============================================================================
-// Fallback Encrypted Storage (SQLite + AES-256-GCM)
+// Encrypted Credential Storage (SQLite + AES-256-GCM)
 // =============================================================================
 
-/// Get the encryption key for email credentials (fallback storage)
+/// Get the encryption key for email credentials
 fn get_email_encryption_key() -> Vec<u8> {
     machine_key::derive_key(KeyPurpose::EmailCredentials)
 }
 
-/// Store an email password using AES-256-GCM encryption (fallback)
+/// Store an email password using AES-256-GCM encryption
 ///
 /// The password is encrypted with a machine-derived key and stored in the database
 /// as a JSON-serialized `EncryptedSecret` struct in the `password_encrypted` column.
@@ -128,13 +58,13 @@ fn store_email_password_encrypted(
     .map_err(|e| Error::Generic(format!("Failed to store encrypted password: {}", e)))?;
 
     debug!(
-        "Stored encrypted password (fallback) for email account {}",
+        "Stored encrypted password for email account {}",
         account_id
     );
     Ok(())
 }
 
-/// Retrieve and decrypt an email password from fallback storage
+/// Retrieve and decrypt an email password
 fn get_email_password_encrypted(encrypted_value: &str) -> Result<String> {
     // Try to parse as EncryptedSecret (new format)
     if let Ok(encrypted) = serde_json::from_str::<EncryptedSecret>(encrypted_value) {
@@ -148,137 +78,71 @@ fn get_email_password_encrypted(encrypted_value: &str) -> Result<String> {
 }
 
 // =============================================================================
-// Unified Credential Storage (Keyring with Fallback)
+// Credential Storage
 // =============================================================================
 
-/// Store an email password securely
+/// Store an email password.
 ///
-/// Attempts to store in OS keyring first. If keyring is unavailable,
-/// falls back to AES-256-GCM encrypted storage in SQLite.
-fn store_email_password(
-    conn: &Connection,
-    account_id: i64,
-    email: &str,
-    password: &str,
-) -> Result<()> {
-    // Try keyring first
-    if is_keyring_available() {
-        match store_email_credential(email, password) {
-            Ok(_) => {
-                // Mark database record to indicate password is in keyring
-                conn.execute(
-                    "UPDATE email_accounts SET password_encrypted = ?1 WHERE id = ?2",
-                    params![KEYRING_MARKER, account_id],
-                )
-                .map_err(|e| Error::Generic(format!("Failed to update password marker: {}", e)))?;
-
-                info!(
-                    "Stored password in OS keyring for account {} ({})",
-                    account_id, email
-                );
-                return Ok(());
-            }
-            Err(e) => {
-                warn!(
-                    "Failed to store in keyring, falling back to encrypted storage: {}",
-                    e
-                );
-            }
-        }
-    }
-
-    // Fallback to encrypted SQLite storage
+/// Encrypted with AES-256-GCM under a machine-derived key and written to the
+/// `password_encrypted` column of the already SQLCipher-encrypted database.
+///
+/// This deliberately does NOT use the OS keyring. Doing so put email behind a
+/// second, separately-ACLed Keychain item, and because the read path migrated
+/// on access, simply reading a password performed a Keychain *write* — so the
+/// user was re-prompted during ordinary use. The database key remains in the
+/// OS keyring (see data::db::key_management); that one is required to open the
+/// database at all.
+fn store_email_password(conn: &Connection, account_id: i64, password: &str) -> Result<()> {
     store_email_password_encrypted(conn, account_id, password)
 }
 
-/// Retrieve an email password securely
+/// Retrieve an email password.
 ///
-/// Checks if password is stored in keyring (marker present) or fallback storage.
-/// Handles migration from legacy formats automatically.
+/// Accounts saved by an earlier build stored the literal `__KEYRING__` marker
+/// instead of ciphertext, with the real secret in the OS keyring. That keyring
+/// is no longer read, so those accounts cannot be recovered here and the
+/// password must be re-entered. Returning a clear error beats prompting for a
+/// Keychain item this build no longer owns.
 fn get_email_password(conn: &Connection, account_id: i64) -> Result<String> {
-    // First get the email address and stored value
-    let (email, encrypted_value): (String, String) = conn
+    let encrypted_value: String = conn
         .query_row(
-            "SELECT email, password_encrypted FROM email_accounts WHERE id = ?1",
+            "SELECT password_encrypted FROM email_accounts WHERE id = ?1",
             params![account_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| row.get(0),
         )
         .map_err(|e| Error::Database(format!("Failed to retrieve password: {}", e)))?;
 
-    // Check if password is in keyring
-    if encrypted_value == KEYRING_MARKER {
-        return get_email_credential(&email);
+    if encrypted_value == LEGACY_KEYRING_MARKER {
+        return Err(Error::Generic(
+            "This account's password was stored in the OS keyring by an earlier version. \
+             Re-enter the password to save it in encrypted local storage."
+                .to_string(),
+        ));
     }
 
-    // Handle empty value (shouldn't happen but be defensive)
     if encrypted_value.is_empty() {
         return Err(Error::Generic(
             "No password stored for this account".to_string(),
         ));
     }
 
-    // Get password from encrypted storage
     let password = get_email_password_encrypted(&encrypted_value)?;
 
-    // Attempt to migrate to keyring if available
-    if is_keyring_available() {
-        debug!(
-            "Migrating password for account {} ({}) to OS keyring",
-            account_id, email
-        );
-        if let Err(e) = migrate_password_to_keyring(conn, account_id, &email, &password) {
-            warn!("Failed to migrate password to keyring: {}", e);
-            // Continue with the password we already have
-        } else {
-            info!(
-                "Successfully migrated password to OS keyring for account {}",
-                account_id
-            );
+    // Legacy rows hold Base64, which is an encoding, not encryption. The value
+    // has just been decoded, so upgrade the row to AES-256-GCM in place and let
+    // the weak form disappear on first read. A failure here is not fatal — the
+    // caller already has the password it asked for.
+    if !encrypted_value.starts_with('{') {
+        if let Err(error) = store_email_password_encrypted(conn, account_id, &password) {
+            warn!("Failed to upgrade legacy email password to encrypted storage: {error}");
         }
     }
 
     Ok(password)
 }
 
-/// Migrate a password from SQLite storage to OS keyring
-fn migrate_password_to_keyring(
-    conn: &Connection,
-    account_id: i64,
-    email: &str,
-    password: &str,
-) -> Result<()> {
-    // Store in keyring
-    store_email_credential(email, password)?;
-
-    // Update database marker
-    conn.execute(
-        "UPDATE email_accounts SET password_encrypted = ?1 WHERE id = ?2",
-        params![KEYRING_MARKER, account_id],
-    )
-    .map_err(|e| Error::Generic(format!("Failed to update password marker: {}", e)))?;
-
-    Ok(())
-}
-
-/// Delete the stored password for an email account
-///
-/// Cleans up both keyring and database storage.
+/// Delete the stored password for an email account.
 fn delete_email_password(conn: &Connection, account_id: i64) -> Result<()> {
-    // Get the email address first to delete from keyring
-    let email: std::result::Result<String, _> = conn.query_row(
-        "SELECT email FROM email_accounts WHERE id = ?1",
-        params![account_id],
-        |row| row.get(0),
-    );
-
-    // Delete from keyring if we have the email
-    if let Ok(email) = email {
-        if let Err(e) = delete_email_credential(&email) {
-            warn!("Failed to delete keyring credential for {}: {}", email, e);
-        }
-    }
-
-    // Clear the database record
     conn.execute(
         "UPDATE email_accounts SET password_encrypted = '' WHERE id = ?1",
         params![account_id],
@@ -891,7 +755,7 @@ fn open_connection(app_handle: &AppHandle) -> Result<Connection> {
 
 /// Insert or update an email account in the database
 ///
-/// The password is stored securely using OS keyring (with SQLite+AES fallback).
+/// The password is encrypted with AES-256-GCM and stored in the local database.
 /// We first insert/update the account metadata with an empty password placeholder,
 /// then store the password securely using `store_email_password`.
 fn upsert_email_account(
@@ -942,8 +806,8 @@ fn upsert_email_account(
         )
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
-    // Store the password securely (OS keyring preferred, SQLite+AES fallback)
-    store_email_password(conn, id, email, password)?;
+    // Store the password encrypted in the local database
+    store_email_password(conn, id, password)?;
 
     Ok(id)
 }
@@ -992,194 +856,6 @@ const fn int_to_bool(value: i64) -> bool {
 
 // =============================================================================
 // Keyring Migration Tauri Commands
-// =============================================================================
-
-/// Response for keyring status check
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct KeyringStatus {
-    /// Whether OS keyring is available on this system
-    pub keyring_available: bool,
-    /// Total number of email accounts
-    pub total_accounts: usize,
-    /// Number of accounts with credentials in keyring
-    pub accounts_in_keyring: usize,
-    /// Number of accounts with credentials in encrypted SQLite storage
-    pub accounts_in_sqlite: usize,
-    /// Number of accounts with legacy Base64 storage (needs migration)
-    pub accounts_legacy: usize,
-}
-
-/// Migration result for a single account
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MigrationResult {
-    /// Email address of the account
-    pub email: String,
-    /// Whether migration was successful
-    pub success: bool,
-    /// Error message if migration failed
-    pub error: Option<String>,
-}
-
-/// Check the keyring status for all email accounts
-///
-/// Returns information about:
-/// - Whether OS keyring is available
-/// - How many accounts have credentials in keyring
-/// - How many accounts have credentials in SQLite (encrypted)
-/// - How many accounts have legacy Base64 storage
-#[tauri::command]
-pub async fn email_check_keyring_status(app_handle: AppHandle) -> Result<KeyringStatus> {
-    let conn = open_connection(&app_handle)?;
-
-    let keyring_available = is_keyring_available();
-
-    let mut total_accounts = 0;
-    let mut accounts_in_keyring = 0;
-    let mut accounts_in_sqlite = 0;
-    let mut accounts_legacy = 0;
-
-    let mut stmt = conn
-        .prepare("SELECT email, password_encrypted FROM email_accounts")
-        .map_err(|e| Error::Database(format!("Failed to query accounts: {}", e)))?;
-
-    let accounts = stmt
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .map_err(|e| Error::Database(format!("Failed to query accounts: {}", e)))?;
-
-    for account in accounts {
-        let (email, password_encrypted) =
-            account.map_err(|e| Error::Database(format!("Failed to read account: {}", e)))?;
-
-        total_accounts += 1;
-
-        if password_encrypted == KEYRING_MARKER {
-            accounts_in_keyring += 1;
-        } else if password_encrypted.is_empty() {
-            // No password stored
-            continue;
-        } else if password_encrypted.starts_with('{') {
-            // JSON EncryptedSecret format
-            accounts_in_sqlite += 1;
-        } else {
-            // Likely legacy Base64 format
-            accounts_legacy += 1;
-        }
-
-        debug!(
-            "Account {}: storage={}",
-            email,
-            if password_encrypted == KEYRING_MARKER {
-                "keyring"
-            } else if password_encrypted.starts_with('{') {
-                "sqlite_encrypted"
-            } else {
-                "legacy_base64"
-            }
-        );
-    }
-
-    Ok(KeyringStatus {
-        keyring_available,
-        total_accounts,
-        accounts_in_keyring,
-        accounts_in_sqlite,
-        accounts_legacy,
-    })
-}
-
-/// Migrate all email credentials to OS keyring
-///
-/// This command will:
-/// 1. Check if keyring is available
-/// 2. For each account with credentials in SQLite or legacy storage:
-///    - Decrypt/decode the password
-///    - Store it in the OS keyring
-///    - Update the database marker
-///
-/// Returns a list of migration results for each account.
-#[tauri::command]
-pub async fn email_migrate_credentials(app_handle: AppHandle) -> Result<Vec<MigrationResult>> {
-    info!("Starting email credential migration to OS keyring");
-
-    if !is_keyring_available() {
-        return Err(Error::Generic(
-            "OS keyring is not available on this system".to_string(),
-        ));
-    }
-
-    let conn = open_connection(&app_handle)?;
-    let mut results = Vec::new();
-
-    // Get all accounts that are NOT in keyring
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, email, password_encrypted FROM email_accounts
-             WHERE password_encrypted != '' AND password_encrypted != ?1",
-        )
-        .map_err(|e| Error::Database(format!("Failed to query accounts: {}", e)))?;
-
-    let accounts: Vec<(i64, String, String)> = stmt
-        .query_map(params![KEYRING_MARKER], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-            ))
-        })
-        .map_err(|e| Error::Database(format!("Failed to query accounts: {}", e)))?
-        .collect::<rusqlite::Result<Vec<_>>>()
-        .map_err(|e| Error::Database(format!("Failed to read accounts: {}", e)))?;
-
-    for (account_id, email, password_encrypted) in accounts {
-        let result = migrate_single_account(&conn, account_id, &email, &password_encrypted);
-
-        match &result {
-            Ok(_) => {
-                info!("Successfully migrated credentials for {}", email);
-                results.push(MigrationResult {
-                    email,
-                    success: true,
-                    error: None,
-                });
-            }
-            Err(e) => {
-                error!("Failed to migrate credentials for {}: {}", email, e);
-                results.push(MigrationResult {
-                    email,
-                    success: false,
-                    error: Some(e.to_string()),
-                });
-            }
-        }
-    }
-
-    info!(
-        "Migration complete: {} successful, {} failed",
-        results.iter().filter(|r| r.success).count(),
-        results.iter().filter(|r| !r.success).count()
-    );
-
-    Ok(results)
-}
-
-/// Migrate a single account's credentials to keyring
-fn migrate_single_account(
-    conn: &Connection,
-    account_id: i64,
-    email: &str,
-    password_encrypted: &str,
-) -> Result<()> {
-    // Decrypt/decode the password from current storage
-    let password = get_email_password_encrypted(password_encrypted)?;
-
-    // Store in keyring and update database marker
-    migrate_password_to_keyring(conn, account_id, email, &password)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1211,8 +887,7 @@ mod tests {
 
     #[test]
     fn test_secure_password_storage_and_retrieval() {
-        // This test uses the encrypted fallback storage directly since keyring
-        // may not be available in test/CI environments (requires signed app, permissions, etc.)
+        // Round-trip through the only storage path there is now.
         let conn = create_test_db();
         let original_password = "super-secret-password-123!@#";
 
@@ -1228,7 +903,7 @@ mod tests {
 
         let account_id = conn.last_insert_rowid();
 
-        // Test the fallback encrypted storage (works reliably in all environments)
+        // Store, then read back through the public accessor.
         store_email_password_encrypted(&conn, account_id, original_password).unwrap();
 
         // Verify the password can be retrieved
@@ -1237,10 +912,7 @@ mod tests {
     }
 
     #[test]
-    fn test_legacy_base64_migration() {
-        // Tests migration from legacy Base64 to encrypted storage
-        // Note: Migration to keyring may not work in test environments, but the
-        // encrypted storage fallback ensures passwords remain accessible
+    fn test_legacy_base64_is_upgraded_to_encrypted_on_read() {
         use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 
         let conn = create_test_db();
@@ -1263,7 +935,10 @@ mod tests {
         let retrieved = get_email_password(&conn, account_id).unwrap();
         assert_eq!(original_password, retrieved);
 
-        // Check what storage format is used after migration attempt
+        // With the OS keyring gone, this is deterministic: the row is upgraded
+        // in place to AES-256-GCM on first read. It previously depended on
+        // whether the machine had a keychain and whether the developer clicked
+        // Allow, so the assertion could not state anything definite.
         let stored_value: String = conn
             .query_row(
                 "SELECT password_encrypted FROM email_accounts WHERE id = ?1",
@@ -1272,22 +947,17 @@ mod tests {
             )
             .unwrap();
 
-        // Migration target depends on what the environment allows: the keyring
-        // marker when the OS keychain accepted the write, encrypted JSON when it
-        // fell back. A developer machine can also *deny* the keychain prompt, and
-        // a CI box has no keychain at all — in both cases the row legitimately
-        // stays legacy Base64, which the comment here always acknowledged but the
-        // assertion did not, so the suite failed whenever someone clicked Deny.
-        //
-        // The invariant that actually matters is the round-trip asserted above:
-        // the caller gets the original password back regardless of storage form.
         assert!(
-            stored_value == KEYRING_MARKER
-                || stored_value.starts_with('{')
-                || stored_value == legacy_base64,
-            "Password should be keyring-backed, encrypted JSON, or unchanged legacy \
-             Base64 when the keychain is unavailable; got an unrecognised form"
+            stored_value.starts_with('{'),
+            "legacy Base64 should be upgraded to encrypted JSON on read, got: {stored_value}"
         );
+        assert_ne!(
+            stored_value, legacy_base64,
+            "the weak Base64 form should no longer be in the row"
+        );
+
+        // And the upgraded row still round-trips.
+        assert_eq!(original_password, get_email_password(&conn, account_id).unwrap());
     }
 
     #[test]
@@ -1305,10 +975,10 @@ mod tests {
 
         let account_id = conn.last_insert_rowid();
 
-        // Store a password using encrypted fallback
+        // Store a password
         store_email_password_encrypted(&conn, account_id, "to-be-deleted").unwrap();
 
-        // Verify it's stored (either in keyring or database)
+        // Verify it's stored
         let stored: String = conn
             .query_row(
                 "SELECT password_encrypted FROM email_accounts WHERE id = ?1",
@@ -1359,7 +1029,7 @@ mod tests {
 
         let account_id = conn.last_insert_rowid();
 
-        // Test the encrypted storage directly (bypassing keyring)
+        // Test the encrypted storage directly
         store_email_password_encrypted(&conn, account_id, original_password).unwrap();
 
         // Verify the password is stored as JSON EncryptedSecret
@@ -1420,32 +1090,39 @@ mod tests {
     }
 
     #[test]
-    fn test_keyring_helper_functions() {
-        // Test the keyring helper functions directly
-        // Note: These may fail in test environments without proper keychain access
+    fn legacy_keyring_rows_ask_for_the_password_instead_of_prompting() {
+        // Rows written by the previous build hold the marker, not ciphertext.
+        // The secret lived in an OS keyring this build no longer reads, so the
+        // only honest outcome is a clear instruction to re-enter it.
+        let conn = create_test_db();
+        conn.execute(
+            "INSERT INTO email_accounts (provider, email, imap_host, imap_port, imap_use_tls,
+                                         smtp_host, smtp_port, smtp_use_tls, password_encrypted, created_at)
+             VALUES ('gmail', 'keyring-era@example.com', 'imap.gmail.com', 993, 1,
+                     'smtp.gmail.com', 587, 1, ?1, 1234567890)",
+            params![LEGACY_KEYRING_MARKER],
+        )
+        .unwrap();
 
-        let test_email = "keyring-test@example.com";
-        let test_password = "keyring-test-password";
+        let account_id = conn.last_insert_rowid();
+        let error = get_email_password(&conn, account_id).unwrap_err().to_string();
 
-        // Try to store - may fail if keyring not available
-        let store_result = store_email_credential(test_email, test_password);
+        assert!(
+            error.contains("Re-enter the password"),
+            "expected a re-entry instruction, got: {error}"
+        );
 
-        if store_result.is_ok() {
-            // If store succeeded, verify we can retrieve
-            let retrieve_result = get_email_credential(test_email);
-            if let Ok(retrieved) = retrieve_result {
-                assert_eq!(test_password, retrieved);
-            }
-            // Clean up
-            let _ = delete_email_credential(test_email);
-        }
-        // If keyring operations fail, that's OK - fallback storage is tested separately
-    }
+        // Storing again must clear the marker and leave real ciphertext.
+        store_email_password(&conn, account_id, "fresh-password").unwrap();
+        assert_eq!("fresh-password", get_email_password(&conn, account_id).unwrap());
 
-    #[test]
-    fn test_keyring_availability_check() {
-        // Test that the keyring availability check doesn't panic
-        // Just verify it runs without panicking and returns a boolean
-        let _available: bool = is_keyring_available();
+        let stored: String = conn
+            .query_row(
+                "SELECT password_encrypted FROM email_accounts WHERE id = ?1",
+                params![account_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(stored.starts_with('{'), "expected encrypted JSON, got: {stored}");
     }
 }

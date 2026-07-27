@@ -28,11 +28,11 @@ Desktop is the full-trust surface (Local + BYOK + Managed Cloud) and the suite's
 
 ## Windows Credential Manager
 
-🟡 Partial. The `keyring = "3"` crate (`Cargo.toml`) targets Windows Credential Manager, and a status probe exists (`email_check_keyring_status`). Gap: the dominant storage path deliberately uses machine-derived AES-256-GCM in SQLite to avoid credential-prompt friction, so the OS-keychain backend is not yet the primary BYOK vault. Requirement (canon target): keys land in Credential Manager; migrate machine-derived vault entries behind it.
+🟡 Partial. The `keyring = "3"` crate (`Cargo.toml`) targets Windows Credential Manager and is used for exactly one secret: the SQLCipher database key (`data/db/key_management.rs`), which must be in OS storage because it is what opens the database. Email credentials used the crate too until 2026-07-27 and no longer do — the read path migrated on access, so reading a password performed a Credential Manager _write_ and re-prompted the user during ordinary use. Gap: application secrets otherwise use machine-derived AES-256-GCM in SQLite, so the OS-keychain backend is not the primary BYOK vault. Requirement (canon target): keys land in Credential Manager; migrate machine-derived vault entries behind it.
 
 ## macOS Keychain
 
-🟡 Partial. Same `keyring` crate covers macOS Keychain; today secrets default to the machine-derived AES-GCM vault (`machine_key.rs` notes it "replaces the keyring-based approach which required user permission"). Requirement: converge BYOK/connector secrets to Keychain (Data Protection keychain, `kSecAttrAccessibleWhenUnlocked`), keeping machine-derived encryption only as a documented fallback.
+🟡 Partial. Same `keyring` crate covers macOS Keychain, and as above it now holds only the SQLCipher database key. Other secrets default to the machine-derived AES-GCM vault (`machine_key.rs` notes it "replaces the keyring-based approach which required user permission"). Note the tension with the requirement below: each additional Keychain item is separately ACLed, so a rebuilt or differently-signed binary re-prompts per item, and denying one prompt for the database key drops the app into the local-data-recovery screen. Requirement: converge BYOK/connector secrets to Keychain (Data Protection keychain, `kSecAttrAccessibleWhenUnlocked`), keeping machine-derived encryption only as a documented fallback — but converging must not reintroduce read paths that write, which is what made email prompt repeatedly.
 
 ## Linux Secret Service
 
