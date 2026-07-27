@@ -183,6 +183,14 @@ pub struct AgentSession {
     /// Maps from the TUI Effort picker: Medium=None, High=Some(16384), Max=Some(32768).
     /// Only applied when the active provider is Anthropic.
     pub thinking_budget_tokens: Option<u32>,
+    /// The Effort picker's selection, kept whole.
+    ///
+    /// `thinking_budget_tokens` above is only the Anthropic projection of this,
+    /// and it collapses Low and Medium to the same `None`. Storing the level
+    /// itself lets the request boundary derive the OpenAI `reasoning.effort`
+    /// string and the Gemini thinking budget too — previously both ran at
+    /// provider default regardless of what the user picked.
+    pub effort: Option<crate::design_system::Effort>,
 }
 
 /// Metadata returned after a single agent turn.
@@ -407,6 +415,7 @@ impl AgentSession {
             json_events: false,
             json_session_id: String::new(),
             thinking_budget_tokens: None,
+            effort: None,
         }
     }
 

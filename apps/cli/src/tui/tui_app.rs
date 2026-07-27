@@ -2453,6 +2453,8 @@ enum SlashResult {
     RunCompact(String),
     RunLogin,
     RunLogout,
+    /// Leave the TUI, run the interactive voice loop, then re-enter.
+    RunVoice(String),
 }
 
 fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
@@ -2923,13 +2925,23 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         // ── Voice ──
-        // run_voice_mode is async and requires session/config args; the TUI slash
-        // handler is sync so we surface instructions instead of invoking directly.
-        // Use `agi --no-tui --voice-lang en` for the interactive REPL voice loop.
+        // The slash handler is sync and `run_voice_mode` is async, which is why
+        // this used to print "Voice mode requires the REPL" over a complete
+        // implementation. It does not require the REPL — it requires leaving the
+        // alt-screen, which is exactly what RunLogin/RunAdvisor already do.
         "/voice" | "/v" => {
-            SlashResult::SystemMessage(
-                "Voice mode requires the REPL (not TUI). Run:\n  agi --no-tui --voice-lang en\nSupported languages: en es fr de it pt ja ko zh ar hi ru nl pl sv da no fi tr cs".to_string()
-            )
+            let lang = if arg.is_empty() { "en" } else { arg };
+            if crate::voice::is_valid_language(lang) {
+                SlashResult::RunVoice(lang.to_string())
+            } else {
+                let langs = crate::voice::supported_languages();
+                let codes: Vec<&str> = langs.iter().map(|(c, _)| *c).collect();
+                SlashResult::SystemMessage(format!(
+                    "Unsupported language '{}'. Supported: {}",
+                    lang,
+                    codes.join(", ")
+                ))
+            }
         }
 
         // ── Theme ──
@@ -3739,6 +3751,25 @@ async fn run_event_loop(
                                     }
                                 }
                             }
+                            SlashResult::RunVoice(lang) => {
+                                // Voice owns the terminal (it prints prompts and
+                                // reads audio state), so drop the alt-screen for
+                                // the duration and restore it after — the same
+                                // shape as RunLogin above.
+                                restore_terminal(terminal)?;
+                                let result =
+                                    crate::voice::run_voice_mode(&mut app.session, &app.config, &lang)
+                                        .await;
+                                *terminal = setup_terminal()?;
+                                app.sync_stats();
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: match result {
+                                        Ok(()) => "Voice session ended.".to_string(),
+                                        Err(e) => format!("Voice mode failed: {e}"),
+                                    },
+                                });
+                            }
                             SlashResult::RunCompact(focus) => {
                                 let focus = (!focus.trim().is_empty()).then_some(focus.as_str());
                                 let result = app.session.compact_now(&app.config, focus).await;
@@ -3994,6 +4025,7 @@ async fn send_message(
     // every send. Only Anthropic respects this field; other providers ignore it.
     // Low/Medium → None (standard inference), High/Max → Some(N tokens).
     app.session.thinking_budget_tokens = app.effort.thinking_budget_for_anthropic();
+    app.session.effort = Some(app.effort);
 
     // Snapshot the session-derived display bits before the send future takes a
     // `&mut app.session` borrow. These don't change during a turn (provider is
@@ -4833,6 +4865,36 @@ mod tests {
         let session = crate::agent::AgentSession::new("claude-sonnet-5", &sys_ctx, None);
         let config = crate::config::CliConfig::default();
         TuiApp::new(session, config, true /* sandbox_disabled */)
+    }
+
+    /// Regression: `/voice` in the TUI printed "Voice mode requires the REPL
+    /// (not TUI). Run: agi --no-tui --voice-lang en" on top of a complete,
+    /// working 1,186-line implementation. Voice never needed the REPL — it
+    /// needed the alt-screen dropped, which RunLogin/RunAdvisor already do.
+    #[test]
+    fn voice_slash_dispatches_instead_of_redirecting_to_the_repl() {
+        let mut app = minimal_app();
+
+        // Default language, and an explicit supported one, both dispatch.
+        assert!(matches!(
+            handle_slash("/voice", &mut app),
+            SlashResult::RunVoice(ref l) if l == "en"
+        ));
+        assert!(matches!(
+            handle_slash("/v es", &mut app),
+            SlashResult::RunVoice(ref l) if l == "es"
+        ));
+
+        // An unsupported language is rejected in place, listing what works —
+        // it must not dispatch a voice session that would immediately fail.
+        match handle_slash("/voice klingon", &mut app) {
+            SlashResult::SystemMessage(msg) => {
+                assert!(msg.contains("Unsupported language"), "got: {msg}");
+                assert!(msg.contains("en"), "should list supported codes: {msg}");
+                assert!(!msg.contains("--no-tui"), "must not redirect to the REPL");
+            }
+            _ => panic!("expected a rejection message for an unsupported language"),
+        }
     }
 
     #[test]
