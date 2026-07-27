@@ -146,6 +146,37 @@ pub fn sandbox_disabled() -> bool {
 ///             some parsers
 ///   - Leading/trailing whitespace: would silently change the matched subpath
 ///   - Root `/`: too broad (would allow write everywhere)
+/// Quote one argv element for a POSIX shell.
+///
+/// `agi sandbox` takes argv but the sandbox executors run `sh -c <string>`, so
+/// argv has to be rebuilt into a command line. A naive `join(" ")` loses every
+/// quote: `agi sandbox -- sh -c 'echo A; echo B'` became
+/// `sh -c echo A; echo B`, which runs `sh -c echo` (printing an empty line,
+/// with `A` as $0) and then executes `echo B` in the *outer* shell. The first
+/// command silently vanished and the second escaped the intended nesting.
+///
+/// Unquoted for characters a shell treats literally; single-quoted otherwise,
+/// with embedded single quotes closed-escaped-reopened.
+pub fn shell_quote(arg: &str) -> String {
+    let safe = !arg.is_empty()
+        && arg.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b'=' | b':' | b',' | b'@' | b'+')
+        });
+    if safe {
+        return arg.to_string();
+    }
+    format!("'{}'", arg.replace('\'', r"'\''"))
+}
+
+/// Rebuild an argv vector into a shell command line without losing quoting.
+pub fn shell_join(args: &[String]) -> String {
+    args.iter()
+        .map(|a| shell_quote(a))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+
 ///   - Empty or relative paths: rejected for correctness
 fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
     let s = path
@@ -235,6 +266,14 @@ pub async fn execute_sandboxed(
 {network_rules}(allow file-read* (subpath "/usr") (subpath "/bin") (subpath "/sbin")
                    (subpath "/Library") (subpath "/System")
                    (subpath "/private/var/db") (subpath "/dev")
+                   ;; macOS resolves `sh` through this symlink directory
+                   ;; (/private/var/select/sh -> /bin/bash). Denying it made
+                   ;; every sandboxed shell print
+                   ;; "Error opening /private/var/select/sh: Operation not
+                   ;; permitted" on success — the command still ran, so the
+                   ;; output looked like a failure that wasn't one. Read-only,
+                   ;; and it grants nothing beyond the /bin access above.
+                   (subpath "/private/var/select")
                    (subpath "/etc") (subpath "/tmp") (subpath "/private/tmp")
                    (literal "/") (subpath "/opt"))
 (allow file-read* (subpath "{ws}"))
@@ -329,6 +368,48 @@ fn which_exists(binary: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn shell_quote_leaves_plain_arguments_alone() {
+        for arg in ["echo", "hello", "/tmp/file.txt", "--flag=value", "a,b:c@d+e"] {
+            assert_eq!(shell_quote(arg), arg, "should not quote {arg}");
+        }
+    }
+
+    #[test]
+    fn shell_quote_neutralises_command_separators() {
+        // The regression: `agi sandbox echo 'hello; touch /tmp/x'` used to be
+        // joined naively, so `sh -c` received two commands and ran the touch.
+        // The argument must survive as one literal token.
+        let quoted = shell_quote("hello; touch /tmp/x");
+        assert_eq!(quoted, "'hello; touch /tmp/x'");
+    }
+
+    #[test]
+    fn shell_quote_handles_embedded_single_quotes() {
+        // Closed-escaped-reopened; a naive wrap would terminate the string early
+        // and leave the rest as shell syntax.
+        assert_eq!(shell_quote("it's"), r"'it'\''s'");
+    }
+
+    #[test]
+    fn shell_join_preserves_a_quoted_shell_command() {
+        // `sh -c 'echo A; echo B'` must reach the sandbox as three argv items,
+        // the third still one string. Joining without quoting dropped `echo A`
+        // entirely and ran `echo B` outside the intended nesting.
+        let joined = shell_join(&[
+            "sh".to_string(),
+            "-c".to_string(),
+            "echo A; echo B".to_string(),
+        ]);
+        assert_eq!(joined, "sh -c 'echo A; echo B'");
+    }
+
+    #[test]
+    fn shell_join_quotes_empty_and_spaced_arguments() {
+        let joined = shell_join(&["cmd".to_string(), String::new(), "two words".to_string()]);
+        assert_eq!(joined, "cmd '' 'two words'");
+    }
     use super::*;
     use std::path::PathBuf;
 
