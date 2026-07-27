@@ -155,6 +155,16 @@ export {
   generatedFileFromLibraryItem,
 } from './components/library/LibraryView';
 export type { LibraryTransport } from './components/library/LibraryView';
+export { TasksPage } from './components/tasks/TasksPage';
+export type { TasksTransport } from './components/tasks/TasksPage';
+export {
+  workModeLabel,
+  taskStateLabel,
+  taskStateTone,
+  isCancellableState,
+  TASK_TONE_BADGE_CLASS,
+} from './components/tasks/task-display';
+export type { AgentTaskState, TaskStateTone } from './components/tasks/task-display';
 export type { GeneratedFileCardProps } from './components/GeneratedFileCard';
 export {
   MessageGeneratedFiles,
