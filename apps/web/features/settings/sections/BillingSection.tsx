@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useBillingStore } from '@shared/stores/web-auth-store';
+import { openBillingPortal } from '@/features/billing/services/stripe-payments';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 
 // Real Stripe-backed shapes returned by the web billing routes.
@@ -145,6 +146,28 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function BillingSection() {
   const subscription = useBillingStore((s) => s.subscription);
+
+  // "Manage billing" and "Update payment method" are Stripe Customer Portal
+  // actions, but both were `<Link href="/billing">` — the old duplicate billing
+  // dashboard. Now that `/billing` redirects here, following them would land
+  // the user back on the screen they clicked from: two dead controls. They
+  // open the portal, which is what their labels have always claimed.
+  const [portalPending, setPortalPending] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
+
+  async function openPortal() {
+    if (portalPending) return;
+    setPortalPending(true);
+    setPortalError(null);
+    try {
+      await openBillingPortal();
+    } catch (error) {
+      // openBillingPortal navigates away on success, so reaching here means it
+      // failed. Silence would look like a dead button all over again.
+      setPortalError(error instanceof Error ? error.message : 'Could not open billing portal.');
+      setPortalPending(false);
+    }
+  }
 
   const tier: string = String(subscription?.tier ?? 'free').toLowerCase();
   const planPricing = BILLING_PLAN_PRICING[tier as keyof typeof BILLING_PLAN_PRICING];
@@ -353,8 +376,10 @@ export function BillingSection() {
             {isFreeTier ? 'Upgrade plan' : 'Adjust plan'}
           </Link>
           {!isFreeTier && (
-            <Link
-              href="/billing"
+            <button
+              type="button"
+              onClick={openPortal}
+              disabled={portalPending}
               style={{
                 padding: '7px 14px',
                 background: 'transparent',
@@ -362,14 +387,25 @@ export function BillingSection() {
                 borderRadius: 'var(--radius)',
                 color: 'var(--text-2)',
                 fontSize: 13,
-                textDecoration: 'none',
-                cursor: 'pointer',
+                cursor: portalPending ? 'progress' : 'pointer',
               }}
             >
-              Manage billing
-            </Link>
+              {portalPending ? 'Opening…' : 'Manage billing'}
+            </button>
           )}
         </div>
+        {portalError && (
+          <div
+            role="alert"
+            style={{
+              padding: '0 20px 16px',
+              fontSize: 13,
+              color: 'var(--danger, #b3261e)',
+            }}
+          >
+            {portalError}
+          </div>
+        )}
       </section>
 
       {/* Payment section (paid users only) */}
@@ -423,8 +459,10 @@ export function BillingSection() {
                     : 'No card on file'}
               </span>
             </div>
-            <Link
-              href="/billing"
+            <button
+              type="button"
+              onClick={openPortal}
+              disabled={portalPending}
               style={{
                 padding: '6px 14px',
                 background: 'transparent',
@@ -432,12 +470,11 @@ export function BillingSection() {
                 borderRadius: 'var(--radius-md)',
                 color: 'var(--text-2)',
                 fontSize: 13,
-                textDecoration: 'none',
-                cursor: 'pointer',
+                cursor: portalPending ? 'progress' : 'pointer',
               }}
             >
-              {defaultCard ? 'Update' : 'Add payment method'}
-            </Link>
+              {portalPending ? 'Opening…' : defaultCard ? 'Update' : 'Add payment method'}
+            </button>
           </div>
         </section>
       )}
