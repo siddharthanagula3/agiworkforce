@@ -3,7 +3,7 @@
  *
  * Moonshot AI (Kimi) provider adapter implementing `ProviderAdapter` from
  * `@agiworkforce/types`. Moonshot ships an OpenAI-compatible Chat Completions
- * endpoint at `https://api.moonshot.cn/v1`. The compat layer registers this
+ * endpoint at `https://api.moonshot.ai/v1`. The compat layer registers this
  * as `endpointClass: 'moonshot-native'` (see provider-attribution.ts +
  * openai-responses-payload-policy.ts's `MOONSHOT_NATIVE_BASE_URLS`), which
  * enables native streaming-usage compat (`stream_options.include_usage`).
@@ -45,7 +45,21 @@ import {
 import { MOONSHOT_MODEL_CATALOG } from './catalog';
 import { withMoonshotCacheUsageNormalization } from './cache-usage';
 
-const MOONSHOT_DEFAULT_BASE_URL = 'https://api.moonshot.cn/v1';
+/**
+ * Moonshot runs two separate platforms with separate accounts and separate
+ * keys: `api.moonshot.ai` (international) and `api.moonshot.cn` (China). A key
+ * issued for one is rejected by the other with a bare
+ * `401 Invalid Authentication`, which reads as a bad key rather than a key
+ * pointed at the wrong platform.
+ *
+ * The default was `.cn`, so an international key — the kind `founder_work.md`
+ * documents, and the kind that lists `kimi-k3` — failed out of the box with no
+ * hint that the endpoint was the problem. `.cn` remains reachable through
+ * `MOONSHOT_BASE_URL`; both hosts are allowlisted below and both are
+ * registered in `MOONSHOT_NATIVE_BASE_URLS`, so the streaming-usage compat is
+ * identical either way.
+ */
+const MOONSHOT_DEFAULT_BASE_URL = 'https://api.moonshot.ai/v1';
 
 /** Hosts a `baseUrl` override is allowed to resolve to (SSRF allowlist). */
 const MOONSHOT_ALLOWED_BASE_HOSTS: readonly string[] = [
