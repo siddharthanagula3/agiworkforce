@@ -877,7 +877,7 @@ mod tests {
             Provider::Anthropic
         );
         assert_eq!(
-            router.infer_provider_from_model("claude-haiku-4-5"),
+            router.infer_provider_from_model("claude-sonnet-5"),
             Provider::Anthropic
         );
         // Case insensitive

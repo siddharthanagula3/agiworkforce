@@ -8,7 +8,9 @@
  *   (a) GPT-5.6 Sol shows its exact none/low/medium/high/xhigh/max ladder.
  *   (b) non-reasoning model (Sonar) shows NO effort control.
  *   (c) Anthropic Opus 5 shows low/medium/high/xhigh/max.
- *   (d) Haiku 4.5 exposes no effort control because it has no effort ladder.
+ *   (d) removed: Haiku 4.5 was the only catalog model without an effort
+ *       ladder, and it was retired 2026-07-27. Every remaining model has
+ *       one, so 'no reasoning control' has no model to demonstrate it.
  *   (e) Fable 5 reasoning is mandatory and cannot be switched off.
  *   (f) GPT-5.6 Sol is live/selectable, while a synthetic future preview is disabled.
  */
@@ -56,7 +58,7 @@ const MODELS = vi.hoisted(() => [
     description: 'Frontier',
   },
   {
-    id: 'claude-haiku-4.5',
+    id: 'claude-sonnet-5',
     name: 'Claude 4.5 Haiku',
     provider: 'Anthropic',
     providerKey: 'anthropic',
@@ -263,18 +265,6 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
 
     fireEvent.change(slider, { target: { value: '3' } });
     expect(thinking.effort).toBe('high');
-  });
-
-  it('(d) Haiku 4.5 shows no reasoning control because it has no effort ladder', () => {
-    sel.id = 'claude-haiku-4.5';
-    thinking.effort = 'low';
-    render(<ComposerFooter />);
-    // Anthropic does not support output_config.effort for Haiku 4.5. A
-    // provider-owned token budget must not be presented as a fake effort UI.
-    expect(screen.queryByLabelText('Toggle extended thinking')).not.toBeInTheDocument();
-    expect(screen.queryByText('Extended thinking')).not.toBeInTheDocument();
-    expect(screen.queryByRole('slider', { name: 'Reasoning effort' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Change model' })).not.toHaveTextContent('Low');
   });
 
   it('(e) Fable 5 shows mandatory reasoning without an off switch', () => {

@@ -216,7 +216,7 @@ describe('free trial service', () => {
           reservedMicrousd: 5_000,
         },
         provider: 'anthropic',
-        model: 'claude-haiku-4.5',
+        model: 'claude-sonnet-5',
         estimatedInputTokens: 100,
         requestedMaxOutputTokens: 32,
       }),
@@ -287,7 +287,7 @@ describe('free trial service', () => {
       },
       outcome: 'completed',
       provider: 'anthropic',
-      model: 'claude-haiku-4.5',
+      model: 'claude-sonnet-5',
       usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
     });
 

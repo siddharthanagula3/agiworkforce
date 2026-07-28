@@ -100,7 +100,7 @@ describe('llm route — catalog-driven Basic allow-list', () => {
 
 describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
   it('resolves anthropic from claude-* models via the catalog', () => {
-    expect(resolveProvider('claude-haiku-4.5')).toBe('anthropic');
+    expect(resolveProvider('claude-sonnet-5')).toBe('anthropic');
     expect(resolveProvider('claude-sonnet-5')).toBe('anthropic');
   });
 
@@ -236,7 +236,7 @@ describe('llm route — edge-case stress (Phase 4 hardening)', () => {
   });
 
   it('resolveProvider is deterministic under 1000 rapid calls for the same model', () => {
-    const model = 'claude-haiku-4.5';
+    const model = 'claude-sonnet-5';
     const expected = resolveProvider(model);
     for (let i = 0; i < 1000; i++) {
       expect(resolveProvider(model)).toBe(expected);

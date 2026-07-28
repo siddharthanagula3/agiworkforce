@@ -87,7 +87,7 @@ describe('Article 50 gate — runs before the first /api/llm/* request', () => {
     await expect(
       client.send({
         providerId: 'anthropic',
-        model: 'claude-haiku-4.5',
+        model: 'claude-sonnet-5',
         requireManagedCloud: true,
         body: { messages: [{ role: 'user', content: 'hi' }] },
       }),
@@ -117,7 +117,7 @@ describe('Article 50 gate — runs before the first /api/llm/* request', () => {
 
     const result = await client.send({
       providerId: 'anthropic',
-      model: 'claude-haiku-4.5',
+      model: 'claude-sonnet-5',
       requireManagedCloud: true,
       body: { messages: [{ role: 'user', content: 'hi' }] },
     });

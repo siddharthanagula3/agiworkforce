@@ -75,7 +75,7 @@ function loadServerKeys(): void {
   }
 }
 
-const MODEL = 'claude-haiku-4-5';
+const MODEL = 'claude-sonnet-5';
 
 const PROMPT =
   'Fetch https://example.com/ with the url_fetch tool and quote the page heading ' +

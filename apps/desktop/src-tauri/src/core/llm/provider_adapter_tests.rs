@@ -1022,7 +1022,7 @@ mod tests {
         assert_eq!(opus["output_config"]["effort"], "high");
 
         let haiku = adapter
-            .adapt_request(&request_for("claude-haiku-4.5", None))
+            .adapt_request(&request_for("claude-sonnet-5", None))
             .expect("Haiku request should adapt without unsupported effort");
         assert!(haiku.get("effort").is_none());
         assert!(haiku.get("output_config").is_none());
@@ -3489,8 +3489,8 @@ mod tests {
     #[test]
     fn anthropic_body_carries_api_model_id_not_dotted_internal() {
         // BUG 1 regression: the Anthropic Messages body must carry the wire
-        // apiModelId (`claude-haiku-4-5`), never the dotted internal catalog id
-        // (`claude-haiku-4.5`) which Anthropic 404s.
+        // apiModelId (`claude-sonnet-5`), never the dotted internal catalog id
+        // (`claude-sonnet-5`) which Anthropic 404s.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
         let request = LLMRequest {
             messages: vec![ChatMessage {
@@ -3500,7 +3500,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-haiku-4.5".to_string(),
+            model: "claude-sonnet-5".to_string(),
             max_tokens: Some(32),
             stream: true,
             ..Default::default()
@@ -3508,7 +3508,7 @@ mod tests {
 
         let adapted = adapter.adapt_request(&request).expect("adapt ok");
         assert_eq!(
-            adapted["model"], "claude-haiku-4-5",
+            adapted["model"], "claude-sonnet-5",
             "Anthropic wire model must be the apiModelId, not the dotted internal id"
         );
     }

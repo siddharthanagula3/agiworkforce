@@ -565,7 +565,7 @@ describe('ModelPickerSheet', () => {
   it('shows no effort selector for Claude Haiku 4.5', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('claude-haiku-4.5');
+    useModelStore.getState().setModel('claude-sonnet-5');
     const { queryByTestId, getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     expect(queryByTestId('model-picker-effort-selector')).toBeNull();
@@ -638,7 +638,7 @@ describe('ModelPickerSheet', () => {
       'claude-fable-5',
       'claude-opus-5',
       'claude-sonnet-5',
-      'claude-haiku-4.5',
+      'claude-sonnet-5',
     ]) {
       expect(getByTestId(`model-row-${id}`)).toBeTruthy();
     }

@@ -11,7 +11,14 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { isRoutedViaOpenRouter, openRouterSlugFor, mappedModelIds } from '../aggregator-routing';
+import {
+  canFailoverToOpenRouter,
+  failoverMappedModelIds,
+  isRoutedViaOpenRouter,
+  mappedModelIds,
+  openRouterFailoverSlugFor,
+  openRouterSlugFor,
+} from '../aggregator-routing';
 
 const ENV_KEYS = ['OPENROUTER_API_KEY', 'AGI_OPENROUTER_ROUTED_PROVIDERS'] as const;
 const saved: Record<string, string | undefined> = {};
@@ -104,5 +111,92 @@ describe('aggregator routing', () => {
   it('maps nothing that is not in the catalog', () => {
     // Guards the reverse drift: a slug left behind after a model is retired.
     expect(mappedModelIds().length).toBeGreaterThan(0);
+  });
+});
+
+describe('OpenRouter failover routes', () => {
+  const saved = process.env['OPENROUTER_API_KEY'];
+  beforeEach(() => {
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test';
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env['OPENROUTER_API_KEY'];
+    else process.env['OPENROUTER_API_KEY'] = saved;
+  });
+
+  it('offers a failover route for a direct provider', () => {
+    expect(canFailoverToOpenRouter('anthropic', 'claude-sonnet-5')).toBe(true);
+    expect(openRouterFailoverSlugFor('claude-sonnet-5')).toBe('anthropic/claude-sonnet-5');
+  });
+
+  it('offers none when already on OpenRouter', () => {
+    // Retrying the same wire would just fail again.
+    expect(canFailoverToOpenRouter('openrouter', 'claude-sonnet-5')).toBe(false);
+    expect(canFailoverToOpenRouter('open_router', 'claude-sonnet-5')).toBe(false);
+  });
+
+  it('offers none without a key', () => {
+    delete process.env['OPENROUTER_API_KEY'];
+    expect(canFailoverToOpenRouter('anthropic', 'claude-sonnet-5')).toBe(false);
+  });
+
+  it('covers every chat model of every directly-called provider', async () => {
+    // The guard that matters over time: add a chat model for a direct provider
+    // and this fails unless it also has a failover route, rather than that
+    // model silently being the one with no safety net during an outage.
+    const { default: catalog } = await import('@agiworkforce/types/models.json', {
+      with: { type: 'json' },
+    });
+    const direct = new Set([
+      'anthropic',
+      'openai',
+      'google',
+      'deepseek',
+      'xai',
+      'moonshot',
+      'perplexity',
+    ]);
+    const NON_CHAT = new Set(['image', 'video', 'audio', 'embedding', 'tts', 'stt']);
+    const models = Object.values(
+      (
+        catalog as {
+          models: Record<
+            string,
+            { provider: string; apiModelId?: string; id: string; modelType?: string }
+          >;
+        }
+      ).models,
+    );
+    const missing = models
+      .filter((m) => direct.has(m.provider) && !NON_CHAT.has(m.modelType ?? ''))
+      .map((m) => m.apiModelId ?? m.id)
+      .filter((id) => openRouterFailoverSlugFor(id) === undefined);
+
+    expect(missing, `chat models with no OpenRouter failover route: ${missing.join(', ')}`).toEqual(
+      [],
+    );
+  });
+
+  it('has no slug for a model the catalog no longer contains', async () => {
+    // The reverse of the coverage check. Retiring a model leaves its slug
+    // behind, and a stale entry is invisible until someone routes to a model
+    // that no longer exists. This is what catches it.
+    const { default: catalog } = await import('@agiworkforce/types/models.json', {
+      with: { type: 'json' },
+    });
+    const known = new Set(
+      Object.values(
+        (catalog as { models: Record<string, { apiModelId?: string; id: string }> }).models,
+      ).map((m) => m.apiModelId ?? m.id),
+    );
+    const stale = [...mappedModelIds(), ...failoverMappedModelIds()].filter((id) => !known.has(id));
+    expect(stale, `slugs for models not in models.json: ${stale.join(', ')}`).toEqual([]);
+  });
+
+  it('never maps a model to both a permanent route and a failover route', () => {
+    // A model already served through OpenRouter has nowhere to fail over to;
+    // listing it in both maps would mean "retry the wire that just failed".
+    const both = mappedModelIds().filter((id) => openRouterFailoverSlugFor(id) !== undefined);
+    expect(both, `models in both routing maps: ${both.join(', ')}`).toEqual([]);
   });
 });

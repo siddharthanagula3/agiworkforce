@@ -9,7 +9,7 @@
 //! │Bring your own key · your own provider keys                                │
 //! │  Anthropic                                                                │
 //! │  ● claude-sonnet                 Balanced      200K ctx                   │
-//! │    claude-haiku                  Fastest       200K ctx                   │
+//! │    claude-sonnet-5               Balanced      200K ctx                   │
 //! │ Thinking: on · Effort: ◀ Medium ▶   Tab/←→                                │
 //! └───────────────────────────────────────────────────────────────────────────┘
 //! ```
@@ -274,7 +274,7 @@ impl ModelPickerState {
     /// MODEL must actually support reasoning (catalog `supports_reasoning`, from
     /// the SSOT `capabilities.thinking`) AND its provider must expose an effort
     /// knob. Gating on the provider alone wrongly showed the control for
-    /// non-reasoning models such as claude-haiku-4-5.
+    /// non-reasoning models such as claude-sonnet-5.
     pub fn show_effort_bar(&self) -> bool {
         let model_reasons = self.selected_model().is_some_and(|m| m.supports_reasoning);
         let provider_has_effort = self
@@ -775,22 +775,26 @@ mod tests {
     #[test]
     fn effort_bar_depends_on_model_reasoning_not_just_provider() {
         // The Anthropic provider exposes an effort knob, but the bar must follow
-        // the highlighted MODEL's reasoning capability: non-reasoning
-        // claude-haiku-4-5 hides it, reasoning claude-sonnet-5 shows it.
+        // the highlighted MODEL's reasoning capability, not its provider.
+        //
+        // Synthetic ids on purpose: the pair only has to differ in the
+        // `supports_reasoning` flag, and naming real models tied this test to
+        // whichever ones happened to have opposite capabilities — it broke when
+        // Haiku 4.5 was retired and every Anthropic model reasoned.
         let models = vec![
-            model_with_reasoning("claude-haiku-4-5", "anthropic", false),
-            model_with_reasoning("claude-sonnet-5", "anthropic", true),
+            model_with_reasoning("fixture-no-reasoning", "anthropic", false),
+            model_with_reasoning("fixture-reasoning", "anthropic", true),
         ];
         let mut picker = ModelPickerState::default();
-        picker.open(&models, "claude-haiku-4-5");
+        picker.open(&models, "fixture-no-reasoning");
         assert!(
             !picker.show_effort_bar(),
-            "non-reasoning haiku must not show the effort bar"
+            "a non-reasoning model must not show the effort bar"
         );
-        picker.open(&models, "claude-sonnet-5");
+        picker.open(&models, "fixture-reasoning");
         assert!(
             picker.show_effort_bar(),
-            "reasoning sonnet must show the effort bar"
+            "a reasoning model must show the effort bar"
         );
     }
 

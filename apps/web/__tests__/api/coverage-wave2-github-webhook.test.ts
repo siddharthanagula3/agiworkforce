@@ -70,8 +70,8 @@ vi.mock('@/lib/github-app', () => ({
 // ── Types catalog mock (model ID lookups) ────────────────────────────────────
 
 vi.mock('@agiworkforce/types', () => ({
-  getProviderDefaultModel: vi.fn(() => 'claude-haiku-4-5'),
-  getTaskModelForProvider: vi.fn(() => 'claude-haiku-4-5'),
+  getProviderDefaultModel: vi.fn(() => 'claude-sonnet-5'),
+  getTaskModelForProvider: vi.fn(() => 'claude-sonnet-5'),
 }));
 
 // Route under test — imported AFTER all vi.mock() calls
