@@ -131,3 +131,23 @@ jest.mock('react-native-webview', () => {
   const WebView = require('react-native').View;
   return { __esModule: true, WebView, default: WebView };
 });
+
+// expo-speech-recognition ships untranspiled TS and touches native modules at
+// import time, so any suite that reaches it fails to LOAD rather than fail a
+// test. That failure mode is quiet: the suite contributes 0 tests, the run
+// total silently drops, and the summary still reads "passed". It surfaced when
+// the chat tab began importing useVoiceConversation for inline voice mode —
+// chat-tab-mode-toggle's 12 tests vanished without a visible failure.
+jest.mock('expo-speech-recognition', () => ({
+  __esModule: true,
+  ExpoSpeechRecognitionModule: {
+    requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+    getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+    supportsOnDeviceRecognition: jest.fn().mockReturnValue(true),
+    start: jest.fn(),
+    stop: jest.fn(),
+    abort: jest.fn(),
+  },
+  useSpeechRecognitionEvent: jest.fn(),
+  addSpeechRecognitionListener: jest.fn(() => ({ remove: jest.fn() })),
+}));
