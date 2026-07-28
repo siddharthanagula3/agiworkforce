@@ -429,6 +429,26 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   the ids and added a `tts_defaults_are_not_retired_models` guard; the
   catalog-driven fix is still owed. STT is already correct — it reads the
   `voice_transcription` slot.
+- OPEN VOICE-REASONING-TEXT-NOT-STREAMED (2026-07-28, confirmed by live capture):
+  the "Thought for Ns" chip can never render on a managed-cloud turn.
+  `apps/mobile/src/features/chat/components/MessageBubble.tsx:168` gates it on
+  `message.reasoning !== undefined`, but the managed-cloud SSE carries reasoning
+  only as token COUNTS — `apps/web/app/api/llm/v1/chat/completions/lib/
+stream-transform.ts` handles `reasoningOutputTokens` and never emits a
+  reasoning TEXT delta. Proven on device, not inferred: a Claude Fable 5 turn
+  with thinking mode ON completed with no chip anywhere above the answer
+  (parity-shots-r5/124035-r5-fable5-thinking-no-chip.jpg). This was misdiagnosed
+  twice as "the local model does not think" — it is a streaming gap, and no
+  choice of model fixes it. Blocks reference 05 in
+  ~/Desktop/references-2. Fix spans the transform, the client SSE parser and the
+  mobile message store, so it is a real slice rather than a patch.
+- OPEN VOICE-OVERLAY-ORB-STILL-RADIAL (2026-07-28): the three new voice surfaces
+  (onboarding sheet, picker, inline bar) use a linear top-to-bottom orb matching
+  the reference; the legacy full-screen `VoiceConversationScreen` still uses a
+  radial one, so the app shows two treatments. Converting it needs the orb
+  gradient separated from the screen BACKDROP gradient first — both are
+  `RadialGradient` in that file and blanket-converting breaks the backdrop
+  (tried, reverted, TS2322 on leftover fx/fy).
 - OPEN VOICE-REALTIME-FAMILY-ABSENT (2026-07-28): the catalog carries no
   realtime audio models, so the OpenAI voice lineup we expose is REST-only
   (speech + transcription). Blocked on three things, in order: `ModelType` in
