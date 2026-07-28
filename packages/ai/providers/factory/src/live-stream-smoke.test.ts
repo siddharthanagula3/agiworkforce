@@ -23,7 +23,7 @@
  * IDs are chosen from `packages/contracts/types/src/models.json` (SSOT) by
  * cost, never hardcoded here — a hardcoded ID silently rots when the catalog
  * moves, and this file would then report a model failure that is really a
- * stale-constant failure. Spend is kept trivial: `maxOutputTokens: 32`, one
+ * stale-constant failure. Spend is kept trivial: `maxOutputTokens: 256`, one
  * request per provider, no retries.
  */
 
@@ -54,6 +54,35 @@ const KEY_ENVS: Partial<Record<ProviderAdapterId, readonly string[]>> = {
   // lmstudio and ollama are local runtimes with no key and no guarantee of a
   // running daemon on the machine executing this. Their liveness is a device
   // check, not a credential check, so they are out of scope here.
+};
+
+/**
+ * Env var holding a base-URL override per provider, matching the server's
+ * `<PREFIX>_BASE_URL` convention.
+ *
+ * The first version of this file passed only `{ apiKey }`, and so reported
+ * Moonshot as a dead key for a day. The key was fine; `MOONSHOT_BASE_URL` was
+ * set to `api.moonshot.ai` and the adapter default was `api.moonshot.cn` —
+ * two separate Moonshot platforms with separate accounts, which reject each
+ * other's keys with a bare `401 Invalid Authentication`. The deployed app read
+ * the override and worked; only this test did not, so it accused a working
+ * provider.
+ *
+ * A smoke test that builds adapters differently from the app it vouches for is
+ * worse than no smoke test, because its failures get believed.
+ */
+const BASE_URL_ENVS: Partial<Record<ProviderAdapterId, string>> = {
+  anthropic: 'ANTHROPIC_BASE_URL',
+  deepseek: 'DEEPSEEK_BASE_URL',
+  google: 'GOOGLE_BASE_URL',
+  minimax: 'MINIMAX_BASE_URL',
+  moonshot: 'MOONSHOT_BASE_URL',
+  openai: 'OPENAI_BASE_URL',
+  open_router: 'OPENROUTER_BASE_URL',
+  perplexity: 'PERPLEXITY_BASE_URL',
+  qwen: 'QWEN_BASE_URL',
+  xai: 'XAI_BASE_URL',
+  zhipu: 'ZHIPU_BASE_URL',
 };
 
 /**
@@ -151,12 +180,16 @@ interface Outcome {
   model: string;
   opened: boolean;
   textDeltas: number;
+  /** Reasoning models may emit only these; still a healthy stream. */
+  thinkingDeltas: number;
   /**
    * Every chunk type the stream produced. A provider that refuses the request
    * still yields *something*; without this the report cannot tell "streamed
    * nothing" apart from "reported an error we did not surface".
    */
   chunkTypes: string[];
+  /** Base-URL override in effect, so the report names the host actually dialled. */
+  baseUrl?: string;
   error?: string;
 }
 
@@ -164,12 +197,16 @@ async function smokeOne(
   providerId: ProviderAdapterId,
   apiKey: string,
   model: CatalogModel,
+  baseUrl?: string,
 ): Promise<Outcome> {
-  const adapter = createProviderAdapter(providerId, { apiKey } as never);
+  const adapter = createProviderAdapter(providerId, {
+    apiKey,
+    ...(baseUrl ? { baseUrl } : {}),
+  } as never);
   const request: ChatRequest = {
     model: model.apiModelId ?? model.id,
     messages: [{ role: 'user', content: 'Say hello in one short sentence.' }],
-    maxOutputTokens: 32,
+    maxOutputTokens: 256,
   } as ChatRequest;
 
   const controller = new AbortController();
@@ -179,7 +216,9 @@ async function smokeOne(
     model: request.model,
     opened: false,
     textDeltas: 0,
+    thinkingDeltas: 0,
     chunkTypes: [],
+    ...(baseUrl ? { baseUrl } : {}),
   };
 
   try {
@@ -190,6 +229,7 @@ async function smokeOne(
       outcome.opened = true;
       if (!outcome.chunkTypes.includes(chunk.type)) outcome.chunkTypes.push(chunk.type);
       if (chunk.type === 'text-delta' && chunk.delta) outcome.textDeltas += 1;
+      if (chunk.type === 'thinking-delta' && chunk.delta) outcome.thinkingDeltas += 1;
       const asError = chunk as { type: string; error?: unknown; message?: unknown };
       if (asError.error ?? asError.message) {
         outcome.error = String(asError.error ?? asError.message);
@@ -231,11 +271,19 @@ describe.skipIf(!LIVE)('live provider streaming (shared TS adapters)', () => {
         skipped.push(`${providerId} (no model available)`);
         continue;
       }
-      outcomes.push(await smokeOne(providerId, apiKey, model));
+      const baseUrlEnv = BASE_URL_ENVS[providerId];
+      const baseUrl = baseUrlEnv ? (env.get(baseUrlEnv) ?? process.env[baseUrlEnv]) : undefined;
+      outcomes.push(await smokeOne(providerId, apiKey, model, baseUrl));
     }
 
-    const green = outcomes.filter((o) => o.opened && o.textDeltas > 0);
-    const red = outcomes.filter((o) => !(o.opened && o.textDeltas > 0));
+    // Green = the stream opened, produced content, and reported no error.
+    // Not "text deltas > 0": a reasoning model can spend the whole token
+    // budget on `thinking-delta` and still be perfectly healthy. Judging on
+    // text alone reported both Moonshot and GLM as broken when they were
+    // answering fine — the same mistake twice, so the rule is written down.
+    const isGreen = (o: Outcome) => o.opened && !o.error && o.textDeltas + o.thinkingDeltas > 0;
+    const green = outcomes.filter(isGreen);
+    const red = outcomes.filter((o) => !isGreen(o));
 
     // eslint-disable-next-line no-console -- this test exists to report a per-provider table
     console.log(
@@ -244,7 +292,8 @@ describe.skipIf(!LIVE)('live provider streaming (shared TS adapters)', () => {
         '======== LIVE STREAMING SMOKE (shared TS adapters) ========',
         ...outcomes.map(
           (o) =>
-            `[${o.provider}] model=${o.model} opened=${o.opened} text_deltas=${o.textDeltas}` +
+            `[${o.provider}] model=${o.model}${o.baseUrl ? ` @ ${new URL(o.baseUrl).host}` : ''}` +
+            ` opened=${o.opened} text=${o.textDeltas} thinking=${o.thinkingDeltas}` +
             ` chunks=[${o.chunkTypes.join(',')}]` +
             (o.error ? `\n    error: ${o.error}` : ''),
         ),
