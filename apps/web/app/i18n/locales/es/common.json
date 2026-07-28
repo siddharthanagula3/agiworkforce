@@ -84,5 +84,11 @@
   "agiHome": "Inicio de AGI",
   "navContactSales": "Contactar ventas",
   "navProducts": "Productos",
-  "navDocs": "Documentación"
+  "navDocs": "Documentación",
+  "navLanguage": "Idioma",
+  "navGetHelp": "Obtener ayuda",
+  "navUpgrade": "Mejorar plan",
+  "navGetApps": "Obtener aplicaciones y extensiones",
+  "navKeyboardShortcuts": "Atajos de teclado",
+  "navLogOut": "Cerrar sesión"
 }

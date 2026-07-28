@@ -51,7 +51,6 @@ import {
   X as XIcon,
   Settings,
   ChevronUp,
-  ChevronRight,
   CreditCard,
   Download,
   HelpCircle,
@@ -2539,10 +2538,11 @@ export default function WebChatPage() {
             {t('common:settings')}
           </DropdownMenuItem>
           <DropdownMenuSub>
+            {/* No ChevronRight here: DropdownMenuSubTrigger already appends one
+                after `children`, so adding a second rendered two arrows. */}
             <DropdownMenuSubTrigger>
               <Globe className="mr-2 h-4 w-4" />
-              Language
-              <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+              {t('common:navLanguage')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-40">
               <DropdownMenuRadioGroup
@@ -2560,20 +2560,20 @@ export default function WebChatPage() {
           </DropdownMenuSub>
           <DropdownMenuItem onClick={() => router.push('/help')}>
             <HelpCircle className="mr-2 h-4 w-4" />
-            Get help
+            {t('common:navGetHelp')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleOpenUpgradeDialog}>
             <CreditCard className="mr-2 h-4 w-4" />
-            Upgrade
+            {t('common:navUpgrade')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push('/download')}>
             <Download className="mr-2 h-4 w-4" />
-            Get apps and extensions
+            {t('common:navGetApps')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setKeyboardShortcutsOpen(true)}>
             <Keyboard className="mr-2 h-4 w-4" />
-            Keyboard shortcuts
+            {t('common:navKeyboardShortcuts')}
             <span className="ml-auto text-[10px] text-muted-foreground">?</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -2582,7 +2582,7 @@ export default function WebChatPage() {
             className="text-destructive focus:text-destructive"
           >
             <LogOut className="mr-2 h-4 w-4" />
-            Log out
+            {t('common:navLogOut')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
