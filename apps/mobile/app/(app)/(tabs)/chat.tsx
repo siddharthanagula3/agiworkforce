@@ -657,24 +657,26 @@ export default function ChatTabScreen() {
         {/* Mode-aware: shows local projects in Local, cloud projects in Cloud. */}
         <ProjectSelectorBar />
 
-        <ChatInput
-          onSend={handleSend}
-          onOpenModelPicker={handleOpenModelPicker}
-          onOpenVoiceMode={handleOpenVoiceMode}
-          onOpenCompare={handleOpenCompare}
-          onOpenAddToChat={handleOpenAddToChat}
-          onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
-          attachRef={chatInputAttachRef}
-          attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-          draftKey="new-chat"
-          draftProvenance={
-            activeMode === 'local'
-              ? { scope: 'local' }
-              : clerkUserId
-                ? { scope: 'cloud', ownerId: clerkUserId }
-                : undefined
-          }
-        />
+        {voiceInlineVisible ? null : (
+          <ChatInput
+            onSend={handleSend}
+            onOpenModelPicker={handleOpenModelPicker}
+            onOpenVoiceMode={handleOpenVoiceMode}
+            onOpenCompare={handleOpenCompare}
+            onOpenAddToChat={handleOpenAddToChat}
+            onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
+            attachRef={chatInputAttachRef}
+            attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+            draftKey="new-chat"
+            draftProvenance={
+              activeMode === 'local'
+                ? { scope: 'local' }
+                : clerkUserId
+                  ? { scope: 'cloud', ownerId: clerkUserId }
+                  : undefined
+            }
+          />
+        )}
       </KeyboardAvoidingView>
 
       {/* Add to Chat bottom sheet */}
