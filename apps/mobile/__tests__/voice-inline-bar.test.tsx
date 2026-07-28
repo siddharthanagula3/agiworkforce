@@ -12,21 +12,33 @@
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
+import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import {
   VoiceInlineBar,
   type VoiceInlinePhase,
 } from '@/src/features/voice/components/VoiceInlineBar';
 import { useSettingsStore } from '@/stores/settingsStore';
 
+// The bar now reads safe-area insets so its exit control clears the home
+// indicator — round 5 found it clipped off the bottom edge entirely, tappable
+// only through the a11y tree. Supply real metrics rather than mocking the hook,
+// so a missing provider stays a visible failure.
+const METRICS: Metrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
 function renderBar(props: Partial<React.ComponentProps<typeof VoiceInlineBar>> = {}) {
   return render(
-    <VoiceInlineBar
-      visible
-      phase={'idle' as VoiceInlinePhase}
-      onToggleMic={jest.fn()}
-      onExit={jest.fn()}
-      {...props}
-    />,
+    <SafeAreaProvider initialMetrics={METRICS}>
+      <VoiceInlineBar
+        visible
+        phase={'idle' as VoiceInlinePhase}
+        onToggleMic={jest.fn()}
+        onExit={jest.fn()}
+        {...props}
+      />
+    </SafeAreaProvider>,
   );
 }
 

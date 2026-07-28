@@ -14,6 +14,7 @@
 
 import { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -93,6 +94,7 @@ export function VoiceInlineBar({
   onExit,
 }: VoiceInlineBarProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const insets = useSafeAreaInsets();
 
   if (!visible) return null;
 
@@ -105,7 +107,7 @@ export function VoiceInlineBar({
     <Animated.View
       entering={FadeIn.duration(180)}
       exiting={FadeOut.duration(140)}
-      style={{ paddingHorizontal: 16, paddingTop: 8 }}
+      style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 12 }}
       accessibilityLiveRegion="polite"
     >
       <View style={{ alignItems: 'center', marginBottom: 14 }}>
