@@ -244,7 +244,12 @@ export function BillingSection() {
             <PlanIcon tier={tier} />
             <div>
               <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-1)' }}>
-                {isFreeTier ? 'Free plan' : `${subscription?.display_name ?? ''} plan`}
+                {/* The catalog label first: `display_name` carries the raw tier
+                    key from the subscription row, which rendered as
+                    "Max_15x plan" instead of "Max 15x". */}
+                {isFreeTier
+                  ? 'Free plan'
+                  : `${planPricing?.label ?? subscription?.display_name ?? ''} plan`}
               </div>
               {isFreeTier && (
                 <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>Try AGI</div>
