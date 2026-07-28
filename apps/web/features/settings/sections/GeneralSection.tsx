@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -292,16 +291,15 @@ export function GeneralSection() {
               <span className="text-sm font-medium text-foreground">
                 {accountEmail || 'Account email unavailable'}
               </span>
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/pricing"
-                  title="Avatar upload is available with hosted cloud upgrades"
-                  className="rounded-md border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground no-underline transition-colors hover:bg-muted"
-                >
-                  Upgrade for photo upload
-                </Link>
-                <span className="text-[11px] text-muted-foreground">Hosted cloud upgrade</span>
-              </div>
+              {/* No "Upgrade for photo upload" chip here.
+                  It was rendered unconditionally — no tier check — so it
+                  survived every upgrade, including Max 15x, and told a paying
+                  customer on the top plan to upgrade. Worse, upgrading does
+                  not unlock it: avatar upload is not implemented on any tier,
+                  so the link sent people to /pricing to buy a feature that
+                  does not exist. Removed rather than tier-gated, because
+                  gating it would still promise something nothing delivers.
+                  Restore it when there is a real upload path to point at. */}
             </div>
           </div>
 
