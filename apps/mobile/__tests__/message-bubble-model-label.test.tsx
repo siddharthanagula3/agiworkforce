@@ -160,7 +160,7 @@ describe('MessageBubble model label', () => {
     expect(getByLabelText('AGI Standard message: Local AI runs on this device.')).toBeTruthy();
   });
 
-  it('renders canonical Cloud activity once and suppresses duplicate legacy reasoning rows', () => {
+  it('renders canonical Cloud activity once and suppresses duplicate legacy step/tool rows', () => {
     const message: ChatMessage = {
       id: 'm-cloud-1',
       role: 'assistant',
@@ -211,10 +211,28 @@ describe('MessageBubble model label', () => {
     const view = render(<MessageBubble message={message} />);
 
     expect(view.getByText('Canonical activity: completed')).toBeTruthy();
-    expect(view.queryByText('Legacy thinking')).toBeNull();
     expect(view.queryByText('Legacy status step')).toBeNull();
     expect(view.queryByText('Legacy tool timeline')).toBeNull();
     expect(view.getByText('Verified answer.')).toBeTruthy();
+    // Reasoning is NOT one of the duplicated rows: AgentActivityState has no
+    // reasoning entry kind, so suppressing the chip alongside steps/tools hid
+    // "Thought for Ns" on every tool/research/agiwork managed-cloud turn.
+    expect(view.getByText('Legacy thinking')).toBeTruthy();
+  });
+
+  it('omits the thinking chip entirely when the turn produced no reasoning', () => {
+    const message: ChatMessage = {
+      id: 'm-no-reasoning',
+      role: 'assistant',
+      content: 'Direct answer.',
+      createdAt: new Date().toISOString(),
+      model: 'gpt-5.6-luna',
+    };
+
+    const view = render(<MessageBubble message={message} />);
+
+    expect(view.queryByText('Legacy thinking')).toBeNull();
+    expect(view.getByText('Direct answer.')).toBeTruthy();
   });
 
   it('rejects malformed synced activity metadata and preserves the legacy safe fallback', () => {

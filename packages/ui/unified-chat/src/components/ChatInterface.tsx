@@ -708,7 +708,11 @@ export function ChatInterface({
 
     // Default: chat view
     return (
-      <div className="flex h-full flex-col">
+      // Empty state: greeting + composer are ONE centered group. Left as two
+      // independent blocks (flex-1 content + bottom-pinned composer) they split
+      // into a centered greeting and a window-edge composer with ~350px of dead
+      // canvas between them.
+      <div className={cn('flex h-full flex-col', !hasMessages && 'justify-center')}>
         {/* Header — only rendered when a conversation with messages is active */}
         {hasMessages && activeConversationId && (
           <ConversationHeader
@@ -719,7 +723,7 @@ export function ChatInterface({
 
         {/* Content area — grows to fill remaining vertical space, hides overflow for
             MessageList's own internal scroll container */}
-        <div className="flex-1 overflow-hidden">
+        <div className={hasMessages ? 'flex-1 overflow-hidden' : 'shrink-0'}>
           {messageLoadState.status === 'loading' && activeConversationId ? (
             <div
               className="flex h-full items-center justify-center text-sm text-[var(--chat-text-muted)]"
