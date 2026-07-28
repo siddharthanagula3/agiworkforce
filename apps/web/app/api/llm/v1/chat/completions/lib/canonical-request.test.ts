@@ -168,19 +168,19 @@ describe('toCanonicalChatRequest', () => {
 
   it('maps the internal dot-form model id to its provider apiModelId (fails without the mapping)', () => {
     const processed = makeProcessed({
-      model: 'claude-haiku-4.5',
+      model: 'claude-sonnet-5',
       messages: [{ role: 'user', content: 'hi' }],
     });
     const chatRequest = toCanonicalChatRequest(processed);
     // LLMProviderFactory.mapModelIdToApiId did this on a local copy right
     // before the provider HTTP call (factory.ts:310-321) -- toCanonicalChatRequest
-    // sits at that same point, so `claude-haiku-4.5` (the internal/catalog id
-    // request-processor.ts routes on) must become `claude-haiku-4-5` (what
+    // sits at that same point, so `claude-sonnet-5` (the internal/catalog id
+    // request-processor.ts routes on) must become `claude-sonnet-5` (what
     // Anthropic's API actually accepts) here. Every existing fixture in this
     // file uses a model id that's already dash-form, so none of them would
     // catch a regression that dropped this mapping -- this test's input is
     // deliberately dot-form.
-    expect(chatRequest.model).toBe('claude-haiku-4-5');
+    expect(chatRequest.model).toBe('claude-sonnet-5');
   });
 
   it('passes through a model id unchanged when it has no distinct apiModelId', () => {

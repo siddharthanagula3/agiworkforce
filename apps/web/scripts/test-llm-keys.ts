@@ -26,7 +26,7 @@ const providers = [
     }),
     // Anthropic requires a POST request with a body
     testBody: JSON.stringify({
-      model: 'claude-haiku-4-5',
+      model: 'claude-sonnet-5',
       max_tokens: 1,
       messages: [{ role: 'user', content: 'Hi' }],
     }),

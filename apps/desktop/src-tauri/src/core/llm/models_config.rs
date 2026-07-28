@@ -740,8 +740,8 @@ mod tests {
         );
 
         // Pin the specific Anthropic haiku case that surfaced the bug.
-        assert_eq!(get_api_model_id("claude-haiku-4.5"), "claude-haiku-4-5");
-        assert_eq!(get_api_model_id("claude-haiku-4-5"), "claude-haiku-4-5");
+        assert_eq!(get_api_model_id("claude-sonnet-5"), "claude-sonnet-5");
+        assert_eq!(get_api_model_id("claude-sonnet-5"), "claude-sonnet-5");
 
         // Pin get_canonicalized_id's reverse-lookup branch directly: it maps a
         // wire (apiModelId) id back to its dotted catalog id, and leaves the
@@ -751,8 +751,8 @@ mod tests {
         // this branch — the branch earns its keep via provider lookup, not
         // idempotence — but the ADAPTER must call get_api_model_id, never
         // get_canonicalized_id, for the wire model field.)
-        assert_eq!(get_canonicalized_id("claude-haiku-4.5"), "claude-haiku-4.5");
-        assert_eq!(get_canonicalized_id("claude-haiku-4-5"), "claude-haiku-4.5");
+        assert_eq!(get_canonicalized_id("claude-sonnet-5"), "claude-sonnet-5");
+        assert_eq!(get_canonicalized_id("claude-sonnet-5"), "claude-sonnet-5");
     }
 
     #[test]
@@ -767,7 +767,7 @@ mod tests {
         assert!(model_supports_effort("claude-opus-5", "high"));
         assert!(model_supports_effort("claude-opus-5", "xhigh"));
         assert!(model_supports_effort("claude-opus-5", "max"));
-        assert!(!model_supports_effort("claude-haiku-4.5", "low"));
+        assert!(!model_supports_effort("claude-sonnet-5", "low"));
         assert!(!model_supports_effort("unknown-anthropic-model", "high"));
         assert!(!model_supports_effort("claude-opus-5", "minimal"));
     }

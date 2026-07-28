@@ -190,7 +190,8 @@ fn routes_free_reasoning_to_an_economy_reasoning_model() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected a free reasoning route");
     };
-    assert_eq!(selected.model_key, "claude-haiku-4.5");
+    // The economy reasoning slot; Haiku 4.5 held it until 2026-07-27.
+    assert_eq!(selected.model_key, "qwen-3.5-flash");
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Economy));
 }
 

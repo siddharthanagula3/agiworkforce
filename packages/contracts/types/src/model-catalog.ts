@@ -1809,7 +1809,7 @@ export function resolveAutoModeModel(
  *
  * Each kind maps to a tier-aware `RoutingSlot` lookup using the same
  * `TIER_POLICIES` registry the auto-router consults. Use this helper instead
- * of hardcoding model IDs (`'gpt-5.6-terra'`, `'claude-haiku-4.5'`, etc.) at
+ * of hardcoding model IDs (`'gpt-5.6-terra'`, `'claude-sonnet-5'`, etc.) at
  * call sites — those literals trip the no-hardcoded-model-ids ESLint rule.
  *
  * @see resolveAutoModeModel for the legacy auto-mode picker.

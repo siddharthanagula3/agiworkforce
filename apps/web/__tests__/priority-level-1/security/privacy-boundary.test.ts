@@ -111,7 +111,7 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'anthropic',
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-sonnet-5',
       isFreeTrial: true,
     });
     // Explicit per-request opt-in lets brand-new users try the product.

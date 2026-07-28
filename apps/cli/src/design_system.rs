@@ -430,11 +430,8 @@ mod tests {
     #[test]
     fn capability_tier_for_known_models() {
         // Use API model IDs as they appear in models.json apiModelId fields.
-        // haiku-4.5 → apiModelId=claude-haiku-4-5, qualityTier=fast → Fastest
-        assert_eq!(
-            capability_for_model("claude-haiku-4-5"),
-            CapabilityTier::Fastest
-        );
+        // The `Fastest` tier had Haiku 4.5 as its example until that model was
+        // retired 2026-07-27; no Anthropic model carries qualityTier=fast now.
         // sonnet-5 → apiModelId=claude-sonnet-5, qualityTier=balanced → Balanced
         assert_eq!(
             capability_for_model("claude-sonnet-5"),

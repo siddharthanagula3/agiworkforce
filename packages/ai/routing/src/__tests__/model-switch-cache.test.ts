@@ -63,7 +63,7 @@ describe('assessModelSwitchCache', () => {
   it('treats same-provider different-model as a reset too (per-model cache key)', () => {
     const a = assessModelSwitchCache({
       priorModelId: 'claude-opus-5',
-      nextModelId: 'claude-haiku-4-5',
+      nextModelId: 'claude-sonnet-5',
       priorTurnCount: 4,
     });
     expect(a.warn).toBe(true);

@@ -124,23 +124,6 @@
       },
       "evidenceRefs": []
     },
-    "claude-haiku-4.5": {
-      "identity": {
-        "key": "claude-haiku-4.5",
-        "displayName": "Claude 4.5 Haiku",
-        "provider": "anthropic",
-        "providerModelId": "claude-haiku-4-5",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "October 15, 2025",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
     "gemini-embedding-2": {
       "identity": {
         "key": "gemini-embedding-2",
@@ -584,7 +567,7 @@
       "gpt-4o-transcribe",
       "gpt-4o-mini-transcribe"
     ],
-    "anthropic": ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4.5"],
+    "anthropic": ["claude-fable-5", "claude-opus-5", "claude-sonnet-5"],
     "google": [
       "gemini-embedding-2",
       "gemini-3.1-pro-preview",
@@ -662,15 +645,6 @@
       "modelKey": "claude-sonnet-5",
       "provider": "anthropic",
       "providerModelId": "claude-sonnet-5",
-      "harnessId": "anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "anthropic/claude-haiku-4.5": {
-      "modelKey": "claude-haiku-4.5",
-      "provider": "anthropic",
-      "providerModelId": "claude-haiku-4-5",
       "harnessId": "anthropic/messages",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -1456,20 +1430,6 @@
       "functionCalling": true,
       "reasoning": true
     },
-    "claude-haiku-4.5": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true
-    },
     "gemini-embedding-2": {
       "textInput": true,
       "imageInput": true,
@@ -1881,15 +1841,6 @@
       "cacheWritePerMillion": 3.75,
       "cacheWrite1hPerMillion": 6
     },
-    "claude-haiku-4.5": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 1,
-      "outputPerMillion": 5,
-      "cacheReadPerMillion": 0.1,
-      "cacheWritePerMillion": 1.25,
-      "cacheWrite1hPerMillion": 2
-    },
     "gemini-embedding-2": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -2101,12 +2052,6 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-01"
     },
-    "claude-haiku-4.5": {
-      "contextTokens": 200000,
-      "maxInputTokens": 200000,
-      "maxOutputTokens": 64000,
-      "knowledgeCutoff": "2025-02"
-    },
     "gemini-embedding-2": { "contextTokens": 8192, "maxInputTokens": 8192 },
     "gemini-3.1-pro-preview": { "contextTokens": 2000000 },
     "gemini-3.5-flash-lite": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
@@ -2141,7 +2086,6 @@
     "claude-fable-5": {},
     "claude-opus-5": {},
     "claude-sonnet-5": {},
-    "claude-haiku-4.5": { "swebench": 45, "humaneval": 88, "mmlu": 85, "gpqa": 55, "aime": 40 },
     "gemini-embedding-2": {},
     "gemini-3.1-pro-preview": {
       "swebench": 74.2,
@@ -2627,7 +2571,7 @@
           "description": "Shared reasoning premium route. Model and provider are selected by the canonical registry."
         },
         "reasoning_economy": {
-          "modelKey": "claude-haiku-4.5",
+          "modelKey": "qwen-3.5-flash",
           "label": "Reasoning Economy",
           "description": "Shared reasoning economy route. Model and provider are selected by the canonical registry."
         },
@@ -2774,13 +2718,7 @@
       }
     },
     "legacyTiers": {
-      "economy": [
-        "gpt-5.4-mini",
-        "gpt-5.6-luna",
-        "gemini-3.5-flash-lite",
-        "gemini-3.6-flash",
-        "claude-haiku-4.5"
-      ],
+      "economy": ["gpt-5.4-mini", "gpt-5.6-luna", "gemini-3.5-flash-lite", "gemini-3.6-flash"],
       "pro_additions": [
         "gpt-5.6-terra",
         "claude-sonnet-5",

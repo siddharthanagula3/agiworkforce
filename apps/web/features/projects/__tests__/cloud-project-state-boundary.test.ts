@@ -11,7 +11,7 @@ describe('Web Cloud project state boundary', () => {
     for (const path of [
       'features/chat/pages/WebChatPage.tsx',
       'shared/components/layout/WebAppShell.tsx',
-      'app/projects/[id]/page.tsx',
+      'app/chat/projects/[id]/page.tsx',
     ]) {
       expect(source(path), path).not.toContain('localOnly');
     }
@@ -21,16 +21,16 @@ describe('Web Cloud project state boundary', () => {
     for (const path of [
       'features/chat/pages/WebChatPage.tsx',
       'shared/components/layout/WebAppShell.tsx',
-      'app/projects/page.tsx',
-      'app/projects/[id]/page.tsx',
+      'app/chat/projects/page.tsx',
+      'app/chat/projects/[id]/page.tsx',
     ]) {
       expect(source(path), path).toContain('useManagedCloudProjects');
     }
   });
 
   it('never presents Web Cloud projects as local or device-only', () => {
-    const listPage = source('app/projects/page.tsx');
-    const detailPage = source('app/projects/[id]/page.tsx');
+    const listPage = source('app/chat/projects/page.tsx');
+    const detailPage = source('app/chat/projects/[id]/page.tsx');
     const adapter = source('features/projects/services/managed-cloud-projects.ts');
 
     expect(listPage).not.toMatch(/stored on this device/i);
@@ -45,7 +45,7 @@ describe('Web Cloud project state boundary', () => {
   });
 
   it('persists archive actions and does not discard rows when a delete request fails', () => {
-    const listPage = source('app/projects/page.tsx');
+    const listPage = source('app/chat/projects/page.tsx');
     const shell = source('shared/components/layout/WebAppShell.tsx');
 
     expect(listPage).toContain('webManagedCloudProjects.updateProject');
@@ -54,7 +54,7 @@ describe('Web Cloud project state boundary', () => {
   });
 
   it('lists project chats from the canonical server project_id association', () => {
-    const detailPage = source('app/projects/[id]/page.tsx');
+    const detailPage = source('app/chat/projects/[id]/page.tsx');
 
     expect(detailPage).toContain('useProjectConversations');
     expect(detailPage).not.toContain('project.conversationIds');

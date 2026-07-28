@@ -2363,8 +2363,8 @@ impl AnthropicAdapter {
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
         Self::validate_model_request_contract(request)?;
         // Resolve the wire API model ID: catalog keys carrying a dotted internal
-        // id (e.g. "claude-haiku-4.5") must be translated to the real Anthropic
-        // API string ("claude-haiku-4-5") before being sent in the request body.
+        // id (e.g. "claude-sonnet-5") must be translated to the real Anthropic
+        // API string ("claude-sonnet-5") before being sent in the request body.
         // `get_api_model_id` returns the `apiModelId` from models.json when set
         // (and is idempotent for an already-wire id), otherwise the input
         // unchanged. Using `get_canonicalized_id` here instead would send the

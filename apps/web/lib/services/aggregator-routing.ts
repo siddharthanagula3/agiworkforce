@@ -21,17 +21,41 @@ import 'server-only';
  * `qwen/qwen3.7-plus` to DashScope, which does not either.
  */
 
-/** Providers eligible for aggregator routing, and their OpenRouter slugs. */
-const OPENROUTER_MODEL_SLUGS: Readonly<Record<string, string>> = {
-  // Verified against https://openrouter.ai/api/v1/models on 2026-07-27 rather
-  // than guessed. A wrong slug here is a 404 at request time, and OpenRouter's
-  // naming does not always mirror the vendor's: Zhipu publishes as `z-ai`, and
-  // Qwen 3.5 Flash is only offered as a dated snapshot.
-  'qwen3.5-flash': 'qwen/qwen3.5-flash-02-23',
-  'qwen3.7-plus': 'qwen/qwen3.7-plus',
-  'glm-5.2': 'z-ai/glm-5.2',
-  'MiniMax-M3': 'minimax/minimax-m3',
-};
+import slugData from './openrouter-slugs.json' with { type: 'json' };
+
+/**
+ * Slugs live in `openrouter-slugs.json`, not as literals here.
+ *
+ * The repo bans hardcoded model IDs in source (`no-restricted-syntax`) because
+ * inlined ids get invented and go stale. That rule is right, and a mapping
+ * table is exactly the shape it is aimed at. Holding the table as data keeps
+ * the rule meaningful in TypeScript while two tests enforce what the rule is
+ * actually protecting: every key must exist in models.json, and every catalog
+ * chat model must have an entry. An invented id fails the first; a forgotten
+ * one fails the second.
+ *
+ * The truly correct home is a field on the catalog entry itself. That needs a
+ * change to the registry schema (`additionalProperties: false`), the compiler
+ * and four generated artifacts, which is more than this warrants today —
+ * tracked as a follow-up rather than done badly.
+ */
+
+/** Providers routed through OpenRouter permanently, keyed by catalog apiModelId. */
+const OPENROUTER_MODEL_SLUGS: Readonly<Record<string, string>> = slugData.routed;
+
+/**
+ * Failover-only routes for models normally called directly.
+ *
+ * Distinct from the map above: these are the escape hatch when a direct
+ * provider is unavailable, not where the model normally goes. OpenRouter
+ * resells the same models, so a 503 from Anthropic need not become a 503 for
+ * the user.
+ *
+ * Chat models only. TTS, embedding, image and video are deliberately absent —
+ * OpenRouter does not serve them, so an attempt would trade one failure for a
+ * more confusing one.
+ */
+const OPENROUTER_FAILOVER_SLUGS: Readonly<Record<string, string>> = slugData.failover;
 
 const DEFAULT_ROUTED_PROVIDERS = ['minimax', 'qwen', 'zhipu'] as const;
 
@@ -81,4 +105,36 @@ export function openRouterSlugFor(apiModelId: string): string | undefined {
 /** Every catalog model id that currently has an OpenRouter mapping. */
 export function mappedModelIds(): readonly string[] {
   return Object.keys(OPENROUTER_MODEL_SLUGS);
+}
+
+/**
+ * OpenRouter slug to retry `apiModelId` on when its direct provider is
+ * unavailable, or `undefined` when no such route exists.
+ *
+ * Consults both maps: a model that is *always* routed through OpenRouter has
+ * no separate failover route (it is already there, and retrying the same wire
+ * would just fail again).
+ */
+export function openRouterFailoverSlugFor(apiModelId: string): string | undefined {
+  return OPENROUTER_FAILOVER_SLUGS[apiModelId];
+}
+
+/**
+ * Whether a request may be retried through OpenRouter when its direct provider
+ * fails.
+ *
+ * Gated on a key for the same reason routing is: without one, "retry via
+ * OpenRouter" replaces an honest upstream error with an OpenRouter auth error
+ * naming a service the user never chose.
+ */
+export function canFailoverToOpenRouter(providerId: string, apiModelId: string): boolean {
+  if (!process.env['OPENROUTER_API_KEY']) return false;
+  // Already on OpenRouter — there is nowhere further to go.
+  if (providerId === 'openrouter' || providerId === 'open_router') return false;
+  return openRouterFailoverSlugFor(apiModelId) !== undefined;
+}
+
+/** Every catalog model id that has an OpenRouter failover route. */
+export function failoverMappedModelIds(): readonly string[] {
+  return Object.keys(OPENROUTER_FAILOVER_SLUGS);
 }

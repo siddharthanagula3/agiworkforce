@@ -272,7 +272,7 @@ async fn run_spec(
 ) -> Result<CompletionResult> {
     // Resolve the (possibly dotted display) model id to the provider wire id
     // (`apiModelId`) ONLY here, at the request boundary. This lets `-m
-    // claude-haiku-4.5` (the id web/desktop/mobile use) work instead of 404ing;
+    // claude-sonnet-5` (the id web/desktop/mobile use) work instead of 404ing;
     // display/pricing/provider-inference keep the dotted id. Unknown ids
     // (local/Ollama/custom) fall through unchanged.
     let wire_model = crate::model_catalog::api_wire_id(model);

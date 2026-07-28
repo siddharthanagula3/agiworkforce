@@ -56,6 +56,17 @@ export interface ServerProviderAdapterOptions {
   anthropicCache?: Readonly<
     Pick<ProviderAdapterConfigMap['anthropic'], 'enableCacheControl' | 'cacheRetention'>
   >;
+  /**
+   * Prompt-cache retention for `anthropic/*` routes served through OpenRouter.
+   *
+   * OpenRouter passes Anthropic `cache_control` through and injects it itself,
+   * defaulting to `'short'`. Without forwarding the request's own policy, a
+   * request that had caching switched OFF would silently get it back on
+   * failover, and one that asked for long retention would quietly be
+   * downgraded — the request would still succeed, so the divergence would only
+   * ever show up as an unexplained change in cost.
+   */
+  openRouterCacheRetention?: 'none' | 'short' | 'long';
 }
 
 /** All provider ids this service can construct an adapter for. */
@@ -192,6 +203,14 @@ export function buildServerProviderAdapter(
   const baseConfig = { apiKey, ...(baseUrl ? { baseUrl } : {}) };
   if (providerId === 'anthropic' && options.anthropicCache) {
     return createProviderAdapter('anthropic', { ...baseConfig, ...options.anthropicCache });
+  }
+  if (adapterId === 'open_router' && options.openRouterCacheRetention !== undefined) {
+    // Carry the request's prompt-cache policy onto the OpenRouter route so a
+    // failed-over Anthropic request caches exactly as it would have directly.
+    return createProviderAdapter('open_router', {
+      ...baseConfig,
+      anthropicCacheRetention: options.openRouterCacheRetention,
+    });
   }
   if (providerId === 'openai') {
     return createProviderAdapter('openai', {

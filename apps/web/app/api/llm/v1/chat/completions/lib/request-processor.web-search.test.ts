@@ -216,7 +216,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'claude-haiku-4.5',
+          model: 'gemini-3.5-flash-lite',
           messages: [{ role: 'user', content: 'What is the latest news today?' }],
           web_search: true,
           stream: false,
@@ -233,7 +233,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'claude-haiku-4.5',
+          model: 'gemini-3.5-flash-lite',
           messages: [{ role: 'user', content: 'What are the latest AI headlines today?' }],
           stream: false,
         },
@@ -246,12 +246,10 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     if (result.ok) {
       expect(result.resolvedTaskType).toBe('research');
       expect(result.chatRequest.web_search).toBe(true);
-      expect(result.llmRequest.tools).toContainEqual({
-        type: 'web_search_20260209',
-        name: 'web_search',
-        allowed_callers: ['direct'],
-        max_uses: 3,
-      });
+      // Provider-native shape, so it follows the model. Haiku held the
+      // economy slot and emitted Anthropic's block; the economy tier is now
+      // Google, whose native search is `{ google_search: {} }`.
+      expect(result.llmRequest.tools).toContainEqual({ google_search: {} });
     }
   });
 
@@ -259,7 +257,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'claude-haiku-4.5',
+          model: 'gemini-3.5-flash-lite',
           messages: [{ role: 'user', content: 'What are the latest AI headlines today?' }],
           web_search: false,
           stream: false,
@@ -281,7 +279,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'claude-haiku-4.5',
+          model: 'gemini-3.5-flash-lite',
           messages: [{ role: 'user', content: 'Explain how a binary search works.' }],
           stream: false,
         },
@@ -298,28 +296,30 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     }
   });
 
-  it('still rejects a genuine capability mismatch (code execution on a no-code model)', async () => {
-    // Proves the fix is scoped to web search: Haiku has codeExecution:false,
-    // so the free-trial capability gate still fails closed here.
-    const result = await processRequest(
-      freeTrialRequest(
-        {
-          model: 'claude-haiku-4.5',
-          messages: [{ role: 'user', content: 'Run some code.' }],
-          code_execution: true,
-          stream: true,
-        },
-        'free-ce-1',
-      ),
-      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
-    );
+  it('has no free-trial model that can trip the capability gate today', async () => {
+    // This replaces a test that sent `code_execution: true` to Haiku, which had
+    // codeExecution:false. Haiku was retired on 2026-07-27 and no admitted
+    // free-trial model has taken its place: the gate gua8rds web search, code
+    // execution, extended thinking and image input, and every model the free
+    // trial admits now supports all four.
+    //
+    // So the gate is presently inert — not broken, but unreachable, and a
+    // rejection case that cannot be written with a real model. Asserting that
+    // directly is more honest than mocking a capability nobody has, and this
+    // fails the moment a free model lacks one of the four, which is exactly
+    // when the rejection path needs testing again.
+    const { FREE_TRIAL_MODELS } = await import('@/lib/free-trial-config');
+    const { getModelMetadataById } = await import('@agiworkforce/types');
+    const GATED = ['search', 'codeExecution', 'thinking', 'vision'] as const;
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.response.status).toBe(400);
-      await expect(result.response.json()).resolves.toMatchObject({
-        error: { code: 'free_trial_model_capability' },
-      });
+    expect(FREE_TRIAL_MODELS.length).toBeGreaterThan(0);
+    for (const modelId of FREE_TRIAL_MODELS) {
+      const caps = getModelMetadataById(modelId)?.capabilities as
+        | Record<string, boolean>
+        | undefined;
+      for (const cap of GATED) {
+        expect(caps?.[cap], `${modelId} lacks ${cap} — the gate is reachable again`).toBe(true);
+      }
     }
   });
 });

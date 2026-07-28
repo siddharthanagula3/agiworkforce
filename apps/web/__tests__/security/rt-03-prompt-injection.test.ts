@@ -28,8 +28,8 @@ vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 
 vi.mock('@agiworkforce/types', () => ({
-  getTaskModelForProvider: () => 'claude-haiku-4-5-20251001',
-  getProviderDefaultModel: () => 'claude-haiku-4-5-20251001',
+  getTaskModelForProvider: () => 'claude-sonnet-5',
+  getProviderDefaultModel: () => 'claude-sonnet-5',
 }));
 
 // ─── Capture the LLM prompt that was sent ────────────────────────────────────

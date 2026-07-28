@@ -46,13 +46,9 @@ describe('AgentControl reactive state', () => {
     ).toBe('High');
   });
 
-  it('hides effort for Haiku even though Anthropic has other effort-capable models', () => {
-    render(
-      <AgentControl conversationId="conversation-1" projectId={null} modelId="claude-haiku-4.5" />,
-    );
-
-    expect(screen.queryByRole('button', { name: 'Reasoning effort' })).toBeNull();
-  });
+  // Removed with Haiku 4.5 (retired 2026-07-27). It was the only catalog
+  // model without an effort ladder, so 'hides the effort control' has no
+  // model left to demonstrate it. Restore when one exists again.
 
   it('shows only Gemini Flash-Lite provider-supported effort levels', () => {
     render(

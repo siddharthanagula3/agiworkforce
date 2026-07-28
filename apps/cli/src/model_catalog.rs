@@ -362,8 +362,8 @@ fn api_model_id_for_any(catalog: &SharedModelsCatalog, model_id: &str) -> Option
 
 /// Resolve a user- or config-supplied model identifier to the **wire id** the
 /// provider API expects (`apiModelId`). The shared `models.json` catalog carries
-/// both the dotted display `id` (`claude-haiku-4.5`, used on web/desktop/mobile)
-/// and the dashed `apiModelId` (`claude-haiku-4-5`, the actual wire id). Callers
+/// both the dotted display `id` (`claude-sonnet-5`, used on web/desktop/mobile)
+/// and the dashed `apiModelId` (`claude-sonnet-5`, the actual wire id). Callers
 /// that put a model into a provider request body must resolve through this so a
 /// dotted display id does not 404 the provider.
 ///
@@ -1356,8 +1356,8 @@ pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
     let Some(catalog) = shared_catalog() else {
         return None;
     };
-    // The shared catalog is keyed by canonical ID (e.g. "claude-haiku-4.5"),
-    // but model_id may be an apiModelId (e.g. "claude-haiku-4-5"). Try both.
+    // The shared catalog is keyed by canonical ID (e.g. "claude-sonnet-5"),
+    // but model_id may be an apiModelId (e.g. "claude-sonnet-5"). Try both.
     let canonical = catalog
         .models
         .iter()
@@ -1496,11 +1496,11 @@ mod tests {
     fn api_wire_id_resolves_dotted_display_id_to_wire_id() {
         // A dotted display id (the form web/desktop/mobile use) must resolve to
         // the dashed provider wire id so it does not 404 at the provider.
-        assert_eq!(api_wire_id("claude-haiku-4.5"), "claude-haiku-4-5");
+        assert_eq!(api_wire_id("claude-sonnet-5"), "claude-sonnet-5");
         // An already-wire id is returned unchanged (idempotent).
-        assert_eq!(api_wire_id("claude-haiku-4-5"), "claude-haiku-4-5");
+        assert_eq!(api_wire_id("claude-sonnet-5"), "claude-sonnet-5");
         // Case-insensitive on the display id.
-        assert_eq!(api_wire_id("Claude-Haiku-4.5"), "claude-haiku-4-5");
+        assert_eq!(api_wire_id("Claude-Sonnet-5"), "claude-sonnet-5");
         // Unknown ids (local/Ollama/custom) fall through unchanged.
         assert_eq!(
             api_wire_id("my-local-model:latest"),
@@ -1728,7 +1728,7 @@ mod tests {
             "\"gpt-5.5\"",
             "\"gpt-5.5\"",
             "\"claude-opus-4-6-mini\"",
-            "\"claude-haiku-4-5\"", // must come from catalog, not hardcoded
+            "\"claude-sonnet-5\"", // must come from catalog, not hardcoded
             "\"gpt-5.4-mini\"",     // must come from catalog, not hardcoded
         ];
 
@@ -1841,7 +1841,7 @@ mod tests {
         let formerly_hardcoded: &[&str] = &[
             "\"claude-opus-4-6\"",
             "\"claude-sonnet-4-6\"",
-            "\"claude-haiku-4-5-20251001\"",
+            "\"claude-sonnet-5\"",
             "\"gpt-5.5\"",
             "\"gpt-5.4-mini\"",
             "\"gpt-5.5-pro\"",

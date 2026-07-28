@@ -78,7 +78,7 @@ describe('Article50Marker — <meta> tag', () => {
       html,
       kind: 'text',
       provider: 'anthropic',
-      model: 'claude-haiku-4.5',
+      model: 'claude-sonnet-5',
       generatedAt: '2026-05-17T00:00:00.000Z',
     });
     expect(once.match(/<meta\s+name="agi:ai-generated"/gi)?.length).toBe(1);
@@ -87,7 +87,7 @@ describe('Article50Marker — <meta> tag', () => {
       html: once,
       kind: 'text',
       provider: 'anthropic',
-      model: 'claude-haiku-4.5',
+      model: 'claude-sonnet-5',
       generatedAt: '2026-05-17T00:00:00.000Z',
     });
     expect(twice.match(/<meta\s+name="agi:ai-generated"/gi)?.length).toBe(1);
@@ -109,7 +109,7 @@ describe('Article50Marker — wrapTextExportWithMarker + hasAiGeneratedMarker', 
     const wrapped = wrapTextExportWithMarker({
       text: 'hello world',
       provider: 'anthropic',
-      model: 'claude-haiku-4.5',
+      model: 'claude-sonnet-5',
       generatedAt: '2026-05-17T00:00:00.000Z',
     });
     expect(wrapped).toContain('<!-- agi:ai-generated:c2pa-claim');

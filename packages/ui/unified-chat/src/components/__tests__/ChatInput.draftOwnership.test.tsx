@@ -99,46 +99,9 @@ describe('ChatInput draft ownership', () => {
     expect(textarea.value).toBe('');
   });
 
-  it('does not send effort for Haiku 4.5', () => {
-    useChatStore.setState({
-      conversations: [
-        {
-          id: 'conv-1',
-          title: 'Haiku test',
-          createdAt: '2026-07-22T00:00:00.000Z',
-          updatedAt: '2026-07-22T00:00:00.000Z',
-          pinned: false,
-          executionMode: 'byok',
-          model: 'claude-haiku-4.5',
-        },
-      ],
-    });
-    useModelStore.setState({
-      selectedModelId: 'claude-haiku-4.5',
-      models: [
-        {
-          id: 'claude-haiku-4.5',
-          name: 'Claude Haiku 4.5',
-          provider: 'anthropic',
-          tier: 'fast',
-          supportsThinking: true,
-          supportsVision: true,
-          supportsTools: true,
-          contextWindow: 200_000,
-          isLocal: false,
-          isByok: true,
-        },
-      ],
-    });
-    useAgentControlStore.getState().setEffort('conv-1', 'low');
-    const onSend = vi.fn();
-    const { textarea } = renderComposer(onSend);
-
-    fireEvent.change(textarea, { target: { value: 'Think carefully' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send message (Enter)' }));
-
-    expect(onSend).toHaveBeenCalledWith('Think carefully', 'ask', undefined, undefined, false);
-  });
+  // Removed with Haiku 4.5 (retired 2026-07-27). It was the only catalog
+  // model without an effort ladder, so 'hides the effort control' has no
+  // model left to demonstrate it. Restore when one exists again.
 
   it('sends an attachment-only turn instead of enabling a silent no-op', () => {
     const onSend = vi.fn();

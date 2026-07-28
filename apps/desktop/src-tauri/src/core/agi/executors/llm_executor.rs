@@ -13,7 +13,7 @@
 //!
 //! The executor supports model preferences through parameters:
 //! - `provider`: Override the default provider (anthropic, openai, google, etc.)
-//! - `model`: Specify a particular model (claude-haiku-4-5, gpt-5.6-luna, etc.)
+//! - `model`: Specify a particular model (claude-sonnet-5, gpt-5.6-luna, etc.)
 //! - `temperature`: Control response randomness (0.0 - 1.0, default 0.7)
 //! - `max_tokens`: Limit response length (default 2000)
 //! - `stream`: Enable streaming responses (default false)

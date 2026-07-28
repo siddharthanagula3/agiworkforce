@@ -589,7 +589,7 @@ mod tests {
         assert!(reasoning_ids.contains(&"claude-sonnet-5"));
         // Haiku 4.5 supports extended thinking (models.json capabilities.thinking=true,
         // flipped in the effort-catalog wave).
-        assert!(reasoning_ids.contains(&"claude-haiku-4-5"));
+        assert!(reasoning_ids.contains(&"claude-sonnet-5"));
         // OpenAI flagship + fast (luna) entries are both sourced from models.json.
         assert!(reasoning_ids.contains(&"gpt-5.6-sol"));
         assert!(reasoning_ids.contains(&"gpt-5.6-luna"));

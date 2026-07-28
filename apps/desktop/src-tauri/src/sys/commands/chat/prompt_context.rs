@@ -305,6 +305,9 @@ pub(super) fn model_likely_supports_vision(model: &str) -> bool {
         "claude-3",
         "claude-sonnet",
         "claude-opus",
+        // Family prefix, not a catalog id. Haiku 4.5 was retired 2026-07-27;
+        // this stays so a future Haiku 5 is recognised as vision-capable
+        // the day it is added rather than silently treated as text-only.
         "claude-haiku",
         "gemini",
         "llava",
