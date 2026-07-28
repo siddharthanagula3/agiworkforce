@@ -24,18 +24,16 @@
 import type { ManagedCloudChatClient } from '@agiworkforce/cloud-contracts';
 import { createCloudChatPersistenceClient } from '../api/cloudApi';
 import { selectPrivacyMode, useAppModeStore } from '../stores/appModeStore';
-import { useAuthStore } from '../stores/auth';
+import { selectHasCloudAccountSession, useAuthStore } from '../stores/auth';
 
 /**
  * True only when the desktop is in the managed-cloud trust boundary.
  */
 export function isManagedCloudPersistenceActive(): boolean {
   try {
-    const authState = useAuthStore.getState();
     return (
       selectPrivacyMode(useAppModeStore.getState()) === 'managed' &&
-      authState.isAuthenticated &&
-      !!authState.accessToken
+      selectHasCloudAccountSession(useAuthStore.getState())
     );
   } catch {
     // Fail-closed: an unreadable store is treated as a private boundary.

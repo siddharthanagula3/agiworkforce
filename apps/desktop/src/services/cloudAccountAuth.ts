@@ -720,6 +720,15 @@ class CloudAccountAuthService {
 
       this.updateState({
         ...snapshot,
+        // The device bearer carries `email: ''` whenever the browser approval
+        // had no email claim, so /api/me is the only authoritative source of
+        // the account address. Fold it back onto the user instead of dropping
+        // it into `profile` alone, or every consumer of `authState.user.email`
+        // (sidebar, account settings) shows a blank address forever.
+        user:
+          this.currentState.user && !this.currentState.user.email && snapshot.profile?.email
+            ? { ...this.currentState.user, email: snapshot.profile.email }
+            : this.currentState.user,
         // A successful account snapshot with no subscription is the canonical
         // Free-tier state, not a billing fetch failure. The orchestrator uses
         // `succeeded + null subscription` to select the Free plan honestly.

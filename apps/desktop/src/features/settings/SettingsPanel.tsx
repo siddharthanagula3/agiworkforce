@@ -794,19 +794,23 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                   isBusy ? 'pointer-events-none opacity-80' : ''
                 }`}
               >
-                {error && (
-                  <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                    {error}
-                  </div>
-                )}
+                {/* Same bounded measure as the shared SettingsModal pane, so
+                    Local and Cloud settings read at one width. */}
+                <div className="mx-auto w-full max-w-[672px]">
+                  {error && (
+                    <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                      {error}
+                    </div>
+                  )}
 
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : (
-                  <div className="space-y-6">{renderTabContent()}</div>
-                )}
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="space-y-6">{renderTabContent()}</div>
+                  )}
+                </div>
               </div>
 
               <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-background/95 px-8 py-4">

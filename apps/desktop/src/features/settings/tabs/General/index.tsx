@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { useAppModeStore, selectMode, selectIsCloud } from '../../../../stores/appModeStore';
-import { useAuthStore } from '../../../../stores/auth';
+import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
 import { useSimpleModeStore } from '../../../../stores/ui';
 import { SUPPORTED_LANGUAGES } from '../../../../i18n';
 import { cn } from '@/lib/utils';
@@ -48,7 +48,7 @@ function Fallback({ label }: { label: string }) {
 function AppModeSection() {
   const mode = useAppModeStore(selectMode);
   const isCloud = useAppModeStore(selectIsCloud);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
   const planTier = useAuthStore((state) => state.plan);
 
@@ -94,7 +94,7 @@ function AppModeSection() {
           <p className="text-sm text-zinc-400 flex-1">Checking authentication...</p>
         </div>
       )}
-      {isCloud && sessionValidated && !isAuthenticated && (
+      {isCloud && sessionValidated && !hasCloudAccountSession && (
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400 flex-1">{DESKTOP_CLOUD_TAGLINE}</p>
@@ -113,7 +113,7 @@ function AppModeSection() {
           </button>
         </div>
       )}
-      {isCloud && isAuthenticated && (
+      {isCloud && hasCloudAccountSession && (
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400 flex-1">

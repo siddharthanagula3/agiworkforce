@@ -18,7 +18,7 @@
 
 import { invoke } from './tauri-mock';
 import { useAppModeStore, selectPrivacyMode } from '../stores/appModeStore';
-import { useUnifiedAuthStore } from '../stores/auth';
+import { selectHasCloudAccountSession, useUnifiedAuthStore } from '../stores/auth';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -30,7 +30,7 @@ const SYNC_INTERVAL_MS = 30_000;
 function getCurrentUserId(): string | null {
   try {
     const auth = useUnifiedAuthStore.getState();
-    if (!auth.isAuthenticated || !auth.accessToken) return null;
+    if (!selectHasCloudAccountSession(auth)) return null;
     return auth.user?.id ?? null;
   } catch {
     return null;

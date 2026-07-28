@@ -325,7 +325,9 @@
       "title": "Artifacts",
       "subtitle": "Saved outputs, generated files, and reusable work.",
       "loading": "Loading artifacts…",
-      "empty": "No artifacts yet. Generate or save an artifact to see it here."
+      "emptyTitle": "No artifacts yet",
+      "empty": "Files and documents you create in chat show up here.",
+      "startChat": "Start a chat"
     },
     "projects": {
       "title": "Projects",
@@ -344,7 +346,8 @@
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
       "paused": "Paused",
-      "empty": "No scheduled tasks yet.",
+      "emptyTitle": "No scheduled tasks",
+      "empty": "Schedule a task and this Mac runs it on a timer.",
       "pauseAria": "Pause scheduled task {{name}}",
       "resumeAria": "Resume scheduled task {{name}}",
       "deleteTitle": "Delete scheduled task?",

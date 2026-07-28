@@ -23,7 +23,13 @@ function absoluteCloudUrl(uri: string): string {
     : `${CLOUD_API_BASE_URL}${uri}`;
 }
 
-export function DesktopLibrary() {
+export interface DesktopLibraryProps {
+  /** Start a new chat from the empty state — the shell owns conversation
+   *  creation, so it supplies the action. */
+  onStartChat?: () => void;
+}
+
+export function DesktopLibrary({ onStartChat }: DesktopLibraryProps = {}) {
   const isSignedIn = useAuthStore(selectHasCloudAccountSession);
 
   const transport = useMemo<LibraryTransport>(
@@ -41,8 +47,9 @@ export function DesktopLibrary() {
       openPreview: (uri) => {
         void openExternalUrl(absoluteCloudUrl(uri));
       },
+      startChat: onStartChat,
     }),
-    [isSignedIn],
+    [isSignedIn, onStartChat],
   );
 
   if (!isSignedIn) {

@@ -1,5 +1,5 @@
 import { selectPrivacyMode, useAppModeStore } from '../stores/appModeStore';
-import { useAuthStore } from '../stores/auth';
+import { selectHasCloudAccountSession, useAuthStore } from '../stores/auth';
 
 export interface ManagedCloudBoundary {
   accountId: string;
@@ -12,15 +12,13 @@ export function captureManagedCloudBoundary(
   const auth = useAuthStore.getState();
   if (
     selectPrivacyMode(useAppModeStore.getState()) !== 'managed' ||
-    !auth.isAuthenticated ||
-    !auth.user?.id ||
-    !auth.accessToken
+    !selectHasCloudAccountSession(auth)
   ) {
     throw new Error(`${operation} requires an authenticated Cloud session.`);
   }
   return {
-    accountId: auth.user.id,
-    accessToken: auth.accessToken,
+    accountId: auth.user?.id ?? '',
+    accessToken: auth.accessToken ?? '',
   };
 }
 
@@ -28,7 +26,7 @@ export function assertManagedCloudBoundary(boundary: ManagedCloudBoundary): void
   const auth = useAuthStore.getState();
   if (
     selectPrivacyMode(useAppModeStore.getState()) !== 'managed' ||
-    !auth.isAuthenticated ||
+    !selectHasCloudAccountSession(auth) ||
     auth.user?.id !== boundary.accountId ||
     auth.accessToken !== boundary.accessToken
   ) {

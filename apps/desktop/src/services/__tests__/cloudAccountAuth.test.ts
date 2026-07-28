@@ -144,6 +144,20 @@ describe('cloudAccountAuth', () => {
     expect(cloudAccountAuth.hasFeature('cloud_managed')).toBe(true);
   });
 
+  it('backfills the account email from /api/me when the bearer claim is empty', async () => {
+    // /api/auth/device/token mints `email: ''` whenever the browser approval had
+    // no email claim, so /api/me is the only authoritative source of the address.
+    const accessToken = jwtWithClaims({
+      sub: 'user_123',
+      email: '',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    await cloudAccountAuth.setSession({ access_token: accessToken });
+
+    expect(cloudAccountAuth.getUser()?.email).toBe('user@example.com');
+  });
+
   it('rejects missing access tokens without creating auth state', async () => {
     const result = await cloudAccountAuth.setSession({ access_token: '' });
 

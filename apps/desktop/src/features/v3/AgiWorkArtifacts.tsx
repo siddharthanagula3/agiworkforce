@@ -1,7 +1,8 @@
-import { ExternalLink, File, RefreshCw, Table } from 'lucide-react';
+import { Box, ExternalLink, File, RefreshCw, Table } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { EmptyState } from '@/ui/EmptyState';
 import { cn } from '../../lib/utils';
 import {
   useArtifactStore,
@@ -41,7 +42,7 @@ function isFresh(summary: ArtifactSummary): boolean {
   return Date.now() - new Date(summary.updated_at).getTime() < STALE_THRESHOLD_MS;
 }
 
-export function AgiWorkArtifacts() {
+export function AgiWorkArtifacts({ onNewChat }: { onNewChat?: () => void } = {}) {
   const { t } = useTranslation('v3');
   const summaries = useArtifactStore((s) => s.summaries);
   const isLoading = useArtifactStore((s) => s.isLoading);
@@ -84,9 +85,16 @@ export function AgiWorkArtifacts() {
             {t('agiWork.artifacts.loading')}
           </div>
         ) : summaries.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[var(--chat-border)] px-4 py-8 text-center text-sm text-[var(--chat-text-muted)]">
-            {t('agiWork.artifacts.empty')}
-          </div>
+          <EmptyState
+            icon={Box}
+            title={t('agiWork.artifacts.emptyTitle')}
+            description={t('agiWork.artifacts.empty')}
+            action={
+              onNewChat
+                ? { label: t('agiWork.artifacts.startChat'), onClick: onNewChat }
+                : undefined
+            }
+          />
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {summaries.map((a) => {

@@ -89,21 +89,27 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ className }) =
 
   return (
     <div className={cn('flex flex-col items-center gap-3 text-center select-none', className)}>
-      {/* Animated brand icon */}
+      {/* Animated brand icon. Token-driven like every sibling in the pane —
+          the previous violet/indigo gradient existed nowhere in the chat
+          palette and did not repaint under [data-chat-theme]. */}
       <div
-        className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500/20 to-indigo-500/10 border border-violet-500/20"
+        className="flex items-center justify-center w-12 h-12 rounded-2xl bg-[var(--chat-accent-primary)]/12 border border-[var(--chat-accent-primary)]/20"
         aria-hidden="true"
       >
-        <AgiMark size={24} spinning className="text-violet-400" />
+        <AgiMark size={24} spinning className="text-[var(--chat-accent-primary)]" />
       </div>
 
-      {/* Headline */}
-      <h1 className="text-2xl font-semibold text-foreground/90 tracking-tight leading-tight">
+      {/* Headline — display serif, sized between web's 28px and Claude's ~40px
+          so it still fits one line at the desktop content measure. */}
+      <h1
+        className="text-[32px] leading-[40px] font-normal tracking-[-0.01em] text-[var(--chat-text-primary)]"
+        style={{ fontFamily: 'var(--chat-font-display)' }}
+      >
         {headline}
       </h1>
 
       {/* Branded sub-tagline */}
-      <p className="text-sm text-muted-foreground font-medium">{subline}</p>
+      <p className="text-sm text-[var(--chat-text-secondary)] font-medium">{subline}</p>
     </div>
   );
 };
