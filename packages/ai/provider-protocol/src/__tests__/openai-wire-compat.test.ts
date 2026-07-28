@@ -252,6 +252,42 @@ describe('OpenAIWireAssembler streaming', () => {
       },
     });
   });
+
+  it('streams reasoning as inline <thinking> tags in openai-passthrough mode, same shape as legacy-web', () => {
+    // Regression: only legacy-web (anthropic/google) got the inline tag pair,
+    // so every openai/deepseek/xai/qwen/moonshot/... managed-cloud turn
+    // discarded its reasoning text outright -- web's ThinkingBlock and
+    // mobile's ThinkingChip both read that ONE shape out of delta.content.
+    const contents = (events: Record<string, unknown>[]): unknown[] =>
+      events.map(
+        (e) =>
+          (e as { choices: Array<{ delta: { content?: unknown } }> }).choices[0]?.delta.content,
+      );
+
+    for (const wireMode of ['legacy-web', 'openai-passthrough'] as const) {
+      const assembler = new OpenAIWireAssembler({ model: 'm', now: NOW, wireMode });
+      const opened = assembler.sseChunks({ type: 'thinking-delta', delta: 'weighing options' });
+      const answered = assembler.sseChunks({ type: 'text-delta', delta: 'Answer.' });
+
+      // openai-passthrough leads with its synthetic role announcement.
+      expect(contents(opened).slice(-2)).toEqual(['<thinking>', 'weighing options']);
+      expect(contents(answered)).toEqual(['</thinking>', 'Answer.']);
+      // Reasoning must never reach the persisted assistant body.
+      expect(assembler.canonicalText()).toBe('Answer.');
+    }
+  });
+
+  it('emits nothing for a turn without reasoning, so no empty thinking block is fabricated', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: 'm',
+      now: NOW,
+      wireMode: 'openai-passthrough',
+    });
+    const events = assembler.sseChunks({ type: 'text-delta', delta: 'Direct.' });
+    const serialized = JSON.stringify(events);
+    expect(serialized).not.toContain('<thinking>');
+    expect(serialized).not.toContain('reasoning_content');
+  });
 });
 
 describe('assembleOpenAIWireResponse (non-streaming)', () => {

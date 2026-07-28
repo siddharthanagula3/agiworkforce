@@ -1555,13 +1555,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // onDone maps them to generated-file artifacts so GeneratedFileCard /
       // InlineArtifactCard render a downloadable file card.
       const turnGeneratedFiles: GeneratedFileWire[] = [];
-      // Structured delta.reasoning is a separate, genuinely incremental channel
-      // (e.g. a provider's dedicated reasoning field) from the tag-embedded
-      // thinking parsed out of cloudContentRaw below. Tracked separately because
-      // parseLocalThinking re-parses the FULL raw buffer on every delta (it has
-      // to, to handle a tag straddling two chunks) — accumulating its output
-      // onto itself across deltas would duplicate the reasoning text.
-      let cloudStructuredReasoning = '';
       // How this turn ended (OpenAI-wire finish_reason, last one seen) and
       // whether the provider failed mid-stream (additive `x_stream_error` —
       // finish_reason alone can't reliably say 'error', see
@@ -1697,12 +1690,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ).pending;
             }
 
-            if (delta.reasoning) {
-              if (!thinkingStartTimes.has(conversationId) && !state.streamingReasoning) {
-                thinkingStartTimes.set(conversationId, Date.now());
-              }
-              cloudStructuredReasoning += delta.reasoning;
-            }
             if (parsedTags.hasReasoning && !thinkingStartTimes.has(conversationId)) {
               thinkingStartTimes.set(conversationId, Date.now());
             }
@@ -1712,7 +1699,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             // + 30s answer as "Thought for 33s".
             if (
               contentChunk &&
-              !delta.reasoning &&
               thinkingStartTimes.has(conversationId) &&
               !thinkingEndTimes.has(conversationId) &&
               cloudContentRaw.length > prevContentLength &&
@@ -1720,9 +1706,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ) {
               thinkingEndTimes.set(conversationId, Date.now());
             }
-            const newReasoning = [cloudStructuredReasoning, parsedTags.reasoning]
-              .filter(Boolean)
-              .join('\n\n');
+            const newReasoning = parsedTags.reasoning;
 
             accumulateToolCallDelta(toolAcc, delta);
             const toolCalls = toolCallList(toolAcc);
@@ -2338,7 +2322,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // empty seed would overwrite it with `undefined` the instant the first
     // resume delta lands, since every onDelta below replaces `reasoning`
     // wholesale rather than appending.
-    let cloudStructuredReasoning = currentMessage?.reasoning ?? '';
+    const priorReasoning = currentMessage?.reasoning ?? '';
     const turnGeneratedFiles: GeneratedFileWire[] = [];
     const turnPendingApprovals: PendingApprovalCall[] = [];
     // See the sendMessage onDelta/onDone pair above for why these are
@@ -2368,8 +2352,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (delta.content) cloudContentRaw += delta.content;
             const parsedTags = parseLocalThinking(cloudContentRaw);
             const newContent = parsedTags.content;
-            if (delta.reasoning) cloudStructuredReasoning += delta.reasoning;
-            const newReasoning = [cloudStructuredReasoning, parsedTags.reasoning]
+            const newReasoning = [priorReasoning, parsedTags.reasoning]
               .filter(Boolean)
               .join('\n\n');
 
