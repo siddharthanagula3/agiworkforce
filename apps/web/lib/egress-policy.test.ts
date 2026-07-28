@@ -226,8 +226,10 @@ describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
     expect(() => validateEgressUrl('https://api.moonshot.cn/v1/chat/completions')).not.toThrow();
   });
 
-  it('allows the configured MuleRouter fallback endpoint', () => {
-    expect(() => validateEgressUrl('https://api.mulerouter.ai/v1/chat/completions')).not.toThrow();
+  it('no longer allows MuleRouter, dropped as a gateway 2026-07-27', () => {
+    // An allowlisted host for a service we no longer use is standing SSRF
+    // surface, so removal is asserted rather than left to inspection.
+    expect(() => validateEgressUrl('https://api.mulerouter.ai/v1/chat/completions')).toThrow();
   });
 
   it('blocks unlisted host', () => {

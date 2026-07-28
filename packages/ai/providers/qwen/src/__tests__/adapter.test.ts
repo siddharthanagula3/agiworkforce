@@ -3,7 +3,7 @@
  * the expected shape (id, label, auth methods, catalog, stream). No network
  * calls — confirms the adapter wires up without throwing on construction
  * for every supported base-URL shape (DashScope compatible-mode default,
- * MuleRouter, and a rejected/SSRF host that falls back silently).
+ * DashScope international, and a rejected/SSRF host that falls back silently).
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -39,7 +39,10 @@ describe('createQwenAdapter', () => {
     expect(() => createQwenAdapter({ apiKey: 'test-key' })).not.toThrow();
   });
 
-  it('constructs with a MuleRouter baseUrl override', () => {
+  it('falls back to the default base URL for a host off the allowlist', () => {
+    // MuleRouter was an allowlisted gateway until 2026-07-27. Now it is just
+    // another unlisted host, and an unlisted host must not be trusted — the
+    // adapter silently reverts to DashScope rather than dialling it.
     expect(() =>
       createQwenAdapter({ apiKey: 'test-key', baseUrl: 'https://api.mulerouter.ai' }),
     ).not.toThrow();
@@ -61,7 +64,7 @@ describe('createQwenAdapter', () => {
   });
 });
 
-describe('createQwenAdapter fallbackEndpoints (DashScope → MuleRouter fail-over)', () => {
+describe('createQwenAdapter fallbackEndpoints (pre-first-byte fail-over)', () => {
   function res503(): Response {
     return new Response(JSON.stringify({ error: { message: 'overloaded' } }), {
       status: 503,
@@ -94,14 +97,18 @@ describe('createQwenAdapter fallbackEndpoints (DashScope → MuleRouter fail-ove
     const adapter = createQwenAdapter({
       apiKey: 'primary-key',
       fetch: hostRecordingFetch(hosts) as never,
-      fallbackEndpoints: [{ baseUrl: 'https://api.mulerouter.ai', apiKey: 'sk-mr-fallback' }],
+      // Any second allowlisted host exercises rotation; DashScope
+      // international stands in now that MuleRouter is gone.
+      fallbackEndpoints: [
+        { baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', apiKey: 'alt-key' },
+      ],
     });
 
     const chunks = await drain(adapter);
 
-    // Both the primary (DashScope) and the fallback (MuleRouter) were attempted.
-    expect(hosts.some((h) => h.includes('dashscope'))).toBe(true);
-    expect(hosts.some((h) => h.includes('mulerouter'))).toBe(true);
+    // Both the primary and the fallback endpoint were attempted.
+    expect(hosts.some((h) => h === 'dashscope.aliyuncs.com')).toBe(true);
+    expect(hosts.some((h) => h === 'dashscope-intl.aliyuncs.com')).toBe(true);
     // Both exhausted → a terminal error is surfaced, never silent.
     expect(chunks.some((c) => c.type === 'error')).toBe(true);
     expect(chunks.at(-1)).toMatchObject({ type: 'stop', reason: 'error' });

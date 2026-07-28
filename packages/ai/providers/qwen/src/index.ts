@@ -10,9 +10,9 @@
  * `openai-responses-payload-policy.ts`'s `MODELSTUDIO_NATIVE_BASE_URLS`),
  * which enables native streaming-usage compat.
  *
- * Also supports MuleRouter (`https://api.mulerouter.ai`) as an alternate
- * OpenAI-compatible gateway, matching `apps/web/lib/llm-providers/qwen.ts`
- * (source of truth for this port) — see `applyQwenBaseUrlQuirks`.
+ * MuleRouter was removed as a gateway on 2026-07-27; Qwen now reaches us
+ * either direct via DashScope or through OpenRouter. `baseUrl` overrides
+ * stay allowlisted to DashScope hosts and loopback only.
  *
  * @packageDocumentation
  */
@@ -41,13 +41,12 @@ import {
 } from '@agiworkforce/providers-openai';
 
 import { QWEN_MODEL_CATALOG } from './catalog';
-import { QWEN_DEFAULT_BASE_URL, applyQwenBaseUrlQuirks } from './base-url';
+import { QWEN_DEFAULT_BASE_URL } from './base-url';
 
 /** Hosts a `baseUrl` override is allowed to resolve to (SSRF allowlist). */
 const QWEN_ALLOWED_BASE_HOSTS: readonly string[] = [
   'dashscope.aliyuncs.com',
   'dashscope-intl.aliyuncs.com',
-  'api.mulerouter.ai',
   'localhost',
   '127.0.0.1',
 ];
@@ -63,12 +62,12 @@ const QWEN_AUTH_METHODS: readonly AuthMethod[] = [
 
 /** An alternate Qwen-compatible endpoint tried on primary-endpoint failure. */
 export interface QwenFallbackEndpoint {
-  /** OpenAI-compatible base URL (e.g. MuleRouter). SSRF-validated like the primary. */
+  /** OpenAI-compatible base URL. SSRF-validated like the primary. */
   baseUrl: string;
   /**
    * API key for this endpoint; falls back to the adapter's primary `apiKey`
-   * when omitted. DashScope and MuleRouter use different keys, so this is
-   * usually set.
+   * when omitted. Set it when the alternate endpoint authenticates
+   * differently from the primary.
    */
   apiKey?: string;
 }
@@ -79,16 +78,16 @@ export interface QwenAdapterConfig extends ProviderAdapterConfig {
   /**
    * Ordered alternate endpoints, tried in order ONLY when the primary endpoint
    * fails with a transient/availability error BEFORE any content is streamed
-   * (pre-first-byte). Enables DashScope (primary) → MuleRouter (fallback)
-   * without risking duplicated output. This same primitive lifts to a shared
-   * helper the moment a second OpenAI-compatible provider needs it (YAGNI:
-   * only Qwen has two endpoints today).
+   * (pre-first-byte), so a rotation can never duplicate output. No endpoint is
+   * configured since MuleRouter was dropped on 2026-07-27; the primitive stays
+   * because it is provider-agnostic and the next second-endpoint need will
+   * want it.
    */
   fallbackEndpoints?: readonly QwenFallbackEndpoint[];
   /**
    * Extra hostnames a `baseUrl` override may resolve to, beyond
    * `dashscope.aliyuncs.com` / `dashscope-intl.aliyuncs.com` /
-   * `api.mulerouter.ai` / `localhost` / `127.0.0.1`. A `baseUrl` whose host
+   * `localhost` / `127.0.0.1`. A `baseUrl` whose host
    * isn't allowlisted falls back to the default base URL rather than being
    * trusted unconditionally (SSRF guard implemented by
    * `@agiworkforce/provider-runtime`).
@@ -100,7 +99,7 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
   const { url: validatedBaseUrl } = resolveValidatedBaseUrl(config.baseUrl, QWEN_DEFAULT_BASE_URL, {
     allowedHosts: [...QWEN_ALLOWED_BASE_HOSTS, ...(config.additionalAllowedBaseUrlHosts ?? [])],
   });
-  const baseUrl = applyQwenBaseUrlQuirks(validatedBaseUrl);
+  const baseUrl = validatedBaseUrl;
 
   const sdk = new OpenAI({
     ...(config.apiKey ? { apiKey: config.apiKey } : {}),
@@ -117,7 +116,7 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
       const { url } = resolveValidatedBaseUrl(endpoint.baseUrl, QWEN_DEFAULT_BASE_URL, {
         allowedHosts: [...QWEN_ALLOWED_BASE_HOSTS, ...(config.additionalAllowedBaseUrlHosts ?? [])],
       });
-      return { url: applyQwenBaseUrlQuirks(url), apiKey: endpoint.apiKey ?? config.apiKey };
+      return { url, apiKey: endpoint.apiKey ?? config.apiKey };
     })
     .filter((endpoint) => endpoint.url !== baseUrl)
     .map(
@@ -221,4 +220,4 @@ export const qwenAdapterFactory: ProviderAdapterFactory = (config) =>
   createQwenAdapter(config as QwenAdapterConfig);
 
 export { QWEN_MODEL_CATALOG } from './catalog';
-export { QWEN_DEFAULT_BASE_URL, applyQwenBaseUrlQuirks } from './base-url';
+export { QWEN_DEFAULT_BASE_URL } from './base-url';
