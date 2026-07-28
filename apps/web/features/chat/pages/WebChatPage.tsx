@@ -141,7 +141,7 @@ import {
   ProjectSettingsDialog,
 } from '@features/projects';
 import { webManagedCloudProjects } from '@features/projects/services/managed-cloud-projects';
-import { useMediaGeneration } from '@/lib/hooks/useMediaGeneration';
+import { useMediaGeneration, MediaGenerationApiError } from '@/lib/hooks/useMediaGeneration';
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import {
   IMAGE_ASPECT_OPTIONS,
@@ -1139,7 +1139,7 @@ export default function WebChatPage() {
     ],
   );
 
-  const { generateImage } = useMediaGeneration();
+  const { generateImage, generateVideo } = useMediaGeneration();
 
   // ---------------------------------------------------------------------------
   // Shared helper: resolve size + provider from composer options
@@ -1483,6 +1483,156 @@ export default function WebChatPage() {
       displayedConversationId,
       getToken,
       readMessageMetadata,
+    ],
+  );
+
+  // ---------------------------------------------------------------------------
+  // handleGenerateVideo – called by composer; mirrors handleGenerateImage.
+  //
+  // The difference that matters is the in-flight window: the video task runs
+  // for a minute or more behind /api/media/video/status, and the assistant
+  // message is deliberately created with `toolType: 'video-generation'` and NO
+  // `videoUrl`, which is exactly the pair MessageBubble reads to render its
+  // shimmering placeholder. `videoUrl` is written only on completion, which is
+  // what flips the same bubble to the player + download affordance.
+  // ---------------------------------------------------------------------------
+  const handleGenerateVideo = useCallback(
+    (prompt: string) => {
+      const videoGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
+      if (sendingConversationsRef.current.has(videoGuardKey)) return;
+      sendingConversationsRef.current.add(videoGuardKey);
+      const releaseSendWindow = claimSendWindow();
+      void (async () => {
+        try {
+          let convId = displayedConversationId;
+          if (!convId) {
+            const fresh = await createConversation(
+              'Video generation',
+              activeModelId,
+              activeProjectId,
+            );
+            if (fresh) {
+              convId = fresh.id;
+              if (!urlConversationId) setBareChatSessionId(fresh.id);
+              router.replace(`/chat/${fresh.id}`);
+            }
+          }
+          if (!convId) return;
+
+          const isTemporaryConversation = isTemporaryConversationById(
+            useChatStore.getState().conversations,
+            convId,
+          );
+          const getAuthToken = async () => {
+            const token = await getToken();
+            if (!token) throw new Error('Not authenticated');
+            return token;
+          };
+          const updateOwnMessage = (id: string, updates: Partial<Message>) =>
+            updateMessage(id, updates, convId);
+
+          const userMessageId = crypto.randomUUID();
+          addMessage(
+            {
+              id: userMessageId,
+              role: 'user',
+              content: prompt,
+              createdAt: new Date().toISOString(),
+            },
+            convId,
+          );
+          if (!isTemporaryConversation) {
+            void persistImageGenerationUserMessage({
+              conversationId: convId,
+              messageId: userMessageId,
+              content: prompt,
+              getAuthToken,
+              updateMessage: updateOwnMessage,
+            });
+          }
+
+          const assistantMsgId = crypto.randomUUID();
+          addMessage(
+            {
+              id: assistantMsgId,
+              role: 'assistant',
+              content: '',
+              isStreaming: true,
+              createdAt: new Date().toISOString(),
+              // No videoUrl: the shimmer branch is keyed off its absence.
+              metadata: { toolType: 'video-generation' },
+            },
+            convId,
+          );
+
+          try {
+            const { videoUrl, thumbnailUrl } = await generateVideo(prompt);
+            const finalMetadata: MessageMetadata = {
+              toolType: 'video-generation',
+              videoUrl,
+              ...(thumbnailUrl ? { thumbnailUrl } : {}),
+            };
+            updateOwnMessage(assistantMsgId, {
+              content: '',
+              isStreaming: false,
+              metadata: finalMetadata,
+            });
+            if (!isTemporaryConversation) {
+              void persistImageGenerationAssistantMessage({
+                conversationId: convId,
+                messageId: assistantMsgId,
+                model: undefined,
+                metadata: finalMetadata,
+                getAuthToken,
+                updateMessage: updateOwnMessage,
+              });
+            }
+          } catch (err) {
+            // A tier refusal must land as an InlinePaywallCard, not a toast or
+            // a raw error bubble: ChatMessageList swaps the whole row for the
+            // card whenever `metadata.paywall` is present. `isPaywall` is the
+            // hook's own classification of the route's 403
+            // (`code: 'plan_upgrade_required'`), so this does not re-parse
+            // error strings.
+            const isPaywall = err instanceof MediaGenerationApiError && err.isPaywall;
+            updateOwnMessage(assistantMsgId, {
+              isStreaming: false,
+              content: isPaywall
+                ? ''
+                : `Video generation failed: ${err instanceof Error ? err.message : String(err)}`,
+              metadata: {
+                toolType: 'video-generation',
+                ...(isPaywall
+                  ? {
+                      paywall: {
+                        feature: 'video_generation',
+                        // billing-catalog.ts: video_generation → ['max_15x', 'enterprise'].
+                        requiredTier: 'max_15x',
+                        reason: 'Video generation is available on Max 15x and Enterprise plans.',
+                      },
+                    }
+                  : {}),
+              },
+            });
+          }
+        } finally {
+          sendingConversationsRef.current.delete(videoGuardKey);
+          releaseSendWindow();
+        }
+      })();
+    },
+    [
+      displayedConversationId,
+      urlConversationId,
+      createConversation,
+      activeModelId,
+      activeProjectId,
+      addMessage,
+      updateMessage,
+      generateVideo,
+      router,
+      getToken,
+      claimSendWindow,
     ],
   );
 
@@ -2802,6 +2952,7 @@ export default function WebChatPage() {
                     sendPreviewPresentation={sendPreviewPresentation}
                     onUpgradeRequest={handleOpenUpgradeDialog}
                     onGenerateImage={handleGenerateImage}
+                    onGenerateVideo={handleGenerateVideo}
                     projectPicker={composerProjectPicker}
                     onSetTemporaryChat={handleSetTemporaryChat}
                     freeTrial={{
@@ -2871,6 +3022,7 @@ export default function WebChatPage() {
                     sendPreviewPresentation={sendPreviewPresentation}
                     onUpgradeRequest={handleOpenUpgradeDialog}
                     onGenerateImage={handleGenerateImage}
+                    onGenerateVideo={handleGenerateVideo}
                     projectPicker={composerProjectPicker}
                     onSetTemporaryChat={handleSetTemporaryChat}
                     freeTrial={{

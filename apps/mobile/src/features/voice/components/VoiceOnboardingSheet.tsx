@@ -54,6 +54,27 @@ function FeatureRow({ icon, children }: { icon: React.ReactNode; children: React
   );
 }
 
+/**
+ * The fill lives on a plain View, not on the Pressable. Three visual passes
+ * found the Pressable's own background refusing to paint here while identical
+ * pills elsewhere in the app render fine; the difference is that these sit
+ * inside a reanimated Animated.View with an `entering` animation and used a
+ * function style. A View's backgroundColor is the most reliably painted thing
+ * in RN, so this removes the variable instead of explaining it.
+ */
+const PILL = {
+  backgroundColor: colors.white,
+  borderRadius: 999,
+  paddingVertical: 17,
+  alignItems: 'center' as const,
+};
+const PILL_LABEL = {
+  color: colors.black,
+  fontSize: 17,
+  fontWeight: '600' as const,
+  textAlign: 'center' as const,
+};
+
 export interface VoiceOnboardingSheetProps {
   visible: boolean;
   /** Acknowledged — the caller proceeds into voice. */
@@ -157,25 +178,11 @@ export function VoiceOnboardingSheet({
             onPress={handleContinue}
             accessibilityRole="button"
             accessibilityLabel="Continue to voice"
-            style={({ pressed }) => ({
-              backgroundColor: colors.white,
-              borderRadius: 999,
-              paddingVertical: 17,
-              alignItems: 'center',
-              flexShrink: 0,
-              opacity: pressed ? 0.85 : 1,
-            })}
+            style={{ flexShrink: 0 }}
           >
-            <Text
-              style={{
-                color: colors.black,
-                fontSize: 17,
-                fontWeight: '600',
-                textAlign: 'center',
-              }}
-            >
-              Continue
-            </Text>
+            <View style={PILL}>
+              <Text style={PILL_LABEL}>Continue</Text>
+            </View>
           </Pressable>
         </Animated.View>
       </Animated.View>

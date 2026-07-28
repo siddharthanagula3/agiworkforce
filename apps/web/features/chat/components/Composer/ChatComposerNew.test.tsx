@@ -997,4 +997,101 @@ describe('ChatComposerNew', () => {
       expect(onSendMock).not.toHaveBeenCalled();
     });
   });
+  /**
+   * "Create video" was the one plus-menu entry that did not exist, even though
+   * /api/media/video/generate, its billing entitlement, and MessageBubble's
+   * in-flight + finished states were all already implemented. These lock the
+   * entry point itself: an entitled user can reach video mode and hand a
+   * prompt to the host, and a non-entitled user is sent to the upgrade path
+   * instead of composing a prompt that is guaranteed to 403.
+   */
+  describe('Create video', () => {
+    const MAX_15X_SUBSCRIPTION: SubscriptionPlan = {
+      tier: 'max_15x',
+      display_name: 'Max 15x',
+      status: 'active',
+      current_period_end: null,
+      plan_name: 'Max 15x',
+    };
+
+    it('offers Create video to an entitled tier and routes the prompt to onGenerateVideo', async () => {
+      useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
+      const onGenerateVideo = vi.fn();
+      const onSend = vi.fn();
+      render(<ChatComposerNew onSend={onSend} onGenerateVideo={onGenerateVideo} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      const item = screen.getByText('Create video');
+      expect(item).toBeInTheDocument();
+      // No upgrade badge: this plan really holds the capability.
+      expect(item.closest('button')).not.toHaveTextContent(/upgrade/i);
+
+      fireEvent.click(item);
+
+      // Entering video mode is visible (exit pill) and re-labels the input.
+      expect(
+        screen.getByRole('button', { name: /exit video generation mode/i }),
+      ).toBeInTheDocument();
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      expect(textarea).toHaveAttribute('placeholder', 'Describe the video you want');
+
+      await userEvent.type(textarea, 'a cat surfing');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(onGenerateVideo).toHaveBeenCalledWith('a cat surfing');
+      });
+      // The prompt goes to the media harness, never to the chat turn.
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
+    it('sends a non-entitled tier to the upgrade path instead of into video mode', () => {
+      // Pro is entitled to image generation but NOT video (billing-catalog:
+      // video_generation -> ['max_15x', 'enterprise']).
+      useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
+      const onUpgradeRequest = vi.fn();
+      const onGenerateVideo = vi.fn();
+      render(
+        <ChatComposerNew
+          onSend={vi.fn()}
+          onUpgradeRequest={onUpgradeRequest}
+          onGenerateVideo={onGenerateVideo}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      const button = screen.getByText('Create video').closest('button')!;
+      expect(button).toHaveTextContent(/upgrade/i);
+
+      fireEvent.click(button);
+
+      expect(onUpgradeRequest).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByRole('button', { name: /exit video generation mode/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('leaves image mode when video mode is entered so one send path owns the prompt', () => {
+      useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
+      render(
+        <ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} onGenerateVideo={vi.fn()} />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByText('Create image'));
+      expect(
+        screen.getByRole('button', { name: /exit image generation mode/i }),
+      ).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByText('Create video'));
+
+      expect(
+        screen.getByRole('button', { name: /exit video generation mode/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /exit image generation mode/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
 });

@@ -1006,7 +1006,12 @@ const MessageBubbleComponent = function MessageBubble({
             !cleanedContent.trim() &&
             !streamingBlock &&
             !canonicalActivity &&
-            message.metadata?.toolType !== 'image-generation' ? (
+            message.metadata?.toolType !== 'image-generation' &&
+            // Same reason as image: the media card below IS the progress
+            // indicator. Observed live — the video shimmer rendered with a
+            // "Thinking..." line stacked on top of it, claiming a reasoning
+            // step that is not happening.
+            message.metadata?.toolType !== 'video-generation' ? (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                 <span className="text-sm">Thinking...</span>
@@ -1176,10 +1181,18 @@ const MessageBubbleComponent = function MessageBubble({
               video will occupy is reserved with a shimmering placeholder rather
               than left empty: the thread does not jump when the result lands,
               and an empty gap for two minutes is indistinguishable from a
-              silent failure. Keyed off "the tool ran but produced no URL yet",
-              which is the only in-flight signal the metadata carries. */}
+              silent failure.
+
+              `isStreaming` is the in-flight signal, NOT "no URL yet". When the
+              only condition was a missing videoUrl, a FAILED generation — which
+              also has no URL — kept shimmering forever directly above its own
+              "Video generation failed" text, so a dead turn was indistinguishable
+              from a live one. Observed against the real route (503, no provider
+              key configured) on 2026-07-27. The writer clears `isStreaming` on
+              every exit, success or failure. */}
           {!isUser &&
             message.metadata?.toolType === 'video-generation' &&
+            message.isStreaming === true &&
             !message.metadata?.videoUrl &&
             !videoError && (
               <div

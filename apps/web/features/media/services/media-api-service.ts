@@ -123,6 +123,49 @@ export async function generateImages(
 }
 
 /**
+ * Transport-level failure that KEEPS the API's structured error fields.
+ *
+ * The previous `throw new Error(data.error || ...)` stringified an error body
+ * of the shape `{ error: { message, code } }` — which is exactly what the
+ * video route's tier refusal returns — into the literal text
+ * "[object Object]", destroying the `plan_upgrade_required` code the client's
+ * paywall detection matches on. Classification stays in `useMediaGeneration`
+ * (MediaGenerationApiError); this type only carries the fields there intact.
+ */
+export class MediaApiError extends Error {
+  readonly status: number | undefined;
+  readonly code: string | undefined;
+  readonly type: string | undefined;
+
+  constructor(message: string, options: { status?: number; code?: string; type?: string } = {}) {
+    super(message);
+    this.name = 'MediaApiError';
+    this.status = options.status;
+    this.code = options.code;
+    this.type = options.type;
+  }
+}
+
+async function readApiError(response: Response, fallback: string): Promise<MediaApiError> {
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: string | { message?: string; code?: string; type?: string };
+    message?: string;
+  };
+  const errorField = body.error;
+  const nested = typeof errorField === 'object' && errorField !== null ? errorField : undefined;
+  const message =
+    nested?.message ||
+    (typeof errorField === 'string' ? errorField : undefined) ||
+    body.message ||
+    fallback;
+  return new MediaApiError(message, {
+    status: response.status,
+    ...(nested?.code !== undefined ? { code: nested.code } : {}),
+    ...(nested?.type !== undefined ? { type: nested.type } : {}),
+  });
+}
+
+/**
  * Start video generation via /api/media/video/generate
  */
 export async function generateVideo(
@@ -142,8 +185,7 @@ export async function generateVideo(
   });
 
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
-    throw new Error(data.error || data.message || `Video generation failed (${response.status})`);
+    throw await readApiError(response, `Video generation failed (${response.status})`);
   }
 
   return (await response.json()) as VideoGenerationResponse;
@@ -163,10 +205,7 @@ export async function getVideoStatus(taskId: string): Promise<VideoStatusRespons
   });
 
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
-    throw new Error(
-      data.error || data.message || `Failed to get video status (${response.status})`,
-    );
+    throw await readApiError(response, `Failed to get video status (${response.status})`);
   }
 
   return (await response.json()) as VideoStatusResponse;

@@ -14,6 +14,7 @@ import {
   EyeOff,
   ImagePlus,
   Image as ImageIcon,
+  Video,
   FileText,
   Terminal,
   Folder,
@@ -176,6 +177,12 @@ interface ChatComposerProps {
     prompt: string,
     options: { aspectRatio: ImageAspectRatio; modelId: string },
   ) => void;
+  /**
+   * Called when the user submits in video-generation mode. Same contract as
+   * `onGenerateImage`: the composer clears its state, the parent owns the async
+   * task (POST + status polling) and the message injection.
+   */
+  onGenerateVideo?: (prompt: string) => void;
   /** Website free-plan state. The server owns the unpublished usage ceiling. */
   freeTrial?: {
     enabled: boolean;
@@ -357,6 +364,7 @@ const ChatComposerNewComponent = ({
   onUpgradeRequest,
   freeTrial,
   onGenerateImage,
+  onGenerateVideo,
   projectPicker,
   onSetTemporaryChat,
 }: ChatComposerProps) => {
@@ -442,6 +450,13 @@ const ChatComposerNewComponent = ({
     billingPolicyReady &&
     !isFreeTrial &&
     canUseBillingPlanCapability(subscriptionTier, 'image_generation');
+  // Video is a narrower entitlement than image (billing-catalog.ts:
+  // video_generation → ['max_15x', 'enterprise']), so it gets its own read of
+  // the same canonical catalog rather than riding the image flag.
+  const canUseVideoGeneration =
+    billingPolicyReady &&
+    !isFreeTrial &&
+    canUseBillingPlanCapability(subscriptionTier, 'video_generation');
 
   /**
    * AUDIT-FIX CMP-1/CMP-2/CMP-5: the composer's send options now live in the
@@ -482,14 +497,22 @@ const ChatComposerNewComponent = ({
     codeExecutionEnabled,
     officeCreationEnabled,
     imageMode,
+    videoMode,
     selectedSkillName,
   } = composerToggles;
   const setWorkMode = useCallback(
     (mode: ComposerWorkMode) => setComposerToggles({ workMode: mode }),
     [setComposerToggles],
   );
+  // The two media modes are mutually exclusive: the send path checks image
+  // first, so leaving both on would silently send a video prompt to the image
+  // route. Entering one always leaves the other.
   const setImageMode = useCallback(
-    (enabled: boolean) => setComposerToggles({ imageMode: enabled }),
+    (enabled: boolean) => setComposerToggles({ imageMode: enabled, videoMode: false }),
+    [setComposerToggles],
+  );
+  const setVideoMode = useCallback(
+    (enabled: boolean) => setComposerToggles({ videoMode: enabled, imageMode: false }),
     [setComposerToggles],
   );
   const setSelectedSkillName = useCallback(
@@ -675,6 +698,14 @@ const ChatComposerNewComponent = ({
     if (imageMode && !canUseImageGeneration) setComposerToggles({ imageMode: false });
   }, [billingPolicyReady, imageMode, canUseImageGeneration, setComposerToggles]);
 
+  // Same guarantee for video, whose server gate is narrower still (Max 15x /
+  // Enterprise). A stale per-conversation flag must not survive a downgrade
+  // into a send that is guaranteed to 403.
+  useEffect(() => {
+    if (!billingPolicyReady) return;
+    if (videoMode && !canUseVideoGeneration) setComposerToggles({ videoMode: false });
+  }, [billingPolicyReady, videoMode, canUseVideoGeneration, setComposerToggles]);
+
   // Incognito / temporary chat — wired to the live web-chat-store
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const isIncognito = useChatStore((s) => {
@@ -785,7 +816,7 @@ const ChatComposerNewComponent = ({
     // remount that used to wipe them no longer touches them. The per-send
     // resets below are the ones that genuinely belong to a single send: the
     // skill selection and image mode are one-shot composer modes.
-    setComposerToggles({ selectedSkillName: null, imageMode: false });
+    setComposerToggles({ selectedSkillName: null, imageMode: false, videoMode: false });
     setLocalNotice(null);
     setImageAspectRatio('auto');
     setImageModelId(IMAGE_MODEL_DEFAULT);
@@ -1348,6 +1379,18 @@ const ChatComposerNewComponent = ({
       return;
     }
 
+    // Video generation mode: same delegation contract as image. The task runs
+    // for a minute or more behind a status poll, so it is deliberately not part
+    // of the streaming turn and is not queued.
+    if (videoMode) {
+      if (isTurnActive) return;
+      const prompt = outgoingContent.trim();
+      if (!prompt) return;
+      onGenerateVideo?.(prompt);
+      clearComposerState();
+      return;
+    }
+
     const sendArgs: Parameters<typeof onSend> = [
       outgoingContent,
       attachments.length > 0 ? attachments : undefined,
@@ -1407,6 +1450,8 @@ const ChatComposerNewComponent = ({
     imageAspectRatio,
     imageModelId,
     onGenerateImage,
+    videoMode,
+    onGenerateVideo,
     conversationId,
     workMode,
     canUseAgiWork,
@@ -1908,16 +1953,18 @@ const ChatComposerNewComponent = ({
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder={
-                isTurnActive && !imageMode
+                isTurnActive && !imageMode && !videoMode
                   ? 'Reply — sends when the current response finishes'
                   : imageMode
                     ? 'Describe or edit an image'
-                    : placeholder
+                    : videoMode
+                      ? 'Describe the video you want'
+                      : placeholder
               }
               // Type-ahead: the textarea stays enabled while a turn streams so the
               // user can compose a follow-up (queued + auto-sent on completion).
               // Image mode has no streaming turn to type ahead of, so it stays gated.
-              disabled={composerDisabled || (imageMode && isTurnActive)}
+              disabled={composerDisabled || ((imageMode || videoMode) && isTurnActive)}
               className={cn(
                 'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
                 emptyState
@@ -2092,6 +2139,51 @@ const ChatComposerNewComponent = ({
                         />
                         <span className="flex-1 text-left">Create image</span>
                         {!canUseImageGeneration && (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                            Upgrade
+                          </span>
+                        )}
+                      </button>
+
+                      {/* 2b. Create video.
+
+                        /api/media/video/generate has been implemented and
+                        entitled (billing-catalog: max_15x + enterprise) all
+                        along, and MessageBubble already renders the in-flight
+                        shimmer and the finished player — but nothing in the
+                        product ever started one, so every state below the
+                        composer was unreachable. Same component, same gating
+                        idiom, same upgrade affordance as "Create image" one row
+                        above; only the capability key differs. */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          closeMenu();
+                          if (!canUseVideoGeneration) {
+                            onUpgradeRequest?.();
+                            return;
+                          }
+                          setVideoMode(true);
+                          setTimeout(() => textareaRef.current?.focus(), 0);
+                        }}
+                        title={
+                          canUseVideoGeneration
+                            ? undefined
+                            : 'Video generation is available on Max 15x and Enterprise.'
+                        }
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                          videoMode && 'text-primary',
+                        )}
+                      >
+                        <Video
+                          className={cn(
+                            'h-4 w-4',
+                            videoMode ? 'text-primary' : 'text-muted-foreground',
+                          )}
+                        />
+                        <span className="flex-1 text-left">Create video</span>
+                        {!canUseVideoGeneration && (
                           <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
                             Upgrade
                           </span>
@@ -2456,6 +2548,26 @@ const ChatComposerNewComponent = ({
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Video-mode pill. Video has no aspect/model picker: the route
+              resolves the model from the catalog's video-generation slot and
+              defaults duration/resolution, so a picker here would be a control
+              with nothing behind it. Exit works exactly like the image pill. */}
+            {videoMode && (
+              <div className={cn('flex shrink-0 items-center gap-1')}>
+                <button
+                  type="button"
+                  onClick={() => setVideoMode(false)}
+                  className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
+                  aria-label="Exit video generation mode"
+                  title="Click to exit video generation mode"
+                >
+                  <Video className="h-3.5 w-3.5" />
+                  <span>Video</span>
+                  <X className="h-3 w-3 opacity-60" />
+                </button>
               </div>
             )}
 
