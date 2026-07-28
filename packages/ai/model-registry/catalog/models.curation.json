@@ -127,6 +127,12 @@
       "verifiedBy": "reasoning-effort-capability-wave-2026-07-10",
       "status": "PASS",
       "notes": "Added additive per-model `reasoning` capability blocks (control/supportedEfforts/defaultEffort/canDisableThinking/thinkingBudget/request paths) for every served model, sourced from docs/research/reasoning-effort-capability-matrix-2026-07-10.md (live-probed 2026-07-10). Fixed claude-haiku-4.5 capabilities.thinking false->true (live 200 with thinking_tokens; control=thinking_budget classic enabled+budget, NOT adaptive). Added GPT-5.6 family (sol/terra/luna) as availability:\"coming_soon\" (LIVE 404 on our key 2026-07-10 — NOT provisioned); bare gpt-5.6 will alias to Sol at GA (no canonicalization alias added this wave — the family is non-routable while coming_soon); kept OUT of tierAllowedModels/SLOT_REGISTRY/taskRouting/defaultModel (enforced by new check:availability-invariant). 5.6 reasoning ladder none/low/medium/high/xhigh/max (max above xhigh). Ultra (multi_agent.enabled + max_concurrent_subagents, beta responses_multi_agent=v1), Pro (reasoning.mode:\"pro\"), persistent reasoning (reasoning.context), and programmatic tool calling (tool type programmatic_tool_calling + allowed_callers) are RESPONSES-API-ONLY and INERT this wave — our web chat route uses /chat/completions, so the at-GA wave must add a Responses path for those four; effort/vision/tools work on the existing chat path. Added inert tierPolicy.minTier authored data (NOT used to derive tierAllowedModels this wave — all budget models stay available for testing per founder). Gemini 3.x request path migrated to thinkingConfig.thinkingLevel (thinkingBudget kept as legacy fallback). 5.6 pricing/limits from founder screenshot corpus (Addendum D): ctx 1,050,000, max output 128K, knowledge cutoff 2026-02-16; short-context per-1M sol 5/0.5/30 (cache write 6.25), terra 2.5/0.25/15 (3.125), luna 1/0.1/6 (1.25); INERT longContext price tier sol 10/1/45, terra 5/0.5/22.5, luna 2/0.2/9 (5.6-only additive sub-block, applied by the AT-GA metering wave). reasoningDots sol 5 / terra 4 / luna 3."
+    },
+    {
+      "date": "2026-07-28",
+      "verifiedBy": "voice-model-sweep-2026-07-28",
+      "status": "PASS",
+      "notes": "Voice/audio lineup swept live against developers.openai.com/api/docs/models and elevenlabs.io/docs/overview/models. REMOVED tts-1 + tts-1-hd (November 2023, superseded); the previous wave kept them because gpt-4o-mini-tts pricing was not then verifiable — it now is. ADDED gpt-4o-mini-tts ($0.60/1M input text, $12/1M output audio, 2k input cap, default snapshot gpt-4o-mini-tts-2025-12-15), which also removes a unit inconsistency: tts-1 was priced per 1M CHARACTERS in inputCost, a field every other model uses for dollars per 1M TOKENS. FIXED gpt-4o-transcribe and gpt-4o-mini-transcribe: both carried whisper-1 leftovers after that model was retired — released \"September 2022\" (whisper-1's date) and costOverride.inputCost 0.006 (whisper-1's $/minute), which published transcription at $0.006/1M tokens against real prices of $2.50/1M and $1.25/1M, understating by ~417x and ~208x. Now $2.50/$10 and $1.25/$5 with 16k context. Desktop TTS defaults fixed in the same pass: ElevenLabs eleven_monolingual_v1 was REMOVED upstream 2026-07-09 and was still the fallback for any user who never set a model, so unconfigured ElevenLabs playback was calling a nonexistent model — now eleven_flash_v2_5; OpenAI tts-1 -> gpt-4o-mini-tts. NOT DONE (follow-up): TTS has no routing slot, so apps/desktop/src-tauri/src/features/speech/tts.rs still hardcodes both defaults; a voice_tts slot would only cover OpenAI because the catalog carries no ElevenLabs provider. Also unaddressed: gpt-4o-transcribe-diarize (new upstream, not added), and managed-cloud transcription is rate-limited but never metered against the usage balance."
     }
   ],
   "providers": {
@@ -1506,14 +1512,14 @@
         "control": "none"
       }
     },
-    "tts-1": {
-      "id": "tts-1",
-      "apiModelId": "tts-1",
-      "name": "OpenAI TTS Standard",
+    "gpt-4o-mini-tts": {
+      "id": "gpt-4o-mini-tts",
+      "apiModelId": "gpt-4o-mini-tts",
+      "name": "GPT-4o Mini TTS",
       "provider": "openai",
       "modelType": "tts",
-      "quality": "good",
-      "qualityTier": "fast",
+      "quality": "excellent",
+      "qualityTier": "balanced",
       "bestFor": ["Voice Generation", "Narration", "Accessibility"],
       "deprecation_date": null,
       "reasoning": {
@@ -1521,10 +1527,10 @@
         "control": "none"
       },
       "costOverride": {
-        "inputCost": 15,
-        "outputCost": 0
+        "inputCost": 0.6,
+        "outputCost": 12
       },
-      "contextOverride": 4096,
+      "contextOverride": 2000,
       "capabilitiesOverride": {
         "streaming": true,
         "tools": false,
@@ -1541,44 +1547,8 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "November 2023"
-    },
-    "tts-1-hd": {
-      "id": "tts-1-hd",
-      "apiModelId": "tts-1-hd",
-      "name": "OpenAI TTS HD",
-      "provider": "openai",
-      "modelType": "tts",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Professional Audio", "High Quality Voice"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 30,
-        "outputCost": 0
-      },
-      "contextOverride": 4096,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "medium",
-      "releasedOverride": "November 2023"
+      "releasedOverride": "December 2025",
+      "pricingNote": "$0.60/1M input text tokens, $12/1M output audio tokens. Default snapshot gpt-4o-mini-tts-2025-12-15. Verified 2026-07-28 against developers.openai.com/api/docs/models."
     },
     "gemini-3.6-flash": {
       "id": "gemini-3.6-flash",
@@ -1843,10 +1813,10 @@
         "control": "none"
       },
       "costOverride": {
-        "inputCost": 0.006,
-        "outputCost": 0
+        "inputCost": 2.5,
+        "outputCost": 10
       },
-      "contextOverride": 0,
+      "contextOverride": 16000,
       "capabilitiesOverride": {
         "streaming": false,
         "tools": false,
@@ -1863,7 +1833,8 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "September 2022"
+      "releasedOverride": "December 2025",
+      "pricingNote": "$2.50/1M input, $10/1M output tokens; 16k context. Was $0.006 — whisper-1's per-minute rate left behind when whisper-1 was replaced, which inputCost (dollars per 1M tokens) understated by ~417x. Verified 2026-07-28 against developers.openai.com/api/docs/models."
     },
     "gpt-4o-mini-transcribe": {
       "id": "gpt-4o-mini-transcribe",
@@ -1880,10 +1851,10 @@
         "control": "none"
       },
       "costOverride": {
-        "inputCost": 0.006,
-        "outputCost": 0
+        "inputCost": 1.25,
+        "outputCost": 5
       },
-      "contextOverride": 0,
+      "contextOverride": 16000,
       "capabilitiesOverride": {
         "streaming": false,
         "tools": false,
@@ -1900,7 +1871,8 @@
         "caching": false
       },
       "speedOverride": "fast",
-      "releasedOverride": "September 2022"
+      "releasedOverride": "December 2025",
+      "pricingNote": "$1.25/1M input, $5/1M output tokens; 16k context. Default snapshot gpt-4o-mini-transcribe-2025-12-15. Was $0.006 — whisper-1's per-minute rate. Verified 2026-07-28 against developers.openai.com/api/docs/models."
     },
     "minimax-m3": {
       "id": "minimax-m3",

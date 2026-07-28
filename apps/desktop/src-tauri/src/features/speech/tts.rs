@@ -106,6 +106,32 @@ pub trait TextToSpeech: Send + Sync {
     fn provider_name(&self) -> &'static str;
 }
 
+/// Default ElevenLabs voice model.
+///
+/// `eleven_monolingual_v1` used to be the default here. It was deprecated and
+/// REMOVED upstream on 2026-07-09, so every barge-in playback that did not
+/// carry an explicit `model_id` was calling a model that no longer exists.
+///
+/// Flash v2.5 is ElevenLabs' recommendation for real-time voice agents (~75ms),
+/// which is what this module is — spoken replies that must stop inside 200ms
+/// when the user talks over them. `eleven_multilingual_v2` is the higher-quality
+/// alternative and is the one to switch to if narration ever outranks latency.
+/// Verified 2026-07-28 against elevenlabs.io/docs/overview/models.
+const ELEVENLABS_DEFAULT_MODEL: &str = "eleven_flash_v2_5";
+
+/// Default OpenAI voice model.
+///
+/// Was `tts-1` (November 2023). `gpt-4o-mini-tts` is the current generation and
+/// is cheaper on top of that: $0.60/1M input text tokens + $12/1M output audio
+/// tokens, against tts-1's flat $15/1M characters. Default snapshot
+/// `gpt-4o-mini-tts-2025-12-15`; the unversioned id tracks it.
+/// Verified 2026-07-28 against developers.openai.com/api/docs/models.
+///
+/// Not read from the model catalog because TTS has no routing slot and the
+/// catalog carries no ElevenLabs provider at all, so only half this decision
+/// could come from there. Tracked as a follow-up in the verification log.
+const OPENAI_DEFAULT_TTS_MODEL: &str = "gpt-4o-mini-tts";
+
 /// ElevenLabs TTS implementation
 pub struct ElevenLabsTts {
     config: TtsConfig,
@@ -138,7 +164,7 @@ impl ElevenLabsTts {
         self.config
             .model_id
             .as_deref()
-            .unwrap_or("eleven_monolingual_v1")
+            .unwrap_or(ELEVENLABS_DEFAULT_MODEL)
     }
 }
 
@@ -249,7 +275,10 @@ impl OpenAiTts {
     }
 
     fn model(&self) -> &str {
-        self.config.model_id.as_deref().unwrap_or("tts-1")
+        self.config
+            .model_id
+            .as_deref()
+            .unwrap_or(OPENAI_DEFAULT_TTS_MODEL)
     }
 }
 
@@ -645,6 +674,55 @@ mod tests {
         assert!(config.api_key.is_none());
         assert!(config.voice_id.is_none());
         assert!(config.model_id.is_none());
+    }
+
+    /// A default that names a retired model turns every un-configured voice
+    /// reply into an upstream 4xx, and nothing else in the suite would notice:
+    /// `TtsConfig::default()` leaves `model_id` as `None`, so the fallback IS
+    /// the shipped behaviour for anyone who never opened voice settings.
+    /// `eleven_monolingual_v1` reached that state on 2026-07-09.
+    #[test]
+    fn tts_defaults_are_not_retired_models() {
+        const RETIRED: &[&str] = &[
+            "eleven_monolingual_v1",
+            "eleven_multilingual_v1",
+            "eleven_turbo_v2",
+            "eleven_turbo_v2_5",
+            "tts-1",
+            "tts-1-hd",
+            "whisper-1",
+        ];
+        for id in RETIRED {
+            assert_ne!(
+                ELEVENLABS_DEFAULT_MODEL, *id,
+                "ElevenLabs default is a retired model: {id}"
+            );
+            assert_ne!(
+                OPENAI_DEFAULT_TTS_MODEL, *id,
+                "OpenAI TTS default is a retired model: {id}"
+            );
+        }
+    }
+
+    /// The defaults have to survive the config plumbing, not just exist as
+    /// constants — this is the path a user with no voice settings takes.
+    #[test]
+    fn unconfigured_providers_fall_back_to_the_current_models() {
+        let eleven = ElevenLabsTts::new(TtsConfig {
+            provider: TtsProvider::ElevenLabs,
+            api_key: Some("test".into()),
+            voice_id: None,
+            model_id: None,
+        });
+        assert_eq!(eleven.model_id(), ELEVENLABS_DEFAULT_MODEL);
+
+        let openai = OpenAiTts::new(TtsConfig {
+            provider: TtsProvider::OpenAi,
+            api_key: Some("test".into()),
+            voice_id: None,
+            model_id: None,
+        });
+        assert_eq!(openai.model(), OPENAI_DEFAULT_TTS_MODEL);
     }
 
     #[test]

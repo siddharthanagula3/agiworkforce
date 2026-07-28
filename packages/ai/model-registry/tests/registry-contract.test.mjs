@@ -82,8 +82,8 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.equal(registry.capabilities['veo-3.1'].videoOutput, true);
   assert.equal(registry.capabilities['gpt-4o-transcribe'].audioInput, true);
   assert.equal(registry.capabilities['gpt-4o-transcribe'].textOutput, true);
-  assert.equal(registry.capabilities['tts-1'].textInput, true);
-  assert.equal(registry.capabilities['tts-1'].audioOutput, true);
+  assert.equal(registry.capabilities['gpt-4o-mini-tts'].textInput, true);
+  assert.equal(registry.capabilities['gpt-4o-mini-tts'].audioOutput, true);
 
   const route = registry.routes['openai/gpt-5.6-luna'];
   assert.equal(route.modelKey, key);

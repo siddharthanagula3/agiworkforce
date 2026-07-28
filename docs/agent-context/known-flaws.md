@@ -410,14 +410,31 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   the auto-policy step and relies entirely on non-auto fallbacks. Correct
   fail-closed behavior, but worth wiring real local harnesses or documenting
   the intended fallback order.
-- OPEN MODEL-CATALOG-HELD-VERIFICATIONS (2026-07-20): tts-1/tts-1-hd retained
-  because successor gpt-4o-mini-tts's pricing row was not verifiably
-  extractable; NIM llama-4 maverick/scout served but unpriced; Nano Banana 2
+- OPEN MODEL-CATALOG-HELD-VERIFICATIONS (2026-07-20, partially resolved
+  2026-07-28): tts-1/tts-1-hd are now REMOVED — gpt-4o-mini-tts's pricing row
+  was verified 2026-07-28 ($0.60/1M input text, $12/1M output audio) and it
+  replaces both. Still held: NIM llama-4 maverick/scout served but unpriced; Nano Banana 2
   Lite (gemini-3.1-flash-lite-image) exists but unpriced-in-full; Qwen3.8-Max
   previewed 2026-07-19 with no official API id. None added — verify before
   writing. Also NOT live-probed with real keys: kimi-k3, grok-4.5,
   mistral-medium-3.5, mistral-small-4, gpt-4o-transcribe (docs-verified only;
   live 200 probe is a founder/live-QA item per the models-policy lesson).
+- OPEN VOICE-TTS-NO-ROUTING-SLOT (2026-07-28, confirmed in source):
+  `apps/desktop/src-tauri/src/features/speech/tts.rs` hardcodes both cloud TTS
+  defaults rather than reading the catalog, because no `voice_tts` routing slot
+  exists and the catalog carries no ElevenLabs provider, so a slot would only
+  cover the OpenAI half. This is how `eleven_monolingual_v1` stayed as the
+  ElevenLabs default for 19 days after upstream removed it on 2026-07-09 —
+  every un-configured ElevenLabs playback was calling a nonexistent model. Fixed
+  the ids and added a `tts_defaults_are_not_retired_models` guard; the
+  catalog-driven fix is still owed. STT is already correct — it reads the
+  `voice_transcription` slot.
+- OPEN VOICE-TRANSCRIPTION-UNMETERED (2026-07-28, confirmed in source):
+  `apps/web/app/api/llm/v1/audio/transcriptions/route.ts` gates on managed
+  compute and rate-limits, but never reserves or settles against the managed
+  usage balance the way the chat and image routes do. Managed-cloud
+  transcription is therefore free at the point of use while costing us
+  $2.50/1M input tokens upstream. Bounded by the rate limiter, not by billing.
 - OPEN DESKTOP-SKILLS-EAGER-INJECTION-01 (2026-07-21, confirmed in source):
   desktop chat still eagerly injects full skill bodies into the LLM context by
   Jaccard-similarity auto-match, the exact pattern CLI remediated in

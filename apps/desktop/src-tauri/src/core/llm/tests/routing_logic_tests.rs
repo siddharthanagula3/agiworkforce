@@ -856,7 +856,7 @@ mod tests {
             Provider::OpenAI
         );
         assert_eq!(
-            router.infer_provider_from_model("tts-1-hd"),
+            router.infer_provider_from_model("gpt-4o-mini-tts"),
             Provider::OpenAI
         );
         assert_eq!(
