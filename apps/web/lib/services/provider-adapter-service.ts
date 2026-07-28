@@ -202,10 +202,12 @@ export function buildServerProviderAdapter(
     });
   }
   if (providerId === 'qwen') {
-    // Qwen resilience: DashScope (primary, above) → MuleRouter (fallback) on a
-    // pre-first-byte availability error. The fallback endpoint carries its own
-    // key (DashScope and MuleRouter keys differ) — QWEN_FALLBACK_API_KEY when set,
-    // else the primary key — and is SSRF-validated like the primary base URL.
+    // Qwen resilience: an optional second endpoint tried on a pre-first-byte
+    // availability error. MuleRouter filled this slot until 2026-07-27 and
+    // nothing does today, so the block is inert unless QWEN_FALLBACK_BASE_URL
+    // is set. Kept because the primitive is endpoint-agnostic. The fallback
+    // carries its own key (QWEN_FALLBACK_API_KEY, else the primary) and is
+    // SSRF-validated like the primary base URL.
     const fallbackRaw = getOptionalEnv('QWEN_FALLBACK_BASE_URL');
     if (fallbackRaw) {
       const validatedFallback = validateBaseUrl(fallbackRaw, {

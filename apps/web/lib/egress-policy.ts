@@ -30,8 +30,6 @@ const ALLOWED_HOSTNAMES = [
   // SSRF allowlist already permits both hosts (packages/ai/providers/moonshot/src/index.ts).
   'api.moonshot.cn',
   'api.moonshot.ai',
-  // MuleRouter is the configured managed fallback for DashScope/Qwen.
-  'api.mulerouter.ai',
   'api.stripe.com',
   'api.upstash.io',
   // Neon: wildcard for project-specific subdomains
