@@ -17,7 +17,7 @@ import Animated, { FadeIn, SlideInDown, SlideOutDown } from 'react-native-reanim
 import { X, AudioLines, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -32,11 +32,11 @@ function IntroOrb({ size = 168 }: { size?: number }) {
   return (
     <Svg width={size} height={size} accessibilityRole="image" accessibilityLabel="">
       <Defs>
-        <RadialGradient id="voiceIntroOrb" cx="50%" cy="35%" r="75%">
+        <LinearGradient id="voiceIntroOrb" x1="0%" y1="0%" x2="0%" y2="100%">
           <Stop offset="0%" stopColor={colors.voiceOrbStart} stopOpacity="1" />
           <Stop offset="55%" stopColor={colors.voiceOrbMid} stopOpacity="1" />
           <Stop offset="100%" stopColor={colors.voiceOrbEnd} stopOpacity="1" />
-        </RadialGradient>
+        </LinearGradient>
       </Defs>
       <Circle cx={r} cy={r} r={r} fill="url(#voiceIntroOrb)" />
     </Svg>
