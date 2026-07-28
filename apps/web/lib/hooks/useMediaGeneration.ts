@@ -3,11 +3,36 @@
 import { useCallback } from 'react';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { useMediaStore } from '@shared/stores/media-store';
+import {
+  generateVideo as startVideoGeneration,
+  getVideoStatus,
+  MediaApiError,
+} from '@features/media/services/media-api-service';
 
 async function getAuthToken(): Promise<string> {
   const { getAuthToken: getClerkToken } = await import('@shared/lib/get-auth-token');
   return (await getClerkToken()) || '';
 }
+
+export interface GenerateVideoOptions {
+  /** Seconds of footage. The route defaults to 5 and clamps per provider. */
+  durationSecs?: number;
+  resolution?: '720p' | '1080p' | '4k';
+  provider?: 'runway' | 'google';
+}
+
+export interface GeneratedVideo {
+  videoUrl: string;
+  thumbnailUrl?: string;
+}
+
+/**
+ * Poll cadence for /api/media/video/status. The route's own doc comment
+ * specifies "every 3–5 seconds … maximum poll window: 5 minutes"; these are
+ * that contract, not invented numbers.
+ */
+const VIDEO_POLL_INTERVAL_MS = 5_000;
+const VIDEO_POLL_TIMEOUT_MS = 5 * 60_000;
 
 export interface GenerateImageOptions {
   size?: '1024x1024' | '1792x1024' | '1024x1792';
@@ -91,6 +116,23 @@ function objectUrlFromBase64(b64: string | undefined): string | undefined {
   }
 }
 
+/**
+ * Re-key a transport error onto the classifier the UI conditions on, so a
+ * video refusal reaches the same InlinePaywallCard path an image refusal does.
+ * `MediaGenerationApiError` owns the paywall vocabulary (PAYWALL_ERROR_CODES /
+ * PAYWALL_ERROR_TYPES above); `MediaApiError` only preserves the wire fields.
+ */
+function toMediaGenerationError(err: unknown): unknown {
+  if (!(err instanceof MediaApiError)) return err;
+  return new MediaGenerationApiError(err.message, {
+    ...(err.status !== undefined ? { status: err.status } : {}),
+    ...(err.code !== undefined ? { code: err.code } : {}),
+    ...(err.type !== undefined ? { type: err.type } : {}),
+  });
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function useMediaGeneration() {
   const { addJob, updateJob } = useMediaStore();
 
@@ -171,5 +213,71 @@ export function useMediaGeneration() {
     [addJob, updateJob],
   );
 
-  return { generateImage };
+  /**
+   * Video generation is asynchronous: POST returns a task id, and
+   * GET /api/media/video/status is polled until the provider finishes. The
+   * promise settles only when a URL exists (or the task fails/times out), so
+   * the caller can keep the message in its in-flight state for the whole wait
+   * — which is what renders MessageBubble's shimmer placeholder.
+   */
+  const generateVideo = useCallback(
+    async (prompt: string, options: GenerateVideoOptions = {}): Promise<GeneratedVideo> => {
+      const jobId = crypto.randomUUID();
+      addJob({
+        id: jobId,
+        type: 'video',
+        prompt,
+        status: 'generating',
+        ...(options.provider ? { provider: options.provider } : {}),
+        createdAt: new Date().toISOString(),
+      });
+
+      try {
+        const started = await startVideoGeneration({
+          prompt,
+          ...(options.durationSecs !== undefined ? { duration_secs: options.durationSecs } : {}),
+          ...(options.resolution ? { resolution: options.resolution } : {}),
+          ...(options.provider ? { provider: options.provider } : {}),
+        }).catch((err: unknown) => {
+          throw toMediaGenerationError(err);
+        });
+
+        const deadline = Date.now() + VIDEO_POLL_TIMEOUT_MS;
+        for (;;) {
+          await sleep(VIDEO_POLL_INTERVAL_MS);
+          const status = await getVideoStatus(started.task_id).catch((err: unknown) => {
+            throw toMediaGenerationError(err);
+          });
+
+          if (status.status === 'completed') {
+            if (!status.video_url) throw new Error('Video finished with no URL');
+            const result: GeneratedVideo = {
+              videoUrl: status.video_url,
+              ...(status.thumbnail_url ? { thumbnailUrl: status.thumbnail_url } : {}),
+            };
+            updateJob(jobId, {
+              status: 'completed',
+              resultUrl: result.videoUrl,
+              ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
+              completedAt: new Date().toISOString(),
+            });
+            return result;
+          }
+          if (status.status === 'failed' || status.status === 'timeout') {
+            throw new Error(status.error || `Video generation ${status.status}`);
+          }
+          if (Date.now() >= deadline) {
+            throw new Error('Video generation timed out. The task may still finish; try again.');
+          }
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        updateJob(jobId, { status: 'failed', errorMessage: message });
+        throw err;
+      }
+    },
+    [addJob, updateJob],
+  );
+
+  return { generateImage, generateVideo };
 }

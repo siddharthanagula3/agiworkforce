@@ -40,6 +40,22 @@ function Orb({ size = ORB_SIZE }: { size?: number }) {
   );
 }
 
+// Same shape as VoiceOnboardingSheet's pill, and same reason: the fill sits on
+// a View because the Pressable's own background did not paint inside the
+// entering-animated sheet. Kept identical so the two sheets stay consistent.
+const PILL = {
+  backgroundColor: colors.white,
+  borderRadius: 999,
+  paddingVertical: 17,
+  alignItems: 'center' as const,
+};
+const PILL_LABEL = {
+  color: colors.black,
+  fontSize: 17,
+  fontWeight: '600' as const,
+  textAlign: 'center' as const,
+};
+
 export interface VoicePickerSheetProps {
   visible: boolean;
   /** Commit the highlighted voice and enter the conversation. */
@@ -205,25 +221,11 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
               onPress={handleStart}
               accessibilityRole="button"
               accessibilityLabel={active ? `Start voice with ${active.name}` : 'Start voice'}
-              style={({ pressed }) => ({
-                backgroundColor: colors.white,
-                borderRadius: 999,
-                paddingVertical: 17,
-                alignItems: 'center',
-                flexShrink: 0,
-                opacity: pressed ? 0.85 : 1,
-              })}
+              style={{ flexShrink: 0 }}
             >
-              <Text
-                style={{
-                  color: colors.black,
-                  fontSize: 17,
-                  fontWeight: '600',
-                  textAlign: 'center',
-                }}
-              >
-                Start Voice
-              </Text>
+              <View style={PILL}>
+                <Text style={PILL_LABEL}>Start Voice</Text>
+              </View>
             </Pressable>
           </View>
         </Animated.View>

@@ -1224,31 +1224,37 @@ export default function ChatScreen() {
           onDismiss={clearError}
         />
 
-        {/* Composer — shows TaskChips when conversation is empty */}
-        <Composer
-          onSend={handleSend}
-          isStreaming={isStreaming}
-          onStop={handleStop}
-          onOpenModelPicker={handleOpenModelPicker}
-          onOpenVoiceMode={handleOpenVoiceMode}
-          onOpenCompare={handleOpenCompare}
-          onOpenExport={handleOpenExport}
-          onOpenAddToChat={handleOpenAddToChat}
-          onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
-          isOnline={conversationExecutionMode === 'local' || isOnline}
-          queueSize={queueSize}
-          attachRef={chatInputAttachRef}
-          showChips={conversationMessages.length === 0}
-          initialText={initialPrompt || undefined}
-          draftKey={id}
-          draftProvenance={
-            conversationExecutionMode === 'local'
-              ? { scope: 'local' }
-              : clerkUserId
-                ? { scope: 'cloud', ownerId: clerkUserId }
-                : undefined
-          }
-        />
+        {/* Composer — shows TaskChips when conversation is empty.
+            Hidden in inline voice mode: VoiceInlineBar IS the composer there,
+            and rendering both stacked two input rows on screen at once, which
+            is neither reference-03 nor what VoiceInlineBar's own docstring
+            promises ("the only thing that changes is the composer"). */}
+        {voiceInlineVisible ? null : (
+          <Composer
+            onSend={handleSend}
+            isStreaming={isStreaming}
+            onStop={handleStop}
+            onOpenModelPicker={handleOpenModelPicker}
+            onOpenVoiceMode={handleOpenVoiceMode}
+            onOpenCompare={handleOpenCompare}
+            onOpenExport={handleOpenExport}
+            onOpenAddToChat={handleOpenAddToChat}
+            onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
+            isOnline={conversationExecutionMode === 'local' || isOnline}
+            queueSize={queueSize}
+            attachRef={chatInputAttachRef}
+            showChips={conversationMessages.length === 0}
+            initialText={initialPrompt || undefined}
+            draftKey={id}
+            draftProvenance={
+              conversationExecutionMode === 'local'
+                ? { scope: 'local' }
+                : clerkUserId
+                  ? { scope: 'cloud', ownerId: clerkUserId }
+                  : undefined
+            }
+          />
+        )}
 
         {/* Add to Chat bottom sheet */}
         <AddToChatSheet
