@@ -33,6 +33,14 @@ import { ConversationExportSheet } from '@/src/features/chat/components/Conversa
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
+import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
+import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
+import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
+import {
+  useVoiceConversation,
+  voiceCaptureErrorMessage,
+} from '@/src/features/voice/hooks/useVoiceConversation';
+import * as TTS from '@/src/features/voice/services/tts';
 import {
   createMessageIdSet,
   findNewAssistantResponse,
@@ -677,6 +685,9 @@ export default function ChatScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
+  const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
+  const [voicePickerVisible, setVoicePickerVisible] = useState(false);
+  const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const handleTapCloudMode = useCallback(() => {
     // Fail closed: no cloud model wired → stay Local rather than dangle a dead toggle.
@@ -746,10 +757,38 @@ export default function ChatScreen() {
   }, [id, loadMessages]);
 
   const handleOpenVoiceMode = useCallback(() => {
-    // Voice mode is a fullscreen overlay, not a Modal — the composer keeps
-    // focus unless we dismiss explicitly, leaving the keyboard on top of it.
+    // Dismiss first: the composer keeps focus otherwise and the keyboard sits
+    // on top of whatever we open.
     Keyboard.dismiss();
-    setVoiceModeVisible(true);
+    // The recording disclosure has to land before any microphone opens, so the
+    // gate lives here rather than inside the voice surfaces themselves.
+    if (!useSettingsStore.getState().voiceOnboardingSeen) {
+      setVoiceIntroVisible(true);
+      return;
+    }
+    setVoiceInlineVisible(true);
+  }, []);
+
+  const handleVoiceIntroContinue = useCallback(() => {
+    setVoiceIntroVisible(false);
+    setVoicePickerVisible(true);
+  }, []);
+
+  const handleVoiceIntroDismiss = useCallback(() => {
+    setVoiceIntroVisible(false);
+  }, []);
+
+  const handleVoicePickerStart = useCallback(() => {
+    setVoicePickerVisible(false);
+    setVoiceInlineVisible(true);
+  }, []);
+
+  const handleVoicePickerDismiss = useCallback(() => {
+    setVoicePickerVisible(false);
+  }, []);
+
+  const handleExitInlineVoice = useCallback(() => {
+    setVoiceInlineVisible(false);
   }, []);
 
   const handleOpenCompare = useCallback(() => {
@@ -962,6 +1001,23 @@ export default function ChatScreen() {
     renameConversation,
     title,
   ]);
+
+  // Placed after handleVoiceSendMessage, not before: options are evaluated when
+  // the hook is CALLED, so referencing a const declared further down puts it in
+  // its temporal dead zone and throws on first render. That exact mistake shipped
+  // green in the tab screen last time — no test mounts a chat with voice on.
+  const { phase: inlineVoicePhase, toggleMute: inlineToggleMute } = useVoiceConversation({
+    enabled: voiceInlineVisible,
+    pttMode: false,
+    hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
+    sendMessage: handleVoiceSendMessage,
+    speak: (text, callbacks) => TTS.speak(text, { ...callbacks }),
+    stopSpeaking: () => TTS.stop(),
+    onCaptureError: (err) => {
+      setVoiceInlineVisible(false);
+      Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));
+    },
+  });
 
   if (!id) {
     return (
@@ -1215,6 +1271,28 @@ export default function ChatScreen() {
           conversationId={id}
           onSelect={handleModelSelect}
           onOpenCloudAccess={handleOpenCloudSignIn}
+        />
+
+        {/* First-run intro carrying the recording disclosure, then the voice
+            picker, then the inline bar. The thread above stays visible for the
+            inline mode — references-2 voice-03. */}
+        <VoiceOnboardingSheet
+          visible={voiceIntroVisible}
+          onContinue={handleVoiceIntroContinue}
+          onDismiss={handleVoiceIntroDismiss}
+        />
+
+        <VoicePickerSheet
+          visible={voicePickerVisible}
+          onStart={handleVoicePickerStart}
+          onDismiss={handleVoicePickerDismiss}
+        />
+
+        <VoiceInlineBar
+          visible={voiceInlineVisible}
+          phase={inlineVoicePhase}
+          onToggleMic={inlineToggleMute}
+          onExit={handleExitInlineVoice}
         />
 
         {/* Voice conversation full-screen overlay */}

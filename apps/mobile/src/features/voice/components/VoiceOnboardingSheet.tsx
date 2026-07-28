@@ -158,7 +158,7 @@ export function VoiceOnboardingSheet({
             accessibilityRole="button"
             accessibilityLabel="Continue to voice"
             style={({ pressed }) => ({
-              backgroundColor: colors.textPrimary,
+              backgroundColor: colors.white,
               borderRadius: 999,
               paddingVertical: 17,
               alignItems: 'center',
@@ -168,7 +168,7 @@ export function VoiceOnboardingSheet({
           >
             <Text
               style={{
-                color: colors.surfaceBase,
+                color: colors.black,
                 fontSize: 17,
                 fontWeight: '600',
                 textAlign: 'center',
