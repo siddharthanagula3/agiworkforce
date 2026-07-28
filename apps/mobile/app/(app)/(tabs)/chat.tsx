@@ -21,6 +21,8 @@ import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelect
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
+import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { findNewAssistantResponse } from '@/src/features/voice/utils/assistantResponse';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
@@ -76,6 +78,7 @@ export default function ChatTabScreen() {
     ) => void;
   } | null>(null);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
+  const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
   const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
@@ -460,7 +463,24 @@ export default function ChatTabScreen() {
   }, []);
 
   const handleOpenVoiceMode = useCallback(() => {
+    // The intro carries the recording disclosure, so it has to land BEFORE the
+    // conversation screen opens a live microphone — not alongside it.
+    if (!useSettingsStore.getState().voiceOnboardingSeen) {
+      setVoiceIntroVisible(true);
+      return;
+    }
     setVoiceModeVisible(true);
+  }, []);
+
+  const handleVoiceIntroContinue = useCallback(() => {
+    setVoiceIntroVisible(false);
+    setVoiceModeVisible(true);
+  }, []);
+
+  // Dismissing without acknowledging must not start voice, and must not mark
+  // the disclosure as seen — the sheet returns next time.
+  const handleVoiceIntroDismiss = useCallback(() => {
+    setVoiceIntroVisible(false);
   }, []);
 
   const handleOpenCompare = useCallback(() => {
@@ -635,6 +655,13 @@ export default function ChatTabScreen() {
         modelScope={modelPickerScope}
         onSelect={setModel}
         onOpenCloudAccess={handleOpenCloudAccess}
+      />
+
+      {/* First-run voice intro + recording disclosure, gating the overlay below */}
+      <VoiceOnboardingSheet
+        visible={voiceIntroVisible}
+        onContinue={handleVoiceIntroContinue}
+        onDismiss={handleVoiceIntroDismiss}
       />
 
       {/* Voice conversation full-screen overlay */}
