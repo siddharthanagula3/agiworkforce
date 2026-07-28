@@ -134,17 +134,19 @@ jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
 }));
 
+// Any icon, not a fixed list. The allowlist version broke whenever a component
+// anywhere in this screen's tree started using a seventh icon — the failure
+// surfaced as "Cannot read properties of undefined (reading 'displayName')"
+// from inside the new component, which points at the wrong file entirely.
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
   const Icon = (props: Record<string, unknown>) => <View {...props} />;
-  return {
-    Cloud: Icon,
-    Cpu: Icon,
-    Download: Icon,
-    EyeOff: Icon,
-    Menu: Icon,
-    Plus: Icon,
-  };
+  return new Proxy(
+    {},
+    {
+      get: (_target, name) => (name === '__esModule' ? false : Icon),
+    },
+  );
 });
 
 jest.mock('@/src/features/model-picker/installStore', () => ({
