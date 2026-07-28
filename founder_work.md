@@ -198,3 +198,42 @@ Re-run the command to confirm; it prints per-provider status and never prints
 key values. Worth doing before recording demo video, since a model picker
 offering nine providers where four 401 is the kind of defect a viewer hits
 first.
+
+## Vercel Hobby cron limit froze every deploy for ~19h (2026-07-27)
+
+**Symptom you saw:** `agiworkforce.com/login` rendered its marketing column
+with no sign-in form.
+
+**Two independent causes, both now fixed in code:**
+
+1. Our CSP did not allow `https://clerk.agiworkforce.com`, the host a
+   _production_ Clerk instance serves ClerkJS from. Dev instances serve from
+   `*.clerk.accounts.dev`, which was allowed — so this broke the moment the
+   keys went live. Fixed by deriving the host from the publishable key.
+2. **Nothing had deployed in 19 hours.** 37 commits sat on `main` undeployed,
+   so even a fixed CSP would not have reached you.
+
+Cause of (2): `vercel.json` had `/api/cron/reclaim-sandboxes` on `45 * * * *`
+(hourly), added 2026-07-25 in `fcfe605bc`. Vercel validates crons at deploy
+time and **Hobby allows daily only**, so every build failed before it started:
+
+    Error: Hobby accounts are limited to daily cron jobs. This cron expression
+    (45 * * * *) would run more than once per day.
+
+Changed to `45 5 * * *` (daily) to unblock. **This is a real degradation, not a
+no-op.** The route's own docs explain why hourly was chosen: a paused
+conversation sandbox needs a Redis mapping that expires after 24h, and
+`killE2BSession()` only runs on explicit delete — so an orphan outlives its
+mapping and keeps occupying both the E2B team cap and the owner's per-plan
+sandbox budget. Daily reclamation means an orphan can now persist up to ~24h
+longer than intended.
+
+**DECIDE:** upgrade to Vercel Pro to restore hourly (also removes the
+Hobby build-minute ceiling), or accept daily reclamation. If E2B execution is
+still gated off in prod, daily costs nothing today and this can wait — but it
+should be restored before sandboxes are generally available.
+
+**Also worth knowing:** pushing to `main` did not surface this failure anywhere
+you would see it. Deploys were failing silently for 19 hours while commits kept
+landing. Worth adding a deploy-status check, or watching the Vercel dashboard
+after a push, until that is in place.
