@@ -436,8 +436,33 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   const userTier = subscription.plan_tier?.toLowerCase() || 'free';
   if (!canUseBillingPlanCapability(userTier, 'video_generation')) {
-    throw createError.forbidden(
-      'Video generation is available on Max 15x and Enterprise plans. Upgrade your plan to unlock AI-powered video creation.',
+    /**
+     * Returned as an explicit body rather than `createError.forbidden`, which
+     * emits `ErrorCode.FORBIDDEN`. The client's paywall detection
+     * (`lib/hooks/useMediaGeneration.ts` PAYWALL_ERROR_CODES / _TYPES) matches
+     * on `plan_upgrade_required`, so a bare FORBIDDEN fell through to the
+     * generic error path and a Basic/Pro user asking for a video saw "Forbidden"
+     * instead of the upgrade prompt. The sibling image route has always
+     * returned this shape; video was the inconsistency.
+     */
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'Video generation is available on Max 15x and Enterprise plans. Upgrade your plan and I can create that video for you.',
+          type: 'invalid_request_error',
+          code: 'plan_upgrade_required',
+          current_plan: userTier,
+          required_plans: ['max_15x', 'enterprise'],
+        },
+      },
+      {
+        status: 403,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
     );
   }
 
