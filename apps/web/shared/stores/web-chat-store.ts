@@ -58,6 +58,8 @@ export interface ComposerToggleState {
   officeCreationEnabled: boolean;
   /** Image-generation composer mode (routes to the media harness, not chat). */
   imageMode: boolean;
+  /** Video-generation composer mode. Mutually exclusive with `imageMode`. */
+  videoMode: boolean;
   /**
    * Exact server-catalog skill name selected for this conversation, or null.
    * Only the name is stored: it is the sole field the send path reads, and the
@@ -81,6 +83,7 @@ export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
   codeExecutionEnabled: false,
   officeCreationEnabled: false,
   imageMode: false,
+  videoMode: false,
   selectedSkillName: null,
 });
 
@@ -273,6 +276,14 @@ export interface MessageMetadata {
   imageGenAspect?: string;
   /** Model id used for image generation. */
   imageGenModel?: string;
+  /**
+   * Generated video URL. Displayed inline when toolType === 'video-generation';
+   * its ABSENCE while the tool is running is what drives MessageBubble's
+   * shimmering placeholder, so it must stay unset until the task completes.
+   */
+  videoUrl?: string;
+  /** Poster frame for the generated video, when the provider returned one. */
+  thumbnailUrl?: string;
 }
 
 export interface MessageToolEntry {

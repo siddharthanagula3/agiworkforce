@@ -136,6 +136,82 @@ describe('MessageBubble', () => {
       expect(screen.queryByText('Thinking...')).toBeNull();
     });
 
+    /**
+     * Both video states existed in this component with nothing in the product
+     * writing `toolType: 'video-generation'`, so neither was reachable. This
+     * asserts the exact metadata transition the composer flow performs
+     * (WebChatPage's handleGenerateVideo): the in-flight turn carries the tool
+     * type and NO videoUrl, and completion adds videoUrl/thumbnailUrl. If the
+     * in-flight patch ever gains a videoUrl, the shimmer is skipped and this
+     * fails.
+     */
+    it('shows the shimmer while a video is in flight and the player once it lands', () => {
+      const inFlight = makeMessage({
+        role: 'assistant',
+        content: '',
+        isStreaming: true,
+        metadata: { toolType: 'video-generation' },
+      });
+      const { rerender } = render(<MessageBubble message={inFlight} />);
+
+      expect(screen.getByLabelText('Generating your video')).toBeInTheDocument();
+      expect(screen.getByLabelText('Generating your video')).toHaveAttribute('role', 'status');
+      expect(screen.queryByText('Your video is ready!')).toBeNull();
+      expect(document.querySelector('video')).toBeNull();
+      // The shimmer IS the progress indicator; a stacked "Thinking..." would
+      // claim a reasoning step that is not happening (same rule as image).
+      expect(screen.queryByText('Thinking...')).toBeNull();
+
+      rerender(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: false,
+            metadata: {
+              toolType: 'video-generation',
+              videoUrl: 'https://cdn.example.com/clip.mp4',
+              thumbnailUrl: 'https://cdn.example.com/clip.jpg',
+            },
+          })}
+        />,
+      );
+
+      expect(screen.queryByLabelText('Generating your video')).toBeNull();
+      expect(screen.getByText('Your video is ready!')).toBeInTheDocument();
+      const video = document.querySelector('video');
+      expect(video).toHaveAttribute('src', 'https://cdn.example.com/clip.mp4');
+      expect(video).toHaveAttribute('poster', 'https://cdn.example.com/clip.jpg');
+      expect(screen.getByLabelText('Download video')).toHaveAttribute(
+        'href',
+        'https://cdn.example.com/clip.mp4',
+      );
+    });
+
+    /**
+     * Observed against the live route (503 — no video provider key is
+     * configured today): the failed turn kept shimmering forever directly
+     * above its own failure text, because "no videoUrl" is true for a dead
+     * task as well as a live one. The in-flight signal is `isStreaming`.
+     */
+    it('stops the shimmer once a failed video turn settles', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Video generation failed: Service temporarily unavailable',
+            isStreaming: false,
+            metadata: { toolType: 'video-generation' },
+          })}
+        />,
+      );
+
+      expect(screen.queryByLabelText('Generating your video')).toBeNull();
+      expect(
+        screen.getByText(/Video generation failed: Service temporarily unavailable/),
+      ).toBeInTheDocument();
+    });
+
     it('renders assistant tool activity in the compact timeline', async () => {
       const msg = makeMessage({
         role: 'assistant',
