@@ -84,5 +84,11 @@
   "agiHome": "AGI होम",
   "navContactSales": "बिक्री से संपर्क करें",
   "navProducts": "उत्पाद",
-  "navDocs": "दस्तावेज़"
+  "navDocs": "दस्तावेज़",
+  "navLanguage": "भाषा",
+  "navGetHelp": "सहायता प्राप्त करें",
+  "navUpgrade": "अपग्रेड करें",
+  "navGetApps": "ऐप्स और एक्सटेंशन प्राप्त करें",
+  "navKeyboardShortcuts": "कीबोर्ड शॉर्टकट",
+  "navLogOut": "लॉग आउट"
 }
