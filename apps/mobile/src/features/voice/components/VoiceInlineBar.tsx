@@ -25,7 +25,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Plus, Mic, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import Svg, { Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -59,11 +59,11 @@ function Orb({ phase }: { phase: VoiceInlinePhase }) {
     <Animated.View style={style}>
       <Svg width={ORB_SIZE} height={ORB_SIZE} accessibilityRole="image" accessibilityLabel="">
         <Defs>
-          <RadialGradient id="voiceInlineOrb" cx="50%" cy="35%" r="75%">
+          <LinearGradient id="voiceInlineOrb" x1="0%" y1="0%" x2="0%" y2="100%">
             <Stop offset="0%" stopColor={colors.voiceOrbStart} stopOpacity="1" />
             <Stop offset="55%" stopColor={colors.voiceOrbMid} stopOpacity="1" />
             <Stop offset="100%" stopColor={colors.voiceOrbEnd} stopOpacity="1" />
-          </RadialGradient>
+          </LinearGradient>
         </Defs>
         <Circle cx={r} cy={r} r={r} fill="url(#voiceInlineOrb)" />
       </Svg>
