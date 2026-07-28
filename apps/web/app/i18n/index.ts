@@ -1,62 +1,31 @@
 'use client';
 
+/**
+ * Web's i18next instance.
+ *
+ * The translations and the language list now come from `@agiworkforce/i18n`,
+ * shared with Desktop and Mobile. They used to live here, in a copy that
+ * carried 3 locales while Desktop's copy carried 12 — so the same product
+ * offered a different set of languages depending on which app you opened, and
+ * a string corrected in one stayed wrong in the other.
+ *
+ * What stays here is the part that is genuinely web-specific: browser language
+ * detection, the SSR hydration dance below, and setting `dir` for RTL.
+ */
+
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
+import {
+  DEFAULT_LANGUAGE,
+  SUPPORTED_LANGUAGES,
+  baseInitOptions,
+  languageFor,
+} from '@agiworkforce/i18n';
 
-import en from './locales/en/common.json';
-import es from './locales/es/common.json';
-import hi from './locales/hi/common.json';
-import enErrors from './locales/en/errors.json';
-import esErrors from './locales/es/errors.json';
-import hiErrors from './locales/hi/errors.json';
-import enAuth from './locales/en/auth.json';
-import esAuth from './locales/es/auth.json';
-import enChat from './locales/en/chat.json';
-import esChat from './locales/es/chat.json';
-import enSettings from './locales/en/settings.json';
-import esSettings from './locales/es/settings.json';
-import hiSettings from './locales/hi/settings.json';
-import enPricing from './locales/en/pricing.json';
-import esPricing from './locales/es/pricing.json';
-import enModels from './locales/en/models.json';
-import esModels from './locales/es/models.json';
-
-export const SUPPORTED_LANGUAGES = [
-  { code: 'en', name: 'English', nativeName: 'English', flag: '🇺🇸' },
-  { code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸' },
-  { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी', flag: '🇮🇳' },
-] as const;
-
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]['code'];
-
-export const defaultLanguage: SupportedLanguage = 'en';
-
-const resources = {
-  en: {
-    common: en,
-    errors: enErrors,
-    auth: enAuth,
-    chat: enChat,
-    settings: enSettings,
-    pricing: enPricing,
-    models: enModels,
-  },
-  es: {
-    common: es,
-    errors: esErrors,
-    auth: esAuth,
-    chat: esChat,
-    settings: esSettings,
-    pricing: esPricing,
-    models: esModels,
-  },
-  hi: {
-    common: hi,
-    errors: hiErrors,
-    settings: hiSettings,
-  },
-};
+export { SUPPORTED_LANGUAGES };
+export type SupportedLanguage = string;
+export const defaultLanguage = DEFAULT_LANGUAGE;
 
 const LANGUAGE_STORAGE_KEY = 'agiworkforce-language';
 
@@ -64,7 +33,7 @@ i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    resources,
+    ...baseInitOptions,
     // Pin the first-render language to `defaultLanguage` instead of letting
     // LanguageDetector resolve it synchronously here. This module runs both
     // during SSR (no `window`/`document`, always falls back to `en`) and in
@@ -75,11 +44,7 @@ i18n
     // detected and applied right after hydration completes (see below), so
     // the mismatch window disappears while the saved preference still wins.
     lng: defaultLanguage,
-    fallbackLng: defaultLanguage,
     supportedLngs: SUPPORTED_LANGUAGES.map((l) => l.code),
-    interpolation: {
-      escapeValue: false,
-    },
     detection: {
       order: ['cookie', 'localStorage', 'navigator'],
       // Cache to both a cookie and localStorage. localStorage alone is
@@ -102,7 +67,23 @@ i18n
     },
   });
 
+/**
+ * Keep `<html lang>` and `<html dir>` in step with the active language.
+ *
+ * Arabic arrived with the shared corpus, and a right-to-left language rendered
+ * inside `dir="ltr"` does not merely look wrong — punctuation and mixed
+ * Latin/Arabic runs order incorrectly, so the text is harder to read than the
+ * untranslated English was. `lang` matters too: screen readers pick a voice
+ * from it, and it is what CSS `:lang()` and hyphenation rules key on.
+ */
+function applyDocumentLanguage(code: string): void {
+  if (typeof document === 'undefined') return;
+  document.documentElement.lang = code;
+  document.documentElement.dir = languageFor(code)?.rtl ? 'rtl' : 'ltr';
+}
+
 if (typeof window !== 'undefined') {
+  i18n.on('languageChanged', applyDocumentLanguage);
   // Defer detection until after the current task so React finishes
   // hydrating with the SSR-matching `defaultLanguage` first. Calling
   // `changeLanguage()` with no argument re-runs the configured
