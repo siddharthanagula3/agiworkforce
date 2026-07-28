@@ -19,6 +19,42 @@ import { NextResponse } from 'next/server';
  * NOTE on style-src 'unsafe-inline': Tailwind, Radix, and ~28 components use
  * inline `style=` attributes, so style-src 'unsafe-inline' must stay regardless.
  */
+/**
+ * The Clerk Frontend API origin this deployment loads ClerkJS from, as a
+ * leading-space CSP token, or `''` when it cannot be derived.
+ *
+ * A **development** Clerk instance serves ClerkJS from `*.clerk.accounts.dev`,
+ * which the static allowlist already covers. A **production** instance serves
+ * it from the CNAME'd subdomain of your own domain — `clerk.agiworkforce.com`
+ * — which matches neither `*.clerk.accounts.dev` nor `*.clerk.com`. So the
+ * swap from `pk_test_` to `pk_live_` silently broke every auth screen: CSP
+ * blocked `clerk.browser.js`, `<SignIn />` never mounted, and `/login`
+ * rendered its marketing column beside an empty space with no error visible to
+ * the user. Nothing about the Clerk instance was wrong — DNS resolved and its
+ * API answered 200 the whole time.
+ *
+ * The host is derived from the publishable key rather than hardcoded, because
+ * the key already encodes it (`pk_<env>_<base64("<fapi-host>$")>`). Hardcoding
+ * `clerk.agiworkforce.com` would work today and rot on the next domain change,
+ * and would leave preview deployments on a different instance broken.
+ *
+ * Shape-validated as a hostname before use, matching the R2 origin below: an
+ * env typo must not be able to widen `script-src` to an arbitrary host.
+ */
+function clerkFapiOrigin(): string {
+  const key = process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY']?.trim();
+  const encoded = key?.replace(/^pk_(test|live)_/u, '');
+  if (!encoded || encoded === key) return '';
+  let host: string;
+  try {
+    host = atob(encoded).replace(/\$+$/u, '');
+  } catch {
+    return '';
+  }
+  if (!/^(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$/u.test(host)) return '';
+  return ` https://${host}`;
+}
+
 function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = "'none'"): string {
   // WEB-13 / WEB-20 (audit 2026-05-19): allow framing the artifact sandbox
   // origin so the cross-origin renderer at sandbox.agiworkforce.com can be
@@ -41,13 +77,14 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
       ? ` https://${r2BucketName}.${r2AccountId}.r2.cloudflarestorage.com`
       : '';
   const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
+  const clerkFapi = clerkFapiOrigin();
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}'${devUnsafeEval} https://*.clerk.accounts.dev https://*.clerk.com https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
+    script-src 'self' 'nonce-${nonce}'${devUnsafeEval}${clerkFapi} https://*.clerk.accounts.dev https://*.clerk.com https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
     img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self'${r2UploadOrigin} https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
+    connect-src 'self'${r2UploadOrigin}${clerkFapi} https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
     frame-ancestors ${frameAncestors};
