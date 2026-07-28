@@ -206,7 +206,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
               accessibilityRole="button"
               accessibilityLabel={active ? `Start voice with ${active.name}` : 'Start voice'}
               style={({ pressed }) => ({
-                backgroundColor: colors.textPrimary,
+                backgroundColor: colors.white,
                 borderRadius: 999,
                 paddingVertical: 17,
                 alignItems: 'center',
@@ -216,7 +216,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
             >
               <Text
                 style={{
-                  color: colors.surfaceBase,
+                  color: colors.black,
                   fontSize: 17,
                   fontWeight: '600',
                   textAlign: 'center',
