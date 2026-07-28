@@ -10,6 +10,7 @@ import {
   type ProviderAdapterId,
 } from '@agiworkforce/providers-factory';
 import { detectProviderFromModelId } from '@agiworkforce/types';
+import { isRoutedViaOpenRouter, openRouterSlugFor } from './aggregator-routing';
 import type { ProviderAdapter, StreamChunk } from '@agiworkforce/types';
 
 /**
@@ -79,6 +80,17 @@ export function resolveProviderFromModel(model: string): string {
     // factory boundary translates that to the catalog's canonical
     // 'open_router' adapter id only when construction happens.
     if (catalogProvider === 'open_router') return 'openrouter';
+    // MiniMax, Qwen and Zhipu are served through OpenRouter for now (see
+    // aggregator-routing). Only redirect when the model actually has a slug
+    // there — otherwise the request would reach OpenRouter under an id it does
+    // not publish, which fails as a confusing 404 instead of a plain
+    // "provider not configured".
+    if (
+      isRoutedViaOpenRouter(catalogProvider) &&
+      openRouterSlugFor(toProviderApiModelId(model)) !== undefined
+    ) {
+      return 'openrouter';
+    }
     return catalogProvider;
   }
 
