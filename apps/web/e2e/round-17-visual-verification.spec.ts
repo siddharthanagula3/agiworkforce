@@ -61,7 +61,7 @@ test.describe('round-17 visual verification — web', () => {
   });
 
   test('round-17 projects', async ({ page }) => {
-    const capture = await captureRoute(page, '/projects', 'round-17-projects');
+    const capture = await captureRoute(page, '/chat/projects', 'round-17-projects');
     writeFileSync(
       `${SCREENSHOT_DIR}/round-17-projects-findings.json`,
       JSON.stringify(capture, null, 2),
@@ -69,7 +69,7 @@ test.describe('round-17 visual verification — web', () => {
   });
 
   test('round-17 project detail (empty)', async ({ page }) => {
-    const capture = await captureRoute(page, '/projects/empty-id', 'round-17-project-detail');
+    const capture = await captureRoute(page, '/chat/projects/empty-id', 'round-17-project-detail');
     writeFileSync(
       `${SCREENSHOT_DIR}/round-17-project-detail-findings.json`,
       JSON.stringify(capture, null, 2),

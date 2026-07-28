@@ -90,7 +90,7 @@ test.describe('authenticated primary workflows', () => {
 
     // 1) Projects: the signed-out gate ("Sign in to view your cloud projects")
     //    must be gone, and the projects hub chrome must render for a real user.
-    await page.goto('/projects');
+    await page.goto('/chat/projects');
     await page.waitForLoadState('networkidle');
     await expect(page.getByText(/sign in to view your cloud projects/i)).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
@@ -105,11 +105,11 @@ test.describe('authenticated primary workflows', () => {
 
     // 3) Other primary signed-in surfaces render for a real user (not a gate or
     //    an error boundary): Customize (settings) and Library.
-    await page.goto('/customize');
+    await page.goto('/chat/customize');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
 
-    await page.goto('/library');
+    await page.goto('/chat/library');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
     // Recently-deleted bin (new): toggling into the bin and back must render
@@ -230,8 +230,8 @@ test.describe('authenticated primary workflows', () => {
     await expect(page.getByRole('textbox').first()).toBeVisible();
     await expectNoCriticalA11y('/chat');
 
-    await page.goto('/projects', { waitUntil: 'domcontentloaded' });
+    await page.goto('/chat/projects', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible({ timeout: 20000 });
-    await expectNoCriticalA11y('/projects');
+    await expectNoCriticalA11y('/chat/projects');
   });
 });

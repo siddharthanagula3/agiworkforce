@@ -16,12 +16,12 @@ const DISALLOW_APP = [
   '/dashboard/',
   '/account/',
   '/chat',
-  '/schedules',
+  '/chat/schedules',
   '/settings',
   '/billing',
-  '/projects',
+  '/chat/projects',
   '/user',
-  '/customize',
+  '/chat/customize',
 ];
 
 /**

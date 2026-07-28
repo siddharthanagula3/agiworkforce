@@ -3,7 +3,7 @@
 /**
  * WebAppShell · persistent app-shell chrome (sidebar + content area) for
  * secondary authenticated web surfaces that are NOT the chat page — currently
- * the Projects hub (`/projects`) and project detail (`/projects/[id]`).
+ * the Projects hub (`/chat/projects`) and project detail (`/chat/projects/[id]`).
  *
  * Why this exists: those routes previously rendered bare `<main>` pages with a
  * back-arrow and no sidebar, so navigating to Projects dropped the user out of
@@ -193,7 +193,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
 
   // ---- Project row handlers ----
   const handleProjectOpen = useCallback(
-    (projectId: string) => router.push(`/projects/${encodeURIComponent(projectId)}`),
+    (projectId: string) => router.push(`/chat/projects/${encodeURIComponent(projectId)}`),
     [router],
   );
   const handleProjectNewChat = useCallback(
@@ -202,7 +202,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
     [router],
   );
   const handleProjectSettings = useCallback(
-    (projectId: string) => router.push(`/projects/${encodeURIComponent(projectId)}`),
+    (projectId: string) => router.push(`/chat/projects/${encodeURIComponent(projectId)}`),
     [router],
   );
   const handleProjectPin = useCallback((projectId: string) => toggleStar(projectId), [toggleStar]);
@@ -217,7 +217,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
     },
     [removeProjectFromStore],
   );
-  const handleProjectCreate = useCallback(() => router.push('/projects'), [router]);
+  const handleProjectCreate = useCallback(() => router.push('/chat/projects'), [router]);
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () => [
@@ -227,8 +227,8 @@ export function WebAppShell({ children }: WebAppShellProps) {
         id: 'library',
         label: 'Library',
         icon: LibraryBig,
-        onClick: () => router.push('/library'),
-        isActive: pathname.startsWith('/library'),
+        onClick: () => router.push('/chat/library'),
+        isActive: pathname.startsWith('/chat/library'),
       },
       {
         id: 'tasks',
@@ -241,8 +241,8 @@ export function WebAppShell({ children }: WebAppShellProps) {
         id: 'schedules',
         label: 'Schedules',
         icon: CalendarClock,
-        onClick: () => router.push('/schedules'),
-        isActive: pathname.startsWith('/schedules'),
+        onClick: () => router.push('/chat/schedules'),
+        isActive: pathname.startsWith('/chat/schedules'),
       },
       {
         id: 'customize',

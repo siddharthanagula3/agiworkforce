@@ -204,7 +204,7 @@ async function handleGet(request: NextRequest) {
   // global-search-service.ts) only knows how to render/navigate
   // 'session' | 'message' result types — it routes every click to
   // `/chat/${sessionId}`, which would 404 for a project id. Wiring a
-  // dedicated project result card that navigates to `/projects/${id}` is a
+  // dedicated project result card that navigates to `/chat/projects/${id}` is a
   // follow-up; this keeps the addition purely additive and non-breaking.
   const projectParams: unknown[] = [userId, `%${q}%`];
   const projectClauses: string[] = ['user_id = $1', '(name ilike $2 or description ilike $2)'];

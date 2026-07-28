@@ -65,7 +65,7 @@ async function captureRoute(
 
 test.describe('visual verification — web shared primitives', () => {
   test('projects route renders and captures a screenshot', async ({ page }) => {
-    const capture = await captureRoute(page, '/projects', 'projects-route');
+    const capture = await captureRoute(page, '/chat/projects', 'projects-route');
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
     writeFileSync(
       `${SCREENSHOT_DIR}/projects-route-findings.json`,
@@ -79,7 +79,7 @@ test.describe('visual verification — web shared primitives', () => {
     // create form — the correct, non-misleading empty state for a logged-out
     // visitor. (The create-form flow itself is covered by unit/component tests;
     // exercising it end-to-end requires the authenticated Clerk harness.)
-    await page.goto('/projects');
+    await page.goto('/chat/projects');
     await page.waitForLoadState('networkidle');
     await expect(page.getByText(/sign in to view your cloud projects/i)).toBeVisible();
     // The create form must NOT render for a signed-out user.
@@ -102,7 +102,7 @@ test.describe('visual verification — web shared primitives', () => {
     // "Project not found" empty state. The populated state can be captured
     // manually after creating a project through the gallery — out of scope
     // for the automated spec, which runs against an empty store.
-    const capture = await captureRoute(page, '/projects/empty-id', 'projects-detail-empty');
+    const capture = await captureRoute(page, '/chat/projects/empty-id', 'projects-detail-empty');
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
     writeFileSync(
       `${SCREENSHOT_DIR}/projects-detail-empty-findings.json`,

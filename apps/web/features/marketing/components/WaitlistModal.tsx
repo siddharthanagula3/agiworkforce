@@ -192,8 +192,8 @@ const AUTO_PROMPT_BLOCKLIST = [
   '/verify',
   '/auth',
   '/device-auth',
-  '/customize',
-  '/projects',
+  '/chat/customize',
+  '/chat/projects',
   '/pricing',
   // Added 2026-07-27. This list is default-OPEN: any route not named here shows
   // a marketing capture over the product. `/device-auth` was blocked but the
@@ -208,7 +208,7 @@ const AUTO_PROMPT_BLOCKLIST = [
   '/status',
   // Signed-in product surfaces.
   '/tasks',
-  '/library',
+  '/chat/library',
   '/connectors',
   '/skills',
 ];

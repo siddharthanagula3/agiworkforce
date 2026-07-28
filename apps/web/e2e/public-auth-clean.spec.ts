@@ -50,7 +50,7 @@ test.describe('authenticated routes stay quiet when signed out', () => {
       }
     });
 
-    await page.goto('/projects/empty-id');
+    await page.goto('/chat/projects/empty-id');
     await page.waitForLoadState('networkidle');
 
     // The not-found / signed-out state still renders its back control.

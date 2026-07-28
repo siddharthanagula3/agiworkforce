@@ -29,15 +29,15 @@ export interface WebShellV3Props {
 }
 
 const VIEW_ROUTES: Record<string, string> = {
-  projects: '/projects',
+  projects: '/chat/projects',
   artifacts: '/gallery',
-  'customize-home': '/customize',
+  'customize-home': '/chat/customize',
   'work-projects': '/agi-work',
   'work-artifacts': '/gallery',
   'work-dispatch': '/agi-work',
   'voice-settings': '/settings/voice',
   account: '/settings/account',
-  schedules: '/schedules',
+  schedules: '/chat/schedules',
 };
 
 export function resolveWebViewRoute(view: string): string | undefined {

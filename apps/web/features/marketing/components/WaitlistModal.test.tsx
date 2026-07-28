@@ -156,7 +156,7 @@ describe('WaitlistModal', () => {
     ['/shared/abc123', 'a public share recipient'],
     ['/status', 'the status page during an incident'],
     ['/tasks', 'a signed-in product surface'],
-    ['/library', 'a signed-in product surface'],
+    ['/chat/library', 'a signed-in product surface'],
   ])('never auto-opens over %s (%s)', (pathname) => {
     vi.useFakeTimers();
     mockPathname.mockReturnValue(pathname);
