@@ -121,11 +121,20 @@ const ELEVENLABS_DEFAULT_MODEL: &str = "eleven_flash_v2_5";
 
 /// Default OpenAI voice model.
 ///
-/// Was `tts-1` (November 2023). `gpt-4o-mini-tts` is the current generation and
-/// is cheaper on top of that: $0.60/1M input text tokens + $12/1M output audio
-/// tokens, against tts-1's flat $15/1M characters. Default snapshot
-/// `gpt-4o-mini-tts-2025-12-15`; the unversioned id tracks it.
-/// Verified 2026-07-28 against developers.openai.com/api/docs/models.
+/// Was `tts-1` (November 2023). `gpt-4o-mini-tts` costs $0.60/1M input text
+/// tokens + $12/1M output audio tokens against tts-1's flat $15/1M characters.
+/// Default snapshot `gpt-4o-mini-tts-2025-12-15`; the unversioned id tracks it.
+///
+/// This model carries a Deprecated badge on OpenAI's catalog listing and is
+/// still the right choice, which needs explaining. It is the ONLY model served
+/// on `/v1/audio/speech` — `gpt-audio-1.5`'s model page lists that endpoint as
+/// "Not supported", the deprecations table names no successor, and no shutdown
+/// date is published. OpenAI is steering speech generation toward audio-native
+/// chat and realtime, neither of which is a drop-in for a REST speech call.
+/// So there is no newer member of this family to move to; when one appears, or
+/// when a shutdown date is published, this path should move to ElevenLabs or
+/// local Piper rather than wait. Verified 2026-07-28 against
+/// developers.openai.com/api/docs/models and .../guides/text-to-speech.
 ///
 /// Not read from the model catalog because TTS has no routing slot and the
 /// catalog carries no ElevenLabs provider at all, so only half this decision
@@ -691,6 +700,11 @@ mod tests {
             "tts-1",
             "tts-1-hd",
             "whisper-1",
+            // Pinning the snapshot instead of the unversioned alias is the other
+            // way to end up on a dead model: this one shut down 2026-07-23 while
+            // bare `gpt-4o-mini-tts` rolled forward to -2025-12-15.
+            "gpt-4o-mini-tts-2025-03-20",
+            "gpt-4o-mini-transcribe-2025-03-20",
         ];
         for id in RETIRED {
             assert_ne!(
