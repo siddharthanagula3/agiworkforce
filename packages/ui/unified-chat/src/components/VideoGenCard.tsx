@@ -1,11 +1,20 @@
-import { Film } from 'lucide-react';
+import { Film, Download, Share2 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { Button } from '@agiworkforce/ui';
 
 export interface VideoGenCardProps {
   status: 'generating' | 'complete' | 'error';
   description: string;
   videoUrl?: string;
   progress?: number;
+  /**
+   * Download the finished video. Optional because Local mode has no fetchable
+   * URL to hand out; when omitted the control is not rendered rather than
+   * rendered dead — a download button that does nothing reads as a bug.
+   * Mirrors `ImageGenCard`'s `onDownload` contract.
+   */
+  onDownload?: () => void;
+  onShare?: () => void;
 }
 
 function ProgressBar({ value }: { value: number }) {
@@ -26,36 +35,58 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
-export function VideoGenCard({ status, description, videoUrl, progress }: VideoGenCardProps) {
+export function VideoGenCard({
+  status,
+  description,
+  videoUrl,
+  progress,
+  onDownload,
+  onShare,
+}: VideoGenCardProps) {
   return (
     <div className="my-2">
       {status === 'generating' && (
+        /**
+         * A full-size shimmering placeholder occupying the space the video will
+         * fill, rather than a small labelled card. Video takes 1-2 minutes, so
+         * reserving the real footprint keeps the thread from jumping when the
+         * result lands, and the moving highlight distinguishes "still working"
+         * from "finished and broken" without needing a progress number the
+         * provider does not reliably give us.
+         */
         <div
-          className={cn(
-            'flex flex-col gap-3 rounded-lg border border-[var(--chat-border)]',
-            'bg-[var(--chat-surface-elevated)] px-4 py-4',
-          )}
+          className="relative w-full aspect-video overflow-hidden rounded-xl bg-[var(--chat-surface-elevated)]"
+          role="status"
+          aria-live="polite"
+          aria-label={
+            typeof progress === 'number'
+              ? `Generating your video, ${Math.round(progress)}% complete`
+              : 'Generating your video'
+          }
         >
-          <div className="flex items-center gap-2">
-            <Film size={15} className="text-[var(--chat-accent-secondary)] shrink-0" />
-            <span className="text-sm font-medium text-[var(--chat-text-primary)]">
-              Generating your video...
+          {/* Drives `@keyframes shimmer` in globals.css, which animates
+              background-position (-200% -> 200%), so the highlight has to be a
+              background gradient sized wider than the box. A translate-based
+              sweep would not move at all under that keyframe. */}
+          <div
+            className={cn(
+              'absolute inset-0',
+              'bg-[linear-gradient(90deg,transparent,var(--chat-surface-hover),transparent)]',
+              'bg-[length:200%_100%]',
+              'motion-safe:animate-[shimmer_1.8s_ease-in-out_infinite]',
+            )}
+          />
+          {/* Reduced-motion and no-animation fallback: without this the block is
+              indistinguishable from a failed render. */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 motion-safe:opacity-0">
+            <Film size={20} className="text-[var(--chat-text-muted)]" aria-hidden="true" />
+            <span className="text-[13px] text-[var(--chat-text-muted)]">
+              Generating your video…
             </span>
           </div>
-
-          {description && (
-            <p className="text-[13px] text-[var(--chat-text-muted)] leading-relaxed">
-              {description}
-            </p>
-          )}
-
-          <p className="text-[12px] text-[var(--chat-text-muted)]">This can take 1–2 minutes</p>
-
-          {typeof progress === 'number' && <ProgressBar value={progress} />}
-
-          {typeof progress !== 'number' && (
-            <div className="h-1 w-full rounded-full bg-[var(--chat-surface-hover)] overflow-hidden">
-              <div className="h-full w-1/3 rounded-full bg-[var(--chat-accent-primary)] animate-[slide_1.5s_ease-in-out_infinite]" />
+          {typeof progress === 'number' && (
+            <div className="absolute inset-x-4 bottom-4">
+              <ProgressBar value={progress} />
             </div>
           )}
         </div>
@@ -63,19 +94,55 @@ export function VideoGenCard({ status, description, videoUrl, progress }: VideoG
 
       {status === 'complete' && videoUrl && (
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <Film size={15} className="text-[var(--chat-accent-secondary)] shrink-0" />
-            <span className="text-sm font-medium text-[var(--chat-text-primary)]">
-              Your video is ready!
-            </span>
-          </div>
+          <span className="text-sm text-[var(--chat-text-primary)]">Your video is ready!</span>
 
-          <video
-            src={videoUrl}
-            controls
-            className="w-full rounded-lg bg-black"
-            aria-label={description}
-          />
+          <div className="group relative w-full overflow-hidden rounded-xl bg-black">
+            <video
+              src={videoUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full rounded-xl bg-black"
+              aria-label={description}
+            />
+
+            {/* Overlaid on the player rather than in a row beneath it, so the
+                controls sit where the reference puts them. focus-within keeps
+                them reachable by keyboard, where hover alone would not. */}
+            {(onDownload || onShare) && (
+              <div
+                className={cn(
+                  'absolute right-2 top-2 flex items-center gap-1',
+                  'opacity-0 transition-opacity duration-150',
+                  'group-hover:opacity-100 group-focus-within:opacity-100',
+                  'motion-reduce:opacity-100',
+                )}
+              >
+                {onDownload && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Download video"
+                    onClick={onDownload}
+                    className="h-8 w-8 rounded-full bg-black/55 text-white hover:bg-black/75 hover:text-white"
+                  >
+                    <Download size={14} aria-hidden="true" />
+                  </Button>
+                )}
+                {onShare && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Share video"
+                    onClick={onShare}
+                    className="h-8 w-8 rounded-full bg-black/55 text-white hover:bg-black/75 hover:text-white"
+                  >
+                    <Share2 size={14} aria-hidden="true" />
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

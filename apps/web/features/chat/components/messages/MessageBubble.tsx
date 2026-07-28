@@ -37,6 +37,7 @@ import {
   ZoomIn,
   Volume2,
   Square,
+  Download,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -1174,19 +1175,44 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser &&
             message.metadata?.toolType === 'video-generation' &&
             message.metadata?.videoUrl && (
-              <div className="mt-4">
+              <div className="mt-4 flex flex-col gap-2">
                 {videoError ? (
                   <div className="flex items-center justify-center p-8 bg-muted/50 text-muted-foreground rounded-xl">
                     <span className="text-sm">Video failed to load</span>
                   </div>
                 ) : (
-                  <video
-                    src={message.metadata.videoUrl}
-                    controls
-                    className="max-h-96 rounded-xl"
-                    poster={message.metadata.thumbnailUrl}
-                    onError={() => setVideoError(true)}
-                  />
+                  <>
+                    <span className="text-sm text-foreground">Your video is ready!</span>
+                    <div className="group relative w-fit overflow-hidden rounded-xl">
+                      <video
+                        src={message.metadata.videoUrl}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="max-h-96 rounded-xl"
+                        poster={message.metadata.thumbnailUrl}
+                        onError={() => setVideoError(true)}
+                      />
+                      {/* Overlaid top-right rather than in a row below, matching
+                          the reference. focus-within keeps it keyboard-reachable,
+                          which hover alone would not, and motion-reduce pins it
+                          visible for users who get no transition cue. */}
+                      <a
+                        href={message.metadata.videoUrl}
+                        download
+                        aria-label="Download video"
+                        className={cn(
+                          'absolute right-2 top-2 flex h-8 w-8 items-center justify-center',
+                          'rounded-full bg-black/55 text-white hover:bg-black/75',
+                          'opacity-0 transition-opacity duration-150',
+                          'group-hover:opacity-100 group-focus-within:opacity-100',
+                          'focus-visible:opacity-100 motion-reduce:opacity-100',
+                        )}
+                      >
+                        <Download size={14} aria-hidden="true" />
+                      </a>
+                    </div>
+                  </>
                 )}
               </div>
             )}
