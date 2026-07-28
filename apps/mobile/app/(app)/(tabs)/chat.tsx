@@ -22,6 +22,7 @@ import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
 import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
+import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { findNewAssistantResponse } from '@/src/features/voice/utils/assistantResponse';
 import { Text } from '@/components/ui/text';
@@ -79,6 +80,7 @@ export default function ChatTabScreen() {
   } | null>(null);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
+  const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
   const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
@@ -472,9 +474,21 @@ export default function ChatTabScreen() {
     setVoiceModeVisible(true);
   }, []);
 
+  // Intro -> pick a voice -> conversation. The picker only fronts the FIRST
+  // run; afterwards the saved preset is used and the mic opens directly, so a
+  // returning user is not asked to re-choose every time.
   const handleVoiceIntroContinue = useCallback(() => {
     setVoiceIntroVisible(false);
+    setVoicePickerVisible(true);
+  }, []);
+
+  const handleVoicePickerStart = useCallback(() => {
+    setVoicePickerVisible(false);
     setVoiceModeVisible(true);
+  }, []);
+
+  const handleVoicePickerDismiss = useCallback(() => {
+    setVoicePickerVisible(false);
   }, []);
 
   // Dismissing without acknowledging must not start voice, and must not mark
@@ -662,6 +676,13 @@ export default function ChatTabScreen() {
         visible={voiceIntroVisible}
         onContinue={handleVoiceIntroContinue}
         onDismiss={handleVoiceIntroDismiss}
+      />
+
+      {/* First-run voice picker, between the intro and the live conversation */}
+      <VoicePickerSheet
+        visible={voicePickerVisible}
+        onStart={handleVoicePickerStart}
+        onDismiss={handleVoicePickerDismiss}
       />
 
       {/* Voice conversation full-screen overlay */}
