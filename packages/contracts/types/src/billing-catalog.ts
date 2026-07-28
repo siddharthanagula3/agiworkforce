@@ -426,7 +426,13 @@ export type ManagedQuotaBlockKind =
   | 'free_trial'
   | 'rolling_window'
   | 'billing_period'
-  | 'rate_limit';
+  | 'rate_limit'
+  /**
+   * The plan simply does not include the capability — nothing was exhausted and
+   * nothing resets. Distinct from every other kind here, which are all "you had
+   * an allowance and used it up", so the card must not offer a reset time.
+   */
+  | 'plan_capability';
 
 export interface ManagedQuotaBlockPresentation {
   kind: ManagedQuotaBlockKind;
@@ -467,6 +473,29 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showResetTime: false,
       suggestStandardModel: false,
       reason: 'That capability requires a paid plan.',
+    },
+    /**
+     * Emitted by the media routes when `canUseBillingPlanCapability` refuses —
+     * image generation below Pro, video generation below Max 15x.
+     *
+     * It was absent here, so a Free or Basic user asking for an image IN CHAT
+     * fell through to a plain error banner: the exact GOV-20 failure this map
+     * was built to end, except for capability refusals rather than exhausted
+     * quotas. The media hook (`useMediaGeneration`) already recognised the code,
+     * so the same refusal produced an upgrade card on the media surface and a
+     * dead-end error in chat.
+     *
+     * `showResetTime` is false because nothing refills — waiting does not help,
+     * and offering a reset time would be a lie. The server's message names the
+     * qualifying plans, and it wins over `reason` when present.
+     */
+    plan_upgrade_required: {
+      kind: 'plan_capability',
+      feature: 'paid_capability',
+      showUpgradeCta: true,
+      showResetTime: false,
+      suggestStandardModel: false,
+      reason: 'That capability is not included in your current plan.',
     },
     rolling_five_hour_limit_reached: {
       kind: 'rolling_window',
