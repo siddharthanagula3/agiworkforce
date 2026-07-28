@@ -12,6 +12,7 @@ import {
 } from '@agiworkforce/provider-protocol';
 import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
 import type { ChatRequest, Effort, ThinkingConfig } from '@agiworkforce/types';
+import { openRouterSlugFor } from '@/lib/services/aggregator-routing';
 import type { ProcessedRequest } from './request-processor';
 
 /**
@@ -103,12 +104,30 @@ function splitTools(tools: unknown[] | undefined): {
  * field from `ProcessedRequest` (`requestedModel` / `chatRequest.model`),
  * never from the returned `ChatRequest.model`.
  */
+/**
+ * The model id to put on the wire.
+ *
+ * Normally the catalog's `apiModelId`. But MiniMax, Qwen and Zhipu are served
+ * through OpenRouter for now, and OpenRouter publishes them under its own
+ * namespace — `glm-5.2` is `z-ai/glm-5.2` there. `resolveProviderFromModel`
+ * has already pointed the request at the OpenRouter adapter; without the
+ * matching id it would arrive asking for a model OpenRouter does not have.
+ *
+ * Keyed off `processed.provider` rather than re-deriving the routing decision,
+ * so the id can never disagree with the adapter actually constructed.
+ */
+function wireModelId(modelId: string, provider: string | undefined): string {
+  const apiModelId = toProviderApiModelId(modelId);
+  if (provider !== 'openrouter' && provider !== 'open_router') return apiModelId;
+  return openRouterSlugFor(apiModelId) ?? apiModelId;
+}
+
 export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest {
   const { llmRequest } = processed;
   const { functionTools, rawVendorTools } = splitTools(llmRequest.tools);
 
   const wireRequest: OpenAIWireChatRequest = {
-    model: toProviderApiModelId(llmRequest.model),
+    model: wireModelId(llmRequest.model, processed.provider),
     messages: llmRequest.messages.map(toWireMessage),
     ...(llmRequest.stream !== undefined ? { stream: llmRequest.stream } : {}),
     ...(llmRequest.temperature !== undefined ? { temperature: llmRequest.temperature } : {}),
