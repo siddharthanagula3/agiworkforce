@@ -129,6 +129,9 @@ export interface LibraryTransport {
   restoreItem(id: string): Promise<Response>;
   /** Show the asset to the user however this host does that. */
   openPreview(uri: string): void;
+  /** Optional way out of the empty state: start a new chat. Hosts that have no
+   *  such action (or have a composer already on screen) omit it. */
+  startChat?: () => void;
 }
 
 interface PageState {
@@ -361,7 +364,7 @@ export function LibraryView({ transport }: { transport: LibraryTransport }) {
       ) : null}
 
       {!loading && !error && cards.length === 0 ? (
-        <EmptyState origin={origin} hasQuery={query.length > 0} />
+        <EmptyState origin={origin} hasQuery={query.length > 0} startChat={transport.startChat} />
       ) : null}
 
       {cards.length > 0 ? (
@@ -457,7 +460,15 @@ function FilterChip({
   );
 }
 
-function EmptyState({ origin, hasQuery }: { origin: OriginFilter; hasQuery: boolean }) {
+function EmptyState({
+  origin,
+  hasQuery,
+  startChat,
+}: {
+  origin: OriginFilter;
+  hasQuery: boolean;
+  startChat?: () => void;
+}) {
   // Honest copy: search miss vs. genuinely empty buckets. Uploads are not
   // cataloged into the Library today (chat uploads stay with their
   // conversation), so the Uploaded bucket says exactly that.
@@ -471,11 +482,18 @@ function EmptyState({ origin, hasQuery }: { origin: OriginFilter; hasQuery: bool
       data-testid="library-empty-state"
       className="flex flex-col items-center gap-3 py-20 text-center"
     >
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--chat-surface-elevated)]">
-        <FolderOpen className="h-6 w-6 text-[var(--chat-text-muted)]" aria-hidden />
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--chat-accent-primary)]/15">
+        <FolderOpen className="h-7 w-7 text-[var(--chat-accent-primary)]" aria-hidden />
       </div>
       <p className="text-base font-semibold text-[var(--chat-text-primary)]">Nothing here yet</p>
       <p className="max-w-md text-sm text-[var(--chat-text-muted)]">{copy}</p>
+      {/* A search miss has an obvious way out (clear the query); a genuinely
+          empty Library does not, so only that case gets the CTA. */}
+      {startChat && !hasQuery ? (
+        <Button size="sm" className="mt-1" onClick={startChat}>
+          Start a chat
+        </Button>
+      ) : null}
     </div>
   );
 }

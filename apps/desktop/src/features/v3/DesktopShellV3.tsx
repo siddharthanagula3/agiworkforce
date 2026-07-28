@@ -391,7 +391,7 @@ export function DesktopShellV3({
             // a long grid is simply unreachable.
             <div className="h-full overflow-y-auto px-6 py-6">
               <Suspense fallback={null}>
-                <DesktopLibrary />
+                <DesktopLibrary onStartChat={() => handleNewChat()} />
               </Suspense>
             </div>
           ) : activePanel === 'tasks' && privacyMode !== 'local' ? (
@@ -400,11 +400,14 @@ export function DesktopShellV3({
             // panel mounted and rendered nothing at all.
             <div className="h-full overflow-y-auto">
               <Suspense fallback={null}>
-                <DesktopTasks onOpenConversation={handleOpenProjectConversation} />
+                <DesktopTasks
+                  onOpenConversation={handleOpenProjectConversation}
+                  onStartChat={() => handleNewChat()}
+                />
               </Suspense>
             </div>
           ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
-            <AgiWorkArtifacts />
+            <AgiWorkArtifacts onNewChat={() => handleNewChat()} />
           ) : activePanel === 'scheduled' && privacyMode === 'local' ? (
             <AgiWorkScheduled />
           ) : (

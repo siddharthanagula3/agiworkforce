@@ -61,6 +61,9 @@ export interface TasksTransport {
   openConversation(conversationId: string): void;
   /** Report a non-fatal failure to the user. */
   notifyError(message: string): void;
+  /** Optional way out of the empty state: start a new AGI Work run. Hosts that
+   *  have no such action omit it. */
+  startWork?: () => void;
 }
 
 export function TasksPage({ transport }: { transport: TasksTransport }) {
@@ -173,12 +176,21 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
           </Button>
         </div>
       ) : runs.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center">
-          <ListChecks className="h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm font-medium">No {filter === 'active' ? 'active ' : ''}tasks yet</p>
-          <p className="max-w-xs text-xs text-muted-foreground">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--chat-accent-primary)]/15">
+            <ListChecks className="h-7 w-7 text-[var(--chat-accent-primary)]" />
+          </div>
+          <p className="text-base font-semibold text-foreground">
+            No {filter === 'active' ? 'active ' : ''}tasks yet
+          </p>
+          <p className="max-w-sm text-sm text-muted-foreground">
             Runs from AGI Work, Research, and long tool sessions show up here.
           </p>
+          {transport.startWork ? (
+            <Button size="sm" onClick={transport.startWork}>
+              Start AGI Work
+            </Button>
+          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-2">

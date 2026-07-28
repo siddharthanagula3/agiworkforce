@@ -59,7 +59,7 @@ import {
 } from '../../stores/settingsStore';
 import { getCloudUsage, type CloudUsage } from '../../api/cloudApi';
 import { openBillingPortal } from '../../lib/stripeCheckout';
-import { selectPlan, useAuthStore } from '../../stores/auth';
+import { selectHasCloudAccountSession, selectPlan, useAuthStore } from '../../stores/auth';
 import type { SettingsTab } from '../../stores/settingsDialogStore';
 import { LEGACY_TAB_MAP } from '../../stores/settingsDialogStore';
 import { PLAN_DISPLAY_NAMES } from '../../lib/cloudAccountTypes';
@@ -100,8 +100,23 @@ const LazyMemoryTab = lazy(() => import('./tabs/Memory').then((m) => ({ default:
 
 function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
   const plan = useAuthStore(selectPlan);
+  const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+
+  // Billing belongs to the Cloud account, not to this device. Without a Cloud
+  // session there is no plan to show and no Stripe customer to open a portal
+  // for, so say that instead of rendering a plan card the user cannot act on.
+  if (!hasCloudAccountSession) {
+    return (
+      <div className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold text-foreground">Billing</h2>
+        <p className="text-sm text-muted-foreground">
+          Connect this Desktop to AGI Cloud to see your plan and manage your subscription.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">

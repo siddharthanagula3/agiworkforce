@@ -19,7 +19,11 @@ vi.mock('../../stores/appModeStore', () => ({
   useAppModeStore: { getState: () => ({ mode: 'cloud' }), subscribe: vi.fn(() => () => {}) },
   selectPrivacyMode: () => h.privacyMode,
 }));
-vi.mock('../../stores/auth', () => ({
+vi.mock('../../stores/auth', async (importOriginal) => ({
+  // Keep the REAL cloud-session predicate: mocking it away is how the
+  // signed-in/signed-out split-brain went unnoticed.
+  selectHasCloudAccountSession: (await importOriginal<typeof import('../../stores/auth')>())
+    .selectHasCloudAccountSession,
   useUnifiedAuthStore: {
     getState: () => ({
       user: h.userId ? { id: h.userId } : null,

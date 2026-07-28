@@ -907,11 +907,25 @@ export const selectIsAuthReady = (state: UnifiedAuthStore): boolean =>
 
 export const selectUser = (state: UnifiedAuthStore) => state.user;
 export const selectIsAuthenticated = (state: UnifiedAuthStore) => state.isAuthenticated;
-export const selectHasCloudAccountSession = (state: UnifiedAuthStore): boolean => {
-  const hasCloudToken = Boolean(state.accessToken);
-  const hasCloudIdentity = Boolean(state.user?.email?.trim());
-  return state.isAuthenticated && state.plan !== 'local-only' && hasCloudToken && hasCloudIdentity;
-};
+/**
+ * THE single desktop answer to "does this install have a usable Managed Cloud
+ * session?". Every cloud-gated surface (sidebar account row, Tasks, Library,
+ * Settings > Account/Privacy/Billing/General, the app shell, cloud chat/project
+ * loading, sync, and the managed egress boundary) must derive from this and
+ * nothing else — four hand-rolled variants are what let the same session render
+ * as signed-in and signed-out at once.
+ *
+ * Identity is `user.id`, NOT `user.email`: the desktop bearer is minted by
+ * /api/auth/device/token with `email: ''` when the browser approval had no
+ * email claim, so an email conjunct silently signs valid paying sessions out.
+ * The credential is the token; the tenant is the id. `plan !== 'local-only'`
+ * keeps the synthesized Local account out of the Managed Cloud boundary.
+ */
+export const selectHasCloudAccountSession = (state: UnifiedAuthStore): boolean =>
+  state.isAuthenticated &&
+  state.plan !== 'local-only' &&
+  Boolean(state.user?.id) &&
+  Boolean(state.accessToken);
 export const selectIsLoading = (state: UnifiedAuthStore) => state.isLoading;
 export const selectAuthError = (state: UnifiedAuthStore) => state.error;
 

@@ -296,7 +296,9 @@
       "title": "Live artifacts",
       "subtitle": "Outputs from scheduled tasks. Refreshed on each run.",
       "loading": "Loading artifacts…",
-      "empty": "No artifacts yet. Run a scheduled task to generate outputs."
+      "emptyTitle": "No artifacts yet",
+      "empty": "Files and documents you create in chat show up here.",
+      "startChat": "Start a chat"
     },
     "projects": {
       "title": "AGI Work projects",
@@ -312,7 +314,8 @@
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
       "paused": "Paused",
-      "empty": "No scheduled tasks yet. Click \"Schedule new task\" to get started."
+      "emptyTitle": "No scheduled tasks",
+      "empty": "Schedule a task and this Mac runs it on a timer."
     }
   },
   "time": {

@@ -14,7 +14,7 @@ import { getModelContextWindow } from '../../constants/llm';
 import { safeGetJSON, safeSetJSON, storageFallback } from '../../utils/localStorage';
 import { useAppModeStore } from '../appModeStore';
 import type { ChatExecutionMode } from '@agiworkforce/types';
-import { useUnifiedAuthStore } from '../auth';
+import { selectHasCloudAccountSession, useUnifiedAuthStore } from '../auth';
 import { useModelStore } from '../modelStore';
 import { registerChatStoreStateReader } from './chatStoreRef';
 import {
@@ -76,7 +76,7 @@ let messageLoadGeneration = 0;
 
 function isCurrentCloudAccount(userId: string): boolean {
   const auth = useUnifiedAuthStore.getState();
-  return isCloudMode() && auth.isAuthenticated && !!auth.accessToken && auth.user?.id === userId;
+  return isCloudMode() && selectHasCloudAccountSession(auth) && auth.user?.id === userId;
 }
 
 export const LOCAL_DESKTOP_USER_ID = 'local-desktop-user';

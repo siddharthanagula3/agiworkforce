@@ -269,7 +269,15 @@ describe('SettingsPanel render stability', () => {
   });
 
   it('shows the backend-owned account plan in the mode summary', async () => {
-    useAuthStore.setState({ plan: 'max', planDisplayName: 'Max' });
+    // A real desktop Cloud session: tenant id + device bearer. The email claim
+    // is empty on purpose — that is what /api/auth/device/token mints.
+    useAuthStore.setState({
+      plan: 'max',
+      planDisplayName: 'Max',
+      isAuthenticated: true,
+      user: { id: 'user-desktop', email: '', name: 'demo' },
+      accessToken: 'device-bearer',
+    });
     useAppModeStore.setState({ mode: 'cloud' });
 
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="general" />);
