@@ -38,6 +38,7 @@ import {
   Volume2,
   Square,
   Download,
+  Video,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -1170,6 +1171,42 @@ const MessageBubbleComponent = function MessageBubble({
               />
             </div>
           )}
+
+          {/* Video generation in flight. Veo takes 1-2 minutes, so the slot the
+              video will occupy is reserved with a shimmering placeholder rather
+              than left empty: the thread does not jump when the result lands,
+              and an empty gap for two minutes is indistinguishable from a
+              silent failure. Keyed off "the tool ran but produced no URL yet",
+              which is the only in-flight signal the metadata carries. */}
+          {!isUser &&
+            message.metadata?.toolType === 'video-generation' &&
+            !message.metadata?.videoUrl &&
+            !videoError && (
+              <div
+                className="mt-4 relative w-full max-w-lg aspect-video overflow-hidden rounded-xl bg-muted"
+                role="status"
+                aria-live="polite"
+                aria-label="Generating your video"
+              >
+                {/* Drives @keyframes shimmer in globals.css, which animates
+                    background-position — so the highlight must be an oversized
+                    background gradient. A translate-based sweep would not move. */}
+                <div
+                  className={cn(
+                    'absolute inset-0',
+                    'bg-[linear-gradient(90deg,transparent,var(--color-accent),transparent)]',
+                    'bg-[length:200%_100%]',
+                    'motion-safe:animate-[shimmer_1.8s_ease-in-out_infinite]',
+                  )}
+                />
+                {/* Visible only when animation is suppressed, so reduced-motion
+                    users still get a "working" cue instead of a blank box. */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 motion-safe:opacity-0">
+                  <Video className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                  <span className="text-[13px] text-muted-foreground">Generating your video…</span>
+                </div>
+              </div>
+            )}
 
           {/* Video Result with Error Handling */}
           {!isUser &&
