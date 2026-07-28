@@ -1,21 +1,27 @@
-'use client';
+/**
+ * `/billing` — post-checkout splash, or a redirect into Settings.
+ *
+ * This used to render a second, older billing dashboard alongside the wired
+ * one at `/settings/billing`. Two screens for one thing meant the stale copy
+ * kept its own idea of the plan: it showed "Payment successful!" above
+ * "Current Plan: FREE / No subscription", and offered "Upgrade to Basic" to an
+ * account that had just paid for Max 15x.
+ *
+ * The route survives rather than being deleted because Stripe's `success_url`
+ * points at it, and changing that alone would strand checkout sessions already
+ * in flight with the old URL. So it keeps the one job only it can do — greeting
+ * someone who just paid — and hands every other visit to the real billing UI.
+ */
 
-import BillingDashboard from '@features/billing/pages/BillingDashboard';
+import { redirect } from 'next/navigation';
+import { UpgradeWelcome } from './UpgradeWelcome';
 
-export default function BillingPage() {
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-5xl space-y-8 px-4 py-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Billing & Usage</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage your subscription, track usage, and view spending.
-          </p>
-        </div>
-
-        {/* Plan, percentage usage, invoices, and payment methods */}
-        <BillingDashboard />
-      </div>
-    </div>
-  );
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ success?: string }>;
+}) {
+  const params = await searchParams;
+  if (params.success !== 'true') redirect('/settings/billing');
+  return <UpgradeWelcome />;
 }
