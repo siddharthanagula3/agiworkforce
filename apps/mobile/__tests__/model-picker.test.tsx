@@ -562,15 +562,22 @@ describe('ModelPickerSheet', () => {
     });
   });
 
-  it('shows no effort selector for Claude Haiku 4.5', () => {
+  // Covers the branch where a model exposes an on/off thinking toggle INSTEAD of
+  // the graded effort slider. Claude Haiku 4.5 used to carry this test via its
+  // thinking_budget control; when Haiku was removed the blanket rename pointed
+  // it at claude-sonnet-5, which has effort_levels — so the assertion
+  // contradicted itself and the test failed. DeepSeek V4 Pro is the current
+  // thinking_toggle model, so the branch is covered again rather than deleted.
+  it('shows a thinking toggle and no effort selector for a thinking_toggle model', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('claude-sonnet-5');
+    useModelStore.getState().setModel('deepseek-v4-pro');
     const { queryByTestId, getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     expect(queryByTestId('model-picker-effort-selector')).toBeNull();
-    fireEvent.press(getByLabelText('Claude 4.5 Haiku, selected'));
-    expect(getByLabelText('Thinking mode for Claude 4.5 Haiku')).toBeTruthy();
+    // The thinking block only renders on an expanded row (ModelRow.tsx:222).
+    fireEvent.press(getByLabelText('DeepSeek V4 Pro, selected'));
+    expect(getByLabelText('Thinking mode for DeepSeek V4 Pro')).toBeTruthy();
   });
 
   it('clamps the reasoning effort to the new model default when switching to a model that lacks the previous value', () => {
