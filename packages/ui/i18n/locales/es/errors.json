@@ -1,0 +1,219 @@
+{
+  "NETWORK_ERROR": {
+    "title": "Problema de Conexion",
+    "message": "No se puede conectar al servidor. Por favor, verifica tu conexion a internet.",
+    "suggestions": [
+      "Verifica tu conexion WiFi o ethernet",
+      "Desactiva la VPN si esta habilitada",
+      "Intentalo de nuevo en un momento",
+      "Verifica si el servidor esta caido"
+    ]
+  },
+  "NETWORK_TIMEOUT": {
+    "title": "Tiempo de Espera Agotado",
+    "message": "La solicitud tardo demasiado en completarse.",
+    "suggestions": [
+      "Verifica tu velocidad de internet",
+      "Intentalo con una solicitud mas pequena",
+      "El servidor podria estar sobrecargado"
+    ]
+  },
+  "API_RATE_LIMIT": {
+    "title": "Limite de Tasa Excedido",
+    "message": "Demasiadas solicitudes. Por favor, espera antes de intentar de nuevo.",
+    "suggestions": [
+      "Espera unos minutos antes de reintentar",
+      "Considera actualizar tu plan de API",
+      "Reduce la frecuencia de solicitudes"
+    ]
+  },
+  "FILE_NOT_FOUND": {
+    "title": "Archivo No Encontrado",
+    "message": "No se pudo encontrar el archivo solicitado.",
+    "suggestions": [
+      "Verifica si la ruta del archivo es correcta",
+      "Verifica que el archivo aun exista",
+      "Verifica los permisos del archivo"
+    ]
+  },
+  "PERMISSION_DENIED": {
+    "title": "Permiso Denegado",
+    "message": "No tienes permiso para acceder a este recurso.",
+    "suggestions": [
+      "Ejecuta la aplicacion como administrador",
+      "Verifica los permisos de archivos/carpetas",
+      "Contacta al administrador del sistema"
+    ]
+  },
+  "DISK_FULL": {
+    "title": "Disco Lleno",
+    "message": "No hay suficiente espacio en disco para completar la operacion.",
+    "suggestions": [
+      "Libera espacio en disco eliminando archivos innecesarios",
+      "Mueve archivos a un disco externo",
+      "Vacia la papelera de reciclaje"
+    ]
+  },
+  "DATABASE_LOCKED": {
+    "title": "Base de Datos Bloqueada",
+    "message": "La base de datos esta bloqueada por otro proceso.",
+    "suggestions": [
+      "Espera un momento e intenta de nuevo",
+      "Cierra otras instancias de la aplicacion",
+      "Reinicia la aplicacion"
+    ]
+  },
+  "DATABASE_CORRUPTED": {
+    "title": "Base de Datos Corrupta",
+    "message": "El archivo de base de datos parece estar corrupto.",
+    "suggestions": [
+      "Restaura desde una copia de seguridad si esta disponible",
+      "Contacta al soporte para asistencia",
+      "Podrias necesitar reiniciar la aplicacion"
+    ]
+  },
+  "AUTH_FAILED": {
+    "title": "Autenticacion Fallida",
+    "message": "No se puede autenticar con las credenciales proporcionadas.",
+    "suggestions": [
+      "Verifica tu nombre de usuario y contrasena",
+      "Verifica que tu clave API sea correcta",
+      "Verifica si tu cuenta esta activa"
+    ]
+  },
+  "TOKEN_EXPIRED": {
+    "title": "Sesion Expirada",
+    "message": "Tu sesion ha expirado. Por favor, inicia sesion de nuevo.",
+    "suggestions": ["Haz clic para re-autenticar", "Verifica si tus credenciales aun son validas"]
+  },
+  "LLM_API_ERROR": {
+    "title": "Error del Proveedor LLM",
+    "message": "Ocurrio un error al comunicarse con el proveedor de LLM.",
+    "suggestions": [
+      "Verifica la configuracion de tu clave API",
+      "Verifica que tu cuenta tenga suficientes creditos",
+      "Intenta cambiar a un proveedor diferente",
+      "Verifica la pagina de estado del proveedor"
+    ]
+  },
+  "LLM_CONTEXT_LENGTH": {
+    "title": "Contexto Muy Largo",
+    "message": "El contexto de la conversacion excede la longitud maxima del modelo.",
+    "suggestions": [
+      "Inicia una nueva conversacion",
+      "Resume el historial de conversacion",
+      "Usa un modelo con mayor ventana de contexto"
+    ]
+  },
+  "LLM_CONTENT_FILTER": {
+    "title": "Contenido Filtrado",
+    "message": "La solicitud fue bloqueada por filtrado de contenido.",
+    "suggestions": [
+      "Reformula tu solicitud",
+      "Elimina contenido potencialmente sensible",
+      "Revisa la politica de contenido"
+    ]
+  },
+  "BROWSER_NOT_FOUND": {
+    "title": "Navegador No Encontrado",
+    "message": "El navegador requerido no esta instalado o no se puede encontrar.",
+    "suggestions": [
+      "Instala el navegador requerido",
+      "Verifica la ruta de instalacion del navegador",
+      "Intenta usar un navegador diferente"
+    ]
+  },
+  "BROWSER_CRASH": {
+    "title": "Navegador Colapso",
+    "message": "La sesion de automatizacion del navegador colapso inesperadamente.",
+    "suggestions": [
+      "Intenta la operacion de nuevo",
+      "Actualiza tu navegador a la ultima version",
+      "Verifica los recursos del sistema (memoria, CPU)"
+    ]
+  },
+  "ELEMENT_NOT_FOUND": {
+    "title": "Elemento No Encontrado",
+    "message": "No se pudo encontrar el elemento de interfaz especificado en la pagina.",
+    "suggestions": [
+      "La pagina aun podria estar cargandose",
+      "El selector del elemento podria ser incorrecto",
+      "La estructura de la pagina puede haber cambiado"
+    ]
+  },
+  "AUTOMATION_FAILED": {
+    "title": "Automatizacion Fallida",
+    "message": "La tarea de automatizacion no pudo completarse.",
+    "suggestions": [
+      "Verifica si la aplicacion aun esta ejecutandose",
+      "Verifica que los pasos de automatizacion sean correctos",
+      "Intenta ejecutar la automatizacion manualmente primero"
+    ]
+  },
+  "UI_ELEMENT_TIMEOUT": {
+    "title": "Tiempo de Espera del Elemento",
+    "message": "Se agoto el tiempo de espera para que apareciera un elemento de interfaz.",
+    "suggestions": [
+      "La aplicacion podria ser lenta para responder",
+      "Aumenta la duracion del tiempo de espera en configuracion",
+      "Verifica si el elemento aun existe"
+    ]
+  },
+  "OUT_OF_MEMORY": {
+    "title": "Sin Memoria",
+    "message": "La aplicacion se quedo sin memoria disponible.",
+    "suggestions": [
+      "Cierra otras aplicaciones para liberar memoria",
+      "Reinicia la aplicacion",
+      "Procesa menores cantidades de datos",
+      "Actualiza la RAM del sistema si esto ocurre frecuentemente"
+    ]
+  },
+  "SYSTEM_ERROR": {
+    "title": "Error del Sistema",
+    "message": "Ocurrio un error inesperado del sistema.",
+    "suggestions": [
+      "Intenta la operacion de nuevo",
+      "Reinicia la aplicacion",
+      "Verifica los registros del sistema para detalles",
+      "Contacta al soporte si el problema persiste"
+    ]
+  },
+  "AGI_PLANNING_FAILED": {
+    "title": "Planificacion Fallida",
+    "message": "El planificador AGI no pudo crear un plan para el objetivo.",
+    "suggestions": [
+      "Intenta reformular el objetivo de manera mas especifica",
+      "Divide objetivos complejos en pasos mas pequenos",
+      "Verifica si el proveedor de LLM esta disponible"
+    ]
+  },
+  "AGI_EXECUTION_FAILED": {
+    "title": "Ejecucion Fallida",
+    "message": "El sistema AGI no pudo ejecutar un paso.",
+    "suggestions": [
+      "Revisa los detalles del paso en el registro de errores",
+      "Verifica si las herramientas requeridas estan disponibles",
+      "Intenta ejecutar el paso manualmente"
+    ]
+  },
+  "AGI_TOOL_NOT_FOUND": {
+    "title": "Herramienta No Disponible",
+    "message": "La herramienta requerida no esta disponible o no esta instalada.",
+    "suggestions": [
+      "Instala la herramienta requerida",
+      "Habilita la herramienta en configuracion",
+      "Intenta usar una herramienta alternativa"
+    ]
+  },
+  "UNKNOWN_ERROR": {
+    "title": "Error Desconocido",
+    "message": "Ocurrio un error inesperado.",
+    "suggestions": [
+      "Intenta la operacion de nuevo",
+      "Reinicia la aplicacion",
+      "Verifica los registros de errores para detalles",
+      "Reporta este problema si persiste"
+    ]
+  }
+}
