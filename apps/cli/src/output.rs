@@ -583,12 +583,8 @@ mod tests {
         assert_eq!(o, 15.0);
     }
 
-    #[test]
-    fn test_model_pricing_anthropic_haiku() {
-        let (i, o) = model_pricing("claude-haiku-4-5");
-        assert_eq!(i, 1.0);
-        assert_eq!(o, 5.0);
-    }
+    // The Haiku 4.5 pricing case was removed with the model on 2026-07-27; the
+    // Sonnet 5 case above already covers Anthropic pricing lookup.
 
     #[test]
     fn test_model_pricing_openai_flagship() {
@@ -699,7 +695,7 @@ mod tests {
         let models = [
             "claude-opus-5",
             "claude-sonnet-5",
-            "claude-haiku-4-5-20251001",
+            "claude-sonnet-5",
             "gpt-5.6-luna",
             "gpt-5.6-sol",
             "gemini-3.5-flash-lite",

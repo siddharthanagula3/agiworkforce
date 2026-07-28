@@ -60,12 +60,15 @@ describe('per-model reasoning capability', () => {
     expect(getModelMetadataById('claude-opus-5')?.reasoning?.control).toBe('effort_levels');
   });
 
-  it('marks Haiku 4.5 as thinking-capable with classic thinking_budget control', () => {
-    const meta = getModelMetadataById('claude-haiku-4.5');
-    expect(meta?.capabilities.thinking).toBe(true); // was WRONG (false) before this wave
-    const r = getModelReasoning('claude-haiku-4.5');
-    expect(r.control).toBe('thinking_budget');
-    expect(r.thinkingBudget?.max).toBe(32768);
+  it('has no model left using the classic thinking_budget control', () => {
+    // Haiku 4.5 was the only one, and it was retired 2026-07-27. Asserting the
+    // absence rather than deleting the test: `thinking_budget` is still a
+    // supported control in code, so this records that nothing exercises it and
+    // fails — prompting a real test — as soon as a model adopts it again.
+    const withBudgetControl = Object.values(modelsCatalog.models)
+      .map((m) => m.id)
+      .filter((id) => getModelReasoning(id).control === 'thinking_budget');
+    expect(withBudgetControl).toEqual([]);
   });
 
   it('marks grok-4.5 as an always-on reasoner that cannot disable thinking', () => {

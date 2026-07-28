@@ -4862,7 +4862,10 @@ mod tests {
             os: "linux".into(),
             shell: "bash".into(),
         };
-        let session = crate::agent::AgentSession::new("claude-sonnet-5", &sys_ctx, None);
+        // From the catalog, not a literal: the hardcoded-model guard forbids naming
+        // a model here, and a literal goes stale the next time one is retired.
+        let model = crate::model_catalog::fast_completion_model("anthropic");
+        let session = crate::agent::AgentSession::new(&model, &sys_ctx, None);
         let config = crate::config::CliConfig::default();
         TuiApp::new(session, config, true /* sandbox_disabled */)
     }
@@ -4970,8 +4973,8 @@ mod tests {
             show_branch: true,
         };
         assert_eq!(
-            build_terminal_title(&all, "abcdef", "claude-sonnet-5", "myrepo", Some("main")),
-            Some("agi — claude-sonnet-5 · myrepo · ⎇ main".to_string())
+            build_terminal_title(&all, "abcdef", "some-model", "myrepo", Some("main")),
+            Some("agi — some-model · myrepo · ⎇ main".to_string())
         );
         let only_id = TerminalTitleConfig {
             show_session_id: true,

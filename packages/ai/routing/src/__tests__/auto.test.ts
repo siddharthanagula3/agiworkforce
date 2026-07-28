@@ -255,7 +255,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-haiku-4.5',
+      modelKey: 'qwen-3.5-flash',
       effectiveProfile: 'economy',
     });
   });

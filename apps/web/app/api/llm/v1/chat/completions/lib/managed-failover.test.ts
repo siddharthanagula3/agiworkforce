@@ -209,3 +209,118 @@ describe('attempt view (attribution + single reservation)', () => {
     expect(processed.usedFallback).toBe(false);
   });
 });
+
+/**
+ * Route-level failover: retry the SAME model through OpenRouter before
+ * changing model at all.
+ *
+ * Model rotation answers an outage with a different model, which is why it is
+ * withheld from explicit selections. Retrying the identical model on another
+ * wire has no such cost, so it is allowed where rotation is not — including
+ * for explicit selections and empty fallback plans.
+ */
+describe('OpenRouter route failover', () => {
+  const savedKey = process.env['OPENROUTER_API_KEY'];
+
+  beforeEach(() => {
+    process.env['OPENROUTER_API_KEY'] = 'sk-or-test';
+  });
+
+  afterEach(() => {
+    if (savedKey === undefined) delete process.env['OPENROUTER_API_KEY'];
+    else process.env['OPENROUTER_API_KEY'] = savedKey;
+  });
+
+  /** A real catalog model, so it has a genuine OpenRouter failover slug. */
+  function anthropicRequest(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
+    return makeProcessed({
+      provider: 'anthropic',
+      chatRequest: {
+        model: 'claude-sonnet-5',
+        messages: [{ role: 'user', content: 'hi' }],
+      } as unknown as ProcessedRequest['chatRequest'],
+      llmRequest: {
+        model: 'claude-sonnet-5',
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 100,
+      } as unknown as ProcessedRequest['llmRequest'],
+      ...overrides,
+    });
+  }
+
+  it('retries the same model on OpenRouter instead of switching model', () => {
+    const attempt = makePlan(anthropicRequest()).next(httpError(503));
+    expect(attempt).not.toBeNull();
+    expect(attempt!.provider).toBe('openrouter');
+    // The user asked for Haiku and still gets Haiku — that is the whole point.
+    expect(attempt!.model).toBe('claude-sonnet-5');
+    expect(attempt!.processed.fallbackReason).toBe('openrouter_route_failover');
+  });
+
+  it('works for an explicit selection, which model rotation cannot serve', () => {
+    // Empty plan = explicit selection. Rotation is structurally unavailable
+    // here; a route retry is not, because the answer is unchanged.
+    const attempt = makePlan(anthropicRequest({ fallbackModels: [] })).next(httpError(503));
+    expect(attempt?.provider).toBe('openrouter');
+    expect(attempt?.model).toBe('claude-sonnet-5');
+  });
+
+  it('is attempted at most once, then falls through to model rotation', () => {
+    const plan = makePlan(anthropicRequest());
+    expect(plan.next(httpError(503))?.provider).toBe('openrouter');
+    // A second availability failure must not loop back to OpenRouter.
+    const second = plan.next(httpError(503));
+    expect(second?.provider).not.toBe('openrouter');
+    expect(second?.model).toBe('candidate-a');
+  });
+
+  it('does not fire without an OpenRouter key', () => {
+    delete process.env['OPENROUTER_API_KEY'];
+    const attempt = makePlan(anthropicRequest({ fallbackModels: [] })).next(httpError(503));
+    expect(attempt).toBeNull();
+  });
+
+  it('does not fire on a credential failure, matching rotation', () => {
+    expect(makePlan(anthropicRequest()).next(httpError(401))).toBeNull();
+  });
+
+  it('does not fire after a client abort', () => {
+    expect(makePlan(anthropicRequest(), true).next(httpError(503))).toBeNull();
+  });
+
+  it('does not fire for a model with no OpenRouter route', () => {
+    // `primary-model` is not in the catalog, so no slug exists. It must fall
+    // through to rotation rather than be sent to OpenRouter under a made-up id.
+    const attempt = makePlan(makeProcessed()).next(httpError(503));
+    expect(attempt?.provider).not.toBe('openrouter');
+  });
+
+  it('does not fire when the request carries provider-native tool payloads', () => {
+    // Anthropic's server-side tools are vendor-wire-specific and unverified
+    // through the proxy; ordinary function tools are fine because the model on
+    // the far side is identical.
+    const withNativeTools = anthropicRequest({
+      fallbackModels: [],
+      llmRequest: {
+        model: 'claude-sonnet-5',
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 100,
+        tools: [{ type: 'web_search_20260209', name: 'web_search' }],
+      } as unknown as ProcessedRequest['llmRequest'],
+    });
+    expect(makePlan(withNativeTools).next(httpError(503))).toBeNull();
+  });
+
+  it('still fires when the request carries ordinary function tools', () => {
+    const withFunctionTools = anthropicRequest({
+      fallbackModels: [],
+      llmRequest: {
+        model: 'claude-sonnet-5',
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 100,
+        tools: [{ type: 'function', function: { name: 'get_weather', parameters: {} } }],
+      } as unknown as ProcessedRequest['llmRequest'],
+    });
+    expect(makePlan(withFunctionTools).next(httpError(503))?.provider).toBe('openrouter');
+  });
+});

@@ -21,6 +21,7 @@ const liveEnabled = process.env['AGIWORKFORCE_LIVE_TEST'] === '1';
 const apiKey = process.env['ANTHROPIC_API_KEY'];
 const skip = !liveEnabled || !apiKey;
 
+// llm-guardrail-allow: paid live-network call, gated by AGIWORKFORCE_LIVE_TEST
 describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
   it('streams a tiny completion via /api/v1/providers/anthropic/stream', async () => {
     // Lazy import so the suite skip path doesn't pull in the gateway tree.
@@ -45,7 +46,7 @@ describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
       .set('authorization', 'Bearer live-test')
       .set('x-requested-with', 'live-test')
       .send({
-        model: 'claude-haiku-4.5',
+        model: 'claude-sonnet-5',
         messages: [{ role: 'user', content: 'Say "ok" and nothing else.' }],
         maxOutputTokens: 32,
       })
@@ -90,6 +91,9 @@ describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
   }, 60_000);
 });
 
+// llm-guardrail-allow: the inverse marker that reports WHY the live suite was
+// skipped, so a silent skip is never mistaken for a pass
 describe.skipIf(!skip)('provider stream route — anthropic e2e (skipped)', () => {
+  // llm-guardrail-allow: placeholder that names the two env vars to set
   it.skip('set AGIWORKFORCE_LIVE_TEST=1 + ANTHROPIC_API_KEY to run', () => {});
 });

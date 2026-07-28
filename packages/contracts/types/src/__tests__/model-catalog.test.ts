@@ -143,29 +143,29 @@ describe('model catalog helpers', () => {
 
     expect(basicModels.map((model) => model.id)).toContain('gpt-5.6-luna');
     expect(basicModels.map((model) => model.id)).not.toContain('gpt-5.6-terra');
-    expect(basicModels.map((model) => model.id)).toContain('claude-haiku-4.5');
+    expect(basicModels.map((model) => model.id)).toContain('gemini-3.5-flash-lite');
     expect(basicModels.map((model) => model.id)).not.toContain('deepseek-v4-flash');
     expect(basicModels.map((model) => model.id)).not.toContain('qwen-3.7-plus');
     expect(basicModels.map((model) => model.id)).not.toContain('qwen-3.5-flash');
     expect(basicModels.map((model) => model.id)).not.toContain('glm-5.2');
     expect(basicModels.map((model) => model.id)).not.toContain('sonar');
-    expect(proModels.map((model) => model.id)).toContain('claude-haiku-4.5');
+    expect(proModels.map((model) => model.id)).toContain('gemini-3.5-flash-lite');
     expect(getAllowedModelsForTier('pro_additions')).toEqual(
       expect.arrayContaining(['deepseek-v4-flash', 'qwen-3.7-plus', 'qwen-3.5-flash', 'glm-5.2']),
     );
     expect(maxPlusModels).toEqual(maxModels);
     expect(
       getModelsForTierAndSurface('basic', 'desktop/cloud-chat').map((model) => model.id),
-    ).toEqual(expect.arrayContaining(['gpt-5.6-luna', 'claude-haiku-4.5']));
+    ).toEqual(expect.arrayContaining(['gpt-5.6-luna', 'gemini-3.5-flash-lite']));
     expect(getModelsForTierAndSurface('basic', 'not-a-runtime-profile')).toEqual([]);
   });
 
   it('keeps Basic on the economy roster while preserving higher-tier inheritance', () => {
     expect(canAccessModelForSubscriptionTier('gpt-5.6-luna', 'basic')).toBe(true);
     expect(canAccessModelForSubscriptionTier('gpt-5.6-terra', 'basic')).toBe(false);
-    expect(canAccessModelForSubscriptionTier('claude-haiku-4.5', 'basic')).toBe(true);
+    expect(canAccessModelForSubscriptionTier('gemini-3.5-flash-lite', 'basic')).toBe(true);
     expect(canAccessModelForSubscriptionTier('deepseek-v4-flash', 'basic')).toBe(false);
-    expect(canAccessModelForSubscriptionTier('claude-haiku-4.5', 'pro')).toBe(true);
+    expect(canAccessModelForSubscriptionTier('gemini-3.5-flash-lite', 'pro')).toBe(true);
     expect(canAccessModelForSubscriptionTier('claude-opus-5', 'max_plus')).toBe(true);
   });
 
@@ -276,10 +276,10 @@ describe('model catalog helpers', () => {
     expect(getModelMetadataById(getModelVariantPartner('deepseek-v4-flash'))).not.toBeNull();
     expect(getModelMetadataById(getModelVariantPartner('claude-sonnet-5'))).not.toBeNull();
     expect(getProviderProbeModel('openai')).toBe('gpt-5.6-luna');
-    expect(getProviderProbeModel('anthropic')).toBe('claude-haiku-4.5');
+    expect(getProviderProbeModel('anthropic')).toBe('claude-sonnet-5');
 
     const fallbackIds = getEconomyFallbackModels().map((entry) => entry.model);
-    expect(fallbackIds.indexOf('claude-haiku-4.5')).toBeGreaterThanOrEqual(0);
+    expect(fallbackIds.indexOf('gemini-3.5-flash-lite')).toBeGreaterThanOrEqual(0);
     expect(fallbackIds).toContain('gpt-5.6-luna');
     expect(fallbackIds).not.toContain('gpt-5.6-terra');
 
@@ -466,7 +466,7 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
     it('reasoning → economy reasoning slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
-      expect(result).toBe('claude-haiku-4.5');
+      expect(result).toBe('qwen-3.5-flash');
     });
     it('multimodal → workhorse_general (Flash-Lite handles vision)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'multimodal');
@@ -481,7 +481,7 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
     it('reasoning → uses the allowed economy reasoning slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
-      expect(result).toBe('claude-haiku-4.5');
+      expect(result).toBe('qwen-3.5-flash');
     });
     it('image_generation → falls back to workhorse_general (no media on free)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'image_generation');
@@ -543,7 +543,7 @@ describe('resolveAutoModeModel — task-aware routing', () => {
 
     it('Free tier reasoning with usOnly=true is ignored (toggle not available)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning', { usOnly: true });
-      expect(result).toBe('claude-haiku-4.5');
+      expect(result).toBe('qwen-3.5-flash');
     });
 
     it('Max balanced coding with usOnly=true stays on the balanced Anthropic slot', () => {
@@ -764,7 +764,7 @@ describe('model env-gating (requiresEnvironment)', () => {
     // Anthropic's server-managed web_search tool — making that code path
     // permanently dead for every Claude model. Assert the fix stays in place.
     it('every current-generation Anthropic model advertises search support', () => {
-      for (const modelId of ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4.5']) {
+      for (const modelId of ['claude-opus-5', 'claude-sonnet-5', 'claude-fable-5']) {
         const metadata = getModelMetadataById(modelId);
         expect(metadata, `missing catalog entry for ${modelId}`).not.toBeNull();
         expect(metadata!.capabilities.search, `${modelId} capabilities.search`).toBe(true);

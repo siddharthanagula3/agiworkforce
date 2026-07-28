@@ -17,7 +17,7 @@ describe('extractProvider', () => {
   it('identifies Anthropic models by claude- prefix', () => {
     expect(extractProvider('claude-opus-5')).toBe('anthropic');
     expect(extractProvider('claude-sonnet-4.6')).toBe('anthropic');
-    expect(extractProvider('claude-haiku-4.5')).toBe('anthropic');
+    expect(extractProvider('claude-sonnet-5')).toBe('anthropic');
   });
 
   it('identifies OpenAI models by gpt- prefix', () => {

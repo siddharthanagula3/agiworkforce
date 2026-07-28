@@ -1716,11 +1716,11 @@ base_url = "http://localhost:11434"
     fn test_set_get_fast_model() {
         let mut config = CliConfig::default();
         config
-            .set_value("fast-model", "claude-haiku-4-5-20251001")
+            .set_value("fast-model", "claude-sonnet-5")
             .unwrap();
         assert_eq!(
             config.get_value("fast-model"),
-            Some("claude-haiku-4-5-20251001".to_string())
+            Some("claude-sonnet-5".to_string())
         );
     }
 

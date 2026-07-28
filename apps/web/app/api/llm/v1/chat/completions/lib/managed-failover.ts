@@ -36,6 +36,8 @@ import 'server-only';
 import { classifyError } from '@agiworkforce/provider-runtime';
 import { canAccessModel } from '@/lib/model-tiers';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
+import { canFailoverToOpenRouter } from '@/lib/services/aggregator-routing';
+import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
 import { logger } from '@/lib/logger';
 import type { ProcessedRequest } from './request-processor';
 import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
@@ -172,10 +174,68 @@ export function createFailoverPlan(
     return null;
   };
 
+  /**
+   * Retry the SAME model through OpenRouter, once, before changing model.
+   *
+   * Rotation answers an outage by switching to a different model, which is a
+   * worse answer than the user asked for and is why explicit selections are
+   * rotation-free. OpenRouter resells the same models, so an Anthropic 503 can
+   * be retried as the identical model on another wire — the user's choice is
+   * preserved, and there is nothing to disclose because nothing changed except
+   * the path.
+   *
+   * That difference is why this is allowed where rotation is not: it runs for
+   * explicit selections and for requests with an empty fallback plan.
+   *
+   * Skipped when the request carries provider-native tool payloads
+   * (`rawVendorTools` — Anthropic's `web_search_20260209`, Google's
+   * `google_search`). Those are vendor-wire-specific and are not verified to
+   * survive the proxy; ordinary function tools transfer fine because the model
+   * on the far side is the same one. Attempted at most once per request, so a
+   * persistent OpenRouter fault cannot turn one outage into a retry storm.
+   */
+  let routeRetryUsed = false;
+  const routeRetryAttempt = (): FailoverAttempt | null => {
+    if (routeRetryUsed) return null;
+    const apiModelId = toProviderApiModelId(processed.llmRequest.model);
+    if (!canFailoverToOpenRouter(processed.provider, apiModelId)) return null;
+    if (!options.isProviderDispatchable('openrouter')) return null;
+    const hasVendorNativeTools = (processed.llmRequest.tools ?? []).some(
+      (tool) => !(tool && typeof tool === 'object' && 'function' in tool),
+    );
+    if (hasVendorNativeTools) return null;
+    routeRetryUsed = true;
+    // Same model — only the provider changes, so pricing, tier admission and
+    // the response's model field all stay exactly as they were.
+    return {
+      model: processed.llmRequest.model,
+      provider: 'openrouter',
+      processed: {
+        ...buildFailoverAttemptView(processed, processed.llmRequest.model, 'openrouter'),
+        fallbackReason: 'openrouter_route_failover',
+      },
+    };
+  };
+
   return {
     next: (error: unknown): FailoverAttempt | null => {
-      if (remaining.length === 0) return null;
       if (!isFailoverEligibleError(error, options.signal)) return null;
+
+      const viaRoute = routeRetryAttempt();
+      if (viaRoute) {
+        logger.warn(
+          {
+            requestId: processed.requestId,
+            model: viaRoute.model,
+            fromProvider: processed.provider,
+            category: classifyError(error).category,
+          },
+          'Managed failover: retrying the same model via OpenRouter',
+        );
+        return viaRoute;
+      }
+
+      if (remaining.length === 0) return null;
       const attempt = nextAdmissibleCandidate();
       if (attempt) {
         logger.warn(

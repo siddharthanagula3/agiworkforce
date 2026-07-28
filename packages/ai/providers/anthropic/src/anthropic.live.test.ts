@@ -28,7 +28,7 @@ describe.skipIf(skip)('Anthropic adapter live', () => {
     const chunks: StreamChunk[] = [];
     for await (const chunk of adapter.stream(
       {
-        model: 'claude-haiku-4.5',
+        model: 'claude-sonnet-5',
         messages: [{ role: 'user', content: 'Say "ok" and nothing else.' }],
         maxOutputTokens: 32,
       },

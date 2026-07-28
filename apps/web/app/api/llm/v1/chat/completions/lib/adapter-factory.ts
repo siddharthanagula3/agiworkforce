@@ -62,8 +62,26 @@ export function buildQwenAdapter(): ProviderAdapter {
   return buildServerProviderAdapter('qwen');
 }
 
-export function buildOpenRouterAdapter(): ProviderAdapter {
-  return buildServerProviderAdapter('openrouter');
+/**
+ * Builds the OpenRouter adapter, carrying the request's prompt-cache policy.
+ *
+ * OpenRouter injects Anthropic `cache_control` on `anthropic/*` routes and
+ * defaults to `'short'` retention. A request arriving here by failover already
+ * computed its own policy for the direct Anthropic call, and dropping it would
+ * mean a request with caching disabled silently getting it back, or a
+ * long-retention request being downgraded — invisible except as a change in
+ * cost, since the request still succeeds either way.
+ *
+ * Harmless for non-Anthropic routes: the adapter only injects `cache_control`
+ * on `anthropic/*` slugs, so passing retention for a Qwen or GLM route is a
+ * no-op rather than a wrong header.
+ */
+export function buildOpenRouterAdapter(processed?: ProcessedRequest): ProviderAdapter {
+  if (!processed) return buildServerProviderAdapter('openrouter');
+  const { enableCacheControl, cacheRetention } = computeAnthropicCacheConfig(processed);
+  return buildServerProviderAdapter('openrouter', {
+    openRouterCacheRetention: enableCacheControl ? cacheRetention : 'none',
+  });
 }
 
 export function buildDeepSeekAdapter(): ProviderAdapter {

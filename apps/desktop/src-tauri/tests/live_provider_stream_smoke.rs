@@ -188,7 +188,7 @@ async fn live_provider_stream_smoke() {
         (
             Provider::Anthropic,
             "anthropic",
-            "claude-haiku-4.5",
+            "claude-sonnet-5",
             &["ANTHROPIC_API_KEY"],
         ),
         (

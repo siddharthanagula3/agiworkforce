@@ -12,7 +12,7 @@ import {
 } from '@agiworkforce/provider-protocol';
 import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
 import type { ChatRequest, Effort, ThinkingConfig } from '@agiworkforce/types';
-import { openRouterSlugFor } from '@/lib/services/aggregator-routing';
+import { openRouterFailoverSlugFor, openRouterSlugFor } from '@/lib/services/aggregator-routing';
 import type { ProcessedRequest } from './request-processor';
 
 /**
@@ -119,7 +119,10 @@ function splitTools(tools: unknown[] | undefined): {
 function wireModelId(modelId: string, provider: string | undefined): string {
   const apiModelId = toProviderApiModelId(modelId);
   if (provider !== 'openrouter' && provider !== 'open_router') return apiModelId;
-  return openRouterSlugFor(apiModelId) ?? apiModelId;
+  // Two ways to be on OpenRouter: routed there permanently, or failed over
+  // there from a direct provider that was unavailable. The slug is needed
+  // either way, and the maps are separate because the reasons are.
+  return openRouterSlugFor(apiModelId) ?? openRouterFailoverSlugFor(apiModelId) ?? apiModelId;
 }
 
 export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest {

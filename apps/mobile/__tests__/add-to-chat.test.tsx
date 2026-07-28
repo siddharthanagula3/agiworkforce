@@ -142,7 +142,7 @@ import { useTierStore } from '../src/features/billing/store';
 // ---------------------------------------------------------------------------
 
 // Representative Cloud-capable default used by the capability-gated rows.
-const SEARCH_CAPABLE_MODEL_ID = 'claude-haiku-4.5';
+const SEARCH_CAPABLE_MODEL_ID = 'claude-sonnet-5';
 
 function resetStores() {
   useChatStore.setState({

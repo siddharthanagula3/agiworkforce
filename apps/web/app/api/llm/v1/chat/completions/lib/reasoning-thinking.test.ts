@@ -10,7 +10,12 @@ import {
  * path is driven by per-model `reasoning.control`, NOT just capabilities.thinking.
  *   - Opus 5 / Sonnet 5 (effort_levels) → adaptive thinking; classic
  *     enabled+budget is not a valid request shape.
- *   - Haiku 4.5 (thinking_budget) → classic enabled+budget (NOT adaptive).
+ *   - The classic `thinking_budget` path (enabled+budget, NOT adaptive) has no
+ *     test here because it has no model. Haiku 4.5 was its only Anthropic
+ *     holder and was retired 2026-07-27; every remaining Anthropic model uses
+ *     `effort_levels`. The branch is kept in the code for a future model that
+ *     controls thinking by budget, but asserting it now would mean inventing
+ *     a model the catalog does not have.
  * See docs/research/reasoning-effort-capability-matrix-2026-07-10.md flags 2 & 3.
  */
 describe('anthropicUsesAdaptiveThinking (control-driven)', () => {
@@ -20,11 +25,6 @@ describe('anthropicUsesAdaptiveThinking (control-driven)', () => {
 
   it('returns adaptive for Sonnet 5', () => {
     expect(anthropicUsesAdaptiveThinking('claude-sonnet-5')).toBe(true);
-  });
-
-  it('returns CLASSIC (not adaptive) for Haiku 4.5 (thinking_budget control)', () => {
-    expect(anthropicUsesAdaptiveThinking('claude-haiku-4.5')).toBe(false);
-    expect(anthropicUsesAdaptiveThinking('claude-haiku-4-5')).toBe(false);
   });
 });
 
@@ -77,20 +77,6 @@ describe('buildThinkingConfig (Anthropic)', () => {
     expect(cfg).toEqual({ type: 'disabled' });
   });
 
-  it('sends classic enabled+budget for Haiku 4.5, clamped to its model max (32768)', () => {
-    const cfg = buildThinkingConfig({
-      provider: 'anthropic',
-      model: 'claude-haiku-4.5',
-      explicitThinking: undefined,
-      thinkingMode: true,
-      // 'max' preset is 65536 — must be clamped to Haiku's 32768 max.
-      effort: 'max',
-    });
-    expect(cfg?.type).toBe('enabled');
-    expect(cfg?.budget_tokens).toBeLessThanOrEqual(32768);
-    expect(cfg?.budget_tokens).toBeGreaterThan(0);
-  });
-
   it('rewrites an explicit classic thinking block to adaptive for Opus 5', () => {
     const cfg = buildThinkingConfig({
       provider: 'anthropic',
@@ -126,10 +112,6 @@ describe('resolveRequestEffort (catalog-driven)', () => {
 
   it('does not attach reasoning effort to a catalog non-reasoning model', () => {
     expect(resolveRequestEffort('openai', 'gpt-image-2', 'high')).toBeUndefined();
-  });
-
-  it('does not attach effort to Haiku 4.5 manual extended thinking', () => {
-    expect(resolveRequestEffort('anthropic', 'claude-haiku-4.5', 'low')).toBeUndefined();
   });
 
   it('preserves provider-supported none and minimal effort values', () => {

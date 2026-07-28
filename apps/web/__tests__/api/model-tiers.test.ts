@@ -27,7 +27,10 @@ describe('shared subscription model gate', () => {
 
     expect(canAccessModel('gpt-5.6-luna', 'basic')).toBe(true);
     expect(canAccessModel('gpt-5.6-terra', 'basic')).toBe(false);
-    expect(canAccessModel('claude-haiku-4.5', 'basic')).toBe(true);
+    // Was Haiku 4.5 (economy) until it was retired; this line exists to show
+    // an economy model IS open to Basic, so it needs an economy model.
+    expect(canAccessModel('gemini-3.5-flash-lite', 'basic')).toBe(true);
+    expect(canAccessModel('claude-sonnet-5', 'basic')).toBe(false);
     expect(canAccessModel('deepseek-v4-flash', 'basic')).toBe(false);
   });
 

@@ -207,7 +207,7 @@
       "aliases": [],
       "defaultModel": "claude-sonnet-5",
       "taskRouting": {
-        "fast_completion": "claude-haiku-4.5",
+        "fast_completion": "claude-sonnet-5",
         "code_generation": "claude-sonnet-5",
         "complex_reasoning": "claude-fable-5",
         "chat": "claude-sonnet-5",
@@ -1069,69 +1069,6 @@
       },
       "speedOverride": "fast",
       "releasedOverride": "June 30, 2026"
-    },
-    "claude-haiku-4.5": {
-      "id": "claude-haiku-4.5",
-      "apiModelId": "claude-haiku-4-5",
-      "name": "Claude 4.5 Haiku",
-      "provider": "anthropic",
-      "modelType": "chat",
-      "maxInputTokens": 200000,
-      "maxOutputTokens": 64000,
-      "knowledgeCutoff": "2025-02",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": [
-        "Agentic Tasks",
-        "Quick Tasks",
-        "Simple Queries",
-        "High Volume",
-        "Cost-Sensitive"
-      ],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "thinking_budget",
-        "canDisableThinking": true,
-        "thinkingBudget": {
-          "min": 1024,
-          "max": 32768,
-          "default": 8192
-        },
-        "request": {
-          "api": "messages",
-          "effortPath": null,
-          "togglePath": "thinking.type",
-          "budgetPath": "thinking.budget_tokens"
-        }
-      },
-      "tierPolicy": {
-        "minTier": "free"
-      },
-      "costOverride": {
-        "inputCost": 1,
-        "outputCost": 5,
-        "cached_input": 0.1,
-        "cached_write": 1.25,
-        "cached_write_1h": 2
-      },
-      "contextOverride": 200000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "releasedOverride": "October 15, 2025"
     },
     "gemini-embedding-2": {
       "id": "gemini-embedding-2",
@@ -2001,13 +1938,7 @@
     }
   },
   "tierAllowedModels": {
-    "economy": [
-      "gpt-5.4-mini",
-      "gpt-5.6-luna",
-      "gemini-3.5-flash-lite",
-      "gemini-3.6-flash",
-      "claude-haiku-4.5"
-    ],
+    "economy": ["gpt-5.4-mini", "gpt-5.6-luna", "gemini-3.5-flash-lite", "gemini-3.6-flash"],
     "pro_additions": [
       "gpt-5.6-terra",
       "claude-sonnet-5",

@@ -251,7 +251,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_1',
       'Ping',
-      'claude-haiku-4-5-20251001',
+      'claude-sonnet-5',
       (chunk) => chunks.push(chunk),
       onDone,
       onError,
@@ -274,7 +274,7 @@ describe('cloudApi', () => {
           'X-AGI-Surface': 'desktop',
         }),
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: 'claude-sonnet-5',
           messages: [{ role: 'user', content: 'Ping' }],
           conversation_id: 'conv_1',
           stream: true,

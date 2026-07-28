@@ -187,7 +187,7 @@
       "aliases": [],
       "defaultModel": "claude-sonnet-5",
       "taskRouting": {
-        "fast_completion": "claude-haiku-4.5",
+        "fast_completion": "claude-sonnet-5",
         "code_generation": "claude-sonnet-5",
         "complex_reasoning": "claude-fable-5",
         "chat": "claude-sonnet-5",
@@ -895,63 +895,6 @@
         }
       },
       "tierPolicy": { "minTier": "pro" }
-    },
-    "claude-haiku-4.5": {
-      "id": "claude-haiku-4.5",
-      "apiModelId": "claude-haiku-4-5",
-      "name": "Claude 4.5 Haiku",
-      "provider": "anthropic",
-      "modelType": "chat",
-      "contextWindow": 200000,
-      "inputCost": 1,
-      "outputCost": 5,
-      "cached_input": 0.1,
-      "cached_write": 1.25,
-      "cached_write_1h": 2,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "benchmarks": { "swebench": 45, "humaneval": 88, "mmlu": 85, "gpqa": 55, "aime": 40 },
-      "speed": "very-fast",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": [
-        "Agentic Tasks",
-        "Quick Tasks",
-        "Simple Queries",
-        "High Volume",
-        "Cost-Sensitive"
-      ],
-      "released": "October 15, 2025",
-      "deprecation_date": null,
-      "maxInputTokens": 200000,
-      "maxOutputTokens": 64000,
-      "knowledgeCutoff": "2025-02",
-      "reasoning": {
-        "capable": true,
-        "control": "thinking_budget",
-        "canDisableThinking": true,
-        "thinkingBudget": { "min": 1024, "max": 32768, "default": 8192 },
-        "request": {
-          "api": "messages",
-          "effortPath": null,
-          "togglePath": "thinking.type",
-          "budgetPath": "thinking.budget_tokens"
-        }
-      },
-      "tierPolicy": { "minTier": "free" }
     },
     "gemini-embedding-2": {
       "id": "gemini-embedding-2",
@@ -1997,13 +1940,7 @@
     }
   },
   "tierAllowedModels": {
-    "economy": [
-      "gpt-5.4-mini",
-      "gpt-5.6-luna",
-      "gemini-3.5-flash-lite",
-      "gemini-3.6-flash",
-      "claude-haiku-4.5"
-    ],
+    "economy": ["gpt-5.4-mini", "gpt-5.6-luna", "gemini-3.5-flash-lite", "gemini-3.6-flash"],
     "pro_additions": [
       "gpt-5.6-terra",
       "claude-sonnet-5",
