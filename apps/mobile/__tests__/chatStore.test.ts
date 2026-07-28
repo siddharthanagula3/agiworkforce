@@ -755,18 +755,40 @@ describe('chatStore — streaming state', () => {
       expect(assistantMsg?.reasoning).toBe('Let me consider this.');
     });
 
-    it('combines tag-extracted reasoning with a structured delta.reasoning channel without duplication', async () => {
+    it('leaves reasoning undefined when the turn never emitted thinking (no "Thought for 0s")', async () => {
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'Plain answer.' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'question', MODEL);
+      });
+
+      const msgs = getState().messages[CONV_ID] ?? [];
+      const assistantMsg = msgs.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.content).toBe('Plain answer.');
+      expect(assistantMsg?.reasoning).toBeUndefined();
+    });
+
+    it('extracts tag reasoning split across chunk boundaries without duplication', async () => {
       // Regression: parseLocalThinking re-parses the FULL raw content buffer on
       // every delta (required to handle a tag straddling two chunks). Naively
-      // accumulating its output onto the previous combined reasoning value across
-      // deltas would duplicate the reasoning text on every subsequent chunk.
+      // accumulating its output onto the previous reasoning value across deltas
+      // would duplicate the reasoning text on every subsequent chunk.
       mockStreamChat.mockImplementation(
         (_body, callbacks) =>
           new Promise<void>((resolve) => {
             setTimeout(() => {
               callbacks.onDelta({ content: '<thinking>Step one.' });
               callbacks.onDelta({ content: ' Step two.</thinking>' });
-              callbacks.onDelta({ content: 'Final answer.', reasoning: 'structured note' });
+              callbacks.onDelta({ content: 'Final answer.' });
               callbacks.onDone();
               resolve();
             }, 0);
@@ -780,10 +802,8 @@ describe('chatStore — streaming state', () => {
       const msgs = getState().messages[CONV_ID] ?? [];
       const assistantMsg = msgs.find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('Final answer.');
-      // Each source's text must appear exactly once — no duplication from re-parsing.
       const reasoning = assistantMsg?.reasoning ?? '';
       expect(reasoning.match(/Step one\. Step two\./g)?.length).toBe(1);
-      expect(reasoning.match(/structured note/g)?.length).toBe(1);
     });
   });
 

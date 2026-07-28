@@ -165,11 +165,14 @@ export const MessageBubble = memo(function MessageBubble({
   const assistantProvenance = isAssistant ? getProvenance(message.model) : null;
   const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
   const roleLabel = isUser ? 'You' : (assistantProvenance?.model ?? 'AGI');
+  // NOT gated on `canonicalActivity`, unlike steps/toolCalls below: those are
+  // genuinely re-rendered by AgentActivityTimeline, but reasoning is not --
+  // AgentActivityState has no reasoning entry kind (packages/client/
+  // client-runtime/src/agentActivity.ts drops 'reasoning-delta' outright), so
+  // suppressing the chip here hid it on every tool/research/agiwork turn with
+  // nothing taking its place.
   const hasReasoning =
-    isAssistant &&
-    !canonicalActivity &&
-    message.reasoning !== undefined &&
-    modelSupportsThinking(message.model);
+    isAssistant && message.reasoning !== undefined && modelSupportsThinking(message.model);
   // FlashList v2 recycles component instances across list items for
   // performance -- bare useState here would bleed a PRIOR message's UI state
   // (an expanded artifact, an open export sheet, a half-typed edit draft)

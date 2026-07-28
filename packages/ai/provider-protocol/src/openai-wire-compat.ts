@@ -858,6 +858,14 @@ export class OpenAIWireAssembler {
     const legacyWeb = this.wireMode === 'legacy-web';
     const openaiPassthrough = this.wireMode === 'openai-passthrough';
     const richWebSearch = legacyWeb || openaiPassthrough;
+    // Reasoning text rides the SAME inline-tag shape on every streaming wire
+    // mode the web route serves. Web (useChatStream's flushContentBuffer) and
+    // mobile (parseLocalThinking) both already split `<thinking>` out of
+    // `delta.content`; gating this on legacy-web silently discarded every
+    // openai/deepseek/xai/qwen/... reasoning token, so those turns could never
+    // render a "Thought for Ns" chip. `reasoning_content` (emitReasoning) is
+    // NOT that shape -- no client reads it -- so it stays off.
+    const inlineThinking = legacyWeb || openaiPassthrough;
 
     // Deterministic role-announcement opening chunk: real OpenAI always
     // sends `delta:{role:"assistant",content:""}` as the FIRST chunk of
@@ -883,7 +891,7 @@ export class OpenAIWireAssembler {
     // stream.ts). Runs before the chunk's own translation either way, so a
     // close tag always precedes whatever comes next, and an open tag always
     // precedes the thinking content that triggered it.
-    if (legacyWeb) {
+    if (inlineThinking) {
       const isThinking = chunk.type === 'thinking-delta';
       if (isThinking && !this.insideThinking) {
         out.push(this.chunkEnvelope({ content: '<thinking>' }, null));
@@ -954,7 +962,7 @@ export class OpenAIWireAssembler {
         out.push(this.chunkEnvelope({ content: chunk.delta }, null, chunk.logprobs ?? null));
         break;
       case 'thinking-delta':
-        if (legacyWeb) {
+        if (inlineThinking) {
           out.push(this.chunkEnvelope({ content: chunk.delta }, null));
         } else if (this.emitReasoning) {
           out.push(this.chunkEnvelope({ reasoning_content: chunk.delta }, null));

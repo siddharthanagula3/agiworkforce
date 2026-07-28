@@ -109,7 +109,6 @@ export interface StreamGeneratedFile {
 
 export interface StreamDelta {
   content?: string;
-  reasoning?: string;
   role?: string;
   finish_reason?: string | null;
   // Tool-calling wire fields (server already emits these; see tool-loop.ts /
