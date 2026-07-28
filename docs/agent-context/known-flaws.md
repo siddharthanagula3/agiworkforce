@@ -429,6 +429,31 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   the ids and added a `tts_defaults_are_not_retired_models` guard; the
   catalog-driven fix is still owed. STT is already correct — it reads the
   `voice_transcription` slot.
+- OPEN VOICE-REALTIME-FAMILY-ABSENT (2026-07-28): the catalog carries no
+  realtime audio models, so the OpenAI voice lineup we expose is REST-only
+  (speech + transcription). Blocked on three things, in order: `ModelType` in
+  `packages/contracts/types/src/model-catalog.ts` has no `realtime` member, so
+  adding one is a schema change across the TS union, the registry schema and
+  both generated Rust registries; we ship no duplex audio path (founder-gated
+  on a realtime provider plus echo cancellation); and registering them live
+  before that would advertise capability we do not have. Current heads, verified
+  2026-07-28 so they need no re-research: `gpt-realtime-2.1` ($4/$24 text,
+  $32/$64 audio, $0.40 cached, 128k ctx, 32k max out) and `gpt-realtime-2.1-mini`
+  ($0.60/$2.40 text, $10/$20 audio). Also live: `gpt-realtime-translate`
+  ($0.034/min) and `gpt-realtime-whisper` ($0.017/min, streaming STT — we use
+  Deepgram for that today). Shutting down 2027-01-20: gpt-realtime,
+  gpt-realtime-mini, gpt-audio, gpt-audio-mini, and every gpt-4o-audio /
+  gpt-4o-realtime variant.
+- OPEN VOICE-OPENAI-TTS-DEPRECATED-NO-SUCCESSOR (2026-07-28): `gpt-4o-mini-tts`
+  carries a Deprecated badge on OpenAI's model-catalog listing, yet it is the
+  ONLY model served on `/v1/audio/speech` — `gpt-audio-1.5` lists that endpoint
+  as "Not supported", the deprecations table names no successor, no shutdown
+  date is published, and the TTS guide still calls it the newest and most
+  reliable TTS model. Marked `deprecated: true` in the catalog (so
+  `selectable: false`) but retained, because removing it leaves the OpenAI TTS
+  path with no model. The product decision this raises: desktop cloud TTS should
+  probably prefer ElevenLabs (`eleven_flash_v2_5`, not deprecated) or local
+  Piper rather than wait for a shutdown date to appear.
 - OPEN VOICE-TRANSCRIPTION-UNMETERED (2026-07-28, confirmed in source):
   `apps/web/app/api/llm/v1/audio/transcriptions/route.ts` gates on managed
   compute and rate-limits, but never reserves or settles against the managed
