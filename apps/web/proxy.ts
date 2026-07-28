@@ -170,7 +170,52 @@ const clerkAwareProxy = clerkMiddleware((_auth, request: NextRequest) => {
   return buildCspResponse(request);
 });
 
+/**
+ * Send browsers that land on the API host back to the app host.
+ *
+ * `api.agiworkforce.com` exists only to expose the OpenAI-compatible endpoints
+ * via the host rewrites in `vercel.json` (`/v1/chat/completions`, `/v1/models`,
+ * `/health`, …). Everything else on that host fell through to the same Next
+ * app, so it happily served the marketing site and the signed-in chat UI on a
+ * hostname that was never meant to render either.
+ *
+ * That is how "Authentication required" appears while the sidebar still shows
+ * your account: the page renders, but it is not the origin the session belongs
+ * to, so every authed request fails. The UI looks signed in and the API
+ * disagrees — the confusing half-state rather than a clean redirect to login.
+ *
+ * Only the exact `api.` + app-host pair is matched. Preview deployments
+ * (`agiworkforce-<hash>.vercel.app`) and localhost must keep serving the app
+ * normally, so a looser check — "not the app host" — would take the whole
+ * preview environment down.
+ *
+ * Paths already rewritten to `/api/*` are left alone: that is the API traffic
+ * this host is for, and by the time middleware runs the rewrite has happened.
+ */
+function apiHostRedirect(request: NextRequest): NextResponse | null {
+  const host = request.headers.get('host');
+  if (!host) return null;
+  let appHost: string;
+  try {
+    appHost = new URL(process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com').host;
+  } catch {
+    return null;
+  }
+  if (host !== `api.${appHost}`) return null;
+  if (request.nextUrl.pathname.startsWith('/api/')) return null;
+  const target = new URL(
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    `https://${appHost}`,
+  );
+  // 307, not 308: a POST to a mistyped API path must not be silently cached as
+  // permanently living on the app host.
+  return NextResponse.redirect(target, 307);
+}
+
 export const proxy: NextMiddleware = (request, event) => {
+  const apiHostBounce = apiHostRedirect(request);
+  if (apiHostBounce) return apiHostBounce;
+
   if (isProtectedAppRoute(request) && !hasBrowserSessionCookie(request)) {
     return buildSignedOutRedirect(request);
   }
