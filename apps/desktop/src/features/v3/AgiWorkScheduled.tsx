@@ -1,7 +1,9 @@
-import { RefreshCw, Trash2 } from 'lucide-react';
+import { CalendarClock, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
+import { EmptyState } from '@/ui/EmptyState';
+import { CreateTaskModal } from '../scheduler/CreateTaskModal';
 import { cn } from '../../lib/utils';
 import {
   useSchedulerStore,
@@ -60,6 +62,10 @@ export function AgiWorkScheduled() {
   const toggleTask = useSchedulerStore((s) => s.toggleTask);
   const deleteTask = useSchedulerStore((s) => s.deleteTask);
   const [deleteCandidate, setDeleteCandidate] = useState<ScheduledTask | null>(null);
+  // The panel shipped with no create path at all, while every locale's empty
+  // string told the user to click a "Schedule new task" button. This is that
+  // button, wired to the scheduler modal that already existed.
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     void fetchTasks();
@@ -73,6 +79,14 @@ export function AgiWorkScheduled() {
           <h1 className="font-serif text-xl font-medium text-[var(--chat-text-primary)]">
             {t('agiWork.scheduled.title')}
           </h1>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus size={14} aria-hidden="true" />
+            {t('agiWork.scheduled.scheduleNew')}
+          </button>
         </div>
 
         {/* Task list */}
@@ -135,13 +149,20 @@ export function AgiWorkScheduled() {
             ))}
 
             {tasks.length === 0 && !isLoading && (
-              <div className="rounded-xl border border-dashed border-[var(--chat-border)] px-4 py-8 text-center text-sm text-[var(--chat-text-muted)]">
-                {t('agiWork.scheduled.empty')}
-              </div>
+              <EmptyState
+                icon={CalendarClock}
+                title={t('agiWork.scheduled.emptyTitle')}
+                description={t('agiWork.scheduled.empty')}
+                action={{
+                  label: t('agiWork.scheduled.scheduleNew'),
+                  onClick: () => setCreateOpen(true),
+                }}
+              />
             )}
           </div>
         )}
       </div>
+      <CreateTaskModal isOpen={createOpen} onClose={() => setCreateOpen(false)} />
       <ConfirmDialog
         open={deleteCandidate !== null}
         onOpenChange={(open) => {

@@ -22,7 +22,7 @@ import { useAppModeStore } from './appModeStore';
 import { desktopCloudProjects } from '../services/desktopCloudProjects';
 import { updateCloudConversation } from '../services/cloudChat';
 import { useChatStore } from './chat/chatStore';
-import { useAuthStore } from './auth';
+import { selectHasCloudAccountSession, useAuthStore } from './auth';
 
 export interface ProjectFile {
   id: string;
@@ -184,7 +184,7 @@ function isManagedCloudMode(): boolean {
 function managedProjectBoundaryKey(): string | null {
   if (!isManagedCloudMode()) return null;
   const auth = useAuthStore.getState();
-  if (!auth.isAuthenticated || !auth.accessToken || !auth.user?.id) return null;
+  if (!selectHasCloudAccountSession(auth) || !auth.user) return null;
   return `cloud:${auth.user.id}`;
 }
 

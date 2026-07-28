@@ -12,10 +12,11 @@ import { useState } from 'react';
 import { CreditCard } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/Button';
-import { useAuthStore } from '../../stores/auth';
+import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { openBillingPortal } from '../../lib/stripeCheckout';
 
 export function BillingSettings() {
+  const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
   const { subscriptionStatus, currentPeriodEnd, planDisplayName } = useAuthStore(
     useShallow((s) => ({
       subscriptionStatus: s.subscriptionStatus,
@@ -57,30 +58,42 @@ export function BillingSettings() {
         </p>
       </div>
 
-      <dl className="rounded-lg border border-border bg-card/60 divide-y divide-border">
-        <div className="flex items-center justify-between px-4 py-3">
-          <dt className="text-sm text-muted-foreground">Plan</dt>
-          <dd className="text-sm font-medium text-foreground">{planDisplayName ?? 'Free'}</dd>
-        </div>
-        <div className="flex items-center justify-between px-4 py-3">
-          <dt className="text-sm text-muted-foreground">Subscription</dt>
-          <dd className="text-sm font-medium text-foreground">
-            {hasActiveSubscription ? (subscriptionStatus ?? 'active') : 'None'}
-          </dd>
-        </div>
-        {periodEndLabel && (
-          <div className="flex items-center justify-between px-4 py-3">
-            <dt className="text-sm text-muted-foreground">Renews / ends</dt>
-            <dd className="text-sm font-medium text-foreground">{periodEndLabel}</dd>
-          </div>
-        )}
-      </dl>
+      {/* Billing lives on the Cloud account. With no Cloud session there is no
+          plan and no Stripe customer, so do not render a plan the user cannot act on. */}
+      {!hasCloudAccountSession && (
+        <p className="text-sm text-muted-foreground">
+          Connect this Desktop to AGI Cloud to see your plan and manage your subscription.
+        </p>
+      )}
 
-      {error && <p className="text-sm text-rose-400">{error}</p>}
+      {hasCloudAccountSession && (
+        <>
+          <dl className="rounded-lg border border-border bg-card/60 divide-y divide-border">
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-sm text-muted-foreground">Plan</dt>
+              <dd className="text-sm font-medium text-foreground">{planDisplayName ?? 'Free'}</dd>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <dt className="text-sm text-muted-foreground">Subscription</dt>
+              <dd className="text-sm font-medium text-foreground">
+                {hasActiveSubscription ? (subscriptionStatus ?? 'active') : 'None'}
+              </dd>
+            </div>
+            {periodEndLabel && (
+              <div className="flex items-center justify-between px-4 py-3">
+                <dt className="text-sm text-muted-foreground">Renews / ends</dt>
+                <dd className="text-sm font-medium text-foreground">{periodEndLabel}</dd>
+              </div>
+            )}
+          </dl>
 
-      <Button onClick={() => void handleManageBilling()} disabled={opening}>
-        {opening ? 'Opening…' : 'Manage billing'}
-      </Button>
+          {error && <p className="text-sm text-rose-400">{error}</p>}
+
+          <Button onClick={() => void handleManageBilling()} disabled={opening}>
+            {opening ? 'Opening…' : 'Manage billing'}
+          </Button>
+        </>
+      )}
     </div>
   );
 }

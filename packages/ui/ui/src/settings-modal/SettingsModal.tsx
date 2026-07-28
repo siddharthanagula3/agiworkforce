@@ -1545,12 +1545,12 @@ function NavButton({
       className={cn(
         'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors',
         isActive
-          ? 'bg-foreground text-background font-medium'
+          ? 'bg-accent text-accent-foreground font-medium'
           : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
       aria-current={isActive ? 'page' : undefined}
     >
-      <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'opacity-100' : 'opacity-60')} />
+      <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'opacity-90' : 'opacity-60')} />
       <span className="truncate">{label}</span>
     </button>
   );
@@ -1743,7 +1743,10 @@ export function SettingsModal({
           style={{ padding: '28px 32px 32px' }}
           id="settings-pane"
         >
-          {renderSection()}
+          {/* Bound the measure: without it the same pane renders 576px wide in
+              the Cloud shell and 720px in the Local one, and grows unbounded
+              with the window. */}
+          <div className="mx-auto w-full max-w-[672px]">{renderSection()}</div>
         </main>
       </div>
     </div>

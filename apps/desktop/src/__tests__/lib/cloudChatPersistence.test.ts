@@ -70,7 +70,13 @@ beforeEach(() => {
   toastInfo.mockClear();
   toastError.mockClear();
   useAppModeStore.setState({ mode: 'local' });
-  useAuthStore.setState({ accessToken: 'desktop-clerk-token', isAuthenticated: true });
+  // A real Cloud session carries a tenant id alongside the bearer; the email
+  // claim is empty because that is what /api/auth/device/token mints.
+  useAuthStore.setState({
+    accessToken: 'desktop-clerk-token',
+    isAuthenticated: true,
+    user: { id: 'user-desktop', email: '' },
+  });
   vi.spyOn(cloudAccountAuth, 'getValidSession').mockResolvedValue({
     access_token: 'desktop-clerk-token',
   } as never);

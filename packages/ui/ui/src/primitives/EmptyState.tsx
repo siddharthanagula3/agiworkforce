@@ -43,8 +43,11 @@ export function EmptyState({ icon: Icon, title, description, action, className }
       aria-label={title}
     >
       {Icon && (
-        <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center">
-          <Icon className="w-6 h-6 text-muted-foreground/40" />
+        // A `bg-muted` tile with a 40%-alpha muted glyph sat at ~1.2:1 on the
+        // dark canvas — the tile and icon were both effectively invisible. The
+        // accent tint is the same treatment Library/Tasks use.
+        <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+          <Icon className="w-6 h-6 text-primary" />
         </div>
       )}
       <div className="space-y-1 max-w-xs">

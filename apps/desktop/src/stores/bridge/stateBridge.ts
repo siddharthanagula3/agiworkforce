@@ -55,9 +55,12 @@ export function bridgeAuthStore(): void {
         appStateStore.setState((prev: AppState) => {
           const userId = state.user?.id ?? null;
           const email = state.user?.email ?? null;
-          const planTier = (state.account?.plan ?? 'free') as AppState['auth']['planTier'];
+          // Read the canonical top-level fields, not the deprecated `account`
+          // mirror — that mirror is only refreshed by setAccount, so setUser or
+          // setPlan alone left this bridge holding a stale plan/token.
+          const planTier = (state.plan ?? 'free') as AppState['auth']['planTier'];
           const isAuthenticated = state.isAuthenticated ?? false;
-          const accessToken = state.account?.accessToken ?? null;
+          const accessToken = state.accessToken ?? null;
 
           // Object.is short-circuit: only update if something actually changed
           if (

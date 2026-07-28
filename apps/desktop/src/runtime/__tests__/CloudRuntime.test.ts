@@ -62,13 +62,18 @@ vi.mock('../../stores/appModeStore', () => ({
   selectPrivacyMode: () => 'managed',
 }));
 
-vi.mock('../../stores/auth', () => {
+vi.mock('../../stores/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../stores/auth')>();
   const state = {
     isAuthenticated: true,
     accessToken: 'desktop-cloud-token',
-    user: { id: 'user-desktop' },
+    // Empty email claim: exactly what /api/auth/device/token mints for a
+    // browser-approved desktop device.
+    user: { id: 'user-desktop', email: '' },
   };
   return {
+    // Keep the REAL cloud-session predicate so the boundary is exercised, not mocked.
+    selectHasCloudAccountSession: actual.selectHasCloudAccountSession,
     useAuthStore: { getState: () => state },
     useUnifiedAuthStore: { getState: () => state },
   };

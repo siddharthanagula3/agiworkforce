@@ -17,9 +17,12 @@ import { selectHasCloudAccountSession, useAuthStore } from '@/stores/auth';
 export interface DesktopTasksProps {
   /** Switch the shell to a conversation. Desktop has no router to push to. */
   onOpenConversation: (conversationId: string) => void;
+  /** Start a new chat from the empty state — the shell owns conversation
+   *  creation, so it supplies the action. */
+  onStartChat?: () => void;
 }
 
-export function DesktopTasks({ onOpenConversation }: DesktopTasksProps) {
+export function DesktopTasks({ onOpenConversation, onStartChat }: DesktopTasksProps) {
   const isSignedIn = useAuthStore(selectHasCloudAccountSession);
 
   const transport = useMemo<TasksTransport>(
@@ -27,8 +30,9 @@ export function DesktopTasks({ onOpenConversation }: DesktopTasksProps) {
       client: createDesktopCloudAgentRunClient(),
       openConversation: onOpenConversation,
       notifyError: (message) => toast.error(message),
+      startWork: onStartChat,
     }),
-    [onOpenConversation],
+    [onOpenConversation, onStartChat],
   );
 
   if (!isSignedIn) {

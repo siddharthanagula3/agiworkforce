@@ -70,6 +70,7 @@ import {
   resolveDesktopCloudPickerModels,
 } from './services/desktopCloudEntitlements';
 import {
+  selectHasCloudAccountSession,
   useAuthStore,
   useAccountStore,
   useBillingStore,
@@ -270,15 +271,13 @@ const DesktopShell = () => {
     setTheme(newTheme);
   }, [theme, setTheme]);
 
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAuthLoading = useAuthStore((state) => state.isLoading);
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
-  const accessToken = useAuthStore((state) => state.accessToken);
   const authenticatedUserId = useAuthStore((state) => state.user?.id ?? null);
   const accountPlan = useAuthStore((state) => state.plan);
   const appMode = useAppModeStore((s) => s.mode);
   const isCloudMode = useAppModeStore((s) => s.mode === 'cloud');
-  const hasCloudSession = isAuthenticated && !!accessToken;
+  const hasCloudSession = useAuthStore(selectHasCloudAccountSession);
   const conversationBoundaryRef = useRef<string | null>(null);
   const [conversationBoundaryReady, setConversationBoundaryReady] = useState(false);
   const [conversationBoundaryError, setConversationBoundaryError] = useState<string | null>(null);
