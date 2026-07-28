@@ -68,6 +68,13 @@ export interface SettingsState {
   ttsProvider: TTSProvider;
   /** Voice conversation push-to-talk: mic is live only while the orb is held */
   voicePushToTalk: boolean;
+  /**
+   * Whether the voice intro + recording disclosure has been acknowledged.
+   * Persisted, so it is shown once rather than on every session. Defaults to
+   * false for existing installs too: nobody has seen the disclosure yet, and
+   * silently treating them as having consented would defeat the point.
+   */
+  voiceOnboardingSeen: boolean;
   /** Temporary chat mode: local memory learning is disabled for new turns */
   isTemporaryChat: boolean;
   /** AI capability toggles */
@@ -83,6 +90,7 @@ export interface SettingsState {
   setSelectedPresetId: (id: string | null) => void;
   setTtsProvider: (provider: TTSProvider) => void;
   setVoicePushToTalk: (enabled: boolean) => void;
+  setVoiceOnboardingSeen: (seen: boolean) => void;
   setTemporaryChat: (enabled: boolean) => void;
   setCapability: (key: keyof Capabilities, value: boolean) => void;
 }
@@ -100,6 +108,7 @@ export const useSettingsStore = create<SettingsState>()(
       selectedPresetId: null,
       ttsProvider: 'system',
       voicePushToTalk: false,
+      voiceOnboardingSeen: false,
       isTemporaryChat: false,
       capabilities: {
         webSearch: true,
@@ -122,6 +131,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSelectedPresetId: (id) => set({ selectedPresetId: id }),
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
       setVoicePushToTalk: (enabled) => set({ voicePushToTalk: enabled }),
+      setVoiceOnboardingSeen: (seen) => set({ voiceOnboardingSeen: seen }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
       setCapability: (key, value) => set({ capabilities: { ...get().capabilities, [key]: value } }),
     }),
