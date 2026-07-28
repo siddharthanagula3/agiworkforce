@@ -95,6 +95,17 @@ const nextConfig: NextConfig = {
       // Retired route aliases (restructure Wave 1): keep old URLs working
       { source: '/chats', destination: '/chat', permanent: false },
       { source: '/chat-multi', destination: '/chat', permanent: false },
+      // Moved under /chat 2026-07-27. These four are reached from the chat
+      // sidebar and belong to the chat workspace, but sat at the top level, so
+      // opening one dropped out of `/chat` and its layout — including the auth
+      // gate and the stream runtime provider. Nested, they inherit both.
+      // Kept as redirects rather than deleted: they have been linkable URLs,
+      // and `/library` is in robots.ts and the sitemap.
+      { source: '/projects', destination: '/chat/projects', permanent: false },
+      { source: '/projects/:id', destination: '/chat/projects/:id', permanent: false },
+      { source: '/library', destination: '/chat/library', permanent: false },
+      { source: '/schedules', destination: '/chat/schedules', permanent: false },
+      { source: '/customize', destination: '/chat/customize', permanent: false },
     ];
   },
 

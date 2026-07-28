@@ -16,7 +16,7 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 /**
  * GET /api/library — the user-scoped Library listing over `media_assets`
  * (generated images, code-interpreter outputs, document deliverables) that
- * powers the web `/library` page. Contract: `LibraryListResponseSchema` in
+ * powers the web `/chat/library` page. Contract: `LibraryListResponseSchema` in
  * `@agiworkforce/cloud-contracts` cloud-contracts.
  *
  * Auth: Clerk session cookie (browser) or `Authorization: Bearer <jwt>`

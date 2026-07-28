@@ -198,13 +198,13 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     // Project matches carry the project id in `sessionId` and navigate to the
     // project page, not a chat session.
     if (result.type === 'project') {
-      router.push(`/projects/${result.sessionId}`);
+      router.push(`/chat/projects/${result.sessionId}`);
       return;
     }
 
     // File matches open the Library (no per-file deep link exists yet).
     if (result.type === 'file') {
-      router.push('/library');
+      router.push('/chat/library');
       return;
     }
 

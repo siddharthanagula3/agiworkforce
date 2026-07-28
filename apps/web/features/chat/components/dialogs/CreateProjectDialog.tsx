@@ -74,7 +74,7 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
       if (onCreated) {
         onCreated(project);
       } else {
-        router.push(`/projects/${project.id}`);
+        router.push(`/chat/projects/${project.id}`);
       }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Something went wrong. Please try again.');

@@ -12,7 +12,7 @@ import { WebAppShell } from './WebAppShell';
 
 const routerState = vi.hoisted(() => ({
   push: vi.fn(),
-  pathname: '/projects',
+  pathname: '/chat/projects',
 }));
 
 vi.mock('next/navigation', () => ({
@@ -89,7 +89,7 @@ function setNarrowViewport(narrow: boolean) {
 
 beforeEach(() => {
   routerState.push = vi.fn();
-  routerState.pathname = '/projects';
+  routerState.pathname = '/chat/projects';
   mediaState.matches = false;
   mediaState.listeners.clear();
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -176,7 +176,7 @@ describe('WebAppShell responsive navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
     expect(screen.getByRole('dialog', { name: 'Navigation' })).toBeInTheDocument();
 
-    routerState.pathname = '/library';
+    routerState.pathname = '/chat/library';
     rerender(
       <WebAppShell>
         <main>content</main>

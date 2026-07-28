@@ -34,7 +34,7 @@ const recap = {
       title: 'What you handed off',
       observation: 'Writing appeared in 2 conversations.',
       nextStep: 'Choose what to keep.',
-      href: '/projects',
+      href: '/chat/projects',
     },
   ],
   sampled: false,
