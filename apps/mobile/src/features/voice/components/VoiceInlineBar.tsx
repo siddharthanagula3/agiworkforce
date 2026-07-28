@@ -60,9 +60,9 @@ function Orb({ phase }: { phase: VoiceInlinePhase }) {
       <Svg width={ORB_SIZE} height={ORB_SIZE} accessibilityRole="image" accessibilityLabel="">
         <Defs>
           <RadialGradient id="voiceInlineOrb" cx="50%" cy="35%" r="75%">
-            <Stop offset="0%" stopColor={colors.voiceConversationBgStart} stopOpacity="1" />
-            <Stop offset="55%" stopColor={colors.voiceConversationBgMid} stopOpacity="1" />
-            <Stop offset="100%" stopColor={colors.voiceConversationBgEnd} stopOpacity="1" />
+            <Stop offset="0%" stopColor={colors.voiceOrbStart} stopOpacity="1" />
+            <Stop offset="55%" stopColor={colors.voiceOrbMid} stopOpacity="1" />
+            <Stop offset="100%" stopColor={colors.voiceOrbEnd} stopOpacity="1" />
           </RadialGradient>
         </Defs>
         <Circle cx={r} cy={r} r={r} fill="url(#voiceInlineOrb)" />
