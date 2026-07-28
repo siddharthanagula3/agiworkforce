@@ -23,6 +23,12 @@ import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPi
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
 import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
+import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
+import {
+  useVoiceConversation,
+  voiceCaptureErrorMessage,
+} from '@/src/features/voice/hooks/useVoiceConversation';
+import * as TTS from '@/src/features/voice/services/tts';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { findNewAssistantResponse } from '@/src/features/voice/utils/assistantResponse';
 import { Text } from '@/components/ui/text';
@@ -81,6 +87,7 @@ export default function ChatTabScreen() {
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
+  const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
   const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
@@ -484,11 +491,15 @@ export default function ChatTabScreen() {
 
   const handleVoicePickerStart = useCallback(() => {
     setVoicePickerVisible(false);
-    setVoiceModeVisible(true);
+    setVoiceInlineVisible(true);
   }, []);
 
   const handleVoicePickerDismiss = useCallback(() => {
     setVoicePickerVisible(false);
+  }, []);
+
+  const handleExitInlineVoice = useCallback(() => {
+    setVoiceInlineVisible(false);
   }, []);
 
   // Dismissing without acknowledging must not start voice, and must not mark
@@ -528,6 +539,22 @@ export default function ChatTabScreen() {
     },
     [handleSend],
   );
+
+  // Same hook the full-screen voice screen uses. `enabled` is what starts and
+  // stops capture, so the bar's visibility IS the session lifecycle — no second
+  // copy of the STT/TTS wiring to drift from the first.
+  const { phase: inlineVoicePhase, toggleMute: inlineToggleMute } = useVoiceConversation({
+    enabled: voiceInlineVisible,
+    pttMode: false,
+    hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
+    sendMessage: handleVoiceSendMessage,
+    speak: (text, callbacks) => TTS.speak(text, { ...callbacks }),
+    stopSpeaking: () => TTS.stop(),
+    onCaptureError: (err) => {
+      setVoiceInlineVisible(false);
+      Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));
+    },
+  });
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
@@ -676,6 +703,16 @@ export default function ChatTabScreen() {
         visible={voiceIntroVisible}
         onContinue={handleVoiceIntroContinue}
         onDismiss={handleVoiceIntroDismiss}
+      />
+
+      {/* Inline voice: the thread stays visible, only the composer changes.
+          references-2 voice-03/05. The full-screen VoiceConversationScreen
+          below remains for the immersive path. */}
+      <VoiceInlineBar
+        visible={voiceInlineVisible}
+        phase={inlineVoicePhase}
+        onToggleMic={inlineToggleMute}
+        onExit={handleExitInlineVoice}
       />
 
       {/* First-run voice picker, between the intro and the live conversation */}
