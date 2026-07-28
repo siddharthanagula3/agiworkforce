@@ -68,16 +68,9 @@ const currentAnthropic = {
     context: 1_000_000,
     maxOutput: 128_000,
   },
-  'claude-haiku-4.5': {
-    providerModelId: 'claude-haiku-4-5',
-    input: 1,
-    cacheRead: 0.1,
-    cacheWrite5m: 1.25,
-    cacheWrite1h: 2,
-    output: 5,
-    context: 200_000,
-    maxOutput: 64_000,
-  },
+  // claude-haiku-4.5 was removed from the catalog on 2026-07-27 (founder
+  // decision: the Haiku family re-enters when Haiku 5 ships). Its assertions
+  // outlived it here and were failing against the shipped catalog.
 };
 
 test('publishes the GA GPT-5.6 API family with its implemented Responses search harness', () => {
@@ -202,7 +195,14 @@ test('selects the founder-approved roster and subscription bands', () => {
   assert.equal(basicRoster.has('gpt-5.4-mini'), true);
   assert.equal(basicRoster.has('gemini-3.6-flash'), true);
   assert.equal(basicRoster.has('gpt-5.6-terra'), false);
-  assert.equal(basicRoster.has('claude-haiku-4.5'), true);
+  // Economy carries no Anthropic model since Haiku 4.5 was dropped. Pinned as
+  // false rather than deleted so that re-adding one is a deliberate edit here.
+  assert.equal(basicRoster.has('claude-haiku-4.5'), false);
+  assert.equal(
+    [...basicRoster].some((modelKey) => modelKey.startsWith('claude-')),
+    false,
+    'economy has no Anthropic slot until the Haiku family returns',
+  );
   assert.equal(basicRoster.has('sonar'), false);
   assert.equal(
     compatibility.tierAllowedModels.pro_additions.includes('sonar-deep-research'),

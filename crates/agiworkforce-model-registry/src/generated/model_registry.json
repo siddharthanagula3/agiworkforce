@@ -366,35 +366,18 @@
       },
       "evidenceRefs": []
     },
-    "tts-1": {
+    "gpt-4o-mini-tts": {
       "identity": {
-        "key": "tts-1",
-        "displayName": "OpenAI TTS Standard",
+        "key": "gpt-4o-mini-tts",
+        "displayName": "GPT-4o Mini TTS",
         "provider": "openai",
-        "providerModelId": "tts-1",
+        "providerModelId": "gpt-4o-mini-tts",
         "kind": "tts"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "November 2023",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "tts-1-hd": {
-      "identity": {
-        "key": "tts-1-hd",
-        "displayName": "OpenAI TTS HD",
-        "provider": "openai",
-        "providerModelId": "tts-1-hd",
-        "kind": "tts"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "November 2023",
+        "released": "December 2025",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -514,7 +497,7 @@
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "September 2022",
+        "released": "December 2025",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -531,7 +514,7 @@
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "September 2022",
+        "released": "December 2025",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -562,8 +545,7 @@
       "gpt-5.6-luna",
       "gpt-5.4-mini",
       "gpt-image-2",
-      "tts-1",
-      "tts-1-hd",
+      "gpt-4o-mini-tts",
       "gpt-4o-transcribe",
       "gpt-4o-mini-transcribe"
     ],
@@ -776,19 +758,10 @@
       "availability": "live",
       "selectable": true
     },
-    "openai/tts-1": {
-      "modelKey": "tts-1",
+    "openai/gpt-4o-mini-tts": {
+      "modelKey": "gpt-4o-mini-tts",
       "provider": "openai",
-      "providerModelId": "tts-1",
-      "harnessId": "openai/media",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "openai/tts-1-hd": {
-      "modelKey": "tts-1-hd",
-      "provider": "openai",
-      "providerModelId": "tts-1-hd",
+      "providerModelId": "gpt-4o-mini-tts",
       "harnessId": "openai/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -1626,21 +1599,7 @@
       "functionCalling": false,
       "reasoning": false
     },
-    "tts-1": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": false,
-      "imageOutput": false,
-      "audioOutput": true,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": false,
-      "functionCalling": false,
-      "reasoning": false
-    },
-    "tts-1-hd": {
+    "gpt-4o-mini-tts": {
       "textInput": true,
       "imageInput": false,
       "audioInput": false,
@@ -1935,17 +1894,11 @@
       "outputPerMillion": 30,
       "cacheReadPerMillion": 2
     },
-    "tts-1": {
+    "gpt-4o-mini-tts": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 15,
-      "outputPerMillion": 0
-    },
-    "tts-1-hd": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 30,
-      "outputPerMillion": 0
+      "inputPerMillion": 0.6,
+      "outputPerMillion": 12
     },
     "gemini-3.6-flash": {
       "currency": "USD",
@@ -1993,14 +1946,14 @@
     "gpt-4o-transcribe": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0.006,
-      "outputPerMillion": 0
+      "inputPerMillion": 2.5,
+      "outputPerMillion": 10
     },
     "gpt-4o-mini-transcribe": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0.006,
-      "outputPerMillion": 0
+      "inputPerMillion": 1.25,
+      "outputPerMillion": 5
     },
     "minimax-m3": {
       "currency": "USD",
@@ -2066,16 +2019,15 @@
     "runway-gen-4": { "contextTokens": 4000 },
     "stable-image-core": { "contextTokens": 4000 },
     "gpt-image-2": { "contextTokens": 4000 },
-    "tts-1": { "contextTokens": 4096 },
-    "tts-1-hd": { "contextTokens": 4096 },
+    "gpt-4o-mini-tts": { "contextTokens": 2000 },
     "gemini-3.6-flash": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
     "glm-5.2": { "contextTokens": 1000000 },
     "qwen-3.7-plus": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "kimi-k3": { "contextTokens": 1048576 },
     "grok-4.5": { "contextTokens": 500000 },
     "veo-3.1": { "contextTokens": 4000 },
-    "gpt-4o-transcribe": {},
-    "gpt-4o-mini-transcribe": {},
+    "gpt-4o-transcribe": { "contextTokens": 16000 },
+    "gpt-4o-mini-transcribe": { "contextTokens": 16000 },
     "minimax-m3": { "contextTokens": 1000000 }
   },
   "benchmarks": {
@@ -2106,8 +2058,7 @@
     "runway-gen-4": {},
     "stable-image-core": {},
     "gpt-image-2": {},
-    "tts-1": {},
-    "tts-1-hd": {},
+    "gpt-4o-mini-tts": {},
     "gemini-3.6-flash": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
     "glm-5.2": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 },
     "qwen-3.7-plus": {},
@@ -2265,6 +2216,13 @@
       "verifiedBy": "reasoning-effort-capability-wave-2026-07-10",
       "status": "PASS",
       "notes": "Added additive per-model `reasoning` capability blocks (control/supportedEfforts/defaultEffort/canDisableThinking/thinkingBudget/request paths) for every served model, sourced from docs/research/reasoning-effort-capability-matrix-2026-07-10.md (live-probed 2026-07-10). Fixed claude-haiku-4.5 capabilities.thinking false->true (live 200 with thinking_tokens; control=thinking_budget classic enabled+budget, NOT adaptive). Added GPT-5.6 family (sol/terra/luna) as availability:\"coming_soon\" (LIVE 404 on our key 2026-07-10 — NOT provisioned); bare gpt-5.6 will alias to Sol at GA (no canonicalization alias added this wave — the family is non-routable while coming_soon); kept OUT of tierAllowedModels/SLOT_REGISTRY/taskRouting/defaultModel (enforced by new check:availability-invariant). 5.6 reasoning ladder none/low/medium/high/xhigh/max (max above xhigh). Ultra (multi_agent.enabled + max_concurrent_subagents, beta responses_multi_agent=v1), Pro (reasoning.mode:\"pro\"), persistent reasoning (reasoning.context), and programmatic tool calling (tool type programmatic_tool_calling + allowed_callers) are RESPONSES-API-ONLY and INERT this wave — our web chat route uses /chat/completions, so the at-GA wave must add a Responses path for those four; effort/vision/tools work on the existing chat path. Added inert tierPolicy.minTier authored data (NOT used to derive tierAllowedModels this wave — all budget models stay available for testing per founder). Gemini 3.x request path migrated to thinkingConfig.thinkingLevel (thinkingBudget kept as legacy fallback). 5.6 pricing/limits from founder screenshot corpus (Addendum D): ctx 1,050,000, max output 128K, knowledge cutoff 2026-02-16; short-context per-1M sol 5/0.5/30 (cache write 6.25), terra 2.5/0.25/15 (3.125), luna 1/0.1/6 (1.25); INERT longContext price tier sol 10/1/45, terra 5/0.5/22.5, luna 2/0.2/9 (5.6-only additive sub-block, applied by the AT-GA metering wave). reasoningDots sol 5 / terra 4 / luna 3."
+    },
+    {
+      "id": "verification/2026-07-28/22",
+      "date": "2026-07-28",
+      "verifiedBy": "voice-model-sweep-2026-07-28",
+      "status": "PASS",
+      "notes": "Voice/audio lineup swept live against developers.openai.com/api/docs/models and elevenlabs.io/docs/overview/models. REMOVED tts-1 + tts-1-hd (November 2023, superseded); the previous wave kept them because gpt-4o-mini-tts pricing was not then verifiable — it now is. ADDED gpt-4o-mini-tts ($0.60/1M input text, $12/1M output audio, 2k input cap, default snapshot gpt-4o-mini-tts-2025-12-15), which also removes a unit inconsistency: tts-1 was priced per 1M CHARACTERS in inputCost, a field every other model uses for dollars per 1M TOKENS. FIXED gpt-4o-transcribe and gpt-4o-mini-transcribe: both carried whisper-1 leftovers after that model was retired — released \"September 2022\" (whisper-1's date) and costOverride.inputCost 0.006 (whisper-1's $/minute), which published transcription at $0.006/1M tokens against real prices of $2.50/1M and $1.25/1M, understating by ~417x and ~208x. Now $2.50/$10 and $1.25/$5 with 16k context. Desktop TTS defaults fixed in the same pass: ElevenLabs eleven_monolingual_v1 was REMOVED upstream 2026-07-09 and was still the fallback for any user who never set a model, so unconfigured ElevenLabs playback was calling a nonexistent model — now eleven_flash_v2_5; OpenAI tts-1 -> gpt-4o-mini-tts. NOT DONE (follow-up): TTS has no routing slot, so apps/desktop/src-tauri/src/features/speech/tts.rs still hardcodes both defaults; a voice_tts slot would only cover OpenAI because the catalog carries no ElevenLabs provider. Also unaddressed: gpt-4o-transcribe-diarize (new upstream, not added), and managed-cloud transcription is rate-limited but never metered against the usage balance."
     }
   ],
   "policies": {

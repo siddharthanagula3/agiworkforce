@@ -53,7 +53,7 @@ describe('shouldUseOpenAIResponsesApi', () => {
   it('keeps non-chat media and audio models off the chat Responses path', () => {
     expect(shouldUseResponses('gpt-image-1')).toBe(false);
     expect(shouldUseResponses('gpt-image-2')).toBe(false);
-    expect(shouldUseResponses('tts-1')).toBe(false);
+    expect(shouldUseResponses('gpt-4o-mini-tts')).toBe(false);
     expect(shouldUseResponses('gpt-4o-transcribe')).toBe(false);
   });
 });
