@@ -30,9 +30,9 @@ function Orb({ size = ORB_SIZE }: { size?: number }) {
     <Svg width={size} height={size} accessibilityRole="image" accessibilityLabel="">
       <Defs>
         <RadialGradient id="voicePickerOrb" cx="50%" cy="35%" r="75%">
-          <Stop offset="0%" stopColor={colors.voiceConversationBgStart} stopOpacity="1" />
-          <Stop offset="55%" stopColor={colors.voiceConversationBgMid} stopOpacity="1" />
-          <Stop offset="100%" stopColor={colors.voiceConversationBgEnd} stopOpacity="1" />
+          <Stop offset="0%" stopColor={colors.voiceOrbStart} stopOpacity="1" />
+          <Stop offset="55%" stopColor={colors.voiceOrbMid} stopOpacity="1" />
+          <Stop offset="100%" stopColor={colors.voiceOrbEnd} stopOpacity="1" />
         </RadialGradient>
       </Defs>
       <Circle cx={r} cy={r} r={r} fill="url(#voicePickerOrb)" />
@@ -148,7 +148,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
             </Pressable>
           </View>
 
-          <View style={{ flex: 1, justifyContent: 'center' }}>
+          <View style={{ flex: 1, minHeight: 200, justifyContent: 'center' }}>
             <FlatList
               ref={listRef}
               data={VOICE_PRESETS}
@@ -210,10 +210,18 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
                 borderRadius: 999,
                 paddingVertical: 17,
                 alignItems: 'center',
+                flexShrink: 0,
                 opacity: pressed ? 0.85 : 1,
               })}
             >
-              <Text style={{ color: colors.surfaceBase, fontSize: 17, fontWeight: '600' }}>
+              <Text
+                style={{
+                  color: colors.surfaceBase,
+                  fontSize: 17,
+                  fontWeight: '600',
+                  textAlign: 'center',
+                }}
+              >
                 Start Voice
               </Text>
             </Pressable>
