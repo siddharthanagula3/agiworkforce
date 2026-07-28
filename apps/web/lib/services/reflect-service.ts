@@ -194,7 +194,7 @@ export function buildManagedReflectRecap(input: {
       title: 'What you handed off',
       observation: `${topTopic.label} appeared in ${topTopic.conversationCount} of ${sampledConversationCount} sampled conversations.`,
       nextStep: 'Choose which repeated parts are useful to delegate and which you want to keep.',
-      href: '/projects',
+      href: '/chat/projects',
     },
     {
       dimension: 'description' as const,

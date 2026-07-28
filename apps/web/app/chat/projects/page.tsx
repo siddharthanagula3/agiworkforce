@@ -364,7 +364,7 @@ export default function ProjectsPage() {
                 layout="grid"
                 onCreate={handleCreateProject}
                 onSelect={(project) => {
-                  router.push(`/projects/${encodeURIComponent(project.id)}`);
+                  router.push(`/chat/projects/${encodeURIComponent(project.id)}`);
                 }}
                 onEditProject={(project) => setEditProject(project)}
                 onArchiveProject={(project) => {
@@ -415,7 +415,7 @@ export default function ProjectsPage() {
                         project={project}
                         onSelect={(p) => {
                           setActiveProject(p.id);
-                          router.push(`/projects/${encodeURIComponent(p.id)}`);
+                          router.push(`/chat/projects/${encodeURIComponent(p.id)}`);
                         }}
                         onEdit={(p) => setEditProject(p)}
                         onArchive={(p) => void handleArchiveProjectServer(p, false)}

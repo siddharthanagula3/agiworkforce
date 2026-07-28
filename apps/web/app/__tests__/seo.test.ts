@@ -107,10 +107,10 @@ describe('robots', () => {
         '/chat',
         '/settings',
         '/billing',
-        '/projects',
-        '/schedules',
+        '/chat/projects',
+        '/chat/schedules',
         '/user',
-        '/customize',
+        '/chat/customize',
       ]) {
         expect(disallow, `${bot} should disallow ${path}`).toContain(path);
       }
@@ -149,10 +149,10 @@ describe('sitemap', () => {
       '/chat',
       '/settings',
       '/billing',
-      '/projects',
-      '/schedules',
+      '/chat/projects',
+      '/chat/schedules',
       '/user',
-      '/customize',
+      '/chat/customize',
     ]) {
       expect(paths.some((p) => p === disallowed || p.startsWith(`${disallowed}/`))).toBe(false);
     }

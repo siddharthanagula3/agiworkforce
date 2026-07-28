@@ -1786,7 +1786,7 @@ export default function WebChatPage() {
   /** Navigate to the project page (shows project conversations + settings). */
   const handleProjectOpen = useCallback(
     (projectId: string) => {
-      router.push(`/projects/${projectId}`);
+      router.push(`/chat/projects/${projectId}`);
     },
     [router],
   );
@@ -2426,7 +2426,7 @@ export default function WebChatPage() {
         id: 'projects',
         label: 'Projects',
         icon: FolderOpen,
-        onClick: () => router.push('/projects'),
+        onClick: () => router.push('/chat/projects'),
         isActive: false,
       },
       // Library — browse generated files without scrolling back to their
@@ -2435,14 +2435,14 @@ export default function WebChatPage() {
         id: 'library',
         label: 'Library',
         icon: LibraryBig,
-        onClick: () => router.push('/library'),
+        onClick: () => router.push('/chat/library'),
         isActive: false,
       },
       {
         id: 'schedules',
         label: 'Schedules',
         icon: CalendarClock,
-        onClick: () => router.push('/schedules'),
+        onClick: () => router.push('/chat/schedules'),
         isActive: false,
       },
       {

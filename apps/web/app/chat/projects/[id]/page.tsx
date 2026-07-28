@@ -171,7 +171,7 @@ export default function ProjectDetailPage() {
   const handleDeleteProject = useCallback(
     (id: string) => {
       removeProject(id);
-      router.push('/projects');
+      router.push('/chat/projects');
     },
     [removeProject, router],
   );
@@ -266,7 +266,7 @@ export default function ProjectDetailPage() {
           <div style={{ maxWidth: 680, margin: '0 auto' }}>
             <button
               type="button"
-              onClick={() => router.push('/projects')}
+              onClick={() => router.push('/chat/projects')}
               style={{
                 border: '1px solid var(--agi-rule-strong)',
                 background: 'transparent',
@@ -333,7 +333,7 @@ export default function ProjectDetailPage() {
             {/* Back button */}
             <button
               type="button"
-              onClick={() => router.push('/projects')}
+              onClick={() => router.push('/chat/projects')}
               aria-label="Back to projects"
               data-testid="project-detail-back"
               title="Back to projects"
