@@ -23,31 +23,10 @@
  * integration is needed later, it belongs in a separate adapter/path — not
  * silently bolted onto this one.
  *
- * Also ports the MuleRouter path quirk from the web adapter's
- * `getOpenAICompatibleChatCompletionsUrl()`: MuleRouter's OpenAI-compatible
- * routes live under `/vendors/openai/v1`, not at the configured host root.
+ * MuleRouter was removed as a gateway on 2026-07-27, and with it the
+ * `/vendors/openai/v1` path quirk this module used to apply. Qwen now reaches
+ * DashScope directly or arrives through OpenRouter, both of which are rooted
+ * at their OpenAI-compatible path already.
  */
 
 export const QWEN_DEFAULT_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
-
-const MULEROUTER_HOSTNAME = 'api.mulerouter.ai';
-const MULEROUTER_VENDOR_PATH = '/vendors/openai/v1';
-
-/**
- * Apply the MuleRouter path quirk to an already-allowlisted base URL. A
- * no-op for every other host (DashScope compatible-mode, localhost, or any
- * caller-supplied proxy already rooted at its OpenAI-compatible path).
- */
-export function applyQwenBaseUrlQuirks(url: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return url;
-  }
-  if (parsed.hostname !== MULEROUTER_HOSTNAME) {
-    return url;
-  }
-  const trimmed = url.replace(/\/+$/, '');
-  return trimmed.endsWith(MULEROUTER_VENDOR_PATH) ? trimmed : `${trimmed}${MULEROUTER_VENDOR_PATH}`;
-}
