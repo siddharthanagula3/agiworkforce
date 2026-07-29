@@ -111,6 +111,21 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     expect(mocks.query).not.toHaveBeenCalled();
   });
 
+  it('accepts dropbox as a known connector id (honest 501, not the allowlist rejection)', async () => {
+    // dropbox is in VALID_CONNECTOR_IDS but (like most providers here) isn't
+    // operator-mapped in this test's mock, so it must fail with the "not
+    // implemented for this provider" 501 — NOT the "Invalid connector ID" 400
+    // an unlisted id would get. This is the regression check for dropbox
+    // joining the allowlist alongside onedrive.
+    const response = await POST(postRequest('dropbox'));
+
+    expect(response.status).toBe(501);
+    expect(await response.json()).toMatchObject({
+      connectorId: 'dropbox',
+      error: expect.stringContaining('not implemented for this provider'),
+    });
+  });
+
   it('does not start GitHub installation while user ownership proof is unavailable', async () => {
     const response = await POST(postRequest('github'));
     const body = (await response.json()) as {

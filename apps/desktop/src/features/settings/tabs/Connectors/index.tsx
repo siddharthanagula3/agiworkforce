@@ -26,6 +26,17 @@ const LazyConnectorHealthDashboard = lazy(() =>
     default: m.ConnectorHealthDashboard,
   })),
 );
+// Google Drive/Dropbox/OneDrive file browser backed by the real native OAuth2
+// clients in src-tauri/src/integrations/cloud/{google_drive,dropbox,one_drive}.rs
+// (list/upload/download/delete/share, all through cloud.rs's cloud_* Tauri
+// commands + cloudStore.ts). This is a separate system from the MCP connector
+// gallery above (which only spawns npx-packaged MCP servers for agent tool
+// use) — it previously only rendered from the archived chat sidecar
+// (archive/features/chat/DynamicSidecar.tsx, excluded from the build), so the
+// panel and its working backend were unreachable from any nav.
+const LazyCloudStoragePanel = lazy(() =>
+  import('@/features/cloud/CloudStoragePanel').then((m) => ({ default: m.CloudStoragePanel })),
+);
 
 function Fallback({ label = 'Loading connectors...' }: { label?: string }) {
   return (
@@ -55,6 +66,11 @@ export function ConnectorsTab() {
       <div className="pt-6 border-t border-border">
         <Suspense fallback={<Fallback label="Loading MCP workspace..." />}>
           <LazyMcpWorkspace />
+        </Suspense>
+      </div>
+      <div className="pt-6 border-t border-border">
+        <Suspense fallback={<Fallback label="Loading cloud storage..." />}>
+          <LazyCloudStoragePanel />
         </Suspense>
       </div>
     </div>
