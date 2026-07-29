@@ -24,20 +24,23 @@
  *   usage        → DesktopUsageSection     (wraps existing UsageDashboard)
  *   capabilities → DesktopCapabilitiesSection (feature flags + agent mode knobs)
  *
- * Deferred: appearance/notifications/voice/models-keys are local-mode-specific and not shown
- * in the cloud modal nav (they stay in SettingsPanel for local users). The activeKeys prop
- * trims the shared nav accordingly.
+ * Web account sections that remain server-rendered (Security, Notifications,
+ * Reflect, Time and focus, and Plugins) open in a content-protected, Desktop-
+ * owned child window. Device-only appearance, voice, and model-key settings
+ * remain in Local settings and are never blended into the Cloud boundary.
  */
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SettingsModal } from '@agiworkforce/ui';
+import { SETTINGS_NAV_GROUPS_WEB, SettingsModal } from '@agiworkforce/ui';
 import { toast } from 'sonner';
 import type {
   SettingsDataAdapter,
   SettingsSkill,
   SettingsConnector,
   ConnectedConnector,
+  SettingsNavGroupResolved,
 } from '@agiworkforce/ui';
+import { Brain } from 'lucide-react';
 
 import { CONNECTORS } from '../connectors/connectorDefinitions';
 import {
@@ -49,6 +52,7 @@ import {
   type CloudConnectorEntry,
 } from '../../api/cloudConnectors';
 import { completeDesktopCloudConnectorInstall } from '../../services/desktopCloudConnectorInstall';
+import { openDesktopCloudAccountWindow } from '../../services/desktopCloudAccountWindow';
 import { listCloudSkills } from '../../api/cloudSkills';
 import {
   createDefaultWindowPreferences,
@@ -83,6 +87,55 @@ import {
 } from '@agiworkforce/types';
 
 type CustomConnectorInput = Parameters<NonNullable<SettingsDataAdapter['addCustomConnector']>>[0];
+
+const SETTINGS_FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+const CONNECTOR_FALLBACK_THEME = 'from-primary/20 to-primary/5 text-primary';
+const CLOUD_SETTINGS_SECTIONS = new Set([
+  'general',
+  'account',
+  'team',
+  'privacy',
+  'billing',
+  'usage',
+  'capabilities',
+  'security',
+  'notifications',
+  'reflect',
+  'time-focus',
+  'connectors',
+  'skills',
+  'plugins',
+  'memory',
+]);
+
+function resolveCloudSettingsSection(tab: SettingsTab): string {
+  if (CLOUD_SETTINGS_SECTIONS.has(tab)) return tab;
+  const mapped = (LEGACY_TAB_MAP[tab] ?? tab) as string;
+  if (mapped === 'models-keys') return 'capabilities';
+  return CLOUD_SETTINGS_SECTIONS.has(mapped) ? mapped : 'general';
+}
+
+function formatUsageReset(value: string | null): string {
+  if (!value) return 'No active reset window';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Reset time unavailable';
+  return `Resets ${new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)}`;
+}
+
+const DESKTOP_CLOUD_SETTINGS_NAV: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
+  (group) => ({
+    ...group,
+    items: group.items.flatMap((item) =>
+      item.key === 'capabilities'
+        ? [item, { key: 'memory' as const, label: 'Memory', icon: Brain }]
+        : [item],
+    ),
+  }),
+);
 
 // ── Tab components (existing, fully wired) ────────────────────────────────────
 
@@ -135,19 +188,24 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
           Upgrades show the exact prorated amount before charging. Downgrades, cancellation, and
           payment methods are managed through Stripe’s secure portal.
         </p>
-        {portalError ? <p className="mt-3 text-xs text-red-500">{portalError}</p> : null}
+        {portalError ? (
+          <p role="alert" className="mt-3 text-xs text-destructive">
+            {portalError}
+          </p>
+        ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90"
+            className={`rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90 ${SETTINGS_FOCUS_RING}`}
             onClick={onOpenPlans}
           >
             Compare or upgrade
           </button>
           <button
             type="button"
-            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            className={`rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted ${SETTINGS_FOCUS_RING}`}
             disabled={portalLoading}
+            aria-busy={portalLoading || undefined}
             onClick={() => {
               setPortalError(null);
               setPortalLoading(true);
@@ -182,21 +240,30 @@ function UsageMeter({
   value: number;
   resetAt: string | null;
 }) {
+  const normalizedValue = Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0;
+
   return (
     <div className="rounded-lg border border-border bg-card/40 p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-sm tabular-nums text-muted-foreground">{Math.round(value)}% used</p>
+        <p className="text-sm tabular-nums text-muted-foreground">
+          {Math.round(normalizedValue)}% used
+        </p>
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+      <div
+        className="mt-3 h-2 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label={`${label} usage`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(normalizedValue)}
+      >
         <div
-          className="h-full rounded-full bg-primary transition-[width]"
-          style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+          className="h-full rounded-full bg-primary motion-safe:transition-[width]"
+          style={{ width: `${normalizedValue}%` }}
         />
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {resetAt ? `Resets ${new Date(resetAt).toLocaleString()}` : 'No active reset window'}
-      </p>
+      <p className="mt-2 text-xs text-muted-foreground">{formatUsageReset(resetAt)}</p>
     </div>
   );
 }
@@ -242,13 +309,21 @@ function DesktopUsageSection() {
           server-side.
         </p>
       </div>
-      {loading ? <div className="h-32 animate-pulse rounded-lg bg-muted/40" /> : null}
+      {loading ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="h-32 rounded-lg bg-muted/40 motion-safe:animate-pulse"
+        >
+          <span className="sr-only">Loading Cloud usage…</span>
+        </div>
+      ) : null}
       {error ? (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
-          <p className="text-sm text-red-500">{error}</p>
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <p className="text-sm text-destructive">{error}</p>
           <button
             type="button"
-            className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+            className={`mt-3 text-xs font-medium text-foreground underline underline-offset-2 ${SETTINGS_FOCUS_RING}`}
             onClick={() => void refresh()}
           >
             Try again
@@ -289,7 +364,7 @@ function DesktopUsageSection() {
 function formatPlanLimit(limit: BillingPlanLimit | undefined): string {
   if (limit === 'unlimited') return 'Unlimited';
   if (limit === 'custom') return 'Custom';
-  return typeof limit === 'number' ? limit.toLocaleString() : 'Unavailable';
+  return typeof limit === 'number' ? new Intl.NumberFormat().format(limit) : 'Unavailable';
 }
 
 /** Managed capability status. Native Local agent controls stay in Local settings. */
@@ -385,7 +460,7 @@ function DesktopCapabilitiesSection() {
             <span
               className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${
                 capability.status === 'Available'
-                  ? 'bg-emerald-500/10 text-emerald-500'
+                  ? 'bg-primary/10 text-primary'
                   : 'bg-muted text-muted-foreground'
               }`}
             >
@@ -427,16 +502,38 @@ function DesktopTeamSection() {
   const plan = useAuthStore(selectPlan);
   const canManageTeam = canUseBillingPlanCapability(plan, 'team_admin');
   const isEnterprise = canUseBillingPlanCapability(plan, 'enterprise_controls');
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const openTeamSettings = () => openExternalUrl(new URL('/settings/team', WEB_APP_URL).toString());
+  const openTeamSettings = () =>
+    openDesktopCloudAccountWindow('/settings/team', 'AGI Cloud team settings');
   const openSales = () => openExternalUrl(new URL('/contact-sales', WEB_APP_URL).toString());
+  const handleOpenTeamAction = async () => {
+    if (opening || plan === null) return;
+    setOpening(true);
+    setError(null);
+    try {
+      await (canManageTeam ? openTeamSettings() : openSales());
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : canManageTeam
+            ? 'Could not open team settings.'
+            : 'Could not open contact sales.',
+      );
+    } finally {
+      setOpening(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-base font-semibold text-foreground">Team &amp; enterprise</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Workspace membership and organization administration are managed in AGI Web.
+          Manage workspace membership and organization administration in an owned AGI Desktop
+          window.
         </p>
       </div>
 
@@ -447,16 +544,22 @@ function DesktopTeamSection() {
         </p>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {canManageTeam
-            ? 'Open AGI Web to create or update the workspace and manage owner, admin, and member roles.'
+            ? 'Open the protected Cloud team controls to manage owner, admin, and member roles.'
             : 'Team administration requires a provisioned Team or Enterprise account.'}
         </p>
+        {error ? (
+          <p role="alert" className="mt-3 text-xs text-destructive">
+            {error}
+          </p>
+        ) : null}
         <button
           type="button"
-          className="mt-4 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90"
-          onClick={() => void (canManageTeam ? openTeamSettings() : openSales())}
-          disabled={plan === null}
+          className={`mt-4 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90 disabled:opacity-50 ${SETTINGS_FOCUS_RING}`}
+          onClick={() => void handleOpenTeamAction()}
+          disabled={plan === null || opening}
+          aria-busy={opening || undefined}
         >
-          {canManageTeam ? 'Manage team on Web' : 'Contact sales'}
+          {opening ? 'Opening…' : canManageTeam ? 'Manage team' : 'Contact sales'}
         </button>
       </div>
 
@@ -473,33 +576,77 @@ function DesktopTeamSection() {
   );
 }
 
+function DesktopCloudAccountSection({
+  title,
+  description,
+  path,
+  action,
+}: {
+  title: string;
+  description: string;
+  path: string;
+  action: string;
+}) {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+      <div className="rounded-lg border border-border bg-card/40 p-5">
+        <p className="text-sm text-foreground">
+          This account surface opens in a content-protected child window owned by AGI Desktop.
+        </p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          It uses the Cloud account boundary and never receives Local chats, files, model keys, or
+          workspace permissions.
+        </p>
+        {error ? (
+          <p role="alert" className="mt-3 text-xs text-destructive">
+            {error}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          className={`mt-4 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90 disabled:opacity-50 ${SETTINGS_FOCUS_RING}`}
+          disabled={opening}
+          aria-busy={opening || undefined}
+          onClick={() => {
+            setError(null);
+            setOpening(true);
+            void openDesktopCloudAccountWindow(path, `AGI Cloud ${title}`)
+              .catch((openError: unknown) => {
+                setError(
+                  openError instanceof Error
+                    ? openError.message
+                    : `Could not open ${title.toLocaleLowerCase()}.`,
+                );
+              })
+              .finally(() => setOpening(false));
+          }}
+        >
+          {opening ? 'Opening…' : action}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Skeleton shown while a section is hydrating ───────────────────────────────
 
 function SectionSkeleton() {
   return (
-    <div className="flex animate-pulse flex-col gap-6">
+    <div role="status" aria-live="polite" className="flex flex-col gap-6 motion-safe:animate-pulse">
+      <span className="sr-only">Loading settings…</span>
       <div className="h-5 w-40 rounded bg-muted/30" />
       <div className="h-4 w-72 rounded bg-muted/20" />
       <div className="h-36 w-full rounded-xl bg-muted/20" />
     </div>
   );
 }
-
-// ── Color map for desktop ConnectorDef → shared SettingsConnector iconBg ─────
-
-const COLOR_TO_GRADIENT: Record<string, string> = {
-  red: 'from-red-500 to-red-600',
-  blue: 'from-blue-500 to-blue-600',
-  green: 'from-green-500 to-green-600',
-  purple: 'from-purple-500 to-purple-600',
-  orange: 'from-orange-500 to-orange-600',
-  yellow: 'from-yellow-500 to-yellow-600',
-  gray: 'from-gray-500 to-gray-600',
-  pink: 'from-pink-500 to-pink-600',
-  indigo: 'from-indigo-500 to-indigo-600',
-  teal: 'from-teal-500 to-teal-600',
-  cyan: 'from-cyan-500 to-cyan-600',
-};
 
 /**
  * Desktop's static catalog (apps/desktop/src/features/connectors/connectorDefinitions.ts)
@@ -566,7 +713,7 @@ function toSettingsConnectors(availableIds: ReadonlySet<string>): SettingsConnec
       actionCount: 0,
       // comingSoon → phase 2 so the shared shell renders "Soon"
       phase: c.comingSoon ? 2 : 1,
-      iconBg: COLOR_TO_GRADIENT[c.color] ?? 'from-gray-500 to-gray-600',
+      iconBg: CONNECTOR_FALLBACK_THEME,
       iconText: c.name.slice(0, 2).toUpperCase(),
       canConnect,
       statusLabel: canConnect ? undefined : 'Coming soon',
@@ -589,86 +736,76 @@ export function DesktopCloudSettingsModal({
   onClose,
   initialTab = 'general',
 }: DesktopCloudSettingsModalProps) {
-  // ── Resolve initial section from legacy tab map ──────────────────────────
-  const resolveSection = (tab: SettingsTab): string => {
-    if (tab === 'team') return 'team';
-    const mapped = (LEGACY_TAB_MAP[tab] ?? tab) as string;
-    if (mapped === 'models-keys') return 'capabilities';
-    // Cloud modal only shows these sections; fall back to general for anything else
-    const CLOUD_SECTIONS = new Set([
-      'general',
-      'account',
-      'team',
-      'privacy',
-      'billing',
-      'usage',
-      'capabilities',
-      'connectors',
-      'skills',
-      'memory',
-    ]);
-    return CLOUD_SECTIONS.has(mapped) ? mapped : 'general';
-  };
-
-  const [activeSection, setActiveSection] = useState<string>(() => resolveSection(initialTab));
+  const [activeSection, setActiveSection] = useState<string>(() =>
+    resolveCloudSettingsSection(initialTab),
+  );
 
   // Sync when the dialog is re-opened with a different tab
   useEffect(() => {
-    if (open) setActiveSection(resolveSection(initialTab));
+    if (open) setActiveSection(resolveCloudSettingsSection(initialTab));
   }, [open, initialTab]);
 
   // ── Connectors (CLOUD state — real client of web's /api/connectors) ──────
   // Trust boundary: this section reflects server truth, not local Tauri MCP
   // connector state (see stores/connectorsStore.ts, which stays wired to the
   // LOCAL settings' ConnectorGallery only — never blended in here).
-  const [cloudConnectors, setCloudConnectors] = useState<CloudConnectorEntry[]>([]);
+  const [cloudConnectors, setCloudConnectors] = useState<CloudConnectorEntry[] | undefined>(
+    undefined,
+  );
   const [availableConnectorIds, setAvailableConnectorIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   const [connectorsLoading, setConnectorsLoading] = useState(false);
   const [hasLoadedConnectors, setHasLoadedConnectors] = useState(false);
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
+  const connectorsRequestGeneration = useRef(0);
 
   const refreshCloudConnectors = useCallback(async () => {
+    const generation = ++connectorsRequestGeneration.current;
     const { connectors, available } = await fetchCloudConnectorState();
-    setCloudConnectors(connectors);
-    setAvailableConnectorIds(new Set(available));
-    setConnectorsError(null);
-    setHasLoadedConnectors(true);
+    if (connectorsRequestGeneration.current === generation) {
+      setCloudConnectors(connectors);
+      setAvailableConnectorIds(new Set(available));
+      setConnectorsError(null);
+      setHasLoadedConnectors(true);
+    }
     return connectors;
   }, []);
 
   const loadCloudConnectors = useCallback(async () => {
+    const generation = connectorsRequestGeneration.current + 1;
     setConnectorsLoading(true);
     setConnectorsError(null);
     try {
       await refreshCloudConnectors();
     } catch (error) {
-      setHasLoadedConnectors(true);
-      setConnectorsError(
-        error instanceof Error ? error.message : 'Could not load Cloud connectors.',
-      );
+      if (connectorsRequestGeneration.current === generation) {
+        setHasLoadedConnectors(true);
+        setConnectorsError(
+          error instanceof Error ? error.message : 'Could not load Cloud connectors.',
+        );
+      }
     } finally {
-      setConnectorsLoading(false);
+      if (connectorsRequestGeneration.current === generation) {
+        setConnectorsLoading(false);
+      }
     }
   }, [refreshCloudConnectors]);
 
-  const isCloudDirectorySection = activeSection === 'connectors' || activeSection === 'skills';
-
   useEffect(() => {
-    if (!open || !isCloudDirectorySection || hasLoadedConnectors || connectorsLoading) {
+    if (!open || activeSection !== 'connectors' || hasLoadedConnectors || connectorsLoading) {
       return;
     }
     void loadCloudConnectors();
-  }, [open, isCloudDirectorySection, hasLoadedConnectors, connectorsLoading, loadCloudConnectors]);
+  }, [open, activeSection, hasLoadedConnectors, connectorsLoading, loadCloudConnectors]);
 
   // cloudConnectors always holds server-shaped rows (server id space); the
   // adapter surface (connectedConnectors / SettingsConnector.id) always uses
   // desktop's catalog id space. Translate exactly at these two boundaries —
   // see toServerConnectorId/toDesktopConnectorId above.
-  const connectedConnectors: ConnectedConnector[] = useMemo(
+  const connectedConnectors: ConnectedConnector[] | undefined = useMemo(
     () =>
-      cloudConnectors.map((c) => ({
+      cloudConnectors?.map((c) => ({
         connectorId: toDisplayConnectorId(c),
         connectedAt: c.connectedAt || undefined,
         status: 'connected' as const,
@@ -683,7 +820,7 @@ export function DesktopCloudSettingsModal({
       const result = await apiConnectConnector(serverId, authType);
       if (result.status === 'connected') {
         setCloudConnectors((prev) => [
-          ...prev.filter((c) => c.connectorId !== serverId),
+          ...(prev ?? []).filter((c) => c.connectorId !== serverId),
           result.connector,
         ]);
         return;
@@ -709,17 +846,19 @@ export function DesktopCloudSettingsModal({
   const disconnectConnector = useCallback(
     async (id: string) => {
       if (id.startsWith('custom-')) {
-        const custom = cloudConnectors.find(
+        const custom = cloudConnectors?.find(
           (connector) => connector.source === 'custom' && toDisplayConnectorId(connector) === id,
         );
         if (!custom) throw new Error('This custom connector could not be found.');
         await apiDeleteCustomConnector(custom.id);
-        setCloudConnectors((prev) => prev.filter((connector) => connector.id !== custom.id));
+        setCloudConnectors((prev) =>
+          (prev ?? []).filter((connector) => connector.id !== custom.id),
+        );
         return;
       }
       const serverId = toServerConnectorId(id);
       await apiDisconnectConnector(serverId);
-      setCloudConnectors((prev) => prev.filter((c) => c.connectorId !== serverId));
+      setCloudConnectors((prev) => (prev ?? []).filter((c) => c.connectorId !== serverId));
     },
     [cloudConnectors],
   );
@@ -733,46 +872,64 @@ export function DesktopCloudSettingsModal({
   );
 
   // ── Skills (Managed Cloud catalog — the same source chat admission uses) ─
-  const [skills, setSkills] = useState<SettingsSkill[]>([]);
+  const [skills, setSkills] = useState<SettingsSkill[] | undefined>(undefined);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [hasLoadedSkills, setHasLoadedSkills] = useState(false);
   const [skillsError, setSkillsError] = useState<string | null>(null);
+  const skillsRequestGeneration = useRef(0);
 
   const loadCloudSkills = useCallback(async () => {
+    const generation = ++skillsRequestGeneration.current;
     setSkillsLoading(true);
     setSkillsError(null);
     try {
       const catalog = await listCloudSkills();
-      setSkills(
-        catalog.map((skill) => ({
-          id: skill.name,
-          name: skill.name,
-          description: skill.description,
-          source: skill.source,
-          tab: skill.source === 'builtin' ? 'prompts' : 'agents',
-        })),
-      );
-      setHasLoadedSkills(true);
+      if (skillsRequestGeneration.current === generation) {
+        setSkills(
+          catalog.map((skill) => ({
+            id: skill.name,
+            name: skill.name,
+            description: skill.description,
+            source: skill.source,
+            tab: skill.source === 'builtin' ? 'prompts' : 'agents',
+          })),
+        );
+        setHasLoadedSkills(true);
+      }
     } catch (error) {
-      setHasLoadedSkills(true);
-      setSkillsError(error instanceof Error ? error.message : 'Could not load Cloud skills.');
+      if (skillsRequestGeneration.current === generation) {
+        setHasLoadedSkills(true);
+        setSkillsError(error instanceof Error ? error.message : 'Could not load Cloud skills.');
+      }
     } finally {
-      setSkillsLoading(false);
+      if (skillsRequestGeneration.current === generation) {
+        setSkillsLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (!open || !isCloudDirectorySection || hasLoadedSkills || skillsLoading) return;
+    if (!open || activeSection !== 'skills' || hasLoadedSkills || skillsLoading) return;
     void loadCloudSkills();
-  }, [open, isCloudDirectorySection, hasLoadedSkills, skillsLoading, loadCloudSkills]);
+  }, [open, activeSection, hasLoadedSkills, skillsLoading, loadCloudSkills]);
 
   useEffect(() => {
     if (open) return;
+    connectorsRequestGeneration.current += 1;
+    skillsRequestGeneration.current += 1;
+    setCloudConnectors(undefined);
+    setAvailableConnectorIds(new Set());
+    setConnectorsLoading(false);
     setHasLoadedConnectors(false);
+    setConnectorsError(null);
+    setSkills(undefined);
+    setSkillsLoading(false);
     setHasLoadedSkills(false);
+    setSkillsError(null);
   }, [open]);
 
-  const settingsConnectors: SettingsConnector[] = useMemo(() => {
+  const settingsConnectors: SettingsConnector[] | undefined = useMemo(() => {
+    if (cloudConnectors === undefined) return undefined;
     const custom = cloudConnectors
       .filter((connector) => connector.source === 'custom')
       .map((connector) => ({
@@ -783,7 +940,7 @@ export function DesktopCloudSettingsModal({
         authType: 'custom_mcp',
         actionCount: 0,
         phase: 1,
-        iconBg: 'from-slate-500 to-slate-600',
+        iconBg: CONNECTOR_FALLBACK_THEME,
         iconText: 'MCP',
         canConnect: false,
       }));
@@ -804,6 +961,9 @@ export function DesktopCloudSettingsModal({
       customConnectorAuthTokenSupported: true,
       openHref: (href) => {
         const url = new URL(href, WEB_APP_URL);
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+          throw new Error('Only HTTP(S) settings links can be opened.');
+        }
         return openExternalUrl(url.toString());
       },
       skills,
@@ -870,17 +1030,27 @@ export function DesktopCloudSettingsModal({
   const sectionContent: Partial<Record<string, React.ReactNode>> = useMemo(
     () => ({
       general: (
-        <Suspense fallback={<SectionSkeleton />}>
-          <LazyGeneralTab
-            resolvedWindowPreferences={resolvedWindowPreferences}
-            resolvedGlobalHotkeyPreferences={resolvedGlobalHotkeyPreferences}
-            defaultGlobalHotkeyCombo={defaultGlobalHotkeyCombo}
-            onThemeChange={(value: 'light' | 'dark' | 'system') => setTheme(value)}
-            onLanguageChange={(value: Language) => setLanguage(value)}
-            onGlobalHotkeyEnabledChange={(value: boolean) => setGlobalHotkeyEnabled(value)}
-            onGlobalHotkeyComboChange={(value: string) => setGlobalHotkeyCombo(value)}
+        <div className="flex flex-col gap-8">
+          <DesktopCloudAccountSection
+            title="Cloud profile"
+            description="Update your name, preferred form of address, work description, and account-level instructions."
+            path="/settings/general"
+            action="Open profile settings"
           />
-        </Suspense>
+          <div className="border-t border-border pt-8">
+            <Suspense fallback={<SectionSkeleton />}>
+              <LazyGeneralTab
+                resolvedWindowPreferences={resolvedWindowPreferences}
+                resolvedGlobalHotkeyPreferences={resolvedGlobalHotkeyPreferences}
+                defaultGlobalHotkeyCombo={defaultGlobalHotkeyCombo}
+                onThemeChange={(value: 'light' | 'dark' | 'system') => setTheme(value)}
+                onLanguageChange={(value: Language) => setLanguage(value)}
+                onGlobalHotkeyEnabledChange={(value: boolean) => setGlobalHotkeyEnabled(value)}
+                onGlobalHotkeyComboChange={(value: string) => setGlobalHotkeyCombo(value)}
+              />
+            </Suspense>
+          </div>
+        </div>
       ),
       account: (
         <Suspense fallback={<SectionSkeleton />}>
@@ -896,6 +1066,46 @@ export function DesktopCloudSettingsModal({
       billing: <DesktopBillingSection onOpenPlans={openPlans} />,
       usage: <DesktopUsageSection />,
       capabilities: <DesktopCapabilitiesSection />,
+      security: (
+        <DesktopCloudAccountSection
+          title="Security"
+          description="Manage password, two-factor authentication, and account session timeout."
+          path="/settings/security"
+          action="Open security controls"
+        />
+      ),
+      notifications: (
+        <DesktopCloudAccountSection
+          title="Notifications"
+          description="Manage Cloud reply-ready notifications alongside Desktop’s native notification controls."
+          path="/settings/notifications"
+          action="Open notification settings"
+        />
+      ),
+      reflect: (
+        <DesktopCloudAccountSection
+          title="Reflect"
+          description="Review an account-level recap of activity, topics, and memory-backed insights."
+          path="/settings/reflect"
+          action="Open Reflect"
+        />
+      ),
+      'time-focus': (
+        <DesktopCloudAccountSection
+          title="Time and focus"
+          description="Configure break reminders and quiet hours for your signed-in Cloud account."
+          path="/settings/time-focus"
+          action="Open time and focus"
+        />
+      ),
+      plugins: (
+        <DesktopCloudAccountSection
+          title="Plugins"
+          description="Discover and manage account-installed Cloud plugins. Local extensions remain isolated in Local settings."
+          path="/settings/plugins"
+          action="Open Cloud plugins"
+        />
+      ),
       memory: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyMemoryTab scope="cloud" />
@@ -916,22 +1126,6 @@ export function DesktopCloudSettingsModal({
     ],
   );
 
-  // ── Nav keys visible in the cloud modal ─────────────────────────────────
-  // Team administration remains Web-owned, but Desktop provides a truthful,
-  // reachable handoff instead of hiding the account's B2B entry point.
-  const activeKeys = [
-    'general',
-    'account',
-    'team',
-    'privacy',
-    'billing',
-    'usage',
-    'capabilities',
-    'connectors',
-    'skills',
-    'memory',
-  ];
-
   return (
     <SettingsModal
       open={open}
@@ -939,7 +1133,7 @@ export function DesktopCloudSettingsModal({
       activeSection={activeSection}
       onSectionChange={setActiveSection}
       sectionContent={sectionContent}
-      activeKeys={activeKeys}
+      navGroups={DESKTOP_CLOUD_SETTINGS_NAV}
       adapter={adapter}
       title="Settings"
     />

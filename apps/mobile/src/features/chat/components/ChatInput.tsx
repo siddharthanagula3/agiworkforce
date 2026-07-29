@@ -16,21 +16,9 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  Plus,
-  Link as LinkIcon,
-  AudioLines,
-  ArrowUp,
-  X,
-  Search,
-  Telescope,
-  Terminal,
-  Paintbrush,
-} from 'lucide-react-native';
+import { Plus, AudioLines, ArrowUp, X, Telescope, Terminal, Paintbrush } from 'lucide-react-native';
 import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
-import { isWebSearchAvailable } from '@agiworkforce/search';
 import { Text } from '@/components/ui/text';
-import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
 import { SendButton } from './SendButton';
@@ -79,7 +67,6 @@ interface ChatInputProps {
   onOpenCompare?: () => void;
   onOpenExport?: () => void;
   onOpenAddToChat?: () => void;
-  onOpenConnectors?: () => void;
   /** When false, send button shows queued state and placeholder reflects offline status */
   isOnline?: boolean;
   /** Number of messages currently waiting in the offline queue */
@@ -119,7 +106,6 @@ export function ChatInput({
   onOpenCompare,
   onOpenExport,
   onOpenAddToChat,
-  onOpenConnectors,
   isOnline = true,
   queueSize = 0,
   attachRef,
@@ -158,23 +144,12 @@ export function ChatInput({
   const subscriptionTier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
-  const genericWebSearchAvailable = useTierStore((s) => s.genericWebSearchAvailable);
   const { colors: themeColors } = useTheme();
   const insets = useSafeAreaInsets();
 
   const modelName = getShortDisplayName(selectedModel, subscriptionTier);
   const selectedModelMetadata = getModelMetadataById(selectedModel);
   const isSignedInCloudChat = appMode === 'cloud' && isClerkSignedIn;
-  const webSearchActive =
-    isSignedInCloudChat &&
-    FEATURES.webSearch &&
-    grantedCapabilities.includes('canUseWebSearch') &&
-    isWebSearchAvailable({
-      provider: selectedModelMetadata?.provider,
-      modelSupportsNativeSearch: selectedModelMetadata?.capabilities.search,
-      modelSupportsTools: selectedModelMetadata?.capabilities.tools,
-      genericBackendConfigured: genericWebSearchAvailable,
-    });
   const researchActive =
     isSignedInCloudChat &&
     FEATURES.research &&
@@ -196,9 +171,10 @@ export function ChatInput({
     grantedCapabilities.includes('canUseImages') &&
     canUseBillingPlanCapability(subscriptionTier, 'image_generation');
   const activeToolStatuses = [
-    ...(webSearchActive
-      ? [{ key: 'search', label: 'Search', accessibilityLabel: 'Web Search active', Icon: Search }]
-      : []),
+    // Web search has no user toggle -- it is on for every capable signed-in
+    // cloud model, so a permanent "Search" chip is noise rather than status.
+    // The chips below all require an explicit toggle in the "+" sheet, so
+    // they still tell the user something they chose.
     ...(researchActive
       ? [
           {
@@ -552,14 +528,6 @@ export function ChatInput({
     onOpenAddToChat?.();
   }, [hapticsEnabled, onOpenAddToChat]);
 
-  const handleConnectorsPress = useCallback(() => {
-    if (!onOpenConnectors) return;
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    onOpenConnectors();
-  }, [hapticsEnabled, onOpenConnectors]);
-
   const queueLabel = queueSize > 0 ? ` (${queueSize} queued)` : '';
   const placeholder = isStreaming
     ? `Reply to ${modelName}...`
@@ -590,45 +558,9 @@ export function ChatInput({
         onSelectCommand={handleSelectCommand}
       />
 
-      {/* Secondary chip row -- model + connectors. Temporary chat is a
-          pre-conversation decision only, so its toggle lives on the
-          empty-state header (chat.tsx), not here. Hidden while the composer
-          pill is in its recording/transcribing state.
-          No extra left padding here: this row shares the same `px-4` outer
-          wrapper as ProjectSelectorBar (chat.tsx renders them as siblings),
-          so their pills line up on the same left edge. An earlier
-          `paddingLeft: 4` here pushed the model chip 4px right of the
-          "No project" pill above it -- a visible one-row misalignment. */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 4,
-          marginBottom: 8,
-          display: isRecording || isTranscribing ? 'none' : 'flex',
-        }}
-      >
-        {!isStreaming && <ModelSelectorButton onPress={onOpenModelPicker ?? (() => {})} />}
-        {!isStreaming && onOpenConnectors ? (
-          <Pressable
-            onPress={handleConnectorsPress}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: radii.full,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            hitSlop={6}
-            accessibilityLabel="Sources and connectors"
-            accessibilityHint="Opens connectors page"
-            accessibilityRole="button"
-          >
-            <LinkIcon size={18} color={themeColors.textMuted} />
-          </Pressable>
-        ) : null}
-      </View>
-
+      {/* Model and Connectors live in the "+" sheet (AddToChatSheet), not as a
+          secondary chip row above the composer -- founder decision 2026-07-29.
+          Connectors was already in that sheet, so the old row duplicated it. */}
       {activeToolStatuses.length > 0 && !isRecording && !isTranscribing ? (
         <View
           style={{

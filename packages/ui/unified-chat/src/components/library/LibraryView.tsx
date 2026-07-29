@@ -140,12 +140,18 @@ interface PageState {
   nextOffset: number | null;
 }
 
-export function LibraryView({ transport }: { transport: LibraryTransport }) {
+export interface LibraryViewProps {
+  transport: LibraryTransport;
+  /** Host-provided deep-link query, used by cross-surface global search. */
+  initialQuery?: string;
+}
+
+export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) {
   const { isSignedIn } = transport;
   const [origin, setOrigin] = useState<OriginFilter>('all');
   const [kind, setKind] = useState<KindFilter>('all');
-  const [searchInput, setSearchInput] = useState('');
-  const [query, setQuery] = useState('');
+  const [searchInput, setSearchInput] = useState(initialQuery);
+  const [query, setQuery] = useState(initialQuery.trim());
   const [page, setPage] = useState<PageState>({ items: [], hasMore: false, nextOffset: null });
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -154,6 +160,11 @@ export function LibraryView({ transport }: { transport: LibraryTransport }) {
   const [viewDeleted, setViewDeleted] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const requestSeq = useRef(0);
+
+  useEffect(() => {
+    setSearchInput(initialQuery);
+    setQuery(initialQuery.trim());
+  }, [initialQuery]);
 
   // Debounce the search box into the effective query.
   useEffect(() => {
@@ -338,7 +349,7 @@ export function LibraryView({ transport }: { transport: LibraryTransport }) {
       {error ? (
         <div
           data-testid="library-error"
-          className="flex items-center gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4 text-sm text-[var(--chat-destructive,#e5484d)]"
+          className="flex items-center gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4 text-sm text-[var(--chat-destructive)]"
         >
           <span>Couldn&apos;t load your library ({error}).</span>
           <Button
@@ -399,7 +410,7 @@ export function LibraryView({ transport }: { transport: LibraryTransport }) {
                 </button>
               ) : null}
               {downloadErrors[item.id] ? (
-                <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive,#e5484d)]">
+                <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive)]">
                   <span>Download failed ({downloadErrors[item.id]}).</span>
                   <button
                     type="button"

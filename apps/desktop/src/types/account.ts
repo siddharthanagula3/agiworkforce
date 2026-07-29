@@ -36,7 +36,7 @@ export interface CreditBalance {
 
 export interface UserProfile {
   id: string;
-  email: string;
+  email: string | null;
   name?: string;
   avatar_url?: string;
   credits?: CreditBalance | null;

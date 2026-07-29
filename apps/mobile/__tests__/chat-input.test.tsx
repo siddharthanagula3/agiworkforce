@@ -422,9 +422,11 @@ describe('ChatInput', () => {
       expect(getByLabelText('Add to chat')).toBeTruthy();
     });
 
-    it('renders Model pill', () => {
-      const { getByTestId } = renderInput();
-      expect(getByTestId('model-selector-button')).toBeTruthy();
+    // The model pill moved out of the composer into the "+" sheet
+    // (AddToChatSheet -> "Model" row), founder 2026-07-29.
+    it('does not render a Model pill above the composer', () => {
+      const { queryByTestId } = renderInput();
+      expect(queryByTestId('model-selector-button')).toBeNull();
     });
 
     it('renders mic button', () => {
@@ -461,7 +463,10 @@ describe('ChatInput', () => {
   });
 
   describe('active Cloud tools', () => {
-    it('shows ambient Web Search only for an eligible signed-in Cloud chat', () => {
+    // Web search has no user toggle -- it is on for every capable signed-in
+    // cloud model, so the composer never renders a "Search" status chip
+    // (founder 2026-07-29). Only user-toggled tools get a chip.
+    it('never shows a Web Search chip, even for an eligible signed-in Cloud chat', () => {
       mockAppMode = 'cloud';
       mockIsClerkSignedIn = true;
       mockTierState = {
@@ -471,9 +476,9 @@ describe('ChatInput', () => {
         genericWebSearchAvailable: true,
       };
 
-      const { getByLabelText, queryByLabelText, rerender } = renderInput();
+      const { queryByLabelText, rerender } = renderInput();
 
-      expect(getByLabelText('Web Search active')).toBeTruthy();
+      expect(queryByLabelText('Web Search active')).toBeNull();
 
       mockAppMode = 'local';
       rerender(<ChatInput {...defaultProps} />);

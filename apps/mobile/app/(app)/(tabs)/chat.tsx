@@ -90,6 +90,7 @@ export default function ChatTabScreen() {
   const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
+  const [projectPickerOpenSignal, setProjectPickerOpenSignal] = useState(0);
   const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
 
   const loadConversations = useChatStore((s) => s.loadConversations);
@@ -335,6 +336,22 @@ export default function ChatTabScreen() {
     addToChatRef.current?.close();
     setTimeout(() => {
       setStyleSelectorOpenSignal((value) => value + 1);
+    }, STYLE_SHEET_HANDOFF_DELAY_MS);
+  }, []);
+
+  // Sheet-to-sheet handoff: the "+" sheet must finish closing before the model
+  // picker snaps open, or the second sheet mounts behind the first backdrop.
+  const handleSheetModelPicker = useCallback(() => {
+    addToChatRef.current?.close();
+    setTimeout(() => {
+      handleOpenModelPicker();
+    }, STYLE_SHEET_HANDOFF_DELAY_MS);
+  }, [handleOpenModelPicker]);
+
+  const handleSheetProjectPicker = useCallback(() => {
+    addToChatRef.current?.close();
+    setTimeout(() => {
+      setProjectPickerOpenSignal((value) => value + 1);
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
@@ -600,12 +617,12 @@ export default function ChatTabScreen() {
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
-            // Bottom-anchor the greeting block just above the composer (ChatGPT mobile
-            // new-chat: composer-focused, greeting sits low, NO suggestion cards — founder
-            // decision 2026-07-19) rather than floating it in the vertical center.
+            // Centre the greeting block in the free space above the composer
+            // (founder decision 2026-07-29, superseding the 2026-07-19
+            // bottom-anchored variant). Still NO suggestion cards.
             flexGrow: 1,
             alignItems: 'center',
-            justifyContent: 'flex-end',
+            justifyContent: 'center',
             paddingHorizontal: 24,
             paddingTop: 24,
             paddingBottom: 16,
@@ -654,8 +671,9 @@ export default function ChatTabScreen() {
           )}
         </ScrollView>
 
-        {/* Mode-aware: shows local projects in Local, cloud projects in Cloud. */}
-        <ProjectSelectorBar />
+        {/* Mode-aware: shows local projects in Local, cloud projects in Cloud.
+            Trigger lives in the "+" sheet; this renders the picker modal only. */}
+        <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
 
         {voiceInlineVisible ? null : (
           <ChatInput
@@ -664,7 +682,6 @@ export default function ChatTabScreen() {
             onOpenVoiceMode={handleOpenVoiceMode}
             onOpenCompare={handleOpenCompare}
             onOpenAddToChat={handleOpenAddToChat}
-            onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
             attachRef={chatInputAttachRef}
             attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
             draftKey="new-chat"
@@ -687,6 +704,8 @@ export default function ChatTabScreen() {
         onFile={handleSheetFile}
         onOpenCloudAccess={handleOpenCloudAccess}
         onOpenStyleSelector={handleOpenStyleSelector}
+        onOpenModelPicker={handleSheetModelPicker}
+        onOpenProjectPicker={handleSheetProjectPicker}
       />
 
       <StyleSelector openSignal={styleSelectorOpenSignal} />
@@ -751,18 +770,19 @@ function DownloadModelBanner({ onPress }: DownloadModelBannerProps) {
       accessibilityLabel="Download a model to chat"
       accessibilityHint="Opens the model library to download a local AI model"
       testID="download-model-banner"
-      style={({ pressed }) => ({
+      className="active:opacity-80"
+      style={{
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        backgroundColor: pressed ? c.surfaceHover : c.accentSurface,
+        backgroundColor: c.accentSurface,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: c.accentBorder,
         paddingHorizontal: 14,
         paddingVertical: 12,
         marginBottom: 16,
-      })}
+      }}
     >
       <View
         style={{

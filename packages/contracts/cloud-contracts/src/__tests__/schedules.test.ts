@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  createManagedCloudSchedulesClient,
   ManagedCloudScheduleListResponseSchema,
   ManagedCloudScheduleRunResponseSchema,
   managedCloudSchedulePath,
@@ -80,5 +81,53 @@ describe('managed cloud schedule wire contracts', () => {
   it('encodes schedule identifiers in canonical paths', () => {
     expect(managedCloudSchedulePath('schedule/1')).toBe('/api/schedules/schedule%2F1');
     expect(managedCloudScheduleRunsPath('schedule/1')).toBe('/api/schedules/schedule%2F1/runs');
+  });
+});
+
+describe('managed cloud schedules client', () => {
+  it('validates mutation payloads and preserves host authentication headers', async () => {
+    const fetchImpl = vi.fn(async (_input: string, init?: RequestInit) => {
+      expect(init?.method).toBe('POST');
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer desktop-token');
+      expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json');
+      return new Response(JSON.stringify({ schedule }), { status: 201 });
+    });
+    const client = createManagedCloudSchedulesClient({
+      baseUrl: 'https://agi.example/',
+      fetchImpl,
+      getHeaders: () => ({ Authorization: 'Bearer desktop-token' }),
+    });
+
+    await expect(
+      client.createSchedule({
+        name: 'Morning brief',
+        description: null,
+        prompt: 'Summarize my priorities.',
+        model: 'auto-balanced',
+        recurrence: 'weekly',
+        cronExpression: null,
+        scheduledAt: null,
+        intervalMs: null,
+        timeOfDay: '09:00',
+        daysOfWeek: [1, 2, 3, 4, 5],
+        dayOfMonth: null,
+        timezone: 'America/Chicago',
+        isActive: true,
+        expiresAt: null,
+        maxExecutions: null,
+      }),
+    ).resolves.toEqual(schedule);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://agi.example/api/schedules',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('requires an idempotency key before dispatching a manual run', async () => {
+    const fetchImpl = vi.fn();
+    const client = createManagedCloudSchedulesClient({ fetchImpl });
+
+    await expect(client.runNow('schedule-1', '   ')).rejects.toThrow(/idempotency key/i);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

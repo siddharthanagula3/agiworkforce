@@ -25,7 +25,7 @@ export interface SettingsConnector {
   authType: string;
   actionCount: number;
   phase: number;
-  /** Tailwind gradient classes for the fallback tile: "from-red-500 to-red-600" */
+  /** Tailwind theme classes for the fallback tile. */
   iconBg: string;
   /** 1-2 char fallback text */
   iconText: string;

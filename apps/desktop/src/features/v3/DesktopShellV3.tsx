@@ -21,6 +21,8 @@ import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
 const DesktopLibrary = lazy(() => import('@/features/library/DesktopLibrary'));
 // Durable Cloud agent runs — the same list web shows at /tasks.
 const DesktopTasks = lazy(() => import('@/features/tasks/DesktopTasks'));
+// Account-owned schedules that continue to run after Desktop closes.
+const DesktopCloudSchedules = lazy(() => import('@/features/schedules/DesktopCloudSchedules'));
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/projectStore';
@@ -39,6 +41,9 @@ import {
   canUseDesktopCloudAgiWork,
   canUseDesktopCloudImageGeneration,
 } from '../../services/desktopCloudEntitlements';
+import { CloudVoiceActionDialog } from '../voice/CloudVoiceActionDialog';
+import { useCloudVoiceController } from '../voice/useCloudVoiceController';
+import { createDesktopCloudShare } from '../../services/desktopCloudShares';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -57,6 +62,7 @@ type V3Panel =
   | 'artifacts'
   | 'library'
   | 'tasks'
+  | 'cloud-schedules'
   | 'scheduled'
   | 'record-skill';
 
@@ -99,6 +105,7 @@ export function DesktopShellV3({
   const [activePanel, setActivePanel] = useState<V3Panel>('chat');
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [libraryInitialQuery, setLibraryInitialQuery] = useState('');
 
   // Artifact panel is driven by the same artifactStore that AgiWorkArtifacts writes.
   // conversationId is optional on ArtifactPanel so it works in the gallery context.
@@ -116,6 +123,7 @@ export function DesktopShellV3({
   );
   const accountPlan = useUnifiedAuthStore(selectPlan);
   const isManagedCloud = privacyMode === 'managed';
+  const cloudVoice = useCloudVoiceController(isManagedCloud);
   const canUseAgiWork = !isManagedCloud || canUseDesktopCloudAgiWork(accountPlan);
   const quickChipAvailability = isManagedCloud
     ? { image: canUseDesktopCloudImageGeneration(accountPlan) }
@@ -162,8 +170,23 @@ export function DesktopShellV3({
       if (detail === 'projects') setActivePanel('projects');
       if (detail === 'chat') setActivePanel('chat');
     };
+    const navigateLibrary = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        typeof (detail as { query?: unknown }).query === 'string'
+      ) {
+        setLibraryInitialQuery((detail as { query: string }).query);
+        setActivePanel('library');
+      }
+    };
     window.addEventListener('desktop:navigate-panel', navigate);
-    return () => window.removeEventListener('desktop:navigate-panel', navigate);
+    window.addEventListener('desktop:navigate-library', navigateLibrary);
+    return () => {
+      window.removeEventListener('desktop:navigate-panel', navigate);
+      window.removeEventListener('desktop:navigate-library', navigateLibrary);
+    };
   }, []);
 
   // Composer "Project or folder" picker (web ChatComposerNew parity).
@@ -264,9 +287,58 @@ export function DesktopShellV3({
     [privacyMode],
   );
 
+  const handleShareConversation = useCallback(
+    async (conversationId: string) => {
+      if (privacyMode !== 'managed') return;
+      const state = useChatStore.getState();
+      const conversation = state.conversations.find((candidate) => candidate.id === conversationId);
+      const messages = state.messagesByConversation[conversationId] ?? [];
+      if (!conversation || messages.length === 0) {
+        toast.info('Add a message before sharing this conversation.');
+        return;
+      }
+      const modelMessage = [...messages]
+        .reverse()
+        .find((message) => message.metadata?.model || message.metadata?.provider);
+      try {
+        const share = await createDesktopCloudShare({
+          title: conversation.title || 'Shared Session',
+          modelId: conversation.modelOverride ?? modelMessage?.metadata?.model,
+          provider: modelMessage?.metadata?.provider,
+          messages: messages.map((message) => ({
+            role: message.role,
+            content: message.content,
+            created_at: message.timestamp.toISOString(),
+          })),
+        });
+        toast.success('Share link created', {
+          description: share.shareUrl,
+          duration: 8_000,
+          action: {
+            label: 'Copy link',
+            onClick: () => {
+              void navigator.clipboard.writeText(share.shareUrl).then(
+                () => toast.success('Link copied'),
+                () => toast.error('The link could not be copied.'),
+              );
+            },
+          },
+        });
+      } catch (error) {
+        toast.error('Could not share conversation', {
+          description: error instanceof Error ? error.message : 'Please try again.',
+        });
+      }
+    },
+    [privacyMode],
+  );
+
   const conversationActions = useMemo(
-    () => ({ onRename: handleRenameConversation }),
-    [handleRenameConversation],
+    () => ({
+      onRename: handleRenameConversation,
+      ...(privacyMode === 'managed' ? { onShare: handleShareConversation } : {}),
+    }),
+    [handleRenameConversation, handleShareConversation, privacyMode],
   );
 
   const handleOpenProjectConversation = useCallback(
@@ -290,6 +362,7 @@ export function DesktopShellV3({
           toast.info('Library lists cloud files. Device files are under Artifacts.');
           return;
         }
+        setLibraryInitialQuery('');
         setActivePanel('library');
         return;
       }
@@ -312,8 +385,8 @@ export function DesktopShellV3({
         return;
       }
       if (view === 'work-scheduled') {
-        if (privacyMode !== 'local') {
-          toast.info('Device schedules are available in Local mode.');
+        if (privacyMode === 'managed') {
+          setActivePanel('cloud-schedules');
           return;
         }
         setActivePanel('scheduled');
@@ -361,6 +434,7 @@ export function DesktopShellV3({
               conversationActions={conversationActions}
               onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
               pendingAttachments={pendingAttachments}
+              voiceInputController={isManagedCloud ? cloudVoice.controller : undefined}
               onRecordSkill={
                 privacyMode === 'local' ? () => setActivePanel('record-skill') : undefined
               }
@@ -391,7 +465,10 @@ export function DesktopShellV3({
             // a long grid is simply unreachable.
             <div className="h-full overflow-y-auto px-6 py-6">
               <Suspense fallback={null}>
-                <DesktopLibrary onStartChat={() => handleNewChat()} />
+                <DesktopLibrary
+                  initialQuery={libraryInitialQuery}
+                  onStartChat={() => handleNewChat()}
+                />
               </Suspense>
             </div>
           ) : activePanel === 'tasks' && privacyMode !== 'local' ? (
@@ -406,6 +483,10 @@ export function DesktopShellV3({
                 />
               </Suspense>
             </div>
+          ) : activePanel === 'cloud-schedules' && privacyMode === 'managed' ? (
+            <Suspense fallback={null}>
+              <DesktopCloudSchedules />
+            </Suspense>
           ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
             <AgiWorkArtifacts onNewChat={() => handleNewChat()} />
           ) : activePanel === 'scheduled' && privacyMode === 'local' ? (
@@ -431,7 +512,7 @@ export function DesktopShellV3({
                 zIndex: 20,
                 display: 'flex',
                 flexDirection: 'column',
-                background: 'var(--chat-surface-base, #0a0c17)',
+                background: 'var(--chat-surface-base)',
               }}
             >
               <ArtifactPanel onClose={closeArtifactPanel} />
@@ -452,6 +533,15 @@ export function DesktopShellV3({
               useProjectStore.getState().setActiveProject(project.id);
               setActivePanel('projects');
             }}
+          />
+          <CloudVoiceActionDialog
+            action={cloudVoice.pendingAction}
+            error={cloudVoice.error}
+            isExecuting={cloudVoice.controller.state === 'executing'}
+            requiresComputerUseConsent={cloudVoice.requiresComputerUseConsent}
+            onApprove={() => void cloudVoice.approveAction()}
+            onUseAsText={cloudVoice.useActionAsText}
+            onCancel={cloudVoice.cancelAction}
           />
         </div>
       </div>

@@ -22,6 +22,7 @@ import {
   Shield,
   SlidersHorizontal,
   Sparkles,
+  SunMoon,
   UserRound,
   X,
   Zap,
@@ -350,7 +351,7 @@ export default function SettingsTabScreen() {
           {
             key: 'appearance',
             label: 'Appearance',
-            icon: Palette,
+            icon: SunMoon,
             value: formatTheme(themeMode),
             onPress: push('/(app)/settings/appearance'),
           },

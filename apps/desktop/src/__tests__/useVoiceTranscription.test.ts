@@ -112,4 +112,52 @@ describe('useVoiceTranscription', () => {
     expect((request.body as FormData).get('model')).toBe(canonicalVoiceModel);
     expect(onResult).toHaveBeenCalledWith('hello world');
   });
+
+  it('uses and revalidates a host-captured Managed Cloud boundary', async () => {
+    const assertCurrent = vi.fn();
+    const getCloudBoundary = vi.fn(() => ({
+      accessToken: 'captured-token',
+      assertCurrent,
+    }));
+    const { result } = renderHook(() =>
+      useVoiceTranscription({
+        preferWhisperCloud: true,
+        getCloudBoundary,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    await act(async () => {
+      await result.current.stopRecording();
+    });
+
+    expect(getCloudBoundary).toHaveBeenCalledTimes(1);
+    expect(assertCurrent).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/voice/transcribe'),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer captured-token' }),
+      }),
+    );
+  });
+
+  it('can discard a recording without uploading it for transcription', async () => {
+    const { result } = renderHook(() =>
+      useVoiceTranscription({
+        preferWhisperCloud: true,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    act(() => {
+      result.current.cancelRecording();
+    });
+
+    expect(result.current.isRecording).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });

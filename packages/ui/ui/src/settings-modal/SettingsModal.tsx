@@ -19,7 +19,6 @@
 
 import React, { useMemo, useState, useCallback } from 'react';
 import {
-  X,
   Search,
   Check,
   Settings2,
@@ -53,6 +52,25 @@ import type {
 import { SETTINGS_NAV_KEYWORDS } from '../settings-nav';
 import type { SettingsNavGroupResolved, SettingsNavKey } from '../settings-nav';
 import { ConnectorLogo } from './ConnectorLogo';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../primitives/Dialog';
+
+const FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+
+function formatSettingsDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unavailable';
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+}
+
+function isValidHttpsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' && parsed.hostname.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Nav config — flat list, no group headers (matches Claude reference)
@@ -132,15 +150,15 @@ function ConnectorStatusCell({
   if (connection) {
     if (connection.status === 'warning') {
       return (
-        <span className="flex items-center gap-1.5 text-xs font-medium text-amber-500">
-          <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+          <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
           {connection.warningLabel ?? 'Connection issue'}
         </span>
       );
     }
     return (
-      <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-500">
-        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-primary">
+        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15">
           <Check className="h-2.5 w-2.5" aria-hidden="true" />
         </span>
         Connected
@@ -156,10 +174,14 @@ function ConnectorStatusCell({
           onConnect();
         }}
         disabled={mutating}
+        aria-busy={mutating || undefined}
         aria-label={`Connect ${connector.name}`}
-        className="rounded-lg border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+        className={cn(
+          'rounded-lg border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
+          FOCUS_RING,
+        )}
       >
-        {mutating ? '...' : 'Connect'}
+        {mutating ? 'Connecting…' : 'Connect'}
       </button>
     );
   }
@@ -194,7 +216,10 @@ function ConnectorDetail({
       <button
         type="button"
         onClick={onBack}
-        className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className={cn(
+          'flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground',
+          FOCUS_RING,
+        )}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         Back
@@ -212,8 +237,8 @@ function ConnectorDetail({
             <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
               <span className="truncate">{connector.name}</span>
               {connection && connection.status !== 'warning' && (
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20">
-                  <Check className="h-2.5 w-2.5 text-emerald-500" aria-hidden="true" />
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                  <Check className="h-2.5 w-2.5 text-primary" aria-hidden="true" />
                 </span>
               )}
             </h2>
@@ -226,18 +251,26 @@ function ConnectorDetail({
               type="button"
               onClick={onDisconnect}
               disabled={mutating}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              aria-busy={mutating || undefined}
+              className={cn(
+                'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50',
+                FOCUS_RING,
+              )}
             >
-              {mutating ? '...' : 'Disconnect'}
+              {mutating ? 'Disconnecting…' : 'Disconnect'}
             </button>
           ) : canConnect ? (
             <button
               type="button"
               onClick={onConnect}
               disabled={mutating}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              aria-busy={mutating || undefined}
+              className={cn(
+                'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
+                FOCUS_RING,
+              )}
             >
-              {mutating ? '...' : 'Connect'}
+              {mutating ? 'Connecting…' : 'Connect'}
             </button>
           ) : (
             <span className="text-xs text-muted-foreground">
@@ -248,12 +281,19 @@ function ConnectorDetail({
       </div>
 
       {connection?.status === 'warning' && (
-        <p className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <p className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
+          <AlertTriangle
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           {connection.warningLabel ?? 'Connection issue'}
         </p>
       )}
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
 
       <p className="text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
 
@@ -280,9 +320,7 @@ function ConnectorDetail({
           {connection?.connectedAt && (
             <div className="flex items-center justify-between px-3 py-2">
               <dt className="text-muted-foreground">Connected</dt>
-              <dd className="text-foreground">
-                {new Date(connection.connectedAt).toLocaleDateString()}
-              </dd>
+              <dd className="text-foreground">{formatSettingsDate(connection.connectedAt)}</dd>
             </div>
           )}
         </dl>
@@ -444,12 +482,25 @@ function DirectoryBrowse({
     )
     .sort(byName);
 
+  const selectTab = (nextTab: BrowseTab) => {
+    setTab(nextTab);
+    if (nextTab === 'connectors' && adapter?.connectors === undefined && !connectorsLoading) {
+      void adapter?.retryConnectors?.();
+    }
+    if (nextTab === 'skills' && adapter?.skills === undefined && !skillsLoading) {
+      void adapter?.retrySkills?.();
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <button
         type="button"
         onClick={onBack}
-        className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className={cn(
+          'flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground',
+          FOCUS_RING,
+        )}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         Back
@@ -472,9 +523,11 @@ function DirectoryBrowse({
             type="button"
             role="tab"
             aria-selected={tab === t.key}
-            onClick={() => setTab(t.key)}
+            aria-controls={`settings-directory-${t.key}`}
+            onClick={() => selectTab(t.key)}
             className={cn(
               'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              FOCUS_RING,
               tab === t.key
                 ? 'bg-foreground text-background'
                 : 'border border-border text-muted-foreground hover:bg-muted',
@@ -488,13 +541,20 @@ function DirectoryBrowse({
       {/* Search + filter + sort */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
           <input
             type="search"
-            placeholder={tab === 'connectors' ? 'Search connectors...' : 'Search...'}
+            aria-label={`Search ${tab}`}
+            placeholder={tab === 'connectors' ? 'Search connectors…' : 'Search…'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+            className={cn(
+              'h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground',
+              FOCUS_RING,
+            )}
           />
         </div>
         {tab === 'connectors' && (
@@ -502,7 +562,10 @@ function DirectoryBrowse({
             aria-label="Filter by type"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="h-8 shrink-0 rounded-lg border border-border bg-muted/30 px-2 text-xs text-foreground outline-none"
+            className={cn(
+              'h-8 shrink-0 rounded-lg border border-border bg-background px-2 text-xs text-foreground',
+              FOCUS_RING,
+            )}
           >
             {categories.map((cat) => (
               <option key={cat} value={cat}>
@@ -515,7 +578,10 @@ function DirectoryBrowse({
           type="button"
           onClick={() => setSort((s) => (s === 'az' ? 'za' : 'az'))}
           aria-label={sort === 'az' ? 'Sort Z to A' : 'Sort A to Z'}
-          className="h-8 shrink-0 rounded-lg border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+          className={cn(
+            'h-8 shrink-0 rounded-lg border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted',
+            FOCUS_RING,
+          )}
         >
           {sort === 'az' ? 'A-Z' : 'Z-A'}
         </button>
@@ -524,17 +590,29 @@ function DirectoryBrowse({
       {/* Card grids */}
       {tab === 'connectors' &&
         (connectorsLoading ? (
-          <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+          <p
+            role="status"
+            aria-live="polite"
+            id="settings-directory-connectors"
+            className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
+          >
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Loading connectors…
           </p>
         ) : connectorsError ? (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
-            <p className="text-sm text-red-500">{connectorsError}</p>
+          <div
+            role="alert"
+            id="settings-directory-connectors"
+            className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+          >
+            <p className="text-sm text-destructive">{connectorsError}</p>
             {adapter?.retryConnectors ? (
               <button
                 type="button"
-                className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+                className={cn(
+                  'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                  FOCUS_RING,
+                )}
                 onClick={() => void adapter.retryConnectors?.()}
               >
                 Try again
@@ -542,9 +620,14 @@ function DirectoryBrowse({
             ) : null}
           </div>
         ) : visibleConnectors.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">No connectors match.</p>
+          <p
+            id="settings-directory-connectors"
+            className="py-8 text-center text-sm text-muted-foreground"
+          >
+            No connectors match.
+          </p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div id="settings-directory-connectors" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {visibleConnectors.map((connector) => {
               const connection = connectionById.get(connector.id);
               const canConnect = Boolean(connector.canConnect && adapter?.connectConnector);
@@ -584,13 +667,16 @@ function DirectoryBrowse({
                             type="button"
                             onClick={() => onOpenConnector(connector.id)}
                             aria-label={`Configure ${connector.name}`}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            className={cn(
+                              'flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                              FOCUS_RING,
+                            )}
                           >
                             <SettingsIcon className="h-4 w-4" />
                           </button>
                         ) : (
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20">
-                            <Check className="h-3 w-3 text-emerald-500" aria-hidden="true" />
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15">
+                            <Check className="h-3 w-3 text-primary" aria-hidden="true" />
                           </span>
                         )
                       ) : canConnect ? (
@@ -598,7 +684,10 @@ function DirectoryBrowse({
                           type="button"
                           onClick={() => connect(connector.id)}
                           aria-label={`Connect ${connector.name}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          className={cn(
+                            'flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                            FOCUS_RING,
+                          )}
                         >
                           <Plus className="h-4 w-4" />
                         </button>
@@ -612,7 +701,11 @@ function DirectoryBrowse({
                   <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
                     {connector.description}
                   </p>
-                  {error && <p className="text-[11px] text-red-500">{error}</p>}
+                  {error && (
+                    <p role="alert" className="text-[11px] text-destructive">
+                      {error}
+                    </p>
+                  )}
                 </div>
               );
             })}
@@ -621,17 +714,29 @@ function DirectoryBrowse({
 
       {tab === 'skills' &&
         (skillsLoading ? (
-          <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+          <p
+            role="status"
+            aria-live="polite"
+            id="settings-directory-skills"
+            className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
+          >
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Loading skills…
           </p>
         ) : skillsError ? (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
-            <p className="text-sm text-red-500">{skillsError}</p>
+          <div
+            role="alert"
+            id="settings-directory-skills"
+            className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+          >
+            <p className="text-sm text-destructive">{skillsError}</p>
             {adapter?.retrySkills ? (
               <button
                 type="button"
-                className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+                className={cn(
+                  'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                  FOCUS_RING,
+                )}
                 onClick={() => void adapter.retrySkills?.()}
               >
                 Try again
@@ -639,11 +744,14 @@ function DirectoryBrowse({
             ) : null}
           </div>
         ) : visibleSkills.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
+          <p
+            id="settings-directory-skills"
+            className="py-8 text-center text-sm text-muted-foreground"
+          >
             {skills.length === 0 ? 'No skills loaded in this environment.' : 'No skills match.'}
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div id="settings-directory-skills" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {visibleSkills.map((skill) => (
               <div
                 key={skill.id}
@@ -665,18 +773,26 @@ function DirectoryBrowse({
 
       {tab === 'plugins' &&
         (pluginsLoading ? (
-          <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+          <p
+            role="status"
+            aria-live="polite"
+            id="settings-directory-plugins"
+            className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
+          >
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Loading plugins…
           </p>
         ) : visiblePlugins.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
+          <p
+            id="settings-directory-plugins"
+            className="py-8 text-center text-sm text-muted-foreground"
+          >
             {plugins.length === 0
               ? 'No plugins available in this environment.'
               : 'No plugins match.'}
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div id="settings-directory-plugins" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {visiblePlugins.map((plugin) => (
               <div
                 key={plugin.id}
@@ -695,7 +811,7 @@ function DirectoryBrowse({
                     className={cn(
                       'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
                       plugin.enabled
-                        ? 'bg-emerald-500/15 text-emerald-500'
+                        ? 'bg-primary/15 text-primary'
                         : 'bg-muted text-muted-foreground',
                     )}
                   >
@@ -709,7 +825,10 @@ function DirectoryBrowse({
                   <a
                     href={plugin.detailsHref}
                     aria-label={`View ${plugin.name} details`}
-                    className="w-fit text-xs font-medium text-foreground underline-offset-4 hover:underline"
+                    className={cn(
+                      'w-fit text-xs font-medium text-foreground underline-offset-4 hover:underline',
+                      FOCUS_RING,
+                    )}
                   >
                     View details
                   </a>
@@ -743,7 +862,7 @@ function AddCustomConnectorForm({
   const [error, setError] = useState<string | null>(null);
 
   const trimmedUrl = url.trim();
-  const urlValid = /^https:\/\/.+/.test(trimmedUrl);
+  const urlValid = isValidHttpsUrl(trimmedUrl);
   const canSubmit = name.trim().length > 0 && urlValid && !submitting;
 
   const handleSubmit = async () => {
@@ -769,15 +888,26 @@ function AddCustomConnectorForm({
     }
   };
 
-  const inputClass =
-    'h-9 w-full rounded-lg border border-border bg-muted/30 px-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring';
+  const inputClass = cn(
+    'h-9 w-full rounded-lg border border-border bg-muted/30 px-3 text-sm text-foreground placeholder:text-muted-foreground',
+    FOCUS_RING,
+  );
 
   return (
-    <div className="flex flex-col gap-4">
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void handleSubmit();
+      }}
+    >
       <button
         type="button"
         onClick={onBack}
-        className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className={cn(
+          'flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground',
+          FOCUS_RING,
+        )}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         Back
@@ -786,7 +916,7 @@ function AddCustomConnectorForm({
       <div>
         <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
           Add custom connector
-          <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-500">
+          <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent-foreground">
             Beta
           </span>
         </h2>
@@ -796,12 +926,15 @@ function AddCustomConnectorForm({
             <button
               type="button"
               onClick={() => void adapter.openHref?.('/docs')}
-              className="text-foreground underline underline-offset-2"
+              className={cn('text-foreground underline underline-offset-2', FOCUS_RING)}
             >
               Learn more
             </button>
           ) : (
-            <a href="/docs" className="text-foreground underline underline-offset-2">
+            <a
+              href="/docs"
+              className={cn('text-foreground underline underline-offset-2', FOCUS_RING)}
+            >
               Learn more
             </a>
           )}
@@ -845,39 +978,58 @@ function AddCustomConnectorForm({
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com/mcp"
+          aria-invalid={trimmedUrl.length > 0 && !urlValid}
+          aria-describedby={
+            trimmedUrl.length > 0 && !urlValid ? 'custom-connector-url-error' : undefined
+          }
           className={inputClass}
         />
         {trimmedUrl.length > 0 && !urlValid && (
-          <span className="text-[11px] text-red-500">Enter a valid https:// URL.</span>
+          <span id="custom-connector-url-error" className="text-[11px] text-destructive">
+            Enter a valid https:// URL.
+          </span>
         )}
       </label>
 
-      <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <p className="flex items-start gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
+        <AlertTriangle
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
         Only use connectors from developers you trust. Custom connectors can read the conversation
         context you share with their tools.
       </p>
 
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
 
       <div className="flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={onBack}
-          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+          className={cn(
+            'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted',
+            FOCUS_RING,
+          )}
         >
           Cancel
         </button>
         <button
-          type="button"
-          onClick={() => void handleSubmit()}
+          type="submit"
           disabled={!canSubmit}
-          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
+          aria-busy={submitting || undefined}
+          className={cn(
+            'rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50',
+            FOCUS_RING,
+          )}
         >
-          {submitting ? 'Adding...' : 'Add'}
+          {submitting ? 'Adding…' : 'Add'}
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 
@@ -992,17 +1144,24 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       </div>
 
       {loading ? (
-        <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+        <p
+          role="status"
+          aria-live="polite"
+          className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
+        >
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Loading connectors…
         </p>
       ) : loadError ? (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
-          <p className="text-sm text-red-500">{loadError}</p>
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <p className="text-sm text-destructive">{loadError}</p>
           {adapter?.retryConnectors ? (
             <button
               type="button"
-              className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+              className={cn(
+                'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                FOCUS_RING,
+              )}
               onClick={() => void adapter.retryConnectors?.()}
             >
               Try again
@@ -1033,6 +1192,7 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                     onClick={() => setActiveTab(tab.key)}
                     className={cn(
                       'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                      FOCUS_RING,
                       activeTab === tab.key
                         ? 'bg-foreground text-background'
                         : 'border border-border text-muted-foreground hover:bg-muted',
@@ -1047,13 +1207,20 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
             <div className="flex shrink-0 items-center gap-1.5">
               {connectors.length > 0 ? (
                 <div className="relative w-48">
-                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Search
+                    className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                   <input
                     type="search"
-                    placeholder="Search connectors..."
+                    aria-label="Search connectors"
+                    placeholder="Search connectors…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                    className={cn(
+                      'h-8 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground',
+                      FOCUS_RING,
+                    )}
                   />
                 </div>
               ) : null}
@@ -1065,7 +1232,10 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                     onClick={toggle}
                     aria-haspopup="menu"
                     aria-expanded={open}
-                    className="flex h-8 items-center gap-1 rounded-lg bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
+                    className={cn(
+                      'flex h-8 items-center gap-1 rounded-lg bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90',
+                      FOCUS_RING,
+                    )}
                   >
                     Add
                     <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1102,7 +1272,10 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                   type="button"
                   onClick={() => setView('add-custom')}
                   disabled={!adapter?.addCustomConnector}
-                  className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={cn(
+                    'rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50',
+                    FOCUS_RING,
+                  )}
                 >
                   Connect remote MCP server
                 </button>
@@ -1113,7 +1286,7 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
               </p>
             )
           ) : (
-            <div className="overflow-hidden rounded-lg border border-border/80">
+            <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -1134,11 +1307,7 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                     const canConnect = Boolean(connector.canConnect && adapter?.connectConnector);
                     const rowError = rowErrors[connector.id];
                     return (
-                      <tr
-                        key={connector.id}
-                        onClick={() => setDetailId(connector.id)}
-                        className="cursor-pointer transition-colors hover:bg-muted/40"
-                      >
+                      <tr key={connector.id} className="transition-colors hover:bg-muted/40">
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <ConnectorLogo
@@ -1154,12 +1323,17 @@ function ConnectorsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                                   e.stopPropagation();
                                   setDetailId(connector.id);
                                 }}
-                                className="block max-w-full truncate text-sm font-medium text-foreground hover:underline"
+                                className={cn(
+                                  'block max-w-full truncate text-sm font-medium text-foreground hover:underline',
+                                  FOCUS_RING,
+                                )}
                               >
                                 {connector.name}
                               </button>
                               {rowError && (
-                                <p className="mt-0.5 text-[11px] text-red-500">{rowError}</p>
+                                <p role="alert" className="mt-0.5 text-[11px] text-destructive">
+                                  {rowError}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -1236,37 +1410,51 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       {/* Toolbar: search + Browse */}
       <div className="flex items-center gap-1.5">
         <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
           <input
             type="search"
-            placeholder="Search skills..."
+            aria-label="Search skills"
+            placeholder="Search skills…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+            className={cn(
+              'h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground',
+              FOCUS_RING,
+            )}
           />
         </div>
         <button
           type="button"
           onClick={() => setView('browse')}
-          className="h-8 shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          className={cn(
+            'h-8 shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted',
+            FOCUS_RING,
+          )}
         >
           Browse
         </button>
       </div>
 
       {loading ? (
-        <div className="flex flex-col gap-2">
+        <div role="status" aria-live="polite" className="flex flex-col gap-2">
+          <span className="sr-only">Loading skills…</span>
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/40" />
           ))}
         </div>
       ) : loadError ? (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4">
-          <p className="text-sm text-red-500">{loadError}</p>
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+          <p className="text-sm text-destructive">{loadError}</p>
           {adapter?.retrySkills ? (
             <button
               type="button"
-              className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+              className={cn(
+                'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                FOCUS_RING,
+              )}
               onClick={() => void adapter.retrySkills?.()}
             >
               Try again
@@ -1280,7 +1468,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
             : 'No skills match your search.'}
         </p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border/80">
+        <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -1297,8 +1485,8 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                 <tr key={skill.id} className="transition-colors hover:bg-muted/40">
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                        <BookOpen className="h-4 w-4" />
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <BookOpen className="h-4 w-4" aria-hidden="true" />
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">{skill.name}</p>
@@ -1380,19 +1568,29 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       {/* Toolbar: search + Browse + Add (capability-gated) */}
       <div className="flex items-center gap-1.5">
         <div className="relative min-w-0 flex-1">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
           <input
             type="search"
-            placeholder="Search plugins..."
+            aria-label="Search plugins"
+            placeholder="Search plugins…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+            className={cn(
+              'h-8 w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground',
+              FOCUS_RING,
+            )}
           />
         </div>
         <button
           type="button"
           onClick={() => setView('browse')}
-          className="h-8 shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          className={cn(
+            'h-8 shrink-0 rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted',
+            FOCUS_RING,
+          )}
         >
           Browse
         </button>
@@ -1405,7 +1603,10 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                 onClick={toggle}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                className="flex h-8 shrink-0 items-center gap-1 rounded-lg bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90"
+                className={cn(
+                  'flex h-8 shrink-0 items-center gap-1 rounded-lg bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90',
+                  FOCUS_RING,
+                )}
               >
                 Add
                 <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1427,7 +1628,8 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
       </div>
 
       {loading ? (
-        <div className="flex flex-col gap-2">
+        <div role="status" aria-live="polite" className="flex flex-col gap-2">
+          <span className="sr-only">Loading plugins…</span>
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/40" />
           ))}
@@ -1442,7 +1644,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border/80">
+        <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -1479,7 +1681,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                           className={cn(
                             'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
                             plugin.enabled
-                              ? 'bg-emerald-500/15 text-emerald-500'
+                              ? 'bg-primary/15 text-primary'
                               : 'bg-muted text-muted-foreground',
                           )}
                         >
@@ -1503,7 +1705,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                   )}
                   {hasUpdatedAt && (
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                      {plugin.updatedAt ? new Date(plugin.updatedAt).toLocaleDateString() : '-'}
+                      {plugin.updatedAt ? formatSettingsDate(plugin.updatedAt) : '-'}
                     </td>
                   )}
                 </tr>
@@ -1544,11 +1746,13 @@ function NavButton({
       onClick={() => onClick(itemKey)}
       className={cn(
         'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+        FOCUS_RING,
         isActive
           ? 'bg-accent text-accent-foreground font-medium'
           : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
       aria-current={isActive ? 'page' : undefined}
+      aria-controls="settings-pane"
     >
       <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'opacity-90' : 'opacity-60')} />
       <span className="truncate">{label}</span>
@@ -1618,18 +1822,6 @@ export function SettingsModal({
     });
   }, [navSearch, activeKeys]);
 
-  // Escape to close
-  React.useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   function renderSection() {
     if (activeSection === 'connectors') {
       return sectionContent['connectors'] ?? <ConnectorsPanel adapter={adapter} />;
@@ -1651,47 +1843,51 @@ export function SettingsModal({
     );
   }
 
-  return (
-    /* Backdrop — clicking outside does NOT close (matches Claude reference) */
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      {/* Dialog */}
-      <div
-        className="relative flex overflow-hidden rounded-xl border border-border/60 bg-background shadow-2xl"
-        style={{ width: 'min(92vw, 860px)', height: 'min(90vh, 680px)' }}
-      >
-        {/* Close button */}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close settings"
-          className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) return;
+    setNavSearch('');
+    onClose();
+  };
 
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        hideCloseButton={false}
+        closeLabel="Close settings"
+        aria-describedby={undefined}
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+        className="flex h-[min(94vh,680px)] w-[min(96vw,860px)] max-w-none flex-col gap-0 overflow-hidden rounded-xl border-border/60 bg-background p-0 shadow-2xl md:flex-row"
+      >
         {/* Left nav */}
         <nav
           aria-label="Settings navigation"
-          className="flex shrink-0 flex-col overflow-y-auto border-r border-border/60"
-          style={{ width: 220, padding: '20px 0' }}
+          className="flex max-h-[42%] w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:py-5"
         >
           {/* Title */}
-          <div className="mb-3 px-4 text-[15px] font-semibold text-foreground">{title}</div>
+          <DialogTitle className="mb-3 px-4 pr-12 text-[15px] font-semibold leading-normal text-foreground md:pr-4">
+            {title}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Search and configure AGI settings.
+          </DialogDescription>
 
           {/* Search */}
           <div className="relative mb-3 px-3">
-            <Search className="absolute left-6 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+            <Search
+              className="pointer-events-none absolute left-6 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
             <input
               type="search"
+              aria-label="Search settings"
               placeholder="Search"
               value={navSearch}
               onChange={(e) => setNavSearch(e.target.value)}
-              className="h-7 w-full rounded-md border border-border/60 bg-muted/30 pl-7 pr-3 text-xs text-foreground placeholder:text-muted-foreground outline-none"
+              className={cn(
+                'h-8 w-full rounded-md border border-border/60 bg-muted/30 pl-7 pr-3 text-xs text-foreground placeholder:text-muted-foreground',
+                FOCUS_RING,
+              )}
             />
           </div>
 
@@ -1739,16 +1935,16 @@ export function SettingsModal({
 
         {/* Right pane */}
         <main
-          className="min-w-0 flex-1 overflow-y-auto"
-          style={{ padding: '28px 32px 32px' }}
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-10 sm:px-6 sm:pb-6 md:px-8 md:pb-8 md:pt-7"
           id="settings-pane"
+          tabIndex={-1}
         >
           {/* Bound the measure: without it the same pane renders 576px wide in
               the Cloud shell and 720px in the Local one, and grows unbounded
               with the window. */}
           <div className="mx-auto w-full max-w-[672px]">{renderSection()}</div>
         </main>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
