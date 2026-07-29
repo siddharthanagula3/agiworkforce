@@ -115,6 +115,13 @@ pub struct LLMSendMessageRequest {
     pub max_tokens: Option<u32>,
     #[serde(default)]
     pub prefer_cloud_credits: bool, // Prefer cloud credits over own API keys
+    /// Explicit execution boundary for lightweight helper calls. Absent stays
+    /// fail-closed to Local in the router.
+    #[serde(
+        default,
+        deserialize_with = "crate::sys::commands::agi::deserialize_trust_mode"
+    )]
+    pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
 }
 
 /// Build the plain LLM request used by `llm_send_message`.
@@ -264,6 +271,10 @@ pub async fn llm_send_message(
 
     let llm_request = build_plain_llm_request(&request, model.clone());
 
+    let managed_cloud_only = matches!(
+        request.trust_mode.as_ref(),
+        Some(agiworkforce_model_registry::TrustMode::ManagedCloud)
+    );
     let preferences = RouterPreferences {
         provider,
         model: request.model.clone(),
@@ -271,17 +282,15 @@ pub async fn llm_send_message(
         context: None,
         prefer_cloud_credits: request.prefer_cloud_credits,
         local_only: false,
-        managed_cloud_only: false,
+        managed_cloud_only,
         // TRUST BOUNDARY (desktop-trust-boundary-01): `llm_send_message` is a
         // directly-exposed IPC command (voice cleanup, ghost-text-style
         // helper calls per the doc comment on `LLMSendMessageRequest`), not
-        // routed through `chat_send_message`'s trust-mode resolution. It has
-        // no active_mode/execution_mode field and no way to know whether the
-        // caller is in a Local session. Fails closed to Local via
-        // `effective_trust_mode`'s default — a BYOK/ManagedCloud `provider`
-        // in `request.provider` will now be rejected unless
-        // `LLMSendMessageRequest` grows a real trust_mode field.
-        trust_mode: None,
+        // routed through `chat_send_message`'s trust-mode resolution. Calls
+        // that omit the field still fail closed to Local via
+        // `effective_trust_mode`; Cloud voice supplies ManagedCloud only after
+        // the frontend captures and validates its authenticated boundary.
+        trust_mode: request.trust_mode,
     };
 
     let candidates = {
@@ -1507,6 +1516,7 @@ mod tests {
             temperature: Some(0.2),
             max_tokens: Some(500),
             prefer_cloud_credits: false,
+            trust_mode: None,
         };
 
         let llm_request = build_plain_llm_request(&request, "gpt-5.6-luna".to_string());
@@ -1519,6 +1529,22 @@ mod tests {
         assert!(llm_request.tools.is_none());
         assert!(llm_request.tool_choice.is_none());
         assert!(llm_request.thinking_mode.is_none());
+    }
+
+    #[test]
+    fn direct_llm_command_deserializes_explicit_managed_trust_boundary() {
+        let request: LLMSendMessageRequest = serde_json::from_value(serde_json::json!({
+            "messages": [],
+            "provider": "managed_cloud",
+            "prefer_cloud_credits": true,
+            "trust_mode": "managed"
+        }))
+        .expect("managed trust mode should deserialize");
+
+        assert_eq!(
+            request.trust_mode,
+            Some(agiworkforce_model_registry::TrustMode::ManagedCloud)
+        );
     }
 
     #[tokio::test]

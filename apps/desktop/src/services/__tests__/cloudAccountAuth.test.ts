@@ -23,6 +23,7 @@ vi.mock('../../lib/egressGuard', () => ({
 }));
 
 import { cloudAccountAuth } from '../cloudAccountAuth';
+import { WEB_APP_URL } from '../../api/config';
 
 function jwtWithClaims(claims: Record<string, unknown>): string {
   const header = btoa(JSON.stringify({ alg: 'none', typ: 'JWT' }))
@@ -224,21 +225,19 @@ describe('cloudAccountAuth', () => {
       close: vi.fn(async () => undefined),
     });
     authorizeDesktopDeviceMock.mockImplementation(async (options) => {
-      await expect(
-        options.post('https://agiworkforce.com/api/auth/device/code', {}),
-      ).resolves.toEqual({
+      await expect(options.post(`${WEB_APP_URL}/api/auth/device/code`, {})).resolves.toEqual({
         status: 200,
         body: '{"device_code":"device-code"}',
       });
       await expect(
-        options.post('https://agiworkforce.com/api/auth/device/token', {
+        options.post(`${WEB_APP_URL}/api/auth/device/token`, {
           device_code: 'device-code',
         }),
       ).resolves.toEqual({
         status: 403,
         body: '{"error":"authorization_pending"}',
       });
-      await options.openAuthorization('https://agiworkforce.com/auth/device?user_code=ABCD-1234');
+      await options.openAuthorization(`${WEB_APP_URL}/auth/device?user_code=ABCD-1234`);
       return { accessToken, expiresAt: Date.now() + 3_600_000 };
     });
 

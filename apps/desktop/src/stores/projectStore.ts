@@ -57,6 +57,8 @@ export interface Project {
   color?: string;
   icon?: string;
   isArchived: boolean;
+  /** Managed Cloud favorite state, persisted in project metadata. */
+  isStarred?: boolean;
   createdAt: string;
   updatedAt: string;
   /** Knowledge base files with extracted content for context injection */

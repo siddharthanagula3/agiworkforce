@@ -40,10 +40,12 @@ const FILTER_TABS: Array<{ id: FilterTab; label: string }> = [
 ];
 
 const FREQUENCY_BADGE_CLASS: Record<Frequency, string> = {
-  daily: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
-  weekly: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
-  monthly: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
-  custom: 'bg-slate-500/15 text-slate-400 border-slate-500/25',
+  daily:
+    'border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]',
+  weekly: 'border-[var(--chat-info)]/25 bg-[var(--chat-info)]/15 text-[var(--chat-info)]',
+  monthly: 'border-[var(--chat-warning)]/25 bg-[var(--chat-warning)]/15 text-[var(--chat-warning)]',
+  custom:
+    'border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]',
 };
 
 const FREQUENCY_LABEL: Record<Frequency, string> = {
@@ -125,10 +127,10 @@ function ScheduleCard({ task, onEdit }: ScheduleCardProps) {
   return (
     <div
       className={cn(
-        'group rounded-xl border bg-white/[0.03] p-4 transition',
+        'group rounded-xl border bg-[var(--chat-surface-elevated)] p-4 transition',
         isActive
-          ? 'border-white/8 hover:border-white/15'
-          : 'border-white/5 opacity-70 hover:opacity-90',
+          ? 'border-[var(--chat-border)] hover:border-[var(--chat-border-strong)]'
+          : 'border-[var(--chat-border-subtle)] opacity-70 hover:opacity-90',
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -136,7 +138,7 @@ function ScheduleCard({ task, onEdit }: ScheduleCardProps) {
         <div className="min-w-0 flex-1 space-y-1.5">
           {/* Name + frequency badge */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-white" title={task.name}>
+            <span className="text-sm font-medium text-[var(--chat-text-primary)]" title={task.name}>
               {truncatedName}
             </span>
             <span
@@ -150,18 +152,20 @@ function ScheduleCard({ task, onEdit }: ScheduleCardProps) {
           </div>
 
           {/* Prompt */}
-          <p className="text-xs leading-relaxed text-slate-500" title={task.prompt}>
+          <p className="text-xs leading-relaxed text-[var(--chat-text-muted)]" title={task.prompt}>
             {truncatedPrompt}
           </p>
 
           {/* Time metadata */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--chat-text-muted)]">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3 flex-shrink-0" />
               {getScheduleSummary(task.schedule)}
             </span>
             {task.nextRunAt !== null && isActive && (
-              <span className="text-teal-500">Next: {getRelativeTimeDisplay(task.nextRunAt)}</span>
+              <span className="text-[var(--chat-accent-primary)]">
+                Next: {getRelativeTimeDisplay(task.nextRunAt)}
+              </span>
             )}
             {task.lastRunAt !== null && <span>Last: {getRelativeTimeDisplay(task.lastRunAt)}</span>}
           </div>
@@ -178,8 +182,8 @@ function ScheduleCard({ task, onEdit }: ScheduleCardProps) {
             className={cn(
               'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition',
               isActive
-                ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20'
-                : 'border-teal-500/30 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20',
+                ? 'border-[var(--chat-warning)]/30 bg-[var(--chat-warning)]/10 text-[var(--chat-warning)] hover:bg-[var(--chat-warning)]/20'
+                : 'border-[var(--chat-success)]/30 bg-[var(--chat-success)]/10 text-[var(--chat-success)] hover:bg-[var(--chat-success)]/20',
               (isToggling || isDeleting) && 'cursor-not-allowed opacity-50',
             )}
           >
@@ -199,7 +203,7 @@ function ScheduleCard({ task, onEdit }: ScheduleCardProps) {
             onClick={() => onEdit(schedule)}
             disabled={isDeleting}
             title="Edit schedule"
-            className="rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md p-1.5 text-[var(--chat-text-muted)] transition hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Edit3 className="h-3.5 w-3.5" />
           </button>
@@ -210,7 +214,7 @@ function ScheduleCard({ task, onEdit }: ScheduleCardProps) {
             onClick={() => void handleDelete()}
             disabled={isDeleting || isToggling}
             title="Delete schedule"
-            className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-900/30 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md p-1.5 text-[var(--chat-text-muted)] transition hover:bg-[var(--chat-destructive)]/10 hover:text-[var(--chat-destructive)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isDeleting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -313,26 +317,28 @@ export function ScheduledTasksPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Page header */}
-      <div className="border-b border-white/10 px-6 py-5">
+      <div className="border-b border-[var(--chat-border)] px-6 py-5">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-teal-400" />
-              <h1 className="text-lg font-semibold text-white">Scheduled Tasks</h1>
+              <Calendar className="h-5 w-5 text-[var(--chat-accent-primary)]" />
+              <h1 className="text-lg font-semibold text-[var(--chat-text-primary)]">
+                Scheduled Tasks
+              </h1>
               {tasks.length > 0 && (
-                <span className="rounded-full bg-teal-500/20 px-2 py-0.5 text-xs font-medium text-teal-300">
+                <span className="rounded-full bg-[var(--chat-accent-primary)]/20 px-2 py-0.5 text-xs font-medium text-[var(--chat-accent-primary)]">
                   {tasks.length}
                 </span>
               )}
             </div>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-[var(--chat-text-muted)]">
               Automate recurring AI tasks — runs on any model, no supervision needed.
             </p>
           </div>
           <button
             type="button"
             onClick={handleOpenCreate}
-            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-500"
+            className="flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-4 py-2 text-sm font-medium text-[var(--chat-accent-primary-contrast)] transition hover:opacity-90"
           >
             <Plus className="h-4 w-4" />
             New Schedule
@@ -352,8 +358,8 @@ export function ScheduledTasksPage() {
                   className={cn(
                     'rounded-lg px-3 py-1.5 text-sm font-medium transition',
                     filter === tab.id
-                      ? 'bg-teal-500/15 text-teal-300'
-                      : 'text-slate-500 hover:bg-white/5 hover:text-slate-300',
+                      ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
+                      : 'text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-secondary)]',
                   )}
                 >
                   {tab.label}
@@ -362,8 +368,8 @@ export function ScheduledTasksPage() {
                       className={cn(
                         'ml-1.5 rounded-full px-1.5 py-0.5 text-xs',
                         filter === tab.id
-                          ? 'bg-teal-500/20 text-teal-300'
-                          : 'bg-white/5 text-slate-500',
+                          ? 'bg-[var(--chat-accent-primary)]/20 text-[var(--chat-accent-primary)]'
+                          : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]',
                       )}
                     >
                       {count}
@@ -383,18 +389,18 @@ export function ScheduledTasksPage() {
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={`skeleton-${i}`}
-                className="animate-pulse rounded-xl border border-white/8 bg-white/[0.03] p-4"
+                className="animate-pulse rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1 space-y-2">
-                    <div className="h-4 w-40 rounded bg-white/10" />
-                    <div className="h-3 w-full rounded bg-white/10" />
-                    <div className="h-3 w-32 rounded bg-white/10" />
+                    <div className="h-4 w-40 rounded bg-[var(--chat-surface-hover)]" />
+                    <div className="h-3 w-full rounded bg-[var(--chat-surface-hover)]" />
+                    <div className="h-3 w-32 rounded bg-[var(--chat-surface-hover)]" />
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
-                    <div className="h-8 w-24 rounded-lg bg-white/10" />
-                    <div className="h-8 w-8 rounded-md bg-white/10" />
-                    <div className="h-8 w-8 rounded-md bg-white/10" />
+                    <div className="h-8 w-24 rounded-lg bg-[var(--chat-surface-hover)]" />
+                    <div className="h-8 w-8 rounded-md bg-[var(--chat-surface-hover)]" />
+                    <div className="h-8 w-8 rounded-md bg-[var(--chat-surface-hover)]" />
                   </div>
                 </div>
               </div>

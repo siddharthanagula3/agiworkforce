@@ -29,6 +29,7 @@ import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
+import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
@@ -120,6 +121,7 @@ export default function ChatScreen() {
   const addToChatRef = useRef<BottomSheet>(null);
   const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
+  const [projectPickerOpenSignal, setProjectPickerOpenSignal] = useState(0);
   const chatInputAttachRef = useRef<{
     addAttachments: (
       items: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
@@ -593,6 +595,22 @@ export default function ChatScreen() {
     addToChatRef.current?.close();
     setTimeout(() => {
       setStyleSelectorOpenSignal((value) => value + 1);
+    }, STYLE_SHEET_HANDOFF_DELAY_MS);
+  }, []);
+
+  // Sheet-to-sheet handoff: the "+" sheet must finish closing before the model
+  // picker snaps open, or the second sheet mounts behind the first backdrop.
+  const handleSheetModelPicker = useCallback(() => {
+    addToChatRef.current?.close();
+    setTimeout(() => {
+      handleOpenModelPicker();
+    }, STYLE_SHEET_HANDOFF_DELAY_MS);
+  }, [handleOpenModelPicker]);
+
+  const handleSheetProjectPicker = useCallback(() => {
+    addToChatRef.current?.close();
+    setTimeout(() => {
+      setProjectPickerOpenSignal((value) => value + 1);
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
@@ -1239,7 +1257,6 @@ export default function ChatScreen() {
             onOpenCompare={handleOpenCompare}
             onOpenExport={handleOpenExport}
             onOpenAddToChat={handleOpenAddToChat}
-            onOpenConnectors={FEATURES.connectors ? handleOpenConnectors : undefined}
             isOnline={conversationExecutionMode === 'local' || isOnline}
             queueSize={queueSize}
             attachRef={chatInputAttachRef}
@@ -1264,9 +1281,14 @@ export default function ChatScreen() {
           onFile={handleSheetFile}
           onOpenCloudAccess={handleOpenCloudSignIn}
           onOpenStyleSelector={handleOpenStyleSelector}
+          onOpenModelPicker={handleSheetModelPicker}
+          onOpenProjectPicker={handleSheetProjectPicker}
         />
 
         <StyleSelector openSignal={styleSelectorOpenSignal} />
+
+        {/* Picker modal only -- the trigger lives in the "+" sheet. */}
+        <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
 
         {/* Model picker bottom sheet — conversationId scopes the reasoning-effort
             selector to this conversation (agentControlStore override). */}

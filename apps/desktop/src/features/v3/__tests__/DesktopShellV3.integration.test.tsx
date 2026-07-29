@@ -21,6 +21,7 @@ vi.mock('react-i18next', () => ({
         'sidebar.nav.projects': 'Projects',
         'sidebar.nav.artifacts': 'Artifacts',
         'sidebar.nav.scheduled': 'Scheduled',
+        'sidebar.nav.customize': 'Customize',
         'sidebar.nav.liveArtifacts': 'Live artifacts',
         'sidebar.nav.dispatch': 'Dispatch',
         'sidebar.signIn': 'Sign in',

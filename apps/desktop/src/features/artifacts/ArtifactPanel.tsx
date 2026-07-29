@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/Button';
 import { ScrollArea } from '@/components/ui/ScrollArea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/Dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,9 +59,9 @@ import {
 import { ArtifactTypeIcon, getArtifactFileExtension } from '@/lib/artifactUtils';
 import { artifactToSummary } from '@/lib/messageArtifactPanel';
 import { ArtifactRendererView } from './ArtifactRendererView';
+import { ArtifactVersionHistory } from './ArtifactVersionHistory';
 import { InlineArtifactEditor } from './InlineArtifactEditor';
 import { ShareArtifactDialog } from './ShareArtifactDialog';
-import { VersionHistoryDialog } from './VersionHistoryDialog';
 import { makeDesktopPublishCallback } from './publishAdapter';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -334,6 +335,19 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     if (!activeArtifactId) return;
     setShareDialogArtifactId(activeArtifactId);
   }, [activeArtifactId]);
+
+  /**
+   * "Fix Bug" from the artifact renderer's error state (e.g. an invalid
+   * diagram). Ported from features/canvas/ArtifactPreview.tsx's onFixBug
+   * pattern: send the error + source back to the model. There is no prop
+   * path from here to the chat composer, so this reuses the existing
+   * `chat:action` window-event bus (see PlansModal.tsx / settings General)
+   * that App.tsx already listens on to queue an externalSendRequest.
+   */
+  const handleFixBug = useCallback((errorMessage: string, source: string) => {
+    const content = `Fix this bug in my artifact:\n\nError:\n${errorMessage}\n\nSource:\n\`\`\`\n${source}\n\`\`\``;
+    window.dispatchEvent(new CustomEvent('chat:action', { detail: { type: 'fix-bug', content } }));
+  }, []);
 
   /**
    * Publish via the canonical artifact-publish service.
@@ -710,6 +724,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                               size="icon"
                               className="h-7 w-7"
                               onClick={() => handleInnerTabChange('versions')}
+                              aria-label="Version history"
                             >
                               <History className="h-3.5 w-3.5" />
                             </Button>
@@ -811,6 +826,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                             <ArtifactRendererView
                               rendered={renderedArtifact}
                               isStreaming={isStreaming === artifact.id}
+                              onFixBug={handleFixBug}
                             />
                           </ScrollArea>
                         )}
@@ -864,13 +880,29 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
         )}
       </div>
 
-      <VersionHistoryDialog
-        open={showVersionHistoryDialog}
-        onOpenChange={setShowVersionHistoryDialog}
-        versions={versions}
-        currentVersion={renderedArtifact?.version_info.current ?? 1}
-        onRollback={handleRollback}
-      />
+      <Dialog open={showVersionHistoryDialog} onOpenChange={setShowVersionHistoryDialog}>
+        <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
+          <DialogTitle className="sr-only">Version History</DialogTitle>
+          <DialogDescription className="sr-only">
+            Compare and restore previous versions of this artifact.
+          </DialogDescription>
+          {activeArtifactId && (
+            <ArtifactVersionHistory
+              artifactId={activeArtifactId}
+              currentVersion={renderedArtifact?.version_info.current ?? 1}
+              className="max-h-[70vh]"
+              onRollbackSuccess={() => {
+                setShowVersionHistoryDialog(false);
+                getRenderedArtifact(activeArtifactId)
+                  .then(setRenderedArtifact)
+                  .catch((err: unknown) => {
+                    console.error('Failed to refresh artifact after rollback:', err);
+                  });
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {shareDialogArtifactId && (
         <ShareArtifactDialog

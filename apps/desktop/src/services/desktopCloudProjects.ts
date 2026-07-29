@@ -30,6 +30,7 @@ function toDesktopProject(project: ManagedCloudProject): Project {
     color: project.color ?? undefined,
     icon: undefined,
     isArchived: project.isArchived ?? false,
+    isStarred: project.metadata?.['starred'] === true,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     knowledgeBaseFiles: [],
@@ -61,6 +62,7 @@ function updateInput(updates: Partial<Project>): ManagedCloudProjectUpdateReques
       : {}),
     ...(updates.color !== undefined ? { color: updates.color } : {}),
     ...(updates.isArchived !== undefined ? { isArchived: updates.isArchived } : {}),
+    ...(updates.isStarred !== undefined ? { starred: updates.isStarred } : {}),
     ...(updates.iconEmoji !== undefined ? { iconEmoji: updates.iconEmoji } : {}),
     ...(updates.accentColor !== undefined ? { accentColor: updates.accentColor } : {}),
     ...(updates.conversationIds !== undefined

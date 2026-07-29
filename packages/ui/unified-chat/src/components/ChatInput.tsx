@@ -9,7 +9,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { Check, ChevronDown, Folder, FolderOpen, Mic, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, Folder, FolderOpen, Loader2, Mic, Plus, X } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
@@ -58,6 +58,27 @@ export interface ChatInputProjectPicker {
   onSelectProject: (projectId: string | null) => void;
   /** Opens the host-owned project creation flow; absent when creation is unsupported. */
   onCreateProject?: () => void;
+}
+
+export type ComposerVoiceState =
+  | 'idle'
+  | 'listening'
+  | 'transcribing'
+  | 'processing'
+  | 'awaiting_action'
+  | 'executing'
+  | 'error'
+  | 'unsupported';
+
+/**
+ * Host-owned replacement for the composer's browser speech-recognition mic.
+ * Desktop Cloud supplies this controller so capture, managed transcription,
+ * rewrite, and action approval stay inside the host's explicit trust boundary.
+ */
+export interface ComposerVoiceController {
+  state: ComposerVoiceState;
+  onToggle: () => void | Promise<void>;
+  idleLabel?: string;
 }
 
 export interface ChatInputProps {
@@ -160,6 +181,8 @@ export interface ChatInputProps {
    * would have two different definitions of an acceptable attachment.
    */
   pendingAttachments?: { id: string; files: File[] } | null;
+  /** Replaces the browser speech mic when a host owns a richer voice workflow. */
+  voiceInputController?: ComposerVoiceController;
 }
 
 export function ChatInput({
@@ -185,6 +208,7 @@ export function ChatInput({
   supportsResearch = false,
   attachmentPolicy,
   pendingAttachments = null,
+  voiceInputController,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const aggregateIsStreaming = useChatStore((s) => s.isStreaming);
@@ -352,7 +376,7 @@ export function ChatInput({
   // Resolve agent control state for the active conversation
   const resolveAgentControl = useAgentControlStore((s) => s.resolve);
   const showAgentControl = Boolean(conversationId && supportsAgentControl);
-  const { state: voiceState, start: startVoice } = useVoiceInput({
+  const { state: browserVoiceState, start: startBrowserVoice } = useVoiceInput({
     onTranscript: (text) => {
       const cleanedText = cleanupVoiceDictation(text);
       const isCommand = detectVoiceCommand(cleanedText);
@@ -364,6 +388,26 @@ export function ChatInput({
       textareaRef.current?.focus();
     },
   });
+  const voiceState = voiceInputController?.state ?? browserVoiceState;
+  const startVoice = voiceInputController?.onToggle ?? startBrowserVoice;
+  const voiceIsBusy = ['transcribing', 'processing', 'awaiting_action', 'executing'].includes(
+    voiceState,
+  );
+  const voiceIsDisabled = voiceIsBusy || voiceState === 'unsupported';
+  const voiceLabel =
+    voiceState === 'listening'
+      ? 'Stop recording'
+      : voiceState === 'transcribing'
+        ? 'Transcribing voice'
+        : voiceState === 'processing'
+          ? 'Processing voice request'
+          : voiceState === 'awaiting_action'
+            ? 'Voice action awaiting approval'
+            : voiceState === 'executing'
+              ? 'Running voice action'
+              : voiceState === 'unsupported'
+                ? 'Voice input unavailable'
+                : (voiceInputController?.idleLabel ?? 'Voice input');
 
   // Auto-focus on mount
   useEffect(() => {
@@ -826,23 +870,32 @@ export function ChatInput({
               />
 
               {/* Mic button — ghost, hidden when streaming */}
-              {!isStreaming && voiceState !== 'unsupported' && (
-                <button
-                  type="button"
-                  onClick={startVoice}
-                  aria-label={voiceState === 'listening' ? 'Stop recording' : 'Voice input'}
-                  className={cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                    'transition-colors duration-150',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-                    voiceState === 'listening'
-                      ? 'text-[var(--chat-accent-primary)] animate-pulse hover:bg-[var(--chat-accent-primary)]/10'
-                      : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
-                  )}
-                >
-                  <Mic size={16} strokeWidth={1.75} />
-                </button>
-              )}
+              {!isStreaming &&
+                (voiceInputController !== undefined || voiceState !== 'unsupported') && (
+                  <button
+                    type="button"
+                    onClick={() => void startVoice()}
+                    aria-label={voiceLabel}
+                    title={voiceLabel}
+                    disabled={voiceIsDisabled}
+                    className={cn(
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+                      'transition-colors duration-150',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                      voiceState === 'listening'
+                        ? 'text-[var(--chat-accent-primary)] animate-pulse hover:bg-[var(--chat-accent-primary)]/10'
+                        : voiceIsBusy
+                          ? 'cursor-wait text-[var(--chat-text-muted)]'
+                          : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
+                    )}
+                  >
+                    {voiceIsBusy ? (
+                      <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
+                    ) : (
+                      <Mic size={16} strokeWidth={1.75} />
+                    )}
+                  </button>
+                )}
 
               {/* Send / Stop — shared 3-state SendButton (mirrors web's composer).
                   The desktop chat store only models `isStreaming`, so we drive

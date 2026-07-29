@@ -114,6 +114,18 @@ function renderModal(
 }
 
 describe('SettingsModal nav (web IA)', () => {
+  it('uses an accessible dialog boundary and a responsive stacked layout', () => {
+    renderModal();
+
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+
+    expect(dialog.getAttribute('aria-labelledby')).toBeTruthy();
+    expect(dialog.className).toContain('md:flex-row');
+    expect(nav.className).toContain('md:w-[220px]');
+    expect(screen.getByRole('searchbox', { name: 'Search settings' })).toBeTruthy();
+  });
+
   it('renders Skills, Connectors, and Plugins as plain nav items with NO group headings', () => {
     renderModal();
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
@@ -134,7 +146,7 @@ describe('SettingsModal nav (web IA)', () => {
 
   it('closes on Escape', () => {
     const { onClose } = renderModal();
-    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -183,7 +195,7 @@ describe('Connectors pane (table)', () => {
 
   it('filters rows via search', () => {
     renderModal();
-    fireEvent.change(screen.getByPlaceholderText('Search connectors...'), {
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search connectors' }), {
       target: { value: 'github' },
     });
     expect(screen.getByText('GitHub')).toBeTruthy();
@@ -221,6 +233,24 @@ describe('Connectors pane (table)', () => {
     // Back returns to the table.
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.getByRole('columnheader', { name: 'Connector' })).toBeTruthy();
+  });
+
+  it('does not make the entire connector table row a mouse-only control', () => {
+    renderModal();
+    const githubRow = screen.getByRole('button', { name: 'GitHub' }).closest('tr');
+    expect(githubRow).toBeTruthy();
+
+    fireEvent.click(within(githubRow!).getByText('Developer'));
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+  });
+
+  it('announces connector loading and errors', () => {
+    const first = renderModal({}, { connectorsLoading: true });
+    expect(screen.getByRole('status').textContent).toContain('Loading connectors…');
+
+    first.unmount();
+    renderModal({}, { connectorsLoading: false, connectorsError: 'Directory unavailable.' });
+    expect(screen.getByRole('alert').textContent).toContain('Directory unavailable.');
   });
 
   it('renders a Connect button ONLY when the surface can actually connect, surfacing failures inline', async () => {

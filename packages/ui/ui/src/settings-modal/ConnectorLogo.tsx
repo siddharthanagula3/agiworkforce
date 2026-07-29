@@ -303,7 +303,7 @@ const SIZE = {
 export interface ConnectorLogoProps {
   /** Connector id used to look up the brand logo */
   connectorId: string;
-  /** Fallback gradient Tailwind classes — only used when no glyph or URL matches */
+  /** Fallback theme classes — only used when no glyph or URL matches */
   fallbackGradient?: string;
   /** Fallback 1-2 char text rendered on the gradient tile */
   fallbackText?: string;
@@ -314,7 +314,7 @@ export interface ConnectorLogoProps {
 
 export function ConnectorLogo({
   connectorId,
-  fallbackGradient = 'from-zinc-600 to-zinc-700',
+  fallbackGradient = 'from-primary/20 to-primary/5 text-primary',
   fallbackText,
   size = 'md',
   className,
@@ -387,7 +387,7 @@ export function ConnectorLogo({
   return (
     <div
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold text-white',
+        'flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-xs font-bold',
         fallbackGradient,
         wrapper,
         className,

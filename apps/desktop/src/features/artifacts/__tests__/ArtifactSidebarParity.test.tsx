@@ -54,8 +54,8 @@ vi.mock('./ShareArtifactDialog', () => ({
   ShareArtifactDialog: () => null,
 }));
 
-vi.mock('./VersionHistoryDialog', () => ({
-  VersionHistoryDialog: () => null,
+vi.mock('./ArtifactVersionHistory', () => ({
+  ArtifactVersionHistory: () => null,
 }));
 
 vi.mock('react-syntax-highlighter', () => ({

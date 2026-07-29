@@ -82,9 +82,9 @@ function padTime(n: number): string {
 
 function fieldCn(extra?: string): string {
   return cn(
-    'w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white',
-    'placeholder-slate-500 outline-none transition',
-    'focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/30',
+    'w-full rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-3 py-2 text-sm text-[var(--chat-text-primary)]',
+    'placeholder:text-[var(--chat-text-placeholder)] outline-none transition',
+    'focus:border-[var(--chat-accent-primary)] focus:ring-1 focus:ring-[var(--chat-accent-primary)]/30',
     extra,
   );
 }
@@ -228,23 +228,26 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-[var(--chat-surface-overlay)]/80 backdrop-blur-sm"
         onClick={handleClose}
         aria-hidden="true"
       />
 
       {/* Dialog */}
       <div
-        className="relative z-10 w-full max-w-xl rounded-2xl border border-white/10 bg-[#0b0c14] shadow-2xl"
+        className="relative z-10 w-full max-w-xl rounded-2xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="schedule-editor-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-[var(--chat-border)] px-6 py-4">
           <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-teal-400" />
-            <h2 id="schedule-editor-title" className="text-sm font-semibold text-white">
+            <Calendar className="h-4 w-4 text-[var(--chat-accent-primary)]" />
+            <h2
+              id="schedule-editor-title"
+              className="text-sm font-semibold text-[var(--chat-text-primary)]"
+            >
               {isEditing ? 'Edit Schedule' : 'New Scheduled Task'}
             </h2>
           </div>
@@ -252,7 +255,7 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
             type="button"
             onClick={handleClose}
             disabled={isSaving}
-            className="rounded-md p-1 text-slate-400 transition hover:bg-white/10 hover:text-white"
+            className="rounded-md p-1 text-[var(--chat-text-muted)] transition hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -263,8 +266,11 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
         <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-5">
           {/* Name */}
           <div>
-            <label htmlFor="sched-name" className="mb-1.5 block text-sm font-medium text-slate-300">
-              Name <span className="text-red-400">*</span>
+            <label
+              htmlFor="sched-name"
+              className="mb-1.5 block text-sm font-medium text-[var(--chat-text-secondary)]"
+            >
+              Name <span className="text-[var(--chat-destructive)]">*</span>
             </label>
             <input
               id="sched-name"
@@ -281,9 +287,9 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
           <div>
             <label
               htmlFor="sched-prompt"
-              className="mb-1.5 block text-sm font-medium text-slate-300"
+              className="mb-1.5 block text-sm font-medium text-[var(--chat-text-secondary)]"
             >
-              Prompt / Task <span className="text-red-400">*</span>
+              Prompt / Task <span className="text-[var(--chat-destructive)]">*</span>
             </label>
             <textarea
               id="sched-prompt"
@@ -298,7 +304,9 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
 
           {/* Frequency */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">Frequency</label>
+            <label className="mb-2 block text-sm font-medium text-[var(--chat-text-secondary)]">
+              Frequency
+            </label>
             <div className="grid grid-cols-2 gap-2">
               {FREQUENCY_OPTIONS.map((opt) => (
                 <button
@@ -309,13 +317,15 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
                   className={cn(
                     'rounded-lg border px-3 py-2.5 text-left transition',
                     frequency === opt.value
-                      ? 'border-teal-500 bg-teal-500/15 text-white'
-                      : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:bg-white/8 hover:text-slate-200',
+                      ? 'border-[var(--chat-accent-primary)] bg-[var(--chat-accent-primary)]/15 text-[var(--chat-text-primary)]'
+                      : 'border-[var(--chat-border)] bg-[var(--chat-surface-base)] text-[var(--chat-text-muted)] hover:border-[var(--chat-border-strong)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-secondary)]',
                     isSaving && 'cursor-not-allowed opacity-50',
                   )}
                 >
                   <div className="text-sm font-medium">{opt.label}</div>
-                  <div className="mt-0.5 text-xs text-slate-500">{opt.description}</div>
+                  <div className="mt-0.5 text-xs text-[var(--chat-text-muted)]">
+                    {opt.description}
+                  </div>
                 </button>
               ))}
             </div>
@@ -324,7 +334,9 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
           {/* Weekly: day picker */}
           {frequency === 'weekly' && (
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">Days of week</label>
+              <label className="mb-2 block text-sm font-medium text-[var(--chat-text-secondary)]">
+                Days of week
+              </label>
               <div className="flex flex-wrap gap-2">
                 {WEEKDAY_OPTIONS.map((day) => {
                   const selected = weekDays.includes(day.value);
@@ -338,8 +350,8 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
                       className={cn(
                         'rounded-lg border px-3 py-1.5 text-xs font-medium transition',
                         selected
-                          ? 'border-teal-500 bg-teal-500/20 text-teal-300'
-                          : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-slate-200',
+                          ? 'border-[var(--chat-accent-primary)] bg-[var(--chat-accent-primary)]/20 text-[var(--chat-accent-primary)]'
+                          : 'border-[var(--chat-border)] bg-[var(--chat-surface-base)] text-[var(--chat-text-muted)] hover:border-[var(--chat-border-strong)] hover:text-[var(--chat-text-secondary)]',
                         isSaving && 'cursor-not-allowed opacity-50',
                       )}
                     >
@@ -354,7 +366,9 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
           {/* Daily / Weekly / Monthly: time picker */}
           {(frequency === 'daily' || frequency === 'weekly' || frequency === 'monthly') && (
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">Time</label>
+              <label className="mb-2 block text-sm font-medium text-[var(--chat-text-secondary)]">
+                Time
+              </label>
               <div className="flex items-center gap-2">
                 <select
                   value={hour}
@@ -364,12 +378,12 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
                   className={cn(fieldCn('w-28 cursor-pointer'), 'w-28')}
                 >
                   {HOUR_OPTIONS.map((h) => (
-                    <option key={h} value={h} className="bg-slate-900">
+                    <option key={h} value={h} className="bg-[var(--chat-surface-base)]">
                       {padTime(h)}:00
                     </option>
                   ))}
                 </select>
-                <span className="text-slate-500">:</span>
+                <span className="text-[var(--chat-text-muted)]">:</span>
                 <select
                   value={minute}
                   onChange={(e) => setMinute(Number(e.target.value))}
@@ -378,7 +392,7 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
                   className={cn(fieldCn('w-24 cursor-pointer'), 'w-24')}
                 >
                   {MINUTE_OPTIONS.map((m) => (
-                    <option key={m} value={m} className="bg-slate-900">
+                    <option key={m} value={m} className="bg-[var(--chat-surface-base)]">
                       {padTime(m)}
                     </option>
                   ))}
@@ -392,9 +406,9 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
             <div>
               <label
                 htmlFor="sched-cron"
-                className="mb-1.5 block text-sm font-medium text-slate-300"
+                className="mb-1.5 block text-sm font-medium text-[var(--chat-text-secondary)]"
               >
-                Cron expression <span className="text-red-400">*</span>
+                Cron expression <span className="text-[var(--chat-destructive)]">*</span>
               </label>
               <input
                 id="sched-cron"
@@ -409,7 +423,7 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
                 href="https://crontab.guru"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-1.5 inline-flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300"
+                className="mt-1.5 inline-flex items-center gap-1 text-xs text-[var(--chat-accent-primary)] hover:opacity-80"
               >
                 <Info className="h-3 w-3" />
                 crontab.guru — cron expression helper
@@ -418,23 +432,23 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
           )}
 
           {/* Preview */}
-          <div className="flex items-center gap-2 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2.5">
+          <div className="flex items-center gap-2 rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-3 py-2.5">
             {frequency === 'custom' ? (
-              <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-teal-400" />
+              <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-[var(--chat-accent-primary)]" />
             ) : (
-              <Clock className="h-3.5 w-3.5 flex-shrink-0 text-teal-400" />
+              <Clock className="h-3.5 w-3.5 flex-shrink-0 text-[var(--chat-accent-primary)]" />
             )}
-            <span className="text-xs text-slate-400">{previewLabel}</span>
+            <span className="text-xs text-[var(--chat-text-muted)]">{previewLabel}</span>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 border-t border-white/10 px-6 py-4">
+        <div className="flex justify-end gap-2 border-t border-[var(--chat-border)] px-6 py-4">
           <button
             type="button"
             onClick={handleClose}
             disabled={isSaving}
-            className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-[var(--chat-border)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
           </button>
@@ -445,8 +459,8 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
             className={cn(
               'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition',
               isSaving
-                ? 'cursor-not-allowed bg-teal-600/50 text-white/70'
-                : 'bg-teal-600 text-white hover:bg-teal-500',
+                ? 'cursor-not-allowed bg-[var(--chat-accent-primary)]/50 text-[var(--chat-accent-primary-contrast)]/70'
+                : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-primary-contrast)] hover:opacity-90',
             )}
           >
             {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}

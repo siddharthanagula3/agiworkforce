@@ -714,11 +714,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       <Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogContent
           disableAnimation
-          className="w-[min(1040px,calc(100vw-48px))] max-w-none overflow-hidden border-border/70 bg-background p-0 shadow-2xl sm:rounded-xl"
+          className="w-[min(1040px,calc(100vw-2rem))] max-w-none overflow-hidden border-border/70 bg-background p-0 shadow-2xl sm:rounded-xl"
         >
-          <div className="flex h-[min(760px,calc(100vh-80px))] min-h-[520px]">
+          <div className="flex h-[min(760px,calc(100vh-2rem))] min-h-0 flex-col md:flex-row">
             <nav
-              className="w-64 shrink-0 overflow-y-auto border-r border-border bg-muted/70 px-3 py-4"
+              className="max-h-[42%] w-full shrink-0 overflow-y-auto overscroll-contain border-b border-border bg-muted/70 px-3 py-4 md:max-h-none md:w-64 md:border-b-0 md:border-r"
               aria-label="Settings sections"
             >
               <DialogHeader className="px-1 pb-4">
@@ -735,10 +735,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                   aria-hidden="true"
                 />
                 <input
+                  type="search"
                   value={navQuery}
                   onChange={(event) => setNavQuery(event.target.value)}
                   placeholder="Search"
-                  className="h-10 w-full rounded-lg border border-transparent bg-background/70 py-2 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-border focus:bg-background focus:ring-2 focus:ring-ring/30"
+                  className="h-10 w-full rounded-lg border border-transparent bg-background/70 py-2 pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground focus-visible:border-border focus-visible:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
                 />
               </label>
 
@@ -757,7 +758,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                         onClick={() => setActiveTab(item.key)}
                         disabled={isBusy}
                         aria-current={activeTab === item.key ? 'page' : undefined}
-                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                           activeTab === item.key
                             ? 'bg-background text-foreground shadow-xs'
                             : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
@@ -767,7 +768,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                         <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
                         {item.key === 'connectors' && connectedConnectorCount > 0 && (
                           <span
-                            className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-green-500/15 px-1.5 text-[10px] font-semibold text-green-500"
+                            className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary"
                             aria-label={`${connectedConnectorCount} connected`}
                           >
                             {connectedConnectorCount}
@@ -788,9 +789,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               </div>
             </nav>
 
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <div
-                className={`flex-1 overflow-y-auto px-8 py-7 ${
+                aria-busy={isBusy || undefined}
+                className={`flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7 ${
                   isBusy ? 'pointer-events-none opacity-80' : ''
                 }`}
               >
@@ -798,14 +800,25 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                     Local and Cloud settings read at one width. */}
                 <div className="mx-auto w-full max-w-[672px]">
                   {error && (
-                    <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                    <div
+                      role="alert"
+                      className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+                    >
                       {error}
                     </div>
                   )}
 
                   {loading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className="flex items-center justify-center py-8"
+                    >
+                      <Loader2
+                        className="h-6 w-6 animate-spin text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <span className="sr-only">Loading settings…</span>
                     </div>
                   ) : (
                     <div className="space-y-6">{renderTabContent()}</div>
@@ -813,11 +826,14 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 </div>
               </div>
 
-              <div className="flex shrink-0 justify-end gap-3 border-t border-border bg-background/95 px-8 py-4">
+              <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-border bg-background/95 px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
                 {requiresDeferredSave ? (
                   <>
                     {saveError && (
-                      <div className="mr-auto rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                      <div
+                        role="alert"
+                        className="mr-auto rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                      >
                         {saveError}
                       </div>
                     )}
@@ -827,8 +843,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                     <Button
                       onClick={() => void handleSaveSettings()}
                       disabled={isBusy || !hasUnsavedChanges}
+                      isLoading={isSaving}
                     >
-                      {loading || isSaving ? 'Saving...' : 'Save Changes'}
+                      {isSaving ? 'Saving…' : 'Save Changes'}
                     </Button>
                   </>
                 ) : (

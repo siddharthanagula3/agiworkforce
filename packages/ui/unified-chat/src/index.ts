@@ -104,6 +104,8 @@ export type {
   ChatInputProjectPicker,
   ChatWorkMode,
   ChatWorkScope,
+  ComposerVoiceController,
+  ComposerVoiceState,
 } from './components/ChatInput';
 export { AgentControl } from './components/AgentControl';
 export type { AgentControlProps } from './components/AgentControl';

@@ -472,7 +472,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               color="#aaa"
               size={19}
               strokeWidth={1.8}
-              testID="icon-Palette"
+              testID="icon-SunMoon"
             />
             <Text
               numberOfLines={1}

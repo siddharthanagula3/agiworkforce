@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
-import { useAgentControlStore } from '../../stores/agentControlStore';
 
 function renderComposer(onSend = vi.fn(), supportsResearch = false) {
   render(
@@ -65,6 +64,54 @@ describe('ChatInput draft ownership', () => {
 
     expect(screen.getByRole('button', { name: 'Send message (Enter)' })).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Stop generation' })).toBeNull();
+  });
+
+  it('uses a host-provided Cloud voice controller instead of the browser speech mic', () => {
+    const onToggle = vi.fn();
+
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        onStop={vi.fn()}
+        onModelSelectorClick={vi.fn()}
+        hasMessages={false}
+        conversationId="conv-1"
+        voiceInputController={{
+          state: 'idle',
+          idleLabel: 'Cloud voice',
+          onToggle,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cloud voice' }));
+
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Voice input' })).toBeNull();
+  });
+
+  it('presents Cloud voice processing as busy and cannot start a second recording', () => {
+    const onToggle = vi.fn();
+
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        onStop={vi.fn()}
+        onModelSelectorClick={vi.fn()}
+        hasMessages={false}
+        conversationId="conv-1"
+        voiceInputController={{
+          state: 'processing',
+          idleLabel: 'Cloud voice',
+          onToggle,
+        }}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Processing voice request' });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(button);
+    expect(onToggle).not.toHaveBeenCalled();
   });
 
   it('does not carry an unsent draft into a newly selected conversation', () => {

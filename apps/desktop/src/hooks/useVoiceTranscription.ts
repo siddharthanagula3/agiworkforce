@@ -77,6 +77,15 @@ export interface UseVoiceTranscriptionOptions {
   onRecordingStart?: () => void;
   /** Callback when recording stops */
   onRecordingStop?: () => void;
+  /**
+   * Optional host-owned Managed boundary. When supplied, Cloud transcription
+   * uses the captured token and revalidates the same boundary before and after
+   * egress instead of resolving whichever account happens to be current.
+   */
+  getCloudBoundary?: () => {
+    accessToken: string;
+    assertCurrent: () => void;
+  };
 }
 
 /**
@@ -103,6 +112,8 @@ export interface UseVoiceTranscriptionReturn extends VoiceTranscriptionState {
   startRecording: () => Promise<void>;
   /** Stop recording and get the transcription */
   stopRecording: () => Promise<string>;
+  /** Stop recording and discard captured audio without transcribing it. */
+  cancelRecording: () => void;
   /** Toggle recording on/off */
   toggleRecording: () => Promise<void>;
   /** Clear the current transcript */
@@ -150,6 +161,7 @@ export function useVoiceTranscription(
     onError,
     onRecordingStart,
     onRecordingStop,
+    getCloudBoundary,
   } = options;
 
   const [state, setState] = useState<VoiceTranscriptionState>({
@@ -271,6 +283,9 @@ export function useVoiceTranscription(
       // BUG-VT-04: Stop MediaRecorder on unmount so the OS recording indicator clears
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         try {
+          mediaRecorderRef.current.onstop = null;
+          mediaRecorderRef.current.ondataavailable = null;
+          audioChunksRef.current = [];
           mediaRecorderRef.current.stop();
         } catch {
           // Ignore stop errors during cleanup
@@ -633,8 +648,10 @@ export function useVoiceTranscription(
         }
 
         try {
-          const session = await cloudAccountAuth.getValidSession();
-          const accessToken = session?.access_token;
+          const managedBoundary = getCloudBoundary?.();
+          managedBoundary?.assertCurrent();
+          const session = managedBoundary ? null : await cloudAccountAuth.getValidSession();
+          const accessToken = managedBoundary?.accessToken ?? session?.access_token;
           if (!accessToken) {
             throw new Error('Authentication required for Whisper Cloud transcription');
           }
@@ -663,6 +680,7 @@ export function useVoiceTranscription(
             }),
             15000,
           );
+          managedBoundary?.assertCurrent();
 
           const payload = (await response.json().catch(() => null)) as {
             text?: string;
@@ -709,8 +727,57 @@ export function useVoiceTranscription(
     onResult,
     onError,
     onRecordingStop,
+    getCloudBoundary,
     withTimeout,
   ]);
+
+  /**
+   * Stop capture without transcription. Mode/account switches use this path so
+   * a hidden recorder cannot keep the microphone open or upload discarded audio.
+   */
+  const cancelRecording = useCallback((): void => {
+    const recognition = speechRecognitionRef.current;
+    speechRecognitionRef.current = null;
+    if (recognition) {
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+      try {
+        recognition.abort();
+      } catch {
+        // Ignore shutdown failures; local state is still cleared below.
+      }
+    }
+
+    const mediaRecorder = mediaRecorderRef.current;
+    mediaRecorderRef.current = null;
+    if (mediaRecorder) {
+      mediaRecorder.ondataavailable = null;
+      mediaRecorder.onerror = null;
+      mediaRecorder.onstop = null;
+      try {
+        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      } catch {
+        // Ignore shutdown failures; tracks are stopped independently.
+      }
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    audioChunksRef.current = [];
+    isRecordingRef.current = false;
+    if (isMountedRef.current) {
+      setState((prev) => ({
+        ...prev,
+        isRecording: false,
+        isTranscribing: false,
+        interimTranscript: '',
+      }));
+    }
+    onRecordingStop?.();
+  }, [onRecordingStop]);
 
   /**
    * Toggle recording on/off
@@ -767,6 +834,7 @@ export function useVoiceTranscription(
     availableLocalWhisper,
     startRecording,
     stopRecording,
+    cancelRecording,
     toggleRecording,
     clearTranscript,
     configure,

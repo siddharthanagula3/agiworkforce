@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import type { NextMiddleware, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { withCorsAndSecurityHeaders } from './lib/cors';
 
 /**
  * Build a per-request Content-Security-Policy string with a nonce.
@@ -170,6 +171,12 @@ const clerkAwareProxy = clerkMiddleware((_auth, request: NextRequest) => {
   return buildCspResponse(request);
 });
 
+function attachApiCors(request: NextRequest, response: Response): Response {
+  return request.nextUrl.pathname.startsWith('/api/')
+    ? withCorsAndSecurityHeaders(response, request)
+    : response;
+}
+
 /**
  * Send browsers that land on the API host back to the app host.
  *
@@ -212,7 +219,7 @@ function apiHostRedirect(request: NextRequest): NextResponse | null {
   return NextResponse.redirect(target, 307);
 }
 
-export const proxy: NextMiddleware = (request, event) => {
+export const proxy: NextMiddleware = async (request, event) => {
   const apiHostBounce = apiHostRedirect(request);
   if (apiHostBounce) return apiHostBounce;
 
@@ -221,11 +228,12 @@ export const proxy: NextMiddleware = (request, event) => {
   }
 
   if (isPublicApiRoute(request)) {
-    return buildCspResponse(request);
+    return attachApiCors(request, buildCspResponse(request));
   }
 
   if (isClerkSessionRoute(request)) {
-    return clerkAwareProxy(request, event);
+    const response = await clerkAwareProxy(request, event);
+    return response ? attachApiCors(request, response) : response;
   }
 
   return buildCspResponse(request);

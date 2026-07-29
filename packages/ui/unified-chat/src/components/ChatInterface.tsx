@@ -17,7 +17,12 @@ import type { Artifact, ChatMessage } from '../lib/types';
 import type { ChipType, QuickChipAvailability } from './QuickChips';
 import { Sidebar } from './Sidebar';
 import { EmptyState } from './EmptyState';
-import { ChatInput, type ChatInputProjectPicker, type ChatWorkScope } from './ChatInput';
+import {
+  ChatInput,
+  type ChatInputProjectPicker,
+  type ChatWorkScope,
+  type ComposerVoiceController,
+} from './ChatInput';
 import { QuickChips } from './QuickChips';
 import { Disclaimer } from './Disclaimer';
 import { MessageList } from './MessageList';
@@ -240,6 +245,8 @@ export interface ChatInterfaceProps {
    * put through the consent ceremony.
    */
   pendingAttachments?: { id: string; files: File[] } | null;
+  /** Host-owned replacement for the default browser speech-recognition mic. */
+  voiceInputController?: ComposerVoiceController;
   externalSendRequest?: {
     id: string;
     content: string;
@@ -342,6 +349,7 @@ export function ChatInterface({
   className,
   externalSendRequest = null,
   pendingAttachments = null,
+  voiceInputController,
   manageTheme = false,
   enableShortcuts = true,
   enableSearchOverlay = true,
@@ -795,6 +803,7 @@ export function ChatInterface({
                 supportsResearch={runtime?.supportsResearch ?? false}
                 attachmentPolicy={runtime?.attachmentPolicy}
                 pendingAttachments={pendingAttachments}
+                voiceInputController={voiceInputController}
               />
               {/* Sample-prompt mode chips below the composer (claude.ai parity —
                   ref: claude_reference/015). This is a composer-area element shown
