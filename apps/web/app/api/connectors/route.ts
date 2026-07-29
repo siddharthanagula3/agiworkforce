@@ -103,6 +103,7 @@ const VALID_CONNECTOR_IDS = new Set([
   'google-sheets',
   'outlook',
   'onedrive',
+  'dropbox',
   'linear',
   'jira',
   'teams',
