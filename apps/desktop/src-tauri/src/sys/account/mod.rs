@@ -4,8 +4,37 @@ use crate::sys::security::SecretManager;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tauri::State;
 
-/// Deserialize a timestamp that may come as either an integer or floating point from the API.
-/// Converts floating point timestamps to u64 by truncating the decimal portion.
+/// Deserialize an optional API timestamp from the canonical `/api/me` wire shape.
+///
+/// The Web contract permits `null`, Unix seconds, or an ISO-8601 string for
+/// `created_at`. Keep the wire value intact because the Desktop credits caller
+/// does not perform timestamp arithmetic on this profile response.
+fn deserialize_optional_timestamp<'de, D>(
+    deserializer: D,
+) -> Result<Option<serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    let value: serde_json::Value = serde::Deserialize::deserialize(deserializer)?;
+    match &value {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::Number(_) => Ok(Some(value)),
+        serde_json::Value::String(timestamp)
+            if chrono::DateTime::parse_from_rfc3339(timestamp).is_ok() =>
+        {
+            Ok(Some(value))
+        }
+        serde_json::Value::String(_) => Err(D::Error::custom(
+            "Expected an RFC 3339 string for timestamp",
+        )),
+        _ => Err(D::Error::custom(
+            "Expected null, number, or RFC 3339 string for timestamp",
+        )),
+    }
+}
+
+/// Deserialize the required numeric `updated_at` timestamp from `/api/me`.
 fn deserialize_timestamp<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -217,12 +246,12 @@ pub struct CreditBalance {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserProfile {
     pub id: String,
-    pub email: String,
+    pub email: Option<String>,
     pub name: String,
     pub avatar_url: Option<String>,
-    /// Timestamp - accepts both integer and floating point from API
-    #[serde(deserialize_with = "deserialize_timestamp")]
-    pub created_at: u64,
+    /// Canonical `/api/me` permits null, Unix seconds, or an ISO-8601 string.
+    #[serde(deserialize_with = "deserialize_optional_timestamp")]
+    pub created_at: Option<serde_json::Value>,
     /// Timestamp - accepts both integer and floating point from API
     #[serde(deserialize_with = "deserialize_timestamp")]
     pub updated_at: u64,
@@ -879,7 +908,7 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
 mod tests {
     use super::{
         build_device_authorization_request, clear_cloud_tokens, restore_cloud_access_token,
-        store_cloud_access_token, validate_api_base_url, CreditBalanceResponse,
+        store_cloud_access_token, validate_api_base_url, CreditBalanceResponse, UserProfile,
     };
     use crate::sys::api::HttpMethod;
     use crate::sys::security::SecretManager;
@@ -991,5 +1020,82 @@ mod tests {
 
         assert!(response.has_credits());
         assert_eq!(response.credits.usage_percentage, 42.5);
+    }
+
+    #[test]
+    fn parses_canonical_me_profile_with_nullable_created_at() {
+        let profile: UserProfile = serde_json::from_str(
+            r#"{
+                "id":"user_123",
+                "email":null,
+                "name":"Demo",
+                "avatar_url":null,
+                "created_at":null,
+                "updated_at":1785361122.75,
+                "plan":{
+                    "tier":"free",
+                    "display_name":"Free",
+                    "status":"none",
+                    "current_period_end":null
+                },
+                "feature_flags":{
+                    "beta_features":true,
+                    "advanced_model_access":false
+                }
+            }"#,
+        )
+        .expect("canonical /api/me profile should deserialize");
+
+        assert_eq!(profile.email, None);
+        assert_eq!(profile.created_at, None);
+        assert_eq!(profile.updated_at, 1_785_361_122);
+    }
+
+    #[test]
+    fn parses_legacy_iso_created_at_without_weakening_validation() {
+        let profile: UserProfile = serde_json::from_str(
+            r#"{
+                "id":"user_123",
+                "email":"demo@example.com",
+                "name":"Demo",
+                "avatar_url":null,
+                "created_at":"2026-07-29T12:00:00Z",
+                "updated_at":1785361122,
+                "plan":{
+                    "tier":"free",
+                    "display_name":"Free",
+                    "status":"none",
+                    "current_period_end":null
+                },
+                "feature_flags":{}
+            }"#,
+        )
+        .expect("legacy ISO profile timestamp should deserialize");
+
+        assert_eq!(
+            profile.created_at,
+            Some(serde_json::Value::String(
+                "2026-07-29T12:00:00Z".to_string()
+            ))
+        );
+
+        let invalid = serde_json::from_str::<UserProfile>(
+            r#"{
+                "id":"user_123",
+                "email":"demo@example.com",
+                "name":"Demo",
+                "avatar_url":null,
+                "created_at":"not-a-date",
+                "updated_at":1785361122,
+                "plan":{
+                    "tier":"free",
+                    "display_name":"Free",
+                    "status":"none",
+                    "current_period_end":null
+                },
+                "feature_flags":{}
+            }"#,
+        );
+        assert!(invalid.is_err());
     }
 }

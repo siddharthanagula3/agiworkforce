@@ -6,8 +6,9 @@
  * attribution. Supports keyboard navigation and client-side fuzzy filtering.
  */
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { Search, MessageSquare, Folder, FileCode, X, Clock } from 'lucide-react';
+import { Search, MessageSquare, Folder, File as FileIcon, FileCode, X, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LibraryListResponseSchema, type LibraryItem } from '@agiworkforce/cloud-contracts';
 import { useChatStore } from '../../stores/chat/chatStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useArtifactStore } from '../../stores/artifactStore';
@@ -18,11 +19,12 @@ import type { ConversationSummary } from '../../stores/chat/types';
 import type { Project } from '../../stores/projectStore';
 import type { ArtifactSummary } from '../../stores/artifactStore';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
+import { CLOUD_API_BASE_URL, cloudFetch } from '../../api/cloudApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ResultType = 'chat' | 'project' | 'artifact';
-type FilterTab = 'all' | 'chats' | 'projects';
+type ResultType = 'chat' | 'project' | 'library' | 'artifact';
+type FilterTab = 'all' | 'chats' | 'projects' | 'files';
 
 interface SearchResult {
   id: string;
@@ -31,7 +33,7 @@ interface SearchResult {
   subtitle?: string;
   updatedAt?: Date | string;
   /** Payload for navigation on select */
-  payload: ConversationSummary | Project | ArtifactSummary;
+  payload: ConversationSummary | Project | LibraryItem | ArtifactSummary;
 }
 
 // ─── Timestamp helper ─────────────────────────────────────────────────────────
@@ -55,13 +57,18 @@ function formatTimestamp(date: Date | string | undefined): string {
 // ─── Result icon ──────────────────────────────────────────────────────────────
 
 function ResultIcon({ type, selected }: { type: ResultType; selected: boolean }) {
-  const className = cn('h-4 w-4', selected ? 'text-teal-400' : 'text-muted-foreground');
+  const className = cn(
+    'h-4 w-4',
+    selected ? 'text-[var(--chat-accent-primary)]' : 'text-muted-foreground',
+  );
 
   switch (type) {
     case 'chat':
       return <MessageSquare className={className} />;
     case 'project':
       return <Folder className={className} />;
+    case 'library':
+      return <FileIcon className={className} />;
     case 'artifact':
       return <FileCode className={className} />;
   }
@@ -76,6 +83,8 @@ export function SearchModal() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
+  const [librarySearchError, setLibrarySearchError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prefersReducedMotion = useReducedMotion();
 
@@ -88,6 +97,40 @@ export function SearchModal() {
   const setActiveArtifact = useArtifactStore((s) => s.setActiveArtifact);
   const openArtifactPanel = useArtifactStore((s) => s.openPanel);
   const privacyMode = useAppModeStore(selectPrivacyMode);
+
+  useEffect(() => {
+    const normalized = query.trim();
+    if (privacyMode !== 'managed' || !normalized || !['all', 'files'].includes(filter)) {
+      setLibraryItems([]);
+      setLibrarySearchError(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      const params = new URLSearchParams({ q: normalized, limit: '10', offset: '0' });
+      void cloudFetch(`${CLOUD_API_BASE_URL}/api/library?${params.toString()}`, {
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const parsed = LibraryListResponseSchema.safeParse(await response.json());
+          if (!parsed.success) throw new Error('Library returned an invalid response.');
+          setLibraryItems(parsed.data.items);
+          setLibrarySearchError(null);
+        })
+        .catch((error: unknown) => {
+          if (error instanceof DOMException && error.name === 'AbortError') return;
+          setLibraryItems([]);
+          setLibrarySearchError(
+            error instanceof Error ? error.message : 'Library search could not be completed.',
+          );
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [filter, privacyMode, query]);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -168,9 +211,21 @@ export function SearchModal() {
             }))
         : [];
 
+    const libraryResults: SearchResult[] =
+      privacyMode === 'managed' && (filter === 'all' || filter === 'files')
+        ? libraryItems.map((item) => ({
+            id: `library-${item.id}`,
+            type: 'library' as const,
+            title: item.file_name,
+            subtitle: item.prompt || `${item.kind} · ${item.origin}`,
+            updatedAt: item.created_at,
+            payload: item,
+          }))
+        : [];
+
     // When there's no query, sort all by recency
     if (!q) {
-      const allResults = [...chatResults, ...projectResults, ...artifactResults];
+      const allResults = [...chatResults, ...projectResults, ...libraryResults, ...artifactResults];
       return allResults.sort((a, b) => {
         const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
         const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
@@ -178,8 +233,8 @@ export function SearchModal() {
       });
     }
 
-    return [...chatResults, ...projectResults, ...artifactResults];
-  }, [query, filter, conversations, projects, summaries, privacyMode]);
+    return [...chatResults, ...projectResults, ...libraryResults, ...artifactResults];
+  }, [query, filter, conversations, projects, summaries, privacyMode, libraryItems]);
 
   // Group results by type for display
   const groupedResults = useMemo(() => {
@@ -187,8 +242,9 @@ export function SearchModal() {
       // In search mode, group by type
       const chats = results.filter((r) => r.type === 'chat');
       const projectItems = results.filter((r) => r.type === 'project');
+      const files = results.filter((r) => r.type === 'library');
       const artifacts = results.filter((r) => r.type === 'artifact');
-      return { chats, projects: projectItems, artifacts };
+      return { chats, projects: projectItems, files, artifacts };
     }
     return null;
   }, [results, query]);
@@ -213,6 +269,15 @@ export function SearchModal() {
           if (privacyMode !== 'local') break;
           setActiveArtifact(artifact.id);
           openArtifactPanel();
+          break;
+        }
+        case 'library': {
+          const item = result.payload as LibraryItem;
+          window.dispatchEvent(
+            new CustomEvent('desktop:navigate-library', {
+              detail: { query: item.file_name },
+            }),
+          );
           break;
         }
       }
@@ -272,7 +337,7 @@ export function SearchModal() {
         className={cn(
           'flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors',
           isSelected
-            ? 'bg-teal-500/15 border-l-2 border-teal-500'
+            ? 'border-l-2 border-[var(--chat-accent-primary)] bg-[var(--chat-accent-primary)]/15'
             : 'hover:bg-accent border-l-2 border-transparent',
         )}
         role="option"
@@ -281,7 +346,7 @@ export function SearchModal() {
         <div
           className={cn(
             'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
-            isSelected ? 'bg-teal-500/20' : 'bg-card',
+            isSelected ? 'bg-[var(--chat-accent-primary)]/20' : 'bg-card',
           )}
         >
           <ResultIcon type={result.type} selected={isSelected} />
@@ -327,7 +392,7 @@ export function SearchModal() {
       return <div className="py-2">{results.map((result, i) => renderResultItem(result, i))}</div>;
     }
 
-    const { chats, projects: projectItems, artifacts } = groupedResults;
+    const { chats, projects: projectItems, files, artifacts } = groupedResults;
 
     if (results.length === 0) {
       return (
@@ -339,8 +404,8 @@ export function SearchModal() {
       );
     }
 
-    // Build a flat ordered index for keyboard nav: chats → projects → artifacts
-    const orderedResults = [...chats, ...projectItems, ...artifacts];
+    // Build a flat ordered index for keyboard nav: chats → projects → files → artifacts
+    const orderedResults = [...chats, ...projectItems, ...files, ...artifacts];
 
     return (
       <div className="py-2">
@@ -358,6 +423,14 @@ export function SearchModal() {
               Projects
             </div>
             {projectItems.map((result) => renderResultItem(result, orderedResults.indexOf(result)))}
+          </div>
+        )}
+        {files.length > 0 && (
+          <div>
+            <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Library files
+            </div>
+            {files.map((result) => renderResultItem(result, orderedResults.indexOf(result)))}
           </div>
         )}
         {artifacts.length > 0 && (
@@ -386,7 +459,7 @@ export function SearchModal() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/60 backdrop-blur-xs"
+          className="absolute inset-0 bg-[var(--chat-surface-overlay)]/80 backdrop-blur-xs"
         />
 
         {/* Panel */}
@@ -404,7 +477,7 @@ export function SearchModal() {
             'relative w-full max-w-2xl',
             'rounded-2xl border border-border',
             'bg-background/95 backdrop-blur-xl',
-            'shadow-2xl shadow-black/50',
+            'shadow-[var(--chat-shadow-lg)]',
             'overflow-hidden',
           )}
           style={{ willChange: prefersReducedMotion ? 'auto' : 'opacity, transform' }}
@@ -417,13 +490,13 @@ export function SearchModal() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search chats and projects..."
+              placeholder="Search chats, projects, and files..."
               className={cn(
                 'flex-1 bg-transparent text-sm text-foreground outline-hidden',
                 'placeholder:text-muted-foreground',
               )}
               role="searchbox"
-              aria-label="Search chats, projects, and artifacts"
+              aria-label="Search chats, projects, library files, and artifacts"
               aria-autocomplete="list"
               aria-controls="search-results"
               aria-activedescendant={
@@ -442,7 +515,10 @@ export function SearchModal() {
 
           {/* Filter tabs */}
           <div className="flex items-center gap-1 border-b border-border/60 px-4 py-2">
-            {(['all', 'chats', 'projects'] as const).map((tab) => (
+            {(privacyMode === 'managed'
+              ? (['all', 'chats', 'projects', 'files'] as const)
+              : (['all', 'chats', 'projects'] as const)
+            ).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -450,7 +526,7 @@ export function SearchModal() {
                 className={cn(
                   'rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors',
                   filter === tab
-                    ? 'bg-teal-500/20 text-teal-300'
+                    ? 'bg-[var(--chat-accent-primary)]/20 text-[var(--chat-accent-primary)]'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
               >
@@ -467,6 +543,11 @@ export function SearchModal() {
             aria-label="Search results"
           >
             {renderGrouped()}
+            {librarySearchError && privacyMode === 'managed' ? (
+              <p role="alert" className="px-4 pb-3 text-xs text-[var(--chat-destructive)]">
+                Library search failed ({librarySearchError}).
+              </p>
+            ) : null}
           </div>
 
           {/* Footer */}

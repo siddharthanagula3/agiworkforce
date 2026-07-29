@@ -5,7 +5,7 @@
  * the user switch or clear it via a dropdown sheet. Also shows a context
  * indicator when a project is active.
  */
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Pressable, Modal, FlatList, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -92,7 +92,16 @@ function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDro
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ProjectSelectorBar() {
+interface ProjectSelectorBarProps {
+  /**
+   * When provided, the inline trigger pill is hidden and the picker is opened
+   * by incrementing this signal — the entry point lives in the "+" sheet
+   * instead of a permanent row above the composer (founder 2026-07-29).
+   */
+  openSignal?: number;
+}
+
+export function ProjectSelectorBar({ openSignal }: ProjectSelectorBarProps = {}) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -125,6 +134,17 @@ export function ProjectSelectorBar() {
   const setActiveProject = isCloud ? setCloudActive : setLocalActive;
 
   const [dropdownVisible, setDropdownVisible] = useState(false);
+  const isSheetDriven = openSignal !== undefined;
+
+  // Open on signal change only — never on mount, or the picker would appear
+  // over the composer every time the chat screen renders.
+  const previousOpenSignalRef = useRef(openSignal);
+  useEffect(() => {
+    if (openSignal === undefined) return;
+    if (previousOpenSignalRef.current === openSignal) return;
+    previousOpenSignalRef.current = openSignal;
+    setDropdownVisible(true);
+  }, [openSignal]);
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
   const sheetMaxHeight = Math.min(height * 0.66, 520);
@@ -153,7 +173,7 @@ export function ProjectSelectorBar() {
 
   return (
     <>
-      <View className="px-4 pb-1">
+      <View className="px-4 pb-1" style={{ display: isSheetDriven ? 'none' : 'flex' }}>
         {activeProject ? (
           // Active project indicator pill
           <Animated.View entering={FadeIn.duration(200)}>

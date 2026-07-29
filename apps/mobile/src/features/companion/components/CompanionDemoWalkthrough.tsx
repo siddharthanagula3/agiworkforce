@@ -20,6 +20,7 @@ import {
   Bot,
   ShieldCheck,
   Pause,
+  ChevronLeft,
   ChevronRight,
   X,
   CheckCircle2,
@@ -284,11 +285,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
                 accessibilityLabel="Previous step"
                 accessibilityRole="button"
               >
-                <ChevronRight
-                  size={18}
-                  color={colors.textMuted}
-                  style={{ transform: [{ rotate: '180deg' }] }}
-                />
+                <ChevronLeft size={18} color={colors.textMuted} />
               </Pressable>
             ) : null}
 

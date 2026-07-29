@@ -20,7 +20,6 @@ interface ComposerProps {
   onOpenCompare?: () => void;
   onOpenExport?: () => void;
   onOpenAddToChat?: () => void;
-  onOpenConnectors?: () => void;
   isOnline?: boolean;
   queueSize?: number;
   attachRef?: React.RefObject<{ addAttachments: (items: Attachment[]) => void } | null>;
@@ -48,7 +47,6 @@ export function Composer({
   onOpenCompare,
   onOpenExport,
   onOpenAddToChat,
-  onOpenConnectors,
   isOnline,
   queueSize,
   attachRef,
@@ -85,7 +83,6 @@ export function Composer({
         onOpenCompare={onOpenCompare}
         onOpenExport={onOpenExport}
         onOpenAddToChat={onOpenAddToChat}
-        onOpenConnectors={onOpenConnectors}
         isOnline={isOnline}
         queueSize={queueSize}
         attachRef={attachRef}

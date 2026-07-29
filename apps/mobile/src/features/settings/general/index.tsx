@@ -1,4 +1,11 @@
-import { BarChart3, Box, MessageSquareDashed, Smartphone, Vibrate } from 'lucide-react-native';
+import {
+  BarChart3,
+  Box,
+  HardDrive,
+  MessageSquareDashed,
+  Smartphone,
+  Vibrate,
+} from 'lucide-react-native';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   SettingsGroup,
@@ -53,7 +60,7 @@ export default function GeneralSettingsScreen() {
         />
         <SettingsRow
           label="Storage"
-          icon={MessageSquareDashed}
+          icon={HardDrive}
           isLast
           onPress={() =>
             router.push({

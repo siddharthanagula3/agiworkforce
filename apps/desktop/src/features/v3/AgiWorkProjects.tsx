@@ -1,7 +1,18 @@
-import { ArrowLeft, FileText, MessageSquare, Plus, Settings, SquarePen } from 'lucide-react';
+import {
+  ArchiveRestore,
+  ArrowLeft,
+  FileText,
+  MessageSquare,
+  Plus,
+  Search,
+  Settings,
+  SquarePen,
+  Star,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { toast } from 'sonner';
 import { useProjectStore, type Project } from '../../stores/projectStore';
 import { useChatStore } from '../../stores/chat';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
@@ -53,12 +64,31 @@ export function AgiWorkProjects({
   const isLoading = useProjectStore((state) => state.isLoading);
   const error = useProjectStore((state) => state.error);
   const loadProjects = useProjectStore((state) => state.loadProjects);
+  const updateProject = useProjectStore((state) => state.updateProject);
+  const unarchiveProject = useProjectStore((state) => state.unarchiveProject);
   const conversations = useChatStore((state) => state.conversations);
   const isManagedCloud = useAppModeStore(selectPrivacyMode) === 'managed';
-  const projects = useMemo(
-    () => allProjects.filter((project) => !project.isArchived),
-    [allProjects],
-  );
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<'updated-desc' | 'updated-asc' | 'name-asc'>('updated-desc');
+  const [showArchived, setShowArchived] = useState(false);
+  const [pendingProjectId, setPendingProjectId] = useState<string | null>(null);
+  const projects = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return allProjects
+      .filter((project) => project.isArchived === showArchived)
+      .filter(
+        (project) =>
+          !normalizedQuery ||
+          project.name.toLocaleLowerCase().includes(normalizedQuery) ||
+          project.description.toLocaleLowerCase().includes(normalizedQuery),
+      )
+      .sort((left, right) => {
+        if (left.isStarred !== right.isStarred) return left.isStarred ? -1 : 1;
+        if (sort === 'name-asc') return left.name.localeCompare(right.name);
+        const difference = new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+        return sort === 'updated-asc' ? -difference : difference;
+      });
+  }, [allProjects, query, showArchived, sort]);
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   const projectConversations = useMemo(
     () =>
@@ -73,6 +103,21 @@ export function AgiWorkProjects({
     [activeProject, conversations],
   );
   const [settingsProject, setSettingsProject] = useState<Project | null>(null);
+
+  const runProjectMutation = async (projectId: string, mutation: () => Promise<void>) => {
+    setPendingProjectId(projectId);
+    try {
+      await mutation();
+    } catch (mutationError) {
+      toast.error(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'The project could not be updated.',
+      );
+    } finally {
+      setPendingProjectId(null);
+    }
+  };
 
   if (activeProject) {
     return (
@@ -205,10 +250,15 @@ export function AgiWorkProjects({
     <>
       <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]">
         <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
-          <div className="flex items-center justify-between">
-            <h1 className="font-serif text-xl font-medium text-[var(--chat-text-primary)]">
-              {t('agiWork.projects.title')}
-            </h1>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="font-serif text-xl font-medium text-[var(--chat-text-primary)]">
+                {t('agiWork.projects.title')}
+              </h1>
+              <p className="mt-1 text-sm text-[var(--chat-text-muted)]">
+                Files, instructions, and chat history stay together across Web, Mobile, and Desktop.
+              </p>
+            </div>
             <button
               type="button"
               disabled={isLoading}
@@ -217,6 +267,48 @@ export function AgiWorkProjects({
             >
               <Plus size={13} strokeWidth={2.4} />
               {t('agiWork.projects.newProject')}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative min-w-52 flex-1">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--chat-text-muted)]"
+                aria-hidden
+              />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search projects"
+                aria-label="Search projects"
+                className="w-full rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 pl-9 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-muted)] focus:border-[var(--chat-accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-primary)]/20"
+              />
+            </label>
+            <select
+              value={sort}
+              onChange={(event) =>
+                setSort(event.target.value as 'updated-desc' | 'updated-asc' | 'name-asc')
+              }
+              aria-label="Sort projects"
+              className="rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-3 py-2 text-sm text-[var(--chat-text-secondary)] focus:border-[var(--chat-accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-primary)]/20"
+            >
+              <option value="updated-desc">Updated (newest)</option>
+              <option value="updated-asc">Updated (oldest)</option>
+              <option value="name-asc">Name (A–Z)</option>
+            </select>
+            <button
+              type="button"
+              aria-pressed={showArchived}
+              onClick={() => setShowArchived((current) => !current)}
+              className={
+                showArchived
+                  ? 'inline-flex items-center gap-1.5 rounded-lg border border-[var(--chat-accent-primary)] bg-[var(--chat-accent-primary)]/10 px-3 py-2 text-sm font-medium text-[var(--chat-accent-primary)]'
+                  : 'inline-flex items-center gap-1.5 rounded-lg border border-[var(--chat-border)] px-3 py-2 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]'
+              }
+            >
+              <ArchiveRestore size={15} aria-hidden />
+              Archived
             </button>
           </div>
 
@@ -246,7 +338,11 @@ export function AgiWorkProjects({
             </div>
           ) : projects.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[var(--chat-border)] px-4 py-8 text-center text-sm text-[var(--chat-text-muted)]">
-              {t('agiWork.projects.empty')}
+              {query.trim()
+                ? 'No projects match your search.'
+                : showArchived
+                  ? 'No archived projects.'
+                  : t('agiWork.projects.empty')}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -270,6 +366,41 @@ export function AgiWorkProjects({
                         {project.name}
                       </span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void runProjectMutation(project.id, () =>
+                          updateProject(project.id, { isStarred: !project.isStarred }),
+                        )
+                      }
+                      disabled={pendingProjectId === project.id}
+                      aria-label={
+                        project.isStarred ? `Unstar ${project.name}` : `Star ${project.name}`
+                      }
+                      title={project.isStarred ? 'Unstar project' : 'Star project'}
+                      className="rounded-md p-1.5 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-base)] hover:text-[var(--chat-warning)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] disabled:opacity-50"
+                    >
+                      <Star
+                        size={14}
+                        aria-hidden
+                        fill={project.isStarred ? 'currentColor' : 'none'}
+                        className={project.isStarred ? 'text-[var(--chat-warning)]' : undefined}
+                      />
+                    </button>
+                    {project.isArchived ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void runProjectMutation(project.id, () => unarchiveProject(project.id))
+                        }
+                        disabled={pendingProjectId === project.id}
+                        aria-label={`Restore ${project.name}`}
+                        title="Restore project"
+                        className="rounded-md p-1.5 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-base)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] disabled:opacity-50"
+                      >
+                        <ArchiveRestore size={14} aria-hidden />
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setSettingsProject(project)}

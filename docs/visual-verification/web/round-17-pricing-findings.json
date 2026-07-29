@@ -1,8 +1,0 @@
-{
-  "route": "/pricing",
-  "pageErrors": [],
-  "consoleErrors": [
-    "[ERROR] [SettingsQuery] Settings error: User not authenticated",
-    "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
-  ]
-}

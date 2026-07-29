@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest, NextResponse } from 'next/server';
 
 const clerkState = vi.hoisted(() => ({
   clerkPaths: [] as string[],
+  response: null as Response | null,
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -28,11 +29,33 @@ vi.mock('@clerk/nextjs/server', () => ({
     ) =>
     (request: NextRequest, event: unknown) => {
       clerkState.clerkPaths.push(request.nextUrl.pathname);
+      if (clerkState.response) return clerkState.response;
       return handler({}, request, event);
     },
 }));
 
 describe('web proxy', () => {
+  beforeEach(() => {
+    clerkState.clerkPaths = [];
+    clerkState.response = null;
+  });
+
+  it('keeps Desktop-readable CORS headers on Clerk rejections before the API route', async () => {
+    clerkState.response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/api/me?surface=desktop', {
+        headers: { Origin: 'https://tauri.localhost' },
+      }),
+      {} as never,
+    );
+
+    expect(response?.status).toBe(401);
+    expect(response?.headers.get('Access-Control-Allow-Origin')).toBe('https://tauri.localhost');
+    expect(response?.headers.get('Access-Control-Allow-Credentials')).toBe('true');
+  });
+
   it('keeps Workflow SDK callbacks outside the global proxy matcher', async () => {
     const { config } = await import('../proxy');
     const matchesProxy = (pathname: string) =>

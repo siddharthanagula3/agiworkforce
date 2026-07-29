@@ -12,7 +12,7 @@ import Animated, {
   SlideInDown,
   SlideOutDown,
 } from 'react-native-reanimated';
-import { X, MicOff, Mic, Phone, Hand } from 'lucide-react-native';
+import { X, MicOff, Mic, PhoneOff, Hand } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Stop, Rect, Circle } from 'react-native-svg';
@@ -383,7 +383,7 @@ export function VoiceConversationScreen({
           accessibilityLabel="End voice conversation"
           accessibilityRole="button"
         >
-          <Phone size={26} color={colors.white} style={{ transform: [{ rotate: '135deg' }] }} />
+          <PhoneOff size={26} color={colors.white} />
         </Pressable>
 
         {/* Push-to-talk mode toggle */}

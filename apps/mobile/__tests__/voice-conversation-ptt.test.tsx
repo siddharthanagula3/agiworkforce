@@ -84,15 +84,16 @@ jest.mock('react-native-svg', () => {
   };
 });
 
+// Proxy, not a hand-listed map: swapping one lucide icon in the screen should not
+// blow up every assertion with "Cannot read properties of undefined".
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
-  return {
-    X: icon,
-    MicOff: icon,
-    Mic: icon,
-    Phone: icon,
-    Hand: icon,
-  };
+  return new Proxy(
+    {},
+    {
+      get: (_target, name) => (name === '__esModule' ? true : icon),
+    },
+  );
 });
 
 jest.mock('react-native-safe-area-context', () => ({

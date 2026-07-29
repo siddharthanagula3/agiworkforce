@@ -27,9 +27,11 @@ export interface DesktopLibraryProps {
   /** Start a new chat from the empty state — the shell owns conversation
    *  creation, so it supplies the action. */
   onStartChat?: () => void;
+  /** Deep-link the shared Library view from Desktop global search. */
+  initialQuery?: string;
 }
 
-export function DesktopLibrary({ onStartChat }: DesktopLibraryProps = {}) {
+export function DesktopLibrary({ onStartChat, initialQuery }: DesktopLibraryProps = {}) {
   const isSignedIn = useAuthStore(selectHasCloudAccountSession);
 
   const transport = useMemo<LibraryTransport>(
@@ -66,7 +68,7 @@ export function DesktopLibrary({ onStartChat }: DesktopLibraryProps = {}) {
     );
   }
 
-  return <LibraryView transport={transport} />;
+  return <LibraryView transport={transport} initialQuery={initialQuery} />;
 }
 
 export default DesktopLibrary;

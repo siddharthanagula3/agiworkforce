@@ -268,6 +268,17 @@ describe('SettingsPanel render stability', () => {
     expect(screen.getByRole('button', { name: /^Extensions$/i })).toBeInTheDocument();
   });
 
+  it('keeps the Local Settings shell usable in a narrow Desktop window', () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="plugins" />);
+
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' });
+
+    expect(dialog.className).toContain('max-h-[calc(100vh-2rem)]');
+    expect(nav.className).toContain('md:w-64');
+    expect(screen.getByRole('searchbox', { name: 'Search settings' })).toBeInTheDocument();
+  });
+
   it('shows the backend-owned account plan in the mode summary', async () => {
     // A real desktop Cloud session: tenant id + device bearer. The email claim
     // is empty on purpose — that is what /api/auth/device/token mints.

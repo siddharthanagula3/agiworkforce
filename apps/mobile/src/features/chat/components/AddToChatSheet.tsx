@@ -13,7 +13,6 @@ import {
   Palette,
   Link,
   ChevronRight,
-  EyeOff,
   Lock,
   Terminal,
   Bot,
@@ -25,8 +24,10 @@ import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -37,6 +38,8 @@ interface AddToChatSheetProps {
   onFile: () => void;
   onOpenCloudAccess: () => void;
   onOpenStyleSelector: () => void;
+  onOpenModelPicker: () => void;
+  onOpenProjectPicker: () => void;
 }
 
 const SNAP_POINTS = ['75%'];
@@ -47,12 +50,20 @@ const SNAP_POINTS = ['75%'];
  *
  * Sections:
  * 1. Attachment row (Camera, Photos, File)
- * 2. Session toggles (Temporary chat)
+ * 2. Session toggles (AGI Work)
  * 3. Tool availability (cloud-gated tools + desktop handoff)
  * 4. Config links (Project, Style, Connectors)
  */
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
-  { onCamera, onPhotos, onFile, onOpenCloudAccess, onOpenStyleSelector },
+  {
+    onCamera,
+    onPhotos,
+    onFile,
+    onOpenCloudAccess,
+    onOpenStyleSelector,
+    onOpenModelPicker,
+    onOpenProjectPicker,
+  },
   ref,
 ) {
   const router = useRouter();
@@ -105,12 +116,19 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const canUseAgiWork = canUseBillingPlanCapability(tier, 'agi_work');
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
 
-  const activeProjectId = useProjectStore((s) => s.activeProjectId);
-  const projects = useProjectStore((s) => s.projects);
-  const activeProject = activeProjectId ? projects.find((p) => p.id === activeProjectId) : null;
-
-  const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
-  const setTemporaryChat = useSettingsStore((s) => s.setTemporaryChat);
+  // Local and cloud projects live in physically separate stores; read the one
+  // matching the active mode so the row never shows a local project name while
+  // the chat is running in Cloud (or vice versa).
+  const localActiveProjectId = useProjectStore((s) => s.activeProjectId);
+  const localProjects = useProjectStore((s) => s.projects);
+  const cloudActiveProjectId = useCloudProjectStore((s) => s.activeProjectId);
+  const cloudProjects = useCloudProjectStore((s) => s.projects);
+  const activeProjectId = appMode === 'cloud' ? cloudActiveProjectId : localActiveProjectId;
+  const activeProject = activeProjectId
+    ? ((appMode === 'cloud' ? cloudProjects : localProjects).find(
+        (p) => p.id === activeProjectId,
+      ) ?? null)
+    : null;
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
@@ -146,6 +164,16 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     haptic();
     onOpenStyleSelector();
   }, [haptic, onOpenStyleSelector]);
+
+  const handleOpenModelPicker = useCallback(() => {
+    haptic();
+    onOpenModelPicker();
+  }, [haptic, onOpenModelPicker]);
+
+  const handleOpenProjectPicker = useCallback(() => {
+    haptic();
+    onOpenProjectPicker();
+  }, [haptic, onOpenProjectPicker]);
 
   const handleCodeExecutionToggle = useCallback(
     (enabled: boolean) => {
@@ -305,39 +333,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             Session
           </Text>
 
-          {/* Temporary chat row */}
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingVertical: 10,
-              paddingHorizontal: 4,
-              minHeight: 44,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <EyeOff
-                size={18}
-                color={isTemporaryChat ? themeColors.purple : themeColors.textMuted}
-              />
-              <View>
-                <Text style={{ fontSize: 15, color: themeColors.textPrimary }}>Temporary chat</Text>
-                <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 1 }}>
-                  Memory will not be saved from this chat
-                </Text>
-              </View>
-            </View>
-            <Switch
-              value={isTemporaryChat}
-              onValueChange={(v) => {
-                haptic();
-                setTemporaryChat(v);
-              }}
-              accessibilityLabel={`Temporary chat ${isTemporaryChat ? 'on' : 'off'}`}
-            />
-          </View>
-
+          {/* Temporary chat lives on the chat header (TemporaryChatToggle) -- it is
+              a pre-conversation decision, and a second copy here was a duplicate
+              control (founder 2026-07-29). */}
           {appMode === 'cloud' && canUseAgiWork ? (
             <CapabilityRow
               icon={<Bot size={18} color={themeColors.teal} />}
@@ -418,20 +416,25 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
         {/* Section 4: Config Links */}
         <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
-          {appMode === 'local' ? (
-            <ConfigLink
-              icon={<FolderPlus size={18} color={themeColors.textMuted} />}
-              label="Project"
-              value={activeProject?.name ?? 'Choose'}
-              textColor={themeColors.textPrimary}
-              mutedColor={themeColors.textMuted}
-              onPress={() => {
-                haptic();
-                closeSheet();
-                router.push('/(app)/(tabs)/projects' as Parameters<typeof router.push>[0]);
-              }}
-            />
-          ) : null}
+          {/* Project assignment for the current chat -- both modes. The picker
+              itself is ProjectSelectorBar's modal, opened by the host screen;
+              it reads the local or cloud project store per active mode. */}
+          <ConfigLink
+            icon={<FolderPlus size={18} color={themeColors.textMuted} />}
+            label="Project"
+            value={activeProject?.name ?? 'Choose'}
+            textColor={themeColors.textPrimary}
+            mutedColor={themeColors.textMuted}
+            onPress={handleOpenProjectPicker}
+          />
+          <ConfigLink
+            icon={<Bot size={18} color={themeColors.textMuted} />}
+            label="Model"
+            value={getShortDisplayName(selectedModel, tier)}
+            textColor={themeColors.textPrimary}
+            mutedColor={themeColors.textMuted}
+            onPress={handleOpenModelPicker}
+          />
           <ConfigLink
             icon={<Palette size={18} color={themeColors.textMuted} />}
             label="Choose style"

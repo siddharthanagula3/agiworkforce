@@ -46,7 +46,7 @@ export function CapModal({ onSwitchModel, onBuyTopUp }: CapModalProps) {
     >
       <div
         className="absolute inset-0"
-        style={{ background: 'rgba(0, 0, 0, 0.5)' }}
+        style={{ background: 'color-mix(in srgb, var(--chat-surface-overlay) 80%, transparent)' }}
         aria-hidden="true"
       />
       <div

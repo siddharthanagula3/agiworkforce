@@ -8,6 +8,7 @@ import React, { useMemo } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
+import { WrenchIcon } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -43,12 +44,20 @@ interface ArtifactRendererViewProps {
   rendered: RenderedArtifact;
   isStreaming?: boolean;
   className?: string;
+  /**
+   * Called from the Diagram renderer's error state ("Fix Bug" button) with
+   * the render error and the offending source, so the caller can send both
+   * back to the model. Mirrors the onFixBug pattern from
+   * features/canvas/ArtifactPreview.tsx, ported to the live artifact path.
+   */
+  onFixBug?: (errorMessage: string, source: string) => void;
 }
 
 export function ArtifactRendererView({
   rendered,
   isStreaming,
   className,
+  onFixBug,
 }: ArtifactRendererViewProps) {
   const { rendered_content } = rendered;
 
@@ -66,7 +75,9 @@ export function ArtifactRendererView({
       {rendered_content.type === 'Spreadsheet' && (
         <SpreadsheetRenderer data={rendered_content.data} />
       )}
-      {rendered_content.type === 'Diagram' && <DiagramRenderer data={rendered_content.data} />}
+      {rendered_content.type === 'Diagram' && (
+        <DiagramRenderer data={rendered_content.data} onFixBug={onFixBug} />
+      )}
       {rendered_content.type === 'Web' && <WebRenderer data={rendered_content.data} />}
       {rendered_content.type === 'Chart' && <ChartRenderer data={rendered_content.data} />}
       {rendered_content.type === 'Presentation' && (
@@ -226,7 +237,13 @@ function SpreadsheetRenderer({ data }: { data: SpreadsheetRenderData }) {
 // Diagram Renderer (Mermaid)
 // =============================================================================
 
-function DiagramRenderer({ data }: { data: DiagramRenderData }) {
+function DiagramRenderer({
+  data,
+  onFixBug,
+}: {
+  data: DiagramRenderData;
+  onFixBug?: (errorMessage: string, source: string) => void;
+}) {
   const [svg, setSvg] = React.useState<string>('');
   const [error, setError] = React.useState<string | null>(null);
 
@@ -268,9 +285,21 @@ function DiagramRenderer({ data }: { data: DiagramRenderData }) {
   if (error) {
     return (
       <div className="p-4 rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
-        <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">
-          Failed to render diagram
-        </p>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <p className="text-sm font-medium text-red-600 dark:text-red-400">
+            Failed to render diagram
+          </p>
+          {onFixBug && (
+            <button
+              type="button"
+              onClick={() => onFixBug(error, data.source)}
+              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs text-red-600 dark:text-red-300 border border-red-300 dark:border-red-500/40 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+            >
+              <WrenchIcon className="h-3 w-3" />
+              Fix Bug
+            </button>
+          )}
+        </div>
         <pre className="text-xs text-red-500 whitespace-pre-wrap">{error}</pre>
         <div className="mt-4 pt-4 border-t border-red-200 dark:border-red-800">
           <p className="text-xs text-zinc-500 mb-1">Source:</p>
@@ -292,6 +321,7 @@ function DiagramRenderer({ data }: { data: DiagramRenderData }) {
       {svg ? (
         <div
           // AUDIT-NEW-001 fix: Sanitize SVG before rendering to prevent XSS attacks
+          // llm-guardrail-allow: svg is DOMPurify-sanitized via sanitizeSvg() above, not raw model/user output
           dangerouslySetInnerHTML={{ __html: sanitizeSvg(svg) }}
           className="flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         />
@@ -320,6 +350,7 @@ function WebRenderer({ data }: { data: WebRenderData }) {
     // script-src 'unsafe-eval' is intentionally OMITTED here.
     //   This renderer is a lightweight preview (ArtifactRendererView) and does
     //   not inject any eval-dependent console-capture logic. Blocking eval()
+    // llm-guardrail-allow: "eval(" mentions here are prose describing the CSP, not executable code
     //   raises the bar against prototype-pollution and code-injection attacks.
     //   If a user artifact explicitly calls eval() it will be blocked by the CSP
     //   and surface as a console error — the correct fail-safe.

@@ -1009,7 +1009,7 @@ const DesktopShell = () => {
   // Listen for chat:action events dispatched by the shared chat package
   useEffect(() => {
     const handleChatAction = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { type: string; tab?: string };
+      const detail = (e as CustomEvent).detail as { type: string; tab?: string; content?: string };
       if (detail.type === 'open-settings') {
         openSettingsDialog((detail.tab as Parameters<typeof openSettingsDialog>[0]) ?? 'general');
       } else if (detail.type === 'keyboard-shortcuts') {
@@ -1018,11 +1018,17 @@ const DesktopShell = () => {
         void useAuthStore.getState().signOut();
       } else if (detail.type === 'open-plans-modal') {
         setPlansModalOpen(true);
+      } else if (detail.type === 'fix-bug' && detail.content) {
+        // From ArtifactPanel's "Fix Bug" affordance — queue the error + code
+        // as an outgoing user message via the same externalSendRequest path
+        // Quick Query uses.
+        ensureActiveConversation();
+        setExternalSendRequest({ id: crypto.randomUUID(), content: detail.content });
       }
     };
     window.addEventListener('chat:action', handleChatAction);
     return () => window.removeEventListener('chat:action', handleChatAction);
-  }, [openSettingsDialog]);
+  }, [openSettingsDialog, ensureActiveConversation]);
 
   // Listen for native menu events from Tauri window menu
   useEffect(() => {
@@ -1708,6 +1714,8 @@ const DesktopShell = () => {
                     openSettingsDialog('connectors');
                   } else if (view === 'skills') {
                     openSettingsDialog('skills');
+                  } else if (view === 'settings') {
+                    openSettingsDialog('general');
                   } else if (view === 'projects') {
                     openSettingsDialog('account');
                   } else if (view === 'pricing' || view === 'billing' || view === 'byok') {

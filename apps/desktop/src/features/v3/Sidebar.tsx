@@ -8,6 +8,7 @@ import {
   FolderOpen,
   FolderPlus,
   Box,
+  CalendarClock,
   Library,
   ListChecks,
   RefreshCw,
@@ -116,6 +117,8 @@ function navItemsForMode(
     return [
       { id: 'library', label: t('sidebar.nav.library'), icon: Library },
       { id: 'tasks', label: t('sidebar.nav.tasks'), icon: ListChecks },
+      { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: CalendarClock },
+      { id: 'customize', label: t('sidebar.nav.customize'), icon: Settings },
     ];
   }
   // Projects moved to its own ChatGPT-style folder section below; the rest
@@ -123,6 +126,7 @@ function navItemsForMode(
   return [
     { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
     { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
+    { id: 'customize', label: t('sidebar.nav.customize'), icon: Settings },
   ];
 }
 
@@ -153,9 +157,11 @@ function railItems(
   if (privacyMode === 'managed') {
     items.push({ id: 'library', icon: Library, title: t('sidebar.nav.library') });
     items.push({ id: 'tasks', icon: ListChecks, title: t('sidebar.nav.tasks') });
+    items.push({ id: 'scheduled', icon: CalendarClock, title: t('sidebar.nav.scheduled') });
   } else {
     items.push({ id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') });
   }
+  items.push({ id: 'customize', icon: Settings, title: t('sidebar.nav.customize') });
   return items;
 }
 
@@ -252,6 +258,7 @@ export function Sidebar({
         library: 'library',
         tasks: 'tasks',
         scheduled: 'work-scheduled',
+        customize: 'settings',
       };
       const view = viewMap[id];
       if (view) onNavigateView?.(view);
@@ -747,7 +754,7 @@ export function Sidebar({
                 background: 'var(--chat-surface-elevated)',
                 border: '1px solid var(--chat-border)',
                 borderRadius: 12,
-                boxShadow: '0 12px 32px rgba(0, 0, 0, 0.28)',
+                boxShadow: 'var(--chat-shadow-lg)',
                 overflow: 'hidden',
                 maxHeight: 420,
                 overflowY: 'auto',
@@ -799,7 +806,9 @@ export function Sidebar({
                   ? 'var(--chat-accent-primary)'
                   : 'var(--chat-surface-elevated)',
                 border: isSignedIn ? 'none' : '1px solid var(--chat-border)',
-                color: isSignedIn ? '#fff' : 'var(--chat-text-secondary)',
+                color: isSignedIn
+                  ? 'var(--chat-accent-primary-contrast)'
+                  : 'var(--chat-text-secondary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

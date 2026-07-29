@@ -73,6 +73,7 @@ vi.mock('react-i18next', () => ({
         'sidebar.nav.projects': 'Projects',
         'sidebar.nav.artifacts': 'Artifacts',
         'sidebar.nav.scheduled': 'Scheduled',
+        'sidebar.nav.customize': 'Customize',
         'sidebar.nav.liveArtifacts': 'Live artifacts',
         'sidebar.nav.dispatch': 'Dispatch',
         'sidebar.signIn': 'Sign in',
@@ -227,6 +228,26 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(unifiedChatMock.chatInterfaceProps[0]?.['sidebarSlot']).toBeNull();
     expect(unifiedChatMock.chatInterfaceProps[0]?.['enableSearchOverlay']).toBe(false);
     expect(unifiedChatMock.chatInterfaceProps[0]?.['emptyStateSlot']).toBeTruthy();
+    expect(unifiedChatMock.chatInterfaceProps[0]?.['voiceInputController']).toBeUndefined();
+  });
+
+  it('replaces the regular composer mic only in authenticated Cloud mode', () => {
+    useUnifiedAuthStore.setState({
+      user: { id: 'cloud-user', email: 'cloud@agi.local', name: 'Cloud User' },
+      isAuthenticated: true,
+      plan: 'pro',
+      planDisplayName: 'Pro',
+      accessToken: 'cloud-token',
+      refreshToken: 'refresh-token',
+    });
+    useAppModeStore.setState({ mode: 'cloud' });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    const props = unifiedChatMock.chatInterfaceProps.at(-1);
+    expect(props?.['voiceInputController']).toMatchObject({
+      idleLabel: 'Cloud voice',
+    });
   });
 
   it('routes the live shared composer into the native skill recorder', () => {
@@ -453,8 +474,11 @@ describe('DesktopShellV3 duplication ownership', () => {
     // no consent surface for.
     expect(props?.['onRecordSkill']).toBeUndefined();
     expect(screen.queryByText('Artifacts')).not.toBeInTheDocument();
-    expect(screen.queryByText('Scheduled')).not.toBeInTheDocument();
+    expect(screen.getByText('Scheduled')).toBeInTheDocument();
     expect(props?.['projectPicker']).toBeTruthy();
+    expect(
+      (props?.['conversationActions'] as { onShare?: (id: string) => Promise<void> })?.onShare,
+    ).toBeTypeOf('function');
   });
 
   it('keeps the folder seam a capability grant in Local mode', () => {
@@ -465,6 +489,17 @@ describe('DesktopShellV3 duplication ownership', () => {
     const props = unifiedChatMock.chatInterfaceProps[0];
     expect(props?.['onSelectFolder']).toBeTypeOf('function');
     expect(props?.['onRecordSkill']).toBeTypeOf('function');
+    expect(
+      (props?.['conversationActions'] as { onShare?: (id: string) => Promise<void> })?.onShare,
+    ).toBeUndefined();
+  });
+
+  it('keeps Customize reachable through the Desktop settings owner', () => {
+    const onNavigateView = vi.fn();
+    render(<DesktopShellV3 runtime={null} hostBridge={null} onNavigateView={onNavigateView} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Customize' }));
+    expect(onNavigateView).toHaveBeenCalledWith('settings');
   });
 
   it('projects Cloud AGI Work and image affordances from the hydrated account tier', () => {
