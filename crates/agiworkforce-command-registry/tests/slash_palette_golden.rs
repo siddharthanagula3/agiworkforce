@@ -49,11 +49,11 @@ fn slash_palette_matches_golden() {
 }
 
 #[test]
-fn slash_palette_has_87_commands() {
+fn slash_palette_has_86_commands() {
     let count = builtin_slash_registry_commands().len();
     assert_eq!(
-        count, 87,
-        "Expected 87 implemented built-in slash commands after removing the unimplemented remote-control placeholder; got {count}"
+        count, 86,
+        "Expected 86 implemented built-in slash commands after removing unimplemented placeholders; got {count}"
     );
 }
 
@@ -80,7 +80,6 @@ fn m22_targeted_commands_are_all_registered() {
     // Newly added by M22:
     for name in [
         "focus",
-        "background",
         "advisor",
         "team-onboarding",
         "terminal-setup",
@@ -96,11 +95,6 @@ fn m22_targeted_commands_are_all_registered() {
 
     // Alias spot-checks for M22 commands:
     assert_eq!(
-        registry.find("bg").map(|c| c.name.as_str()),
-        Some("background"),
-        "/bg must resolve to canonical /background"
-    );
-    assert_eq!(
         registry.find("onboarding").map(|c| c.name.as_str()),
         Some("team-onboarding"),
         "/onboarding must resolve to canonical /team-onboarding"
@@ -115,6 +109,16 @@ fn m22_targeted_commands_are_all_registered() {
         Some("extra-usage"),
         "/pricing must resolve to canonical /extra-usage"
     );
+}
+
+#[test]
+fn unimplemented_background_command_is_not_advertised() {
+    use agiworkforce_command_registry::CommandRegistry;
+    let mut registry = CommandRegistry::default();
+    registry.extend(builtin_slash_registry_commands());
+
+    assert!(registry.find("background").is_none());
+    assert!(registry.find("bg").is_none());
 }
 
 #[test]

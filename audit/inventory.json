@@ -1502,8 +1502,8 @@
   {
     "item": "background-task-ctrl-b",
     "surface": "apps/cli",
-    "status": "stub",
-    "evidence": "apps/cli/src/tui/tui_app.rs:3164-3166: `\"/background\" | \"/bg\" => { SlashResult::SystemMessage(\"Moving the current turn to the background isn't available yet — it keeps running in the foreground. Use /tasks to view active background tasks.\".into()) }`. The command is registered and reachable but its own message admits it is not implemented; no `Char('b')`+CONTROL keybinding exists anywhere in tui_app.rs (grepped) to back the 'Ctrl-B' half of the item name either."
+    "status": "missing",
+    "evidence": "The unreachable promise was cut rather than fabricated: `background` and alias `bg` are absent from crates/agiworkforce-command-registry/src/lib.rs, both apps/cli/src/claude_parity.rs and apps/cli/src/tui/tui_app.rs have no dispatch arm for them, and docs/cli/COMMAND_SURFACE.md no longer advertises either command. crates/agiworkforce-command-registry/tests/slash_palette_golden.rs asserts both names stay absent. `/tasks` remains wired to the real session task registry. No Ctrl-B binding exists, so current-turn backgrounding is honestly Missing instead of a reachable Stub; docs/adr/wire-or-cut.md records the cut."
   },
   {
     "item": "process-manager",
@@ -2582,8 +2582,8 @@
   {
     "item": "background-subagent-execution",
     "surface": "packages/core-agent",
-    "status": "stub",
-    "evidence": "apps/cli/src/tui/tui_app.rs:3164-3166 — the `/background`|`/bg` slash command explicitly returns: \"Moving the current turn to the background isn't available yet — it keeps running in the foreground.\" The only subagent execution path (`run_task_batch`, chat.rs:1514-1518) always calls `mgr.wait_all().await` before returning results, i.e. is synchronous/foreground."
+    "status": "missing",
+    "evidence": "The placeholder `/background` and `/bg` command surface was removed from the shared registry, TUI, classic shared handler, tests, and command documentation, so no reachable UI claims detached execution. The actual subagent batch path in apps/cli/src/agent/chat.rs remains synchronous and waits for all workers before returning. `/tasks` continues to expose only real session task-registry entries. Detached subagent execution is therefore honestly Missing pending a durable run/reattach contract, with the cut recorded in docs/adr/wire-or-cut.md."
   },
   {
     "item": "foreground-blocking-subagent",

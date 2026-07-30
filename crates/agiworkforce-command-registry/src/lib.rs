@@ -429,13 +429,6 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
-            "background",
-            "Continue current task in background",
-            false,
-            false,
-            vec!["bg"],
-        ),
-        RegistryCommand::builtin_slash(
             "advisor",
             "Consult a higher-tier model on a side question",
             false,
