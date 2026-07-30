@@ -33,8 +33,7 @@ mod tests;
 
 // Re-export main types for convenience
 pub use agents::{
-    CalendarSearchAgent, DocumentSearchAgent, EmailSearchAgent, MemorySearchAgent, SearchAgent,
-    SearchAgentResult, WebSearchAgent,
+    DocumentSearchAgent, MemorySearchAgent, SearchAgent, SearchAgentResult, WebSearchAgent,
 };
 pub use citation::{Citation, CitationFormat, CitationTracker, SourceType};
 pub use orchestrator::{ResearchOrchestrator, ResearchSession};

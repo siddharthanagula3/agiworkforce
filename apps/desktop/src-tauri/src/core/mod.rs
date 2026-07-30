@@ -32,11 +32,11 @@ pub use skills::{
 
 // Re-export research types
 pub use research::{
-    CalendarSearchAgent, Citation, CitationFormat, CitationTracker, ConfidenceLevel,
-    DocumentSearchAgent, EmailSearchAgent, MemorySearchAgent, ReportSection, ResearchConfig,
-    ResearchError, ResearchMode, ResearchOrchestrator, ResearchProgress, ResearchQuery,
-    ResearchReport, ResearchReportGenerator, ResearchResult, ResearchSession, SearchAgent,
-    SearchAgentResult, SearchStrategy, SourceType, WebSearchAgent,
+    Citation, CitationFormat, CitationTracker, ConfidenceLevel, DocumentSearchAgent,
+    MemorySearchAgent, ReportSection, ResearchConfig, ResearchError, ResearchMode,
+    ResearchOrchestrator, ResearchProgress, ResearchQuery, ResearchReport, ResearchReportGenerator,
+    ResearchResult, ResearchSession, SearchAgent, SearchAgentResult, SearchStrategy, SourceType,
+    WebSearchAgent,
 };
 
 // Re-export intent types
