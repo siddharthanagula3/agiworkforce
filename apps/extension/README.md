@@ -79,14 +79,17 @@ Do not commit extension store credentials, private keys, local native-host regis
 
 The build reads the public values documented in `.env.example`:
 
+- `VITE_AGI_WEB_API_BASE_URL` — the Web origin used for CSRF, invite
+  redemption, and product updates.
 - `CLERK_PUBLISHABLE_KEY` — the same Clerk instance used by Web.
 - `CLERK_FRONTEND_API` — the exact Clerk Frontend API origin.
 - `CLERK_SYNC_HOST` — the exact Clerk web-session Sync Host origin.
 - `CHROME_EXTENSION_PUBLIC_KEY` — public CRX key material that keeps the
   extension ID stable across unpacked/store builds.
 
-Production packages require a live Clerk key and all three origins/key values.
-The package script fails closed when they are absent or malformed.
+Copy `.env.local.example` to `.env.local` for local development. Production
+packages require a live Clerk key, both Clerk origins, and the CRX public key;
+the package script fails closed when they are absent or malformed.
 
 ## Cloud Account Contract
 

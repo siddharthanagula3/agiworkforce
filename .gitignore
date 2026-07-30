@@ -125,6 +125,7 @@ $RECYCLE.BIN/
 .env.production
 .env.*.local
 !.env.example
+!.env.local.example
 
 # --- Temporary files ---
 *.tmp

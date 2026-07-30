@@ -173,6 +173,10 @@ EAS signing runbook: `scripts/release/EAS_SIGNING_RUNBOOK.md`.
 ## Config notes
 
 - **`app.config.js` is the single Expo config.** The stale root/mobile `app.json` files were removed 2026-05-21.
+- **Environment templates:** `.env.example` is the complete Expo build contract;
+  copy `.env.local.example` to `.env.local` for local Metro/prebuild work. EAS
+  preview/production builds use EAS environment variables because
+  `EXPO_NO_DOTENV=1` is set in `eas.json`.
 - **iOS entitlement profile:** default `APP_ENV=development` builds use a reduced entitlement set for basic development provisioning profiles. To force full production entitlements locally (Push / SIWA / Siri / Translate), set `APP_ENV=preview|production` or `EXPO_ENABLE_PRODUCTION_IOS_ENTITLEMENTS=1`.
 - **Physical iPhone debug:** run `pnpm --filter @agiworkforce/mobile run ios:device:dev -- <device-udid-or-name>` to clean-regenerate ignored iOS prebuild artifacts with the reduced development entitlement set before installing. Local iPhone builds default to the company Apple team `D2PR62RLT4`; override only with `AGI_IOS_DEVELOPMENT_TEAM=<team-id>`. In Xcode, `Team: AGI AUTOMATION LLC` plus a provisioning profile that includes the device is enough even when the certificate common name shows an individual developer name. Use `ios:device:dev:no-prebuild` only after the generated `apps/mobile/ios/` project is already in the right entitlement state. If iOS reports that the profile is not explicitly trusted, open iPhone Settings -> General -> VPN & Device Management -> Developer App, trust the company developer profile, then rerun the `no-prebuild` command.
 - **Tier 1/2/3 mobile runtime** is wired in `native/` (custom Swift/Kotlin modules) — do NOT add a new on-device model path outside the tier router.
