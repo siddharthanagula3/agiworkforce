@@ -54,7 +54,11 @@ export default function SharedLinksScreen() {
   }, [load]);
 
   const handleBack = useCallback(() => {
-    router.navigate('/(app)/settings/data-controls' as Parameters<typeof router.navigate>[0]);
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const handleRefresh = useCallback(async () => {

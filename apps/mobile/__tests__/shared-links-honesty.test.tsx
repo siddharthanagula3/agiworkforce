@@ -12,7 +12,11 @@ jest.mock('@/services/api', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ navigate: jest.fn() }),
+  useRouter: () => ({
+    canGoBack: jest.fn(() => true),
+    back: jest.fn(),
+    replace: jest.fn(),
+  }),
 }));
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
