@@ -1,7 +1,7 @@
 /**
  * Cloud Account Settings Screen
  *
- * Aligns with the web AccountSection: session management + user ID.
+ * Aligns with the web AccountSection: current-session management + user ID.
  * Cloud-only — shown when FEATURES.auth is true and user is signed in.
  */
 

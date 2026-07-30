@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: ab45aad024233db402ce01d20c3ae2c8de8e63acede574d64e067f6cbbb0410d -->
+<!-- ui-gaps-csv-sha256: 4848fe36c50d2ce2ac9df7da61d17fcb82c15b5047d1dad39a20119cfa22a61d -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 81 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 80 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  285 |
+| Open        |  284 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   42 |
+| Done        |   43 |
 | Not Planned |   14 |
 
 ## P0
@@ -970,24 +970,24 @@ Completed. Keep this client-side preflight as the shared minimum for both execut
 
 - `chatgpt_reference/061-chatgpt-ios-settings-safety-reduce-sensitive-content-toggle.png`
 
-### GAP-042 — No account security screen on mobile: passkeys, MFA methods, active sessions, lockdown
+### GAP-042 — Mobile Account Security exposes authoritative authenticator and current-session state
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Settings > Security and login
 
 **Gap**
 
-Reference groups Log in (Security keys & passkeys, count 1), MFA (Authenticator app Off, Text messages On), Sessions (Active sessions 2, with copy about removing trusted devices and Log out all), Advanced security (Lockdown mode) and the device-level Face ID toggle, each with an explainer. agiworkforce mobile's Safety & Security has only App Lock and OS Permissions — nothing about the cloud account. A user whose account is compromised cannot enrol MFA or terminate other sessions from the phone.
+Mobile now has a first-class Account Security route reachable from Settings and the signed-in Cloud profile. It reads the account-owned authenticator status and backup-code count from AGI Cloud, shows the real current Mobile session, links App Lock to device protection, and provides bounded Web security/account handoffs. Unsupported passkeys, SMS MFA, other-device inventory/revocation, and Lockdown mode are explicitly labeled unavailable rather than rendered as cosmetic controls.
 
 **Evidence**
 
-apps/mobile/src/features/settings/safety-security/index.tsx (App Lock + Permissions only); grep -i 'passkey|mfa|authenticator|active session|lockdown' across apps/mobile src+app — no match; web equivalent exists at apps/web/features/settings/sections/SecuritySection.tsx (2FA toggle, session timeout, change password, AuditLogPanel)
+account-security/service.ts validates GET /api/settings/2fa before exposing enabled, enabled_at, or backup-code state. account-security/index.tsx binds the fetch to the current Clerk account epoch and Cloud egress mode, renders factor/session/device groups, and states the missing contract boundaries. app/(app)/settings/account-security.tsx and the authenticated drawer register the route; settings/index.tsx and profile/index.tsx expose it. account-security-service.test.ts, account-security-screen.test.tsx, settings-page.test.tsx, profile-mode-boundary.test.tsx, and drawer-route-contract.test.ts cover validation, auth and Local/Cloud gates, navigation, supported state, unavailable state, and Web handoffs.
 
 **Suggested fix**
 
-Add /(app)/settings/security backed by the same Clerk endpoints the web panel uses: passkey list with add/remove, MFA methods with per-method status as SettingsRow `value`, an Active sessions list showing device/location/last-seen with revoke and 'Log out all', and each group's explainer copy.
+Completed for the account security state the product can verify today. Keep passkeys, SMS MFA, other-device lists, cross-device revoke/log-out-all, and Lockdown mode absent until account-owned APIs expose factor identifiers, verified enrollment/removal ceremonies, trusted session metadata, revocation semantics, recovery, rate limits, and cross-client tests. Never infer those controls from the current Clerk session.
 
 **Reference screenshot(s)**
 

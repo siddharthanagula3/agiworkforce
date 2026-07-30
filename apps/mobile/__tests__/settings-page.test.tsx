@@ -126,6 +126,7 @@ describe('Settings page', () => {
     expect(getByText('Data Controls')).toBeTruthy();
     expect(getByText('Parental Controls')).toBeTruthy();
     expect(getByText('Shared Links')).toBeTruthy();
+    expect(getByText('Account Security')).toBeTruthy();
     expect(getByText('Device Integrations')).toBeTruthy();
     expect(queryByText(/byok/i)).toBeNull();
   });
@@ -235,10 +236,12 @@ describe('Settings page', () => {
     fireEvent.press(getByLabelText('Cloud Personalization. Cloud'));
     fireEvent.press(getByLabelText('Cloud Memory. Cloud'));
     fireEvent.press(getByLabelText('Cloud Data Controls. Cloud'));
+    fireEvent.press(getByLabelText('Account Security. Cloud'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization?scope=cloud');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory?scope=cloud');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/account-security');
   });
 
   it('routes a signed-out cloud row tap to sign-in (public alpha, no invite/waitlist gate)', () => {
