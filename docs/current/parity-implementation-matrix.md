@@ -51,13 +51,15 @@ The table below records production mounts and end-to-end reality found by the 20
 | Search/research             | Present/Partial      | Present/Partial                                              | Partial                    | Tool-driven                              | Workspace search                          | Page operations, no research run         |
 | Tools/approvals             | Present/Partial      | Present/Partial                                              | Present/Partial            | Present                                  | Present                                   | Present/Partial                          |
 | Voice                       | Dictation input only | Composer voice plus broken system-wide claim                 | Voice conversation present | Missing                                  | Missing                                   | Speech input only                        |
-| Remote developer control    | Missing              | Companion components unmounted                               | Static/feature-off Code UI | Host relay missing                       | Host relay missing                        | Native bridge is not Code Remote Control |
+| Remote developer control    | Missing              | Companion components unmounted                               | Missing                    | Host relay missing                       | Host relay missing                        | Native bridge is not Code Remote Control |
 
 Critical evidence:
 
 - Web production chat is `apps/web/features/chat/pages/WebChatPage.tsx`; `UnifiedChatPage.tsx` and `features/chat/v3/WebShellV3.tsx` are unmounted alternatives.
 - Desktop production shell is `apps/desktop/src/features/v3/DesktopShellV3.tsx`; its `V3Mode` is currently only `chat`.
-- Mobile Code reads the hardcoded empty `apps/mobile/src/features/code-sessions/data.ts` array and has no live session client.
+- Mobile no longer advertises the hardcoded-empty Code Sessions surface. Managed
+  Cloud code execution remains available inside chat and generated output remains
+  available through Artifacts; cross-device developer-session control is missing.
 - VS Code's primary chat uses the CLI app-server while code-action/provider-stream settings retain a second execution path.
 - Chrome's production `apps/extension/src/side_panel.ts` is a 7,728-line ownership hotspot. Quick mode's previously cosmetic persistence is fixed: outgoing turns carry the preference and the Managed Cloud boundary applies the admitted `auto-economy` route without mutating the saved picker selection. The monolith split remains open.
 - Chrome restricted-page UX now keeps Managed Cloud chat usable, shows an accessible restriction notice, and disables only page context/browser automation instead of silently removing the visible state.

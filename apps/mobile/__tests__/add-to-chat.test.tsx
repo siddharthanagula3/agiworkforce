@@ -260,10 +260,11 @@ describe('AddToChatSheet', () => {
   // ---- Section 3: Feature Rows ----
 
   describe('feature toggles', () => {
-    it('shows the enabled tool rows and hides the disabled ones', () => {
-      const { getByText, queryByText } = renderSheet();
+    it('hides controls that live elsewhere or are disabled', () => {
+      const { queryByText } = renderSheet();
 
-      expect(getByText('Temporary chat')).toBeTruthy();
+      // Temporary chat lives in the chat header, not this sheet.
+      expect(queryByText('Temporary chat')).toBeNull();
       // Search is ambient and capability-clamped at send time, so it is not a
       // per-turn switch in the + sheet. Image generation is Cloud-only.
       expect(queryByText('Web search')).toBeNull();
@@ -398,7 +399,7 @@ describe('AddToChatSheet', () => {
       expect(getByText('My Project')).toBeTruthy();
     });
 
-    it('does not show local project config while in Cloud mode', () => {
+    it('uses the Cloud project store without leaking a Local project name', () => {
       useProjectStore.setState({
         projects: [
           {
@@ -416,7 +417,7 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Project')).toBeNull();
+      expect(queryByText('Project')).toBeTruthy();
       expect(queryByText('My Project')).toBeNull();
       expect(queryByText('Choose style')).toBeTruthy();
     });

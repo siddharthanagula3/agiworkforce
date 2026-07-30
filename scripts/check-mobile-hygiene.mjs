@@ -81,8 +81,6 @@ const serviceStoreImportBaseline = new Set([
   'apps/mobile/services/cloudSettingsMapping.ts',
   'apps/mobile/services/companion.ts',
   'apps/mobile/services/companionNotifications.ts',
-  'apps/mobile/services/desktopStatus.ts',
-  'apps/mobile/services/dispatchRealtime.ts',
   'apps/mobile/services/realtime.ts',
   // The notification gate's job IS to read the user's notification preferences before
   // delivering a push. It already keeps the coupling out of the early notification

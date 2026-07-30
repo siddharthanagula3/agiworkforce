@@ -71,8 +71,6 @@ import {
 } from '@/services/notifications';
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
 import { subscribeToRealtime, unsubscribeFromRealtime } from '@/services/realtime';
-import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatchRealtime';
-import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
@@ -469,40 +467,6 @@ export default function RootLayout() {
       unsubscribe?.();
       unsubscribeFromRealtime();
     };
-  }, [isClerkSignedIn, clerkUserId]);
-
-  // Dispatch Realtime — desktop→mobile task updates
-  // #386: gated on isClerkSignedIn instead of the legacy session (always null).
-  useEffect(() => {
-    if (!FEATURES.dispatch || !isClerkSignedIn || !clerkUserId) return;
-
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
-    subscribeToDispatch()
-      .then((unsub) => {
-        if (disposed) {
-          unsub();
-          return;
-        }
-        unsubscribe = unsub;
-      })
-      .catch((err) => {
-        console.warn('[RootLayout] Dispatch subscription failed:', err);
-      });
-
-    return () => {
-      disposed = true;
-      unsubscribe?.();
-      unsubscribeFromDispatch();
-    };
-  }, [isClerkSignedIn, clerkUserId]);
-
-  // Desktop liveness polling — catch missed Realtime heartbeat updates
-  // #386: gated on isClerkSignedIn instead of the legacy session (always null).
-  useEffect(() => {
-    if (!FEATURES.dispatch || !isClerkSignedIn || !clerkUserId) return;
-    const cleanup = startDesktopStatusPolling();
-    return cleanup;
   }, [isClerkSignedIn, clerkUserId]);
 
   // NOTE: cross-device conversation sync runs through `cloudSyncEngine`
