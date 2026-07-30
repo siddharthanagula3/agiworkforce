@@ -41,6 +41,16 @@ export interface ConnectorDirectory {
   available: string[];
 }
 
+export type ConnectorToolPermissionLevel = 'allow' | 'ask' | 'deny';
+
+export interface ConnectorToolPermission {
+  /** Runtime connector/server id used by the Cloud tool loop. */
+  connectorId: string;
+  /** Exact wire tool name observed by the approval flow. */
+  toolName: string;
+  level: ConnectorToolPermissionLevel;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -105,6 +115,55 @@ export async function connectConnector(connectorId: string): Promise<void> {
 
 export async function disconnectConnector(connectorId: string): Promise<void> {
   await api.delete(`/api/connectors?connectorId=${encodeURIComponent(connectorId)}`);
+}
+
+function parseConnectorToolPermission(value: unknown): ConnectorToolPermission {
+  if (!isRecord(value)) throw new Error('Invalid connector permissions response');
+  const connectorId = value['connectorId'];
+  const toolName = value['toolName'];
+  const level = value['level'];
+  if (
+    typeof connectorId !== 'string' ||
+    connectorId.length === 0 ||
+    typeof toolName !== 'string' ||
+    toolName.length === 0 ||
+    (level !== 'allow' && level !== 'ask' && level !== 'deny')
+  ) {
+    throw new Error('Invalid connector permissions response');
+  }
+  return { connectorId, toolName, level };
+}
+
+/**
+ * Returns only server-persisted decisions for tools the account has actually
+ * encountered. The connector API does not expose a trustworthy complete tool
+ * catalog, so Mobile must never synthesize one from marketing labels.
+ */
+export async function fetchConnectorToolPermissions(): Promise<ConnectorToolPermission[]> {
+  const response = await api.get<unknown>('/api/connectors/permissions');
+  if (!isRecord(response) || !Array.isArray(response['permissions'])) {
+    throw new Error('Invalid connector permissions response');
+  }
+  return response['permissions'].map(parseConnectorToolPermission);
+}
+
+export async function setConnectorToolPermission(
+  connectorId: string,
+  toolName: string,
+  level: ConnectorToolPermissionLevel,
+): Promise<void> {
+  await api.put('/api/connectors/permissions', { connectorId, toolName, level });
+}
+
+export async function resetConnectorToolPermission(
+  connectorId: string,
+  toolName: string,
+): Promise<void> {
+  await api.delete(
+    `/api/connectors/permissions?connectorId=${encodeURIComponent(
+      connectorId,
+    )}&toolName=${encodeURIComponent(toolName)}`,
+  );
 }
 
 export interface AddCustomConnectorInput {

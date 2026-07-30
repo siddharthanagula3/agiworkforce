@@ -31,7 +31,7 @@ import {
   TextInput,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Plug, Link, CheckCircle, RefreshCw, Search } from 'lucide-react-native';
+import { Plug, Link, CheckCircle, ChevronRight, RefreshCw, Search } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -54,8 +54,6 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
   connectConnector,
-  deleteCustomConnector,
-  disconnectConnector,
   fetchConnectorDirectory,
   getGitHubInstallWebUrl,
   type ConnectedConnector,
@@ -543,23 +541,22 @@ function ConnectorCard({
               </Text>
             </View>
             {connected ? (
-              // Status badge, not a button — tonal green circle so a connected
-              // row reads as "state" rather than "action". No chevron: there
-              // is no per-connector detail screen to navigate into yet
-              // (tracked gap).
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.successSurface,
-                  borderWidth: 1,
-                  borderColor: colors.successBorder,
-                }}
-              >
-                <CheckCircle size={15} color={colors.agentSuccess} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: colors.successSurface,
+                    borderWidth: 1,
+                    borderColor: colors.successBorder,
+                  }}
+                >
+                  <CheckCircle size={15} color={colors.agentSuccess} />
+                </View>
+                <ChevronRight size={17} color={colors.textMuted} />
               </View>
             ) : available || busy ? (
               // Filled, high-contrast pill — same inverse treatment as the
@@ -760,31 +757,10 @@ export default function CloudConnectorsScreen({
       if (!isConnectorActionCurrent(account)) return;
       const connection = connectionFor(entry.id);
       if (connection) {
-        Alert.alert(`Disconnect ${entry.name}?`, 'Remove this connector from your account.', [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disconnect',
-            style: 'destructive',
-            onPress: () => {
-              if (!isConnectorActionCurrent(account)) return;
-              const disconnect =
-                connection.source === 'custom'
-                  ? deleteCustomConnector(connection.id)
-                  : disconnectConnector(entry.id);
-              disconnect
-                .then(() => {
-                  if (isConnectorActionCurrent(account)) return load();
-                })
-                .catch(() => {
-                  if (!isConnectorActionCurrent(account)) return;
-                  Alert.alert(
-                    'Could not disconnect',
-                    `Disconnecting ${entry.name} failed. Please try again.`,
-                  );
-                });
-            },
-          },
-        ]);
+        router.push({
+          pathname: '/(app)/connectors/[id]',
+          params: { id: connection.connectorId },
+        } as unknown as Parameters<typeof router.push>[0]);
       } else if (!availableIds.has(entry.id)) {
         return;
       } else if (entry.id === 'github') {
@@ -817,7 +793,7 @@ export default function CloudConnectorsScreen({
           });
       }
     },
-    [availableIds, connectionFor, isConnectorActionCurrent, load],
+    [availableIds, connectionFor, isConnectorActionCurrent, load, router],
   );
 
   // Chip options: All + Connected + every catalog category.

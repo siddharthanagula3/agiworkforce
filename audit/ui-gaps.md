@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: c83403a63182ceffe93667c0e847fdde9d3d80ced22ab68a78b5bd05a0063234 -->
+<!-- ui-gaps-csv-sha256: 0d00bfa8f1b2bc720571a5a0c25375c49af494569411e31e067d9662434c1b5d -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 90 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 89 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  294 |
+| Open        |  293 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   40 |
+| Done        |   41 |
 | Not Planned |    7 |
 
 ## P0
@@ -901,24 +901,24 @@ Completed for native capabilities the product can truthfully expose. Keep Remind
 
 - `claude_reference/130-claude-ios-settings-permissions-location-calendar-reminders-health.png`
 
-### GAP-039 — No per-connector/plugin detail screen with tool-level permissions on mobile
+### GAP-039 — Connected services open an account-scoped detail screen with enforceable tool policies
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Settings > Plugins
 
 **Gap**
 
-Reference lists every added plugin under 'Added', each row drilling into its own detail page where that plugin's access can be reviewed. agiworkforce mobile shows a flat connector directory where tapping a connected item immediately opens a 'Disconnect X?' Alert — there is no way to inspect what a connected service can do, revoke individual tools, or see when/why it was granted. Web already has this concept (ToolPermissionsPanel, /connectors/permissions).
+Every connected Mobile row now drills into a real detail route instead of immediately asking to disconnect. The screen shows the AGI Cloud account, connection method, connected timestamp, and saved Allow, Ask, or Block decisions for that connector's exact runtime tool keys. It intentionally does not copy Web's unmounted static panel or invent a complete tool list: operator and custom connector tools are discovered at runtime, so only decisions created from tools the account has actually encountered are reviewable. Reset removes the saved verdict and restores the default approval flow; Disconnect remains a separately confirmed destructive footer action and clears server policies through the existing disconnect contract.
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-connectors/index.tsx handlePress (connected → Alert 'Disconnect'); no detail route under apps/mobile/app/(app)/connectors; apps/web/features/connectors/components/ToolPermissionsPanel.tsx and apps/web/app/connectors/permissions/page.tsx exist
+apps/mobile/app/(app)/connectors/[id].tsx owns the typed dynamic route and the authenticated drawer registers it. ConnectorDetailScreen.tsx enforces sign-in, Cloud mode, account-epoch isolation, real connection metadata, runtime-key permission editing/reset, an explicit default-flow empty state, and confirmed disconnect. services/connectors.ts validates /api/connectors/permissions responses and preserves exact connectorId/toolName keys for PUT and DELETE. cloud-connectors/index.tsx navigates connected rows to detail. connector-detail.test.tsx, custom-connector.test.ts, cloud-connectors-page-enabled.test.tsx, and drawer-route-contract.test.ts cover metadata, filtering, policy mutation/reset, stale-account suppression, destructive confirmation, directory navigation, response validation, and route ownership. The unmounted Web ToolPermissionsPanel itself documents why non-GitHub static labels are not enforceable keys.
 
 **Suggested fix**
 
-Add /(app)/connectors/[id] showing the connector's granted tools with per-tool toggles, connected-at, account label, and Disconnect as a destructive footer action; make the list row navigate there instead of firing a disconnect Alert.
+Completed with runtime-derived policy honesty. Keep complete tool discovery out of static client config; if the server later returns an authenticated per-connection tool manifest, merge it with saved decisions so untouched tools can be reviewed without creating silent no-op keys. Preserve account-epoch checks and confirmed destructive disconnect behavior.
 
 **Reference screenshot(s)**
 
