@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "recorder-hud",
+  "description": "Minimal event and close permissions for the workflow recorder HUD.",
+  "windows": ["recorder-hud"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-close"
+  ]
+}

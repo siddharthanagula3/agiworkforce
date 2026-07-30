@@ -103,6 +103,11 @@ const FloatingChat = lazy(() =>
     default: m.FloatingChat,
   })),
 );
+const RecorderHud = lazy(() =>
+  import('./features/automation/RecorderHud').then((m) => ({
+    default: m.RecorderHud,
+  })),
+);
 const DesktopShellV3 = lazy(() =>
   import('./features/v3').then((m) => ({
     default: m.DesktopShellV3,
@@ -208,7 +213,7 @@ const LoadingFallback = () => (
   </div>
 );
 
-type DesktopWindowMode = 'default' | 'overlay' | 'floating';
+type DesktopWindowMode = 'default' | 'overlay' | 'floating' | 'recorder-hud';
 
 function resolveDesktopWindowMode(): DesktopWindowMode {
   if (typeof window === 'undefined') return 'default';
@@ -217,10 +222,12 @@ function resolveDesktopWindowMode(): DesktopWindowMode {
     const pathname = window.location.pathname;
     if (pathname === '/floating') return 'floating';
     if (pathname === '/overlay') return 'overlay';
+    if (pathname === '/recorder-hud') return 'recorder-hud';
 
     const mode = new URLSearchParams(window.location.search).get('mode');
     if (mode === 'overlay') return 'overlay';
     if (mode === 'floating') return 'floating';
+    if (mode === 'recorder-hud') return 'recorder-hud';
   } catch {
     // Invalid location state falls back to the main Desktop shell.
   }
@@ -1869,8 +1876,8 @@ const App = () => {
   }, [i18n.language]);
 
   useEffect(() => {
-    // Cloud account bootstrap belongs to the main Desktop shell. Overlay and
-    // floating webviews have independent JS auth services and intentionally do
+    // Cloud account bootstrap belongs to the main Desktop shell. Auxiliary
+    // webviews have independent JS auth services and intentionally do
     // not restore the native credential; installing an orchestrator there would
     // immediately publish a false signed-out state into shared persistence.
     if (windowMode !== 'default') return;
@@ -1977,6 +1984,8 @@ const App = () => {
         return <VisualizationLayer />;
       case 'floating':
         return <FloatingChat />;
+      case 'recorder-hud':
+        return <RecorderHud />;
       default:
         return <DesktopShell />;
     }

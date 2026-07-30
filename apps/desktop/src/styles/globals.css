@@ -383,6 +383,11 @@
     pointer-events: none;
   }
 
+  body[data-window-mode='recorder-hud'],
+  #root[data-window-mode='recorder-hud'] {
+    background: transparent !important;
+  }
+
   a {
     color: inherit;
     text-decoration: none;

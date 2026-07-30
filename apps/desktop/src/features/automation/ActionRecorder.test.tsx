@@ -7,7 +7,13 @@ const mocks = vi.hoisted(() => ({
   requestAutomationPermission: vi.fn(),
   automationRecordStart: vi.fn(),
   automationRecordStop: vi.fn(),
+  automationRecordDiscard: vi.fn(),
+  automationRecordGetStatus: vi.fn(),
+  automationRecordGetLast: vi.fn(),
+  automationRecordClearLast: vi.fn(),
   skillCreateFromRecording: vi.fn(),
+  openRecorderHudWindow: vi.fn(),
+  closeRecorderHudWindow: vi.fn(),
   listen: vi.fn(),
 }));
 
@@ -17,6 +23,10 @@ vi.mock('@agiworkforce/desktop-command-client', () => ({
     requestAutomationPermission: mocks.requestAutomationPermission,
     automationRecordStart: mocks.automationRecordStart,
     automationRecordStop: mocks.automationRecordStop,
+    automationRecordDiscard: mocks.automationRecordDiscard,
+    automationRecordGetStatus: mocks.automationRecordGetStatus,
+    automationRecordGetLast: mocks.automationRecordGetLast,
+    automationRecordClearLast: mocks.automationRecordClearLast,
   },
   skills: {
     skillCreateFromRecording: mocks.skillCreateFromRecording,
@@ -27,12 +37,27 @@ vi.mock('../../lib/tauri-mock', () => ({
   listen: mocks.listen,
 }));
 
+vi.mock('@/services/recorderHudWindow', () => ({
+  openRecorderHudWindow: mocks.openRecorderHudWindow,
+  closeRecorderHudWindow: mocks.closeRecorderHudWindow,
+}));
+
 import { ActionRecorder } from './ActionRecorder';
 
 describe('ActionRecorder', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listen.mockResolvedValue(() => {});
+    mocks.automationRecordGetStatus.mockResolvedValue(null);
+    mocks.automationRecordGetLast.mockResolvedValue(null);
+    mocks.automationRecordDiscard.mockResolvedValue({
+      sessionId: 'session-1',
+      actionCount: 0,
+      durationMs: 0,
+    });
+    mocks.automationRecordClearLast.mockResolvedValue(undefined);
+    mocks.openRecorderHudWindow.mockResolvedValue(undefined);
+    mocks.closeRecorderHudWindow.mockResolvedValue(undefined);
     mocks.automationRecordStart.mockResolvedValue({
       sessionId: 'session-1',
       startTime: 1,
@@ -81,12 +106,32 @@ describe('ActionRecorder', () => {
 
     await user.click(screen.getByRole('button', { name: 'I understand, continue' }));
     await user.click(screen.getByRole('button', { name: 'Start recording' }));
+    expect(mocks.openRecorderHudWindow).toHaveBeenCalledOnce();
     await user.click(await screen.findByRole('button', { name: 'Done' }));
 
     expect(
       await screen.findByText(/No actions were captured. Grant Input Monitoring/i),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create skill' })).not.toBeInTheDocument();
+  });
+
+  it('aborts native capture if the detached controls cannot open', async () => {
+    const user = userEvent.setup();
+    mocks.checkAutomationPermissions.mockResolvedValue({
+      accessibility: true,
+      inputMonitoring: true,
+      screenRecording: false,
+    });
+    mocks.openRecorderHudWindow.mockRejectedValue(new Error('HUD unavailable'));
+
+    render(<ActionRecorder />);
+
+    await user.click(screen.getByRole('button', { name: 'I understand, continue' }));
+    await user.click(screen.getByRole('button', { name: 'Start recording' }));
+
+    expect(await screen.findByText('HUD unavailable')).toBeInTheDocument();
+    expect(mocks.automationRecordDiscard).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Capturing your workflow')).not.toBeInTheDocument();
   });
 
   it('creates a reusable managed skill from a reviewed recording', async () => {

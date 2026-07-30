@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listen } from '../../lib/tauri-mock';
 import {
   AlertTriangle,
@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Keyboard,
   Loader2,
+  Mic,
   MousePointer2,
   Save,
   ShieldCheck,
@@ -38,6 +39,7 @@ import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { ScrollArea } from '@/components/ui/ScrollArea';
 import { cn } from '@/lib/utils';
+import { closeRecorderHudWindow, openRecorderHudWindow } from '@/services/recorderHudWindow';
 
 interface ActionRecorderProps {
   onSkillCreated?: (skillName: string) => void;
@@ -79,6 +81,30 @@ function normalizeRecordedAction(payload: unknown): RecordedAction | null {
   };
 }
 
+function normalizeRecording(payload: unknown): Recording | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const raw = payload as Record<string, unknown>;
+  const actionsRaw = raw['actions'];
+  if (
+    typeof raw['id'] !== 'string' ||
+    typeof raw['name'] !== 'string' ||
+    !Array.isArray(actionsRaw)
+  ) {
+    return null;
+  }
+  const actions = actionsRaw
+    .map((action) => normalizeRecordedAction(action))
+    .filter((action): action is RecordedAction => Boolean(action));
+  return {
+    id: raw['id'],
+    name: raw['name'],
+    description: typeof raw['description'] === 'string' ? raw['description'] : undefined,
+    actions,
+    durationMs: Number(raw['durationMs'] ?? raw['duration_ms'] ?? 0),
+    createdAt: Number(raw['createdAt'] ?? raw['created_at'] ?? 0),
+  };
+}
+
 function formatDuration(ms: number) {
   const seconds = Math.floor(ms / 1000);
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
@@ -110,6 +136,23 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
     return missing;
   }, [permissions]);
 
+  const applyCompletedRecording = useCallback((recording: Recording) => {
+    setHasConsented(true);
+    setIsRecording(false);
+    setDuration(recording.durationMs);
+    setCurrentRecording(recording);
+    setRecordedActions(recording.actions);
+    if (recording.actions.length === 0) {
+      setError(
+        'No actions were captured. Grant Input Monitoring, then record at least one click or keystroke.',
+      );
+      setShowSaveDialog(false);
+      return;
+    }
+    setError(null);
+    setShowSaveDialog(true);
+  }, []);
+
   useEffect(() => {
     if (!isRecording) return;
     const interval = window.setInterval(() => setDuration((previous) => previous + 1000), 1000);
@@ -118,21 +161,70 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
 
   useEffect(() => {
     let mounted = true;
-    let unlisten: (() => void) | undefined;
-    void listen<unknown>('automation:action_recorded', (event) => {
-      const action = normalizeRecordedAction(event.payload);
-      if (mounted && action) {
-        setRecordedActions((previous) => [...previous, action]);
-      }
-    }).then((cleanup) => {
-      if (mounted) unlisten = cleanup;
-      else cleanup();
+    let cleanups: Array<() => void> = [];
+    void Promise.all([
+      listen<unknown>('automation:action_recorded', (event) => {
+        const action = normalizeRecordedAction(event.payload);
+        if (mounted && action) {
+          setRecordedActions((previous) => [...previous, action]);
+        }
+      }),
+      listen<unknown>('automation:recording_started', (event) => {
+        if (!mounted) return;
+        const raw = event.payload as Record<string, unknown> | null;
+        setHasConsented(true);
+        setRecordedActions([]);
+        setCurrentRecording(null);
+        setShowSaveDialog(false);
+        setDuration(
+          raw && Number.isFinite(Number(raw['startTime'] ?? raw['start_time']))
+            ? Math.max(0, Date.now() - Number(raw['startTime'] ?? raw['start_time']))
+            : 0,
+        );
+        setIsRecording(true);
+        setError(null);
+      }),
+      listen<unknown>('automation:recording_stopped', (event) => {
+        const recording = normalizeRecording(event.payload);
+        if (mounted && recording) applyCompletedRecording(recording);
+        void closeRecorderHudWindow();
+      }),
+      listen('automation:recording_discarded', () => {
+        if (mounted) {
+          setIsRecording(false);
+          setRecordedActions([]);
+          setCurrentRecording(null);
+          setShowSaveDialog(false);
+          setDuration(0);
+          setError(null);
+        }
+        void closeRecorderHudWindow();
+      }),
+    ]).then((nextCleanups) => {
+      if (mounted) cleanups = nextCleanups;
+      else nextCleanups.forEach((cleanup) => cleanup());
     });
+
+    void Promise.all([automation.automationRecordGetStatus(), automation.automationRecordGetLast()])
+      .then(([status, lastRecording]) => {
+        if (!mounted) return;
+        if (status?.isRecording) {
+          setHasConsented(true);
+          setIsRecording(true);
+          setDuration(status.durationMs);
+          return;
+        }
+        if (lastRecording) applyCompletedRecording(lastRecording);
+      })
+      .catch(() => {
+        // Lifecycle events remain authoritative if the initial status read races startup.
+      });
+
     return () => {
       mounted = false;
-      unlisten?.();
+      cleanups.forEach((cleanup) => cleanup());
     };
-  }, []);
+  }, [applyCompletedRecording]);
 
   const checkPermissions = async () => {
     setIsCheckingPermissions(true);
@@ -155,6 +247,12 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
 
     try {
       await automation.automationRecordStart();
+      try {
+        await openRecorderHudWindow();
+      } catch (cause) {
+        await automation.automationRecordDiscard().catch(() => undefined);
+        throw cause;
+      }
       setError(null);
       setRecordedActions([]);
       setCurrentRecording(null);
@@ -168,17 +266,8 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
   const stopRecording = async () => {
     try {
       const recording = await automation.automationRecordStop();
-      setIsRecording(false);
-      setDuration(recording.durationMs);
-      setCurrentRecording(recording);
-      setRecordedActions(recording.actions);
-      if (recording.actions.length === 0) {
-        setError(
-          'No actions were captured. Grant Input Monitoring, then record at least one click or keystroke.',
-        );
-        return;
-      }
-      setShowSaveDialog(true);
+      applyCompletedRecording(recording);
+      await closeRecorderHudWindow();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not finish recording.');
     }
@@ -187,11 +276,13 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
   const discardRecording = async () => {
     if (isRecording) {
       try {
-        await automation.automationRecordStop();
+        await automation.automationRecordDiscard();
       } catch {
         // The recorder may already have stopped. Discard remains safe and local.
       }
     }
+    await automation.automationRecordClearLast().catch(() => undefined);
+    await closeRecorderHudWindow();
     setIsRecording(false);
     setRecordedActions([]);
     setCurrentRecording(null);
@@ -221,6 +312,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
       setRecordedActions([]);
       setCurrentRecording(null);
       setDuration(0);
+      await automation.automationRecordClearLast().catch(() => undefined);
       onSkillCreated?.(result.skill.name);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create the skill.');
@@ -417,10 +509,14 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
                       'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
                       action.actionType === 'type' || action.actionType === 'hotkey'
                         ? 'bg-emerald-500/10 text-emerald-500'
-                        : 'bg-blue-500/10 text-blue-500',
+                        : action.actionType === 'narration'
+                          ? 'bg-amber-500/10 text-amber-500'
+                          : 'bg-blue-500/10 text-blue-500',
                     )}
                   >
-                    {action.actionType === 'type' || action.actionType === 'hotkey' ? (
+                    {action.actionType === 'narration' ? (
+                      <Mic className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : action.actionType === 'type' || action.actionType === 'hotkey' ? (
                       <Keyboard className="h-3.5 w-3.5" aria-hidden="true" />
                     ) : (
                       <MousePointer2 className="h-3.5 w-3.5" aria-hidden="true" />
