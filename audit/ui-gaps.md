@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 4848fe36c50d2ce2ac9df7da61d17fcb82c15b5047d1dad39a20119cfa22a61d -->
+<!-- ui-gaps-csv-sha256: cd4e676b903c35e9e10fd9ee3f4d1deac2056a5c4a60ac2919ca6ff682ad4f53 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 80 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 71 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  284 |
+| Open        |  275 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   43 |
-| Not Planned |   14 |
+| Done        |   44 |
+| Not Planned |   22 |
 
 ## P0
 
@@ -2488,24 +2488,24 @@ Render the resolved terminal-sandbox/approval policy as a composer footer chip (
 
 - `chatgpt_reference/088-chatgpt-macos-work-mode-empty-state-quick-actions.png`
 
-### GAP-108 — No settings screen for a hosted/cloud browsing agent's permissions and cookie data
+### GAP-108 — Hosted cloud-browser settings are declined without a browser runtime
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Web
 - **Surface/type:** web · missing-screen
 - **Reference:** ChatGPT · web · Cloud browser
 
 **Gap**
 
-Reference has a whole 'Cloud browser' settings page: a Default permissions mode ('Always ask'), per-site permission overrides ('Add site'), and a Browser data section to clear cookies saved by the cloud browser. agiworkforce has an analogous allow/deny/ask-list for native desktop app automation (Computer Use) but nothing for a hosted browsing agent's site-level web permissions or its cookie store, on any surface.
+The reference manages permissions and cookies for a hosted browsing runtime. AGI Workforce Web has no hosted browser session, browser-owned cookie jar, origin-permission evaluator, or clear-data operation. Desktop Computer Use approves native applications and is a different trust boundary. Adding a Web settings page would therefore persist controls that no runtime reads and imply that AGI stores browser cookies when it does not.
 
 **Evidence**
 
-apps/desktop/src/features/settings/ComputerUseSettings.tsx (app-level, not site/URL-level); searched 'cloud browser', 'site permission' across apps/web, apps/desktop, apps/mobile — zero matches
+Repository searches find no hosted browser session or cookie-store service on Web. apps/desktop/src/features/settings/ComputerUseSettings.tsx manages native application automation rather than sites or origins. The Web settings route inventory has no browser owner, and the API surface has no site-policy or browser-data endpoint.
 
 **Suggested fix**
 
-If/when a hosted browsing agent ships, add a Settings > Cloud Browser page with a default-permission dropdown, a per-site override list with Add Site, and a 'Clear cookies' action scoped to that browser's storage.
+Not planned until a tenant-owned hosted browser service defines isolated cookie storage, origin normalization, ask/allow/block enforcement, per-site overrides, retention, clear-data semantics, audit records, SSRF and redirect handling, and cross-tenant tests. Do not reuse Desktop Computer Use policies for a different runtime.
 
 **Reference screenshot(s)**
 
@@ -2580,47 +2580,47 @@ Completed. Preserve the signed-in lookup, fixed client catalog, runtime response
 
 - `chatgpt_reference/037-codex-ios-oauth-consent-webview-confirm-account-codex-remote.png`
 
-### GAP-112 — Chats and Tasks are separate surfaces instead of one unified 'Chats and tasks' home list
+### GAP-112 — Chats and Tasks remain separate because their lifecycle and actions differ
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Web
 - **Surface/type:** web · missing-ia
 - **Reference:** Claude · web · Home > Chats and tasks unified list
 
 **Gap**
 
-Reference's primary Home nav item is 'Chats and tasks', a single searchable/filterable list mixing chat threads and scheduled/background task cards (with a distinct task icon, unread-status dot, and relative timestamps), plus a Select bulk-action mode, Filter-by-All dropdown, and New button. agiworkforce's web sidebar has no combined nav entry; Tasks live at a separate /tasks route/feature from the chat list, with no evidence of a merged, filterable, bulk-selectable view.
+The reference mixes conversations and background tasks in one list. AGI Workforce keeps chat history and durable task runs separate because they have different identifiers, state machines, retention, mutation actions, and navigation targets. A cosmetic merged list would make archive/delete/select semantics ambiguous and cannot provide atomic bulk behavior across the two owners.
 
 **Evidence**
 
-apps/web/features/chat/v3/WebSidebar.tsx nav items (Projects, Artifacts, Customize — no 'Chats and tasks' merged entry); apps/web/app/tasks/page.tsx is a standalone TasksPage separate from chat history; grep for 'Chats and tasks' / 'Search chats and tasks' across apps/web — no match
+apps/web/features/chat/v3/WebSidebar.tsx consumes conversation records and conversation mutations. apps/web/features/tasks/components/TasksPage.tsx consumes task/run status and task-specific navigation. The APIs, stores, filters, and destructive actions are separately owned; no shared cursor, unread contract, or cross-entity bulk mutation exists.
 
 **Suggested fix**
 
-Introduce a unified 'Chats and tasks' home view combining chat history and task/agent-run cards in one filterable, searchable list with Select (bulk actions), Filter-by, and New, matching the reference IA.
+Not planned on the current contracts. Reconsider a unified activity index only after the backend publishes a stable discriminated feed with cursor ordering, unread semantics, owner-scoped search, per-kind actions, cross-kind bulk-operation rules, and deep-link tests. Keep the two honest destinations until then.
 
 **Reference screenshot(s)**
 
 - `claude_reference/165-claude-web-home-chats-and-tasks-recents-list-with-tasks.png`
 
-### GAP-113 — No unified Skills/Connectors/Plugins 'Directory' browse modal with search, filter, and sort
+### GAP-113 — A unified Directory is declined while catalogs have different authority and lifecycle
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Web
 - **Surface/type:** web · missing-screen
 - **Reference:** Claude · web · Plugin directory browse (unified Directory modal)
 
 **Gap**
 
-Reference has one 'Directory' modal reachable from any of Skills/Connectors/Plugins, with a persistent left nav between the three catalogs, a search box, Anthropic/Partners source tabs, Filter by and Sort by dropdowns, and a card grid with download-count metadata. agiworkforce has no such modal — its closest analog is a static marketing page (/plugins) with 4 hardcoded items and no search/filter/sort/download counts, and no shared entry point across skills/connectors/plugins.
+Skills, connectors, and plugins are not three views over one installable catalog in AGI Workforce. Managed skills are read-only deployment metadata, connectors have account-owned OAuth/custom connection state, and plugins are a public catalogue-shape preview with installation disabled. Combining them in an install-shaped modal would erase those trust boundaries and fabricate author, download, entitlement, or installed-state metadata.
 
 **Evidence**
 
-grep for '"Directory"' / 'Search plugins...' / 'Search skills...' / 'Search connectors...' across apps/web and apps/desktop finds no unified directory component, only separate per-surface search bars (SkillSearchBar.tsx, ConnectorGallery.tsx)
+apps/web/features/plugins/stores/plugin-store.ts hard-disables installation and returns no installed plugins. apps/web/app/plugins/page.tsx repeatedly labels the catalog a preview. Skills and connectors use separate authenticated services and purpose-built search/list surfaces with incompatible response shapes and mutations.
 
 **Suggested fix**
 
-Build a shared Directory modal component with left-nav tabs for Skills/Connectors/Plugins, a search box, source filter chips (e.g. Anthropic/Partners), Filter by/Sort by menus, and a reusable card grid showing name, author, description, and install-count.
+Not planned until a server-owned directory contract provides typed entries, source provenance, entitlement, versioning, install/uninstall state, connector authorization, permission review, metrics definitions, pagination, and account isolation across all three kinds. Preserve the separate honest surfaces meanwhile.
 
 **Reference screenshot(s)**
 
@@ -2649,70 +2649,70 @@ Add a Settings > Safety page (web + mobile) with a 'Reduce sensitive content' to
 
 - `chatgpt_reference/139-chatgpt-web-settings-safety-reduce-sensitive-content-toggle.png`
 
-### GAP-115 — No passkey/security-key (WebAuthn) registration, and 2FA is explicitly unimplemented on web
+### GAP-115 — Passkey and multi-device controls are explicitly unavailable pending account contracts
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Web
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Security and login
 
 **Gap**
 
-Reference shows 'Security keys & passkeys' management (count + last-added date) and working authenticator-app / SMS MFA toggles. agiworkforce's TwoFactorPanel shows an authenticator-app label but the code comment states 'Two-factor via an authenticator app is coming to web. Manage 2FA from your identity provider for now' — i.e. it is not actually enrollable in-app — and there is no SMS MFA option and no passkey/security-key UI at all.
+Web Security already keeps the authenticator switch disabled because enrollment is not mounted. It now also states that passkeys, security keys, SMS MFA, trusted-device lists, and cross-device session revocation are outside the current account contract, and that authenticator enrollment remains read-only until verification and recovery are complete. No editable control is rendered for unsupported state.
 
 **Evidence**
 
-apps/web/features/settings/components/Settings/TwoFactor.tsx line ~82 ('coming to web... manage from your identity provider for now'); searched 'passkey', 'security key' across apps/web — zero matches
+SecuritySection.tsx renders the Current account boundary disclosure on the mounted /settings/security surface. TwoFactor.tsx keeps the authenticator switch disabled and explains its read-only status. The repository has TOTP status/setup APIs but no mounted enrollment ceremony, WebAuthn credential API/schema, SMS factor lifecycle, trusted session inventory, or cross-device revoke endpoint. SettingsCapabilityBoundaries.test.tsx pins the visible boundary.
 
 **Suggested fix**
 
-Implement WebAuthn passkey registration/list/remove in Settings > Security, and either finish in-app authenticator-app enrollment or clearly gray out the control until it ships (avoid a toggle that implies functionality that doesn't exist).
+Not planned until account-owned APIs support credential identifiers, WebAuthn challenge/origin validation, verified factor enrollment and removal, recovery, rate limits, trusted device/session metadata, independent revocation, audit events, and adversarial auth tests. Keep unsupported controls visibly absent or read-only.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/140-chatgpt-web-settings-security-login-password-passkeys-mfa-sessions.png`
 
-### GAP-116 — Settings has no 'Claude Code'-equivalent section for coding-session preferences
+### GAP-116 — Coding-session preferences are declined without a mounted Web code-session product
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Web
 - **Surface/type:** web · missing-screen
 - **Reference:** Claude · web · Settings > Claude Code appearance & behavior preferences
 
 **Gap**
 
-Reference settings include a dedicated 'Claude Code' section with toggles for automatic session-state classification and model-switching-on-safety-flag, plus a 'Code appearance' block letting users pick separate light/dark diff themes with live preview and set a custom monospace code font, and a high-contrast dark theme toggle. agiworkforce's Settings has no comparable section; this is consistent with the broader absence of an in-product Code/coding-session surface.
+The reference configures a dedicated coding-session runtime. AGI Workforce Web has bounded code capability inside chat but no mounted repository worktree, diff-review session, code-specific safety classifier, or authoritative light/dark diff-theme consumer. A settings section would save values that no Web code surface reads.
 
 **Evidence**
 
-grep -in 'code appearance|classify session|global instructions|high-contrast|code font|diff theme' across the audit source strings snapshot and apps/web — no hits for the Claude-Code-specific terms; apps/web/app/settings/capabilities/page.tsx and the settings nav list (general, account, byok, capabilities, connections, memory, notifications, privacy, profile, reflect, security, skills, sync, team, time-focus, usage, voice) contain no 'Claude Code' entry.
+The mounted Web settings inventory contains capabilities but no code-session owner. Web chat code execution returns bounded generated artifacts rather than repository state. Repository searches find no mounted Web diff-theme, code-font, high-contrast code, session classifier, or safety-model-switch preference consumer.
 
 **Suggested fix**
 
-Once a Code tab / coding-session feature exists, add a matching Settings section with diff/code-appearance theme pickers (light+dark), a custom code font field, a high-contrast toggle, and behavior toggles for auto session classification and model-switch-on-flag.
+Not planned until a Web coding-session product owns repository/worktree state, review rendering, theme/font consumption, session classification, and safety-model routing. Add preferences only with runtime consumers, synchronized defaults, accessibility tests, and account persistence.
 
 **Reference screenshot(s)**
 
 - `claude_reference/177-claude-web-settings-panel-claude-code-appearance-prefs.png`
 
-### GAP-117 — Plugin installs are permanently disabled, not just empty — no real install flow exists
+### GAP-117 — Plugin installation remains explicitly closed until an account-owned marketplace exists
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Web
 - **Surface/type:** web · missing-state
 - **Reference:** Claude · web · Settings > Plugins empty state
 
 **Gap**
 
-The reference's Plugins empty state is one state of a working install pipeline (Browse plugins leads to a real marketplace with working Add buttons, per image 162). agiworkforce hardcodes `plugins: []` in WebSettingsModal.tsx with no fetch/load path, and the /plugins marketing page explicitly says 'hosted marketplace installation is not open yet' — so there is no way for this empty state to ever transition to a populated one.
+The Web plugin surface is deliberately a catalogue preview, not an empty state for a working installer. It says installation is not open and that nothing installs; the persisted client store hard-disables install, uninstall, installed-list, and installed-state behavior. Enabling cosmetic Add controls would create local state without server entitlement, permission enforcement, or runtime deployment.
 
 **Evidence**
 
-apps/web/features/settings/components/WebSettingsModal.tsx line ~485 'plugins: []' hardcoded, 'pluginsLoading: false'; apps/web/app/plugins/page.tsx explicit copy 'hosted marketplace installation is not open yet'
+apps/web/app/plugins/page.tsx labels the surface Catalogue preview and says hosted marketplace installation is not open and nothing installs. apps/web/features/plugins/stores/plugin-store.ts sets PLUGIN_INSTALLS_ENABLED false and makes install-related actions inert. No account-owned plugin installation API or runtime activation contract exists.
 
 **Suggested fix**
 
-Wire a real plugin-install backend (mirroring the skills /api/skills pattern) so installed plugins persist and the empty state can transition to a populated list after Browse > Add.
+Not planned for the current marketplace. Keep the preview explicit and installation controls absent until the server owns catalog identity, entitlement, versions, install/uninstall, connector/tool permissions, activation, rollback, audit history, and cross-client state.
 
 **Reference screenshot(s)**
 
@@ -2741,70 +2741,70 @@ Add /settings/archived (and a matching modal section) listing archived conversat
 
 - `chatgpt_reference/121-codex-macos-settings-archived-chats-empty.png`
 
-### GAP-119 — Notifications reduced to one browser toggle — no event categories or Push/Email channels
+### GAP-119 — Web Notifications exposes only the channel with a real sender
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Web
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings › Notifications
 
 **Gap**
 
-Reference lists seven event categories (Codex tasks, Group chats, Marketing, Personalized tips, Projects, Responses, Tasks) each with a channel selector showing Push, Email or both. agiworkforce web deliberately stripped every category except a single browser 'Reply ready' switch because no email or push dispatcher exists, so nothing can notify a user about a finished task, an agent run or a shared-project invite.
+Web has one enforced notification: a browser popup when a long-running reply finishes in a background tab. The mounted Notifications screen now explicitly says Browser replies only and lists email, task, schedule, project, usage, tips, and marketing channels as unavailable. It does not persist switches for nonexistent senders.
 
 **Evidence**
 
-apps/web/features/settings/sections/NotificationsSection.tsx:22-62 (comment: email/push groups removed, 'no email sender, no push dispatcher'; NotifKey = 'browserReplyReady' only)
+NotificationsSection.tsx defines only browserReplyReady, persists it in the notifications namespace, and WebChatPage.tsx consumes it at response completion. The new Notification channel availability card explains why other categories are absent. SettingsCapabilityBoundaries.test.tsx verifies the visible boundary and account-sync status. Repository searches find no Web email dispatcher, service-worker push subscription lifecycle, or task/schedule/project channel consumer.
 
 **Suggested fix**
 
-Build the send paths first (email via the existing transactional provider, web push via service worker), then restore category rows — Tasks, Schedules, Shared projects, Responses, Usage, Marketing — each with a Push/Email multi-select persisted in the notifications namespace.
+Not planned until each channel has an authenticated sender, delivery target lifecycle, consent and unsubscribe semantics, event producer, retry/deduplication behavior, account-scoped preference consumer, and end-to-end delivery tests. Never add a preference before its sender reads it.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/123-chatgpt-web-settings-notifications-codex-groupchats-marketing-top.png`
 
-### GAP-120 — No trusted-contact crisis-safety feature anywhere in the product
+### GAP-120 — Trusted-contact escalation is declined without a verified consent and safety service
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Web
 - **Surface/type:** web · missing-screen
 - **Reference:** ChatGPT · web · Trusted contact
 
 **Gap**
 
-ChatGPT lets a user designate a trusted contact (18+) who can be automatically notified if the user discusses suicide in a way that indicates a serious safety concern, with explicit consent/explainer copy. agiworkforce has no equivalent settings screen, contact model, or crisis-detection-to-notification pipeline on any surface.
+AGI Workforce has no contact-verification service, mutual opt-in, safety classifier and review policy, jurisdiction-aware escalation, notification dispatcher, or audit trail. Web Security now states Trusted contact · Not configured and explicitly says AGI does not monitor conversations to notify another person and sends no conversation content or automatic safety alerts. This avoids creating dangerous expectations with a cosmetic enrollment form.
 
 **Evidence**
 
-searched 'trusted contact', 'crisis', 'self-harm', 'suicide' across apps/web, apps/desktop, apps/mobile — zero matches
+SecuritySection.tsx renders the trusted-contact boundary on the mounted settings surface, and SettingsCapabilityBoundaries.test.tsx pins it. Repository searches find no trusted-contact entity, consent lifecycle, crisis classifier, escalation review service, notification delivery owner, or revocation/audit flow.
 
 **Suggested fix**
 
-Add a Settings > Trusted Contact screen (web/mobile) allowing users to add a contact with explainer copy on when/why they'd be notified; wire it to any existing self-harm-risk detection in the moderation pipeline as an opt-in escalation path.
+Not planned until a dedicated reviewed safety service provides mutual verified consent, adult policy, minimization and encryption, revocation/deletion, classifier limitations and human review, jurisdiction-aware resources, abuse prevention, delivery/audit guarantees, and legal plus clinical-safety review. Do not promise automatic escalation before then.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/144-chatgpt-web-settings-trusted-contact-add-contact-safety.png`
 
-### GAP-121 — Web Voice settings page is a fully disabled 'Coming soon' stub
+### GAP-121 — Web Voice separates working dictation from unavailable managed voice
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Web
 - **Surface/type:** web · missing-state
 - **Reference:** ChatGPT · web · Voice
 
 **Gap**
 
-Reference shows a working live-voice-mode configuration screen: animated persona avatar, name + description, prev/next carousel with page dots, and Model / Intelligence / Language dropdowns. agiworkforce's web Voice settings page renders every row as 'Not available yet' behind a 'Coming soon' banner, with opacity reduced and pointer-events disabled — there is no functioning voice-mode configuration UI on web at all (desktop has a persona picker, which is a partial analog).
+The old page rendered fake Monthly allowance, Transcription model, and AI cleanup rows at reduced opacity even though no runtime consumed them. The replacement presents two direct states: composer dictation works today as reviewed push-to-talk text, while managed live voice is unavailable. It names the unsupported personas, models, intelligence, languages, metered minutes, and provider controls without imitating enabled settings.
 
 **Evidence**
 
-apps/web/app/settings/voice/page.tsx — hasVoice = false hardcoded, all rows render 'Not available yet', section opacity 0.5 / pointerEvents 'none'
+apps/web/app/settings/voice/page.tsx contains no hasVoice flag, disabled pointer-events panel, or Not available yet rows. It explains the working composer microphone, the live-conversation boundary, and the separate Desktop/CLI BYOK scope. page.test.tsx verifies both states, the absence of inert control copy, and the BYOK destination.
 
 **Suggested fix**
 
-Either ship the underlying managed voice feature and enable the page, or replace the fully-inert stub with an honest 'not yet available, here's what's coming' state that doesn't visually imitate a real settings panel — and long-term add persona preview + Model/Intelligence/Language controls matching the reference.
+Completed for the current voice runtime. Add persona, Model, Intelligence, Language, and allowance controls only after a managed live-voice service consumes them, with microphone consent, interruption handling, metering, entitlement, persistence, accessibility, and end-to-end browser tests.
 
 **Reference screenshot(s)**
 

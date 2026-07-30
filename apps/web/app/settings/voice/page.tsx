@@ -1,24 +1,11 @@
 'use client';
 
-import { useBillingStore } from '@shared/stores/web-auth-store';
-import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
 import Link from 'next/link';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 
 const byokLabel = formatPrivacyModeLabel('byok');
 
 export default function VoiceSettingsPage() {
-  const subscription = useBillingStore((s) => s.subscription);
-  const tier = subscription?.tier ?? 'free';
-  void tier;
-  // MANAGED transcription only: quotas, tier minute caps and provider controls
-  // are not enforced or billed yet, so the controls below stay inert.
-  //
-  // This is deliberately NOT a claim that voice is unavailable — composer
-  // dictation ships today via VoiceInputButton + /api/voice/transcribe. The
-  // banner said "Voice transcription is coming soon", which contradicted a
-  // microphone the user had just used one screen over.
-  const hasVoice = false;
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
       <div>
@@ -34,151 +21,76 @@ export default function VoiceSettingsPage() {
           Voice
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Push-to-talk transcription settings (Wispr Flow style).
+          Composer dictation and managed voice availability.
         </p>
       </div>
 
-      {/* Scoped banner: managed transcription is unavailable; dictation is not. */}
-      {!hasVoice && (
-        <div
-          style={{
-            border: '1px solid var(--settings-border)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--bg-elev)',
-            padding: '20px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', marginBottom: 4 }}>
-              Dictation works today — these settings do not apply yet
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
-              You can already dictate a message with the microphone in the composer. What is not
-              available yet is <em>managed</em> transcription — metered minutes, tier caps, and the
-              provider controls below. When that ships you will also be able to bring your own
-              provider key on Desktop and CLI via {byokLabel}.
-            </div>
-          </div>
-          <span
-            style={{
-              padding: '8px 18px',
-              background: 'var(--bg-elev)',
-              border: '1px solid var(--settings-border)',
-              borderRadius: 'var(--radius)',
-              color: 'var(--text-3)',
-              fontSize: 13,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            Coming soon
-          </span>
-        </div>
-      )}
-
-      {/* Voice settings */}
       <section
         style={{
           border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
-          overflow: 'hidden',
-          opacity: hasVoice ? 1 : 0.5,
-          pointerEvents: hasVoice ? 'auto' : 'none',
+          padding: '20px 24px',
         }}
       >
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-border)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
-          Transcription
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', marginBottom: 6 }}>
+          Composer dictation works today
         </div>
-        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Row label="Monthly allowance">
-            <span style={{ fontSize: 14, color: 'var(--text-3)' }}>Not available yet</span>
-          </Row>
-          <Row label="Transcription model">
-            <span style={{ fontSize: 14, color: 'var(--text-3)' }}>Not available yet</span>
-          </Row>
-          <Row label="AI cleanup">
-            <span style={{ fontSize: 14, color: 'var(--text-3)' }}>Not available yet</span>
-          </Row>
-        </div>
+        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: 'var(--text-3)' }}>
+          Use the microphone in the chat composer to turn speech into message text. Review the
+          transcript before sending; this is push-to-talk dictation, not a live voice conversation.
+        </p>
       </section>
 
-      {/* BYOK voice */}
+      <section
+        aria-label="Managed voice availability"
+        style={{
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          padding: '20px 24px',
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', marginBottom: 6 }}>
+          Managed voice is not available
+        </div>
+        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: 'var(--text-3)' }}>
+          Voice personas, live-call models, intelligence levels, language selection, metered
+          minutes, and provider controls are not active on Web. This page does not show disabled
+          settings that the runtime cannot consume.
+        </p>
+      </section>
+
       <section
         style={{
           border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
-          overflow: 'hidden',
+          padding: '20px 24px',
         }}
       >
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid var(--settings-border)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>
           Bring Your Own Key (BYOK)
         </div>
-        <div style={{ padding: '16px 20px' }}>
-          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 12px' }}>
-            When managed transcription ships, you will be able to plug in your own OpenAI API key on
-            Desktop and CLI to use Whisper directly, with requests going to OpenAI without any
-            proxy. BYOK itself already lives on Desktop and CLI today.
-          </p>
-          <Link
-            href="/byok"
-            style={{
-              padding: '7px 14px',
-              background: 'transparent',
-              border: '1px solid var(--settings-border)',
-              borderRadius: 'var(--radius)',
-              color: 'var(--text-2)',
-              fontSize: 13,
-              textDecoration: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            Configure BYOK
-          </Link>
-        </div>
+        <p style={{ margin: '0 0 14px', fontSize: 13, lineHeight: 1.6, color: 'var(--text-3)' }}>
+          Desktop and CLI support {byokLabel}. Web dictation does not use those keys and does not
+          promise a managed voice allowance.
+        </p>
+        <Link
+          href="/byok"
+          style={{
+            display: 'inline-block',
+            padding: '7px 14px',
+            border: '1px solid var(--settings-border)',
+            borderRadius: 'var(--radius)',
+            color: 'var(--text-2)',
+            fontSize: 13,
+            textDecoration: 'none',
+          }}
+        >
+          Learn about BYOK
+        </Link>
       </section>
     </div>
   );
 }
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-        minHeight: 32,
-      }}
-    >
-      <span style={{ fontSize: 14, color: 'var(--text-3)', flexShrink: 0 }}>{label}</span>
-      {children}
-    </div>
-  );
-}
-
-// Suppress unused import warning - referenced at module level for type safety
-void BILLING_PLAN_PRICING;

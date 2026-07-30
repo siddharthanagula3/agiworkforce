@@ -105,6 +105,25 @@ export function SecuritySection() {
         </p>
       </div>
 
+      <section
+        aria-label="Account security availability"
+        style={{
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          padding: '16px 20px',
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
+          Current account boundary
+        </div>
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
+          Passkeys, security keys, SMS MFA, trusted-device lists, and cross-device session
+          revocation are not available in the current account contract. Authenticator enrollment
+          also remains read-only until its verification and recovery flow is mounted.
+        </p>
+      </section>
+
       {isLoading ? (
         <div style={{ fontSize: 13, color: 'var(--text-3)' }}>Loading security settings...</div>
       ) : (
@@ -124,6 +143,24 @@ export function SecuritySection() {
       )}
 
       <AuditLogPanel />
+
+      <section
+        aria-label="Trusted contact availability"
+        style={{
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          padding: '16px 20px',
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
+          Trusted contact · Not configured
+        </div>
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
+          AGI does not monitor conversations to notify another person. No contact receives
+          conversation content or automatic safety alerts.
+        </p>
+      </section>
     </div>
   );
 }
