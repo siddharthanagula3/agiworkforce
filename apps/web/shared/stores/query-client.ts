@@ -236,17 +236,7 @@ export const queryKeys = {
     subscription: () => ['billing', 'subscription'] as const,
     plan: (userId: string) => ['billing', 'plan', userId] as const,
     invoices: () => ['billing', 'invoices'] as const,
-    invoicesInfinite: () => ['billing', 'invoices', 'infinite'] as const,
     paymentMethods: () => ['billing', 'payment-methods'] as const,
-    usage: () => ['billing', 'usage'] as const,
-    tokenBalance: (userId: string) => ['billing', 'tokenBalance', userId] as const,
-    tokenUsage: (userId: string) => ['billing', 'tokenUsage', userId] as const,
-    tokenUsageHistoryInfinite: (
-      userId: string,
-      filters?: { provider?: string; startDate?: string; endDate?: string },
-    ) => ['billing', 'tokenUsage', 'history', 'infinite', userId, filters] as const,
-    analytics: (userId: string, timeRange: string) =>
-      ['billing', 'analytics', userId, timeRange] as const,
   },
 
   // Settings

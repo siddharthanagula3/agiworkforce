@@ -3788,8 +3788,8 @@
   {
     "item": "cost-breakdown",
     "surface": "admin-and-billing",
-    "status": "stub",
-    "evidence": "The type/UI plumbing exists — apps/web/features/billing/hooks/use-billing-queries.ts:57-62,84-90 defines `LLMUsage{provider,tokens,cost,limit}` and `BillingUsage.llmUsage`, and apps/web/features/billing/pages/BillingDashboard.tsx:92-121 maps up to 4 llmUsage entries to icons/colors for display — but the actual data source always supplies an empty array: use-billing-queries.ts:230 calls `buildBillingInfoFromUsage(usage, [])`, and buildBillingInfoFromUsage (lines 140-164) also hardcodes `totalCost: 0`. The backend (/api/usage, /api/billing/analytics) only returns a single aggregate usage_percentage, never a per-model/per-provider breakdown."
+    "status": "missing",
+    "evidence": "A public provider-cost breakdown is intentionally not a product capability under docs/current/source-of-truth.md: managed-usage clients may receive only bounded percentages and reset times, never internal provider cost, ledger cents, token conversion, allowance operands, or dollar value. The former Web billing `LLMUsage`, `totalCost`, token-named percentage fields, and provider-icon mapping were removed instead of fabricating private economics. The supported live usage dashboard remains tracked separately under usage-dashboard."
   },
   {
     "item": "plans-free-pro-max-team-enterprise",

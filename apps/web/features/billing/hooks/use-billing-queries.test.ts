@@ -20,27 +20,23 @@ const usage: ManagedUsageSummaryResponse = {
 
 describe('buildBillingInfoFromUsage', () => {
   it('preserves actual subscription status and periods without inventing a USD price', () => {
-    const billing = buildBillingInfoFromUsage(usage, []);
+    const billing = buildBillingInfoFromUsage(usage);
 
     expect(billing.status).toBe('past_due');
     expect(billing.current_period_start).toBe('2026-07-18T00:00:00.000Z');
     expect(billing.current_period_end).toBe('2026-08-18T00:00:00.000Z');
     expect(billing.price).toBeNull();
     expect(billing.currency).toBeNull();
-    expect(billing.usage.totalTokens).toBe(42);
-    expect(billing.usage.totalLimit).toBe(100);
+    expect(billing.usage).toEqual({ usedPercent: 42 });
   });
 
   it('keeps unknown periods and subscription state honest', () => {
-    const billing = buildBillingInfoFromUsage(
-      {
-        ...usage,
-        period_start: null,
-        period_end: null,
-        subscription_status: 'none',
-      },
-      [],
-    );
+    const billing = buildBillingInfoFromUsage({
+      ...usage,
+      period_start: null,
+      period_end: null,
+      subscription_status: 'none',
+    });
 
     expect(billing.status).toBe('none');
     expect(billing.current_period_start).toBeNull();
@@ -48,8 +44,8 @@ describe('buildBillingInfoFromUsage', () => {
   });
 
   it('derives public plan features from the shared limit and capability catalog', () => {
-    const free = buildBillingInfoFromUsage({ ...usage, plan_tier: 'free' }, []);
-    const max15x = buildBillingInfoFromUsage({ ...usage, plan_tier: 'max_15x' }, []);
+    const free = buildBillingInfoFromUsage({ ...usage, plan_tier: 'free' });
+    const max15x = buildBillingInfoFromUsage({ ...usage, plan_tier: 'max_15x' });
 
     expect(free.features).toContain('1 project');
     expect(free.features).toContain('1 custom MCP server');

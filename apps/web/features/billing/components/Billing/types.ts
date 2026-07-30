@@ -1,5 +1,3 @@
-import React from 'react';
-
 // pro_plus removed 2026-06-20; 'hobby' renamed to 'basic' 2026-07-02.
 // Locked tiers are free, basic, pro, max, team, enterprise.
 export const VALID_PLANS = [
@@ -43,16 +41,6 @@ export function normalizeStatus(status: unknown): BillingStatus {
   return isValidStatus(status) ? status : 'none';
 }
 
-export interface LLMUsage {
-  provider: string;
-  tokens: number;
-  cost: number;
-  limit: number;
-  icon: React.ReactNode;
-  color: string;
-  bgColor: string;
-}
-
 export interface BillingInfo {
   plan: PlanTier;
   status: BillingStatus;
@@ -62,10 +50,7 @@ export interface BillingInfo {
   currency: string | null;
   features: string[];
   usage: {
-    totalTokens: number;
-    totalLimit: number;
-    totalCost: number;
-    llmUsage: LLMUsage[];
+    usedPercent: number;
   };
   invoices: {
     id: string;
@@ -92,9 +77,4 @@ export function formatCurrency(amount: number, currency: string) {
     style: 'currency',
     currency: safeCurrency,
   }).format(amount);
-}
-
-export function safePercentage(used: number, limit: number): number {
-  if (limit <= 0 || used < 0) return 0;
-  return Math.min((used / limit) * 100, 100);
 }
