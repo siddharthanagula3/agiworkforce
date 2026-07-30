@@ -17,6 +17,7 @@ export { default as ErrorBoundary } from './error';
  * Navigation structure:
  *   Drawer (slide-out on iPhone, permanent sidebar on iPad)
  *     (tabs)/       -- Chat, Projects, Settings screens (retained for route compat)
+ *     chats/        -- full chat history, filters, and global search
  *     artifacts/    -- mobile artifact gallery
  *     library/      -- aggregated generated images + artifacts view
  *     skills/       -- read-only Managed Cloud Skills catalog
@@ -62,6 +63,7 @@ export default function AppLayout() {
       <Drawer.Screen name="(tabs)" options={HIDDEN} />
 
       {/* New drawer-level routes */}
+      <Drawer.Screen name="chats/index" options={HIDDEN} />
       <Drawer.Screen name="artifacts/index" options={HIDDEN} />
       <Drawer.Screen name="library/index" options={HIDDEN} />
       <Drawer.Screen name="connectors/index" options={HIDDEN} />

@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -41,6 +41,7 @@ import {
 
 interface ArtifactsGalleryScreenProps {
   initialLoading?: boolean;
+  initialArtifactId?: string;
 }
 
 const NUM_COLUMNS = 2;
@@ -78,12 +79,16 @@ function badgeLabel(artifact: MobileArtifact): string {
 // Main screen
 // ---------------------------------------------------------------------------
 
-export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGalleryScreenProps) {
+export function ArtifactsGalleryScreen({
+  initialLoading = false,
+  initialArtifactId,
+}: ArtifactsGalleryScreenProps) {
   const c = useThemeColors();
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const [selectedArtifact, setSelectedArtifact] = useState<MobileArtifact | null>(null);
   const selectedArtifactScopeRef = useRef<AccountScopedUiState | null>(null);
+  const openedInitialArtifactRef = useRef<string | null>(null);
   const [isLoading] = useState(initialLoading);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
@@ -154,6 +159,14 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
     selectedArtifactScopeRef.current = null;
     setSelectedArtifact(null);
   }, []);
+
+  useEffect(() => {
+    if (!initialArtifactId || openedInitialArtifactRef.current === initialArtifactId) return;
+    const artifact = galleryArtifacts.find((candidate) => candidate.id === initialArtifactId);
+    if (!artifact) return;
+    openedInitialArtifactRef.current = initialArtifactId;
+    handleOpenArtifact(artifact);
+  }, [galleryArtifacts, handleOpenArtifact, initialArtifactId]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: MobileArtifact; index: number }) => (
