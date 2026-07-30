@@ -127,7 +127,6 @@ describe.skipIf(!LIVE)('tool loop, live end to end', () => {
       const output = await collect(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
 
       if (process.env['AGI_DUMP'] === '1') {
-        // eslint-disable-next-line no-console -- opt-in evidence dump
         console.log(
           output
             .split('\n')

@@ -223,36 +223,6 @@ pub async fn vision_send_message(
 }
 
 #[tauri::command]
-pub async fn vision_analyze_screenshot(
-    capture_id: String,
-    prompt: Option<String>,
-    provider: Option<String>,
-    model: Option<String>,
-    state: State<'_, LLMState>,
-    db: State<'_, AppDatabase>,
-) -> Result<VisionResponse, String> {
-    tracing::info!("Analyzing screenshot: {}", capture_id);
-
-    let default_prompt = "Describe this screenshot in detail. What do you see?".to_string();
-
-    let request = VisionRequest {
-        prompt: prompt.unwrap_or(default_prompt),
-        images: vec![VisionImage {
-            source_type: "capture_id".to_string(),
-            source: capture_id,
-            detail: Some("high".to_string()),
-        }],
-        provider,
-        model,
-        temperature: Some(0.3),
-        max_tokens: Some(1000),
-        detail_level: Some("high".to_string()),
-    };
-
-    vision_send_message(request, state, db).await
-}
-
-#[tauri::command]
 pub async fn vision_extract_text(
     image_path: String,
     provider: Option<String>,

@@ -9,7 +9,18 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { Check, ChevronDown, Folder, FolderOpen, Loader2, Mic, Plus, X } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Folder,
+  FolderOpen,
+  History,
+  ListChecks,
+  Loader2,
+  Mic,
+  Plus,
+  X,
+} from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
@@ -19,11 +30,18 @@ import { AttachmentMenu } from './AttachmentMenu';
 import { ModelSelector } from './ModelSelector';
 import { SendButton } from './SendButton';
 import { AgentControl } from './AgentControl';
+import { PlanModeToggle } from './ChatInputToolbar';
+import { SlashCommandMenu, type CommandSuggestion } from './SlashCommandMenu';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
 import type { WritingStyle } from '../lib/writingStyle';
 import type { ChatAttachmentPolicy } from '../lib/runtime';
+import {
+  getSlashCommand,
+  registerBuiltinSlashCommands,
+  type SlashCommandContext,
+} from '../lib/slashCommands';
 import {
   ALLOWED_ATTACHMENT_ACCEPT,
   getModelMetadataById,
@@ -31,6 +49,8 @@ import {
   validateAttachmentFile,
   type CloudWorkMode,
 } from '@agiworkforce/types';
+
+registerBuiltinSlashCommands();
 
 /** Composer work mode — mirrors web ChatComposerNew's ComposerWorkMode. */
 export type ChatWorkMode = CloudWorkMode;
@@ -79,6 +99,13 @@ export interface ComposerVoiceController {
   state: ComposerVoiceState;
   onToggle: () => void | Promise<void>;
   idleLabel?: string;
+}
+
+export interface ChatInputSlashCommandHost {
+  /** Toggle the real AgentMode sent to the runtime. */
+  togglePlanMode: () => void;
+  /** Present only when the host has a live checkpoint transport. */
+  openRewindTimeline?: (checkpointId?: string) => void;
 }
 
 export interface ChatInputProps {
@@ -183,6 +210,8 @@ export interface ChatInputProps {
   pendingAttachments?: { id: string; files: File[] } | null;
   /** Replaces the browser speech mic when a host owns a richer voice workflow. */
   voiceInputController?: ComposerVoiceController;
+  /** Host actions exposed through the package-owned slash-command registry. */
+  slashCommandHost?: ChatInputSlashCommandHost;
 }
 
 export function ChatInput({
@@ -209,6 +238,7 @@ export function ChatInput({
   attachmentPolicy,
   pendingAttachments = null,
   voiceInputController,
+  slashCommandHost,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const aggregateIsStreaming = useChatStore((s) => s.isStreaming);
@@ -225,6 +255,7 @@ export function ChatInput({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [activeStyle, setActiveStyle] = useState<WritingStyle | null>(null);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
 
   // Work-mode segmented toggle (Chat | AGI Work) — web ChatComposerNew parity.
   // 'agiwork' reveals the "Project or folder" chip row below the composer and
@@ -376,6 +407,9 @@ export function ChatInput({
   // Resolve agent control state for the active conversation
   const resolveAgentControl = useAgentControlStore((s) => s.resolve);
   const showAgentControl = Boolean(conversationId && supportsAgentControl);
+  const activeAgentMode = useAgentControlStore((state) =>
+    conversationId ? state.resolve(conversationId, projectId ?? null).mode : 'ask',
+  );
   const { state: browserVoiceState, start: startBrowserVoice } = useVoiceInput({
     onTranscript: (text) => {
       const cleanedText = cleanupVoiceDictation(text);
@@ -433,9 +467,74 @@ export function ChatInput({
   const handleChange = useCallback(
     (e: ChangeEvent<HTMLTextAreaElement>) => {
       setDraftContent(e.target.value, conversationId);
+      setSlashSelectedIndex(0);
       adjustHeight();
     },
     [adjustHeight, conversationId, setDraftContent],
+  );
+
+  const slashQueryMatch = /^\/([A-Za-z0-9_-]*)$/.exec(draftContent);
+  const slashQuery = slashQueryMatch?.[1]?.toLowerCase() ?? null;
+  const slashSuggestions = useMemo<CommandSuggestion[]>(() => {
+    if (slashQuery === null || !slashCommandHost) return [];
+
+    const entries = [
+      {
+        name: 'plan',
+        enabled: true,
+        icon: <ListChecks className="h-4 w-4 text-[var(--chat-text-secondary)]" />,
+      },
+      {
+        name: 'rewind',
+        enabled: Boolean(conversationId && slashCommandHost.openRewindTimeline),
+        icon: <History className="h-4 w-4 text-[var(--chat-text-secondary)]" />,
+      },
+    ] as const;
+
+    return entries.flatMap(({ name, enabled, icon }) => {
+      const command = getSlashCommand(name);
+      if (
+        !enabled ||
+        !command ||
+        (slashQuery &&
+          !command.name.startsWith(slashQuery) &&
+          !command.description.toLowerCase().includes(slashQuery))
+      ) {
+        return [];
+      }
+      return [
+        {
+          id: command.name,
+          command: `/${command.name}`,
+          description: command.description,
+          example: command.argsHint,
+          icon,
+          slashCommand: command,
+        },
+      ];
+    });
+  }, [conversationId, slashCommandHost, slashQuery]);
+  const slashMenuOpen = slashQuery !== null && slashSuggestions.length > 0;
+
+  useEffect(() => {
+    if (slashSelectedIndex < slashSuggestions.length) return;
+    setSlashSelectedIndex(Math.max(0, slashSuggestions.length - 1));
+  }, [slashSelectedIndex, slashSuggestions.length]);
+
+  const handleSlashSelect = useCallback(
+    (suggestion: CommandSuggestion) => {
+      const command = suggestion.slashCommand;
+      if (!command?.handler || !slashCommandHost) return;
+      const context: SlashCommandContext = {
+        conversationId: conversationId ?? null,
+        host: { ...slashCommandHost },
+      };
+      void command.handler('', context);
+      clearDraftContent(conversationId);
+      setSlashSelectedIndex(0);
+      textareaRef.current?.focus();
+    },
+    [clearDraftContent, conversationId, slashCommandHost],
   );
 
   // Validate + append candidate files through the shared @agiworkforce/types
@@ -639,6 +738,32 @@ export function ChatInput({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (slashMenuOpen) {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSlashSelectedIndex(
+            (index) => (index - 1 + slashSuggestions.length) % slashSuggestions.length,
+          );
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSlashSelectedIndex((index) => (index + 1) % slashSuggestions.length);
+          return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          const suggestion = slashSuggestions[slashSelectedIndex];
+          if (suggestion) handleSlashSelect(suggestion);
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          clearDraftContent(conversationId);
+          return;
+        }
+      }
+
       // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
       // convention). Cmd/Ctrl+Enter also sends. IME composition (e.g. CJK) must not
       // submit mid-candidate, so guard on isComposing.
@@ -647,7 +772,15 @@ export function ChatInput({
         handleSend();
       }
     },
-    [handleSend],
+    [
+      clearDraftContent,
+      conversationId,
+      handleSend,
+      handleSlashSelect,
+      slashMenuOpen,
+      slashSelectedIndex,
+      slashSuggestions,
+    ],
   );
 
   const [focused, setFocused] = useState(false);
@@ -661,7 +794,14 @@ export function ChatInput({
         : 'How can I help you today?';
 
   return (
-    <div className={cn('mx-auto w-full max-w-3xl px-4 pb-2', className)}>
+    <div className={cn('relative mx-auto w-full max-w-3xl px-4 pb-2', className)}>
+      <SlashCommandMenu
+        show={slashMenuOpen}
+        suggestions={slashSuggestions}
+        selectedIndex={slashSelectedIndex}
+        onSelect={handleSlashSelect}
+        onHover={setSlashSelectedIndex}
+      />
       <div
         className={cn(
           'overflow-hidden border transition-colors',
@@ -851,6 +991,13 @@ export function ChatInput({
                   projectId={projectId ?? null}
                   modelId={selectedModelId}
                   className="min-w-0 max-w-full flex-wrap justify-start gap-1"
+                />
+              )}
+              {supportsAgentControl && slashCommandHost && (
+                <PlanModeToggle
+                  active={activeAgentMode === 'plan'}
+                  onToggle={slashCommandHost.togglePlanMode}
+                  className="shrink-0"
                 />
               )}
             </div>

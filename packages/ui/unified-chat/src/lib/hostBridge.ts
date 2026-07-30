@@ -22,6 +22,14 @@ export interface ChatHostSnapshot {
   conversations: ChatHostConversation[];
 }
 
+export interface ChatHostCodingCheckpoint {
+  id: string;
+  toolName: string;
+  filePath?: string;
+  createdAtMs: number;
+  description?: string;
+}
+
 export interface ChatHostBridge {
   getSnapshot: () => ChatHostSnapshot;
   subscribe?: (listener: () => void) => () => void;
@@ -38,6 +46,10 @@ export interface ChatHostBridge {
    * hosts must never route Local-mode content through this.
    */
   fetchCloudFile?: (uri: string) => Promise<Blob>;
+  /** Live host checkpoint transport used by the shared rewind timeline. */
+  fetchCodingCheckpoints?: () => Promise<ChatHostCodingCheckpoint[]>;
+  /** Restore the workspace to a host checkpoint; rejects on failure. */
+  rewindCodingCheckpoint?: (checkpointId: string) => Promise<void>;
 }
 
 export const HostBridgeContext = createContext<ChatHostBridge | null>(null);

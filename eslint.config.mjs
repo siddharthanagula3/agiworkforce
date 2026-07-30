@@ -727,8 +727,6 @@ export default [
       'apps/web/utils/security.ts',
       'apps/web/utils/subscriptionGate.ts',
       'apps/web/utils/tokenCount.ts',
-      // Handler stubs
-      'apps/web/handlers/slashCommandHandlers.ts',
       // Store stubs
       'apps/web/stores/artifactStore.ts',
       'apps/web/stores/memoryStore.ts',

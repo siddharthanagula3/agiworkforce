@@ -7,6 +7,9 @@ import {
   getSlashCommand,
   listSlashCommands,
   clearSlashCommands,
+  BUILT_IN_SLASH_COMMANDS,
+  filterSlashCommands,
+  filterSlashCommandsByCapability,
 } from '../slashCommands';
 
 describe('parseSlashCommand', () => {
@@ -76,6 +79,30 @@ describe('slash command registry', () => {
       query: 'memory',
     });
     expect(matchByDesc.map((c) => c.name)).toEqual(['forget']);
+  });
+});
+
+describe('canonical slash menu catalog', () => {
+  it('keeps prompt command metadata in the shared package', () => {
+    expect(BUILT_IN_SLASH_COMMANDS.map((command) => command.id)).toEqual([
+      'search',
+      'think',
+      'image',
+      'code',
+      'browser',
+      'terminal',
+      'database',
+    ]);
+  });
+
+  it('filters desktop-only commands through the shared platform capability boundary', () => {
+    const webCommands = filterSlashCommandsByCapability(BUILT_IN_SLASH_COMMANDS, () => false);
+    expect(webCommands.map((command) => command.id)).toEqual(['search', 'think', 'image', 'code']);
+  });
+
+  it('filters by command name or description', () => {
+    expect(filterSlashCommands('term').map((command) => command.id)).toEqual(['terminal']);
+    expect(filterSlashCommands('reason').map((command) => command.id)).toEqual(['think']);
   });
 });
 
