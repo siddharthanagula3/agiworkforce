@@ -288,7 +288,6 @@ fn generate_device_fingerprint(device_id: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-#[tauri::command]
 pub async fn device_link_initiate(
     state: State<'_, ApiState>,
 ) -> Result<DeviceLinkResponse, String> {
@@ -333,7 +332,6 @@ pub async fn device_link_initiate(
     parse_json_response(&response)
 }
 
-#[tauri::command]
 pub async fn device_link_poll(
     device_id: String,
     state: State<'_, ApiState>,
@@ -416,7 +414,6 @@ pub async fn fetch_user_profile(
     parse_json_response(&response)
 }
 
-#[tauri::command]
 pub async fn oauth_refresh(
     refresh_token: String,
     state: State<'_, ApiState>,
@@ -780,7 +777,6 @@ impl CreditBalanceResponse {
 }
 
 /// Fetch current credit balance from the API
-#[tauri::command]
 pub async fn fetch_credit_balance(
     state: State<'_, ApiState>,
 ) -> Result<CreditBalanceResponse, String> {

@@ -77,7 +77,6 @@ impl From<ErrorContext> for ErrorContextResponse {
     }
 }
 
-#[tauri::command]
 pub async fn get_error_context(
     error_id: String,
     store: State<'_, ErrorContextStore>,
@@ -90,7 +89,6 @@ pub async fn get_error_context(
     Ok(context.into())
 }
 
-#[tauri::command]
 pub async fn get_all_error_contexts(
     store: State<'_, ErrorContextStore>,
 ) -> Result<Vec<ErrorContextResponse>, String> {
@@ -101,7 +99,6 @@ pub async fn get_all_error_contexts(
     Ok(responses)
 }
 
-#[tauri::command]
 pub async fn retry_failed_step(
     error_id: String,
     store: State<'_, ErrorContextStore>,
@@ -121,7 +118,6 @@ pub async fn retry_failed_step(
     Ok(format!("Retry initiated for error {}", error_id))
 }
 
-#[tauri::command]
 pub async fn skip_failed_step(
     error_id: String,
     store: State<'_, ErrorContextStore>,
@@ -136,7 +132,6 @@ pub async fn skip_failed_step(
     Ok(format!("Step skipped for error {}", error_id))
 }
 
-#[tauri::command]
 pub async fn abort_execution(
     error_id: String,
     store: State<'_, ErrorContextStore>,
@@ -151,7 +146,6 @@ pub async fn abort_execution(
     Ok(format!("Execution aborted for error {}", error_id))
 }
 
-#[tauri::command]
 pub async fn clear_error_contexts(store: State<'_, ErrorContextStore>) -> Result<String, String> {
     let mut contexts = store.contexts.write().await;
     let count = contexts.len();
@@ -160,7 +154,6 @@ pub async fn clear_error_contexts(store: State<'_, ErrorContextStore>) -> Result
     Ok(format!("Cleared {} error contexts", count))
 }
 
-#[tauri::command]
 pub async fn get_recovery_suggestion(
     error_id: String,
     store: State<'_, ErrorContextStore>,

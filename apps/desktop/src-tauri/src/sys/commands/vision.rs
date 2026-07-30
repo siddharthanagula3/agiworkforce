@@ -349,7 +349,6 @@ pub async fn vision_compare_images(
     })
 }
 
-#[tauri::command]
 pub async fn vision_locate_element(
     capture_id: String,
     element_description: String,
@@ -392,7 +391,6 @@ pub async fn vision_locate_element(
     Ok(location)
 }
 
-#[tauri::command]
 pub async fn vision_describe_ui_elements(
     capture_id: String,
     provider: Option<String>,
@@ -425,7 +423,6 @@ pub async fn vision_describe_ui_elements(
     vision_send_message(request, state, db).await
 }
 
-#[tauri::command]
 pub async fn vision_answer_question(
     image_path: String,
     question: String,
