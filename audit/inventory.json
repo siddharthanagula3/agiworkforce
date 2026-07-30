@@ -3260,8 +3260,8 @@
   {
     "item": "saml",
     "surface": "packages/auth",
-    "status": "broken",
-    "evidence": "apps/web/app/api/admin/sso/route.ts:37-45,111-134,218-232 implements CRUD for SAML/OIDC connection metadata against a `sso_connections` table, but apps/web/features/admin/pages/AdminConsolePage.tsx:47,50 self-documents (in-app) that 'no sso_connections or directory_sync_connections migration exists anywhere, so /api/admin/sso and /api/admin/directory-sync will fail against a real database' and (line 192-193) 'the admin API routes exist but query tables with no migration, and there is no login flow.' Additionally the DELETE handler at apps/web/app/api/admin/sso/route.ts:304-305 selects a column `provider` that doesn't exist anywhere else in the file (every other query uses `provider_type`), a second independent defect. No SAML Assertion Consumer Service endpoint exists anywhere in the repo (grep for SAMLResponse/AssertionConsumerService/samlify/saml2 returned nothing), so there is also no actual SAML login flow."
+    "status": "partial",
+    "evidence": "The formerly broken configuration path is repaired: apps/web/db/neon/0076_enterprise_control_plane_tables.sql:39-68 owns `sso_connections` and :219-232 enforces organization-role RLS; apps/web/app/api/admin/sso/route.ts:86-392 provides role-checked, rate-limited, audited metadata CRUD and its DELETE lookup now reads the migrated `provider_type` column at :306. The remaining first-party sign-in/assertion-consumer and provisioning runtime is intentionally absent, disclosed as deferred in apps/web/features/admin/pages/AdminConsolePage.tsx:47-50,192-193, and dispositioned for Phase 3 by audit/capability-gaps.csv CAP-028 plus docs/adr/wire-or-cut.md:39. Configuration storage is built; authentication/provisioning is an ADR-accepted Partial, not a broken reachable flow."
   },
   {
     "item": "scim",
@@ -3728,8 +3728,8 @@
   {
     "item": "sso-enforcement",
     "surface": "admin-and-billing",
-    "status": "broken",
-    "evidence": "apps/web/app/api/admin/sso/route.ts:86-392 implements full CRUD (GET/POST/DELETE) against a `sso_connections` table with role checks, rate limiting, and audit logging, and apps/web/app/api/settings/organization/route.ts:47 exposes an `enforceSSO` schema field. However, grepping every migration in apps/web/db/neon (0001-0074) finds no `sso_connections` table creation anywhere, and the product's own admin page states it directly: apps/web/features/admin/pages/AdminConsolePage.tsx:46-51 — 'Org/Teams only — no SSO/SCIM schema ... /api/admin/sso and /api/admin/directory-sync will fail against a real database'. There is also no SSO login flow (same comment, line 193-194)."
+    "status": "partial",
+    "evidence": "The configuration schema and API are no longer broken: migration 0076 creates `sso_connections` at apps/web/db/neon/0076_enterprise_control_plane_tables.sql:39-68 and organization-role RLS at :219-232, while apps/web/app/api/admin/sso/route.ts:86-392 provides guarded metadata CRUD. Enforcement remains deliberately unavailable: apps/web/app/api/settings/organization/route.ts:47 accepts `enforceSSO` only for validation but :54-59,265-273 rejects the unsupported settings mutation, with fail-closed coverage in route.capability-honesty.test.ts:66-84. CAP-028 and docs/adr/wire-or-cut.md:39 defer the first-party sign-in/provisioning runtime to Phase 3, and AdminConsolePage.tsx:47-50,192-193 discloses that boundary. This is an ADR-accepted Partial rather than a reachable broken promise."
   },
   {
     "item": "audit-log-viewer",
