@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
         with:
@@ -139,6 +141,12 @@ jobs:
 
       - name: Validate integration inventory
         run: pnpm check:audit-inventory
+
+      - name: Validate UI gap tracker
+        run: pnpm check:ui-gaps
+
+      - name: Enforce monotonic P0/P1 UI gap counts
+        run: pnpm check:ui-gaps:monotonic
 
       - name: LLM and repo operability checks
         run: pnpm check:llm-operability

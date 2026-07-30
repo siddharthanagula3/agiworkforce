@@ -38,11 +38,14 @@ function requireNotIncludes(relativePath, forbidden) {
 requireIncludes('.github/workflows/repo-operability.yml', 'pull_request:');
 requireIncludes('.github/workflows/repo-operability.yml', 'bash scripts/check-node-version.sh');
 requireIncludes('.github/workflows/repo-operability.yml', 'pnpm install --frozen-lockfile');
+requireIncludes('.github/workflows/repo-operability.yml', 'fetch-depth: 0');
 requireIncludes(
   '.github/workflows/repo-operability.yml',
   'pnpm exec turbo run build lint test typecheck --dry=json',
 );
 requireIncludes('.github/workflows/repo-operability.yml', 'pnpm check:audit-inventory');
+requireIncludes('.github/workflows/repo-operability.yml', 'pnpm check:ui-gaps');
+requireIncludes('.github/workflows/repo-operability.yml', 'pnpm check:ui-gaps:monotonic');
 requireIncludes(
   '.github/workflows/repo-operability.yml',
   'needs: [validate-version, build, sign-release-assets]',

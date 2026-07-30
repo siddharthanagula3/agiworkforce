@@ -1,0 +1,149 @@
+#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
+import {
+  parseCsv,
+  renderUiGapsMarkdown,
+  serializeCsv,
+  sortUiGaps,
+  SOURCE_UI_GAP_COLUMNS,
+  UI_GAP_COLUMNS,
+} from './ui-gaps-lib.mjs';
+
+const root = process.cwd();
+const csvPath = path.join(root, 'audit/ui-gaps.csv');
+const markdownPath = path.join(root, 'audit/ui-gaps.md');
+
+function fail(message) {
+  console.error(`UI gap import failed: ${message}`);
+  process.exit(1);
+}
+
+function normalizeMachineLocalPaths(value) {
+  return value
+    .replaceAll('/tmp/agiw_strings.md', 'the audit source strings snapshot')
+    .replaceAll('/tmp/agiw_inventory.md', 'the audit source inventory snapshot')
+    .replaceAll('/tmp/agiw/', '');
+}
+
+function reconcileCurrentP0Premises(record) {
+  const currentOverrides = {
+    'GAP-001': {
+      title: 'Mobile has no supported Skills screen or workflow',
+      detail:
+        "The reference gives Skills a first-class screen: sidebar entry, surface selector, search, and an empty state that explains the next step. agiworkforce mobile currently has no Skills route, navigation entry, supported mobile Skills client, list, search, or empty state. The source audit's claim that a shipped mobile skills service/store was waiting to be mounted is stale: those disconnected artifacts were removed because they had no supported runtime contract.",
+      evidence:
+        'No Skills route exists under apps/mobile/app or apps/mobile/src/features. Current searches for useSkillsStore, listSkills, and a mobile skills service return no supported implementation; Web and Desktop Skills surfaces do not establish a Mobile API or product contract.',
+      suggestedFix:
+        'Treat Mobile Skills as a new cross-surface capability, not an orphan-mount task: approve the product/API contract first, then add a supported client, route, drawer entry, searchable installed/catalogue views, and a useful empty state. Do not restore the removed disconnected service/store.',
+    },
+    'GAP-002': {
+      detail:
+        'Claude shows a task-scoped modal listing the exact resolved paths an agent is about to read, modify, or execute within, with Cancel/Allow and an optional persistent grant. agiworkforce has a static allowed-directory settings surface and a CloudFolderAttachSheet that explicitly gates managed-cloud file attachment egress, but neither is a just-in-time gate for a local agent tool call that introduces a new path.',
+      evidence:
+        'apps/desktop/src/features/settings/AllowedDirectoriesSettings.tsx manages persistent folders. apps/desktop/src/features/context-handoff/CloudFolderAttachSheet.tsx gates files leaving the device in Managed Cloud. No FolderAccessConsent-style surface is wired into the local filesystem/tool-call path before a previously unapproved resolved directory is accessed.',
+      suggestedFix:
+        "Add a task-scoped FolderAccessConsentDialog at the local filesystem/tool-call authorization boundary. List resolved paths and requested capabilities, default to Cancel, and only persist a grant when the user explicitly selects a 'remember these folders' option that updates AllowedDirectoriesSettings.",
+    },
+    'GAP-003': {
+      detail:
+        "The reference floats a small always-on-top pill over every application while capture runs: recording state, live step count, microphone control, Discard, and Done. agiworkforce still renders ActionRecorder only as the DesktopShellV3 'record-skill' panel. Generic always-on-top and overlay infrastructure exists, but no recorder-specific secondary window mounts controls or subscribes to the recorder event stream.",
+      evidence:
+        "apps/desktop/src/features/automation/ActionRecorder.tsx owns the live controls and automation:action_recorded listener; apps/desktop/src/features/v3/DesktopShellV3.tsx mounts it only for activePanel === 'record-skill'. apps/desktop/src-tauri/src/ui/overlay/window.rs proves an overlay window primitive exists, but searches find no RecorderHud or recorder overlay integration.",
+      suggestedFix:
+        'Create a recorder-specific secondary Tauri window using the existing overlay/window primitives. Mount a RecorderHud subscribed to the same event stream, expose step count/mic/Discard/Done, keep the main panel as review, and add a global stop shortcut.',
+    },
+    'GAP-006': {
+      suggestedFix:
+        'Add a Cowork settings destination in the shared settings IA, but expose only controls with real backing contracts. Start with Dispatch state once the existing HMAC session service has an enable/disable lifecycle; add storage location, trusted folders, cloud-run defaults, and global instructions only as their persistence and runtime consumers are implemented.',
+    },
+    'GAP-007': {
+      detail:
+        'The reference exposes Archived chats as a recoverable destination. agiworkforce currently supports archiving from the Desktop sidebar and the chat store supports archive plus archived selection, while normal sidebar groups hide archived conversations. No mounted component consumes getArchivedConversations, so users still cannot list, open, restore, or permanently delete archived chats.',
+      evidence:
+        'apps/desktop/src/features/v3/Sidebar.tsx wires onArchive to archiveConversation. apps/desktop/src/stores/chat/chatStore.ts implements archiveConversation and getArchivedConversations. Current feature imports contain no getArchivedConversations consumer and no Archived chats destination.',
+      suggestedFix:
+        'Add an Archived chats destination that consumes getArchivedConversations and supports open, restore, and delete-permanently with an empty state. Reuse the existing sidebar archive action instead of adding a second archive control.',
+    },
+    'GAP-008': {
+      title: 'Full-access sandbox selection lacks a confirmation gate and complete risk disclosure',
+      detail:
+        "The reference explains each permission tier and requires a deliberate confirmation before full access. agiworkforce now shows a short description for the selected terminal-sandbox policy, so the source audit's 'zero explanatory text' premise is stale. However, choosing Danger full access still persists immediately, and the description only says commands use the app's normal access; it does not clearly enumerate whole-disk writes, network reach, approval bypass implications, data-loss/leak risk, or provide a cancelable confirmation ceremony.",
+      evidence:
+        'apps/desktop/src/features/settings/AgentExecutionSettings.tsx defines SANDBOX_POLICY_DESCRIPTIONS and renders the selected description, but handleTerminalSandboxPolicyChange immediately calls setTerminalSandboxPolicy. The danger-full-access SelectItem has no confirmation dialog, explicit scope list, risk acknowledgement, or Learn more path.',
+      suggestedFix:
+        'Intercept transitions to danger-full-access with a danger-styled confirmation dialog that names filesystem, command, network, approval, prompt-injection, data-loss, and data-exposure risks. Keep Cancel as the safe default and persist the policy only after explicit confirmation; retain the existing inline descriptions for all tiers.',
+    },
+    'GAP-009': {
+      detail:
+        'The reference exposes a master memory switch, memory-generation scope, and reset. The mounted Desktop Settings tab renders only the shared MemoryEditor for fact management. A separate legacy features/memory/MemoryPanel contains localStorage-backed enable/pause/auto-inject controls but has no consumer and does not establish a shared generation/retrieval policy, so mounting it would create another settings façade rather than close the privacy-control gap.',
+      evidence:
+        'apps/desktop/src/features/settings/tabs/Memory.tsx mounts MemoryEditor only. apps/desktop/src/features/memory/MemoryPanel.tsx contains isEnabled/isPaused controls, but current imports find no consumer outside its own file. No single Desktop capability store gates both memory generation and retrieval across Local and Managed Cloud.',
+      suggestedFix:
+        'Define one mode-aware memory policy contract that gates generation and retrieval, wire it into the actual memory pipelines, then expose master enable, tool-assisted-generation scope, and destructive reset controls in the mounted Memory settings tab. Remove the orphan localStorage-only panel instead of mounting non-authoritative toggles.',
+    },
+  };
+
+  return currentOverrides[record.id] ? { ...record, ...currentOverrides[record.id] } : record;
+}
+
+function mergeKnownDuplicate(records) {
+  const primary = records.find((record) => record.id === 'GAP-004');
+  const duplicate = records.find((record) => record.id === 'GAP-005');
+  if (!primary || !duplicate) fail('expected duplicate pair GAP-004/GAP-005 was not found');
+  if (primary.status !== duplicate.status) fail('GAP-004/GAP-005 have conflicting statuses');
+
+  primary.evidence = `${primary.evidence}\n\nIndependent duplicate evidence (GAP-005): ${duplicate.evidence}`;
+  primary.suggestedFix = `${primary.suggestedFix}\n\nIndependent duplicate recommendation (GAP-005): ${duplicate.suggestedFix}`;
+  primary.image = [...new Set([primary.image, duplicate.image])].join(';');
+  primary.mergedFrom = 'GAP-005';
+  if (primary.owner === 'Unassigned' && duplicate.owner !== 'Unassigned') {
+    primary.owner = duplicate.owner;
+  }
+
+  return records.filter((record) => record.id !== duplicate.id);
+}
+
+function writeArtifacts(records) {
+  const sorted = sortUiGaps(records);
+  const csv = serializeCsv(sorted);
+  fs.mkdirSync(path.dirname(csvPath), { recursive: true });
+  fs.writeFileSync(csvPath, csv);
+  fs.writeFileSync(markdownPath, renderUiGapsMarkdown(sorted, csv));
+  console.log(`Wrote ${sorted.length} records to audit/ui-gaps.csv and audit/ui-gaps.md.`);
+}
+
+if (process.argv[2] === '--render') {
+  if (!fs.existsSync(csvPath)) fail('audit/ui-gaps.csv does not exist');
+  const parsed = parseCsv(fs.readFileSync(csvPath, 'utf8'));
+  if (JSON.stringify(parsed.columns) !== JSON.stringify(UI_GAP_COLUMNS)) {
+    fail('audit/ui-gaps.csv does not use the canonical schema');
+  }
+  writeArtifacts(parsed.records);
+  process.exit(0);
+}
+
+const sourcePath = process.argv[2];
+if (!sourcePath) {
+  fail('pass the source CSV path, or use --render to regenerate Markdown');
+}
+if (!fs.existsSync(sourcePath)) fail(`source CSV does not exist: ${sourcePath}`);
+
+const parsed = parseCsv(fs.readFileSync(sourcePath, 'utf8'));
+if (JSON.stringify(parsed.columns) !== JSON.stringify(SOURCE_UI_GAP_COLUMNS)) {
+  fail(`unexpected source columns: ${parsed.columns.join(', ')}`);
+}
+
+const normalized = parsed.records.map((sourceRecord) => {
+  const record = Object.fromEntries(
+    UI_GAP_COLUMNS.map((column) => [
+      column,
+      normalizeMachineLocalPaths(sourceRecord[column] ?? ''),
+    ]),
+  );
+  record.owner = record.owner.trim() || 'Unassigned';
+  return reconcileCurrentP0Premises(record);
+});
+
+writeArtifacts(mergeKnownDuplicate(normalized));

@@ -1,0 +1,17 @@
+{
+  "sourceRecords": 342,
+  "duplicateMerges": {
+    "GAP-004": ["GAP-005"]
+  },
+  "normalizedRecords": 341,
+  "normalizedSeverityCounts": {
+    "P0": 11,
+    "P1": 126,
+    "P2": 161,
+    "P3": 43
+  },
+  "maxUnresolved": {
+    "P0": 11,
+    "P1": 126
+  }
+}
