@@ -23,7 +23,6 @@
 /chrome
 /ide
 /plugin [plugins, marketplace, market]
-/tasks
 /status
 /cost
 /usage

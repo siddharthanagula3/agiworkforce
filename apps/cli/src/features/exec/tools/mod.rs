@@ -20,8 +20,6 @@ pub mod registry;
 mod task_registry;
 mod web;
 
-pub use task_registry::session_task_summaries;
-
 use bash::execute_run_command;
 use common::{describe_command, print_tool_status, truncate_output_with_save};
 #[cfg(test)]
@@ -39,10 +37,8 @@ use git::{execute_enter_worktree, execute_exit_worktree, execute_list_worktrees}
 use task_registry::{
     execute_advisor, execute_ask_user, execute_cron_create, execute_cron_delete, execute_cron_list,
     execute_lsp_completion, execute_lsp_definition, execute_lsp_diagnostics,
-    execute_lsp_document_symbols, execute_lsp_format, execute_lsp_hover, execute_task_create,
-    execute_task_get, execute_task_list, execute_task_output, execute_task_stop,
-    execute_task_update, execute_team_create, execute_team_delete, execute_todo_read,
-    execute_todo_write,
+    execute_lsp_document_symbols, execute_lsp_format, execute_lsp_hover, execute_team_create,
+    execute_team_delete, execute_todo_read, execute_todo_write,
 };
 #[cfg(test)]
 use web::is_private_or_internal_ip;
@@ -367,12 +363,6 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "todo_write" => execute_todo_write(&call.args).await,
         "ask_user" => execute_ask_user(&call.args).await,
         "read_many_files" => execute_read_many_files(&call.args).await,
-        "task_create" => execute_task_create(&call.args).await,
-        "task_get" => execute_task_get(&call.args).await,
-        "task_list" => execute_task_list(&call.args).await,
-        "task_update" => execute_task_update(&call.args).await,
-        "task_stop" => execute_task_stop(&call.args).await,
-        "task_output" => execute_task_output(&call.args).await,
         "team_create" => execute_team_create(&call.args).await,
         "team_delete" => execute_team_delete(&call.args).await,
         "cron_create" => execute_cron_create(&call.args).await,
@@ -1264,7 +1254,6 @@ decision = "deny"
         assert_eq!(canonical_tool_name("Grep"), "grep_files");
         assert_eq!(canonical_tool_name("Glob"), "glob");
         assert_eq!(canonical_tool_name("TodoWrite"), "todo_write");
-        assert_eq!(canonical_tool_name("TaskOutput"), "task_output");
         assert_eq!(canonical_tool_name("unknown_tool"), "unknown_tool");
     }
 

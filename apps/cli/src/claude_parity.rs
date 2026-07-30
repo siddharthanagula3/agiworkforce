@@ -20,7 +20,6 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "copy",
         "new",
         "mcp",
-        "tasks",
         "output-style",
         "fallback",
         "replay",
@@ -107,7 +106,6 @@ pub fn handle_shared_command(
             ParityCommandResult::SystemMessage("Started new conversation.".to_string())
         }
         "/mcp" => ParityCommandResult::SystemMessage(render_mcp(session)),
-        "/tasks" => ParityCommandResult::SystemMessage(render_tasks()),
         "/output-style" => ParityCommandResult::SystemMessage(handle_output_style(session, arg)),
         "/fallback" => ParityCommandResult::SystemMessage(render_fallback(session)),
         "/replay" => ParityCommandResult::SystemMessage(render_replay()),
@@ -642,19 +640,6 @@ pub fn render_mcp(session: &AgentSession) -> String {
         if server_tools.len() > 5 {
             lines.push(format!("    ... +{} more", server_tools.len() - 5));
         }
-    }
-    lines.join("\n")
-}
-
-pub fn render_tasks() -> String {
-    let tasks = crate::tools::session_task_summaries();
-    if tasks.is_empty() {
-        return "Tasks\n  no background tasks in this session".to_string();
-    }
-
-    let mut lines = vec![format!("Tasks ({})", tasks.len())];
-    for task in tasks {
-        lines.push(format!("  {task}"));
     }
     lines.join("\n")
 }

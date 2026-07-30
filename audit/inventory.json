@@ -1503,7 +1503,7 @@
     "item": "background-task-ctrl-b",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "The unreachable promise was cut rather than fabricated: `background` and alias `bg` are absent from crates/agiworkforce-command-registry/src/lib.rs, both apps/cli/src/claude_parity.rs and apps/cli/src/tui/tui_app.rs have no dispatch arm for them, and docs/cli/COMMAND_SURFACE.md no longer advertises either command. crates/agiworkforce-command-registry/tests/slash_palette_golden.rs asserts both names stay absent. `/tasks` remains wired to the real session task registry. No Ctrl-B binding exists, so current-turn backgrounding is honestly Missing instead of a reachable Stub; docs/adr/wire-or-cut.md records the cut."
+    "evidence": "The unreachable promise was cut rather than fabricated: `background`, alias `bg`, and `tasks` are absent from crates/agiworkforce-command-registry/src/lib.rs, both apps/cli/src/claude_parity.rs and apps/cli/src/tui/tui_app.rs have no dispatch arm for them, and docs/cli/COMMAND_SURFACE.md advertises none of them. crates/agiworkforce-command-registry/tests/slash_palette_golden.rs asserts all three names stay absent. No Ctrl-B binding or detached-run contract exists, so current-turn backgrounding is honestly Missing instead of a reachable Stub; docs/adr/wire-or-cut.md records the cut."
   },
   {
     "item": "process-manager",
@@ -2510,8 +2510,8 @@
   {
     "item": "process-monitor-tool",
     "surface": "packages/core-agent",
-    "status": "stub",
-    "evidence": "apps/cli/src/features/exec/tools/task_registry/mod.rs:116-161 (`execute_task_create`) only writes a placeholder metadata record and an empty output file; it never spawns or attaches to a real OS process regardless of `kind` (including \"local_shell\"). Status transitions (`task_update`, lines 227-301) are purely model/caller-driven, not fed by any actual process exit code or live stdout stream. `run_command`/`powershell` (the only real process-executing tools) are synchronous one-shot calls with a fixed timeout (bash/mod.rs:155-192) and no background-poll/kill primitive."
+    "status": "missing",
+    "evidence": "The placeholder task lifecycle was cut instead of being presented as process monitoring: apps/cli/src/platform/runtime/tool_catalog.rs advertises no task_create/task_get/task_list/task_update/task_stop/task_output definitions or aliases, apps/cli/src/features/exec/tools/mod.rs dispatches none of them, and both CLI frontends and the shared slash registry omit `/tasks`. `run_command` and `powershell` remain synchronous, approval-gated foreground execution; the real `task` tool remains the separate foreground subagent orchestrator. No background process poll/output/kill capability is claimed."
   },
   {
     "item": "web-search-tool",
@@ -2528,8 +2528,8 @@
   {
     "item": "task-create-list-tools",
     "surface": "packages/core-agent",
-    "status": "built",
-    "evidence": "apps/cli/src/features/exec/tools/task_registry/mod.rs:116-360 implements task_create/task_get/task_list/task_update/task_stop/task_output against a session-scoped in-memory registry (`SESSION_REGISTRY`); dispatched at apps/cli/src/features/exec/tools/mod.rs:300-305. Bookkeeping-only (see process-monitor-tool gap) but reachable and functional as a status ledger."
+    "status": "missing",
+    "evidence": "The task_create/task_get/task_list/task_update/task_stop/task_output bookkeeping tools were removed from apps/cli/src/platform/runtime/tool_catalog.rs and apps/cli/src/features/exec/tools/mod.rs because their caller-maintained metadata was not connected to any execution lifecycle. `/tasks` was removed from the shared slash registry and both CLI frontends for the same reason. Real foreground subagent orchestration remains available through the separate `task` tool."
   },
   {
     "item": "artifact-tool",
@@ -2565,7 +2565,7 @@
     "item": "workflow-tool",
     "surface": "packages/core-agent",
     "status": "missing",
-    "evidence": "No model-callable \"workflow\" tool exists in the CLI's tool catalog; the only occurrence is the inert `\"local_workflow\"` enum label inside `task_create`'s `kind` field (apps/cli/src/platform/runtime/tool_catalog.rs:521-524), which has no distinct execution semantics (task_create is pure bookkeeping, see process-monitor-tool). A separate, unrelated visual workflow-automation engine exists in apps/desktop/src-tauri/src/core/orchestration/workflow_engine.rs (WorkflowDefinition/AgentNodeData/ToolNodeData, SQLite-backed CRUD, Tauri commands registered at apps/desktop/src-tauri/src/lib.rs:2162) with a frontend (apps/desktop/src/features/workflows/WorkflowBuilder.tsx, WorkflowPanel.tsx) — but it is not an agent-loop tool call, and its frontend is never imported outside its own directory (grep -rl WorkflowPanel apps/desktop/src outside features/workflows returns nothing), so it is unreachable regardless."
+    "evidence": "No model-callable \"workflow\" tool exists in the CLI tool catalog or executor. The former inert task-registry kind label was removed with that placeholder lifecycle. A separate, unrelated visual workflow-automation engine exists in apps/desktop/src-tauri/src/core/orchestration/workflow_engine.rs (WorkflowDefinition/AgentNodeData/ToolNodeData, SQLite-backed CRUD, Tauri commands registered at apps/desktop/src-tauri/src/lib.rs:2162) with a frontend (apps/desktop/src/features/workflows/WorkflowBuilder.tsx, WorkflowPanel.tsx) — but it is not an agent-loop tool call, and its frontend is never imported outside its own directory (grep -rl WorkflowPanel apps/desktop/src outside features/workflows returns nothing), so it is unreachable regardless."
   },
   {
     "item": "subagent-orchestrator",

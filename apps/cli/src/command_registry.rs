@@ -252,7 +252,7 @@ mod tests {
     fn cli_uses_shared_builtin_registry() {
         let commands = builtin_slash_registry_commands();
 
-        assert_eq!(commands.len(), 86);
+        assert_eq!(commands.len(), 85);
         assert_eq!(commands[0].name, "model");
         assert_eq!(
             commands
@@ -448,7 +448,6 @@ mod tests {
             "agents",
             "chrome",
             "ide",
-            "tasks",
             "usage",
             "sandbox",
             "doctor",
