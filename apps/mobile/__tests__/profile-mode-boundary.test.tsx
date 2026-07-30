@@ -147,6 +147,7 @@ function resetStores() {
     ],
     messages: {},
     currentConversationId: null,
+    loadConversations: jest.fn(async () => undefined),
   });
   // Cloud conversations live in the cloud store — clear it between tests.
   useChatCloudMessageStore.setState({ conversations: [], messages: {}, historyStats: null });
