@@ -192,7 +192,7 @@ const CSRF_PROTECTED_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
  * Path prefixes that are exempt from CSRF checks because they use
  * their own authentication (e.g., HMAC signatures for webhooks).
  */
-const CSRF_EXEMPT_PATHS = ['/api/webhooks/', '/health', '/api/v1/status'];
+const CSRF_EXEMPT_PATHS = ['/api/webhooks/', '/health', '/ready', '/api/v1/status'];
 
 /**
  * Middleware that requires an `X-Requested-With: XMLHttpRequest` header

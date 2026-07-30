@@ -1,0 +1,39 @@
+# App identity is supplied by the protected CI environment through
+# FLY_GATEWAY_STAGING_APP. Do not hardcode account-owned app names here.
+kill_signal = "SIGTERM"
+kill_timeout = 30
+
+[env]
+  NODE_ENV = "production"
+  HOST = "0.0.0.0"
+  PORT = "3000"
+  TRUST_PROXY = "true"
+  RATE_LIMIT_MULTI_INSTANCE = "0"
+  SHUTDOWN_GRACE_MS = "25000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/ready"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

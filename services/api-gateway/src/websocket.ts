@@ -5,6 +5,7 @@ import { authenticatedUserSchema } from './authenticated-user';
 import { requireEnv } from './env';
 import { logger } from './lib/logger';
 import { getUserScopedClient } from './lib/neonClients';
+import { resolveRequestId } from './middleware/requestContext';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
@@ -23,6 +24,7 @@ interface AuthenticatedWebSocket extends WebSocket {
   deviceId?: string;
   isAlive?: boolean;
   authTimeout?: ReturnType<typeof setTimeout>;
+  requestId?: string;
 }
 
 const clients = new Map<string, Set<AuthenticatedWebSocket>>();
@@ -208,6 +210,8 @@ export function setupWebSocket(wss: WebSocketServer) {
   });
 
   wss.on('connection', (ws: AuthenticatedWebSocket, request) => {
+    ws.requestId = resolveRequestId(request.headers['x-request-id']);
+
     // SECURITY: Validate Origin header to prevent cross-site WebSocket hijacking.
     // Uses ALLOWED_ORIGINS (same env var as HTTP CORS) with sensible defaults
     // so the check is never bypassed when the env var is unset.
@@ -228,18 +232,21 @@ export function setupWebSocket(wss: WebSocketServer) {
           'https://agiworkforce.com',
         ];
     if (origin && !wsAllowedOrigins.includes(origin)) {
-      logger.warn({ origin }, 'WebSocket connection rejected: disallowed origin');
+      logger.warn(
+        { origin, requestId: ws.requestId },
+        'WebSocket connection rejected: disallowed origin',
+      );
       ws.close(1008, 'Forbidden origin');
       return;
     }
 
-    logger.debug({}, 'New WebSocket connection');
+    logger.debug({ requestId: ws.requestId }, 'New WebSocket connection');
 
     ws.isAlive = true;
 
     // Handle individual socket errors to prevent unhandled exceptions
     ws.on('error', (error) => {
-      logger.error({ error: error.message }, 'WebSocket client error');
+      logger.error({ error: error.message, requestId: ws.requestId }, 'WebSocket client error');
       // Clean up auth timeout if exists
       if (ws.authTimeout) {
         clearTimeout(ws.authTimeout);
@@ -251,7 +258,10 @@ export function setupWebSocket(wss: WebSocketServer) {
     // Set authentication timeout - close connection if not authenticated in time
     ws.authTimeout = setTimeout(() => {
       if (!ws.userId) {
-        logger.warn({}, 'WebSocket connection closed due to authentication timeout');
+        logger.warn(
+          { requestId: ws.requestId },
+          'WebSocket connection closed due to authentication timeout',
+        );
         try {
           ws.send(
             JSON.stringify({
@@ -304,7 +314,10 @@ export function setupWebSocket(wss: WebSocketServer) {
         }
         rateLimit.count++;
         if (rateLimit.count > RATE_LIMIT_MAX_MESSAGES) {
-          logger.warn({ userId: ws.userId }, 'WebSocket rate limit exceeded, closing connection');
+          logger.warn(
+            { userId: ws.userId, requestId: ws.requestId },
+            'WebSocket rate limit exceeded, closing connection',
+          );
           ws.close(1008, 'Rate limit exceeded');
           return;
         }
@@ -337,7 +350,7 @@ export function setupWebSocket(wss: WebSocketServer) {
 
         handleMessage(ws, parsed);
       } catch (error) {
-        logger.error({ error }, 'Error processing WebSocket message');
+        logger.error({ error, requestId: ws.requestId }, 'Error processing WebSocket message');
       }
     });
 
@@ -358,7 +371,7 @@ export function setupWebSocket(wss: WebSocketServer) {
             clients.delete(ws.userId);
           }
         }
-        logger.info({ userId: ws.userId }, 'User disconnected');
+        logger.info({ userId: ws.userId, requestId: ws.requestId }, 'User disconnected');
       }
     });
   });
@@ -501,10 +514,11 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
       JSON.stringify({
         type: 'auth_success',
         userId,
+        requestId: ws.requestId,
       }),
     );
 
-    logger.info({ userId }, 'User authenticated via WebSocket');
+    logger.info({ userId, requestId: ws.requestId }, 'User authenticated via WebSocket');
 
     // Flush any pending commands for this device
     flushPendingCommands(ws);

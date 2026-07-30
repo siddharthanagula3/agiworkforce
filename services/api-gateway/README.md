@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Backend/data owner
-Last updated: 2026-05-21
+Last updated: 2026-07-30
 Kind: service
 Criticality: high
 
@@ -95,12 +95,39 @@ Managed cloud is in public alpha and open by default — the private-beta/waitli
 
 ## Release / Deployment Notes
 
-Deploy only with explicit environment review, rate-limit configuration, logging policy, and rollback path.
+Build the production image from the monorepo root:
+
+```bash
+docker build \
+  --file services/api-gateway/Dockerfile \
+  --build-arg RELEASE_SHA="$(git rev-parse HEAD)" \
+  --tag agiworkforce-api-gateway:local \
+  .
+```
+
+`GET /health` is an unthrottled process-liveness contract. `GET /ready`
+returns 200 only after the listener is accepting traffic and the database
+dependency responds; it returns 503 before startup completion, while draining,
+or when the dependency is unavailable. Both HTTP responses and WebSocket
+authentication carry a bounded `x-request-id` correlation value.
+
+The process handles SIGTERM and SIGINT, removes itself from readiness first,
+drains HTTP and WebSocket traffic, disposes database resources, and force-closes
+remaining sockets after `SHUTDOWN_GRACE_MS` (25 seconds by default).
+
+The root `.dockerignore` is the build-context security boundary. Do not build
+from the service directory or add local `.env*` files to the context.
+
+Deploy only through the CI-owned immutable-image workflow after explicit
+environment review, rate-limit configuration, logging policy, and rollback
+path.
 
 ## Known Caveats
 
-- Managed cloud is intentionally not a public default path.
-- API gateway route mounting and future agents/MCP route decisions remain tracked in the parity TODO.
+- WebSocket pending commands and live connection ownership are process-local;
+  keep one replica until the durable-state/two-replica ticket is complete.
+- Readiness depends on the canonical Neon schema and returns 503 when it cannot
+  verify that dependency.
 - Enterprise routes are foundation endpoints only; public managed credits remain gated by ledger, cap, fraud, refund, dispute, and provider-term evidence.
 
 ## CODEOWNERS

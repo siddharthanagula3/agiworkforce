@@ -11,6 +11,7 @@ const warnings = [];
 const allowedRootFiles = new Set([
   '.git',
   '.claudeignore',
+  '.dockerignore',
   '.env.example',
   '.gitattributes',
   '.gitignore',
