@@ -15,7 +15,6 @@
 //! ```
 
 pub mod checks;
-pub mod commands;
 pub mod runner;
 
 use async_trait::async_trait;
@@ -26,10 +25,6 @@ use std::time::Duration;
 pub use checks::{
     AuthHealthCheck, ConfigValidationCheck, DatabaseIntegrityCheck, DependencyCheck,
     DiskSpaceCheck, McpConnectivityCheck, NetworkCheck, PermissionsCheck,
-};
-pub use commands::{
-    doctor_format_report, doctor_get_report, doctor_is_running, doctor_list_checks,
-    doctor_run_check, doctor_run_checks, DiagnosticsState,
 };
 pub use runner::DiagnosticRunner;
 

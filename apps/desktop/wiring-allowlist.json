@@ -6,34 +6,6 @@
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {
-      "command": "bg_llm_cancel",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "bg_llm_cleanup",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "bg_llm_get_statistics",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "bg_llm_get_status",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "bg_llm_process_queue",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "bg_llm_submit",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "bg_llm_verify_webhook",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
       "command": "bridge_get_token",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
@@ -70,18 +42,6 @@
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {
-      "command": "debug_analyze_stack_trace",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "debug_parse_error",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "debug_suggest_fixes",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
       "command": "device_link_initiate",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
@@ -91,30 +51,6 @@
     },
     {
       "command": "dictation_session_snapshot",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "doctor_format_report",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "doctor_get_report",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "doctor_is_running",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "doctor_list_checks",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "doctor_run_check",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "doctor_run_checks",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {
@@ -163,30 +99,6 @@
     },
     {
       "command": "get_recovery_suggestion",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "github_clone_repo",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "github_get_file_tree",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "github_get_repo_context",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "github_list_repos",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "github_read_file",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "github_search_files",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {

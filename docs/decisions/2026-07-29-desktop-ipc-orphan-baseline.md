@@ -55,3 +55,7 @@ changes.
   commands. Mounted AI workflows remain on the agent/workspace/tool paths;
   updates and version reads remain on the signed Tauri plugin APIs. The reviewed
   allowance count decreased from 90 to 77.
+- 2026-07-30: cut 22 isolated native wrappers for the unused background-LLM
+  queue, debug analysis, native GitHub browser, and `/doctor` endpoints. Mounted
+  background-agent/Git paths and sanitized startup diagnostics remain. The
+  reviewed allowance count decreased from 77 to 55.
