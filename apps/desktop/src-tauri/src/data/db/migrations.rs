@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 75;
+const CURRENT_VERSION: i32 = 76;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -80,12 +80,9 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "context_items",
         "mcp_servers",
         "mcp_tools_cache",
-        // Autonomous & AI
+        // Autonomous execution
         "autonomous_sessions",
         "autonomous_task_logs",
-        "ai_employees",
-        "user_employees",
-        "employee_tasks",
         // Checkpoints & onboarding
         "conversation_checkpoints",
         "checkpoint_restore_history",
@@ -638,6 +635,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 75 {
         run_migration_in_transaction(conn, 75, apply_migration_v75)?;
+    }
+
+    if current_version < 76 {
+        run_migration_in_transaction(conn, 76, apply_migration_v76)?;
     }
 
     Ok(())
@@ -3620,103 +3621,11 @@ fn apply_migration_v32(conn: &Connection) -> Result<()> {
 
 fn apply_migration_v33(conn: &Connection) -> Result<()> {
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS ai_employees (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            description TEXT NOT NULL,
-            capabilities TEXT NOT NULL,
-            estimated_time_saved INTEGER NOT NULL,
-            estimated_cost_saved REAL NOT NULL,
-            demo_workflow TEXT,
-            required_integrations TEXT,
-            template_id TEXT,
-            is_verified INTEGER DEFAULT 0 CHECK(is_verified IN (0, 1)),
-            usage_count INTEGER DEFAULT 0,
-            avg_rating REAL DEFAULT 0.0,
-            created_at INTEGER NOT NULL,
-            creator_id TEXT,
-            tags TEXT NOT NULL DEFAULT '[]'
-        )",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_employees_role
-         ON ai_employees(role)",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_employees_verified
-         ON ai_employees(is_verified, avg_rating DESC)",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS user_employees (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            employee_id TEXT NOT NULL,
-            hired_at INTEGER NOT NULL,
-            tasks_completed INTEGER DEFAULT 0,
-            time_saved_minutes INTEGER DEFAULT 0,
-            cost_saved_usd REAL DEFAULT 0.0,
-            is_active INTEGER DEFAULT 1 CHECK(is_active IN (0, 1)),
-            custom_config TEXT,
-            FOREIGN KEY(employee_id) REFERENCES ai_employees(id)
-        )",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_user_employees_user
-         ON user_employees(user_id, hired_at DESC)",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_user_employees_active
-         ON user_employees(user_id, is_active)
-         WHERE is_active = 1",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS employee_tasks (
-            id TEXT PRIMARY KEY,
-            user_employee_id TEXT NOT NULL,
-            task_type TEXT NOT NULL,
-            input_data TEXT NOT NULL,
-            output_data TEXT,
-            time_saved_minutes INTEGER,
-            cost_saved_usd REAL,
-            started_at INTEGER NOT NULL,
-            completed_at INTEGER,
-            status TEXT NOT NULL CHECK(status IN ('Pending', 'Running', 'Completed', 'Failed', 'Cancelled')),
-            FOREIGN KEY(user_employee_id) REFERENCES user_employees(id)
-        )",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_employee_tasks_user_employee
-         ON employee_tasks(user_employee_id, started_at DESC)",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_employee_tasks_status
-         ON employee_tasks(status, started_at DESC)",
-        [],
-    )?;
-
-    conn.execute(
         "CREATE TABLE IF NOT EXISTS realtime_metrics (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             automation_id TEXT,
-            employee_id TEXT,
+            automation_name TEXT,
             time_saved_minutes INTEGER NOT NULL,
             cost_saved_usd REAL NOT NULL,
             tasks_completed INTEGER DEFAULT 1,
@@ -3730,13 +3639,6 @@ fn apply_migration_v33(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_metrics_user_time
          ON realtime_metrics(user_id, timestamp DESC)",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_metrics_employee
-         ON realtime_metrics(employee_id, timestamp DESC)
-         WHERE employee_id IS NOT NULL",
         [],
     )?;
 
@@ -3880,11 +3782,10 @@ fn apply_migration_v37(conn: &Connection) -> Result<()> {
             started_at INTEGER NOT NULL,
             completed_at INTEGER,
             step TEXT NOT NULL,
-            recommended_employees TEXT NOT NULL,
-            selected_employee_id TEXT,
+            recommended_demos TEXT NOT NULL,
+            selected_demo_id TEXT,
             demo_results TEXT,
             time_to_value_seconds INTEGER NOT NULL DEFAULT 0,
-            hired_employee INTEGER NOT NULL DEFAULT 0 CHECK(hired_employee IN (0, 1)),
             updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
         )",
         [],
@@ -3904,13 +3805,6 @@ fn apply_migration_v37(conn: &Connection) -> Result<()> {
     )?;
 
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_first_run_hired
-         ON first_run_sessions(hired_employee)
-         WHERE hired_employee = 1",
-        [],
-    )?;
-
-    conn.execute(
         "CREATE TABLE IF NOT EXISTS sample_data_marker (
             user_id TEXT PRIMARY KEY,
             created_at INTEGER NOT NULL
@@ -3926,10 +3820,9 @@ fn apply_migration_v38(conn: &Connection) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS demo_runs (
             id TEXT PRIMARY KEY,
             user_id TEXT,
-            employee_id TEXT NOT NULL,
+            demo_id TEXT NOT NULL,
             ran_at INTEGER NOT NULL,
-            results TEXT NOT NULL,
-            led_to_hire INTEGER NOT NULL DEFAULT 0 CHECK(led_to_hire IN (0, 1))
+            results TEXT NOT NULL
         )",
         [],
     )?;
@@ -3942,15 +3835,8 @@ fn apply_migration_v38(conn: &Connection) -> Result<()> {
     )?;
 
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_demo_runs_employee
-         ON demo_runs(employee_id, ran_at DESC)",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_demo_runs_conversion
-         ON demo_runs(led_to_hire)
-         WHERE led_to_hire = 1",
+        "CREATE INDEX IF NOT EXISTS idx_demo_runs_demo
+         ON demo_runs(demo_id, ran_at DESC)",
         [],
     )?;
 
@@ -6050,6 +5936,135 @@ fn apply_migration_v75(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration v76: remove the retired "AI employee hiring" data model.
+///
+/// Onboarding keeps reusable demo/session history, and ROI keeps
+/// automation-oriented metrics. Existing local databases are rebuilt in place
+/// so obsolete employee tables and columns do not remain as hidden product
+/// concepts.
+fn apply_migration_v76(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "DROP TABLE IF EXISTS employee_tasks;
+         DROP TABLE IF EXISTS user_employees;
+         DROP TABLE IF EXISTS ai_employees;",
+    )?;
+
+    if table_has_column(conn, "first_run_sessions", "recommended_employees")? {
+        conn.execute_batch(
+            "ALTER TABLE first_run_sessions RENAME TO first_run_sessions_legacy_v76;
+
+             CREATE TABLE first_run_sessions (
+                 id TEXT PRIMARY KEY,
+                 user_id TEXT NOT NULL,
+                 started_at INTEGER NOT NULL,
+                 completed_at INTEGER,
+                 step TEXT NOT NULL,
+                 recommended_demos TEXT NOT NULL,
+                 selected_demo_id TEXT,
+                 demo_results TEXT,
+                 time_to_value_seconds INTEGER NOT NULL DEFAULT 0,
+                 updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+             );
+
+             INSERT INTO first_run_sessions (
+                 id, user_id, started_at, completed_at, step,
+                 recommended_demos, selected_demo_id, demo_results,
+                 time_to_value_seconds, updated_at
+             )
+             SELECT
+                 id, user_id, started_at, completed_at, step,
+                 recommended_employees, selected_employee_id, demo_results,
+                 time_to_value_seconds, updated_at
+             FROM first_run_sessions_legacy_v76;
+
+             DROP TABLE first_run_sessions_legacy_v76;
+             CREATE INDEX idx_first_run_user
+                 ON first_run_sessions(user_id, started_at DESC);
+             CREATE INDEX idx_first_run_completed
+                 ON first_run_sessions(completed_at DESC)
+                 WHERE completed_at IS NOT NULL;",
+        )?;
+    }
+
+    if table_has_column(conn, "demo_runs", "employee_id")? {
+        conn.execute_batch(
+            "ALTER TABLE demo_runs RENAME TO demo_runs_legacy_v76;
+
+             CREATE TABLE demo_runs (
+                 id TEXT PRIMARY KEY,
+                 user_id TEXT,
+                 demo_id TEXT NOT NULL,
+                 ran_at INTEGER NOT NULL,
+                 results TEXT NOT NULL
+             );
+
+             INSERT INTO demo_runs (id, user_id, demo_id, ran_at, results)
+             SELECT id, user_id, employee_id, ran_at, results
+             FROM demo_runs_legacy_v76;
+
+             DROP TABLE demo_runs_legacy_v76;
+             CREATE INDEX idx_demo_runs_user
+                 ON demo_runs(user_id, ran_at DESC)
+                 WHERE user_id IS NOT NULL;
+             CREATE INDEX idx_demo_runs_demo
+                 ON demo_runs(demo_id, ran_at DESC);
+             CREATE INDEX idx_demo_runs_time
+                 ON demo_runs(ran_at DESC);",
+        )?;
+    }
+
+    if table_has_column(conn, "realtime_metrics", "employee_id")? {
+        conn.execute_batch(
+            "ALTER TABLE realtime_metrics RENAME TO realtime_metrics_legacy_v76;
+
+             CREATE TABLE realtime_metrics (
+                 id TEXT PRIMARY KEY,
+                 user_id TEXT NOT NULL,
+                 automation_id TEXT,
+                 automation_name TEXT,
+                 time_saved_minutes INTEGER NOT NULL,
+                 cost_saved_usd REAL NOT NULL,
+                 tasks_completed INTEGER DEFAULT 1,
+                 errors_prevented INTEGER DEFAULT 0,
+                 quality_score REAL,
+                 timestamp INTEGER NOT NULL
+             );
+
+             INSERT INTO realtime_metrics (
+                 id, user_id, automation_id, automation_name,
+                 time_saved_minutes, cost_saved_usd, tasks_completed,
+                 errors_prevented, quality_score, timestamp
+             )
+             SELECT
+                 id, user_id, automation_id, NULL,
+                 time_saved_minutes, cost_saved_usd, tasks_completed,
+                 errors_prevented, quality_score, timestamp
+             FROM realtime_metrics_legacy_v76;
+
+             DROP TABLE realtime_metrics_legacy_v76;
+             CREATE INDEX idx_metrics_user_time
+                 ON realtime_metrics(user_id, timestamp DESC);
+             CREATE INDEX idx_metrics_automation
+                 ON realtime_metrics(automation_id, timestamp DESC)
+                 WHERE automation_id IS NOT NULL;
+             CREATE INDEX idx_metrics_automation_name
+                 ON realtime_metrics(automation_name, timestamp DESC)
+                 WHERE automation_name IS NOT NULL;
+             CREATE INDEX idx_metrics_timestamp
+                 ON realtime_metrics(timestamp DESC);",
+        )?;
+    } else {
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_metrics_automation_name
+             ON realtime_metrics(automation_name, timestamp DESC)
+             WHERE automation_name IS NOT NULL",
+            [],
+        )?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6083,6 +6098,9 @@ mod tests {
         assert!(tables.contains(&"schema_version".to_string()));
         assert!(tables.contains(&"cache_entries".to_string()));
         assert!(tables.contains(&"calendar_accounts".to_string()));
+        assert!(!tables.contains(&"ai_employees".to_string()));
+        assert!(!tables.contains(&"user_employees".to_string()));
+        assert!(!tables.contains(&"employee_tasks".to_string()));
     }
 
     #[test]
@@ -6124,6 +6142,103 @@ mod tests {
 
         // Re-running migrations on an already-migrated db must be a no-op.
         run_migrations(&conn).unwrap();
+    }
+
+    #[test]
+    fn migration_v76_removes_employee_model_and_preserves_demo_metrics() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE ai_employees (id TEXT PRIMARY KEY);
+             CREATE TABLE user_employees (id TEXT PRIMARY KEY);
+             CREATE TABLE employee_tasks (id TEXT PRIMARY KEY);
+
+             CREATE TABLE first_run_sessions (
+                 id TEXT PRIMARY KEY,
+                 user_id TEXT NOT NULL,
+                 started_at INTEGER NOT NULL,
+                 completed_at INTEGER,
+                 step TEXT NOT NULL,
+                 recommended_employees TEXT NOT NULL,
+                 selected_employee_id TEXT,
+                 demo_results TEXT,
+                 time_to_value_seconds INTEGER NOT NULL DEFAULT 0,
+                 hired_employee INTEGER NOT NULL DEFAULT 0,
+                 updated_at INTEGER NOT NULL
+             );
+             INSERT INTO first_run_sessions VALUES
+                 ('s1', 'u1', 10, 20, '\"completed\"', '[]', 'demo-1', '{}', 10, 1, 20);
+
+             CREATE TABLE demo_runs (
+                 id TEXT PRIMARY KEY,
+                 user_id TEXT,
+                 employee_id TEXT NOT NULL,
+                 ran_at INTEGER NOT NULL,
+                 results TEXT NOT NULL,
+                 led_to_hire INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO demo_runs VALUES ('r1', 'u1', 'demo-1', 11, '{}', 1);
+
+             CREATE TABLE realtime_metrics (
+                 id TEXT PRIMARY KEY,
+                 user_id TEXT NOT NULL,
+                 automation_id TEXT,
+                 employee_id TEXT,
+                 time_saved_minutes INTEGER NOT NULL,
+                 cost_saved_usd REAL NOT NULL,
+                 tasks_completed INTEGER DEFAULT 1,
+                 errors_prevented INTEGER DEFAULT 0,
+                 quality_score REAL,
+                 timestamp INTEGER NOT NULL
+             );
+             INSERT INTO realtime_metrics VALUES
+                 ('m1', 'u1', 'run-1', 'retired-value', 5, 4.0, 1, 0, 1.0, 12);",
+        )
+        .unwrap();
+
+        apply_migration_v76(&conn).unwrap();
+
+        for table in ["ai_employees", "user_employees", "employee_tasks"] {
+            let exists: bool = conn
+                .query_row(
+                    "SELECT EXISTS(
+                         SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1
+                     )",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(!exists, "{table} must be removed");
+        }
+
+        let selected_demo: String = conn
+            .query_row(
+                "SELECT selected_demo_id FROM first_run_sessions WHERE id = 's1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(selected_demo, "demo-1");
+        assert!(!table_has_column(&conn, "first_run_sessions", "hired_employee").unwrap());
+
+        let demo_id: String = conn
+            .query_row("SELECT demo_id FROM demo_runs WHERE id = 'r1'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(demo_id, "demo-1");
+        assert!(!table_has_column(&conn, "demo_runs", "led_to_hire").unwrap());
+
+        let automation_name: Option<String> = conn
+            .query_row(
+                "SELECT automation_name FROM realtime_metrics WHERE id = 'm1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(automation_name, None);
+        assert!(!table_has_column(&conn, "realtime_metrics", "employee_id").unwrap());
+
+        apply_migration_v76(&conn).expect("v76 must remain restart-safe");
     }
 
     #[test]

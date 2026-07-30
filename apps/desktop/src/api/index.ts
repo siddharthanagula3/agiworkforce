@@ -555,7 +555,7 @@ export {
   type CodebaseCacheStats,
 } from './cache';
 
-// Onboarding - Onboarding progress, first-run, session, preferences (21 commands)
+// Onboarding - Onboarding progress, first-run, session, preferences (20 commands)
 export {
   OnboardingClient,
   getOnboardingStatus,
@@ -574,7 +574,6 @@ export {
   updateFirstRunStep,
   selectDemo,
   recordDemoResults,
-  markSetupCompleted,
   completeFirstRun,
   getFirstRunSession,
   getFirstRunStatistics,
@@ -814,7 +813,7 @@ export {
   type BenchmarkComparison,
   type MilestoneData,
   type DayStats,
-  type TopEmployeeData,
+  type TopAutomationData,
   type DailyBreakdown,
   type WeekStats,
   type WeeklyBreakdown,

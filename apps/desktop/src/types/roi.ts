@@ -4,8 +4,8 @@ export interface DayStats {
   automationsRun: number;
   avgQualityScore: number;
   changeFromYesterday: number;
-  topEmployee: string;
-  topEmployeeTimeSaved: number;
+  topAutomation: string;
+  topAutomationTimeSaved: number;
 }
 
 export interface WeekStats {
@@ -14,7 +14,7 @@ export interface WeekStats {
   automationsRun: number;
   avgQualityScore: number;
   changeFromLastWeek: number;
-  topEmployees: TopEmployee[];
+  topAutomations: TopAutomation[];
   dailyBreakdown: DailyBreakdown[];
 }
 
@@ -24,7 +24,7 @@ export interface MonthStats {
   automationsRun: number;
   avgQualityScore: number;
   changeFromLastMonth: number;
-  topEmployees: TopEmployee[];
+  topAutomations: TopAutomation[];
   weeklyBreakdown: WeeklyBreakdown[];
 }
 
@@ -34,13 +34,12 @@ export interface AllTimeStats {
   automationsRun: number;
   avgQualityScore: number;
   milestonesAchieved: number;
-  topEmployees: TopEmployee[];
+  topAutomations: TopAutomation[];
   monthlyTrend: MonthlyTrend[];
 }
 
-export interface TopEmployee {
-  employeeId: string;
-  employeeName: string;
+export interface TopAutomation {
+  automationName: string;
   timeSavedHours: number;
   costSavedUsd: number;
   automationsRun: number;
@@ -119,13 +118,12 @@ export interface BenchmarkComparisonData {
 
 export interface ActivityItem {
   id: string;
-  type: 'automation_run' | 'employee_hired' | 'milestone_achieved' | 'goal_completed';
+  type: 'automation_run' | 'milestone_achieved' | 'goal_completed';
   title: string;
   description: string;
   timestamp: number;
   timeSavedMinutes?: number;
   costSavedUsd?: number;
-  employeeName?: string;
   automationName?: string;
   status?: 'success' | 'failed' | 'partial';
 }
@@ -142,7 +140,7 @@ export interface ExportOptions {
   includeCharts: boolean;
   includeDetailedLog: boolean;
   includeComparison: boolean;
-  includeEmployeeBreakdown: boolean;
+  includeAutomationBreakdown: boolean;
   startDate?: string;
   endDate?: string;
 }
@@ -155,8 +153,8 @@ export interface ChartDataPoint {
   label?: string;
 }
 
-export interface EmployeeChartData {
-  employeeName: string;
+export interface AutomationChartData {
+  automationName: string;
   timeSavedHours: number;
   costSavedUsd: number;
   automationsRun: number;

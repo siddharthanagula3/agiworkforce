@@ -372,11 +372,11 @@ pub async fn has_completed_first_run(
 #[tauri::command]
 pub async fn run_instant_demo(
     db: State<'_, AppDatabase>,
-    employee_id: String,
+    demo_id: String,
     user_id: Option<String>,
 ) -> Result<DemoResult, String> {
     let demo = InstantDemo::new(db.conn.clone());
-    demo.run_demo(&employee_id, user_id.as_deref())
+    demo.run_demo(&demo_id, user_id.as_deref())
         .await
         .map_err(|e| format!("Failed to run instant demo: {}", e))
 }
@@ -389,7 +389,7 @@ pub async fn update_first_run_step(
 ) -> Result<(), String> {
     let step_enum = match step.as_str() {
         "welcome" => crate::ui::onboarding::OnboardingStep::Welcome,
-        "choose_employee" => crate::ui::onboarding::OnboardingStep::ChooseEmployee,
+        "choose_demo" => crate::ui::onboarding::OnboardingStep::ChooseDemo,
         "running_demo" => crate::ui::onboarding::OnboardingStep::RunningDemo,
         "viewing_results" => crate::ui::onboarding::OnboardingStep::ViewingResults,
         "quick_setup" => crate::ui::onboarding::OnboardingStep::QuickSetup,
@@ -426,17 +426,6 @@ pub async fn record_demo_results(
     first_run
         .record_demo_results(&session_id, &results)
         .map_err(|e| format!("Failed to record demo results: {}", e))
-}
-
-#[tauri::command]
-pub async fn mark_setup_completed(
-    db: State<'_, AppDatabase>,
-    session_id: String,
-) -> Result<(), String> {
-    let first_run = FirstRunExperience::new(db.conn.clone());
-    first_run
-        .mark_setup_completed(&session_id)
-        .map_err(|e| format!("Failed to mark setup completed: {}", e))
 }
 
 #[tauri::command]

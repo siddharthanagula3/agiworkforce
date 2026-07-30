@@ -12,7 +12,7 @@ import type {
   ComparisonData,
   ComparisonMode,
   DayStats,
-  EmployeeChartData,
+  AutomationChartData,
   ExportOptions,
   MetricsUpdate,
   Milestone,
@@ -40,7 +40,7 @@ interface ROIState {
   recentActivity: ActivityItem[];
 
   chartData: ChartDataPoint[];
-  employeeChartData: EmployeeChartData[];
+  automationChartData: AutomationChartData[];
 
   loading: boolean;
   error: string | null;
@@ -76,7 +76,7 @@ const initialState = {
   comparisonData: null,
   recentActivity: [],
   chartData: [],
-  employeeChartData: [],
+  automationChartData: [],
   loading: false,
   error: null,
   unsubscribeFn: null,
@@ -140,13 +140,13 @@ export const useROIStore = create<ROIState>()(
             }));
           }
 
-          if (stats.topEmployees) {
-            state.employeeChartData = stats.topEmployees.map((emp) => ({
-              employeeName: emp.employeeName,
-              timeSavedHours: emp.timeSavedHours,
-              costSavedUsd: emp.costSavedUsd,
-              automationsRun: emp.automationsRun,
-              successRate: emp.successRate,
+          if (stats.topAutomations) {
+            state.automationChartData = stats.topAutomations.map((automation) => ({
+              automationName: automation.automationName,
+              timeSavedHours: automation.timeSavedHours,
+              costSavedUsd: automation.costSavedUsd,
+              automationsRun: automation.automationsRun,
+              successRate: automation.successRate,
             }));
           }
         });

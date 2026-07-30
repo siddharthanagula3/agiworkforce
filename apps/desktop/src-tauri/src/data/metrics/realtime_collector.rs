@@ -12,7 +12,6 @@ const DEFAULT_HOURLY_RATE: f64 = 50.0;
 pub struct AutomationRun {
     pub id: String,
     pub user_id: String,
-    pub employee_id: Option<String>,
     pub automation_name: String,
     pub estimated_manual_time_ms: u64,
     pub actual_execution_time_ms: u64,
@@ -27,7 +26,6 @@ pub struct AutomationRun {
 impl AutomationRun {
     pub fn new(
         user_id: String,
-        employee_id: Option<String>,
         automation_name: String,
         estimated_manual_time_ms: u64,
         actual_execution_time_ms: u64,
@@ -35,7 +33,6 @@ impl AutomationRun {
         Self {
             id: Uuid::new_v4().to_string(),
             user_id,
-            employee_id,
             automation_name,
             estimated_manual_time_ms,
             actual_execution_time_ms,
@@ -54,7 +51,7 @@ pub struct MetricsSnapshot {
     pub id: String,
     pub user_id: String,
     pub automation_id: Option<String>,
-    pub employee_id: Option<String>,
+    pub automation_name: String,
     pub time_saved_minutes: u64,
     pub cost_saved_usd: f64,
     pub tasks_completed: u64,
@@ -70,7 +67,7 @@ pub struct PeriodStats {
     pub total_automations_run: u64,
     pub avg_time_saved_per_run: f64,
     pub success_rate: f64,
-    pub top_employees: Vec<EmployeePerformance>,
+    pub top_automations: Vec<AutomationPerformance>,
 }
 
 impl Default for PeriodStats {
@@ -81,7 +78,7 @@ impl Default for PeriodStats {
             total_automations_run: 0,
             avg_time_saved_per_run: 0.0,
             success_rate: 0.0,
-            top_employees: Vec::new(),
+            top_automations: Vec::new(),
         }
     }
 }
@@ -95,9 +92,8 @@ pub struct RealtimeStats {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmployeePerformance {
-    pub employee_id: String,
-    pub employee_name: String,
+pub struct AutomationPerformance {
+    pub automation_name: String,
     pub total_time_saved_hours: f64,
     pub total_cost_saved_usd: f64,
     pub automations_run: u64,
@@ -156,7 +152,7 @@ impl RealtimeMetricsCollector {
             id: Uuid::new_v4().to_string(),
             user_id: run.user_id.clone(),
             automation_id: Some(run.id.clone()),
-            employee_id: run.employee_id.clone(),
+            automation_name: run.automation_name.clone(),
             time_saved_minutes,
             cost_saved_usd,
             tasks_completed: run.tasks_completed,
@@ -170,7 +166,7 @@ impl RealtimeMetricsCollector {
         let conn = self.connection()?;
         conn.execute(
             "INSERT INTO realtime_metrics (
-                id, user_id, automation_id, employee_id,
+                id, user_id, automation_id, automation_name,
                 time_saved_minutes, cost_saved_usd, tasks_completed,
                 errors_prevented, quality_score, timestamp
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -178,7 +174,7 @@ impl RealtimeMetricsCollector {
                 &metrics.id,
                 &metrics.user_id,
                 &metrics.automation_id,
-                &metrics.employee_id,
+                &metrics.automation_name,
                 metrics.time_saved_minutes as i64,
                 metrics.cost_saved_usd,
                 metrics.tasks_completed as i64,
@@ -327,7 +323,7 @@ impl RealtimeMetricsCollector {
             0.0
         };
 
-        let top_employees = self.get_top_employees(user_id, Some(cutoff))?;
+        let top_automations = self.get_top_automations(user_id, Some(cutoff))?;
 
         Ok(PeriodStats {
             total_time_saved_hours,
@@ -335,7 +331,7 @@ impl RealtimeMetricsCollector {
             total_automations_run,
             avg_time_saved_per_run,
             success_rate: 1.0,
-            top_employees,
+            top_automations,
         })
     }
 
@@ -363,7 +359,7 @@ impl RealtimeMetricsCollector {
             0.0
         };
 
-        let top_employees = self.get_top_employees(user_id, None)?;
+        let top_automations = self.get_top_automations(user_id, None)?;
 
         Ok(PeriodStats {
             total_time_saved_hours,
@@ -371,53 +367,52 @@ impl RealtimeMetricsCollector {
             total_automations_run,
             avg_time_saved_per_run,
             success_rate: 1.0,
-            top_employees,
+            top_automations,
         })
     }
 
-    fn get_top_employees(
+    fn get_top_automations(
         &self,
         user_id: &str,
         cutoff_timestamp: Option<i64>,
-    ) -> SqliteResult<Vec<EmployeePerformance>> {
+    ) -> SqliteResult<Vec<AutomationPerformance>> {
         let conn = self.connection()?;
 
         let query = if let Some(_cutoff) = cutoff_timestamp {
             "SELECT
-                employee_id,
+                automation_name,
                 SUM(time_saved_minutes) as total_time_minutes,
                 SUM(cost_saved_usd) as total_cost,
                 COUNT(*) as coun
             FROM realtime_metrics
-            WHERE user_id = ?1 AND employee_id IS NOT NULL AND timestamp >= ?2
-            GROUP BY employee_id
+            WHERE user_id = ?1 AND automation_name IS NOT NULL AND timestamp >= ?2
+            GROUP BY automation_name
             ORDER BY total_cost DESC
             LIMIT 10"
         } else {
             "SELECT
-                employee_id,
+                automation_name,
                 SUM(time_saved_minutes) as total_time_minutes,
                 SUM(cost_saved_usd) as total_cost,
                 COUNT(*) as coun
             FROM realtime_metrics
-            WHERE user_id = ?1 AND employee_id IS NOT NULL
-            GROUP BY employee_id
+            WHERE user_id = ?1 AND automation_name IS NOT NULL
+            GROUP BY automation_name
             ORDER BY total_cost DESC
             LIMIT 10"
         };
 
         let mut stmt = conn.prepare(query)?;
 
-        let employees = if let Some(cutoff) = cutoff_timestamp {
+        let automations = if let Some(cutoff) = cutoff_timestamp {
             stmt.query_map([user_id, &cutoff.to_string()], |row| {
-                let employee_id: String = row.get(0)?;
+                let automation_name: String = row.get(0)?;
                 let total_time_minutes: i64 = row.get(1)?;
                 let total_cost: f64 = row.get(2)?;
                 let count: i64 = row.get(3)?;
 
-                Ok(EmployeePerformance {
-                    employee_id: employee_id.clone(),
-                    employee_name: format!("Employee {}", employee_id),
+                Ok(AutomationPerformance {
+                    automation_name,
                     total_time_saved_hours: total_time_minutes as f64 / 60.0,
                     total_cost_saved_usd: total_cost,
                     automations_run: count as u64,
@@ -427,14 +422,13 @@ impl RealtimeMetricsCollector {
             .collect::<SqliteResult<Vec<_>>>()?
         } else {
             stmt.query_map([user_id], |row| {
-                let employee_id: String = row.get(0)?;
+                let automation_name: String = row.get(0)?;
                 let total_time_minutes: i64 = row.get(1)?;
                 let total_cost: f64 = row.get(2)?;
                 let count: i64 = row.get(3)?;
 
-                Ok(EmployeePerformance {
-                    employee_id: employee_id.clone(),
-                    employee_name: format!("Employee {}", employee_id),
+                Ok(AutomationPerformance {
+                    automation_name,
                     total_time_saved_hours: total_time_minutes as f64 / 60.0,
                     total_cost_saved_usd: total_cost,
                     automations_run: count as u64,
@@ -444,7 +438,7 @@ impl RealtimeMetricsCollector {
             .collect::<SqliteResult<Vec<_>>>()?
         };
 
-        Ok(employees)
+        Ok(automations)
     }
 
     /// Get daily breakdown of metrics for a date range (Unix timestamps).
@@ -592,7 +586,9 @@ impl RealtimeMetricsCollector {
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, user_id, automation_id, employee_id, time_saved_minutes,
+                "SELECT id, user_id, automation_id,
+                        COALESCE(automation_name, 'Unknown automation'),
+                        time_saved_minutes,
                         cost_saved_usd, tasks_completed, errors_prevented, quality_score, timestamp
                  FROM realtime_metrics
                  WHERE user_id = ?1 AND timestamp >= ?2
@@ -609,7 +605,7 @@ impl RealtimeMetricsCollector {
                         id: row.get(0)?,
                         user_id: row.get(1)?,
                         automation_id: row.get(2)?,
-                        employee_id: row.get(3)?,
+                        automation_name: row.get(3)?,
                         time_saved_minutes: row.get::<_, i64>(4)? as u64,
                         cost_saved_usd: row.get(5)?,
                         tasks_completed: row.get::<_, i64>(6)? as u64,

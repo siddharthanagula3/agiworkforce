@@ -1,16 +1,16 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import type { EmployeeChartData } from '../../../types/roi';
+import type { AutomationChartData } from '../../../types/roi';
 
 interface CostSavedChartProps {
-  data: EmployeeChartData[];
+  data: AutomationChartData[];
   loading?: boolean;
 }
 
 // Recharts tooltip props interface
 interface TooltipPayloadItem {
   value?: number;
-  payload?: EmployeeChartData;
+  payload?: AutomationChartData;
 }
 
 interface CustomTooltipProps {
@@ -48,17 +48,19 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 }
 
 export function CostSavedChart({ data, loading = false }: CostSavedChartProps) {
-  const formattedData = data.map((emp) => ({
-    ...emp,
+  const formattedData = data.map((automation) => ({
+    ...automation,
     displayName:
-      emp.employeeName.length > 15 ? `${emp.employeeName.substring(0, 15)}...` : emp.employeeName,
+      automation.automationName.length > 15
+        ? `${automation.automationName.substring(0, 15)}...`
+        : automation.automationName,
   }));
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Cost Saved</CardTitle>
-        <CardDescription>Breakdown by AI employee</CardDescription>
+        <CardDescription>Breakdown by automation</CardDescription>
       </CardHeader>
 
       <CardContent>
@@ -68,7 +70,7 @@ export function CostSavedChart({ data, loading = false }: CostSavedChartProps) {
           </div>
         ) : data.length === 0 ? (
           <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-            No employee data available
+            No automation data available
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>

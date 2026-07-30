@@ -12,7 +12,8 @@ import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../lib/tauri-mock';
 import { ErrorSeverity, errorTracking } from '../services/errorTracking';
-import type { AllTimeStats, ChartDataPoint, TopEmployee } from '../types/roi';
+import type { UserMetrics } from '../api/analytics';
+import type { AllTimeStats, ChartDataPoint } from '../types/roi';
 
 // ============================================================================
 // Types
@@ -21,7 +22,7 @@ import type { AllTimeStats, ChartDataPoint, TopEmployee } from '../types/roi';
 interface ROIState {
   roiReport: AllTimeStats | null;
   processMetrics: ChartDataPoint[];
-  userMetrics: TopEmployee[];
+  userMetrics: UserMetrics[];
   toolMetrics: ChartDataPoint[];
   trends: Record<string, ChartDataPoint[]>;
   isLoadingROI: boolean;
@@ -30,7 +31,7 @@ interface ROIState {
 interface ROIActions {
   calculateROI: (startDate: number, endDate: number) => Promise<AllTimeStats>;
   loadProcessMetrics: (startDate: number, endDate: number) => Promise<ChartDataPoint[]>;
-  loadUserMetrics: (startDate: number, endDate: number) => Promise<TopEmployee[]>;
+  loadUserMetrics: (startDate: number, endDate: number) => Promise<UserMetrics[]>;
   loadToolMetrics: (startDate: number, endDate: number) => Promise<ChartDataPoint[]>;
   loadTrends: (metric: string, days: number) => Promise<ChartDataPoint[]>;
   exportReport: (format: string, startDate: number, endDate: number) => Promise<string>;
@@ -93,7 +94,7 @@ export const useROIStore = create<ROIStore>()(
 
         loadUserMetrics: async (startDate: number, endDate: number) => {
           try {
-            const metrics = await invoke<TopEmployee[]>('analytics_get_user_metrics', {
+            const metrics = await invoke<UserMetrics[]>('analytics_get_user_metrics', {
               startDate,
               endDate,
             });
