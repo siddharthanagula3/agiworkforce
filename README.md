@@ -235,7 +235,7 @@ pnpm --filter @agiworkforce/web dev
 ### Mobile App (Expo)
 
 ```bash
-cp apps/mobile/.env.example apps/mobile/.env
+cp apps/mobile/.env.local.example apps/mobile/.env.local
 pnpm --filter @agiworkforce/mobile dev
 # Then: press 'i' for iOS simulator or 'a' for Android emulator
 ```
@@ -251,7 +251,8 @@ cargo run -p agiworkforce-cli --bin agi
 ### API Gateway
 
 ```bash
-cp services/api-gateway/.env.example services/api-gateway/.env
+# Export the keys documented in services/api-gateway/.env.example from Zsh.
+pnpm env:doctor -- --scope gateway --mode development
 pnpm --filter @agiworkforce/api-gateway dev
 ```
 
@@ -264,31 +265,31 @@ docker compose up -d          # PostgreSQL 16 + pgAdmin
 
 ## Environment Variables
 
-Copy the relevant `.env.example` files and fill in values. **Never commit `.env.local` files.**
+Each surface owns its environment contract. Deployment-oriented examples list
+every supported key; local examples contain only local-development inputs.
+Never commit `.env`, `.env.local`, signing credentials, or provider secrets.
 
-### Web App (`apps/web/.env.local`)
+| Surface          | Contract                                 | Local loading behavior                         |
+| ---------------- | ---------------------------------------- | ---------------------------------------------- |
+| Desktop          | `apps/desktop/.env.example`              | Vite loads `apps/desktop/.env.local`           |
+| Web              | `apps/web/.env.example`                  | Next.js loads `apps/web/.env.local`            |
+| Mobile           | `apps/mobile/.env.example`               | Expo loads `.env.local`; EAS uses EAS envs     |
+| Chrome extension | `apps/extension/.env.example`            | Vite loads `apps/extension/.env.local`         |
+| API gateway      | `services/api-gateway/.env.example`      | Process environment only; no dotenv loading    |
+| Signaling        | `services/signaling-server/.env.example` | Loads `services/signaling-server/.env` locally |
 
-| Variable                             | Purpose                            |
-| ------------------------------------ | ---------------------------------- |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`  | Clerk authentication (public)      |
-| `CLERK_SECRET_KEY`                   | Clerk authentication (server)      |
-| `DATABASE_URL`                       | Neon PostgreSQL connection string  |
-| `STRIPE_SECRET_KEY`                  | Stripe payments (server)           |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe payments (client)           |
-| `STRIPE_WEBHOOK_SECRET`              | Stripe webhook verification        |
-| `NEXT_PUBLIC_APP_URL`                | Application base URL               |
-| `NEXT_PUBLIC_API_URL`                | API gateway URL                    |
-| `OPENAI_API_KEY`                     | Optional — managed cloud LLM proxy |
-| `ANTHROPIC_API_KEY`                  | Optional — managed cloud LLM proxy |
+For shell-managed services and production checks, keep values in your local Zsh
+configuration or deployment secret store, start a fresh shell, and run:
 
-### Desktop App (`apps/desktop/.env.local`)
+```bash
+# Reads process.env only and prints key names, never values.
+pnpm env:doctor -- --scope web --mode production
+pnpm env:doctor -- --scope gateway --mode production
+pnpm env:doctor -- --scope signaling --mode production
 
-| Variable                  | Purpose                         |
-| ------------------------- | ------------------------------- |
-| `VITE_API_BASE_URL`       | API gateway base URL            |
-| `VITE_WEB_APP_URL`        | Web app URL for OAuth redirects |
-| `VITE_SIGNALING_HTTP_URL` | WebRTC signaling server URL     |
-| `VITE_SENTRY_DSN`         | Optional — error reporting      |
+# Verifies all templates, git tracking, and the no-/tmp-credentials rule.
+pnpm check:env-contract
+```
 
 ## Local Development Commands
 

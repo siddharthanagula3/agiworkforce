@@ -113,7 +113,11 @@ const allowedLiveNonMarkdownPrefixes = [
   'audit/demo-readiness/screenshots/',
   'reports/generated/',
 ];
-const allowedLiveNonMarkdownFiles = new Set(['audit/inventory.json']);
+const allowedLiveNonMarkdownFiles = new Set([
+  'audit/inventory.json',
+  'audit/ui-gaps-baseline.json',
+  'audit/ui-gaps.csv',
+]);
 
 for (const scanRoot of ['docs', 'audit', 'reports', 'tasks']) {
   for (const file of listFilesRecursive(scanRoot)) {

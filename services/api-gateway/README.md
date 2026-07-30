@@ -60,6 +60,10 @@ the shell; the gateway runtime does not load `.env` or `.env.local`. Never
 commit JWT secrets, Neon service-role keys, provider keys, webhook secrets,
 managed compute tokens, or production URLs that imply secret access.
 
+After loading your local Zsh configuration, run
+`pnpm env:doctor -- --scope gateway --mode production`; the command reports key
+names only and never prints values.
+
 `NEON_DATABASE_URL` backs two separate connection strategies out of `src/lib/neonClients.ts`:
 
 - `getSystemClient(purpose)` — the one-shot `@neondatabase/serverless` `neon()` HTTP client with privileged database rights. Callers must name an allowlisted system purpose. It is reserved for pre-auth device authorization, health checks, and compatibility access to tables whose schema is not owned by canonical migrations.

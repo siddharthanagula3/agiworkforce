@@ -23,6 +23,17 @@ echo -e "${NC}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Secrets come only from the caller's environment (normally local Zsh or a CI
+# secret store). This script never parses dotenv files or writes credentials to
+# temporary files.
+for ENV_NAME in NEON_DATABASE_URL SIGNALING_INTERNAL_SECRET ADMIN_API_KEY; do
+    if [ -z "${!ENV_NAME:-}" ]; then
+        echo -e "${RED}${ENV_NAME} must be exported before running this script.${NC}"
+        echo "Run: pnpm env:doctor -- --scope signaling --mode production"
+        exit 1
+    fi
+done
+
 # ============================================================================
 # Step 1: Check Prerequisites
 # ============================================================================
@@ -136,27 +147,12 @@ if [ "$DEPLOY_NEW" = true ]; then
     flyctl launch --name "$APP_NAME" --no-deploy --region sjc --yes
 fi
 
-# Get Neon and Clerk credentials from .env.local
-WEB_ENV="$REPO_ROOT/apps/web/.env.local"
-if [ -f "$WEB_ENV" ]; then
-    NEON_DATABASE_URL=$(grep -E "^(NEON_DATABASE_URL|DATABASE_URL)=" "$WEB_ENV" | head -1 | cut -d '=' -f2-)
-    CLERK_SECRET_KEY=$(grep "^CLERK_SECRET_KEY=" "$WEB_ENV" | cut -d '=' -f2-)
-else
-    echo -e "${YELLOW}Enter your Neon database URL:${NC}"
-    read -rs NEON_DATABASE_URL
-    echo -e "${YELLOW}Enter your Clerk secret key:${NC}"
-    read -rs CLERK_SECRET_KEY
-fi
-
-# Generate admin API key
-ADMIN_API_KEY=$(openssl rand -hex 32)
-
 # Set secrets
 echo -e "${BLUE}Setting environment variables...${NC}"
 flyctl secrets set \
     NEON_DATABASE_URL="$NEON_DATABASE_URL" \
     DATABASE_URL="$NEON_DATABASE_URL" \
-    CLERK_SECRET_KEY="$CLERK_SECRET_KEY" \
+    SIGNALING_INTERNAL_SECRET="$SIGNALING_INTERNAL_SECRET" \
     ADMIN_API_KEY="$ADMIN_API_KEY" \
     NODE_ENV="production" \
     LOG_LEVEL="info" \
@@ -203,11 +199,10 @@ console.log('Updated tauri.conf.json with public key');
     fi
 fi
 
-# Create/update .env file for desktop with signaling URL
-DESKTOP_ENV="$REPO_ROOT/apps/desktop/.env"
-echo "VITE_SIGNALING_URL=wss://${SIGNALING_URL}/ws" >> "$DESKTOP_ENV"
-echo "VITE_SIGNALING_HTTP_URL=https://${SIGNALING_URL}" >> "$DESKTOP_ENV"
-echo -e "${GREEN}✓ Updated desktop .env with signaling URLs${NC}"
+echo -e "${GREEN}✓ No local dotenv files were changed${NC}"
+echo -e "${BLUE}Set these public deployment values in their owning secret stores:${NC}"
+echo "  EXPO_PUBLIC_WS_URL=wss://${SIGNALING_URL}/ws"
+echo "  SIGNALING_HTTP_URL=https://${SIGNALING_URL}  (API gateway)"
 
 # ============================================================================
 # Summary
@@ -225,8 +220,8 @@ echo -e "  Health:    https://${SIGNALING_URL}/health"
 echo -e "  Metrics:   https://${SIGNALING_URL}/metrics (requires API key)"
 echo ""
 
-echo -e "${BLUE}Admin API Key (save this!):${NC}"
-echo -e "  ${ADMIN_API_KEY}"
+echo -e "${BLUE}Admin API key:${NC}"
+echo "  Configured from the process environment; value not printed."
 echo ""
 
 echo -e "${BLUE}Tauri Signing Keys:${NC}"
