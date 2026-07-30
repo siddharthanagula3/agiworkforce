@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: ed90f5dc066a2fd9f718c1c1a95e3fa3d910558dd1f14b1e054a61794398ae59 -->
+<!-- ui-gaps-csv-sha256: 09ca1bffcacda40a5ebbf27f152c4576da02a755b9d803e435ebe8cb67bdd44c -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 102 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 101 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  306 |
+| Open        |  305 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   34 |
+| Done        |   35 |
 | Not Planned |    1 |
 
 ## P0
@@ -786,24 +786,24 @@ Add a cloud 'Export data' action that requests a server-side archive and deliver
 
 - `chatgpt_reference/056-chatgpt-ios-settings-data-controls-export-delete-account.png`
 
-### GAP-034 — No App language selector on mobile — the app has no localisation layer at all
+### GAP-034 — Mobile General exposes a persisted searchable App language selector
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > General
 
 **Gap**
 
-The reference's first General row is 'App language: English' with a drill-in list. agiworkforce mobile ships no language row and no i18n runtime: every string is a hardcoded English literal, unlike desktop which has src/i18n and a Language setting.
+Mobile now boots the shared i18next runtime before the navigator appears and exposes the active app language as the first row in General. The drill-in offers Match device plus all 12 shared locales, searchable by English name, native name, or code. Selection changes translated Mobile keys immediately and persists as a device-local encrypted preference; unsupported or unreadable stored values fail back to the device language. Voice recognition language remains explicitly separate. The shared corpus retains its existing honest English fallback wherever a Mobile-specific string has not yet adopted a translation key.
 
 **Evidence**
 
-apps/mobile/src/features/settings/general/index.tsx (no language row); grep 'app language|appLanguage|i18n' across apps/mobile/src|app — only expo-localization used for voice locale; compare apps/desktop/src/i18n and features/settings/GeneralSettings.tsx ('Language')
+apps/mobile/src/i18n/index.ts owns device-language detection, preference validation, encrypted-MMKV read/write, the shared @agiworkforce/i18n corpus, and safe restoration. app/\_layout.tsx awaits restoration after MMKV initialization so the first navigable frame uses the chosen language. settings/general/index.tsx renders the translated General, Language, and Storage labels plus active native language; settings/app-language/index.tsx renders the searchable Match device and 12-locale radio list. The authenticated drawer registers the hidden route and navigation types include it. app-language-settings.test.tsx verifies General navigation, default selection, explicit choice, and native-name search; mobile-i18n.test.ts verifies corpus translation, persistence, device fallback, and invalid-value handling.
 
 **Suggested fix**
 
-Introduce an i18n provider on mobile (reuse the desktop locale catalogue), add an 'App language' SettingsRow in General with a searchable locale list plus a 'Match device' default, and persist it in the local/cloud settings stores.
+Completed for the shared language runtime and selector. Continue migrating Mobile-specific literals to shared translation keys as their screens change, preserve English fallback for missing keys, keep voice language separate, and add a locale only through the shared corpus so Web, Desktop, and Mobile do not drift.
 
 **Reference screenshot(s)**
 
