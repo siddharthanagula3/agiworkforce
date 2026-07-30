@@ -7,6 +7,7 @@
  *   2. At least one of the package.json commands is registered and resolvable.
  *   3. The `@agi` chat participant is registered (catches registration order bugs).
  *   4. The branded settings editor opens inside a real extension host.
+ *   5. Two editor-chat commands create two independent webview tabs.
  *
  * Requires: pnpm add -D mocha @types/mocha glob @types/glob
  */
@@ -71,5 +72,46 @@ suite('AGI Workforce extension — smoke', () => {
       'command "agi-workforce.openSettings" is not registered at runtime',
     );
     await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
+  });
+
+  test('editor chat supports parallel conversation tabs', async () => {
+    await vscode.commands.executeCommand('agi-workforce.openChatInEditor');
+    await vscode.commands.executeCommand('agi-workforce.openChatInEditor');
+
+    let chatTabs: readonly vscode.Tab[] = [];
+    const deadline = Date.now() + 2_000;
+    do {
+      chatTabs = vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .filter(
+          (tab) =>
+            typeof tab.input === 'object' &&
+            tab.input !== null &&
+            'viewType' in tab.input &&
+            String(tab.input.viewType).endsWith('agi-workforce.chatPanel'),
+        );
+      if (chatTabs.length === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < deadline);
+
+    const visibleTabs = vscode.window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .map((tab) => ({
+        label: tab.label,
+        viewType:
+          typeof tab.input === 'object' && tab.input !== null && 'viewType' in tab.input
+            ? String(tab.input.viewType)
+            : undefined,
+      }));
+    assert.strictEqual(
+      chatTabs.length,
+      2,
+      `expected two independent AGI Chat editor tabs; visible tabs: ${JSON.stringify(visibleTabs)}`,
+    );
+    assert.deepStrictEqual(
+      chatTabs.map((tab) => tab.label),
+      ['AGI Chat', 'AGI Chat 2'],
+      'parallel chat tabs should have distinguishable labels',
+    );
   });
 });
