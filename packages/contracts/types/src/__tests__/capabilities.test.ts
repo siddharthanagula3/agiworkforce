@@ -8,6 +8,9 @@ import {
   getCapabilityMetadata,
   getCapabilitiesByDomain,
   capabilityRequiresConfirmation,
+  ALL_DISCOVERABLE_SURFACE_CAPABILITIES,
+  DISCOVERABLE_SURFACE_CAPABILITIES,
+  getSurfaceCapabilityAvailability,
   type PlatformCapability,
 } from '../capabilities';
 
@@ -146,5 +149,45 @@ describe('capability metadata (domains + permissions, additive layer)', () => {
   it('capabilityRequiresConfirmation reflects the descriptor', () => {
     expect(capabilityRequiresConfirmation('canUseTerminal')).toBe(true);
     expect(capabilityRequiresConfirmation('canChat')).toBe(false);
+  });
+});
+
+describe('cross-surface capability discovery', () => {
+  const surfaces = ['web', 'desktop', 'mobile', 'cli', 'vscode', 'chrome'] as const;
+
+  it('defines an explicit boolean for every capability and canonical surface', () => {
+    for (const capability of ALL_DISCOVERABLE_SURFACE_CAPABILITIES) {
+      for (const surface of surfaces) {
+        expect(typeof DISCOVERABLE_SURFACE_CAPABILITIES[capability].availability[surface]).toBe(
+          'boolean',
+        );
+      }
+    }
+  });
+
+  it('keeps surface-bound capabilities discoverable without claiming VS Code support', () => {
+    for (const capability of ALL_DISCOVERABLE_SURFACE_CAPABILITIES) {
+      const presentation = getSurfaceCapabilityAvailability(capability, 'vscode');
+      expect(presentation.available).toBe(false);
+      expect(presentation.statusLabel).toBe('Unavailable in this context');
+      expect(presentation.availableSurfaceLabels.length).toBeGreaterThan(0);
+      expect(presentation.tooltip).toMatch(/^Available in .+\.$/u);
+    }
+  });
+
+  it('names the shipped surfaces for browser control and computer use', () => {
+    for (const capability of ['browser-control', 'computer-use'] as const) {
+      const presentation = getSurfaceCapabilityAvailability(capability, 'vscode');
+      expect(presentation.availableSurfaceLabels).toEqual(['Desktop app', 'Chrome extension']);
+      expect(presentation.tooltip).toBe('Available in Desktop app and Chrome extension.');
+      expect(getSurfaceCapabilityAvailability(capability, 'desktop').available).toBe(true);
+      expect(getSurfaceCapabilityAvailability(capability, 'chrome').available).toBe(true);
+    }
+  });
+
+  it('derives managed plugin availability from the synced-app runtime matrix', () => {
+    expect(getSurfaceCapabilityAvailability('managed-plugins', 'web').available).toBe(true);
+    expect(getSurfaceCapabilityAvailability('managed-plugins', 'desktop').available).toBe(true);
+    expect(getSurfaceCapabilityAvailability('managed-plugins', 'mobile').available).toBe(false);
   });
 });

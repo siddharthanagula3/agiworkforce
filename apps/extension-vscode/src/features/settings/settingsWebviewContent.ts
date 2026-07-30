@@ -1,4 +1,8 @@
 import type * as vscode from 'vscode';
+import {
+  getSurfaceCapabilityAvailability,
+  type DiscoverableSurfaceCapability,
+} from '@agiworkforce/types';
 import type { SettingsPanelState, SettingsSection } from './settingsProtocol';
 
 function serializeForInlineScript(value: unknown): string {
@@ -8,6 +12,21 @@ function serializeForInlineScript(value: unknown): string {
     .replace(/\u2029/gu, '\\u2029');
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+    .replace(/"/gu, '&quot;')
+    .replace(/'/gu, '&#39;');
+}
+
+const VSCODE_DISCOVERABLE_CAPABILITIES: readonly DiscoverableSurfaceCapability[] = [
+  'managed-plugins',
+  'browser-control',
+  'computer-use',
+];
+
 export function getSettingsWebviewContent(
   webview: vscode.Webview,
   nonce: string,
@@ -16,6 +35,26 @@ export function getSettingsWebviewContent(
 ): string {
   const serializedState = serializeForInlineScript(initialState);
   const serializedSection = serializeForInlineScript(initialSection);
+  const capabilityAvailabilityRows = VSCODE_DISCOVERABLE_CAPABILITIES.map((capability) => {
+    const presentation = getSurfaceCapabilityAvailability(capability, 'vscode');
+    return `
+              <div
+                class="capability-availability-row${presentation.available ? '' : ' is-unavailable'}"
+                data-capability-id="${escapeHtml(presentation.id)}"
+                data-capability-available="${String(presentation.available)}"
+                role="listitem"
+                title="${escapeHtml(presentation.tooltip)}"
+              >
+                <div class="capability-availability-copy">
+                  <div class="capability-availability-heading">
+                    <span class="capability-availability-name">${escapeHtml(presentation.label)}</span>
+                    <span class="capability-availability-status">${escapeHtml(presentation.statusLabel)}</span>
+                  </div>
+                  <span class="setting-description">${escapeHtml(presentation.description)}</span>
+                </div>
+                <span class="surface-availability">${escapeHtml(presentation.tooltip)}</span>
+              </div>`;
+  }).join('');
 
   return /* html */ `<!doctype html>
 <html lang="en">
@@ -580,6 +619,54 @@ export function getSettingsWebviewContent(
         border-top: 1px solid var(--vscode-panel-border);
       }
 
+      .capability-availability-list {
+        display: grid;
+      }
+
+      .capability-availability-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(170px, auto);
+        align-items: center;
+        gap: 18px;
+        min-height: 72px;
+        padding: 14px 18px;
+      }
+
+      .capability-availability-row + .capability-availability-row {
+        border-top: 1px solid var(--vscode-panel-border);
+      }
+
+      .capability-availability-row.is-unavailable .capability-availability-name {
+        color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+      }
+
+      .capability-availability-copy {
+        min-width: 0;
+      }
+
+      .capability-availability-heading {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 7px;
+        margin-bottom: 4px;
+      }
+
+      .capability-availability-name {
+        font-weight: 600;
+      }
+
+      .capability-availability-status {
+        color: var(--vscode-descriptionForeground);
+        font-size: 11px;
+      }
+
+      .surface-availability {
+        color: var(--vscode-descriptionForeground);
+        font-size: 11px;
+        text-align: right;
+      }
+
       .action-row {
         display: flex;
         flex-wrap: wrap;
@@ -624,6 +711,15 @@ export function getSettingsWebviewContent(
 
         .content {
           padding: 26px 18px 48px;
+        }
+
+        .capability-availability-row {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 6px;
+        }
+
+        .surface-availability {
+          text-align: left;
         }
 
         .page-header {
@@ -1357,7 +1453,16 @@ export function getSettingsWebviewContent(
         <section class="section" id="section-plugins" data-settings-section="plugins" hidden>
           <div class="section-heading">
             <h2 tabindex="-1">Plugins</h2>
-            <p>Extension capabilities stay explicit about where installation and data access occur.</p>
+            <p>Discover capabilities across AGI surfaces without pretending they run inside this IDE.</p>
+          </div>
+          <div class="card">
+            <div
+              class="capability-availability-list"
+              role="list"
+              aria-label="Capability availability in VS Code"
+            >
+${capabilityAvailabilityRows}
+            </div>
           </div>
           <div class="card">
             <div class="empty-capability">
