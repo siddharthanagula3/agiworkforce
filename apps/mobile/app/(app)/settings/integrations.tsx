@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   View,
   Pressable,
@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import BottomSheet from '@gorhom/bottom-sheet';
 import {
   ArrowLeft,
   Calendar,
@@ -34,11 +33,7 @@ import {
   getContactsPermissionStatus,
   type PermissionStatus,
 } from '@/src/features/integrations/services/deviceIntegrations';
-import { PlatformCard } from '@/src/features/integrations/components/PlatformCard';
 import { DeviceIntegrationStatus } from '@/src/features/integrations/components/DeviceIntegrationStatus';
-import { useIntegrationStore } from '@/src/features/integrations/store';
-import { PlatformSetupSheet } from '@/src/features/messaging/components/PlatformSetupSheet';
-import type { MessagingPlatform } from '@/src/features/messaging/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
@@ -83,15 +78,7 @@ function StatusIcon({ status, colors }: { status: PermissionStatus; colors: Colo
 // Section header
 // ---------------------------------------------------------------------------
 
-function SectionHeader({
-  title,
-  count,
-  colors,
-}: {
-  title: string;
-  count?: number;
-  colors: ColorScheme;
-}) {
+function SectionHeader({ title, colors }: { title: string; colors: ColorScheme }) {
   return (
     <View className="flex-row items-center justify-between mb-3">
       <Text
@@ -100,9 +87,6 @@ function SectionHeader({
       >
         {title}
       </Text>
-      {count !== undefined && (
-        <Badge label={`${count} connected`} color={count > 0 ? 'teal' : 'gray'} />
-      )}
     </View>
   );
 }
@@ -119,31 +103,6 @@ export default function IntegrationsScreen() {
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>('undetermined');
   const [contactsStatus, setContactsStatus] = useState<PermissionStatus>('undetermined');
   const [isChecking, setIsChecking] = useState(true);
-
-  // -- Messaging platform store ---------------------------------------------
-  const { platforms, platformsLoading, connectPlatform, disconnectPlatform } =
-    useIntegrationStore();
-
-  // Bottom sheet for platform setup (reuses existing PlatformSetupSheet)
-  const setupSheetRef = useRef<BottomSheet>(null);
-  const [selectedPlatformId, setSelectedPlatformId] = useState<string | null>(null);
-
-  // The PlatformSetupSheet expects a MessagingPlatform shape (whatsapp/telegram/slack only).
-  // For the extended platforms we show a generic OAuth/Coming-soon alert.
-  const legacyPlatformIds = new Set(['whatsapp', 'telegram', 'slack']);
-
-  const selectedLegacyPlatform: MessagingPlatform | null = selectedPlatformId
-    ? legacyPlatformIds.has(selectedPlatformId)
-      ? {
-          id: selectedPlatformId as MessagingPlatform['id'],
-          name: platforms.find((p) => p.id === selectedPlatformId)?.name ?? selectedPlatformId,
-          connected: false,
-          connectedAt: null,
-          config: {},
-          stats: { messagesSent: 0, messagesReceived: 0, lastActive: null },
-        }
-      : null
-    : null;
 
   const refreshPermissionStatus = useCallback(async () => {
     setIsChecking(true);
@@ -243,45 +202,6 @@ export default function IntegrationsScreen() {
     [contactsStatus, openSystemSettings],
   );
 
-  // -- Messaging handlers ---------------------------------------------------
-
-  const handleConnect = useCallback((platformId: string) => {
-    if (legacyPlatformIds.has(platformId)) {
-      setSelectedPlatformId(platformId);
-      setupSheetRef.current?.expand();
-    } else {
-      // Previously promised "available in the next update. OAuth flow will open
-      // in your browser." There is no such OAuth flow on mobile and no release
-      // it is scheduled for — describing a browser hand-off that never happens
-      // is worse than saying nothing. Connectors are managed on web.
-      Alert.alert(
-        'Manage this on web',
-        `${platformId.charAt(0).toUpperCase() + platformId.slice(1)} cannot be connected from the mobile app. Sign in on the web app to connect it; it will then be available here.`,
-        [{ text: 'OK' }],
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleDisconnect = useCallback(
-    (platformId: string) => {
-      const platform = platforms.find((p) => p.id === platformId);
-      Alert.alert(
-        'Disconnect Platform',
-        `Are you sure you want to disconnect ${platform?.name ?? platformId}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disconnect',
-            style: 'destructive',
-            onPress: () => disconnectPlatform(platformId),
-          },
-        ],
-      );
-    },
-    [platforms, disconnectPlatform],
-  );
-
   if (!FEATURES.connectors) return <FeatureUnavailable feature="Connectors" />;
 
   return (
@@ -308,53 +228,12 @@ export default function IntegrationsScreen() {
       >
         {/* Description */}
         <Text className="text-sm leading-5 mt-2" style={{ color: colors.textMuted }}>
-          {FEATURES.messaging
-            ? 'Connect messaging platforms and device features to give AI assistants the context they need.'
-            : 'Manage device features that can provide context to AI assistants.'}{' '}
-          Data stays on your device and is only shared when you start a chat.
+          Manage device features that can provide context to AI assistants. Data stays on your
+          device and is only shared when you start a chat.
         </Text>
 
         {/* ------------------------------------------------------------------ */}
-        {/* SECTION 1: Messaging Platforms                                       */}
-        {/* ------------------------------------------------------------------ */}
-        {FEATURES.messaging && (
-          <View>
-            <SectionHeader
-              title="Messaging"
-              count={platforms.filter((platform) => platform.connected).length}
-              colors={colors}
-            />
-
-            {platformsLoading && (
-              <View className="flex-row items-center justify-center py-4">
-                <ActivityIndicator size="small" color={colors.teal} />
-                <Text className="text-sm ml-3" style={{ color: colors.textMuted }}>
-                  Loading platforms...
-                </Text>
-              </View>
-            )}
-
-            {!platformsLoading &&
-              platforms.map((p) => (
-                <PlatformCard
-                  key={p.id}
-                  platform={{
-                    name: p.name,
-                    icon: p.id,
-                    connected: p.connected,
-                    accountName: p.accountName,
-                    lastSynced: p.lastSynced,
-                    messageCount: p.messageCount,
-                  }}
-                  onConnect={() => handleConnect(p.id)}
-                  onDisconnect={() => handleDisconnect(p.id)}
-                />
-              ))}
-          </View>
-        )}
-
-        {/* ------------------------------------------------------------------ */}
-        {/* SECTION 2: Device Integrations (new component)                       */}
+        {/* SECTION 1: Device Integrations                                       */}
         {/* ------------------------------------------------------------------ */}
         <View>
           <SectionHeader title="Device" colors={colors} />
@@ -362,7 +241,7 @@ export default function IntegrationsScreen() {
         </View>
 
         {/* ------------------------------------------------------------------ */}
-        {/* SECTION 3: Legacy permission toggles (Calendar / Contacts)           */}
+        {/* SECTION 2: Permission toggles (Calendar / Contacts)                  */}
         {/* ------------------------------------------------------------------ */}
         <View>
           <SectionHeader title="Permissions" colors={colors} />
@@ -474,20 +353,6 @@ export default function IntegrationsScreen() {
           </Text>
         </Pressable>
       </ScrollView>
-
-      {/* Bottom sheet for legacy platform setup (Slack / Telegram / WhatsApp) */}
-      {FEATURES.messaging && selectedLegacyPlatform && (
-        <PlatformSetupSheet
-          sheetRef={setupSheetRef}
-          platform={selectedLegacyPlatform}
-          onConnect={async (config) => {
-            if (selectedPlatformId) {
-              await connectPlatform(selectedPlatformId, config);
-            }
-            setSelectedPlatformId(null);
-          }}
-        />
-      )}
     </SafeAreaView>
   );
 }

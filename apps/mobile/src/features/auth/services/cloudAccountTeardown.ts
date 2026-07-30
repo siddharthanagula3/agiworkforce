@@ -149,19 +149,9 @@ function clearLocalCloudAccountStateNow(): void {
     useTierStore.getState().clearAccountEntitlements();
   });
 
-  runTeardownStep('connector cache', () => {
-    const { useIntegrationStore } = require('@/src/features/integrations/store');
-    useIntegrationStore.getState().clearPlatformConnections();
-  });
-
   runTeardownStep('schedule cache', () => {
     const { useScheduleStore } = require('@/src/features/schedules/store');
     useScheduleStore.getState().clearAccountSchedules();
-  });
-
-  runTeardownStep('legacy messaging cache', () => {
-    const { useMessagingStore } = require('@/src/features/messaging/store');
-    useMessagingStore.getState().clearAccountMessaging();
   });
 
   runTeardownStep('API authentication work', () => {

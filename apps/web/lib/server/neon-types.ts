@@ -285,16 +285,6 @@ export type UsageEventRow = {
   created_at: string;
 };
 
-export type MessagingConnectionRow = {
-  id: string;
-  user_id: string;
-  platform: string;
-  config: Record<string, unknown> | null;
-  is_active: boolean;
-  connected_at: string;
-  updated_at: string;
-};
-
 export type GitHubInstallationRow = {
   id: string;
   user_id: string;
