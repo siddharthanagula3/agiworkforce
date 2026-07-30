@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: e7542e42ede70f280c1f61486e0e06180c6e879ae24d99c0db8633676a9d6401 -->
+<!-- ui-gaps-csv-sha256: 50d6bf6ac0a5447e2c329b02c0065cc61c2b938ef2fb3dae9fb9b179f6a022b5 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 97 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 96 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  301 |
+| Open        |  300 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   38 |
-| Not Planned |    2 |
+| Not Planned |    3 |
 
 ## P0
 
@@ -579,24 +579,24 @@ Build /(app)/plugins backed by the same catalog API the web /plugins page uses: 
 
 - `chatgpt_reference/050-chatgpt-ios-plugins-marketplace-list-installed-featured-productivity.png`
 
-### GAP-025 — Code-session transcript has no structured git diffstat / files-changed summary card
+### GAP-025 — Mobile code-session diffstat card is declined because the cited session surface was removed
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** Claude/Codex · iOS · Remote session structured diffstat card (files changed count, +/- lines, expandable file list) inside chat transcript
 
 **Gap**
 
-Claude Code Remote renders a collapsible '30 files changed +53 -52' card with a short list of changed file paths, per-file +/- counts, and a 'View 27 more files' expander directly inline in the agent's response. agiworkforce's code-session transcript (TranscriptBlock in code-sessions/index.tsx) only renders plain text lines and a special-cased 'Bash <cmd>' block — there is no diffstat/file-list rendering at all, and the Agent Detail screen's Run Artifacts list shows file names but not diff line counts or an expandable full-file list.
+The audit premise is stale: the cited apps/mobile/src/features/code-sessions transcript no longer exists and there is no mounted Mobile code-session route. Mobile code execution runs as a bounded capability inside ordinary chat and returns generated files/artifacts, not a repository worktree or authoritative git patch. Paired Desktop Dispatch exposes task status, generic run artifacts, and tool calls through a signed contract that carries no per-file additions/deletions. Rendering a diffstat from either path would fabricate data and imply a review boundary Mobile does not own.
 
 **Evidence**
 
-apps/mobile/src/features/code-sessions/index.tsx:485-513 (TranscriptBlock only handles plain text and 'Bash ' prefixed lines); apps/mobile/app/(app)/companion/agent/[id].tsx:312-345 (Run Artifacts shows label/detail/timestamp only, no diff stats); grep for 'diffLines/DiffView/hunk' in apps/mobile/src returned no relevant UI components
+apps/mobile/src/features/cloud-bridge/README.md records removal of the unshipped Code Sessions shell. The only remaining code-sessions filename is an artifact-gallery test; no production route or feature module exists. FEATURES.codeExecution documents the bounded chat capability, while chatExecutionStore streams generated files rather than git state. The mounted companion Agent Detail renders agentStore RunArtifact label/detail/timestamp values; packages/contracts/types/src/cross-device.ts DispatchTaskStatusEvent carries status/message/result/error but no changed-file or diff fields. Desktop retains the native git diff APIs and review UI where the repository and approval authority live.
 
 **Suggested fix**
 
-Add a DiffSummaryCard component to the code-session transcript renderer: header row with total files/+/- counts, top 3 file rows with per-file +/-, and a 'View N more files' expandable disclosure that pushes to a full file list/diff viewer route.
+Not planned on the current Mobile execution contracts. Keep generated files as honest chat artifacts and Desktop repository review on Desktop. Reconsider an inline diff summary only after a mounted Mobile review route receives authenticated task-bound file paths, additions/deletions, full diff retrieval, truncation metadata, and Desktop-authoritative approval semantics.
 
 **Reference screenshot(s)**
 
