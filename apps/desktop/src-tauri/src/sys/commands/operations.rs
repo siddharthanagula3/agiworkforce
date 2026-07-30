@@ -105,7 +105,6 @@ pub async fn reject_operation(
     Ok(())
 }
 
-#[tauri::command]
 pub async fn cancel_background_task(app_handle: AppHandle, task_id: String) -> Result<(), String> {
     tracing::info!("[Commands] Cancelling background task: {}", task_id);
 
@@ -122,7 +121,6 @@ pub async fn cancel_background_task(app_handle: AppHandle, task_id: String) -> R
     Ok(())
 }
 
-#[tauri::command]
 pub async fn pause_background_task(app_handle: AppHandle, task_id: String) -> Result<(), String> {
     tracing::info!("[Commands] Pausing background task: {}", task_id);
 
@@ -139,7 +137,6 @@ pub async fn pause_background_task(app_handle: AppHandle, task_id: String) -> Re
     Ok(())
 }
 
-#[tauri::command]
 pub async fn resume_background_task(app_handle: AppHandle, task_id: String) -> Result<(), String> {
     tracing::info!("[Commands] Resuming background task: {}", task_id);
 
@@ -156,7 +153,6 @@ pub async fn resume_background_task(app_handle: AppHandle, task_id: String) -> R
     Ok(())
 }
 
-#[tauri::command]
 pub async fn list_background_tasks(
     app_handle: AppHandle,
 ) -> Result<Vec<serde_json::Value>, String> {
@@ -178,7 +174,6 @@ pub async fn list_background_tasks(
     Ok(tasks_json)
 }
 
-#[tauri::command]
 pub async fn list_active_agents(app_handle: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     if let Some(orchestrator) = app_handle
         .try_state::<std::sync::Arc<tokio::sync::Mutex<crate::core::agi::orchestrator::AgentOrchestrator>>>()

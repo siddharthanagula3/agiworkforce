@@ -366,7 +366,6 @@ fn pending_deletion_path(app_handle: &tauri::AppHandle) -> Result<std::path::Pat
 /// cloud rows / Stripe subscriptions runs in a later sprint once the
 /// cross-surface data marshaling lands. The marker is reversible via
 /// `privacy_cancel_pending_deletion`.
-#[tauri::command]
 pub async fn privacy_request_account_deletion(
     user_id: Option<String>,
     app_handle: tauri::AppHandle,
@@ -402,7 +401,6 @@ pub async fn privacy_request_account_deletion(
 
 /// Read the current pending-deletion status. Returns `pending: false` when no
 /// marker file exists (the common case).
-#[tauri::command]
 pub async fn privacy_get_pending_deletion(
     app_handle: tauri::AppHandle,
 ) -> Result<PendingDeletionStatus, String> {
@@ -437,7 +435,6 @@ pub async fn privacy_get_pending_deletion(
 
 /// Cancel a pending account-deletion request by removing the marker file.
 /// Safe to call even when no marker exists.
-#[tauri::command]
 pub async fn privacy_cancel_pending_deletion(app_handle: tauri::AppHandle) -> Result<(), String> {
     let path = pending_deletion_path(&app_handle)?;
     if path.exists() {

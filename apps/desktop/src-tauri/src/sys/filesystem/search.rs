@@ -33,7 +33,6 @@ fn search_root() -> Result<PathBuf, String> {
     Err("No usable workspace root: cwd is filesystem root and HOME is unset".to_string())
 }
 
-#[tauri::command]
 pub async fn fs_search_files(query: String, limit: usize) -> Result<Vec<String>, String> {
     let root = search_root()?;
     let limit = limit.min(MAX_RESULT_LIMIT);
@@ -43,7 +42,6 @@ pub async fn fs_search_files(query: String, limit: usize) -> Result<Vec<String>,
         .map_err(|e| format!("Search task failed: {}", e))?
 }
 
-#[tauri::command]
 pub async fn fs_search_folders(query: String, limit: usize) -> Result<Vec<String>, String> {
     let root = search_root()?;
     let limit = limit.min(MAX_RESULT_LIMIT);

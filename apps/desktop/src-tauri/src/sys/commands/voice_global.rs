@@ -172,7 +172,6 @@ pub async fn dictation_session_end(
 }
 
 /// Current coordinator snapshot for UIs and diagnostics.
-#[tauri::command]
 pub async fn dictation_session_snapshot() -> Result<DictationSnapshot, String> {
     Ok(DICTATION_COORDINATOR.snapshot())
 }

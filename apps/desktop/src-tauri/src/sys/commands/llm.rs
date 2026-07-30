@@ -1333,7 +1333,6 @@ async fn list_openrouter_models_internal() -> Result<Vec<ModelInfo>, String> {
 /// `llm_get_available_models` — even though the endpoint itself is public,
 /// so the app doesn't make background egress calls to a third party for
 /// users who never opted into OpenRouter.
-#[tauri::command]
 pub async fn llm_list_openrouter_models() -> Result<Vec<ModelInfo>, String> {
     list_openrouter_models_internal().await
 }

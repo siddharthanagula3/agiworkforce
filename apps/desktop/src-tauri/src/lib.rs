@@ -1456,7 +1456,6 @@ pub fn run() {
 
             crate::sys::commands::browser_init,
             crate::sys::commands::browser_check_status,
-            crate::sys::commands::open_url,
             crate::sys::commands::browser_launch,
             crate::sys::commands::browser_open_tab,
             crate::sys::commands::browser_close,
@@ -1501,7 +1500,6 @@ pub fn run() {
             crate::sys::commands::browser_highlight_element,
             crate::sys::commands::browser_get_content,
             crate::sys::commands::browser_get_dom_snapshot,
-            crate::features::search::web_search::web_search,
 
             crate::sys::commands::find_element_semantic,
             crate::sys::commands::find_all_elements_semantic,
@@ -1573,7 +1571,6 @@ pub fn run() {
             crate::sys::commands::llm_list_lmstudio_models,
             crate::sys::commands::llm_list_llamacpp_models,
             crate::sys::commands::llm_list_vllm_models,
-            crate::sys::commands::llm_list_openrouter_models,
             crate::sys::commands::router_suggestions,
             crate::sys::commands::get_model_capabilities,
 
@@ -1623,11 +1620,7 @@ pub fn run() {
             // Session Sharing
             crate::sys::commands::chat::share::conversation_share,
 
-            crate::sys::account::device_link_initiate,
-            crate::sys::account::device_link_poll,
             crate::sys::account::fetch_user_profile,
-            crate::sys::account::oauth_refresh,
-            crate::sys::account::fetch_credit_balance,
             crate::sys::account::account_store_api_base_url,
             crate::sys::account::account_store_access_token,
             crate::sys::account::account_store_refresh_token,
@@ -1706,11 +1699,6 @@ pub fn run() {
             crate::sys::commands::screen_watcher_capture_now,
 
             // Native Messaging (browser extension communication)
-            crate::sys::commands::native_messaging_check_status,
-            crate::sys::commands::native_messaging_install,
-            crate::sys::commands::native_messaging_uninstall,
-            crate::sys::commands::native_messaging_set_extension_id,
-            crate::sys::commands::native_messaging_get_connection_state,
 
             crate::sys::commands::file_read,
             crate::sys::commands::file_write,
@@ -1728,8 +1716,6 @@ pub fn run() {
             crate::sys::commands::dir_list,
             crate::sys::commands::dir_delete,
             crate::sys::commands::dir_traverse,
-            crate::sys::filesystem::fs_search_files,
-            crate::sys::filesystem::fs_search_folders,
             crate::sys::commands::file_watch_start,
             crate::sys::commands::file_watch_stop,
             crate::sys::commands::file_watch_list,
@@ -1749,8 +1735,6 @@ pub fn run() {
             crate::sys::commands::format_detect,
 
             // Test runner integration
-            crate::sys::commands::test_run,
-            crate::sys::commands::test_detect_runner,
 
             // Workspace indexing & code analysis
             crate::sys::commands::workspace_index,
@@ -1834,21 +1818,17 @@ pub fn run() {
             crate::sys::commands::document_search,
             crate::sys::commands::document_detect_type,
             crate::sys::commands::document_create_word,
-            crate::sys::commands::document_create_word_manifest,
             crate::sys::commands::document_create_word_simple,
             crate::sys::commands::document_create_word_simple_manifest,
             crate::sys::commands::document_create_excel,
-            crate::sys::commands::document_create_excel_manifest,
             crate::sys::commands::document_create_excel_simple,
             crate::sys::commands::document_create_excel_simple_manifest,
             crate::sys::commands::document_create_excel_numbers,
             crate::sys::commands::document_create_excel_numbers_manifest,
             crate::sys::commands::document_create_pdf,
-            crate::sys::commands::document_create_pdf_manifest,
             crate::sys::commands::document_create_pdf_simple,
             crate::sys::commands::document_create_pdf_simple_manifest,
             crate::sys::commands::document_create_powerpoint,
-            crate::sys::commands::document_create_powerpoint_manifest,
             crate::sys::commands::document_create_powerpoint_simple,
             crate::sys::commands::document_create_powerpoint_simple_manifest,
             // Memory commands (persistent cross-session memory)
@@ -2031,7 +2011,6 @@ pub fn run() {
             crate::sys::commands::voice_global::dictation_session_begin,
             crate::sys::commands::voice_global::dictation_session_advance,
             crate::sys::commands::voice_global::dictation_session_end,
-            crate::sys::commands::voice_global::dictation_session_snapshot,
             crate::sys::commands::voice_global::voice_start_global_ptt,
             crate::sys::commands::voice_global::voice_stop_global_ptt,
             crate::sys::commands::voice_global::voice_inject_text,
@@ -2261,11 +2240,7 @@ pub fn run() {
             crate::sys::commands::master_password::master_password_needs_migration,
             crate::sys::commands::master_password::master_password_start_migration,
             crate::sys::commands::master_password::master_password_complete_migration,
-            crate::sys::commands::master_password::master_password_migrate_credentials,
             crate::sys::commands::daily_budget::budget_get_status,
-            crate::sys::commands::daily_budget::budget_set_cap_usd,
-            crate::sys::commands::daily_budget::budget_record_actual,
-            crate::sys::commands::google_batch::google_batch_is_beta_stub,
 
             // Background Agents (push to background with "&" prefix)
             crate::sys::commands::background_agents::background_agent_push,
@@ -2304,16 +2279,11 @@ pub fn run() {
             crate::sys::commands::realtime::set_user_offline,
             crate::sys::commands::realtime::update_user_activity,
             // RT-04: Bridge token management
-            crate::sys::commands::realtime::bridge_get_token,
-            crate::sys::commands::realtime::bridge_rotate_token,
 
             // Privacy
             crate::sys::commands::privacy::privacy_delete_account,
             crate::sys::commands::privacy::privacy_export_data,
             crate::sys::commands::privacy::settings_update_privacy,
-            crate::sys::commands::privacy::privacy_request_account_deletion,
-            crate::sys::commands::privacy::privacy_get_pending_deletion,
-            crate::sys::commands::privacy::privacy_cancel_pending_deletion,
 
             // Undo Manager (AGI action reversal)
             crate::sys::commands::undo_get_summary,
@@ -2467,7 +2437,6 @@ pub fn run() {
             crate::sys::commands::bg_submit_task,
             crate::sys::commands::browser_enable_request_interception,
             crate::sys::commands::calendar_disconnect,
-            crate::sys::commands::cancel_background_task,
             crate::sys::commands::chat::pending::chat_clear_pending_messages,
             crate::sys::commands::chat_create_message,
             crate::sys::commands::chat_archive_conversation,
@@ -2522,9 +2491,6 @@ pub fn run() {
             crate::sys::commands::contact_get,
             crate::sys::commands::contact_import_vcard,
             crate::sys::commands::contact_search,
-            crate::sys::commands::continuous_job_runner_start,
-            crate::sys::commands::continuous_job_runner_status,
-            crate::sys::commands::continuous_job_runner_stop,
             crate::sys::commands::coord_get_pending_approvals,
             crate::sys::commands::coord_request_approval,
             crate::sys::commands::coord_update_app_state,
@@ -2610,10 +2576,8 @@ pub fn run() {
             crate::sys::commands::intent_extract_entities,
             crate::sys::commands::intent_get_categories,
             crate::sys::commands::intent_get_complexity_levels,
-            crate::sys::commands::list_active_agents,
             crate::sys::commands::list_autonomous_task_checkpoints,
             crate::sys::commands::list_autonomous_task_checkpoints_by_task,
-            crate::sys::commands::list_background_tasks,
             crate::sys::commands::llm_list_ollama_models,
             crate::sys::commands::mark_setup_completed,
             crate::sys::commands::memory_archive_compacted_logs,
@@ -2650,7 +2614,6 @@ pub fn run() {
             crate::sys::commands::orchestrator_spawn_parallel,
             crate::sys::commands::orchestrator_wait_all,
             crate::sys::commands::pause_agent,
-            crate::sys::commands::pause_background_task,
             crate::sys::commands::populate_sample_data,
             crate::sys::commands::project_context_get_folder,
             crate::sys::commands::project_context_get_summary,
@@ -2671,7 +2634,6 @@ pub fn run() {
             crate::sys::commands::resolve_task_approval,
             crate::sys::commands::resume_agent,
             crate::sys::commands::resume_autonomous_task,
-            crate::sys::commands::resume_background_task,
             crate::sys::commands::route_to_best_api,
             crate::sys::commands::run_instant_demo,
             crate::sys::commands::project_memory::save_architectural_decision,
@@ -2725,9 +2687,6 @@ pub fn run() {
             crate::sys::commands::update_first_run_step,
             crate::sys::commands::project_memory::update_memory_importance,
             crate::sys::commands::update_session_activity,
-            crate::sys::commands::vision_answer_question,
-            crate::sys::commands::vision_describe_ui_elements,
-            crate::sys::commands::vision_locate_element,
             crate::sys::commands::voice_check_piper_binary,
             crate::sys::commands::voice_configure_barge_in,
             crate::sys::commands::voice_convert_audio_to_pcm,
@@ -2814,19 +2773,8 @@ pub fn run() {
             // ============================================================
 
             // Error recovery (sys/error/commands.rs)
-            crate::sys::error::commands::abort_execution,
-            crate::sys::error::commands::clear_error_contexts,
-            crate::sys::error::commands::get_all_error_contexts,
-            crate::sys::error::commands::get_error_context,
-            crate::sys::error::commands::get_recovery_suggestion,
-            crate::sys::error::commands::retry_failed_step,
-            crate::sys::error::commands::skip_failed_step,
 
             // Codebase indexing (core/codebase/mod.rs)
-            crate::core::codebase::get_file_symbols,
-            crate::core::codebase::get_index_stats,
-            crate::core::codebase::index_workspace_file,
-            crate::core::codebase::search_symbols,
 
             // Billing — payment methods + invoice email + setup intent
         ])

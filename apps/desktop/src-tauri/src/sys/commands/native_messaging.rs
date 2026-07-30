@@ -78,7 +78,6 @@ pub struct BrowserActionResponse {
 }
 
 /// Check if native messaging is installed
-#[tauri::command]
 pub async fn native_messaging_check_status(
     state: State<'_, NativeMessagingStateWrapper>,
 ) -> Result<NativeMessagingStatus, String> {
@@ -112,7 +111,6 @@ pub async fn native_messaging_check_status(
 }
 
 /// Install native messaging manifests
-#[tauri::command]
 pub async fn native_messaging_install(
     extension_id: Option<String>,
     state: State<'_, NativeMessagingStateWrapper>,
@@ -134,7 +132,6 @@ pub async fn native_messaging_install(
 }
 
 /// Uninstall native messaging manifests
-#[tauri::command]
 pub async fn native_messaging_uninstall() -> Result<(), String> {
     tracing::info!("Uninstalling native messaging manifests");
 
@@ -142,7 +139,6 @@ pub async fn native_messaging_uninstall() -> Result<(), String> {
 }
 
 /// Set extension ID for native messaging
-#[tauri::command]
 pub async fn native_messaging_set_extension_id(
     extension_id: String,
     state: State<'_, NativeMessagingStateWrapper>,
@@ -173,7 +169,6 @@ pub async fn native_messaging_set_extension_id(
 }
 
 /// Get connection state
-#[tauri::command]
 pub async fn native_messaging_get_connection_state(
     state: State<'_, NativeMessagingStateWrapper>,
 ) -> Result<String, String> {

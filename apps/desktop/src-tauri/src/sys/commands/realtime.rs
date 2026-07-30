@@ -100,7 +100,6 @@ pub async fn get_user_presence(
 /// Security: the token is only readable by authenticated Tauri IPC callers
 /// (same-origin, from the Tauri webview).  It is NOT broadcast over the
 /// WebSocket or emitted as a Tauri event.
-#[tauri::command]
 pub async fn bridge_get_token(state: State<'_, RealtimeState>) -> Result<String, String> {
     Ok(state.token.read().await.clone())
 }
@@ -122,7 +121,6 @@ pub async fn bridge_get_token(state: State<'_, RealtimeState>) -> Result<String,
 ///
 /// Existing authenticated WebSocket sessions are disconnected immediately
 /// so a compromised token cannot be used on active connections.
-#[tauri::command]
 pub async fn bridge_rotate_token(
     state: State<'_, RealtimeState>,
     server_handle: State<'_, RealtimeServerHandle>,

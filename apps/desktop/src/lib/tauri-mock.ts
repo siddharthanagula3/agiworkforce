@@ -1073,10 +1073,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         available: false,
       } as T;
 
-    // Test runner detection
-    case 'test_detect_runner':
-      return 'auto' as T;
-
     // LSP server listing
     case 'lsp_list_servers':
       return [] as T;
@@ -1089,8 +1085,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'vision_send_message':
     case 'vision_analyze_screenshot':
     case 'vision_extract_text':
-    case 'vision_describe_ui_elements':
-    case 'vision_answer_question':
       return {
         content: '(mock vision response)',
         model: 'mock-vision',
@@ -1108,16 +1102,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         visualDiffHighlighted: null,
         model: 'mock-vision',
         cost: 0,
-      } as T;
-
-    case 'vision_locate_element':
-      return {
-        description: '',
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        confidence: 0,
       } as T;
 
     // ── Swarm commands ──────────────────────────────────────────────
@@ -1446,7 +1430,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     case 'agent_list_tasks':
     case 'agent_list_trusted_workflows':
-    case 'list_active_agents':
       return [] as T;
 
     case 'agi_should_use_swarm':
@@ -1598,13 +1581,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'check_connectivity':
       return { connected: false } as T;
 
-    case 'continuous_job_runner_start':
-    case 'continuous_job_runner_stop':
-      return undefined as T;
-
-    case 'continuous_job_runner_status':
-      return { running: false } as T;
-
     case 'window_is_fullscreen':
     case 'window_is_maximized':
     case 'window_is_floating_visible':
@@ -1711,7 +1687,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return `bgtask_mock_${Date.now()}` as T;
 
     case 'bg_list_tasks':
-    case 'list_background_tasks':
       return [] as T;
 
     case 'bg_get_task_status':
@@ -1721,9 +1696,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'bg_cancel_task':
     case 'bg_pause_task':
     case 'bg_resume_task':
-    case 'cancel_background_task':
-    case 'pause_background_task':
-    case 'resume_background_task':
       return undefined as T;
 
     // ── Onboarding commands ─────────────────────────────────────────
