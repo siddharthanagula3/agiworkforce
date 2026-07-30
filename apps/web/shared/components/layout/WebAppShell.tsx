@@ -31,6 +31,8 @@ import {
   CalendarClock,
   ListChecks,
   Menu,
+  MessageSquare,
+  TerminalSquare,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -221,6 +223,20 @@ export function WebAppShell({ children }: WebAppShellProps) {
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () => [
+      {
+        id: 'chat-home',
+        label: 'Chat',
+        icon: MessageSquare,
+        onClick: () => router.push('/chat'),
+        isActive: pathname === '/chat',
+      },
+      {
+        id: 'code',
+        label: 'Code',
+        icon: TerminalSquare,
+        onClick: () => router.push('/chat/code'),
+        isActive: pathname.startsWith('/chat/code'),
+      },
       // Library — same persistent entry the chat page's sidebar carries, so
       // navigating between /projects and /library keeps the link visible.
       {

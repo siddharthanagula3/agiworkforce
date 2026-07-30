@@ -66,8 +66,19 @@ async function importSandbox(): Promise<typeof import('@e2b/code-interpreter').S
 function scopeFromMetadata(metadata: Record<string, string>): E2BSessionScope | null {
   const userId = metadata['userId'];
   const conversationId = metadata['conversationId'];
-  if (!userId || !conversationId) return null;
-  return { tenantId: MANAGED_CLOUD_E2B_TENANT_ID, userId, conversationId };
+  const codeSessionId = metadata['codeSessionId'];
+  if (!userId) return null;
+  if (conversationId) {
+    return { tenantId: MANAGED_CLOUD_E2B_TENANT_ID, userId, conversationId };
+  }
+  if (codeSessionId) {
+    return {
+      tenantId: MANAGED_CLOUD_E2B_TENANT_ID,
+      userId,
+      resource: { kind: 'code_session', id: codeSessionId },
+    };
+  }
+  return null;
 }
 
 /**
@@ -153,7 +164,10 @@ export async function reclaimAbandonedE2BSandboxes(
           report.meteredCents += await meterSandboxComputeInterval({
             userId: scope.userId,
             sandboxId: info.sandboxId,
-            conversationId: scope.conversationId,
+            ...(scope.conversationId ? { conversationId: scope.conversationId } : {}),
+            ...(scope.resource?.kind === 'code_session'
+              ? { codeSessionId: scope.resource.id }
+              : {}),
             startedAtMs: session.activeSinceMs,
             endedAtMs: nowMs,
             reason: 'reclaim',
@@ -173,6 +187,7 @@ export async function reclaimAbandonedE2BSandboxes(
             orphaned,
             userId: scope?.userId,
             conversationId: scope?.conversationId,
+            codeSessionId: scope?.resource?.kind === 'code_session' ? scope.resource.id : undefined,
           },
           '[e2b] reclaimed abandoned sandbox',
         );

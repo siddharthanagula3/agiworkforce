@@ -1,0 +1,199 @@
+'use client';
+
+import { z } from 'zod';
+import {
+  CLOUD_CODE_NETWORK_ACCESS,
+  CLOUD_CODE_SESSION_STATES,
+  type CloudCodeSession,
+  type CloudCodeSessionListResponse,
+  type CloudCodeTerminalEntry,
+  type CreateCloudCodeSessionInput,
+  type RunCloudCodeCommandResponse,
+} from '@agiworkforce/types';
+import { getCsrfToken as getBrowserCsrfToken } from '@/lib/client/csrf';
+
+export class CloudCodeApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'CloudCodeApiError';
+  }
+}
+
+const sessionSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  repositoryUrl: z.string().nullable(),
+  networkAccess: z.enum(CLOUD_CODE_NETWORK_ACCESS),
+  state: z.enum(CLOUD_CODE_SESSION_STATES),
+  workspacePath: z.string(),
+  lastError: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  closedAt: z.string().datetime().nullable(),
+});
+
+const terminalEntrySchema = z.object({
+  id: z.string(),
+  sessionId: z.string().uuid(),
+  command: z.string(),
+  stdout: z.string(),
+  stderr: z.string(),
+  exitCode: z.number().int(),
+  startedAt: z.string().datetime(),
+  completedAt: z.string().datetime(),
+});
+
+const listSchema = z.object({
+  availability: z.object({
+    deploymentEnabled: z.boolean(),
+    storageReady: z.boolean(),
+    planEntitled: z.boolean(),
+    planTier: z.string(),
+    maxSessions: z.number().int().nonnegative(),
+  }),
+  sessions: z.array(sessionSchema),
+});
+
+const sessionDetailSchema = z.object({
+  session: sessionSchema,
+  terminalEntries: z.array(terminalEntrySchema),
+});
+
+const sessionOnlySchema = z.object({ session: sessionSchema });
+const commandSchema = z.object({ session: sessionSchema, terminalEntry: terminalEntrySchema });
+
+interface CloudCodeApiDependencies {
+  fetchImpl?: typeof fetch;
+  getCsrfToken?: () => Promise<string>;
+}
+
+export interface CloudCodeApi {
+  list(signal?: AbortSignal): Promise<CloudCodeSessionListResponse>;
+  get(
+    sessionId: string,
+    signal?: AbortSignal,
+  ): Promise<{ session: CloudCodeSession; terminalEntries: CloudCodeTerminalEntry[] }>;
+  create(
+    input: CreateCloudCodeSessionInput,
+    signal?: AbortSignal,
+  ): Promise<{ session: CloudCodeSession; terminalEntries: CloudCodeTerminalEntry[] }>;
+  run(
+    sessionId: string,
+    command: string,
+    signal?: AbortSignal,
+  ): Promise<RunCloudCodeCommandResponse>;
+  close(sessionId: string, signal?: AbortSignal): Promise<CloudCodeSession>;
+}
+
+async function responseBody(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function apiError(body: unknown, status: number): CloudCodeApiError {
+  const parsed = z
+    .object({
+      error: z
+        .union([
+          z.string(),
+          z.object({ code: z.string().optional(), message: z.string().optional() }),
+        ])
+        .optional(),
+      message: z.string().optional(),
+    })
+    .safeParse(body);
+  if (!parsed.success) return new CloudCodeApiError(`Request failed (${status}).`, status);
+  const nested = typeof parsed.data.error === 'object' ? parsed.data.error : undefined;
+  const message =
+    nested?.message ??
+    (typeof parsed.data.error === 'string' ? parsed.data.error : undefined) ??
+    parsed.data.message ??
+    `Request failed (${status}).`;
+  return new CloudCodeApiError(message, status, nested?.code);
+}
+
+export function createCloudCodeApi(dependencies: CloudCodeApiDependencies = {}): CloudCodeApi {
+  const fetchImpl = dependencies.fetchImpl ?? fetch;
+  const getCsrfToken = dependencies.getCsrfToken ?? getBrowserCsrfToken;
+
+  async function request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetchImpl(path, { credentials: 'include', ...init });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      throw new CloudCodeApiError(
+        'Could not reach managed Code. Check your connection and retry.',
+        0,
+      );
+    }
+    const body = await responseBody(response);
+    if (!response.ok) throw apiError(body, response.status);
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      throw new CloudCodeApiError('Managed Code returned an invalid response.', 502);
+    }
+    return parsed.data;
+  }
+
+  async function mutationHeaders(): Promise<Record<string, string>> {
+    return {
+      'Content-Type': 'application/json',
+      'x-csrf-token': await getCsrfToken(),
+    };
+  }
+
+  return {
+    list(signal) {
+      return request('/api/code/sessions', { signal }, listSchema);
+    },
+    get(sessionId, signal) {
+      return request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}`,
+        { signal },
+        sessionDetailSchema,
+      );
+    },
+    async create(input, signal) {
+      return request(
+        '/api/code/sessions',
+        {
+          method: 'POST',
+          headers: await mutationHeaders(),
+          body: JSON.stringify(input),
+          signal,
+        },
+        sessionDetailSchema,
+      );
+    },
+    async run(sessionId, command, signal) {
+      return request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}/commands`,
+        {
+          method: 'POST',
+          headers: await mutationHeaders(),
+          body: JSON.stringify({ command }),
+          signal,
+        },
+        commandSchema,
+      );
+    },
+    async close(sessionId, signal) {
+      const body = await request(
+        `/api/code/sessions/${encodeURIComponent(sessionId)}`,
+        { method: 'DELETE', headers: await mutationHeaders(), signal },
+        sessionOnlySchema,
+      );
+      return body.session;
+    },
+  };
+}
+
+export const cloudCodeApi = createCloudCodeApi();

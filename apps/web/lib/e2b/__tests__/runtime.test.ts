@@ -41,7 +41,9 @@ vi.mock('@/lib/services/subscription-service', () => ({
 interface TestScope {
   tenantId: string;
   userId: string;
-  conversationId: string;
+  conversationId?: string;
+  resource?: { kind: 'code_session'; id: string };
+  networkAccess?: 'none' | 'trusted' | 'full';
   planTier?: string;
 }
 
@@ -51,7 +53,23 @@ function scope(conversationId: string, userId = 'user-1', planTier = 'pro'): Tes
 }
 
 function scopeKey(value: TestScope): string {
-  return `${value.tenantId}:${value.userId}:${value.conversationId}`;
+  const resource = value.resource
+    ? `${value.resource.kind}:${value.resource.id}`
+    : value.conversationId;
+  return `${value.tenantId}:${value.userId}:${resource}`;
+}
+
+function codeScope(
+  codeSessionId: string,
+  networkAccess: 'none' | 'trusted' | 'full' = 'none',
+): TestScope {
+  return {
+    tenantId: 'managed-cloud',
+    userId: 'user-code',
+    resource: { kind: 'code_session', id: codeSessionId },
+    networkAccess,
+    planTier: 'pro',
+  };
 }
 
 const sessions = new Map<
@@ -122,6 +140,14 @@ function makeSandboxInstance(sandboxId: string) {
       error: undefined,
     })),
     files: { write: vi.fn(), makeDir: vi.fn() },
+    commands: {
+      run: vi.fn(async () => ({
+        stdout: '/home/user\n',
+        stderr: '',
+        exitCode: 0,
+      })),
+    },
+    updateNetwork: vi.fn(async () => undefined),
     kill: vi.fn(async () => true),
   };
 }
@@ -234,6 +260,59 @@ describe('getE2BExecutor — conversation-scoped', () => {
     expect(executor).not.toBeNull();
     expect(connect).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledOnce();
+  });
+});
+
+describe('getE2BExecutor — managed Code session', () => {
+  beforeEach(() => {
+    sessions.clear();
+    vi.clearAllMocks();
+    sandboxCounter = 0;
+    listedSandboxes = [];
+  });
+
+  it('isolates its mapping, metadata, egress policy, and terminal command', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(codeScope('code-1', 'trusted'));
+
+    expect(executor).not.toBeNull();
+    const createOptions = (create.mock.calls[0] as unknown[])[0] as {
+      metadata: Record<string, string>;
+      network: { allowOut: string[]; denyOut: string[] };
+    };
+    expect(createOptions.metadata).toMatchObject({
+      userId: 'user-code',
+      codeSessionId: 'code-1',
+    });
+    expect(createOptions.metadata['conversationId']).toBeUndefined();
+    expect(createOptions.network.allowOut).toContain('github.com');
+    expect(createOptions.network.denyOut).toContain('0.0.0.0/0');
+
+    const instance = await create.mock.results[0]!.value;
+    expect(instance.updateNetwork).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowOut: expect.arrayContaining(['github.com', 'registry.npmjs.org']),
+        denyOut: ['0.0.0.0/0'],
+      }),
+    );
+    await expect(
+      executor!.runCommand?.({ command: 'pwd', cwd: '/home/user' }),
+    ).resolves.toMatchObject({
+      ok: true,
+      stdout: '/home/user\n',
+      exitCode: 0,
+    });
+    expect(sessions.has(scopeKey(codeScope('code-1', 'trusted')))).toBe(true);
+  });
+
+  it('fails closed when the requested network policy cannot be enforced', async () => {
+    const broken = makeSandboxInstance('sbx-network-error');
+    broken.updateNetwork.mockRejectedValueOnce(new Error('policy update failed'));
+    create.mockResolvedValueOnce(broken);
+
+    const { getE2BExecutor } = await import('../runtime');
+    await expect(getE2BExecutor(codeScope('code-2', 'none'))).resolves.toBeNull();
+    expect(staticPause).toHaveBeenCalledWith('sbx-network-error');
   });
 });
 

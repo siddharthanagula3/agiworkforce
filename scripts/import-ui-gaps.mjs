@@ -125,6 +125,17 @@ function reconcileCurrentPremises(record) {
       suggestedFix:
         'Completed. Keep automatic retrieval and every generation entry point behind the fail-closed master policy, require explicit opt-in for tool-assisted generation, preserve manual deletion while disabled, and extend the named GAP-009 tests whenever a new memory pipeline is added.',
     },
+    'GAP-010': {
+      status: 'Done',
+      owner: 'Web',
+      title: 'Web exposes authenticated, durable managed Code sessions',
+      detail:
+        'The production Web chat sidebar and secondary app shell now expose Chat and Code as first-class destinations. The authenticated Code surface creates tenant-owned, persistent managed environments, optionally clones a public GitHub repository, attaches to a bounded terminal journal, runs commands, and closes sessions explicitly. It remains capability-honest when the E2B cut-over, plan entitlement, or database migration is unavailable and never claims access to local files or credentials.',
+      evidence:
+        'apps/web/app/chat/code/page.tsx and features/code/CloudCodePage.tsx provide responsive loading, unavailable, empty, create, attach, running, error, terminal-history, and confirmed-close states. WebChatPage.tsx, WebAppShell.tsx, and the v3 WebSidebar expose the real /chat/code destination. /api/code/sessions and cloud-code-session-service.ts enforce Clerk/RLS ownership, CSRF, user-keyed rate limits, active-plan sandbox ceilings, idempotent creation, atomic command state transitions, bounded output, and strict public GitHub URLs. Migration 0075 forces RLS over the session and terminal journal. The E2B lifecycle isolates Code mappings from conversations, defaults egress off, allowlists GitHub/npm/PyPI for Trusted hosts, requires server-validated acknowledgement for Full network, pauses after each request, meters compute, and supports reclaim. Focused UI/API/service/runtime/migration tests and the full Web suite cover these seams; production build plus authenticated desktop- and mobile-viewport browser passes verify the mounted route and live Chat-to-Code navigation.',
+      suggestedFix:
+        'Completed for bounded managed terminal sessions. Apply migration 0075 and provision AGI_E2B_EXECUTION=1 plus E2B_API_KEY before enabling creation in a deployment. Keep private-repository credentials, arbitrary secret injection, collaborative PTY streaming, and long-lived service previews out until each has an explicit credential, approval, egress, billing, and revocation contract.',
+    },
     'GAP-011': {
       status: 'Done',
       owner: 'VS Code',

@@ -79,4 +79,19 @@ describe('E2B session-store tenant isolation', () => {
       'e2b:session:v2:managed-cloud:user-b:same-conversation',
     );
   });
+
+  it('keeps managed Code sessions in a resource-kind-isolated v3 namespace', async () => {
+    const { getE2BSession } = await import('../session-store');
+
+    await getE2BSession({
+      tenantId: 'managed-cloud',
+      userId: 'user-a',
+      resource: { kind: 'code_session', id: 'code:one' },
+      networkAccess: 'none',
+    });
+
+    expect(redisMocks.get).toHaveBeenCalledWith(
+      'e2b:session:v3:managed-cloud:user-a:code_session:code%3Aone',
+    );
+  });
 });

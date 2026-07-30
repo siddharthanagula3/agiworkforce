@@ -67,6 +67,16 @@ export function e2bCutoverEnabled(): boolean {
 }
 
 /**
+ * Code-session provisioning requires BOTH the deliberate operator cut-over and
+ * a usable credential. This is stricter than the low-level executor gate so
+ * the product never advertises an environment that cannot be created.
+ */
+export function e2bProvisioningReady(): boolean {
+  const key = process.env[E2B_API_KEY_ENV];
+  return e2bCutoverEnabled() && typeof key === 'string' && key.trim().length > 0;
+}
+
+/**
  * Managed-compute private-beta status — a SEPARATE, broader gate (used by the
  * route-level managed-compute enforcement). Re-exported here for callers that need to
  * reason about both gates together. Not required for `e2bExecutionEnabled()`.

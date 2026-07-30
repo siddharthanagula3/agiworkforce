@@ -14,6 +14,9 @@ import {
   ChevronDown,
   Settings,
   CalendarClock,
+  TerminalSquare,
+  Download,
+  Blocks,
 } from 'lucide-react';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import type { ChatHostConversation } from '@agiworkforce/unified-chat';
@@ -94,6 +97,12 @@ function navItemsForMode(mode: V3Mode): NavItem[] {
       { id: 'cw-dispatch', label: 'Dispatch', icon: GitBranch, beta: true },
       { id: 'schedules', label: 'Schedules', icon: CalendarClock },
       { id: 'customize', label: 'Customize', icon: Sliders },
+    ];
+  }
+  if (mode === 'code') {
+    return [
+      { id: 'code-desktop', label: 'Desktop app', icon: Download },
+      { id: 'code-vscode', label: 'VS Code extension', icon: Blocks },
     ];
   }
   // chat (the only other surfaced mode)
@@ -193,6 +202,8 @@ export function WebSidebar({
         'cw-dispatch': 'work-dispatch',
         schedules: 'schedules',
         settings: 'voice-settings',
+        'code-desktop': 'code-desktop',
+        'code-vscode': 'code-vscode',
       };
       const view = viewMap[id];
       if (view) onNavigateView?.(view);
@@ -200,7 +211,7 @@ export function WebSidebar({
     [onNavigateView],
   );
 
-  const newLabel = 'New chat';
+  const newLabel = mode === 'code' ? 'New Code session' : 'New chat';
 
   return (
     <aside
@@ -271,34 +282,37 @@ export function WebSidebar({
             padding: 2,
           }}
         >
-          {([{ id: 'chat' as V3Mode, label: 'Chat', icon: MessageSquare }] as const).map(
-            ({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => onModeChange(id)}
-                data-active={mode === id}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 4,
-                  padding: '4px 6px',
-                  borderRadius: 6,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: mode === id ? 600 : 400,
-                  background: mode === id ? 'var(--chat-surface-elevated)' : 'transparent',
-                  color: mode === id ? 'var(--chat-text-primary)' : 'var(--chat-text-secondary)',
-                  transition: 'background 120ms, color 120ms',
-                }}
-              >
-                <Icon size={12} />
-                <span>{label}</span>
-              </button>
-            ),
-          )}
+          {(
+            [
+              { id: 'chat' as V3Mode, label: 'Chat', icon: MessageSquare },
+              { id: 'code' as V3Mode, label: 'Code', icon: TerminalSquare },
+            ] as const
+          ).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => onModeChange(id)}
+              data-active={mode === id}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
+                padding: '4px 6px',
+                borderRadius: 6,
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: mode === id ? 600 : 400,
+                background: mode === id ? 'var(--chat-surface-elevated)' : 'transparent',
+                color: mode === id ? 'var(--chat-text-primary)' : 'var(--chat-text-secondary)',
+                transition: 'background 120ms, color 120ms',
+              }}
+            >
+              <Icon size={12} />
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       )}
 
@@ -329,44 +343,46 @@ export function WebSidebar({
       </div>
 
       {/* Search */}
-      <div style={{ padding: '2px 8px 4px', flexShrink: 0 }}>
-        <button
-          onClick={onOpenSearch}
-          title="Search (Ctrl+K)"
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: collapsed ? '6px 0' : '6px 10px',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            borderRadius: 8,
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            color: 'var(--chat-text-secondary)',
-            fontSize: 13,
-          }}
-        >
-          <Search size={14} />
-          {!collapsed && (
-            <>
-              <span style={{ flex: 1, textAlign: 'left' }}>Search</span>
-              <span
-                style={{
-                  fontSize: 11,
-                  color: 'var(--chat-text-muted)',
-                  background: 'var(--chat-border)',
-                  borderRadius: 4,
-                  padding: '1px 5px',
-                }}
-              >
-                Ctrl+K
-              </span>
-            </>
-          )}
-        </button>
-      </div>
+      {mode !== 'code' && (
+        <div style={{ padding: '2px 8px 4px', flexShrink: 0 }}>
+          <button
+            onClick={onOpenSearch}
+            title="Search (Ctrl+K)"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: collapsed ? '6px 0' : '6px 10px',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              borderRadius: 8,
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: 'var(--chat-text-secondary)',
+              fontSize: 13,
+            }}
+          >
+            <Search size={14} />
+            {!collapsed && (
+              <>
+                <span style={{ flex: 1, textAlign: 'left' }}>Search</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--chat-text-muted)',
+                    background: 'var(--chat-border)',
+                    borderRadius: 4,
+                    padding: '1px 5px',
+                  }}
+                >
+                  Ctrl+K
+                </span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Per-mode nav (expanded only) */}
       {!collapsed && (
@@ -416,7 +432,7 @@ export function WebSidebar({
       )}
 
       {/* Recents (expanded only) */}
-      {!collapsed && (
+      {!collapsed && mode !== 'code' && (
         <div
           style={{
             flex: 1,

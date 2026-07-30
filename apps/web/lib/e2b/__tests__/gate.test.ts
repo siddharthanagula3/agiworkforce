@@ -111,3 +111,30 @@ describe('e2bExecutionEnabled', () => {
     expect(e2bExecutionEnabled()).toBe(true);
   });
 });
+
+describe('e2bProvisioningReady', () => {
+  beforeEach(() => {
+    delete process.env[ENV_KEY];
+    delete process.env[API_KEY];
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    delete process.env[ENV_KEY];
+    delete process.env[API_KEY];
+  });
+
+  it('requires both deliberate cut-over and a non-empty API key', async () => {
+    const { e2bProvisioningReady } = await import('../gate');
+    expect(e2bProvisioningReady()).toBe(false);
+
+    process.env[ENV_KEY] = '1';
+    expect(e2bProvisioningReady()).toBe(false);
+
+    process.env[API_KEY] = 'e2b-test-key';
+    expect(e2bProvisioningReady()).toBe(true);
+
+    process.env[ENV_KEY] = '0';
+    expect(e2bProvisioningReady()).toBe(false);
+  });
+});

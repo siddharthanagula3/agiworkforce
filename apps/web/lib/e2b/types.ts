@@ -40,6 +40,12 @@ export interface SandboxFileEntry {
   byteSize: number;
 }
 
+export interface CommandExecutionResult extends ExecutionResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
 export interface E2BExecutor {
   /** Run code in the sandbox (e.g. python/node) and return its output. */
   runCode(input: { language: string; code: string }): Promise<ExecutionResult>;
@@ -47,6 +53,15 @@ export interface E2BExecutor {
   writeFile(input: { path: string; content: string }): Promise<ExecutionResult>;
   /** Create a folder inside the sandbox workspace. */
   createFolder(input: { path: string }): Promise<ExecutionResult>;
+  /**
+   * Run a bounded shell command in the sandbox. Optional so existing tool-loop
+   * mocks need not implement the interactive Code surface.
+   */
+  runCommand?(input: {
+    command: string;
+    cwd?: string;
+    timeoutMs?: number;
+  }): Promise<CommandExecutionResult>;
   /**
    * List directory entries (non-recursive). Optional: used by the generated-file
    * harvest (lib/e2b/generated-files.ts); mocks that never harvest may omit it.

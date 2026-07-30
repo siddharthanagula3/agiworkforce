@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: d7e88f8e5e0da4bfb89b7b40d6206dcf91b2678c504e13468255e62c6c01240f -->
+<!-- ui-gaps-csv-sha256: d6520904e713a3370794c5218c081d4ac937de44149457d96c5c868afc2af3a3 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 2 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 1 P0, 126 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  332 |
+| Open        |  331 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |    9 |
+| Done        |   10 |
 | Not Planned |    0 |
 
 ## P0
@@ -232,24 +232,24 @@ Completed. Keep automatic retrieval and every generation entry point behind the 
 
 - `chatgpt_reference/098-codex-macos-settings-personalization-personality-instructions-memory.png`
 
-### GAP-010 — No in-product 'Code' tab / cloud coding environment feature at all
+### GAP-010 — Web exposes authenticated, durable managed Code sessions
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Web
 - **Surface/type:** web · missing-screen
 - **Reference:** Claude · web · Code onboarding wizard: create cloud environment
 
 **Gap**
 
-Claude web has a full second top-level tab ('Code') separate from 'Home' that lets users set up and run coding sessions: download desktop app, connect terminal/VS Code/JetBrains/mobile/Slack, connect GitHub, and create cloud dev environments with configurable network access (None/Trusted/Full). agiworkforce web has none of this as an in-app surface — only static marketing pages (/agi-code, /cli, /vscode-extension) describing the CLI and VS Code extension exist, with no interactive session composer, no cloud environment creation, and no onboarding wizard.
+The production Web chat sidebar and secondary app shell now expose Chat and Code as first-class destinations. The authenticated Code surface creates tenant-owned, persistent managed environments, optionally clones a public GitHub repository, attaches to a bounded terminal journal, runs commands, and closes sessions explicitly. It remains capability-honest when the E2B cut-over, plan entitlement, or database migration is unavailable and never claims access to local files or credentials.
 
 **Evidence**
 
-Searched apps/web/features/chat/v3/WebSidebar.tsx (no 'Code' tab item), grep for 'Set up and start coding', 'Code with Claude anywhere', 'cloud environment', 'CloudEnvironment' across apps/web — no matches; apps/web/app/agi-code/page.tsx is a marketing-only page.
+apps/web/app/chat/code/page.tsx and features/code/CloudCodePage.tsx provide responsive loading, unavailable, empty, create, attach, running, error, terminal-history, and confirmed-close states. WebChatPage.tsx, WebAppShell.tsx, and the v3 WebSidebar expose the real /chat/code destination. /api/code/sessions and cloud-code-session-service.ts enforce Clerk/RLS ownership, CSRF, user-keyed rate limits, active-plan sandbox ceilings, idempotent creation, atomic command state transitions, bounded output, and strict public GitHub URLs. Migration 0075 forces RLS over the session and terminal journal. The E2B lifecycle isolates Code mappings from conversations, defaults egress off, allowlists GitHub/npm/PyPI for Trusted hosts, requires server-validated acknowledgement for Full network, pauses after each request, meters compute, and supports reclaim. Focused UI/API/service/runtime/migration tests and the full Web suite cover these seams; production build plus authenticated desktop- and mobile-viewport browser passes verify the mounted route and live Chat-to-Code navigation.
 
 **Suggested fix**
 
-Add a second top-level 'Code' tab to the web chat shell alongside Home, with its own composer (repo/environment selector), an empty-state onboarding wizard (connect terminal via CLI command, connect GitHub via token or OAuth, create a cloud sandbox environment with network-access tiers), and session list, backed by a new cloud-environments API.
+Completed for bounded managed terminal sessions. Apply migration 0075 and provision AGI_E2B_EXECUTION=1 plus E2B_API_KEY before enabling creation in a deployment. Keep private-repository credentials, arbitrary secret injection, collaborative PTY streaming, and long-lived service previews out until each has an explicit credential, approval, egress, billing, and revocation contract.
 
 **Reference screenshot(s)**
 
