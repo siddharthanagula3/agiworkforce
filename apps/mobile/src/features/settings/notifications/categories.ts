@@ -11,8 +11,8 @@ export const NOTIFICATION_CATEGORY_COPY: Record<NotificationCategory, Notificati
     description: 'Agent action approval requests',
   },
   task_updates: {
-    label: 'Task Updates',
-    description: 'Task completed, paused, or resumed',
+    label: 'Work Updates',
+    description: 'Task results, schedule runs, and chat replies',
   },
   errors: {
     label: 'Errors & Stops',
