@@ -127,7 +127,11 @@ export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
         headers_lists: settings.personalization.headersLists,
         emoji: settings.personalization.emoji,
       },
-      capabilities: { ...settings.capabilities },
+      capabilities: {
+        ...settings.capabilities,
+        referencePastChats: settings.referencePastChats,
+        generateMemoryFromHistory: settings.generateMemoryFromHistory,
+      },
       chat_preferences: {
         mode: chatView.chatMode,
         style: chatView.chatStyle,
@@ -228,8 +232,15 @@ export async function resetLocalInMemoryState(): Promise<void> {
     notificationsEnabled: true,
     speechLanguage: 'en',
     autoListenEnabled: true,
+    referencePastChats: true,
+    generateMemoryFromHistory: true,
     personalization: defaultPersonalization,
   };
   useLocalSettingsStore.setState(defaultModeSettings);
-  useCloudSettingsStore.setState({ ...defaultModeSettings, settingsUpdatedAt: null });
+  useCloudSettingsStore.setState({
+    ...defaultModeSettings,
+    referencePastChats: false,
+    memoryPolicyInitialized: false,
+    settingsUpdatedAt: null,
+  });
 }

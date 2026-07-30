@@ -61,6 +61,7 @@ import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useChatViewStore, type ChatMode, type ChatStyle } from './chatViewStore';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
+import { retrievePastChatContext } from '@/src/features/memory/services/pastChatContext';
 import {
   consolidateFactsFromTurn,
   shouldConsolidateMemoryOnClient,
@@ -1232,21 +1233,39 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // not expose an equivalent effort axis.
     const agentControl = useAgentControlStore.getState().resolve(conversationId, activeProjectId);
 
-    // Inject personalization + top-K relevant memories as system context, in BOTH
-    // modes (parity with web/desktop cloud chat). The sources are mode-scoped so
-    // the trust boundary holds: `retrieveMemoryContext` reads the cloud memory
-    // store in cloud mode and on-device SQLite in local mode, and personalization
-    // comes from the matching settings store. A pure composer decides block content
-    // + order ([persona, memory]); any failure here must never block a chat turn.
+    const memorySettings =
+      executionMode === 'cloud'
+        ? useCloudSettingsStore.getState()
+        : useLocalSettingsStore.getState();
+    const isTemporaryChat = useSettingsStore.getState().isTemporaryChat;
+    const memoryContextEnabled = memorySettings.referencePastChats && !isTemporaryChat;
+
+    // Inject personalization plus explicitly enabled, mode-scoped memory context.
+    // Local reads stay on device. Cloud history search and saved memories stay
+    // inside the authenticated account boundary. Prior chat excerpts are rendered
+    // as bounded, untrusted data; any failure must never block the turn.
     try {
-      const memFacts = await retrieveMemoryContext(content, 5);
+      const [memFacts, pastChatContext] = memoryContextEnabled
+        ? await Promise.all([
+            retrieveMemoryContext(content, 5),
+            retrievePastChatContext({
+              executionMode,
+              query: content,
+              currentConversationId: conversationId,
+              enabled: true,
+            }),
+          ])
+        : [[], null];
       if (!isTurnAccountCurrent()) return false;
-      const personalization =
-        executionMode === 'cloud'
-          ? useCloudSettingsStore.getState().personalization
-          : useLocalSettingsStore.getState().personalization;
-      const blocks = buildPersonalContextBlocks({ personalization, memories: memFacts });
-      // Unshift in reverse so the final order is [persona, memory, ...existing].
+      const blocks = buildPersonalContextBlocks({
+        personalization: memorySettings.personalization,
+        memories: memFacts,
+      });
+      if (pastChatContext) {
+        blocks.push({ role: 'system', content: pastChatContext });
+      }
+      // Unshift in reverse so the final order is
+      // [persona, saved memory, past-chat excerpts, ...existing].
       for (let i = blocks.length - 1; i >= 0; i -= 1) {
         historyMessages.unshift(blocks[i]);
       }
@@ -1267,7 +1286,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (
       shouldConsolidateMemoryOnClient({
         executionMode,
-        isTemporaryChat: useSettingsStore.getState().isTemporaryChat,
+        isTemporaryChat,
+        memoryEnabled: memorySettings.referencePastChats,
+        generateMemoryFromHistory: memorySettings.generateMemoryFromHistory,
       })
     ) {
       void consolidateFactsFromTurn({ message: content, conversationId });

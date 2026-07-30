@@ -743,7 +743,14 @@ export function prepareManagedAutoMemoryFacts(params: {
   surface: CloudChatSurface;
   policy: ManagedMemoryPolicy;
 }): string[] {
-  if (!params.policy.enabled || params.isTemporary || params.surface === 'api') return [];
+  if (
+    !params.policy.enabled ||
+    !params.policy.generateFromHistory ||
+    params.isTemporary ||
+    params.surface === 'api'
+  ) {
+    return [];
+  }
   return extractCandidateMemoryFacts(params.message).slice(0, 5);
 }
 

@@ -65,8 +65,15 @@ const MAX_PER_TURN = 5;
 export function shouldConsolidateMemoryOnClient(opts: {
   executionMode: 'local' | 'cloud';
   isTemporaryChat: boolean;
+  memoryEnabled: boolean;
+  generateMemoryFromHistory: boolean;
 }): boolean {
-  return !opts.isTemporaryChat && opts.executionMode === 'local';
+  return (
+    !opts.isTemporaryChat &&
+    opts.executionMode === 'local' &&
+    opts.memoryEnabled &&
+    opts.generateMemoryFromHistory
+  );
 }
 
 export async function consolidateFactsFromTurn(params: {

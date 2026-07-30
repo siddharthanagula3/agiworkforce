@@ -40,6 +40,7 @@ describe('loadManagedMemoryPolicy', () => {
       loadManagedMemoryPolicy({ query: disabledQuery }, { userId: 'user-1' }),
     ).resolves.toEqual({
       enabled: false,
+      generateFromHistory: false,
       allowToolAssistedGeneration: false,
     });
 
@@ -55,7 +56,24 @@ describe('loadManagedMemoryPolicy', () => {
       loadManagedMemoryPolicy({ query: enabledQuery }, { userId: 'user-1' }),
     ).resolves.toEqual({
       enabled: true,
+      generateFromHistory: true,
       allowToolAssistedGeneration: true,
+    });
+
+    const generationDisabledQuery = vi.fn().mockResolvedValue([
+      {
+        capabilities: {
+          memory: true,
+          generateFromHistory: false,
+        },
+      },
+    ]);
+    await expect(
+      loadManagedMemoryPolicy({ query: generationDisabledQuery }, { userId: 'user-1' }),
+    ).resolves.toEqual({
+      enabled: true,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
     });
   });
 });

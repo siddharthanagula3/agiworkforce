@@ -38,6 +38,10 @@ export interface LocalSettingsState {
   speechLanguage: string;
   /** Auto-listen after AI speaks in voice conversation mode */
   autoListenEnabled: boolean;
+  /** Search prior Local chats and use relevant saved memories while answering */
+  referencePastChats: boolean;
+  /** Generate durable Local memories from eligible chat turns */
+  generateMemoryFromHistory: boolean;
   /** User personalization preferences (local profile, never sent to cloud) */
   personalization: Personalization;
 
@@ -47,6 +51,8 @@ export interface LocalSettingsState {
   setNotificationsEnabled: (enabled: boolean) => void;
   setSpeechLanguage: (language: string) => void;
   setAutoListenEnabled: (enabled: boolean) => void;
+  setReferencePastChats: (enabled: boolean) => void;
+  setGenerateMemoryFromHistory: (enabled: boolean) => void;
   setPersonalization: (partial: Partial<Personalization>) => void;
 }
 
@@ -75,6 +81,10 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       notificationsEnabled: true,
       speechLanguage: 'en',
       autoListenEnabled: true,
+      // Preserve the pre-preference Local behavior. Local history never leaves
+      // this device.
+      referencePastChats: true,
+      generateMemoryFromHistory: true,
       personalization: defaultPersonalization,
 
       setThemeMode: (mode) => set({ themeMode: mode }),
@@ -83,6 +93,8 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       setSpeechLanguage: (language) => set({ speechLanguage: language }),
       setAutoListenEnabled: (enabled) => set({ autoListenEnabled: enabled }),
+      setReferencePastChats: (enabled) => set({ referencePastChats: enabled }),
+      setGenerateMemoryFromHistory: (enabled) => set({ generateMemoryFromHistory: enabled }),
       setPersonalization: (partial) =>
         set({ personalization: { ...get().personalization, ...partial } }),
     }),
@@ -128,6 +140,8 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
                 notificationsEnabled: s.notificationsEnabled ?? true,
                 speechLanguage: s.speechLanguage ?? 'en',
                 autoListenEnabled: s.autoListenEnabled ?? true,
+                referencePastChats: s.referencePastChats ?? true,
+                generateMemoryFromHistory: s.generateMemoryFromHistory ?? true,
                 personalization: s.personalization ?? defaultPersonalization,
               });
             }

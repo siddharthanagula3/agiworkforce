@@ -62,7 +62,11 @@ describe('prepareManagedAutoMemoryFacts', () => {
         message: 'My name is Ada. I prefer morning meetings.',
         isTemporary: false,
         surface: 'web',
-        policy: { enabled: true, allowToolAssistedGeneration: false },
+        policy: {
+          enabled: true,
+          generateFromHistory: true,
+          allowToolAssistedGeneration: false,
+        },
       }),
     ).toEqual(["User's name is Ada", 'User prefers morning meetings']);
 
@@ -71,7 +75,11 @@ describe('prepareManagedAutoMemoryFacts', () => {
         message: 'My name is Ada.',
         isTemporary: true,
         surface: 'web',
-        policy: { enabled: true, allowToolAssistedGeneration: false },
+        policy: {
+          enabled: true,
+          generateFromHistory: true,
+          allowToolAssistedGeneration: false,
+        },
       }),
     ).toEqual([]);
     expect(
@@ -79,7 +87,11 @@ describe('prepareManagedAutoMemoryFacts', () => {
         message: 'My name is Ada.',
         isTemporary: false,
         surface: 'mobile',
-        policy: { enabled: false, allowToolAssistedGeneration: false },
+        policy: {
+          enabled: false,
+          generateFromHistory: true,
+          allowToolAssistedGeneration: false,
+        },
       }),
     ).toEqual([]);
     expect(
@@ -87,7 +99,11 @@ describe('prepareManagedAutoMemoryFacts', () => {
         message: 'My name is Ada.',
         isTemporary: false,
         surface: 'mobile',
-        policy: { enabled: true, allowToolAssistedGeneration: false },
+        policy: {
+          enabled: true,
+          generateFromHistory: true,
+          allowToolAssistedGeneration: false,
+        },
       }),
     ).toEqual(["User's name is Ada"]);
     expect(
@@ -95,7 +111,26 @@ describe('prepareManagedAutoMemoryFacts', () => {
         message: 'My name is Ada.',
         isTemporary: false,
         surface: 'api',
-        policy: { enabled: true, allowToolAssistedGeneration: true },
+        policy: {
+          enabled: true,
+          generateFromHistory: true,
+          allowToolAssistedGeneration: true,
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it('does not learn when generation from chat history is disabled', () => {
+    expect(
+      prepareManagedAutoMemoryFacts({
+        message: 'My name is Ada.',
+        isTemporary: false,
+        surface: 'mobile',
+        policy: {
+          enabled: true,
+          generateFromHistory: false,
+          allowToolAssistedGeneration: false,
+        },
       }),
     ).toEqual([]);
   });

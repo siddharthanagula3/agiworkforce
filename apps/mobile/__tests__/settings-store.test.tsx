@@ -97,6 +97,8 @@ function resetLocalStore() {
     notificationsEnabled: true,
     speechLanguage: 'en',
     autoListenEnabled: true,
+    referencePastChats: true,
+    generateMemoryFromHistory: true,
     personalization: defaultPersonalization,
   });
 }
@@ -109,6 +111,9 @@ function resetCloudStore() {
     notificationsEnabled: true,
     speechLanguage: 'en',
     autoListenEnabled: true,
+    referencePastChats: false,
+    generateMemoryFromHistory: true,
+    memoryPolicyInitialized: false,
     personalization: defaultPersonalization,
     settingsUpdatedAt: null,
   });
@@ -285,6 +290,17 @@ describe('localSettingsStore (mode-specific — never synced)', () => {
       expect(useLocalSettingsStore.getState().accentColor).toBe('green');
     });
   });
+
+  describe('memory policy', () => {
+    it('keeps Local reference and generation preferences independent', () => {
+      useLocalSettingsStore.getState().setReferencePastChats(false);
+      expect(useLocalSettingsStore.getState().referencePastChats).toBe(false);
+      expect(useLocalSettingsStore.getState().generateMemoryFromHistory).toBe(true);
+
+      useLocalSettingsStore.getState().setGenerateMemoryFromHistory(false);
+      expect(useLocalSettingsStore.getState().generateMemoryFromHistory).toBe(false);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -308,6 +324,19 @@ describe('cloudSettingsStore (mode-specific — synced to cloud)', () => {
     useCloudSettingsStore.getState().setPersonalization({ nickname: 'CloudUser' });
     expect(useCloudSettingsStore.getState().settingsUpdatedAt).not.toBeNull();
     expect(useCloudSettingsStore.getState().personalization.nickname).toBe('CloudUser');
+  });
+
+  it('stamps settingsUpdatedAt for both account memory preferences', () => {
+    useCloudSettingsStore.getState().setReferencePastChats(true);
+    expect(useCloudSettingsStore.getState().referencePastChats).toBe(true);
+    expect(useCloudSettingsStore.getState().memoryPolicyInitialized).toBe(true);
+    expect(useCloudSettingsStore.getState().settingsUpdatedAt).not.toBeNull();
+
+    useCloudSettingsStore.setState({ settingsUpdatedAt: null, memoryPolicyInitialized: false });
+    useCloudSettingsStore.getState().setGenerateMemoryFromHistory(false);
+    expect(useCloudSettingsStore.getState().generateMemoryFromHistory).toBe(false);
+    expect(useCloudSettingsStore.getState().memoryPolicyInitialized).toBe(true);
+    expect(useCloudSettingsStore.getState().settingsUpdatedAt).not.toBeNull();
   });
 });
 

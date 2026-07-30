@@ -8,7 +8,10 @@ import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
+import { MemoryControlsCard } from '@/src/features/memory/components/MemoryControlsCard';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -35,6 +38,26 @@ export default function MemoryScreen() {
   const { scope } = useLocalSearchParams<{ scope?: string }>();
   const currentIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
+  const localReferencePastChats = useLocalSettingsStore((state) => state.referencePastChats);
+  const localGenerateMemory = useLocalSettingsStore((state) => state.generateMemoryFromHistory);
+  const setLocalReferencePastChats = useLocalSettingsStore((state) => state.setReferencePastChats);
+  const setLocalGenerateMemory = useLocalSettingsStore(
+    (state) => state.setGenerateMemoryFromHistory,
+  );
+  const cloudReferencePastChats = useCloudSettingsStore((state) => state.referencePastChats);
+  const cloudGenerateMemory = useCloudSettingsStore((state) => state.generateMemoryFromHistory);
+  const setCloudReferencePastChats = useCloudSettingsStore((state) => state.setReferencePastChats);
+  const setCloudGenerateMemory = useCloudSettingsStore(
+    (state) => state.setGenerateMemoryFromHistory,
+  );
+  const referencePastChats = currentIsCloud ? cloudReferencePastChats : localReferencePastChats;
+  const generateMemoryFromHistory = currentIsCloud ? cloudGenerateMemory : localGenerateMemory;
+  const setReferencePastChats = currentIsCloud
+    ? setCloudReferencePastChats
+    : setLocalReferencePastChats;
+  const setGenerateMemoryFromHistory = currentIsCloud
+    ? setCloudGenerateMemory
+    : setLocalGenerateMemory;
   // The memory store's read/write path follows the CURRENT chat mode toggle
   // (trust-boundary requirement — chat-time retrieval must match the active
   // conversation's mode). When the user navigates here via a Local- or
@@ -269,6 +292,14 @@ export default function MemoryScreen() {
           </View>
         </View>
       ) : null}
+
+      <MemoryControlsCard
+        isCloud={currentIsCloud}
+        referencePastChats={referencePastChats}
+        generateMemoryFromHistory={generateMemoryFromHistory}
+        onReferencePastChatsChange={setReferencePastChats}
+        onGenerateMemoryFromHistoryChange={setGenerateMemoryFromHistory}
+      />
 
       {/* Count subtitle */}
       <View className="px-4 mb-2">
