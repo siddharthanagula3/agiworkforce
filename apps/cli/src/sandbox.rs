@@ -3,6 +3,7 @@ pub use agiworkforce_sandbox_policy::SandboxPolicy;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -179,9 +180,10 @@ pub fn shell_join(args: &[String]) -> String {
 
 ///   - Empty or relative paths: rejected for correctness
 fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
-    let s = path
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let s = canonical
         .to_str()
-        .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8: {:?}", path))?;
+        .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8: {:?}", canonical))?;
 
     if s.is_empty() {
         anyhow::bail!("workspace path is empty");
@@ -230,32 +232,68 @@ fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
     Ok(s.to_string())
 }
 
-pub async fn execute_sandboxed(
-    manager: &SandboxManager,
-    command: &str,
-    cwd: Option<&Path>,
-) -> Result<std::process::Output> {
-    let mut cmd = tokio::process::Command::new("sh");
-    cmd.arg("-c").arg(command);
-    if let Some(dir) = cwd {
-        cmd.current_dir(dir);
+fn writable_roots(manager: &SandboxManager) -> Result<Vec<PathBuf>> {
+    let configured = match &manager.policy {
+        SandboxPolicy::ReadOnly => return Ok(Vec::new()),
+        SandboxPolicy::WorkspaceWrite { writable_roots } => writable_roots,
+        SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox => {
+            return Ok(Vec::new());
+        }
+    };
+
+    let mut roots = Vec::with_capacity(configured.len() + 1);
+    let mut seen = HashSet::new();
+    for root in std::iter::once(&manager.workspace_dir).chain(configured.iter()) {
+        if !root.is_absolute() {
+            anyhow::bail!("sandbox writable root must be absolute: {:?}", root);
+        }
+        if root == Path::new("/") {
+            anyhow::bail!("sandbox writable root '/' is too broad");
+        }
+        if seen.insert(root.clone()) {
+            roots.push(root.clone());
+        }
     }
-    match manager.sandbox_type {
-        SandboxType::MacosSeatbelt => {
-            // CRIT-2: validate path before interpolation to prevent SBPL injection.
-            let ws = validate_and_escape_seatbelt_path(&manager.workspace_dir)?;
+    Ok(roots)
+}
 
-            // CRIT-1: network is default-deny. Only re-open outbound when the caller
-            // has explicitly opted in via NetworkPolicy::Allow.
-            let network_rules = match manager.network_policy {
-                NetworkPolicy::Allow => "(allow network-outbound)\n(allow network-inbound)\n",
-                // SECURITY: omit (allow network-outbound) entirely so Seatbelt deny-default
-                // blocks all outbound connections including DNS resolution.
-                NetworkPolicy::Deny => "",
-            };
+fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Result<String> {
+    let ws = validate_and_escape_seatbelt_path(&manager.workspace_dir)?;
 
-            let profile = format!(
-                r#"(version 1)
+    let network_rules = match manager.network_policy {
+        NetworkPolicy::Allow => "(allow network-outbound)\n(allow network-inbound)\n",
+        NetworkPolicy::Deny => "",
+    };
+
+    let mut scratch_read_rules = String::new();
+    let mut write_rules = String::from("(allow file-write* (literal \"/dev/null\"))\n");
+    match &manager.policy {
+        SandboxPolicy::ReadOnly => {
+            let scratch_dir = scratch_dir.ok_or_else(|| {
+                anyhow::anyhow!("read-only Seatbelt execution requires a private scratch directory")
+            })?;
+            let scratch_dir = validate_and_escape_seatbelt_path(scratch_dir)?;
+            scratch_read_rules.push_str(&format!(
+                "(allow file-read* (subpath \"{scratch_dir}\"))\n"
+            ));
+            write_rules.push_str(&format!(
+                "(allow file-write* (subpath \"{scratch_dir}\"))\n"
+            ));
+        }
+        SandboxPolicy::WorkspaceWrite { .. } => {
+            write_rules.push_str(
+                "(allow file-write* (subpath \"/tmp\") (subpath \"/private/tmp\"))\n",
+            );
+            for root in writable_roots(manager)? {
+                let root = validate_and_escape_seatbelt_path(&root)?;
+                write_rules.push_str(&format!("(allow file-write* (subpath \"{root}\"))\n"));
+            }
+        }
+        SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox => {}
+    }
+
+    Ok(format!(
+        r#"(version 1)
 (deny default)
 (allow process-exec)
 (allow process-fork)
@@ -267,27 +305,133 @@ pub async fn execute_sandboxed(
                    (subpath "/Library") (subpath "/System")
                    (subpath "/private/var/db") (subpath "/dev")
                    ;; macOS resolves `sh` through this symlink directory
-                   ;; (/private/var/select/sh -> /bin/bash). Denying it made
-                   ;; every sandboxed shell print
-                   ;; "Error opening /private/var/select/sh: Operation not
-                   ;; permitted" on success — the command still ran, so the
-                   ;; output looked like a failure that wasn't one. Read-only,
-                   ;; and it grants nothing beyond the /bin access above.
+                   ;; (/private/var/select/sh -> /bin/bash).
                    (subpath "/private/var/select")
                    (subpath "/etc") (subpath "/tmp") (subpath "/private/tmp")
                    (literal "/") (subpath "/opt"))
 (allow file-read* (subpath "{ws}"))
-(allow file-write* (subpath "{ws}") (subpath "/tmp") (subpath "/private/tmp") (subpath "/dev/null"))
-"#,
-                network_rules = network_rules,
-                ws = ws
-            );
+{scratch_read_rules}
+{write_rules}"#,
+        network_rules = network_rules,
+        ws = ws,
+        scratch_read_rules = scratch_read_rules,
+        write_rules = write_rules,
+    ))
+}
+
+fn bubblewrap_args(manager: &SandboxManager, command: &str) -> Result<Vec<String>> {
+    if !manager.workspace_dir.is_absolute() {
+        anyhow::bail!(
+            "sandbox workspace must be absolute: {:?}",
+            manager.workspace_dir
+        );
+    }
+    if manager.workspace_dir == Path::new("/") {
+        anyhow::bail!("sandbox workspace '/' is too broad");
+    }
+
+    let mut args = vec![
+        "--die-with-parent".to_string(),
+        "--unshare-pid".to_string(),
+        "--unshare-uts".to_string(),
+    ];
+    if manager.network_policy == NetworkPolicy::Deny {
+        args.push("--unshare-net".to_string());
+    }
+    args.extend([
+        "--ro-bind".to_string(),
+        "/".to_string(),
+        "/".to_string(),
+        "--tmpfs".to_string(),
+        "/tmp".to_string(),
+        "--dev".to_string(),
+        "/dev".to_string(),
+        "--proc".to_string(),
+        "/proc".to_string(),
+    ]);
+    if manager.policy == SandboxPolicy::ReadOnly
+        && manager.workspace_dir.starts_with(Path::new("/tmp"))
+    {
+        let workspace = manager
+            .workspace_dir
+            .to_str()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "sandbox workspace is not valid UTF-8: {:?}",
+                    manager.workspace_dir
+                )
+            })?
+            .to_string();
+        args.extend(["--ro-bind".to_string(), workspace.clone(), workspace]);
+    }
+    // Writable binds must follow the /tmp tmpfs mount. Otherwise a workspace
+    // below /tmp is shadowed by the later scratch mount.
+    for root in writable_roots(manager)? {
+        let root = root
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("sandbox writable root is not valid UTF-8: {:?}", root))?
+            .to_string();
+        args.extend(["--bind".to_string(), root.clone(), root]);
+    }
+    args.extend([
+        "--".to_string(),
+        "sh".to_string(),
+        "-c".to_string(),
+        command.to_string(),
+    ]);
+    Ok(args)
+}
+
+pub async fn execute_sandboxed(
+    manager: &SandboxManager,
+    command: &str,
+    cwd: Option<&Path>,
+) -> Result<std::process::Output> {
+    let mut cmd = tokio::process::Command::new("sh");
+    cmd.arg("-c").arg(command);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    if matches!(
+        manager.policy,
+        SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox
+    ) {
+        return cmd
+            .output()
+            .await
+            .map_err(|e| anyhow::anyhow!("unsandboxed exec failed: {}", e));
+    }
+    match manager.sandbox_type {
+        SandboxType::MacosSeatbelt => {
+            let scratch_dir = if manager.policy == SandboxPolicy::ReadOnly {
+                Some(
+                    tempfile::Builder::new()
+                        .prefix("agi-sandbox-scratch-")
+                        .tempdir()
+                        .map_err(|error| {
+                            anyhow::anyhow!(
+                                "failed to create read-only sandbox scratch directory: {error}"
+                            )
+                        })?,
+                )
+            } else {
+                None
+            };
+            let profile =
+                seatbelt_profile(manager, scratch_dir.as_ref().map(tempfile::TempDir::path))?;
             let mut scmd = tokio::process::Command::new("sandbox-exec");
             scmd.arg("-p")
                 .arg(&profile)
                 .arg("sh")
                 .arg("-c")
                 .arg(command);
+            if let Some(scratch_dir) = scratch_dir.as_ref() {
+                let scratch_path = scratch_dir
+                    .path()
+                    .canonicalize()
+                    .unwrap_or_else(|_| scratch_dir.path().to_path_buf());
+                scmd.env("TMPDIR", scratch_path);
+            }
             if let Some(dir) = cwd {
                 scmd.current_dir(dir);
             }
@@ -296,37 +440,8 @@ pub async fn execute_sandboxed(
                 .map_err(|e| anyhow::anyhow!("Seatbelt exec failed: {}", e))
         }
         SandboxType::LinuxBubblewrap => {
-            let ws = manager.workspace_dir.to_string_lossy().to_string();
             let mut bcmd = tokio::process::Command::new("bwrap");
-
-            let mut bwrap_args: Vec<&str> = vec![
-                "--die-with-parent",
-                "--unshare-pid", // isolate process namespace
-                "--unshare-uts", // isolate hostname
-            ];
-            // CRIT-1: default-deny network via --unshare-net; only omit when
-            // the caller explicitly opts in with NetworkPolicy::Allow.
-            if manager.network_policy == NetworkPolicy::Deny {
-                bwrap_args.push("--unshare-net");
-            }
-            bwrap_args.extend([
-                "--ro-bind",
-                "/",
-                "/",
-                "--bind",
-                &ws,
-                &ws,
-                "--tmpfs",
-                "/tmp",
-                "--dev",
-                "/dev",
-                "--proc",
-                "/proc",
-                "--",
-                "sh",
-                "-c",
-                command,
-            ]);
+            let bwrap_args = bubblewrap_args(manager, command)?;
             bcmd.args(&bwrap_args);
             if let Some(dir) = cwd {
                 bcmd.current_dir(dir);
@@ -575,6 +690,163 @@ mod tests {
         let mgr = SandboxManager::new(SandboxPolicy::default(), PathBuf::from("/tmp/test"))
             .with_network(NetworkPolicy::Allow);
         assert_eq!(mgr.network_policy, NetworkPolicy::Allow);
+    }
+
+    #[test]
+    fn read_only_policy_has_no_persistent_writable_roots() {
+        let mgr = SandboxManager::new(SandboxPolicy::ReadOnly, PathBuf::from("/tmp/test"));
+        assert!(writable_roots(&mgr).expect("roots").is_empty());
+    }
+
+    #[test]
+    fn workspace_write_policy_includes_workspace_and_explicit_roots() {
+        let mgr = SandboxManager::new(
+            SandboxPolicy::WorkspaceWrite {
+                writable_roots: vec![PathBuf::from("/tmp/shared"), PathBuf::from("/tmp/shared")],
+            },
+            PathBuf::from("/tmp/workspace"),
+        );
+        assert_eq!(
+            writable_roots(&mgr).expect("roots"),
+            vec![
+                PathBuf::from("/tmp/workspace"),
+                PathBuf::from("/tmp/shared")
+            ]
+        );
+    }
+
+    #[test]
+    fn workspace_write_policy_rejects_root_as_an_explicit_writable_root() {
+        let mgr = SandboxManager::new(
+            SandboxPolicy::WorkspaceWrite {
+                writable_roots: vec![PathBuf::from("/")],
+            },
+            PathBuf::from("/tmp/workspace"),
+        );
+        assert!(writable_roots(&mgr).is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn read_only_seatbelt_profile_does_not_allow_workspace_writes() {
+        let mgr = SandboxManager::new(
+            SandboxPolicy::ReadOnly,
+            PathBuf::from("/tmp/developer-workspace"),
+        );
+        let profile = seatbelt_profile(
+            &mgr,
+            Some(Path::new("/private/tmp/agi-read-only-scratch")),
+        )
+        .expect("profile");
+        assert!(profile.contains("(allow file-read* (subpath \"/tmp/developer-workspace\"))"));
+        assert!(!profile.contains("(allow file-write* (subpath \"/tmp/developer-workspace\"))"));
+        assert!(profile.contains(
+            "(allow file-write* (subpath \"/private/tmp/agi-read-only-scratch\"))"
+        ));
+        assert!(!profile.contains("(allow file-write* (subpath \"/tmp\")"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn read_only_bubblewrap_profile_does_not_bind_workspace_writable() {
+        let mgr = SandboxManager::new(
+            SandboxPolicy::ReadOnly,
+            PathBuf::from("/tmp/developer-workspace"),
+        );
+        let args = bubblewrap_args(&mgr, "true").expect("args");
+        assert!(!args.windows(3).any(|window| {
+            window
+                == [
+                    "--bind".to_string(),
+                    "/tmp/developer-workspace".to_string(),
+                    "/tmp/developer-workspace".to_string(),
+                ]
+        }));
+        assert!(args.windows(3).any(|window| {
+            window
+                == [
+                    "--ro-bind".to_string(),
+                    "/tmp/developer-workspace".to_string(),
+                    "/tmp/developer-workspace".to_string(),
+                ]
+        }));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[tokio::test]
+    async fn read_only_policy_blocks_a_workspace_write() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let marker = workspace.path().join("should-not-exist");
+        let mut mgr = SandboxManager::new(SandboxPolicy::ReadOnly, workspace.path().to_path_buf());
+        mgr.network_policy = NetworkPolicy::Deny;
+
+        if mgr.sandbox_type == SandboxType::None {
+            return;
+        }
+
+        let command = format!(
+            "printf blocked > {}",
+            shell_quote(&marker.to_string_lossy())
+        );
+        let output = execute_sandboxed(&mgr, &command, Some(workspace.path()))
+            .await
+            .expect("sandbox should launch");
+
+        assert!(
+            !output.status.success(),
+            "read-only write unexpectedly succeeded"
+        );
+        assert!(!marker.exists(), "read-only sandbox created the file");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn read_only_policy_blocks_a_workspace_write_below_tmp() {
+        let workspace = tempfile::Builder::new()
+            .prefix("agi-read-only-")
+            .tempdir_in("/tmp")
+            .expect("workspace below /tmp");
+        let marker = workspace.path().join("should-not-exist");
+        let mgr = SandboxManager::new(SandboxPolicy::ReadOnly, workspace.path().to_path_buf());
+        let command = format!(
+            "printf blocked > {}",
+            shell_quote(&marker.to_string_lossy())
+        );
+
+        let output = execute_sandboxed(&mgr, &command, Some(workspace.path()))
+            .await
+            .expect("sandbox should launch");
+
+        assert!(
+            !output.status.success(),
+            "read-only /tmp write unexpectedly succeeded"
+        );
+        assert!(
+            !marker.exists(),
+            "read-only sandbox created a file below /tmp"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn read_only_policy_keeps_private_scratch_writable() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let mgr = SandboxManager::new(SandboxPolicy::ReadOnly, workspace.path().to_path_buf());
+
+        let output = execute_sandboxed(
+            &mgr,
+            "scratch_file=$(mktemp \"$TMPDIR/file.XXXXXX\"); printf scratch-ok > \"$scratch_file\"; cat \"$scratch_file\"",
+            Some(workspace.path()),
+        )
+        .await
+        .expect("sandbox should launch");
+
+        assert!(
+            output.status.success(),
+            "private scratch write failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "scratch-ok");
     }
 
     #[test]

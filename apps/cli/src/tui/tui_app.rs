@@ -3828,6 +3828,7 @@ async fn run_event_loop(
                                     quiet: true,
                                     approval_callback: None,
                                     privacy_mode: app.session.privacy_mode,
+                                    workspace_root: std::env::current_dir().ok(),
                                 };
                                 let text = match crate::tools::execute_tool_with_opts(&call, &opts)
                                     .await
@@ -4649,6 +4650,7 @@ mod tests {
                 quiet: true,
                 approval_callback: Some(callback),
                 privacy_mode: crate::agent::PrivacyMode::Local,
+                workspace_root: std::env::current_dir().ok(),
             };
 
             let result = crate::tools::execute_tool_with_opts(&call, &opts)
@@ -4706,6 +4708,7 @@ mod tests {
                 quiet: true,
                 approval_callback: Some(callback),
                 privacy_mode: crate::agent::PrivacyMode::Local,
+                workspace_root: std::env::current_dir().ok(),
             };
 
             let result = crate::tools::execute_tool_with_opts(&call, &opts)
@@ -4802,6 +4805,7 @@ mod tests {
                 quiet: true,
                 approval_callback: Some(callback),
                 privacy_mode: crate::agent::PrivacyMode::Local,
+                workspace_root: std::env::current_dir().ok(),
             };
 
             // Run BOTH tools concurrently (mirrors `join_all` in chat.rs). Each
