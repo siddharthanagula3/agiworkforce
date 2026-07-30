@@ -2,6 +2,7 @@
 # Usage:
 #   Start all services:       docker compose up -d
 #   Start only postgres:      docker compose up -d postgres
+#   Initialize/upgrade DB:    AGI_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/agiworkforce_dev pnpm db:migrate -- apply --target local
 #   Stop all services:        docker compose down
 #   Destroy volumes:          docker compose down -v
 
@@ -25,8 +26,8 @@ services:
       POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Mount migration files so they run automatically on first init
-      - ./apps/web/db/neon:/docker-entrypoint-initdb.d:ro
+      # Schema is applied by the checksum ledger runner, not initdb mounts.
+      # That keeps fresh databases and upgraded persistent volumes on one path.
     healthcheck:
       test: ['CMD', 'pg_isready', '-U', 'postgres']
       interval: 10s

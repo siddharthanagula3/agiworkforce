@@ -78,8 +78,7 @@ vi.mock('../../src/lib/neonClients', () => {
     return query;
   }
 
-  // Canonical organization membership reads use the user-scoped client;
-  // unowned enterprise compatibility tables use the explicit system client.
+  // Organization membership and enterprise rows share one RLS-scoped client.
   const serviceClient = {
     from: vi.fn((table: string) => {
       if (table === 'profiles') {

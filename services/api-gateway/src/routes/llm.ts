@@ -537,7 +537,7 @@ router.post(
         })
         .then(
           ({ error }) => {
-            if (error) logger.debug({ error }, 'Failed to log usage event (table may not exist)');
+            if (error) logger.debug({ error }, 'Failed to log usage event');
           },
           (err: unknown) => {
             logger.debug({ err }, `Usage event insert rejected (${eventType} path)`);

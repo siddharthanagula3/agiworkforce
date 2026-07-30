@@ -17,11 +17,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import {
-  getSystemClient,
-  getUserScopedClient,
-  type UserAuth,
-} from '../lib/neonClients';
+import { getUserScopedClient, type UserAuth } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -162,9 +158,7 @@ router.get('/pending', createRateLimiter('device-status'), async (req: Request, 
 
   await verifyDesktopOwnership(desktopId, user);
 
-  // agent_approval_requests has no canonical migration. The explicit user_id
-  // and desktop_id predicates remain mandatory on this compatibility path.
-  const db = getSystemClient('shadow-schema-compatibility');
+  const db = getUserScopedClient(user);
   // Fetch pending approval requests from Neon
   const { data: pendingRequests, error } = await db
     .from('agent_approval_requests')
@@ -213,7 +207,7 @@ router.post(
 
     await verifyDesktopOwnership(desktopId, user);
 
-    const db = getSystemClient('shadow-schema-compatibility');
+    const db = getUserScopedClient(user);
     const { data: updatedRows, error: updateError } = await db
       .from('agent_approval_requests')
       .update({ status: 'approved', resolved_at: new Date().toISOString() })
@@ -276,7 +270,7 @@ router.post('/deny', createRateLimiter('device-command'), async (req: Request, r
 
   await verifyDesktopOwnership(desktopId, user);
 
-  const db = getSystemClient('shadow-schema-compatibility');
+  const db = getUserScopedClient(user);
   const { data: updatedRows, error: updateError } = await db
     .from('agent_approval_requests')
     .update({

@@ -17,10 +17,10 @@
 --      NO `user_id` column, so its policy uses `id`, not `user_id`. The draft
 --      referenced a non-existent `profiles.user_id` and would have failed to apply.
 --
--- HOW TO APPLY (branch-first; an apply script + a cross-tenant probe ship with it):
+-- HOW TO APPLY (branch-first; the ledger runner + a cross-tenant probe ship with it):
 --   neonctl branches create --name <test-branch>
---   DATABASE_URL="<branch-url>" node apps/web/scripts/apply-rls.mjs
---   DATABASE_URL="<branch-url>" node apps/web/scripts/rls-probe.mjs   # must PASS
+--   AGI_DATABASE_URL="<branch-url>" pnpm db:migrate -- apply --target branch
+--   AGI_DATABASE_URL="<branch-url>" pnpm db:rls-probe -- --target branch
 --   # then apply to production only after the probe passes on the branch.
 --
 -- PRODUCTION ENFORCEMENT CAVEAT (tracked follow-up, NOT in this migration):

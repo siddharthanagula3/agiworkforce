@@ -63,6 +63,10 @@ requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run typecheck --aff
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run test --affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run build --affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm check:protocol-types');
+requireIncludes('.github/workflows/ci.yml', 'image: postgres:16-alpine');
+requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- apply --target ci');
+requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- verify');
+requireIncludes('.github/workflows/ci.yml', 'pnpm db:rls-probe -- --target ci');
 requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
 requireIncludes('.github/workflows/ci.yml', '--filter=agi-workforce');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter agi-workforce package');

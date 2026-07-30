@@ -16,11 +16,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import {
-  getSystemClient,
-  getUserScopedClient,
-  type UserAuth,
-} from '../lib/neonClients';
+import { getUserScopedClient, type UserAuth } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -119,9 +115,7 @@ router.post(
     const messageId = randomUUID();
     const timestamp = Date.now();
 
-    // chat_messages has no canonical migration. Preserve its explicit user_id
-    // ownership predicates on the compatibility boundary.
-    const db = getSystemClient('shadow-schema-compatibility');
+    const db = getUserScopedClient(user);
     // Persist the message to Neon for history (best-effort)
     const { error: insertError } = await db.from('chat_messages').insert({
       id: messageId,
@@ -135,8 +129,8 @@ router.post(
     });
 
     if (insertError) {
-      // Non-fatal: table may not exist yet, message still gets delivered via WS
-      logger.debug({ error: insertError }, 'Failed to persist chat message (table may not exist)');
+      // Persistence is best-effort; realtime delivery can still succeed.
+      logger.debug({ error: insertError }, 'Failed to persist chat message');
     }
 
     // Forward to desktop via WebSocket
@@ -197,7 +191,7 @@ router.get('/history', createRateLimiter('device-status'), async (req: Request, 
     await verifyDesktopOwnership(query.desktopId, user);
   }
 
-  const db = getSystemClient('shadow-schema-compatibility');
+  const db = getUserScopedClient(user);
   // Build Neon query
   let dbQuery = db
     .from('chat_messages')
@@ -221,8 +215,7 @@ router.get('/history', createRateLimiter('device-status'), async (req: Request, 
   const { data: messages, error } = await dbQuery;
 
   if (error) {
-    // Table may not exist yet — return empty list
-    logger.debug({ error }, 'Failed to fetch chat history (table may not exist)');
+    logger.debug({ error }, 'Failed to fetch chat history');
     res.json({ messages: [], hasMore: false });
     return;
   }
@@ -268,7 +261,7 @@ router.get(
       await verifyDesktopOwnership(desktopId, user);
     }
 
-    const db = getSystemClient('shadow-schema-compatibility');
+    const db = getUserScopedClient(user);
     // Fetch distinct conversations with their latest message
     let dbQuery = db
       .from('chat_messages')
@@ -285,7 +278,7 @@ router.get(
     const { data: messages, error } = await dbQuery;
 
     if (error) {
-      logger.debug({ error }, 'Failed to fetch conversations (table may not exist)');
+      logger.debug({ error }, 'Failed to fetch conversations');
       res.json({ conversations: [] });
       return;
     }
