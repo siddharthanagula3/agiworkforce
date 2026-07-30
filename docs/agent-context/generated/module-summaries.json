@@ -1,0 +1,341 @@
+{
+  "generatedFrom": "docs/agent-context/repo-map.json#workspaceUnits (unit list) + each unit's package.json description / Cargo.toml description / README.md ## Purpose|Scope section",
+  "units": [
+    {
+      "name": "agiworkforce-agent-core",
+      "path": "crates/agiworkforce-agent-core",
+      "kind": "crate",
+      "purpose": "AGI Workforce shared agent turn-loop engine: model-stream driving, tool-call scheduling (sequential + parallel read-only batches), runaway/iteration/budget guards, and turn-event emission. Host-agnostic — the CLI and desktop implement TurnHost to supply completion, tool dispatch, hooks, approval, and event routing."
+    },
+    {
+      "name": "agiworkforce-app-server",
+      "path": "crates/agiworkforce-app-server",
+      "kind": "crate",
+      "purpose": "JSON-RPC stdio + WebSocket transport exposing AGI Workforce tools to programmatic clients"
+    },
+    {
+      "name": "agiworkforce-command-registry",
+      "path": "crates/agiworkforce-command-registry",
+      "kind": "crate",
+      "purpose": "AGI command registry contracts for CLI and TUI surfaces"
+    },
+    {
+      "name": "agiworkforce-execpolicy",
+      "path": "crates/agiworkforce-execpolicy",
+      "kind": "crate",
+      "purpose": "AGI Workforce exec policy: prefix-based Starlark rules for command decisions."
+    },
+    {
+      "name": "agiworkforce-licensing",
+      "path": "crates/agiworkforce-licensing",
+      "kind": "crate",
+      "purpose": "Offline, panic-free verification of enterprise-Local **licenses** (`.agilicense`) and **org policies** (`.agipolicy`) — the Rust half of the P7 Enterprise Local licensing foundation (design `docs/enterprise/enterprise-local-design.md` §2..."
+    },
+    {
+      "name": "agiworkforce-llm",
+      "path": "crates/agiworkforce-llm",
+      "kind": "crate",
+      "purpose": "AGI Workforce shared LLM provider engine: dialect request building, SSE/NDJSON stream decoding, tool-call delta assembly, and provider error classification."
+    },
+    {
+      "name": "agiworkforce-mcp",
+      "path": "crates/agiworkforce-mcp",
+      "kind": "crate",
+      "purpose": "AGI Workforce shared MCP (Model Context Protocol) client engine: JSON-RPC framing/correlation/timeouts, stdio/SSE/Streamable-HTTP transports, and RFC 9728/8414/7591 OAuth. Transport-agnostic; UI/persistence injected by the host app."
+    },
+    {
+      "name": "agiworkforce-model-registry",
+      "path": "crates/agiworkforce-model-registry",
+      "kind": "crate",
+      "purpose": "Typed Rust access to AGI Workforce's generated model registry and Auto routing policy."
+    },
+    {
+      "name": "agiworkforce-network-proxy",
+      "path": "crates/agiworkforce-network-proxy",
+      "kind": "crate",
+      "purpose": "Rust network proxy crate for controlled network access in AGI Workforce runtimes."
+    },
+    {
+      "name": "agiworkforce-protocol",
+      "path": "crates/agiworkforce-protocol",
+      "kind": "crate",
+      "purpose": "This crate owns Rust wire types shared by AGI runtimes and clients. Its `developer_session` module defines the canonical local thread/turn protocol used by `agi app-server` and AGI for VS Code. Selected types are generated into `@agiwork..."
+    },
+    {
+      "name": "agiworkforce-sandbox-policy",
+      "path": "crates/agiworkforce-sandbox-policy",
+      "kind": "crate",
+      "purpose": "Shared sandbox policy model for AGI Workforce surfaces"
+    },
+    {
+      "name": "agiworkforce-utils-absolute-path",
+      "path": "crates/agiworkforce-utils-absolute-path",
+      "kind": "crate",
+      "purpose": "Rust utility crate for absolute path handling and path serialization."
+    },
+    {
+      "name": "agiworkforce-utils-image",
+      "path": "crates/agiworkforce-utils-image",
+      "kind": "crate",
+      "purpose": "Rust utility crate for image handling, MIME detection, encoding, and image-related helpers."
+    },
+    {
+      "name": "@agiworkforce/model-registry",
+      "path": "packages/ai/model-registry",
+      "kind": "package",
+      "purpose": "Canonical owner of model identity, provider routes, intrinsic capabilities, harness capabilities, pricing, limits, lifecycle, availability, routing policy, evidence, and generated cross-language registry artifacts."
+    },
+    {
+      "name": "@agiworkforce/provider-protocol",
+      "path": "packages/ai/provider-protocol",
+      "kind": "package",
+      "purpose": "Cross-provider LLM payload normalization helpers."
+    },
+    {
+      "name": "@agiworkforce/provider-runtime",
+      "path": "packages/ai/provider-runtime",
+      "kind": "package",
+      "purpose": "Shared LLM runtime abstractions for streaming, events, tool loops, and provider-independent model execution behavior."
+    },
+    {
+      "name": "providers",
+      "path": "packages/ai/providers",
+      "kind": "package-group",
+      "purpose": "`packages/ai/providers` contains provider-specific adapters for model APIs and local runtimes. These packages translate vendor/local provider behavior into AGI-owned schemas and event contracts."
+    },
+    {
+      "name": "@agiworkforce/providers-anthropic",
+      "path": "packages/ai/providers/anthropic",
+      "kind": "package",
+      "purpose": "Anthropic provider adapter for AGI-owned model/provider contracts."
+    },
+    {
+      "name": "@agiworkforce/providers-deepseek",
+      "path": "packages/ai/providers/deepseek",
+      "kind": "package",
+      "purpose": "DeepSeek provider adapter using AGI-owned provider contracts."
+    },
+    {
+      "name": "@agiworkforce/providers-factory",
+      "path": "packages/ai/providers/factory",
+      "kind": "package",
+      "purpose": "`@agiworkforce/providers-factory` is the cross-deployable TypeScript composition boundary for constructing a provider adapter from a canonical provider ID and an explicit provider configuration."
+    },
+    {
+      "name": "@agiworkforce/providers-google",
+      "path": "packages/ai/providers/google",
+      "kind": "package",
+      "purpose": "Google/Gemini provider adapter for AGI-owned model/provider contracts."
+    },
+    {
+      "name": "groq",
+      "path": "packages/ai/providers/groq",
+      "kind": "package",
+      "purpose": "unknown"
+    },
+    {
+      "name": "@agiworkforce/providers-lmstudio",
+      "path": "packages/ai/providers/lmstudio",
+      "kind": "package",
+      "purpose": "LM Studio local/OpenAI-compatible provider adapter for AGI-owned model/provider contracts."
+    },
+    {
+      "name": "mistral",
+      "path": "packages/ai/providers/mistral",
+      "kind": "package",
+      "purpose": "unknown"
+    },
+    {
+      "name": "@agiworkforce/providers-moonshot",
+      "path": "packages/ai/providers/moonshot",
+      "kind": "package",
+      "purpose": "Moonshot AI (Kimi) provider adapter using AGI-owned provider contracts. Moonshot serves an OpenAI-compatible Chat Completions API."
+    },
+    {
+      "name": "@agiworkforce/providers-ollama",
+      "path": "packages/ai/providers/ollama",
+      "kind": "package",
+      "purpose": "Ollama local-provider adapter for AGI-owned model/provider contracts."
+    },
+    {
+      "name": "@agiworkforce/providers-openai",
+      "path": "packages/ai/providers/openai",
+      "kind": "package",
+      "purpose": "OpenAI provider adapter for AGI-owned model/provider contracts."
+    },
+    {
+      "name": "@agiworkforce/providers-openrouter",
+      "path": "packages/ai/providers/openrouter",
+      "kind": "package",
+      "purpose": "OpenRouter provider adapter using AGI-owned provider contracts. OpenRouter routes to hundreds of underlying models via an OpenAI-compatible Chat Completions endpoint at `https://openrouter.ai/api/v1`."
+    },
+    {
+      "name": "@agiworkforce/providers-perplexity",
+      "path": "packages/ai/providers/perplexity",
+      "kind": "package",
+      "purpose": "Perplexity provider adapter using AGI-owned provider contracts."
+    },
+    {
+      "name": "@agiworkforce/providers-qwen",
+      "path": "packages/ai/providers/qwen",
+      "kind": "package",
+      "purpose": "Qwen (Alibaba) provider adapter using AGI-owned provider contracts. Defaults to Alibaba DashScope's **OpenAI-compatible mode** (`https://dashscope.aliyuncs.com/compatible-mode/v1`), not DashScope's native generation API — see \"Judgment c..."
+    },
+    {
+      "name": "@agiworkforce/providers-xai",
+      "path": "packages/ai/providers/xai",
+      "kind": "package",
+      "purpose": "xAI provider adapter using AGI-owned provider contracts."
+    },
+    {
+      "name": "@agiworkforce/providers-zhipu",
+      "path": "packages/ai/providers/zhipu",
+      "kind": "package",
+      "purpose": "ZhipuAI (GLM / BigModel) provider adapter using AGI-owned provider contracts. Zhipu serves an OpenAI-compatible Chat Completions API at `https://open.bigmodel.cn/api/paas/v4`."
+    },
+    {
+      "name": "@agiworkforce/routing",
+      "path": "packages/ai/routing",
+      "kind": "package",
+      "purpose": "Shared model/provider routing logic for selecting providers, models, fallbacks, and routing metadata."
+    },
+    {
+      "name": "@agiworkforce/search",
+      "path": "packages/ai/search",
+      "kind": "package",
+      "purpose": "Canonical cross-surface queries for registry-derived web-search harness availability. It tells callers which provider paths are implemented and when a generic platform tool is required; it does not execute search."
+    },
+    {
+      "name": "@agiworkforce/client-runtime",
+      "path": "packages/client/client-runtime",
+      "kind": "package",
+      "purpose": "`@agiworkforce/client-runtime` owns shared TypeScript runtime primitives that can be used across AGI Workforce surfaces without importing app code."
+    },
+    {
+      "name": "@agiworkforce/desktop-command-client",
+      "path": "packages/client/desktop-command-client",
+      "kind": "package",
+      "purpose": "Typed Desktop renderer client for privileged commands exposed by the Tauri host. It provides command-specific wrappers and wire types on top of `@agiworkforce/client-runtime`; it is not the platform HTTP API or API Gateway."
+    },
+    {
+      "name": "@agiworkforce/sync",
+      "path": "packages/client/sync",
+      "kind": "package",
+      "purpose": "Canonical pure delta-apply and bigint-cursor mechanics for cross-device Managed Cloud synchronization. Mobile consumes the TypeScript implementation at runtime. Web consumes the cursor mechanics for its pull-only artifact overlay. Deskto..."
+    },
+    {
+      "name": "@agiworkforce/cloud-contracts",
+      "path": "packages/contracts/cloud-contracts",
+      "kind": "package",
+      "purpose": "Canonical managed-cloud wire contracts for AGI Workforce. This package owns the Zod schemas, endpoint paths, custom stream deltas, and typed clients shared by Web, Desktop, Mobile, and the transitional `@agiworkforce/services` facade."
+    },
+    {
+      "name": "@agiworkforce/compliance",
+      "path": "packages/contracts/compliance",
+      "kind": "package",
+      "purpose": "Shared compliance logic and policy helpers for privacy, audit, and regulatory-facing product behavior."
+    },
+    {
+      "name": "@agiworkforce/licensing",
+      "path": "packages/contracts/licensing",
+      "kind": "package",
+      "purpose": "`@agiworkforce/licensing` is the pure, offline-verifiable primitive for Enterprise Local licensing (design `docs/enterprise/enterprise-local-design.md` §2.1–§2.2). It verifies signed `.agilicense` and `.agipolicy` files with **zero I/O a..."
+    },
+    {
+      "name": "@agiworkforce/trust-boundaries",
+      "path": "packages/contracts/trust-boundaries",
+      "kind": "package",
+      "purpose": "Canonical platform-neutral classification policy for AGI-owned Managed Cloud hosts. Desktop and Mobile use it as the shared floor for their fail-closed Local-mode egress guards."
+    },
+    {
+      "name": "@agiworkforce/types",
+      "path": "packages/contracts/types",
+      "kind": "package",
+      "purpose": "`@agiworkforce/types` is the shared TypeScript contract package for AGI Workforce. It owns cross-surface schemas for providers, models, chat, artifacts, memory, billing catalogs, dispatch, MCP, tools, users, runtime events, and other pro..."
+    },
+    {
+      "name": "@agiworkforce/artifacts",
+      "path": "packages/platform/artifacts",
+      "kind": "package",
+      "purpose": "Canonical platform-neutral artifact mechanics for Web, Desktop, and Mobile: deterministic derivation, publish-boundary enforcement, cloud merge/apply rules, and the vanilla Zustand artifact store. Hosts wrap the store with their own pers..."
+    },
+    {
+      "name": "@agiworkforce/data-layer",
+      "path": "packages/platform/data-layer",
+      "kind": "package",
+      "purpose": "Neon + Clerk data-layer boundary for AGI Workforce"
+    },
+    {
+      "name": "@agiworkforce/local-llm",
+      "path": "packages/platform/local-llm",
+      "kind": "package",
+      "purpose": "Shared local LLM contracts and helpers for on-device or local-host model execution, especially mobile/local-first flows."
+    },
+    {
+      "name": "@agiworkforce/utils",
+      "path": "packages/platform/utils",
+      "kind": "package",
+      "purpose": "Shared utility helpers that are genuinely cross-surface and too small to justify a domain package."
+    },
+    {
+      "name": "@agiworkforce/apply-patch",
+      "path": "packages/tools/apply-patch",
+      "kind": "package",
+      "purpose": "Shared TypeScript patch-application helpers for agent/code-edit workflows."
+    },
+    {
+      "name": "@agiworkforce/browser-tool",
+      "path": "packages/tools/browser-tool",
+      "kind": "package",
+      "purpose": "Shared browser automation primitives backed by Playwright Core."
+    },
+    {
+      "name": "@agiworkforce/mcp",
+      "path": "packages/tools/mcp",
+      "kind": "package",
+      "purpose": "Shared Model Context Protocol helpers and contracts for MCP server registration, prompts, tools, and connector behavior."
+    },
+    {
+      "name": "@agiworkforce/skills",
+      "path": "packages/tools/skills",
+      "kind": "package",
+      "purpose": "Shared skill manifest and skill-loading helpers for AGI Workforce customization flows."
+    },
+    {
+      "name": "@agiworkforce/design-tokens",
+      "path": "packages/ui/design-tokens",
+      "kind": "package",
+      "purpose": "Shared design tokens and CSS exports for AGI Workforce surfaces."
+    },
+    {
+      "name": "@agiworkforce/ui",
+      "path": "packages/ui/ui",
+      "kind": "package",
+      "purpose": "`@agiworkforce/ui` is the cross-surface home for **pure presentation primitives and shared UI configuration** that must stay byte-identical between the web and desktop chat surfaces — so brand/provider marks and the settings information ..."
+    },
+    {
+      "name": "@agiworkforce/unified-chat",
+      "path": "packages/ui/unified-chat",
+      "kind": "package",
+      "purpose": "`@agiworkforce/unified-chat` owns reusable chat UI, chat stores, artifact UI, composer behavior, model selector UI, command palette pieces, and shared frontend chat primitives used across AGI Workforce surfaces."
+    },
+    {
+      "name": "@agiworkforce/api-gateway",
+      "path": "services/api-gateway",
+      "kind": "service",
+      "purpose": "API Gateway for AGI Workforce Mobile Companion"
+    },
+    {
+      "name": "@agiworkforce/signaling-server",
+      "path": "services/signaling-server",
+      "kind": "service",
+      "purpose": "`services/signaling-server` owns real-time signaling for pairing, companion, collaboration, or remote-control flows that need a backend relay."
+    },
+    {
+      "name": "skill-vetting",
+      "path": "tools/skill-vetting",
+      "kind": "tool",
+      "purpose": "unknown"
+    }
+  ]
+}

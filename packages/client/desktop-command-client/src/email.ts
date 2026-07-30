@@ -58,15 +58,6 @@ export interface Contact {
   company?: string;
   notes?: string;
 }
-export interface KeyringStatus {
-  available: boolean;
-  error?: string;
-}
-export interface MigrationResult {
-  account: string;
-  success: boolean;
-  error?: string;
-}
 export interface GmailOAuthConfig {
   clientId: string;
   clientSecret: string;
@@ -175,13 +166,6 @@ export async function emailSearch(
 ): Promise<EmailSearchResult> {
   return command<EmailSearchResult>('email_search', { accountId, query, folder, limit });
 }
-export async function emailCheckKeyringStatus(): Promise<KeyringStatus> {
-  return command<KeyringStatus>('email_check_keyring_status');
-}
-export async function emailMigrateCredentials(): Promise<MigrationResult[]> {
-  return command<MigrationResult[]>('email_migrate_credentials');
-}
-
 // ---- Contacts ----
 
 export async function contactCreate(contact: Contact): Promise<number> {

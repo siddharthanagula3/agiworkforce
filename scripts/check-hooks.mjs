@@ -64,6 +64,7 @@ for (const hook of ['.husky/commit-msg', '.husky/pre-commit', '.husky/pre-push']
 
 requireIncludes('.husky/commit-msg', 'pnpm exec commitlint --edit "$1"');
 requireIncludes('.husky/pre-commit', 'pnpm exec lint-staged');
+requireIncludes('.husky/pre-commit', 'pnpm check:audit-inventory');
 requireIncludes('.husky/pre-commit', 'pnpm check:executable-docs');
 requireIncludes('.husky/pre-commit', 'pnpm check:structure-conventions');
 requireIncludes('.husky/pre-commit', 'pnpm check:agent-context');
@@ -77,6 +78,7 @@ requireIncludes('commitlint.config.cjs', 'header-max-length');
 requireIncludes('commitlint.config.cjs', 'subject-case');
 
 requirePackageScript('check:hooks', 'scripts/check-hooks.mjs');
+requirePackageScript('check:audit-inventory', 'scripts/check-audit-inventory.mjs');
 requirePackageScript('check:executable-docs', 'scripts/check-executable-docs.mjs');
 requirePackageScript('check:llm-operability', 'pnpm check:hooks');
 

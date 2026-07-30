@@ -1,0 +1,43 @@
+# Baseline Desktop IPC Registrations Without Literal Callers
+
+Status: Accepted
+
+Date: 2026-07-29
+
+Owners: Desktop frontend, Desktop native, and product integration
+
+## Context
+
+The corrected Desktop wiring guard parses only the real
+`tauri::generate_handler![]` registry and scans production Desktop/shared-client
+sources for literal command calls. After removing phantom frontend calls and
+unregistered renderer-exposed billing commands, 97 registered commands remain
+without a statically discoverable caller.
+
+Some commands are invoked through runtime-selected names, while the rest are
+preexisting integration debt that must be wired or cut in Ticket 1C. Failing
+the entire branch before that bounded reconciliation would prevent the guard
+from landing and allow new orphan registrations to accumulate.
+
+## Decision
+
+`apps/desktop/wiring-allowlist.json` is the only accepted exception list for a
+registered command without a literal production caller.
+
+- Every entry names one registered command and gives a substantive reason.
+- Entries with confirmed runtime-selected call sites identify that mechanism.
+- Other entries explicitly say they are temporary Ticket 1C debt.
+- The checker rejects duplicate, unregistered, or newly called entries as
+  stale.
+- Adding a new entry requires updating this decision or superseding it; the
+  normal rule is to add the caller in the same change or remove the command.
+
+An allowlist entry is not evidence that a capability is built or reachable.
+The integration inventory remains authoritative for product status.
+
+## Consequences
+
+CI now fails on every new frontend-to-native mismatch, every unregistered
+Tauri command, and every new orphan registration. Ticket 1C has a finite,
+machine-enforced baseline to reconcile without weakening checks for subsequent
+changes.

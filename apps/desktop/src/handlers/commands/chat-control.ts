@@ -414,30 +414,3 @@ export async function executeEnhanceCommand(lastMessage: string): Promise<Inline
 
   return panel;
 }
-
-export async function executePlanCommand(description: string): Promise<InlinePanel> {
-  const panelId = `plan-${crypto.randomUUID()}`;
-
-  const { usePlanningStore } = await import('../../stores/planningStore');
-  usePlanningStore.getState().openPanel(description || undefined);
-
-  const panel: InlinePanel = {
-    id: panelId,
-    type: 'plan',
-    content: {
-      data: {
-        title: 'Interactive Plan',
-        description: description
-          ? `Generating execution plan for: "${description.slice(0, 100)}${description.length > 100 ? '...' : ''}"`
-          : 'Plan panel opened — enter a task description to generate steps.',
-      },
-    },
-    isCollapsed: false,
-    timestamp: new Date(),
-    metadata: {
-      status: description ? 'running' : 'completed',
-    },
-  };
-
-  return panel;
-}
