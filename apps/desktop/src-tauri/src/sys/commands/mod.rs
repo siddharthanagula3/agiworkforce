@@ -102,7 +102,6 @@ pub mod swarm; // Added in Phase 26
 pub mod system_permissions;
 pub mod test_runner; // Test runner integration (cargo / pytest / jest / etc.)
 pub mod tool_confirmation;
-pub mod tray;
 pub mod tutorials;
 pub mod undo;
 pub mod vision;
@@ -217,7 +216,6 @@ pub use terminal::*;
 pub use test_runner::*;
 pub use thinking::*;
 pub use tool_confirmation::*;
-pub use tray::*;
 pub use triggers::*;
 pub use tutorials::*;
 pub use undo::*;

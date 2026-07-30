@@ -1287,7 +1287,6 @@ pub fn run() {
             crate::sys::commands::window_set_fullscreen,
             crate::sys::commands::window_toggle_floating,
             crate::sys::commands::window_close_floating,
-            crate::sys::commands::tray_set_unread_badge,
 
             crate::sys::commands::chat_create_conversation,
             crate::sys::commands::chat_get_conversations,
