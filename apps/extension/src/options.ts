@@ -514,6 +514,21 @@ async function buildPage(): Promise<void> {
   notifRow.appendChild(notifToggle);
   permSection.appendChild(notifRow);
 
+  const browserControlBoundary = el('div', { class: 'opt-row' });
+  const browserControlBoundaryText = el('div');
+  browserControlBoundaryText.appendChild(
+    el('div', { class: 'opt-row-label' }, 'Browser control boundary'),
+  );
+  browserControlBoundaryText.appendChild(
+    el(
+      'div',
+      { class: 'opt-row-hint' },
+      'Computer use uses Chrome DevTools Protocol (CDP) only after you start a run on an approved site. Ask before acting is on by default in the side panel; the debugger attaches for one bounded action and detaches afterward. AGI does not expose an unrestricted CDP developer mode.',
+    ),
+  );
+  browserControlBoundary.appendChild(browserControlBoundaryText);
+  permSection.appendChild(browserControlBoundary);
+
   // Approved sites (allowlist)
   const allowlistBody = el('div', { class: 'opt-allowlist-body' });
   allowlistBody.appendChild(
