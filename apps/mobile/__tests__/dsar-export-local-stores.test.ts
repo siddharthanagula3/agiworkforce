@@ -74,6 +74,7 @@ import { buildLocalDataExportSnapshot } from '../src/features/settings/data-cont
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import { useSettingsStore } from '../stores/settingsStore';
 
 describe('DSAR export local stores', () => {
   beforeEach(() => {
@@ -138,6 +139,7 @@ describe('DSAR export local stores', () => {
         emoji: 0,
       },
     });
+    useSettingsStore.setState({ reduceSensitiveContent: true });
   });
 
   it('exports MMKV-backed local conversations, projects, and settings', async () => {
@@ -166,6 +168,7 @@ describe('DSAR export local stores', () => {
     expect(payload.mobile_settings).toEqual(
       expect.objectContaining({
         accent_color: 'blue',
+        reduce_sensitive_content: true,
         personalization: expect.objectContaining({ full_name: 'Sid' }),
       }),
     );

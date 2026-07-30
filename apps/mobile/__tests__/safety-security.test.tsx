@@ -7,6 +7,9 @@ const mockSetItemAsync = jest.fn();
 const mockGetEnrolledLevelAsync = jest.fn();
 const mockAuthenticateAsync = jest.fn();
 const mockPush = jest.fn();
+const mockSetReduceSensitiveContent = jest.fn();
+let mockMinorMode = false;
+let mockReduceSensitiveContent = false;
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn().mockResolvedValue(null),
@@ -37,12 +40,17 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+jest.mock('../src/features/auth/services/ageGate', () => ({
+  isMinorMode: () => mockMinorMode,
+}));
+
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
   const icon = (props: Record<string, unknown>) => <View {...props} />;
   return {
     ArrowLeft: icon,
     ChevronRight: icon,
+    EyeOff: icon,
     Fingerprint: icon,
     Shield: icon,
     Smartphone: icon,
@@ -50,8 +58,18 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('../stores/settingsStore', () => ({
-  useSettingsStore: (selector: (state: { hapticsEnabled: boolean }) => unknown) =>
-    selector({ hapticsEnabled: false }),
+  useSettingsStore: (
+    selector: (state: {
+      hapticsEnabled: boolean;
+      reduceSensitiveContent: boolean;
+      setReduceSensitiveContent: typeof mockSetReduceSensitiveContent;
+    }) => unknown,
+  ) =>
+    selector({
+      hapticsEnabled: false,
+      reduceSensitiveContent: mockReduceSensitiveContent,
+      setReduceSensitiveContent: mockSetReduceSensitiveContent,
+    }),
 }));
 
 jest.mock('@/components/ui/switch', () => {
@@ -61,13 +79,19 @@ jest.mock('@/components/ui/switch', () => {
       value,
       onValueChange,
       disabled,
+      accessibilityLabel,
+      accessibilityHint,
     }: {
       value: boolean;
       onValueChange: (next: boolean) => void;
       disabled?: boolean;
+      accessibilityLabel?: string;
+      accessibilityHint?: string;
     }) => (
       <Pressable
         accessibilityRole="switch"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
         accessibilityState={{ checked: value, disabled: Boolean(disabled) }}
         disabled={disabled}
         onPress={() => onValueChange(!value)}
@@ -86,6 +110,8 @@ describe('Safety & Security settings', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMinorMode = false;
+    mockReduceSensitiveContent = false;
     useBiometricFlag.setState({ hydrated: true, enabled: false });
     mockGetEnrolledLevelAsync.mockResolvedValue(2);
     mockAuthenticateAsync.mockResolvedValue({ success: true });
@@ -97,17 +123,46 @@ describe('Safety & Security settings', () => {
   });
 
   it('shows the app-lock toggle with Face ID and passcode copy', () => {
-    const { getByText, getByLabelText } = render(<SafetySecurityScreen />);
+    const { getByText, getByRole } = render(<SafetySecurityScreen />);
 
     expect(getByText('App Lock')).toBeTruthy();
     expect(getByText('Require Face ID, Touch ID, or passcode to open AGI.')).toBeTruthy();
-    expect(getByLabelText('App Lock. Off')).toBeTruthy();
+    expect(getByRole('switch', { name: 'App Lock. Off' })).toBeTruthy();
+  });
+
+  it('lets an adult enable stricter content filtering', () => {
+    const { getByText, getByRole } = render(<SafetySecurityScreen />);
+
+    expect(getByText('Reduce sensitive content')).toBeTruthy();
+    expect(
+      getByText(
+        'Filter clearly explicit and harmful requests before they reach Local or Cloud models.',
+      ),
+    ).toBeTruthy();
+
+    fireEvent.press(getByRole('switch', { name: 'Reduce sensitive content. Off' }));
+
+    expect(mockSetReduceSensitiveContent).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps stricter content filtering on and disabled in minor-safe mode', () => {
+    mockMinorMode = true;
+    const { getByText, getByRole } = render(<SafetySecurityScreen />);
+    const safetySwitch = getByRole('switch', { name: 'Reduce sensitive content. On' });
+
+    expect(
+      getByText('Required by age settings. It stays on while minor-safe mode is active.'),
+    ).toBeTruthy();
+    expect(safetySwitch.props.accessibilityState).toEqual({ checked: true, disabled: true });
+
+    fireEvent.press(safetySwitch);
+    expect(mockSetReduceSensitiveContent).not.toHaveBeenCalled();
   });
 
   it('requires successful OS authentication before enabling app lock', async () => {
     const { getByRole } = render(<SafetySecurityScreen />);
 
-    fireEvent.press(getByRole('switch'));
+    fireEvent.press(getByRole('switch', { name: 'App Lock. Off' }));
 
     await waitFor(() => {
       expect(mockAuthenticateAsync).toHaveBeenCalledWith({
@@ -127,7 +182,7 @@ describe('Safety & Security settings', () => {
     mockGetEnrolledLevelAsync.mockResolvedValue(0);
     const { getByRole } = render(<SafetySecurityScreen />);
 
-    fireEvent.press(getByRole('switch'));
+    fireEvent.press(getByRole('switch', { name: 'App Lock. Off' }));
 
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith(
@@ -144,7 +199,7 @@ describe('Safety & Security settings', () => {
     mockAuthenticateAsync.mockResolvedValue({ success: false, error: 'user_cancel' });
     const { getByRole } = render(<SafetySecurityScreen />);
 
-    fireEvent.press(getByRole('switch'));
+    fireEvent.press(getByRole('switch', { name: 'App Lock. Off' }));
 
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith(
