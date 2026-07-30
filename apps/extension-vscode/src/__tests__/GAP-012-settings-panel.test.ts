@@ -217,4 +217,51 @@ describe('SettingsPanel', () => {
       'agiWorkforce',
     );
   });
+
+  it('persists custom instructions in the selected scope and refreshes panel state', async () => {
+    SettingsPanel.createOrShow(context, 'personalization');
+
+    await webviewMessageHandler!({
+      type: 'settings.instructions.update',
+      scope: 'workspace',
+      value: 'Use workspace fixtures.',
+    });
+
+    expect(context.workspaceState.get('agiWorkforce.customInstructions.workspace')).toBe(
+      'Use workspace fixtures.',
+    );
+    expect(panelPostMessage).toHaveBeenCalledWith({
+      type: 'settings.instructions.saved',
+      scope: 'workspace',
+    });
+    expect(panelPostMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'settings.snapshot',
+        state: expect.objectContaining({
+          instructionContext: expect.objectContaining({
+            effectiveScope: 'workspace',
+            effective: 'Use workspace fixtures.',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('routes config-file and runtime-restart actions through registered extension commands', async () => {
+    SettingsPanel.createOrShow(context, 'configuration');
+
+    await webviewMessageHandler!({
+      type: 'settings.command',
+      command: 'openAgentConfig',
+    });
+    await webviewMessageHandler!({
+      type: 'settings.command',
+      command: 'restartLocalRuntime',
+    });
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.openAgentConfig');
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'agi-workforce.restartLocalRuntime',
+    );
+  });
 });

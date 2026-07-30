@@ -4,6 +4,7 @@ import {
   ContextPanelProvider,
   validateWorkspaceContextFile,
 } from '../features/trees/contextPanelProvider';
+import { HOST_CUSTOM_INSTRUCTIONS_KEY } from '../features/instructions';
 
 describe('workspace context-file selection', () => {
   beforeEach(() => {
@@ -62,6 +63,34 @@ describe('workspace context-file selection', () => {
 
     expect(result.ok).toBe(false);
     expect(addFile).not.toHaveBeenCalled();
+    provider.dispose();
+  });
+
+  it('shows the exact effective custom prelude beside runtime-discovered project sources', async () => {
+    const context = new vscode.ExtensionContext();
+    await context.globalState.update(
+      HOST_CUSTOM_INSTRUCTIONS_KEY,
+      'Prefer focused integration tests.',
+    );
+    vi.mocked(vscode.workspace.fs.readFile).mockImplementation(async (uri) => {
+      if (uri.fsPath.endsWith('AGENTS.md')) return Buffer.from('Use pnpm.');
+      throw new Error('not found');
+    });
+    const provider = new ContextPanelProvider(context);
+
+    await provider.refreshInstructionContext();
+    const instructionGroup = provider
+      .getChildren()
+      .find((item) => String(item.label).startsWith('Instructions'));
+    expect(instructionGroup).toBeDefined();
+    const instructionItems = provider.getChildren(instructionGroup);
+
+    expect(instructionItems.map((item) => item.label)).toEqual([
+      'Custom instructions',
+      'AGENTS.md',
+    ]);
+    expect(String(instructionItems[0]?.tooltip)).toContain('Prefer focused integration tests.');
+    expect(String(instructionItems[1]?.tooltip)).toContain('Use pnpm.');
     provider.dispose();
   });
 });

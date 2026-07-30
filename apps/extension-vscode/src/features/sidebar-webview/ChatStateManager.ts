@@ -44,6 +44,7 @@ import {
   setAgentModeWithConsent,
 } from '../permissions/agentModeConsent';
 import { ONBOARDING_SEEN_KEY } from '../onboarding/onboardingState';
+import { buildCustomInstructionInput } from '../instructions';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -971,12 +972,14 @@ export class ChatStateManager {
       try {
         const attachmentEntries = [...this._pendingAttachments];
         const attachmentInputs = attachmentEntries.map((entry) => entry.input);
+        const customInstructionInput = buildCustomInstructionInput(this._context);
         const memoryInput = buildMemoryContextInput(this._context.globalState);
         const contextFiles = contextFilesForWorkspace(cwd);
         const turn = await runtime.startTurn({
           threadId: thread.id,
           cwd,
           input: [
+            ...(customInstructionInput === undefined ? [] : [customInstructionInput]),
             { type: 'text', text, text_elements: [] },
             ...(memoryInput === undefined ? [] : [memoryInput]),
             ...attachmentInputs,

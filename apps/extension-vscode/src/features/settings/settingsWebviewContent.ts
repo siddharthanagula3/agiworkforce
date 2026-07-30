@@ -49,19 +49,22 @@ export function getSettingsWebviewContent(
 
       button,
       input,
-      select {
+      select,
+      textarea {
         font: inherit;
       }
 
       button,
       select,
-      input {
+      input,
+      textarea {
         color: var(--vscode-input-foreground);
       }
 
       button:focus-visible,
       select:focus-visible,
-      input:focus-visible {
+      input:focus-visible,
+      textarea:focus-visible {
         outline: 1px solid var(--vscode-focusBorder);
         outline-offset: 2px;
       }
@@ -358,6 +361,96 @@ export function getSettingsWebviewContent(
         cursor: pointer;
       }
 
+      .config-path {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 3px 6px;
+        border-radius: 4px;
+        color: var(--vscode-textPreformat-foreground);
+        background: var(--vscode-textPreformat-background);
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: 11px;
+        word-break: break-all;
+      }
+
+      .instruction-editor {
+        padding: 16px 18px;
+      }
+
+      .instruction-editor + .instruction-editor {
+        border-top: 1px solid var(--vscode-panel-border);
+      }
+
+      .instruction-textarea {
+        width: 100%;
+        min-height: 132px;
+        margin-top: 9px;
+        padding: 9px 10px;
+        resize: vertical;
+        border: 1px solid var(--vscode-input-border, transparent);
+        border-radius: 5px;
+        color: var(--vscode-input-foreground);
+        background: var(--vscode-input-background);
+        line-height: 1.45;
+      }
+
+      .instruction-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 9px;
+      }
+
+      .character-count {
+        color: var(--vscode-descriptionForeground);
+        font-size: 11px;
+      }
+
+      .instruction-preview {
+        max-height: 260px;
+        margin: 10px 0 0;
+        padding: 12px;
+        overflow: auto;
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 6px;
+        color: var(--vscode-editor-foreground);
+        background: var(--vscode-textCodeBlock-background);
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: 11px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .instruction-subheading {
+        margin-top: 14px;
+      }
+
+      .instruction-sources {
+        display: grid;
+        gap: 7px;
+        margin: 10px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .instruction-source {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 8px 10px;
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 5px;
+      }
+
+      .instruction-source span {
+        color: var(--vscode-descriptionForeground);
+        font-size: 11px;
+        text-align: right;
+      }
+
       .secondary-button,
       .primary-button {
         min-height: 30px;
@@ -481,6 +574,10 @@ export function getSettingsWebviewContent(
         margin: 7px 0 14px;
         color: var(--vscode-descriptionForeground);
         line-height: 1.5;
+      }
+
+      .setting-row + .empty-capability {
+        border-top: 1px solid var(--vscode-panel-border);
       }
 
       .action-row {
@@ -779,6 +876,25 @@ export function getSettingsWebviewContent(
                 spellcheck="false"
               />
             </div>
+            <div class="empty-capability">
+              <h3>Agent configuration file</h3>
+              <p>
+                The CLI reads this host-local TOML file when a workspace runtime starts. Existing
+                developer sessions keep their current process until you restart the local runtime.
+              </p>
+              <code class="config-path" id="agentConfigPath">~/.agiworkforce/config.toml</code>
+              <div class="action-row">
+                <button class="primary-button" type="button" data-command="openAgentConfig">
+                  Open config.toml
+                </button>
+                <button class="secondary-button" type="button" data-command="restartLocalRuntime">
+                  Restart local runtime
+                </button>
+                <button class="secondary-button" type="button" data-command="openConfigDocs">
+                  Configuration docs
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="card">
@@ -903,7 +1019,78 @@ export function getSettingsWebviewContent(
         >
           <div class="section-heading">
             <h2 tabindex="-1">Personalization</h2>
-            <p>Choose where AGI appears in the editor and how optional suggestions behave.</p>
+            <p>Set developer-session instructions and choose where AGI appears in the editor.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Custom instructions</h3>
+              <p>
+                Host instructions apply to VS Code developer sessions on this extension host.
+                A non-empty workspace value replaces the host default for this workspace.
+              </p>
+            </div>
+            <div class="instruction-editor">
+              <label class="setting-name" for="hostCustomInstructions">Host default</label>
+              <span class="setting-description">
+                Private to this VS Code extension host; it is not written into the repository.
+              </span>
+              <textarea
+                class="instruction-textarea"
+                id="hostCustomInstructions"
+                maxlength="8000"
+                placeholder="For example: Prefer focused changes, explain tradeoffs, and run relevant tests."
+              ></textarea>
+              <div class="instruction-footer">
+                <span class="character-count" id="hostInstructionCount">0 / 8,000</span>
+                <button
+                  class="primary-button"
+                  type="button"
+                  data-instruction-save="host"
+                >
+                  Save host instructions
+                </button>
+              </div>
+            </div>
+            <div class="instruction-editor">
+              <label class="setting-name" for="workspaceCustomInstructions">
+                Workspace override
+              </label>
+              <span class="setting-description">
+                Leave empty to inherit the host default. Stored in VS Code workspace state, not in a project file.
+              </span>
+              <textarea
+                class="instruction-textarea"
+                id="workspaceCustomInstructions"
+                maxlength="8000"
+                placeholder="Optional instructions for only this workspace."
+              ></textarea>
+              <div class="instruction-footer">
+                <span class="character-count" id="workspaceInstructionCount">0 / 8,000</span>
+                <button
+                  class="primary-button"
+                  type="button"
+                  data-instruction-save="workspace"
+                >
+                  Save workspace override
+                </button>
+              </div>
+            </div>
+            <div class="instruction-editor">
+              <span class="setting-name">Effective turn prelude</span>
+              <span class="setting-description">
+                This is the exact custom-instruction block prepended to new local developer turns.
+                Repository instruction files are loaded separately by the local runtime to avoid duplication.
+              </span>
+              <pre class="instruction-preview" id="instructionPrelude">No custom instructions are active.</pre>
+              <span class="setting-name instruction-subheading">Runtime-discovered project sources</span>
+              <ul class="instruction-sources" id="instructionSources"></ul>
+              <div class="action-row">
+                <button class="secondary-button" type="button" data-command="openInstructionDocs">
+                  Custom-instruction docs
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="card">
@@ -1264,7 +1451,7 @@ export function getSettingsWebviewContent(
           },
           personalization: {
             title: 'Personalization',
-            description: 'Choose where AGI appears in the editor and how optional suggestions behave.'
+            description: 'Manage custom instructions and choose where AGI appears in the editor.'
           },
           usage: {
             title: 'Usage & billing',
@@ -1409,6 +1596,66 @@ export function getSettingsWebviewContent(
             signInButton.hidden = false;
             signOutButton.hidden = true;
           }
+
+          document.getElementById('agentConfigPath').textContent =
+            state.agentConfigPath || '~/.agiworkforce/config.toml';
+
+          var instructionContext = state.instructionContext || {
+            host: '',
+            workspace: '',
+            effective: '',
+            effectiveScope: 'none',
+            turnPrelude: '',
+            projectSources: []
+          };
+          var hostInstructions = document.getElementById('hostCustomInstructions');
+          var workspaceInstructions = document.getElementById('workspaceCustomInstructions');
+          if (document.activeElement !== hostInstructions) {
+            hostInstructions.value = instructionContext.host || '';
+          }
+          if (document.activeElement !== workspaceInstructions) {
+            workspaceInstructions.value = instructionContext.workspace || '';
+          }
+          updateInstructionCount('host');
+          updateInstructionCount('workspace');
+          document.getElementById('instructionPrelude').textContent =
+            instructionContext.turnPrelude || 'No custom instructions are active.';
+
+          var instructionSources = document.getElementById('instructionSources');
+          instructionSources.textContent = '';
+          var projectSources = Array.isArray(instructionContext.projectSources)
+            ? instructionContext.projectSources
+            : [];
+          if (projectSources.length === 0) {
+            var emptySource = document.createElement('li');
+            emptySource.className = 'instruction-source';
+            emptySource.textContent =
+              'No AGENTS.md, CLAUDE.md, or .agiworkforce/instructions.md source was found.';
+            instructionSources.appendChild(emptySource);
+          } else {
+            projectSources.forEach(function (source) {
+              var item = document.createElement('li');
+              item.className = 'instruction-source';
+              var name = document.createElement('strong');
+              name.textContent = source.fileName || 'Instruction file';
+              var detail = document.createElement('span');
+              detail.textContent =
+                (source.truncated ? 'Preview truncated · ' : '') + (source.path || '');
+              item.appendChild(name);
+              item.appendChild(detail);
+              instructionSources.appendChild(item);
+            });
+          }
+        }
+
+        function updateInstructionCount(scope) {
+          var textarea = document.getElementById(
+            scope === 'host' ? 'hostCustomInstructions' : 'workspaceCustomInstructions'
+          );
+          var count = document.getElementById(
+            scope === 'host' ? 'hostInstructionCount' : 'workspaceInstructionCount'
+          );
+          count.textContent = textarea.value.length.toLocaleString() + ' / 8,000';
         }
 
         function readControlValue(control) {
@@ -1449,6 +1696,31 @@ export function getSettingsWebviewContent(
           });
         });
 
+        ['host', 'workspace'].forEach(function (scope) {
+          var textarea = document.getElementById(
+            scope === 'host' ? 'hostCustomInstructions' : 'workspaceCustomInstructions'
+          );
+          textarea.addEventListener('input', function () {
+            updateInstructionCount(scope);
+          });
+        });
+
+        document.querySelectorAll('[data-instruction-save]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            var scope = button.getAttribute('data-instruction-save');
+            if (scope !== 'host' && scope !== 'workspace') return;
+            var textarea = document.getElementById(
+              scope === 'host' ? 'hostCustomInstructions' : 'workspaceCustomInstructions'
+            );
+            setStatus('Saving ' + (scope === 'host' ? 'host instructions' : 'workspace override') + '…');
+            vscode.postMessage({
+              type: 'settings.instructions.update',
+              scope: scope,
+              value: textarea.value
+            });
+          });
+        });
+
         window.addEventListener('message', function (event) {
           var message = event.data;
           if (!message || typeof message !== 'object') return;
@@ -1456,6 +1728,12 @@ export function getSettingsWebviewContent(
             applySnapshot(message.state);
           } else if (message.type === 'settings.saved') {
             setStatus((settingLabels[message.key] || message.key) + ' saved.');
+          } else if (message.type === 'settings.instructions.saved') {
+            setStatus(
+              message.scope === 'workspace'
+                ? 'Workspace instruction override saved.'
+                : 'Host instructions saved.'
+            );
           } else if (message.type === 'settings.error') {
             setStatus(message.message || 'The setting could not be saved.', 'error');
             applySnapshot(state);

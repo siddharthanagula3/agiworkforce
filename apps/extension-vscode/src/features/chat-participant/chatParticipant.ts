@@ -36,6 +36,7 @@ import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
+import { buildCustomInstructionInput } from '../instructions';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ export function createChatHandler(
   conversationTreeProvider?: ConversationTreeProvider,
   globalState?: vscode.ExtensionContext['globalState'],
   localRuntimes?: LocalRuntimePool,
+  workspaceState?: vscode.ExtensionContext['workspaceState'],
 ): vscode.ChatRequestHandler {
   return async (
     request: vscode.ChatRequest,
@@ -206,6 +208,10 @@ export function createChatHandler(
     const runtime = localRuntimes.forWorkspace(cwd);
     const model = normalizeConfiguredModelId(Config.model());
     const userMessage = buildRuntimeTurnInput(request, editorCtx);
+    const customInstructionInput =
+      globalState === undefined || workspaceState === undefined
+        ? undefined
+        : buildCustomInstructionInput({ globalState, workspaceState });
     const memoryInput =
       globalState === undefined ? undefined : buildMemoryContextInput(globalState);
     let threadId = localThreadIdFromHistory(context);
@@ -341,6 +347,7 @@ export function createChatHandler(
         threadId,
         cwd,
         input: [
+          ...(customInstructionInput === undefined ? [] : [customInstructionInput]),
           { type: 'text', text: userMessage, text_elements: [] },
           ...(memoryInput === undefined ? [] : [memoryInput]),
         ],
@@ -419,6 +426,7 @@ export function registerChatParticipant(
     conversationTreeProvider,
     context.globalState,
     localRuntimes,
+    context.workspaceState,
   );
 
   const participant = vscode.chat.createChatParticipant('agiworkforce.agi', handler);

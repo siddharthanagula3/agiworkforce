@@ -17,6 +17,10 @@ import {
 } from '../features/trees/contextPanelProvider';
 import { MEMORY_STORE_KEY } from '../memory/memoryStore';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
+import {
+  HOST_CUSTOM_INSTRUCTIONS_KEY,
+  WORKSPACE_CUSTOM_INSTRUCTIONS_KEY,
+} from '../features/instructions';
 
 function makeHarness(
   options: {
@@ -418,6 +422,41 @@ describe('ChatStateManager local turn lifecycle', () => {
         ]),
       }),
     );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('prepends the effective workspace custom instructions before the user turn', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update(HOST_CUSTOM_INSTRUCTIONS_KEY, 'Use the host default.');
+    await harness.context.workspaceState.update(
+      WORKSPACE_CUSTOM_INSTRUCTIONS_KEY,
+      'Prefer workspace fixtures.',
+    );
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Implement the feature' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const turnParams = harness.runtime.startTurn.mock.calls[0]?.[0];
+    expect(turnParams.input[0]).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('Prefer workspace fixtures.'),
+    });
+    expect(turnParams.input[0].text).toContain('this VS Code workspace');
+    expect(turnParams.input[1]).toMatchObject({
+      type: 'text',
+      text: 'Implement the feature',
+    });
     harness.emit({
       type: 'turn_completed',
       threadId: 'thread-1',
