@@ -133,7 +133,7 @@ export default function AgeGateScreen() {
           </Text>
 
           <Text style={[styles.body, { color: colors.textSecondary }]}>
-            A parent or guardian can review these settings in{' '}
+            Age settings can be reviewed on this device in{' '}
             <Text style={{ color: colors.teal }}>Settings &gt; Parental Controls</Text>.
           </Text>
 

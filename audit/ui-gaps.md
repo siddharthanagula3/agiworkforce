@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: dabc8fe83bfc2390025863f616fed54f5bade921f0be83ca5c788973c4c74326 -->
+<!-- ui-gaps-csv-sha256: e7542e42ede70f280c1f61486e0e06180c6e879ae24d99c0db8633676a9d6401 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 99 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 97 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  303 |
+| Open        |  301 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   37 |
-| Not Planned |    1 |
+| Done        |   38 |
+| Not Planned |    2 |
 
 ## P0
 
@@ -533,24 +533,24 @@ Completed. Keep manual codes five-minute high-entropy bearer secrets, never log 
 
 - `chatgpt_reference/030-codex-ios-remote-setup-manual-pairing-code-modal-keyboard.png`
 
-### GAP-023 — Parental controls is a solo age-gate status page, not real parent-teen account linking
+### GAP-023 — Family account linking is not planned for the current device-only age-settings scope
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · web · Parental controls
 
 **Gap**
 
-Reference shows a full family-safety system: parents and teens link accounts, and parents get tools to adjust features, set limits, and add safeguards ('Add family member' flow). agiworkforce's mobile Parental Controls screen only displays whether minor-safe mode is active on this device and links to the age-gate re-check — there is no second account, no invite/link flow, and no parent-side controls over a teen's account.
+The reference is an account-linked family-governance product. agiworkforce v1 makes a narrower product decision: its age gate stores a device-local minor-safe state and applies content filtering, but it does not create a parent/teen relationship, send invitations, grant another account access, or enforce remote usage, quiet-hour, model, or feature limits. Mobile now states that boundary directly instead of presenting its device age review as family governance.
 
 **Evidence**
 
-apps/mobile/src/features/settings/parental-controls/index.tsx — only renders SettingsInfo(minor-mode status) + a 'Review Age Settings' row; searched 'family member', 'link account', 'parent' additionally with no family-linking matches
+The age-gate screen's module contract explicitly says there is no parental-consent flow in v1 and that minor-safe mode is a content filter only. parental-controls/index.tsx now labels the scope Device age settings only, enumerates the unavailable remote controls, and says review changes only this device; the minor status copy names the real pre-inference Local/Cloud filtering boundary. age-gate.tsx no longer implies that a linked parent account exists. parental-controls.test.tsx verifies the adult and minor disclosures plus the bounded on-device review route.
 
 **Suggested fix**
 
-Build an account-linking flow (invite by email/QR), a parent dashboard for limits (usage time, content restrictions, model access), and persist the relationship server-side; surface it from the same Settings > Parental Controls entry point on mobile and web.
+Not planned for the current v1 device-local trust model. Keep the explicit boundary copy and do not add an invite, family-member row, or remote-control setting until an account relationship service, mutual consent and revocation, authorization policy, audit trail, and cross-account isolation tests exist on both mobile and web.
 
 **Reference screenshot(s)**
 
@@ -855,24 +855,24 @@ Extend NotificationCategory with responses, projects, schedules/tasks, usage-lim
 
 - `chatgpt_reference/065-chatgpt-ios-settings-notifications-codex-chats-projects-usage.png`
 
-### GAP-037 — Parental controls cannot link a family member or set any limits
+### GAP-037 — Parental Controls explicitly limits itself to device age review
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Settings > Parental controls
 
 **Gap**
 
-Reference explains that parents and teens link accounts, then offers a Family Members group with 'Add family member >' that starts the linking invite. agiworkforce's Parental Controls is a static status card ('Minor-safe mode is active' / 'Adult profile') plus a link back to the age gate — there is no family member list, no invite, and no parent-side control over features or limits, so the screen promises governance it cannot deliver.
+Mobile no longer leaves the device-only scope implicit. It shows whether minor-safe filtering is required on this device, states that parent and teen accounts are not linked, names the remote usage, quiet-hour, model, and content controls that are unavailable, and labels the only action Review Device Age Settings. The age-gate notice likewise points to an on-device review rather than suggesting a guardian account has access.
 
 **Evidence**
 
-apps/mobile/src/features/settings/parental-controls/index.tsx (SettingsInfo + single 'Review Age Settings' row); grep -i 'family member|family plan|link account|guardian' across apps/mobile and apps/web — only age-gate prose at apps/mobile/app/(public)/age-gate.tsx line 136
+parental-controls/index.tsx contains separate status and Device age settings only information cards plus the renamed Review Device Age Settings action. app/(public)/age-gate.tsx says that age settings can be reviewed on this device. parental-controls.test.tsx locks the no-linking/no-remote-governance disclosure for adult and minor states and verifies the route payload. The age-gate unit suite continues to verify its validation and stored minor-safe behavior.
 
 **Suggested fix**
 
-Add a Family Members group with an 'Add family member' invite flow (email/link invite, teen accepts, link recorded server-side) and a per-linked-account controls screen (content filter, quiet hours, feature limits); until linking ships, replace the section with explicit copy that only device-level age review is available so the screen does not imply parental governance.
+Completed for the current scope by using the audit's prescribed honest interim state. Preserve the device-only disclosure. A Family Members group remains out of scope until the account-linking, mutual-consent, revocation, authorization, audit, and isolation contracts described in GAP-023 are approved and implemented.
 
 **Reference screenshot(s)**
 
