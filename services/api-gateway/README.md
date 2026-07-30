@@ -66,10 +66,20 @@ names only and never prints values.
 
 `NEON_DATABASE_URL` backs two separate connection strategies out of `src/lib/neonClients.ts`:
 
-- `getSystemClient(purpose)` — the one-shot `@neondatabase/serverless` `neon()` HTTP client with privileged database rights. Callers must name an allowlisted system purpose. It is reserved for pre-auth device authorization, health checks, and compatibility access to tables whose schema is not owned by canonical migrations.
+- `getSystemClient(purpose)` — the one-shot `@neondatabase/serverless` `neon()` HTTP client with privileged database rights. Callers must name an allowlisted system purpose. It is reserved for pre-auth device authorization and health checks.
 - `getUserScopedClient({ userId, token })` — a pooled `@neondatabase/serverless` `Pool` via `@agiworkforce/data-layer`'s `NeonDatabaseAdapter`. It binds Postgres RLS per request (`SET LOCAL ROLE app_rls` plus `request.jwt.claim.sub`) and fails closed: token-binding, role, policy, connection, and query failures never retry through the system client. Use the **pooled** Neon connection string (dashboard → Connection Details → "Pooled connection"). This requires the role and policies from `0037_rls_user_isolation.sql` and `0054_gateway_user_scope_rls.sql` to exist on the target database.
 
-Gateway compatibility tables without a canonical migration remain explicit privileged operations with application ownership predicates. Current examples include `agent_approval_requests`, `chat_messages`, `conversations`, `messages`, `device_pairings`, and the enterprise extension tables. (The former `worker_registrations`/`work_units` examples were removed with the worker-control plane in W9, 2026-07-15.) Do not add RLS policies for these names until their schema owner and canonical migration are established.
+The privileged client is restricted to pre-auth device authorization and health
+checks. Gateway chat, pairing, approval, and enterprise routes use canonical
+tables plus `getUserScopedClient`; `0076` and `0077` own those schemas and RLS
+policies. Do not add user-owned tables to a system-client allowlist.
+
+Apply schema changes only through the root ledger runner:
+
+- `pnpm db:migrate -- status`
+- `pnpm db:migrate -- apply --target local|ci|branch|production`
+- `pnpm db:migrate -- verify`
+- `pnpm db:rls-probe -- --target local|ci|branch`
 
 ## Security, Privacy, Data Boundaries
 

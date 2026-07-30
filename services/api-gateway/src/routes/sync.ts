@@ -19,7 +19,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getSystemClient, getUserScopedClient } from '../lib/neonClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -103,10 +103,7 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
   const rawDeviceId = (req.headers['x-device-id'] as string | undefined) ?? batch.device_id;
   let deviceId: string | undefined;
   if (rawDeviceId) {
-    // device_pairings has no canonical migration; its explicit user_id
-    // predicate remains on the named compatibility boundary.
-    const pairingDb = getSystemClient('shadow-schema-compatibility');
-    const { data: pairing } = await pairingDb
+    const { data: pairing } = await db
       .from('device_pairings')
       .select('id')
       .eq('user_id', user.userId)

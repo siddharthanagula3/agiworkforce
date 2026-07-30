@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { missingRouteTableMigrations } from './lib/route-table-contract.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -70,6 +71,16 @@ if (!fs.existsSync(absolute(migrationsDir))) {
       );
     }
   }
+}
+
+for (const missing of missingRouteTableMigrations(root)) {
+  const evidence = missing.locations
+    .slice(0, 3)
+    .map((location) => `${location.file}:${location.line}`)
+    .join(', ');
+  errors.push(
+    `Route code references ${missing.table}, but canonical migrations create no table/view with that name (${evidence}).`,
+  );
 }
 
 const retiredDbDir = 'supa' + 'base';

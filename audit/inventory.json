@@ -3368,8 +3368,8 @@
   {
     "item": "managed-enterprise-settings",
     "surface": "packages/settings",
-    "status": "broken",
-    "evidence": "services/api-gateway/src/routes/enterprise.ts:214-260 (GET /organizations/:orgId/policy) and the audit-events/support-cases routes query Neon tables `organization_admin_policies`, `enterprise_audit_events`, `organization_usage_ledger`, `support_cases` via getSystemClient('shadow-schema-compatibility') (services/api-gateway/src/lib/neonClients.ts:510-524). None of these tables are created by any migration: `grep -rl \"organization_admin_policies\\|enterprise_audit_events\\|organization_usage_ledger\\|support_cases\" apps/web/db/neon/*.sql` returns zero matches across all 74 migrations. The route is reachable (registered, rate-limited, auth-checked) but every DB read/write against it will fail at runtime with a missing-relation error. Separately, packages/contracts/licensing/src/org-policy.ts:18-22 explicitly documents the signed OrgPolicy schema+verifier as 'not wired into any surface's enforcement path'. apps/web/features/admin/pages/AdminConsolePage.tsx:67-90 renders only the static DEFAULT_ENTERPRISE_ADMIN_POLICY constant, never calling the GET policy endpoint."
+    "status": "partial",
+    "evidence": "Migration 0076 canonically owns organization_admin_policies, enterprise_audit_events, organization_usage_ledger, support_cases, sso_connections, and directory_sync_connections with FORCE RLS. services/api-gateway/src/routes/enterprise.ts reads/writes the enterprise rows through getUserScopedClient, and the clean-Postgres CI gate plus two-tenant probe verifies the schema and isolation. apps/web/features/admin/pages/AdminConsolePage.tsx remains a truthful readiness ledger rather than a policy editor; first-party SSO sign-in/SCIM provisioning and signed OrgPolicy enforcement are explicitly deferred to the Phase 3 enterprise runtime."
   },
   {
     "item": "user-settings",

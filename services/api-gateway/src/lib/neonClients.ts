@@ -504,25 +504,11 @@ let systemClients = new Map<SystemClientPurpose, NeonDataClient>();
 
 export type CloudDbClient = NeonDataClient;
 
-export type SystemClientPurpose =
-  | 'device-authorization'
-  | 'gateway-health'
-  | 'shadow-schema-compatibility';
+export type SystemClientPurpose = 'device-authorization' | 'gateway-health';
 
 const SYSTEM_TABLES: Record<SystemClientPurpose, ReadonlySet<string>> = {
   'device-authorization': new Set(['device_authorization_codes', 'profiles']),
   'gateway-health': new Set(['profiles']),
-  'shadow-schema-compatibility': new Set([
-    'agent_approval_requests',
-    'chat_messages',
-    'conversations',
-    'device_pairings',
-    'enterprise_audit_events',
-    'messages',
-    'organization_admin_policies',
-    'organization_usage_ledger',
-    'support_cases',
-  ]),
 };
 
 /**

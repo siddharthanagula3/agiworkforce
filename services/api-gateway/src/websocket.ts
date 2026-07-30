@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticatedUserSchema } from './authenticated-user';
 import { requireEnv } from './env';
 import { logger } from './lib/logger';
-import { getSystemClient, getUserScopedClient } from './lib/neonClients';
+import { getUserScopedClient } from './lib/neonClients';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
@@ -463,10 +463,7 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
           );
         }
 
-        // device_pairings has no canonical migration. Keep its explicit user
-        // predicate behind the named compatibility boundary.
-        const pairingDb = getSystemClient('shadow-schema-compatibility');
-        const { data: pairing } = await pairingDb
+        const { data: pairing } = await wsUserDb
           .from('device_pairings')
           .select('id')
           .eq('user_id', userId)

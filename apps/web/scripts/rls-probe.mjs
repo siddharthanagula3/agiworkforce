@@ -1,204 +1,302 @@
 #!/usr/bin/env node
-/**
- * rls-probe.mjs — [Tranche-1] Alpha's Runtime Skeptic: Cross-Tenant Denial Probe
- *
- * Proves the RLS floor actually isolates tenants. Run against a THROWAWAY Neon
- * branch (a COW clone of production) AFTER apply-rls.mjs. Never run against
- * production — FORCE RLS without the live path setting the GUC would deny the
- * live app.
- *
- * CRITICAL DEPLOY FINDING this probe enforces: a Postgres role with the
- * BYPASSRLS attribute (Neon's default owner role HAS it) bypasses ALL policies
- * regardless of FORCE ROW LEVEL SECURITY. RLS therefore isolates tenants ONLY
- * when the app connects as a NON-BYPASSRLS role. This probe:
- *   - reports whether the connection role bypasses RLS (a production blocker if so),
- *   - then verifies the POLICIES under a dedicated NON-BYPASSRLS role via SET ROLE
- *     (the correct way to test RLS — the owner is exempt by design).
- *
- * PASS conditions (all must hold):
- *   1. All 10 user-scoped tables have rowsecurity = true AND forcerowsecurity = true.
- *   2. Under a non-bypass role bound to user A, user B's rows are NOT visible.
- *   3. Under that role, UPDATE of B's row affects 0 rows.
- *   4. Under that role, INSERT with user_id = B is REJECTED by WITH CHECK (42501).
- *
- * The GUC is set via set_config('request.jwt.claim.sub', <user>, true) — the
- * transaction-local form current_app_user_id() reads.
- *
- * USAGE:
- *   DATABASE_URL="<branch-connection-string>" node apps/web/scripts/rls-probe.mjs
- *
- * Exits 0 on PASS, non-zero on FAIL.
- */
-import { Client, neonConfig } from '@neondatabase/serverless';
-import ws from 'ws';
 
-neonConfig.webSocketConstructor = ws;
+import { randomUUID } from 'node:crypto';
+import process from 'node:process';
+import { Client } from 'pg';
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error('[rls-probe] FATAL: DATABASE_URL env var is required.');
-  process.exit(1);
-}
-
-const USER_A = 'rls_probe_userA';
-const USER_B = 'rls_probe_userB';
-// The REAL non-bypass application role created by 0037 (apply-rls runs first).
-// Testing under it validates both the policies AND the role's grants/membership.
-const PROBE_ROLE = 'app_rls';
 const RLS_TABLES = [
-  'web_conversations',
-  'web_messages',
-  'profiles',
-  'subscriptions',
-  'token_credits',
-  'credit_transactions',
-  'api_keys',
-  'user_projects',
-  'project_knowledge_files',
-  'user_memories',
+  'sso_connections',
+  'directory_sync_connections',
+  'organization_admin_policies',
+  'enterprise_audit_events',
+  'organization_usage_ledger',
+  'support_cases',
+  'conversations',
+  'messages',
+  'chat_messages',
+  'device_pairings',
+  'agent_approval_requests',
 ];
 
-const failures = [];
-const warnings = [];
-function check(ok, msg) {
-  if (ok) console.log(`  PASS  ${msg}`);
-  else {
-    console.error(`  FAIL  ${msg}`);
-    failures.push(msg);
+function parseTarget(argv) {
+  let target = process.env.AGI_RLS_PROBE_TARGET;
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] === '--') continue;
+    if (argv[index] === '--target') {
+      target = argv[++index];
+      continue;
+    }
+    throw new Error(`Unknown argument: ${argv[index]}`);
+  }
+  if (!['local', 'ci', 'branch'].includes(target)) {
+    throw new Error('RLS probe requires --target local|ci|branch');
+  }
+  return target;
+}
+
+function databaseUrl() {
+  return process.env.AGI_DATABASE_URL ?? process.env.DATABASE_URL ?? process.env.NEON_DATABASE_URL;
+}
+
+function isLocalUrl(connectionString) {
+  const hostname = new URL(connectionString).hostname;
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+}
+
+function assertTarget(target, connectionString) {
+  if ((target === 'local' || target === 'ci') && !isLocalUrl(connectionString)) {
+    throw new Error(`--target ${target} refuses a non-local database host`);
+  }
+}
+
+function reportCheck(failures, condition, message) {
+  if (condition) {
+    console.log(`PASS ${message}`);
+  } else {
+    failures.push(message);
+    console.error(`FAIL ${message}`);
+  }
+}
+
+async function count(client, table) {
+  const result = await client.query(`select count(*)::int as count from public.${table}`);
+  return result.rows[0]?.count ?? 0;
+}
+
+async function expectRlsRejection(client, statement, values) {
+  await client.query('SAVEPOINT expected_rls_rejection');
+  try {
+    await client.query(statement, values);
+    await client.query('ROLLBACK TO SAVEPOINT expected_rls_rejection');
+    return false;
+  } catch (error) {
+    await client.query('ROLLBACK TO SAVEPOINT expected_rls_rejection');
+    return error?.code === '42501';
+  }
+}
+
+async function cleanup(client, fixture) {
+  await client.query('delete from public.agent_approval_requests where user_id = any($1)', [
+    fixture.users,
+  ]);
+  await client.query('delete from public.device_pairings where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.chat_messages where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.conversations where user_id = any($1)', [fixture.users]);
+  await client.query('delete from public.organizations where id = any($1::uuid[])', [
+    fixture.organizations,
+  ]);
+}
+
+async function seed(client, fixture) {
+  for (let index = 0; index < fixture.users.length; index += 1) {
+    const userId = fixture.users[index];
+    const organizationId = fixture.organizations[index];
+    const conversationId = fixture.conversations[index];
+    const suffix = fixture.suffixes[index];
+
+    await client.query(
+      `insert into public.organizations (id, name, slug, created_by)
+       values ($1, $2, $3, $4)`,
+      [organizationId, `RLS Probe ${suffix}`, `rls-probe-${suffix}`, userId],
+    );
+    await client.query(
+      `insert into public.organization_members (organization_id, user_id, role)
+       values ($1, $2, 'owner')`,
+      [organizationId, userId],
+    );
+    await client.query(
+      `insert into public.sso_connections
+         (organization_id, provider_type, domain, metadata_url, created_by)
+       values ($1, 'saml', $2, $3, $4)`,
+      [
+        organizationId,
+        `${suffix}.rls-probe.invalid`,
+        `https://${suffix}.rls-probe.invalid/metadata`,
+        userId,
+      ],
+    );
+    await client.query(
+      `insert into public.directory_sync_connections
+         (organization_id, provider, directory_id, display_name)
+       values ($1, 'generic_scim', $2, $3)`,
+      [organizationId, `directory-${suffix}`, `RLS Probe ${suffix}`],
+    );
+    await client.query(
+      'insert into public.organization_admin_policies (organization_id) values ($1)',
+      [organizationId],
+    );
+    await client.query(
+      `insert into public.enterprise_audit_events
+         (organization_id, actor_user_id, surface, action, resource_type, outcome, severity)
+       values ($1, $2, 'web', 'policy.updated', 'policy', 'success', 'info')`,
+      [organizationId, userId],
+    );
+    await client.query(
+      `insert into public.organization_usage_ledger
+         (organization_id, user_id, privacy_mode, provider, model,
+          provider_cost_usd, charged_amount_usd, gross_margin_usd, gross_margin_pct)
+       values ($1, $2, 'managed', 'probe', 'probe-model', 0.10, 0.20, 0.10, 0.50)`,
+      [organizationId, userId],
+    );
+    await client.query(
+      `insert into public.support_cases
+         (organization_id, requester_user_id, subject, description)
+       values ($1, $2, 'RLS probe', 'Tenant-isolation fixture')`,
+      [organizationId, userId],
+    );
+    await client.query(
+      `insert into public.conversations (id, user_id, title)
+       values ($1, $2, 'RLS probe')`,
+      [conversationId, userId],
+    );
+    await client.query(
+      `insert into public.messages (conversation_id, role, content)
+       values ($1, 'user', 'RLS probe')`,
+      [conversationId],
+    );
+    await client.query(
+      `insert into public.chat_messages
+         (user_id, conversation_id, role, content)
+       values ($1, $2, 'user', 'RLS probe')`,
+      [userId, conversationId],
+    );
+    await client.query(
+      `insert into public.device_pairings (user_id, device_id)
+       values ($1, $2)`,
+      [userId, `device-${suffix}`],
+    );
+    await client.query(
+      `insert into public.agent_approval_requests
+         (user_id, desktop_id, agent_id, tool_name, tool_args)
+       values ($1, $2, 'probe-agent', 'probe-tool', '{}'::jsonb)`,
+      [userId, randomUUID()],
+    );
+  }
+}
+
+async function runProbe(client, fixture, failures) {
+  const flags = await client.query(
+    `select relname, relrowsecurity, relforcerowsecurity
+       from pg_class
+      where relnamespace = 'public'::regnamespace
+        and relname = any($1)`,
+    [RLS_TABLES],
+  );
+  const flagsByTable = new Map(flags.rows.map((row) => [row.relname, row]));
+  for (const table of RLS_TABLES) {
+    const row = flagsByTable.get(table);
+    reportCheck(
+      failures,
+      row?.relrowsecurity === true && row?.relforcerowsecurity === true,
+      `${table} has ENABLE + FORCE RLS`,
+    );
+  }
+
+  const role = await client.query("select rolbypassrls from pg_roles where rolname = 'app_rls'");
+  reportCheck(
+    failures,
+    role.rows.length === 1 && role.rows[0]?.rolbypassrls === false,
+    'app_rls exists without BYPASSRLS',
+  );
+
+  await client.query('BEGIN');
+  try {
+    await client.query('SET LOCAL ROLE app_rls');
+    await client.query("select set_config('request.jwt.claim.sub', $1, true)", [fixture.users[0]]);
+    await client.query("select set_config('request.jwt.claim.org_id', '', true)");
+
+    for (const table of RLS_TABLES) {
+      reportCheck(
+        failures,
+        (await count(client, table)) === 1,
+        `${table} exposes only tenant A's seeded row`,
+      );
+    }
+
+    const crossTenantUpdate = await client.query(
+      "update public.conversations set title = 'cross-tenant' where user_id = $1",
+      [fixture.users[1]],
+    );
+    reportCheck(
+      failures,
+      crossTenantUpdate.rowCount === 0,
+      "tenant A cannot update tenant B's conversation",
+    );
+
+    reportCheck(
+      failures,
+      await expectRlsRejection(
+        client,
+        `insert into public.chat_messages (user_id, role, content)
+         values ($1, 'user', 'cross-tenant')`,
+        [fixture.users[1]],
+      ),
+      "tenant A cannot insert tenant B's chat message",
+    );
+
+    reportCheck(
+      failures,
+      await expectRlsRejection(
+        client,
+        `insert into public.sso_connections
+           (organization_id, provider_type, domain, metadata_url, created_by)
+         values ($1, 'saml', $2, $3, $4)`,
+        [
+          fixture.organizations[1],
+          `cross-${fixture.suffixes[0]}.rls-probe.invalid`,
+          'https://rls-probe.invalid/metadata',
+          fixture.users[0],
+        ],
+      ),
+      "tenant A cannot insert an SSO connection into tenant B's organization",
+    );
+  } finally {
+    await client.query('ROLLBACK');
   }
 }
 
 async function main() {
-  const client = new Client(DATABASE_URL);
+  const connectionString = databaseUrl();
+  if (!connectionString) {
+    throw new Error('AGI_DATABASE_URL, DATABASE_URL, or NEON_DATABASE_URL must be exported');
+  }
+  const target = parseTarget(process.argv.slice(2));
+  assertTarget(target, connectionString);
+
+  const runId = randomUUID().replaceAll('-', '').slice(0, 12);
+  const fixture = {
+    users: [`rls_probe_a_${runId}`, `rls_probe_b_${runId}`],
+    organizations: [randomUUID(), randomUUID()],
+    conversations: [randomUUID(), randomUUID()],
+    suffixes: [`a-${runId}`, `b-${runId}`],
+  };
+  const failures = [];
+  const client = new Client({
+    connectionString,
+    application_name: 'agiworkforce-rls-probe',
+  });
+
   await client.connect();
   try {
-    // --- 1. RLS enabled + forced on all 10 tables -------------------------
-    console.log('[rls-probe] (1) RLS flags on user-scoped tables');
-    const { rows: flagRows } = await client.query(
-      `SELECT relname, relrowsecurity, relforcerowsecurity
-         FROM pg_class
-        WHERE relnamespace = 'public'::regnamespace
-          AND relname = ANY($1)`,
-      [RLS_TABLES],
-    );
-    const flagByName = new Map(flagRows.map((r) => [r.relname, r]));
-    for (const t of RLS_TABLES) {
-      const r = flagByName.get(t);
-      check(
-        !!r && r.relrowsecurity === true && r.relforcerowsecurity === true,
-        `${t}: rowsecurity+forcerowsecurity enabled`,
-      );
-    }
-
-    // --- 1b. Surface whether the LIVE connection role bypasses RLS --------
-    const { rows: su } = await client.query(
-      `SELECT rolsuper, rolbypassrls, rolcreaterole
-         FROM pg_roles WHERE rolname = current_user`,
-    );
-    const role = su[0] || {};
-    if (role.rolsuper || role.rolbypassrls) {
-      const w =
-        `connection role "${''}" bypasses RLS (superuser=${role.rolsuper}, bypassrls=${role.rolbypassrls}). ` +
-        `PRODUCTION BLOCKER: the app must connect as a NON-BYPASSRLS, non-superuser role or RLS does NOTHING. ` +
-        `Verifying policies below under a dedicated non-bypass role.`;
-      console.warn(`  WARN  ${w}`);
-      warnings.push(w);
-    } else {
-      console.log('  INFO  connection role does not bypass RLS');
-    }
-
-    // --- 2. Seed one row per user (as the privileged role; bypasses checks) -
-    console.log('[rls-probe] (2) seed one user_memories row per tenant');
-    await client.query('DELETE FROM public.user_memories WHERE user_id = ANY($1)', [
-      [USER_A, USER_B],
-    ]);
-    for (const u of [USER_A, USER_B]) {
-      await client.query('INSERT INTO public.user_memories (user_id, content) VALUES ($1, $2)', [
-        u,
-        `probe-${u}`,
-      ]);
-    }
-    check(true, 'seeded one row per tenant');
-
-    // --- 2b. Verify the real app_rls role exists and is non-bypass --------
-    const { rows: prRows } = await client.query(
-      'SELECT rolbypassrls FROM pg_roles WHERE rolname = $1',
-      [PROBE_ROLE],
-    );
-    if (prRows.length === 0) {
-      failures.push(`role "${PROBE_ROLE}" not found — apply-rls.mjs (0037) must create it first`);
-    } else if (prRows[0].rolbypassrls === true) {
-      failures.push(`role "${PROBE_ROLE}" unexpectedly has BYPASSRLS — it must be NOBYPASSRLS`);
-    } else {
-      // --- 3. Under the non-bypass role bound to A: deny cross-tenant ------
-      console.log(`[rls-probe] (3) cross-tenant denial under ${PROBE_ROLE} bound to user A`);
-      await client.query('BEGIN');
-      await client.query(`SET LOCAL ROLE ${PROBE_ROLE}`);
-      await client.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [USER_A]);
-
-      const { rows: seeB } = await client.query(
-        'SELECT count(*)::int AS n FROM public.user_memories WHERE user_id = $1',
-        [USER_B],
-      );
-      check(seeB[0].n === 0, `A cannot SELECT B's rows (saw ${seeB[0].n}, expect 0)`);
-
-      const { rows: seeOwn } = await client.query(
-        "SELECT count(*)::int AS n FROM public.user_memories WHERE content LIKE 'probe-rls_probe_%'",
-      );
-      check(seeOwn[0].n === 1, `A sees only its own probe row (saw ${seeOwn[0].n}, expect 1)`);
-
-      const upd = await client.query(
-        "UPDATE public.user_memories SET content = 'hacked' WHERE user_id = $1",
-        [USER_B],
-      );
-      check(upd.rowCount === 0, `A's UPDATE of B's rows affects 0 rows (affected ${upd.rowCount})`);
-
-      let insertRejected = false;
-      let insertErrCode = null;
-      try {
-        await client.query('INSERT INTO public.user_memories (user_id, content) VALUES ($1, $2)', [
-          USER_B,
-          'evil-cross-tenant',
-        ]);
-      } catch (e) {
-        insertRejected = true;
-        insertErrCode = e.code; // 42501 = insufficient_privilege (RLS WITH CHECK)
-      }
-      check(
-        insertRejected && insertErrCode === '42501',
-        `A's INSERT with user_id=B is REJECTED by WITH CHECK (code=${insertErrCode ?? 'none'})`,
-      );
-
-      // Failed INSERT aborts the txn; roll back (also resets ROLE + GUC).
-      await client.query('ROLLBACK');
-    }
-
-    // --- 4. Cleanup (branch is disposable, but keep it tidy) --------------
-    await client.query('DELETE FROM public.user_memories WHERE user_id = ANY($1)', [
-      [USER_A, USER_B],
-    ]);
+    await seed(client, fixture);
+    await runProbe(client, fixture, failures);
   } finally {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // No active transaction is also safe.
+    }
+    await cleanup(client, fixture);
     await client.end();
   }
+
+  if (failures.length > 0) {
+    throw new Error(`RLS probe failed ${failures.length} check(s)`);
+  }
+  console.log(`RLS probe passed: ${RLS_TABLES.length} tables isolate two seeded tenants`);
 }
 
-main()
-  .then(() => {
-    if (warnings.length) {
-      console.warn(`\n[rls-probe] ${warnings.length} production warning(s):`);
-      warnings.forEach((w) => console.warn(`  ! ${w}`));
-    }
-    if (failures.length === 0) {
-      console.log(
-        '\nRLS PROBE: PASS — policies deny cross-tenant read AND write under a non-bypass role.',
-      );
-      process.exit(0);
-    }
-    console.error(`\nRLS PROBE: FAIL — ${failures.length} check(s) failed:`);
-    failures.forEach((f) => console.error(`  - ${f}`));
-    process.exit(1);
-  })
-  .catch((err) => {
-    console.error('\nRLS PROBE: FAIL (probe error):', err.message || err);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

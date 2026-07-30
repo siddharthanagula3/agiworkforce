@@ -11,9 +11,8 @@ import { logger } from '@/lib/logger';
  * GET /api/control-plane/status
  *
  * Returns cross-surface operational status for the dashboard control-plane hero.
- * Surfaces (desktop, mobile, extension, CLI) are detected via last-heartbeat
- * timestamps stored in Neon. Agent activity and provider health are derived
- * from available data.
+ * Surface activity is derived from canonical device records. Agent activity
+ * comes from the durable cloud-run journal; provider health uses live probes.
  */
 
 export const runtime = 'nodejs';
@@ -89,7 +88,7 @@ export async function GET(request: NextRequest) {
   const db = getNeonDb();
 
   // ---------------------------------------------------------------------------
-  // 1. Surface heartbeats
+  // 1. Surface activity from canonical device records
   // ---------------------------------------------------------------------------
   const surfaces: SurfaceRow[] = [
     { id: 'desktop', status: 'unknown', lastSeen: null },
@@ -100,7 +99,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const heartbeats = await db.query<{ surface_id: string; last_seen_at: string }>(
-      'select surface_id, last_seen_at from surface_heartbeats where user_id = $1',
+      `
+        select 'desktop'::text as surface_id, max(last_seen_at)::text as last_seen_at
+          from desktop_devices
+         where user_id = $1
+        union all
+        select 'mobile'::text as surface_id, max(updated_at)::text as last_seen_at
+          from mobile_devices
+         where user_id = $1
+      `,
       [userId],
     );
 
@@ -109,6 +116,7 @@ export async function GET(request: NextRequest) {
     const now = Date.now();
 
     for (const hb of heartbeats) {
+      if (!hb.last_seen_at) continue;
       const idx = surfaces.findIndex((s) => s.id === hb.surface_id);
       if (idx === -1) continue;
       const diff = now - new Date(hb.last_seen_at).getTime();
@@ -117,13 +125,10 @@ export async function GET(request: NextRequest) {
       surfaces[idx] = { ...surfaces[idx]!, status, lastSeen: hb.last_seen_at };
     }
   } catch (err) {
-    // Table not yet created (expected pre-migration) OR a genuine DB
-    // failure — this catch doesn't distinguish the two, so log it rather
-    // than swallowing silently. Falls through to all-'unknown' either way:
-    // this is a dashboard hero widget, not worth failing the request over.
+    // This dashboard widget is non-critical; retain unknown states on failure.
     logger.warn(
-      { err, userId, route: 'GET /api/control-plane/status', section: 'surface_heartbeats' },
-      'Failed to fetch surface heartbeats; surfaces remain unknown',
+      { err, userId, route: 'GET /api/control-plane/status', section: 'surface_activity' },
+      'Failed to fetch surface activity; surfaces remain unknown',
     );
   }
 
@@ -138,15 +143,15 @@ export async function GET(request: NextRequest) {
 
     const [runningRows, pendingRows, completedRows] = await Promise.all([
       db.query<{ cnt: string }>(
-        "select count(*) as cnt from agent_tasks where user_id = $1 and status = 'running'",
+        "select count(*) as cnt from cloud_agent_runs where user_id = $1 and state = 'running'",
         [userId],
       ),
       db.query<{ cnt: string }>(
-        "select count(*) as cnt from agent_tasks where user_id = $1 and status = 'pending_approval'",
+        "select count(*) as cnt from cloud_agent_approval_checkpoints where user_id = $1 and state = 'pending'",
         [userId],
       ),
       db.query<{ cnt: string }>(
-        "select count(*) as cnt from agent_tasks where user_id = $1 and status = 'completed' and completed_at >= $2",
+        "select count(*) as cnt from cloud_agent_runs where user_id = $1 and state = 'completed' and completed_at >= $2",
         [userId, todayStart.toISOString()],
       ),
     ]);
@@ -157,10 +162,7 @@ export async function GET(request: NextRequest) {
       completedToday: parseInt(completedRows[0]?.cnt ?? '0', 10),
     };
   } catch (err) {
-    // Table not yet created (expected pre-migration) OR a genuine DB
-    // failure — log rather than swallow silently. Falls through to zeros
-    // either way: this is a dashboard hero widget, not worth failing the
-    // request over.
+    // This dashboard widget is non-critical; retain zeros on failure.
     logger.warn(
       { err, userId, route: 'GET /api/control-plane/status', section: 'agent_activity' },
       'Failed to fetch agent activity counts; defaulting to zeros',
@@ -186,7 +188,21 @@ export async function GET(request: NextRequest) {
       action_label: string;
       created_at: string;
     }>(
-      'select id, surface_id, action_label, created_at from surface_activity_log where user_id = $1 order by created_at desc limit 10',
+      `
+        select event.id::text as id,
+               case
+                 when run.origin_surface = 'vscode' then 'extension'
+                 else run.origin_surface
+               end as surface_id,
+               event.event_type as action_label,
+               event.created_at::text as created_at
+          from cloud_agent_events as event
+          join cloud_agent_runs as run on run.id = event.run_id
+         where run.user_id = $1
+           and run.origin_surface in ('desktop', 'mobile', 'vscode')
+         order by event.created_at desc
+         limit 10
+      `,
       [userId],
     );
 
@@ -197,10 +213,7 @@ export async function GET(request: NextRequest) {
       timestamp: row.created_at,
     }));
   } catch (err) {
-    // Table not yet created (expected pre-migration) OR a genuine DB
-    // failure — log rather than swallow silently. Falls through to an
-    // empty feed either way: this is a dashboard hero widget, not worth
-    // failing the request over.
+    // This dashboard widget is non-critical; retain an empty feed on failure.
     logger.warn(
       { err, userId, route: 'GET /api/control-plane/status', section: 'recent_activity' },
       'Failed to fetch recent activity feed; returning empty',
