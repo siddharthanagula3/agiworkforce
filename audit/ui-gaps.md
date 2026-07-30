@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 02b2f0a5c2cbd8241e3cb61fed40272979f30ee98302e55cecc50dd34ca7913f -->
+<!-- ui-gaps-csv-sha256: 54c78f03101818cc79e0ed9b046f7bf2313af28aaf21b6ee837efce5a3bfe8ba -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 87 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 86 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  291 |
+| Open        |  290 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   42 |
-| Not Planned |    8 |
+| Not Planned |    9 |
 
 ## P0
 
@@ -993,24 +993,24 @@ Add /(app)/settings/security backed by the same Clerk endpoints the web panel us
 
 - `chatgpt_reference/059-chatgpt-ios-settings-security-login-keys-mfa-sessions-lockdown-codex.png`
 
-### GAP-043 — No account storage quota view (used/total bar, Documents & Images breakdown)
+### GAP-043 — Account storage quota totals are declined until the Cloud publishes an enforceable byte policy
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Settings > Storage
 
 **Gap**
 
-Reference Storage shows '161 MB of 100 GB used' with a quota progress bar and per-type rows (Documents 141 MB >, Images 19 MB >) that drill into managing those files. agiworkforce's Storage screen measures only on-device bytes — downloaded models and cache — so a cloud user cannot see how much of their plan's file storage they have consumed or delete the largest offenders.
+The reference visualizes a real 100 GB account quota, but agiworkforce has no storage entitlement, used/limit aggregate, or category-total endpoint on any surface. Individual media and project-file rows carry byte metadata, yet summing those tables would omit chat attachments, generated files, soft-deleted retention, and storage objects without a canonical catalog; inventing a plan limit would be worse. Mobile Storage now makes the boundary explicit: AGI Cloud Storage is Not metered, and the existing downloaded-model and cache totals are titled On This Device so they cannot be mistaken for account usage.
 
 **Evidence**
 
-apps/mobile/app/(app)/settings/storage.tsx (Storage Usage card = downloaded models + cache; Downloaded Models list; wipe/export actions); grep -i 'quota|GB used|file storage' across apps/mobile/src — no match; apps/mobile/src/features/settings/cloud-usage/index.tsx reports usage but no storage bytes
+StorageScopeNotice.tsx states that the account publishes no file-storage byte quota and that following totals are device-only. apps/mobile/app/(app)/settings/storage.tsx mounts the notice above the renamed On This Device card while retaining real model/cache measurement and deletion. apps/mobile/src/features/settings/cloud-usage/index.tsx reports compute/billing utilization rather than file bytes. Repository routes expose per-file byteCount/byte_count values, but searches find no account storage limit, canonical aggregate, quota enforcement, or storage-usage endpoint. storage-scope-notice.test.tsx prevents device totals from being relabeled as Cloud quota; storageUsage.test.ts continues to verify real recursive device-byte measurement.
 
 **Suggested fix**
 
-Add a cloud storage section fed by an account-usage endpoint: used/total with a progress bar, Documents and Images rows with byte totals, each pushing a file list sorted by size with swipe-to-delete; keep the existing device-storage card below it, clearly labelled 'On this device'.
+Not planned until the backend owns a storage entitlement and canonical inventory. Add the used/total bar and Documents, Images, and Files management only with an authenticated owner-scoped aggregate endpoint, explicit treatment of retention/soft deletes and orphaned objects, an enforced plan limit, category definitions, deletion APIs, and cross-tenant plus byte-accounting tests.
 
 **Reference screenshot(s)**
 
