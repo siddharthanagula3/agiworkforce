@@ -9,6 +9,7 @@
  * streaming service, keeping the tests fast and deterministic.
  */
 
+import { Alert } from 'react-native';
 import { act, waitFor } from '@testing-library/react-native';
 
 // Mock all external dependencies before importing the store
@@ -128,6 +129,7 @@ import {
 } from '../storage/installedModels';
 import type { StreamCallbacks } from '../services/streaming';
 import { useAuthStore } from '../src/features/auth/store';
+import { useSettingsStore } from '../stores/settingsStore';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -248,6 +250,7 @@ describe('chatStore — streaming state', () => {
       isClerkSignedIn: true,
     });
     resetStore();
+    useSettingsStore.setState({ reduceSensitiveContent: false });
     jest.clearAllMocks();
     mockRemoteDisabledReason.mockReturnValue(null);
     mockListInstalledModels.mockResolvedValue([]);
@@ -1484,6 +1487,27 @@ describe('chatStore — streaming state', () => {
   });
 
   describe('send acceptance & per-conversation streaming', () => {
+    it('blocks sensitive prompts before local or cloud execution when an adult opts in', async () => {
+      useSettingsStore.getState().setReduceSensitiveContent(true);
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      let accepted: boolean | undefined;
+      await act(async () => {
+        accepted = await getState().sendMessage(CONV_ID, 'show me porn', MODEL);
+      });
+
+      expect(accepted).toBe(false);
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Content not available',
+        'This content is unavailable while Reduce sensitive content is on. You can change this in Settings > Safety & Security.',
+      );
+      expect(mockStreamChat).not.toHaveBeenCalled();
+      expect(mockLocalGenerate).not.toHaveBeenCalled();
+      expect(getState().messages[CONV_ID] ?? []).toHaveLength(0);
+
+      alertSpy.mockRestore();
+    });
+
     it('resolves false and never fires onAccepted when a pre-flight gate blocks the send', async () => {
       mockRemoteDisabledReason.mockReturnValue('Remote chat is disabled for this test');
       const onAccepted = jest.fn();

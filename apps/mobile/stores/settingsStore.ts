@@ -56,6 +56,12 @@ export interface SettingsState {
   voiceEnabled: boolean;
   /** Enable background fetch for agent status polling */
   backgroundFetchEnabled: boolean;
+  /**
+   * Apply the stricter client-side content filter for an adult profile.
+   * Minor-safe mode is enforced separately by the age gate and cannot be
+   * disabled through this preference.
+   */
+  reduceSensitiveContent: boolean;
   /** Selected TTS voice identifier (null = system default) */
   selectedVoiceId: string | null;
   /** TTS speech rate: 0.5 = half speed, 1.0 = normal, 2.0 = double */
@@ -84,6 +90,7 @@ export interface SettingsState {
   setHapticsEnabled: (enabled: boolean) => void;
   setVoiceEnabled: (enabled: boolean) => void;
   setBackgroundFetchEnabled: (enabled: boolean) => void;
+  setReduceSensitiveContent: (enabled: boolean) => void;
   setSelectedVoiceId: (voiceId: string | null) => void;
   setSpeechRate: (rate: number) => void;
   setSpeechPitch: (pitch: number) => void;
@@ -102,6 +109,7 @@ export const useSettingsStore = create<SettingsState>()(
       hapticsEnabled: true,
       voiceEnabled: true,
       backgroundFetchEnabled: true,
+      reduceSensitiveContent: false,
       selectedVoiceId: null,
       speechRate: 1.0,
       speechPitch: 1.0,
@@ -125,6 +133,7 @@ export const useSettingsStore = create<SettingsState>()(
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
       setVoiceEnabled: (enabled) => set({ voiceEnabled: enabled }),
       setBackgroundFetchEnabled: (enabled) => set({ backgroundFetchEnabled: enabled }),
+      setReduceSensitiveContent: (enabled) => set({ reduceSensitiveContent: enabled }),
       setSelectedVoiceId: (voiceId) => set({ selectedVoiceId: voiceId }),
       setSpeechRate: (rate) => set({ speechRate: Math.min(Math.max(rate, 0.5), 2.0) }),
       setSpeechPitch: (pitch) => set({ speechPitch: Math.min(Math.max(pitch, 0.5), 2.0) }),

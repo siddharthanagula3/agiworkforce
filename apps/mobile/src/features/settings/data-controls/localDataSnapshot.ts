@@ -114,6 +114,7 @@ export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
       notifications_enabled: settings.notificationsEnabled,
       voice_enabled: settings.voiceEnabled,
       background_fetch_enabled: settings.backgroundFetchEnabled,
+      reduce_sensitive_content: settings.reduceSensitiveContent,
       temporary_chat_enabled: settings.isTemporaryChat,
       personalization: {
         full_name: settings.personalization.fullName,
@@ -190,6 +191,7 @@ export async function resetLocalInMemoryState(): Promise<void> {
     hapticsEnabled: true,
     voiceEnabled: true,
     backgroundFetchEnabled: true,
+    reduceSensitiveContent: false,
     selectedVoiceId: null,
     speechRate: 1,
     speechPitch: 1,

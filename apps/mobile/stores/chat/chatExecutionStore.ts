@@ -35,7 +35,11 @@ import {
   toolCallList,
 } from '@/src/features/chat/utils/toolCallAccumulator';
 import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
-import { checkContentFilter } from '@/lib/contentFilter';
+import {
+  checkContentFilter,
+  MINOR_SAFE_REFUSAL,
+  REDUCED_SENSITIVE_CONTENT_REFUSAL,
+} from '@/lib/contentFilter';
 import { isMinorMode } from '@/src/features/auth/services/ageGate';
 import { useAuthStore } from '@/src/features/auth/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -797,11 +801,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   setPaywallError: (paywallError) => set({ paywallError }),
 
   sendMessage: async (conversationId, content, model, attachments, options) => {
-    // #2: enforce minor-safe content filtering before the prompt reaches ANY LLM
-    // (local or cloud). The age-gate promises minors "age-appropriate content
-    // filtering"; this is the only enforcement point and was previously dead code.
-    if (isMinorMode()) {
-      const verdict = checkContentFilter(content, true);
+    // Enforce both mandatory minor-safe filtering and the adult opt-in before
+    // the prompt reaches ANY local or cloud model.
+    const minorMode = isMinorMode();
+    const reduceSensitiveContent = useSettingsStore.getState().reduceSensitiveContent;
+    if (minorMode || reduceSensitiveContent) {
+      const verdict = checkContentFilter(
+        content,
+        true,
+        minorMode ? MINOR_SAFE_REFUSAL : REDUCED_SENSITIVE_CONTENT_REFUSAL,
+      );
       if (!verdict.allowed) {
         Alert.alert('Content not available', verdict.refusal);
         return false;

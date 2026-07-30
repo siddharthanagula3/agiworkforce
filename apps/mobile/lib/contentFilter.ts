@@ -1,10 +1,10 @@
 /**
- * Minor-safe content filter.
+ * Strict client-side content filter.
  *
- * When minor mode is active (age-gate confirmed the user is below threshold),
- * outgoing prompts are checked against a keyword/pattern blocklist before
- * being sent to any LLM. The check is synchronous and purely client-side —
- * no network call, no model evaluation.
+ * When minor mode or the adult safety preference is active, outgoing prompts
+ * are checked against a keyword/pattern blocklist before being sent to any
+ * LLM. The check is synchronous and purely client-side — no network call, no
+ * model evaluation.
  *
  * Policy: EU AI Act Article 5(1)(b) requires that AI systems not use
  * subliminal techniques or exploit vulnerabilities of minors. Our mitigation
@@ -22,7 +22,7 @@
  * Patterns checked against the lower-cased prompt.
  * Keep patterns specific enough to avoid over-blocking common school content.
  */
-const MINOR_UNSAFE_PATTERNS: RegExp[] = [
+const STRICT_UNSAFE_PATTERNS: RegExp[] = [
   // Explicit sexual content requests
   /\b(porn|pornography|hentai|nsfw|xxx|erotic|explicit\s+sexual|nude\s+photo|naked\s+photo)\b/,
   // Requests for graphic violence how-tos
@@ -53,23 +53,33 @@ export const MINOR_SAFE_REFUSAL =
   "This content isn't available in AGI for users under the minimum age in your region. " +
   'If you believe this is an error, a parent or guardian can adjust age settings in Settings > Privacy.';
 
+/** Refusal shown when an adult has opted in to the stricter safety preference. */
+export const REDUCED_SENSITIVE_CONTENT_REFUSAL =
+  'This content is unavailable while Reduce sensitive content is on. ' +
+  'You can change this in Settings > Safety & Security.';
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Checks whether a prompt is allowed under minor-safe mode.
+ * Checks whether a prompt is allowed under the shared strict-content policy.
  *
  * @param prompt  The full user prompt text.
- * @param isMinor Whether minor mode is currently active.
+ * @param enabled Whether the strict-content policy is active.
+ * @param refusal Refusal copy for the policy that activated the filter.
  */
-export function checkContentFilter(prompt: string, isMinor: boolean): ContentFilterResult {
-  if (!isMinor) return { allowed: true };
+export function checkContentFilter(
+  prompt: string,
+  enabled: boolean,
+  refusal = MINOR_SAFE_REFUSAL,
+): ContentFilterResult {
+  if (!enabled) return { allowed: true };
 
   const lower = prompt.toLowerCase();
-  for (const pattern of MINOR_UNSAFE_PATTERNS) {
+  for (const pattern of STRICT_UNSAFE_PATTERNS) {
     if (pattern.test(lower)) {
-      return { allowed: false, refusal: MINOR_SAFE_REFUSAL };
+      return { allowed: false, refusal };
     }
   }
   return { allowed: true };
