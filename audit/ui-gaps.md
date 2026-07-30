@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: d9a854d129efd8e39b88fc3f9be6c9423fe259a98c525d3c4464a6044d93499a -->
+<!-- ui-gaps-csv-sha256: 1d176cb300f0a14d2f100adf1e2ebfed315fcd57f4b81920f10193147228d291 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 113 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 111 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  317 |
+| Open        |  315 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   24 |
+| Done        |   26 |
 | Not Planned |    0 |
 
 ## P0
@@ -372,24 +372,24 @@ Completed. Keep the source server-authoritative, fail unknown entitled ownership
 
 - `chatgpt_reference/070-chatgpt-ios-settings-billing-modal-subscription-external-platform.png`
 
-### GAP-016 — No dedicated Chats list screen with search, filter, and New chat CTA
+### GAP-016 — Mobile exposes a dedicated, filterable full Chats history
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** Claude · iOS · Chats list
 
 **Gap**
 
-Reference has a full 'Chats' tab: chronological list of all conversations, filter icon (top right), a persistent floating search bar pinned to the bottom, and a floating 'New chat' pill button. agiworkforce's chat.tsx tab is a composer/start screen, and full chat history is only reachable through the nav drawer's 'Recents' list, which is capped to 8 items and has no filter control.
+Mobile now separates the composer-first new-chat surface from a dedicated Chats destination. The full-height screen shows every history-visible conversation in the active Local or Managed Cloud mode, groups it by pinned and recency, provides All, Pinned, and Unread filters, and keeps a floating New chat action visible. The drawer retains a deliberately compact Recents preview and links to the unbounded destination.
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/chat.tsx (comment: 'Recents live in the drawer; this screen stays focused on starting work.'); apps/mobile/src/features/drawer/components/DrawerContent.tsx (DRAWER_RECENT_LIMIT = 8, no filter UI). Searched for 'Filter'/'SlidersHorizontal' in chat.tsx and DrawerContent.tsx — no match.
+apps/mobile/app/(app)/chats/index.tsx registers the route; ChatsListScreen.tsx owns the mode-scoped unbounded SectionList, recency grouping, filter dialog, search field, empty states, and floating New chat action. DrawerContent.tsx exposes Chats and routes its search affordance to the full screen; the composer copy points users to Chats for history. chats-list-screen.test.tsx verifies ten uncapped rows, filters, search, and creation; drawer-content.test.tsx and drawer-route-contract.test.ts verify discoverability and route ownership.
 
 **Suggested fix**
 
-Add a dedicated, full-height Chats list route (or convert the drawer Recents list into a full-screen view) with a filter control and an unbounded, searchable list of all conversations, plus a floating New Chat action, matching the reference IA.
+Completed. Keep the drawer preview compact while preserving the unbounded Chats route, and apply every future history filter after the Local/Managed Cloud execution-mode boundary.
 
 **Reference screenshot(s)**
 
@@ -418,24 +418,24 @@ Add a ContinuitySheet under app/(app)/ shown once on first cloud sign-in (and re
 
 - `references-2/claude-ios-cowork-01-cross-device-continuity-onboarding.png`
 
-### GAP-018 — Global search does not cover files, library or artifacts
+### GAP-018 — Mobile global search covers chats, projects, files, Library images, and artifacts
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Global search overlay
 
 **Gap**
 
-The reference states its scope up front — 'Search chats, files, and projects' — so uploaded documents and images are findable from one place. agiworkforce's search queries conversations (title + message content) and projects only; Library and Artifacts, both of which have their own screens, are unreachable from search.
+The Chats search field names its complete scope and fans out over chat titles and message content, projects, transcript file attachments, generated Library images, and artifact metadata/content. Results render in labeled groups with source badges and route to the exact chat, project, image preview, or artifact preview. The projection uses only stores already authorized for the active Local or Managed Cloud mode; Local queries do not add network egress.
 
 **Evidence**
 
-apps/mobile/src/features/drawer/components/DrawerContent.tsx:295-371 (searchConversations + project title filter only); apps/mobile/app/(app)/library/index.tsx and app/(app)/artifacts/index.tsx exist but are not searched
+src/features/search/mobileGlobalSearch.ts owns the pure grouped projection and attachment metadata collector. ChatsListScreen.tsx selects mode-scoped conversations, messages, projects, images, and artifact provenance, rejects stale content-search results from a previous query, and routes typed results. Library and Artifacts route wrappers accept exact result ids; their feature screens revalidate the authorized store projection before opening. mobile-global-search.test.ts, chats-list-screen.test.tsx, library-search-deep-link.test.tsx, search-result-route-handoff.test.tsx, artifacts-code-sessions.test.tsx, and existing chat-view-search tests cover grouping, attachment discovery, mode boundaries, and exact handoffs.
 
 **Suggested fix**
 
-Extend the search query to fan out over conversations, projects, library files and artifacts, returning grouped sections with type badges, and update the placeholder to name the scope.
+Completed. Keep Local search on device, keep Cloud message search behind the existing authenticated Cloud boundary, and add new searchable domains only through typed authorized projections with exact destinations.
 
 **Reference screenshot(s)**
 

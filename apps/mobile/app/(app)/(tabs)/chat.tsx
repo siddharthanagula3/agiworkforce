@@ -70,7 +70,8 @@ const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 
 /**
  * Chat tab -- composer-first new chat surface.
- * Recents live in the drawer; this screen stays focused on starting work.
+ * Full history and global search live in the dedicated Chats surface; this
+ * screen stays focused on starting work.
  * The hamburger menu opens the app-level drawer navigator.
  */
 export default function ChatTabScreen() {
@@ -134,8 +135,8 @@ export default function ChatTabScreen() {
   const cloudChatAvailable = FEATURES.cloudChat && Boolean(DEFAULT_CLOUD_MODEL_ID);
   const modeDescription =
     activeMode === 'cloud'
-      ? 'Continue with AGI Cloud. Use the sidebar for recents and projects.'
-      : 'Start privately on this device. Use the sidebar for recents and projects.';
+      ? 'Continue with AGI Cloud. Use Chats for full history and global search.'
+      : 'Start privately on this device. Use Chats for full history and global search.';
 
   // SendPreview disclosure data: Mobile supports Local and sign-in-gated AGI Cloud.
   const sendPreviewPresentation = useMemo(() => {

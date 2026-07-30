@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, View, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,13 +38,14 @@ type LibraryItem =
   | { kind: 'image'; id: string; image: LibraryImage }
   | { kind: 'artifact'; id: string; artifact: MobileArtifact };
 
-export function LibraryScreen() {
+export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const c = useThemeColors();
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [previewImage, setPreviewImage] = useState<LibraryImage | null>(null);
   const previewImageScopeRef = useRef<AccountScopedUiState | null>(null);
+  const openedInitialImageRef = useRef<string | null>(null);
 
   const appMode = useChatAppModeStore((s) => s.appMode);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
@@ -125,6 +126,14 @@ export function LibraryScreen() {
     previewImageScopeRef.current = null;
     setPreviewImage(null);
   }, []);
+
+  useEffect(() => {
+    if (!initialImageId || openedInitialImageRef.current === initialImageId) return;
+    const image = generatedImages.find((candidate) => candidate.id === initialImageId);
+    if (!image) return;
+    openedInitialImageRef.current = initialImageId;
+    handleOpenImage(image);
+  }, [generatedImages, handleOpenImage, initialImageId]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: LibraryItem; index: number }) => {

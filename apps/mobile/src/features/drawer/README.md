@@ -10,3 +10,4 @@ Purpose: Mobile app drawer composition, navigation shortcuts, and drawer-adjacen
 - Import drawer UI through `@/src/features/drawer`.
 - Drawer content may compose other feature domains but must not own their business state.
 - Keep navigation labels and route wiring close to the drawer component.
+- Keep Recents intentionally compact; the Chats destination owns full history, filters, and global search.

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Pressable, TextInput, ScrollView, Alert } from 'react-native';
+import { useCallback, useMemo } from 'react';
+import { View, Pressable, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import {
@@ -9,13 +9,13 @@ import {
   CalendarClock,
   FolderOpen,
   HelpCircle,
+  MessageSquare,
   Pin,
   Search,
   Settings,
   Sparkles,
   SquarePen,
   UserCircle,
-  X,
   type LucideIcon,
 } from 'lucide-react-native';
 import { type DrawerContentComponentProps } from '@react-navigation/drawer';
@@ -31,9 +31,9 @@ import {
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useChatViewStore } from '@/stores/chat/chatViewStore';
 
 type RoutePath =
+  | '/(app)/chats'
   | '/(app)/(tabs)/projects'
   | '/(app)/(tabs)/chat'
   | '/(app)/artifacts'
@@ -48,7 +48,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'projects' | 'artifacts' | 'library' | 'skills' | 'tasks' | 'schedules';
+  key: 'chats' | 'projects' | 'artifacts' | 'library' | 'skills' | 'tasks' | 'schedules';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -56,6 +56,12 @@ interface PrimaryItem {
 }
 
 const PRIMARY_ITEMS: PrimaryItem[] = [
+  {
+    key: 'chats',
+    label: 'Chats',
+    icon: MessageSquare,
+    route: '/(app)/chats',
+  },
   {
     key: 'projects',
     label: 'Projects',
@@ -200,18 +206,13 @@ function NavRow({
   );
 }
 
-function SearchBox({
-  value,
-  onChange,
-  onClear,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onClear: () => void;
-}) {
+function SearchBox({ onPress }: { onPress: () => void }) {
   const colors = useThemeColors();
   return (
-    <View
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Search chats, projects, files, library, and artifacts"
       style={{
         height: 42,
         borderRadius: 21,
@@ -225,36 +226,10 @@ function SearchBox({
       }}
     >
       <Search size={17} color={colors.textMuted} />
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder="Search"
-        placeholderTextColor={colors.textMuted}
-        returnKeyType="search"
-        autoCapitalize="none"
-        autoCorrect={false}
-        accessibilityLabel="Search chats and projects"
-        style={{ flex: 1, color: colors.textPrimary, fontSize: 15, paddingVertical: 0 }}
-      />
-      {value.trim().length > 0 ? (
-        <Pressable
-          testID="drawer-search-clear"
-          onPress={onClear}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Clear search"
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 14,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <X size={16} color={colors.textMuted} />
-        </Pressable>
-      ) : null}
-    </View>
+      <Text style={{ flex: 1, color: colors.textMuted, fontSize: 15 }}>
+        Search chats, projects, and files
+      </Text>
+    </Pressable>
   );
 }
 
@@ -300,24 +275,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const appMode = useChatAppModeStore((s) => s.appMode);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const query = searchQuery.trim().toLowerCase();
-  const isSearching = query.length > 0;
-
-  // Drive the shared (mode-aware) search: cloud mode runs the server full-text
-  // search via chatViewStore.searchConversations; local mode searches on-device.
-  // We surface conversations that matched by message *content* (not just title)
-  // alongside the title filter below.
-  const searchConversations = useChatViewStore((s) => s.searchConversations);
-  const searchResults = useChatViewStore((s) => s.searchResults);
-  useEffect(() => {
-    searchConversations(searchQuery);
-  }, [searchQuery, searchConversations]);
-  const contentMatchIds = useMemo(
-    () => new Set(searchResults.map((r) => r.conversationId)),
-    [searchResults],
-  );
-
   const closeDrawer = useCallback(() => {
     props.navigation.closeDrawer();
   }, [props.navigation]);
@@ -338,17 +295,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   }, [closeDrawer, router]);
 
   const displayedConversations = useMemo(() => {
-    const source = isSearching
-      ? conversations.filter(
-          (conversation) =>
-            (conversation.title || '').toLowerCase().includes(query) ||
-            // Include conversations matched by message content / server full-text
-            // search (chatViewStore.searchResults), not just by title.
-            contentMatchIds.has(conversation.id),
-        )
-      : conversations;
     return (
-      source
+      conversations
         .filter(
           (conversation) =>
             executionModeForConversation(conversation) === appMode &&
@@ -359,7 +307,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
         .slice(0, DRAWER_RECENT_LIMIT)
     );
-  }, [appMode, conversations, isSearching, query, contentMatchIds]);
+  }, [appMode, conversations]);
 
   const displayedProjects = useMemo(() => {
     if (!FEATURES.projects) return [];
@@ -367,16 +315,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     // Only show non-tombstoned projects. Local mode: read from local store as before.
     if (appMode === 'cloud') {
       const source = cloudProjects.filter((p) => p.deletedAt === null && !p.isArchived);
-      const filtered = isSearching
-        ? source.filter((p) => p.name.toLowerCase().includes(query))
-        : source;
-      return filtered.slice(0, 6);
+      return source.slice(0, 6);
     }
-    const source = isSearching
-      ? localProjects.filter((project) => project.name.toLowerCase().includes(query))
-      : localProjects;
-    return source.slice(0, 6);
-  }, [appMode, cloudProjects, isSearching, localProjects, query]);
+    return localProjects.slice(0, 6);
+  }, [appMode, cloudProjects, localProjects]);
 
   const visiblePrimaryItems = useMemo(
     () =>
@@ -396,6 +338,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     (key: PrimaryItem['key']) => {
       const p = pathname.startsWith('/') ? pathname : `/${pathname}`;
       if (key === 'projects') return p.includes('/projects');
+      if (key === 'chats') return p.includes('/chats');
       if (key === 'artifacts') return p.includes('/artifacts');
       if (key === 'library') return p.includes('/library');
       if (key === 'skills') return p.includes('/skills');
@@ -431,11 +374,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           />
         </View>
 
-        <SearchBox
-          value={searchQuery}
-          onChange={setSearchQuery}
-          onClear={() => setSearchQuery('')}
-        />
+        <SearchBox onPress={() => navigate('/(app)/chats')} />
 
         <ScrollView
           style={{ flex: 1, marginTop: 14 }}
@@ -510,7 +449,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 paddingHorizontal: 2,
               }}
             >
-              {isSearching ? 'Results' : 'Recents'}
+              Recents
             </Text>
 
             {displayedConversations.length > 0 ? (
@@ -562,7 +501,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               </View>
             ) : (
               <Text style={{ color: colors.textMuted, fontSize: 14, paddingHorizontal: 10 }}>
-                {isSearching ? 'No matches' : 'No recent chats'}
+                No recent chats
               </Text>
             )}
           </View>
