@@ -11,6 +11,7 @@ import {
   Layout,
   LockKeyhole,
   Mic,
+  RefreshCw,
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -124,6 +125,15 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
           label: 'Web search',
           description: 'Search current web information in Cloud sessions.',
           value: cloudValue,
+        },
+        {
+          key: 'continuity',
+          icon: RefreshCw,
+          tone: 'cloud',
+          label: 'Cross-device continuity',
+          description: 'See how Managed Cloud tasks continue across mobile, web, and desktop.',
+          value: 'Beta',
+          href: '/(app)/continuity',
         },
         {
           key: 'image-generation',

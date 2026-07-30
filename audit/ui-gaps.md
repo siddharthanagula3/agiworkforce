@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 1d176cb300f0a14d2f100adf1e2ebfed315fcd57f4b81920f10193147228d291 -->
+<!-- ui-gaps-csv-sha256: 35235e8051e0187aa0b245b3edc9ab4ee20746a5671fdf50c80f01dd8f41145f -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 111 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 110 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  315 |
+| Open        |  314 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   26 |
+| Done        |   27 |
 | Not Planned |    0 |
 
 ## P0
@@ -395,24 +395,24 @@ Completed. Keep the drawer preview compact while preserving the unbounded Chats 
 
 - `claude_reference/117-claude-ios-chats-list-greeting-and-two-older-chats.png`
 
-### GAP-017 — iOS has no cross-device continuity onboarding sheet for cloud tasks
+### GAP-017 — Mobile explains cross-device continuity when an account first enters Managed Cloud
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** Claude · iOS · Cowork cross-device continuity onboarding
 
 **Gap**
 
-The reference is a full-screen sheet with a Beta pill, serif headline 'Keep Cowork going when you're on the go', three icon+text benefits (start and steer tasks from the phone; check in from phone, browser or desktop app; work continues in the background even when the app is closed), a primary 'Start a Cowork task' CTA and a secondary 'Not now'. agiworkforce mobile has no such screen: first-run is a three-step local-model-download flow, and the only educational overlay is a four-step LAN desktop-pairing walkthrough, so nothing ever explains that cloud work persists across surfaces.
+A full-screen continuity sheet now appears once per signed-in Cloud owner when that owner first enters Managed Cloud on the device. It carries the Beta state, a clear cross-device headline, three concrete benefits, a Start a task handoff into the Cloud composer, and a persisted Not now decision. Settings → Capabilities keeps the explanation replayable. The background-work promise explicitly names the existing completion notification route rather than implying that Local Mode runs after the app closes.
 
 **Evidence**
 
-apps/mobile/app/(public)/onboarding.tsx:1-16 (Hero → device tier → model download); apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx:48-70 (Pair/Monitor/Approve/Remote Control, all LAN pairing); searched 'cross-device|continuity|even when you close' under apps/mobile — only sync-engine code comments
+src/features/continuity owns the account-scoped encrypted-MMKV acknowledgement, first-Cloud gate, accessible full-screen explanation, and Managed Cloud composer handoff. app/(app)/continuity/index.tsx registers the route, the authenticated drawer mounts the gate, and settings/capabilities/index.tsx exposes the replay row. continuity-onboarding.test.tsx covers owner isolation, Local and acknowledged suppression, benefits, start/not-now behavior, sign-in fallback, and the task_completed notification contract; capabilities-settings.test.tsx covers replay routing, while cloud-tasks-screen.test.tsx and notification-auth-gate.test.ts cover the real run and notification seams.
 
 **Suggested fix**
 
-Add a ContinuitySheet under app/(app)/ shown once on first cloud sign-in (and re-openable from Settings → Capabilities): Beta pill, display-serif headline, three benefit rows reusing the existing lucide icons (list-checks, clock, globe), primary 'Start a task' routing to the cloud composer and secondary 'Not now' persisted in MMKV. Tie the third benefit to the existing task_completed notification so the promise is verifiable.
+Completed. Keep acknowledgement owner-scoped, keep automatic presentation gated on the Managed Cloud trust boundary, and keep any future background-work promise backed by a real server run state and authenticated notification deep link.
 
 **Reference screenshot(s)**
 
