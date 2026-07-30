@@ -25,17 +25,7 @@ import {
   useInvoices,
   usePaymentMethods,
 } from '@features/billing/hooks/use-billing-queries';
-import {
-  Loader2,
-  RefreshCw,
-  Crown,
-  Settings,
-  ExternalLink,
-  Brain,
-  Code,
-  Search,
-  Sparkles,
-} from 'lucide-react';
+import { Loader2, RefreshCw, Crown, Settings, ExternalLink } from 'lucide-react';
 import ErrorBoundary from '@shared/components/ErrorBoundary';
 import {
   normalizePlan,
@@ -87,38 +77,6 @@ const BillingPage: React.FC = () => {
   const billing: BillingInfo | null = billingData
     ? {
         ...billingData,
-        usage: {
-          ...billingData.usage,
-          llmUsage: billingData.usage.llmUsage.map((llm, index) => ({
-            ...llm,
-            icon:
-              index === 0 ? (
-                <Brain className="h-5 w-5" />
-              ) : index === 1 ? (
-                <Code className="h-5 w-5" />
-              ) : index === 2 ? (
-                <Search className="h-5 w-5" />
-              ) : (
-                <Sparkles className="h-5 w-5" />
-              ),
-            color:
-              index === 0
-                ? 'text-green-600'
-                : index === 1
-                  ? 'text-blue-600'
-                  : index === 2
-                    ? 'text-purple-600'
-                    : 'text-orange-600',
-            bgColor:
-              index === 0
-                ? 'bg-green-50 dark:bg-green-950/30'
-                : index === 1
-                  ? 'bg-blue-50 dark:bg-blue-950/30'
-                  : index === 2
-                    ? 'bg-purple-50 dark:bg-purple-950/30'
-                    : 'bg-orange-50 dark:bg-orange-950/30',
-          })),
-        },
         invoices: (invoicesData ?? []).map((inv) => ({
           id: inv.id,
           date: inv.createdAt,

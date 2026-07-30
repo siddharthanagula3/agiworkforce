@@ -14,17 +14,12 @@ import { useBillingStore } from '../auth';
  * backend has been deleted.
  *
  * The desktop `UsageStats` shape (automations / api_calls / storage /
- * per-model tokens) has no honest source in the web REST API: `/api/usage`
- * returns credit-ledger balances (cents), not this legacy metering shape, and
- * `/api/usage/providers` groups by provider, not per-model. Rather than
- * fabricate those fields, `fetchUsage` leaves `usageStats` null — the UI
- * (UsageProgressBars, UsageDashboard) already renders an honest no-data
- * fallback. Credit balance/limits ARE available and flow through the unified
- * auth store (`credits`, `creditBalance_cents`) via `fetchCreditsWithCache`.
- *
- * Gap: a first-class per-model usage read for the desktop dashboards is not
- * wired. It would map `/api/usage/providers` (+ `/api/usage/analytics`) onto a
- * new credit-based view; tracked as follow-up.
+ * per-model tokens) has no honest source in the web REST API. `/api/usage`
+ * intentionally exposes only bounded usage percentages and reset times; raw
+ * provider cost, ledger cents, token conversions, and allowance operands stay
+ * server-private. Rather than fabricate those fields, `fetchUsage` leaves
+ * `usageStats` null — the UI (UsageProgressBars, UsageDashboard) already
+ * renders an honest no-data fallback.
  */
 
 export interface UsageSliceState {

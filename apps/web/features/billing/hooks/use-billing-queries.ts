@@ -52,16 +52,6 @@ export type SubscriptionStatus =
   | 'none';
 
 /**
- * LLM provider usage statistics
- */
-export interface LLMUsage {
-  provider: string;
-  tokens: number;
-  cost: number;
-  limit: number;
-}
-
-/**
  * Complete billing information for a user
  */
 export interface BillingInfo {
@@ -79,23 +69,13 @@ export interface BillingInfo {
 }
 
 /**
- * Token and cost usage breakdown
+ * Public managed-usage percentage.
+ *
+ * Provider costs, ledger cents, token conversions, and allowance operands are
+ * server-private by product policy.
  */
 export interface BillingUsage {
-  totalTokens: number;
-  totalLimit: number;
-  totalCost: number;
-  currentBalance: number;
-  llmUsage: LLMUsage[];
-}
-
-/**
- * User's token balance
- */
-export interface TokenBalance {
-  currentBalance: number;
-  totalGranted: number;
-  totalUsed: number;
+  usedPercent: number;
 }
 
 type UsageApiResponse = ManagedUsageSummaryResponse;
@@ -137,10 +117,7 @@ function normalizeSubscriptionStatus(status: string): SubscriptionStatus {
     : 'none';
 }
 
-export function buildBillingInfoFromUsage(
-  data: UsageApiResponse,
-  llmUsage: LLMUsage[],
-): BillingInfo {
+export function buildBillingInfoFromUsage(data: UsageApiResponse): BillingInfo {
   const plan = normalizeManagedBillingPlan(data.plan_tier);
   const usedPercent = normalizeUsagePercentage(data.usage_percentage);
   return {
@@ -154,11 +131,7 @@ export function buildBillingInfoFromUsage(
     stripeCustomerId: null,
     stripeSubscriptionId: null,
     usage: {
-      totalTokens: usedPercent,
-      totalLimit: 100,
-      totalCost: 0,
-      currentBalance: 100 - usedPercent,
-      llmUsage,
+      usedPercent,
     },
   };
 }
@@ -182,39 +155,8 @@ async function fetchUsageSummary(): Promise<UsageApiResponse | null> {
 }
 
 /**
- * Fetch plan usage via /api/usage.
- * Normalizes the percentage-only public response for legacy billing widgets.
- */
-async function fetchTokenBalance(_userId: string): Promise<TokenBalance> {
-  const token = await getAuthToken();
-  if (!token) {
-    return { currentBalance: 0, totalGranted: 0, totalUsed: 0 };
-  }
-
-  try {
-    const res = await fetch('/api/usage', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      logger.warn('[BillingQuery] /api/usage returned', res.status);
-      return { currentBalance: 0, totalGranted: 0, totalUsed: 0 };
-    }
-    const data = (await res.json()) as UsageApiResponse;
-    const usedPercent = normalizeUsagePercentage(data.usage_percentage);
-    return {
-      currentBalance: 100 - usedPercent,
-      totalGranted: 100,
-      totalUsed: usedPercent,
-    };
-  } catch (err) {
-    logger.error('[BillingQuery] fetchTokenBalance error:', err);
-    return { currentBalance: 0, totalGranted: 0, totalUsed: 0 };
-  }
-}
-
-/**
  * Main billing data query hook
- * Fetches complete billing information including plan, usage, and token balance
+ * Fetches complete billing information including plan and managed-usage status.
  *
  * @returns UseQueryResult with BillingInfo data or null
  */
@@ -227,7 +169,7 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
       if (!user?.id) return null;
 
       const usage = await fetchUsageSummary();
-      return usage ? buildBillingInfoFromUsage(usage, []) : null;
+      return usage ? buildBillingInfoFromUsage(usage) : null;
     },
     enabled: !!user?.id,
     staleTime: 2 * 60 * 1000, // 2 minutes - billing data changes infrequently
@@ -235,27 +177,6 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
     refetchOnWindowFocus: true, // Refetch when user returns to tab
     meta: {
       errorMessage: 'Failed to load billing information',
-    },
-  });
-}
-
-/**
- * Token balance query hook
- * Fetches current token balance, total granted, and usage
- *
- * @returns UseQueryResult with TokenBalance data
- */
-export function useTokenBalance(): UseQueryResult<TokenBalance, Error> {
-  const { user } = useAuthStore();
-
-  return useQuery<TokenBalance, Error>({
-    queryKey: queryKeys.billing.tokenBalance(user?.id ?? ''),
-    queryFn: (): Promise<TokenBalance> => fetchTokenBalance(user!.id),
-    enabled: !!user?.id,
-    staleTime: 60 * 1000, // 1 minute
-    gcTime: 5 * 60 * 1000, // 5 minutes
-    meta: {
-      errorMessage: 'Failed to load token balance',
     },
   });
 }

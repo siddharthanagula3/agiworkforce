@@ -29,7 +29,7 @@ describe('Billing Usage', () => {
       price: 20,
       currency: 'USD',
       features: [],
-      usage: { totalTokens: 50, totalLimit: 100, totalCost: 7.25, llmUsage: [] },
+      usage: { usedPercent: 50 },
       invoices: [],
     };
 
@@ -50,7 +50,7 @@ describe('Billing Usage', () => {
     expect(screen.getByText('50% used')).toBeTruthy();
     expect(screen.getByText(/resets august 1, 2026/i)).toBeTruthy();
     expect(screen.queryByText(/100 credits/i)).toBeNull();
-    expect(screen.queryByText(/\$7\.25/)).toBeNull();
+    expect(screen.queryByText(/provider cost/i)).toBeNull();
     expect(screen.queryByText(/total cost/i)).toBeNull();
   });
 });
