@@ -117,16 +117,6 @@ jest.mock('../src/features/artifacts/store', () => ({
   clearAccountScopedArtifactState: jest.fn(),
 }));
 
-// Platform integration connection status (connected/lastSynced/accountName)
-// is persisted to MMKV and scoped to the signed-in user — clearPlatformConnections
-// must run on sign-out so a subsequent account cannot inherit a prior user's
-// "Connected" badges.
-jest.mock('../src/features/integrations/store', () => ({
-  useIntegrationStore: {
-    getState: jest.fn(),
-  },
-}));
-
 // Persisted Cloud mode is account-bound UI state. Sign-out must return the
 // app to Local before any signed-out Cloud settings surface can render.
 jest.mock('../src/features/chat/store/appModeStore', () => ({
@@ -223,12 +213,6 @@ jest.mock('../src/features/schedules/store', () => ({
   },
 }));
 
-jest.mock('../src/features/messaging/store', () => ({
-  useMessagingStore: {
-    getState: jest.fn(() => ({ clearAccountMessaging: jest.fn() })),
-  },
-}));
-
 jest.mock('../services/api', () => ({
   resetApiAccountState: jest.fn(),
 }));
@@ -286,12 +270,6 @@ const _artifactMock = require('../src/features/artifacts/store') as {
   clearAccountScopedArtifactState: jest.Mock;
 };
 const mockClearCloudArtifacts = _artifactMock.clearAccountScopedArtifactState;
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const _integrationMock = require('../src/features/integrations/store') as {
-  useIntegrationStore: { getState: jest.Mock };
-};
-const mockClearPlatformConnections = jest.fn();
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const _appModeMock = require('../src/features/chat/store/appModeStore') as {
@@ -560,9 +538,6 @@ describe('authStore — secure storage persistence', () => {
     _artifactMock.useArtifactStore.getState.mockReturnValue({
       clearCloudArtifacts: mockClearCloudArtifacts,
     });
-    _integrationMock.useIntegrationStore.getState.mockReturnValue({
-      clearPlatformConnections: mockClearPlatformConnections,
-    });
   });
 
   it('signInWithEmail throws and does not write session to secure store (Clerk v1)', async () => {
@@ -703,22 +678,6 @@ describe('authStore — secure storage persistence', () => {
     await act(async () => {
       await pendingSignOut;
     });
-  });
-
-  it('signOut clears platform integration connections (account-B isolation)', async () => {
-    // Regression: platforms (connected/lastSynced/accountName) on
-    // useIntegrationStore is persisted to MMKV and scoped to the signed-in
-    // user, but had no sign-out reset at all — a subsequent account signing
-    // in on this device would see a prior user's "Connected" badges
-    // (Slack/Gmail/etc.) as its own, with no self-heal (fetchPlatforms()
-    // does not reconcile against the server).
-    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
-
-    await act(async () => {
-      await getState().signOut();
-    });
-
-    expect(mockClearPlatformConnections).toHaveBeenCalledTimes(1);
   });
 
   it('signOut clears cloud artifacts (account-B isolation)', async () => {

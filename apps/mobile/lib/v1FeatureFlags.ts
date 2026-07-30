@@ -109,9 +109,6 @@ export const FEATURES = {
   /** Desktop companion pairing + QR code flow. */
   companion: false,
 
-  /** External messaging integrations (WhatsApp, Telegram, Slack). */
-  messaging: false,
-
   /** Connectors directory. The server returns both connected rows and the
    *  deployment's live `available` ids. Mobile offers Connect only for that
    *  server-advertised set, opens the configured GitHub App install flow for

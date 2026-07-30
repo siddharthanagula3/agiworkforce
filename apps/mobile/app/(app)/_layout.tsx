@@ -26,8 +26,6 @@ export { default as ErrorBoundary } from './error';
  *     profile/      -- User profile
  *     schedules/    -- Schedule management
  *     settings/*    -- Settings sub-pages
- *     messaging/    -- External messaging
- *
  * The drawer replaces the previous bottom tab bar, giving more room
  * for the 6 nav items + recents list + user profile card.
  */
@@ -96,9 +94,6 @@ export default function AppLayout() {
       <Drawer.Screen name="settings/personalization" options={HIDDEN} />
       <Drawer.Screen name="settings/capabilities" options={HIDDEN} />
       <Drawer.Screen name="settings/auto-approve" options={HIDDEN} />
-
-      {/* Messaging */}
-      <Drawer.Screen name="messaging/index" options={HIDDEN} />
 
       {/* Notifications */}
       <Drawer.Screen name="notifications/index" options={HIDDEN} />

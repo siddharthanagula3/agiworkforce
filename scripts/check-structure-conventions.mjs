@@ -857,7 +857,6 @@ requireIncludes(
 requireIncludes('apps/mobile/src/features/schedules/index.ts', 'public API barrel');
 requireIncludes('apps/mobile/components/README.md', 'retained only for shared UI primitives');
 requireIncludes('apps/mobile/src/features/voice/README.md', 'Cloud STT/TTS calls');
-requireIncludes('apps/mobile/src/features/messaging/README.md', 'store.ts');
 requireIncludes('docs/engineering/naming-conventions.md', 'Primary CLI command: `agi`.');
 requireIncludes(
   'docs/engineering/naming-conventions.md',

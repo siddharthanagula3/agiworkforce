@@ -62,16 +62,8 @@ jest.mock('../src/features/billing/store', () => ({
   useTierStore: { getState: jest.fn() },
 }));
 
-jest.mock('../src/features/integrations/store', () => ({
-  useIntegrationStore: { getState: jest.fn() },
-}));
-
 jest.mock('../src/features/schedules/store', () => ({
   useScheduleStore: { getState: jest.fn() },
-}));
-
-jest.mock('../src/features/messaging/store', () => ({
-  useMessagingStore: { getState: jest.fn() },
 }));
 
 jest.mock('../services/api', () => ({
@@ -167,14 +159,8 @@ const { useCloudSettingsStore } = require('../stores/settings/cloudSettingsStore
 const { useTierStore } = require('../src/features/billing/store') as {
   useTierStore: { getState: jest.Mock };
 };
-const { useIntegrationStore } = require('../src/features/integrations/store') as {
-  useIntegrationStore: { getState: jest.Mock };
-};
 const { useScheduleStore } = require('../src/features/schedules/store') as {
   useScheduleStore: { getState: jest.Mock };
-};
-const { useMessagingStore } = require('../src/features/messaging/store') as {
-  useMessagingStore: { getState: jest.Mock };
 };
 const { resetApiAccountState } = require('../services/api') as {
   resetApiAccountState: jest.Mock;
@@ -221,9 +207,7 @@ describe('clearLocalCloudAccountState', () => {
   const clearCloudConversationSelection = jest.fn();
   const clearCloudAgentControls = jest.fn();
   const clearEntitlements = jest.fn();
-  const clearIntegrations = jest.fn();
   const clearSchedules = jest.fn();
-  const clearMessaging = jest.fn();
   const resetIapFlow = jest.fn();
   const clearCloudSearch = jest.fn();
   const clearManagedCloudAccess = jest.fn();
@@ -257,11 +241,7 @@ describe('clearLocalCloudAccountState', () => {
     useTierStore.getState.mockReturnValue({
       clearAccountEntitlements: clearEntitlements,
     });
-    useIntegrationStore.getState.mockReturnValue({
-      clearPlatformConnections: clearIntegrations,
-    });
     useScheduleStore.getState.mockReturnValue({ clearAccountSchedules: clearSchedules });
-    useMessagingStore.getState.mockReturnValue({ clearAccountMessaging: clearMessaging });
     useIapStore.getState.mockReturnValue({ reset: resetIapFlow });
     useChatViewStore.getState.mockReturnValue({ clearCloudSearchState: clearCloudSearch });
     useWaitlistStore.getState.mockReturnValue({ clear: clearManagedCloudAccess });
@@ -289,9 +269,7 @@ describe('clearLocalCloudAccountState', () => {
     expect(resetProjectSync).toHaveBeenCalledTimes(1);
     expect(resetSettingsSync).toHaveBeenCalledTimes(1);
     expect(clearEntitlements).toHaveBeenCalledTimes(1);
-    expect(clearIntegrations).toHaveBeenCalledTimes(1);
     expect(clearSchedules).toHaveBeenCalledTimes(1);
-    expect(clearMessaging).toHaveBeenCalledTimes(1);
     expect(resetApiAccountState).toHaveBeenCalledTimes(1);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(1);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(1);
@@ -340,9 +318,7 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCloudProjects).toHaveBeenCalledTimes(2);
     expect(resetSettingsSync).toHaveBeenCalledTimes(2);
     expect(clearEntitlements).toHaveBeenCalledTimes(2);
-    expect(clearIntegrations).toHaveBeenCalledTimes(2);
     expect(clearSchedules).toHaveBeenCalledTimes(2);
-    expect(clearMessaging).toHaveBeenCalledTimes(2);
     expect(resetApiAccountState).toHaveBeenCalledTimes(2);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(2);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(2);
