@@ -46,6 +46,7 @@ import { ModelsKeysTab } from './tabs/ModelsKeys';
 import { AgentsTab } from './tabs/Agents';
 import { CapabilitiesTab } from './tabs/Capabilities';
 import { ConnectionsTab } from './tabs/Connections';
+import { CoworkTab } from './tabs/Cowork';
 import { ConnectorsTab } from './tabs/Connectors';
 import { PluginsTab } from './tabs/Plugins';
 import { NotificationsTab } from './tabs/Notifications';
@@ -92,7 +93,13 @@ function canPersistNotificationSettings(): boolean {
   return isTauri || isCloudWeb;
 }
 
-const SELF_SAVING_TABS = new Set<CanonicalTab>(['capabilities', 'connectors', 'plugins']);
+const SELF_SAVING_TABS = new Set<CanonicalTab>([
+  'capabilities',
+  'connections',
+  'cowork',
+  'connectors',
+  'plugins',
+]);
 const WEB_HIDDEN_TABS = new Set<CanonicalTab>(['models-keys', 'voice']);
 const LOCAL_HIDDEN_TABS = new Set<CanonicalTab>(['account', 'billing', 'usage']);
 const visibleNav = isCloudWeb
@@ -682,6 +689,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return <CapabilitiesTab />;
       case 'connections':
         return <ConnectionsTab />;
+      case 'cowork':
+        return <CoworkTab />;
       case 'connectors':
         return <ConnectorsTab />;
       case 'agi-code':

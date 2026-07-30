@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 65f779cd2fffae8cab198936ec88063f638d7c925dbc810e02836dd3d1d2fc62 -->
+<!-- ui-gaps-csv-sha256: d7e88f8e5e0da4bfb89b7b40d6206dcf91b2678c504e13468255e62c6c01240f -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 3 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 2 P0, 126 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  333 |
+| Open        |  332 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |    8 |
+| Done        |    9 |
 | Not Planned |    0 |
 
 ## P0
@@ -140,24 +140,24 @@ Independent duplicate recommendation (GAP-005): Duplicate disposition complete; 
 - `chatgpt_reference/053-codex-macos-settings-connections-control-this-mac-devices.png`
 - `chatgpt_reference/032-codex-macos-settings-connections-control-this-mac-allow-toggle.png`
 
-### GAP-006 — Cowork Dispatch lacks an execution lifecycle and authoritative settings surface
+### GAP-006 — Cowork Dispatch has an authenticated task lifecycle and authoritative settings
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Claude · macOS desktop · Settings > Cowork (Dispatch, Cowork files, trusted folders, run-in-cloud, global instructions)
 
 **Gap**
 
-The reference exposes a full Cowork settings section whose controls govern real dispatch, storage, trusted-folder, cloud-run, and instruction lifecycles. agiworkforce has an HMAC transport helper in services/dispatch.ts and connectionStore verifies mobile control envelopes, but the source audit's claim that Dispatch is wired into the runtime/chat layer is stale: verified controls are emitted as mobile-companion:control events with no consumer, and the current mobile companion sends commands for existing agents rather than a new-task dispatch request. No Cowork settings surface can truthfully control this yet.
+Desktop now has a searchable Cowork settings destination whose persisted, default-off Dispatch switch is the execution authority for new tasks from a paired phone. Mobile can compose and cancel a new Desktop task; the signed, versioned contract returns accepted, queued, running, review, completed, failed, cancelled, or rejected state. The same authenticated channel answers agent refreshes with current Desktop task snapshots. Unsupported storage-location, trusted-folder, cloud-run, and global-instruction controls remain absent because no matching runtime consumer exists.
 
 **Evidence**
 
-apps/desktop/src/services/dispatch.ts derives, verifies, signs, rotates, and resets HMAC session keys only. apps/desktop/src/stores/connectionStore.ts dispatches a mobile-companion:control CustomEvent after verification. Current code search finds no listener for that event. apps/mobile/services/companion.ts sends sync_request, approval_response, heartbeat, cancel, and agent-command dispatch_request messages; it does not expose a new Cowork task dispatch flow.
+packages/contracts/types/src/cross-device.ts defines dispatch.task.create, dispatch.task.cancel, and dispatch.task.status. apps/desktop/src/services/coworkDispatch.ts validates bounded payloads, gates creation through coworkDispatchStore, submits to the production agentTaskStore, mirrors lifecycle and agent snapshots, and permits cancellation after Dispatch is disabled. App.tsx owns the runtime listener. packages/ui/ui/src/settings-nav.ts and both Local and Cloud Desktop settings render tabs/Cowork with the persisted authority switch and live pairing state. apps/mobile/services/companion.ts, dispatchTaskStore.ts, DispatchTaskComposer.tsx, and the enabled companion flags provide the paired Mobile create/cancel/status UI. coworkDispatch.test.ts, CoworkTab.test.tsx, dispatch-defense.test.ts, and wave1-control-relay.test.ts cover validation, default-deny, execution, status, cancellation, navigation, and Mobile transport.
 
 **Suggested fix**
 
-Define and implement the cross-surface Dispatch execution contract first: validated new-task payload, Desktop consumer, response/status protocol, enable/disable lifecycle, persistence, and cancellation. Then add a Cowork settings destination whose Dispatch control gates that consumer. Add storage location, trusted folders, cloud-run defaults, and global instructions only with their runtime consumers; do not mount inert settings.
+Completed for paired-device local Desktop execution. Keep Dispatch default-off and HMAC-authenticated, preserve bounded versioned payload validation and cancellation while disabled, and add storage, trusted folders, cloud execution, or global instructions only when those settings have authoritative runtime consumers.
 
 **Reference screenshot(s)**
 

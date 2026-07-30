@@ -40,7 +40,7 @@ import type {
   ConnectedConnector,
   SettingsNavGroupResolved,
 } from '@agiworkforce/ui';
-import { Brain } from 'lucide-react';
+import { Brain, Laptop } from 'lucide-react';
 
 import { CONNECTORS } from '../connectors/connectorDefinitions';
 import {
@@ -99,6 +99,7 @@ const CLOUD_SETTINGS_SECTIONS = new Set([
   'billing',
   'usage',
   'capabilities',
+  'cowork',
   'security',
   'notifications',
   'reflect',
@@ -131,7 +132,11 @@ const DESKTOP_CLOUD_SETTINGS_NAV: SettingsNavGroupResolved[] = SETTINGS_NAV_GROU
     ...group,
     items: group.items.flatMap((item) =>
       item.key === 'capabilities'
-        ? [item, { key: 'memory' as const, label: 'Memory', icon: Brain }]
+        ? [
+            item,
+            { key: 'cowork' as const, label: 'Cowork', icon: Laptop },
+            { key: 'memory' as const, label: 'Memory', icon: Brain },
+          ]
         : [item],
     ),
   }),
@@ -149,6 +154,7 @@ const LazyPrivacyTab = lazy(() =>
   import('./tabs/Privacy').then((m) => ({ default: m.PrivacyTab })),
 );
 const LazyMemoryTab = lazy(() => import('./tabs/Memory').then((m) => ({ default: m.MemoryTab })));
+const LazyCoworkTab = lazy(() => import('./tabs/Cowork').then((m) => ({ default: m.CoworkTab })));
 // ── Cloud-only sections that have no dedicated desktop tab ────────────────────
 
 function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
@@ -1066,6 +1072,11 @@ export function DesktopCloudSettingsModal({
       billing: <DesktopBillingSection onOpenPlans={openPlans} />,
       usage: <DesktopUsageSection />,
       capabilities: <DesktopCapabilitiesSection />,
+      cowork: (
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCoworkTab />
+        </Suspense>
+      ),
       security: (
         <DesktopCloudAccountSection
           title="Security"

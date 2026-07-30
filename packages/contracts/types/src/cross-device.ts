@@ -159,6 +159,57 @@ export interface CrossDeviceAttachment {
 }
 
 // ============================================================================
+// Desktop Dispatch
+// ============================================================================
+
+/**
+ * Versioned, authenticated control contract for starting and controlling a
+ * Desktop task from a paired Mobile companion. These messages travel inside
+ * the signed Dispatch envelope; they never represent cloud-queued work.
+ */
+export interface DispatchTaskCreateRequest {
+  action: 'dispatch.task.create';
+  version: 1;
+  requestId: string;
+  prompt: string;
+  title?: string;
+  sentAt: string;
+}
+
+export interface DispatchTaskCancelRequest {
+  action: 'dispatch.task.cancel';
+  version: 1;
+  requestId: string;
+  taskId?: string;
+  sentAt: string;
+}
+
+export type DispatchTaskControlRequest = DispatchTaskCreateRequest | DispatchTaskCancelRequest;
+
+export type DispatchTaskLifecycleStatus =
+  | 'accepted'
+  | 'queued'
+  | 'running'
+  | 'awaiting_input'
+  | 'ready_for_review'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'rejected';
+
+export interface DispatchTaskStatusEvent {
+  action: 'dispatch.task.status';
+  version: 1;
+  requestId: string;
+  taskId?: string;
+  status: DispatchTaskLifecycleStatus;
+  message?: string;
+  result?: string;
+  error?: string;
+  updatedAt: string;
+}
+
+// ============================================================================
 // Device Pairing
 // ============================================================================
 

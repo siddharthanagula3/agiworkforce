@@ -126,21 +126,26 @@ function extractMobileControlMessage(input: unknown): MobileControlMessage | nul
   return { action, payload, rawJson, id };
 }
 
-async function sendControlToMobile(action: string, payload: Record<string, unknown>) {
+export async function sendCompanionControl(
+  action: string,
+  payload: Record<string, unknown>,
+): Promise<boolean> {
   try {
     const signedJson = await signOutbound({ ...payload, action }, action);
     if (controlChannel?.readyState === 'open') {
       controlChannel.send(signedJson);
-      return;
+      return true;
     }
 
     const signedPayload = parseJsonObject(signedJson);
     if (signedPayload && signalingClient) {
       signalingClient.sendSignal('control', signedPayload);
+      return true;
     }
   } catch (error) {
     console.warn('[mobile-companion] failed to send signed control response:', error);
   }
+  return false;
 }
 
 async function handleMobileControlPayload(input: unknown) {
@@ -157,7 +162,7 @@ async function handleMobileControlPayload(input: unknown) {
   }
 
   if (message.action === 'heartbeat') {
-    await sendControlToMobile('heartbeat_ack', {
+    await sendCompanionControl('heartbeat_ack', {
       timestamp:
         typeof message.payload['timestamp'] === 'number'
           ? message.payload['timestamp']

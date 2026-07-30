@@ -37,6 +37,8 @@ import type { Agent } from './agentStore';
 import { notifyCompanionMessage } from '@/services/companionNotifications';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useDispatchTaskStore } from './dispatchTaskStore';
+import type { DispatchTaskLifecycleStatus, DispatchTaskStatusEvent } from '@agiworkforce/types';
 
 export type ConnectionStatus =
   | 'disconnected'
@@ -295,6 +297,17 @@ const VALID_APPROVAL_TYPES = new Set<ApprovalRequest['type']>([
   'data_modification',
   'other',
 ]);
+const VALID_DISPATCH_TASK_STATUSES = new Set<DispatchTaskLifecycleStatus>([
+  'accepted',
+  'queued',
+  'running',
+  'awaiting_input',
+  'ready_for_review',
+  'completed',
+  'failed',
+  'cancelled',
+  'rejected',
+]);
 
 function boundedString(v: unknown, max: number): string | undefined {
   if (!isString(v)) return undefined;
@@ -360,6 +373,59 @@ export function ingestApprovalRequestPayload(payload: unknown): boolean {
   useAgentStore.getState().addApproval(approval);
   notifyCompanionMessage({ ...normalized, action: 'approval_request' });
   return true;
+}
+
+export function parseDispatchTaskStatus(payload: unknown): DispatchTaskStatusEvent | null {
+  const normalized = normalizeIncomingControlPayload(payload);
+  if (
+    !normalized ||
+    normalized['action'] !== 'dispatch.task.status' ||
+    normalized['version'] !== 1
+  ) {
+    return null;
+  }
+
+  const requestId = boundedString(normalized['requestId'], 128);
+  const statusValue = normalized['status'];
+  const updatedAt = boundedString(normalized['updatedAt'], 64);
+  if (
+    !requestId ||
+    !isString(statusValue) ||
+    !VALID_DISPATCH_TASK_STATUSES.has(statusValue as DispatchTaskLifecycleStatus) ||
+    !updatedAt ||
+    !Number.isFinite(Date.parse(updatedAt))
+  ) {
+    return null;
+  }
+
+  const taskId =
+    normalized['taskId'] === undefined ? undefined : boundedString(normalized['taskId'], 128);
+  const message =
+    normalized['message'] === undefined ? undefined : boundedString(normalized['message'], 4_000);
+  const result =
+    normalized['result'] === undefined ? undefined : boundedString(normalized['result'], 4_000);
+  const error =
+    normalized['error'] === undefined ? undefined : boundedString(normalized['error'], 4_000);
+  if (
+    (normalized['taskId'] !== undefined && !taskId) ||
+    (normalized['message'] !== undefined && !message) ||
+    (normalized['result'] !== undefined && !result) ||
+    (normalized['error'] !== undefined && !error)
+  ) {
+    return null;
+  }
+
+  return {
+    action: 'dispatch.task.status',
+    version: 1,
+    requestId,
+    ...(taskId ? { taskId } : {}),
+    status: statusValue as DispatchTaskLifecycleStatus,
+    ...(message ? { message } : {}),
+    ...(result ? { result } : {}),
+    ...(error ? { error } : {}),
+    updatedAt,
+  };
 }
 
 /**
@@ -486,6 +552,11 @@ function handleControlMessageInner(payload: unknown): void {
     }
     case 'approval_request': {
       ingestApprovalRequestPayload(normalizedPayload);
+      break;
+    }
+    case 'dispatch.task.status': {
+      const event = parseDispatchTaskStatus(normalizedPayload);
+      if (event) useDispatchTaskStore.getState().applyStatus(event);
       break;
     }
     case 'agent_failed':
@@ -1011,6 +1082,7 @@ export const useConnectionStore = create<ConnectionState>()(
         });
         // Clear agents on disconnect
         useAgentStore.getState().setAgents([]);
+        useDispatchTaskStore.getState().reset();
       },
 
       sendControl: (action: string, payload?: unknown) => {
