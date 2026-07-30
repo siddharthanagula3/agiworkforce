@@ -255,4 +255,14 @@ describe('Profile mode boundary', () => {
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
   });
+
+  it('opens the native Account Security overview from a signed-in Cloud profile', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkSignedIn: true });
+
+    const { getByText } = render(<ProfileScreen />);
+    fireEvent.press(getByText('Account Security'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/account-security');
+  });
 });
