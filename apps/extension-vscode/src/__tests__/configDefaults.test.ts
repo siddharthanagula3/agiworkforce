@@ -11,12 +11,14 @@
 import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { __CONFIG_DEFAULTS } from '../platform/config';
+import { __CONFIG_DEFAULTS, SETTINGS_PANEL_SETTING_KEYS } from '../platform/config';
 
 interface PkgConfigContrib {
   type: string;
   default?: unknown;
   description?: string;
+  deprecationMessage?: string;
+  readOnly?: boolean;
 }
 
 interface ExtensionPackageJson {
@@ -42,12 +44,14 @@ function readPkgConfigSettings(): Record<string, PkgConfigContrib> {
 
 /** Map from DEFAULTS key → package.json `agiWorkforce.<x>` setting key. */
 const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
+  apiEndpoint: 'agiWorkforce.apiEndpoint',
   agentPlanMode: 'agiWorkforce.agent.planMode',
   agentMode: 'agiWorkforce.agent.mode',
   agentEffort: 'agiWorkforce.agent.effort',
   agentThinking: 'agiWorkforce.agent.thinking',
   codeLensEnabled: 'agiWorkforce.codeLensEnabled',
   hoverEnabled: 'agiWorkforce.hoverEnabled',
+  autoApplyFixes: 'agiWorkforce.autoApplyFixes',
   inlineCompletionsEnabled: 'agiWorkforce.inlineCompletions.enabled',
   inlineCompletionsDebounceMs: 'agiWorkforce.inlineCompletions.debounceMs',
   inlineCompletionsMaxLength: 'agiWorkforce.inlineCompletions.maxLength',
@@ -63,6 +67,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   tier: 'agiWorkforce.tier',
   currentTier: 'agiWorkforce.currentTier',
   cliPath: 'agiWorkforce.cliPath',
+  gatewayUrl: 'agiWorkforce.gatewayUrl',
 };
 
 describe('Config DEFAULTS ↔ package.json parity', () => {
@@ -93,6 +98,17 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
       missing,
       `Config keys with no matching package.json setting: ${missing.join(', ')}`,
     ).toEqual([]);
+  });
+
+  it('exposes every active mutable extension option in the branded settings panel', () => {
+    const activeMutableKeys = Object.entries(pkgSettings)
+      .filter(
+        ([, setting]) => setting.readOnly !== true && setting.deprecationMessage === undefined,
+      )
+      .map(([key]) => key.replace(/^agiWorkforce\./u, ''))
+      .sort();
+
+    expect([...SETTINGS_PANEL_SETTING_KEYS].sort()).toEqual(activeMutableKeys);
   });
 
   it('keeps the optional Desktop bridge opt-in for a clean public install', () => {

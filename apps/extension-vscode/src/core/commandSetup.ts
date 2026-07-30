@@ -47,6 +47,7 @@ import {
 import * as telemetry from './telemetry';
 import { recordFailure } from './subsystemHealth';
 import { setAgentModeWithConsent } from '../features/permissions/agentModeConsent';
+import { SettingsPanel } from '../features/settings';
 
 const execFileAsync = promisify(execFile);
 
@@ -135,6 +136,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   };
 
   context.subscriptions.push(
+    register('agi-workforce.openSettings', (section?: unknown) => {
+      SettingsPanel.createOrShow(context, section);
+    }),
+
     // ── context panel commands ──────────────────────────────────────────────────
     register('agi-workforce.addToContext', async (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
@@ -1342,7 +1347,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       } else if (pick?.action === 'sign-out') {
         await vscode.commands.executeCommand('agi-workforce.signOut');
       } else if (pick?.action === 'settings') {
-        await vscode.commands.executeCommand('workbench.action.openSettings', 'agiWorkforce');
+        await vscode.commands.executeCommand('agi-workforce.openSettings', 'general');
       } else if (pick?.action === 'manage-usage') {
         await vscode.env.openExternal(
           vscode.Uri.parse('https://agiworkforce.com/settings/usage?from=vscode-extension'),

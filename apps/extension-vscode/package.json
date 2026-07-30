@@ -72,6 +72,11 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "agi-workforce.openSettings",
+        "title": "AGI Workforce: Open Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "agi-workforce.agentMode",
         "title": "AGI Workforce: Agent Mode",
         "icon": "$(robot)"
@@ -523,6 +528,11 @@
       ],
       "view/title": [
         {
+          "command": "agi-workforce.openSettings",
+          "when": "view == agi-workforce.sidebar",
+          "group": "navigation@99"
+        },
+        {
           "command": "agi-workforce.refreshConversations",
           "when": "view == agi-workforce.conversations",
           "group": "navigation"
@@ -684,6 +694,7 @@
         "agiWorkforce.agent.planMode": {
           "type": "boolean",
           "default": false,
+          "deprecationMessage": "Use AGI Workforce: Open Settings and choose Agent mode → Plan instead.",
           "description": "Deprecated — use agiWorkforce.agent.mode instead. When true, maps to agent.mode = 'plan'."
         },
         "agiWorkforce.agent.mode": {

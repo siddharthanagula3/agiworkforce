@@ -27,7 +27,8 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { runTests } from '@vscode/test-electron';
+import { downloadAndUnzipVSCode, runTests } from '@vscode/test-electron';
+import { resolveVsCodeExecutablePath } from './resolveVsCodeExecutable';
 
 async function main(): Promise<void> {
   try {
@@ -39,8 +40,14 @@ async function main(): Promise<void> {
     // worktree) makes the default in-repo `.vscode-test/user-data` path fail
     // with `listen EINVAL`. Always use a short per-run dir under the OS tmpdir.
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agi-vsc-'));
+    const downloadedExecutablePath = await downloadAndUnzipVSCode({
+      version: 'stable',
+      extensionDevelopmentPath,
+    });
+    const vscodeExecutablePath = resolveVsCodeExecutablePath(downloadedExecutablePath);
 
     await runTests({
+      vscodeExecutablePath,
       extensionDevelopmentPath,
       extensionTestsPath,
       // Open with no workspace; smoke test triggers activation via command.

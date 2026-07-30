@@ -265,7 +265,7 @@ export class ChatStateManager {
       }
 
       case 'openSettings': {
-        await vscode.commands.executeCommand('workbench.action.openSettings', 'agiWorkforce');
+        await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
         break;
       }
 
