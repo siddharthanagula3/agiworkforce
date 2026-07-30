@@ -146,12 +146,12 @@ describe('model catalog helpers', () => {
     expect(basicModels.map((model) => model.id)).toContain('gemini-3.5-flash-lite');
     expect(basicModels.map((model) => model.id)).not.toContain('deepseek-v4-flash');
     expect(basicModels.map((model) => model.id)).not.toContain('qwen-3.7-plus');
-    expect(basicModels.map((model) => model.id)).not.toContain('qwen-3.5-flash');
+    expect(basicModels.map((model) => model.id)).toContain('qwen-3.5-flash');
     expect(basicModels.map((model) => model.id)).not.toContain('glm-5.2');
     expect(basicModels.map((model) => model.id)).not.toContain('sonar');
     expect(proModels.map((model) => model.id)).toContain('gemini-3.5-flash-lite');
     expect(getAllowedModelsForTier('pro_additions')).toEqual(
-      expect.arrayContaining(['deepseek-v4-flash', 'qwen-3.7-plus', 'qwen-3.5-flash', 'glm-5.2']),
+      expect.arrayContaining(['deepseek-v4-flash', 'qwen-3.7-plus', 'glm-5.2']),
     );
     expect(maxPlusModels).toEqual(maxModels);
     expect(
