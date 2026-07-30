@@ -91,8 +91,6 @@ pub struct PlatformStatus {
 pub struct ConnectSlackRequest {
     pub user_id: String,
     pub bot_token: String,
-    pub app_token: String,
-    pub signing_secret: String,
     pub workspace_id: Option<String>,
     pub workspace_name: Option<String>,
 }
@@ -122,8 +120,6 @@ pub async fn connect_slack(
 ) -> Result<MessagingConnection, String> {
     let config = SlackConfig {
         bot_token: request.bot_token.clone(),
-        app_token: request.app_token.clone(),
-        signing_secret: request.signing_secret.clone(),
     };
 
     SlackClient::new(config).map_err(|e| format!("Failed to create Slack client: {}", e))?;
@@ -134,8 +130,6 @@ pub async fn connect_slack(
     // FIX-002 (Sprint 1): encrypt the credentials JSON before INSERT.
     let credentials_json = serde_json::json!({
         "bot_token": request.bot_token,
-        "app_token": request.app_token,
-        "signing_secret": request.signing_secret,
     })
     .to_string();
     let credentials_value = encrypt_messaging_credentials(encryption.inner(), &credentials_json)?;
@@ -322,14 +316,6 @@ pub async fn send_message(
                 bot_token: creds["bot_token"]
                     .as_str()
                     .ok_or("Missing bot_token")?
-                    .to_string(),
-                app_token: creds["app_token"]
-                    .as_str()
-                    .ok_or("Missing app_token")?
-                    .to_string(),
-                signing_secret: creds["signing_secret"]
-                    .as_str()
-                    .ok_or("Missing signing_secret")?
                     .to_string(),
             };
 

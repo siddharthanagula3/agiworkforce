@@ -25,8 +25,6 @@ interface MessagingConnection {
 interface ConnectSlackRequest {
   user_id: string;
   bot_token: string;
-  app_token: string;
-  signing_secret: string;
   workspace_id?: string;
   workspace_name?: string;
 }
@@ -56,8 +54,6 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
   const [showTeamsModal, setShowTeamsModal] = useState(false);
 
   const [slackBotToken, setSlackBotToken] = useState('');
-  const [slackAppToken, setSlackAppToken] = useState('');
-  const [slackSigningSecret, setSlackSigningSecret] = useState('');
   const [slackWorkspaceName, setSlackWorkspaceName] = useState('');
 
   const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState('');
@@ -93,16 +89,12 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
       const request: ConnectSlackRequest = {
         user_id: userId,
         bot_token: slackBotToken,
-        app_token: slackAppToken,
-        signing_secret: slackSigningSecret,
         workspace_name: slackWorkspaceName || undefined,
       };
 
       await invoke<MessagingConnection>('connect_slack', { request });
 
       setSlackBotToken('');
-      setSlackAppToken('');
-      setSlackSigningSecret('');
       setSlackWorkspaceName('');
       setShowSlackModal(false);
 
@@ -288,24 +280,6 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
                 value={slackBotToken}
                 onChange={(e) => setSlackBotToken(e.target.value)}
                 placeholder="xoxb-..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">App Token</label>
-              <Input
-                type="password"
-                value={slackAppToken}
-                onChange={(e) => setSlackAppToken(e.target.value)}
-                placeholder="xapp-..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Signing Secret</label>
-              <Input
-                type="password"
-                value={slackSigningSecret}
-                onChange={(e) => setSlackSigningSecret(e.target.value)}
-                placeholder="Enter signing secret"
               />
             </div>
             <div>
