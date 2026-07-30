@@ -46,6 +46,7 @@ import {
 } from '../features/model-picker/modelConstants';
 import * as telemetry from './telemetry';
 import { recordFailure } from './subsystemHealth';
+import { setAgentModeWithConsent } from '../features/permissions/agentModeConsent';
 
 const execFileAsync = promisify(execFile);
 
@@ -881,12 +882,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           });
           const selectedMode = modePick?.value;
           if (selectedMode !== undefined) {
-            await vscode.workspace
-              .getConfiguration('agiWorkforce')
-              .update('agent.mode', selectedMode, vscode.ConfigurationTarget.Global);
-            vscode.window.showInformationMessage(
-              `AGI Workforce agent mode set to: ${cap(selectedMode)}`,
-            );
+            if (await setAgentModeWithConsent(context, selectedMode)) {
+              vscode.window.showInformationMessage(
+                `AGI Workforce agent mode set to: ${cap(selectedMode)}`,
+              );
+            }
           }
           break;
         }
@@ -991,12 +991,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         matchOnDescription: true,
       });
       if (modePick?.detail !== undefined) {
-        await vscode.workspace
-          .getConfiguration('agiWorkforce')
-          .update('agent.mode', modePick.detail, vscode.ConfigurationTarget.Global);
-        vscode.window.showInformationMessage(
-          `AGI Workforce agent mode set to: ${capMode(modePick.detail)}`,
-        );
+        const selectedMode = modePick.detail as 'ask' | 'auto' | 'plan' | 'bypass';
+        if (await setAgentModeWithConsent(context, selectedMode)) {
+          vscode.window.showInformationMessage(
+            `AGI Workforce agent mode set to: ${capMode(selectedMode)}`,
+          );
+        }
       }
     }),
 
@@ -1199,13 +1199,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const current = Config.agentMode();
       const idx = modes.indexOf(current);
       const next: 'ask' | 'auto' | 'plan' | 'bypass' = modes[(idx + 1) % modes.length] ?? 'auto';
-      await vscode.workspace
-        .getConfiguration('agiWorkforce')
-        .update('agent.mode', next, vscode.ConfigurationTarget.Global);
-      vscode.window.setStatusBarMessage(
-        `$(robot) AGI mode: ${next.charAt(0).toUpperCase() + next.slice(1)}`,
-        2000,
-      );
+      if (await setAgentModeWithConsent(context, next)) {
+        vscode.window.setStatusBarMessage(
+          `$(robot) AGI mode: ${next.charAt(0).toUpperCase() + next.slice(1)}`,
+          2000,
+        );
+      }
     }),
   );
 

@@ -21,10 +21,16 @@ import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
+import {
+  initializeAgentModeConsent,
+  reconcileAgentModeConsent,
+} from './features/permissions/agentModeConsent';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext): void {
+  initializeAgentModeConsent(context);
+
   // ── 0. Subsystem health (must be first) ─────────────────────────────────────
   initSubsystemHealth(context);
 
@@ -101,10 +107,23 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   updateStatusBar();
+  void reconcileAgentModeConsent(context)
+    .then(updateStatusBar)
+    .catch((error: unknown) => {
+      recordFailure('agent-mode-consent', error);
+    });
   void validateAdvancedFeatureFlags(context);
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('agiWorkforce.agent.mode')) {
+        void reconcileAgentModeConsent(context)
+          .then(updateStatusBar)
+          .catch((error: unknown) => {
+            recordFailure('agent-mode-consent', error);
+          });
+      }
+
       if (e.affectsConfiguration('agiWorkforce.cliPath')) {
         localRuntimes.restartAll();
         conversationTreeProvider.refresh();

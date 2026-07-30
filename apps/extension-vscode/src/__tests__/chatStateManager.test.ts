@@ -335,6 +335,24 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('keeps a spoofed or cancelled sidebar bypass request on Auto', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({ type: 'setMode', payload: { mode: 'bypass' } });
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'Turn on Bypass Permissions?',
+      expect.objectContaining({ modal: true }),
+      expect.objectContaining({ title: 'Cancel', isCloseAffordance: true }),
+      expect.objectContaining({ title: 'Turn On Bypass Permissions' }),
+    );
+    expect(harness.manager.mode).toBeUndefined();
+    expect(harness.posted).toContainEqual({
+      type: 'modeChanged',
+      payload: { mode: 'auto' },
+    });
+  });
+
   it('includes user-curated memory as untrusted turn data', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update(MEMORY_STORE_KEY, [

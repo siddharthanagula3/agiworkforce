@@ -19,6 +19,7 @@
  */
 
 import * as vscode from 'vscode';
+import { enforceAgentModeConsent } from '../features/permissions/agentModeConsent';
 
 /** Default values mirror those declared in `package.json` `contributes.configuration`. */
 const DEFAULTS = {
@@ -66,7 +67,9 @@ export const Config = {
    */
   agentMode(): 'ask' | 'auto' | 'plan' | 'bypass' {
     const raw = get<string>('agent.mode', DEFAULTS.agentMode);
-    if (raw === 'ask' || raw === 'auto' || raw === 'plan' || raw === 'bypass') return raw;
+    if (raw === 'ask' || raw === 'auto' || raw === 'plan' || raw === 'bypass') {
+      return enforceAgentModeConsent(raw);
+    }
     // Backwards-compat: fall through to deprecated planMode alias
     return get<boolean>('agent.planMode', false) ? 'plan' : 'auto';
   },
