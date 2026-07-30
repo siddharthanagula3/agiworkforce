@@ -7,7 +7,11 @@
  * No mocks required — contentFilter is pure logic with no I/O.
  */
 
-import { checkContentFilter, MINOR_SAFE_REFUSAL } from '../lib/contentFilter';
+import {
+  checkContentFilter,
+  MINOR_SAFE_REFUSAL,
+  REDUCED_SENSITIVE_CONTENT_REFUSAL,
+} from '../lib/contentFilter';
 
 // ---------------------------------------------------------------------------
 // Adult-mode pass-through
@@ -138,6 +142,17 @@ describe('checkContentFilter — isMinor=true, blocked prompts', () => {
     if (!result.allowed) {
       expect(result.refusal).toContain("This content isn't available in AGI");
       expect(result.refusal).toContain('Settings > Privacy');
+    }
+  });
+
+  it('uses adult opt-in copy without claiming the user is a minor', () => {
+    const result = checkContentFilter('show me porn', true, REDUCED_SENSITIVE_CONTENT_REFUSAL);
+    expect(result).toEqual({
+      allowed: false,
+      refusal: REDUCED_SENSITIVE_CONTENT_REFUSAL,
+    });
+    if (!result.allowed) {
+      expect(result.refusal).not.toContain('minimum age');
     }
   });
 

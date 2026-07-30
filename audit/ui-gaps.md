@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: c92644e7498dbfc5c2a8d2972534d4dfc7a7c4706723428080e99915f8cb04ac -->
+<!-- ui-gaps-csv-sha256: dabc8fe83bfc2390025863f616fed54f5bade921f0be83ca5c788973c4c74326 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 100 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 99 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  304 |
+| Open        |  303 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   36 |
+| Done        |   37 |
 | Not Planned |    1 |
 
 ## P0
@@ -947,24 +947,24 @@ Persist paired desktops (id, name, platform, lastConnectedAt, enabled) and rende
 
 - `chatgpt_reference/058-codex-ios-settings-remote-control-desktop-connection-composer-faceid.png`
 
-### GAP-041 — No user-controllable 'Reduce sensitive content' safety toggle
+### GAP-041 — Mobile Safety exposes a persisted Reduce sensitive content control
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > Safety
 
 **Gap**
 
-Reference gives every user a Safety screen with an opt-in 'Reduce sensitive content' toggle plus explainer and Learn more. agiworkforce only has minor-safe mode, which is derived automatically from the age gate and cannot be enabled by an adult who wants stricter output (or by a parent setting up a shared device).
+Safety & Security now gives adult profiles an explicit Reduce sensitive content preference with plain-language scope: it filters clearly explicit and harmful requests before either Local or Cloud inference. The setting is device-global and encrypted-MMKV persisted. Minor-safe mode remains authoritative: the effective value is forced on, the switch is disabled, and the screen explains that age settings require it. Adult opt-in refusals use separate copy and never claim the user is underage.
 
 **Evidence**
 
-apps/mobile/src/features/settings/parental-controls/index.tsx (read-only status from isMinorMode()); apps/mobile/app/(public)/age-gate.tsx line 17 comment 'No parental-consent flow in v1 — minor-safe mode is a content filter only'; grep -i 'sensitive content|content filter' across apps/mobile — no user-facing toggle
+settingsStore.ts owns the persisted device-global reduceSensitiveContent field and setter. safety-security/index.tsx renders the explainer and accessible switch, ORs the preference with isMinorMode(), and disables it for minors. chatExecutionStore.ts evaluates that same OR before the send queue, attachments, transcript mutation, or any local/cloud model call; contentFilter.ts supplies distinct minor and adult refusal copy. localDataSnapshot.ts and dsarExport.ts include the preference in user data export and local reset clears it. safety-security.test.tsx covers adult opt-in and forced minor state; content-filter.test.ts covers policy-specific copy; chatStore.test.ts proves a blocked adult-opt-in prompt returns false without transcript or model activity; settings-store.test.tsx and dsar-export-local-stores.test.ts cover persistence semantics and export.
 
 **Suggested fix**
 
-Add /(app)/settings/safety with a persisted 'Reduce sensitive content' switch that ORs into the same filter path minor-safe mode uses, with copy stating what it changes; keep it forced-on and disabled while minor mode is active, explaining why.
+Completed. Keep this client-side preflight as the shared minimum for both execution paths, retain distinct adult and minor explanations, and only broaden the block policy through reviewed rules with false-positive and bypass tests.
 
 **Reference screenshot(s)**
 

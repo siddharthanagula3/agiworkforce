@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Alert } from 'react-native';
-import { Fingerprint, Shield, Smartphone } from 'lucide-react-native';
+import { EyeOff, Fingerprint, Shield, Smartphone } from 'lucide-react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useBiometricFlag } from '@/lib/biometricFlagStore';
+import { isMinorMode } from '@/src/features/auth/services/ageGate';
+import { useSettingsStore } from '@/stores/settingsStore';
 import {
   SettingsGroup,
   SettingsInfo,
@@ -16,6 +18,10 @@ export default function SafetySecurityScreen() {
   const router = useRouter();
   const biometricEnabled = useBiometricFlag((s) => s.enabled);
   const setBiometricEnabled = useBiometricFlag((s) => s.setEnabled);
+  const reduceSensitiveContent = useSettingsStore((s) => s.reduceSensitiveContent);
+  const setReduceSensitiveContent = useSettingsStore((s) => s.setReduceSensitiveContent);
+  const minorMode = isMinorMode();
+  const strictContentFilterEnabled = minorMode || reduceSensitiveContent;
   const [saving, setSaving] = useState(false);
 
   const confirmDeviceLock = async (): Promise<boolean> => {
@@ -60,6 +66,26 @@ export default function SafetySecurityScreen() {
 
   return (
     <SettingsScreenShell title="Safety & Security">
+      <SettingsInfo
+        title="Content safeguards"
+        body="Choose stricter safeguards independently from device access and operating-system permissions."
+        icon={EyeOff}
+      />
+      <SettingsGroup>
+        <SettingsSwitchRow
+          label="Reduce sensitive content"
+          description={
+            minorMode
+              ? 'Required by age settings. It stays on while minor-safe mode is active.'
+              : 'Filter clearly explicit and harmful requests before they reach Local or Cloud models.'
+          }
+          icon={EyeOff}
+          value={strictContentFilterEnabled}
+          onValueChange={setReduceSensitiveContent}
+          disabled={minorMode}
+          isLast
+        />
+      </SettingsGroup>
       <SettingsInfo
         title="Device boundary"
         body="Local chats stay on this device unless you choose AGI Cloud."

@@ -69,6 +69,7 @@ function resetDeviceStore() {
     hapticsEnabled: true,
     voiceEnabled: true,
     backgroundFetchEnabled: true,
+    reduceSensitiveContent: false,
     selectedVoiceId: null,
     speechRate: 1.0,
     speechPitch: 1.0,
@@ -186,6 +187,12 @@ describe('settingsStore (device-global)', () => {
       expect(useSettingsStore.getState().hapticsEnabled).toBe(false);
       useSettingsStore.getState().setHapticsEnabled(true);
       expect(useSettingsStore.getState().hapticsEnabled).toBe(true);
+    });
+
+    it('reduceSensitiveContent defaults off and can be enabled', () => {
+      expect(useSettingsStore.getState().reduceSensitiveContent).toBe(false);
+      useSettingsStore.getState().setReduceSensitiveContent(true);
+      expect(useSettingsStore.getState().reduceSensitiveContent).toBe(true);
     });
 
     it('isTemporaryChat defaults to false', () => {

@@ -178,6 +178,7 @@ export interface DsarMobileSettings {
   notifications_enabled: boolean;
   voice_enabled: boolean;
   background_fetch_enabled: boolean;
+  reduce_sensitive_content: boolean;
   temporary_chat_enabled: boolean;
   personalization: {
     full_name: string;
