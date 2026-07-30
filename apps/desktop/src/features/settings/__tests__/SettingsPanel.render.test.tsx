@@ -92,6 +92,10 @@ vi.mock('@/features/governance/SafetyPolicies', () => ({
   SafetyPolicies: () => <div>Safety policies</div>,
 }));
 
+vi.mock('../../mobile-companion/MobileCompanionPanel', () => ({
+  MobileCompanionPanel: () => <div>Live mobile pairing workflow</div>,
+}));
+
 describe('SettingsPanel render stability', () => {
   beforeEach(() => {
     vi.mocked(invoke).mockImplementation(async (command) => {
@@ -322,6 +326,14 @@ describe('SettingsPanel render stability', () => {
     expect(await screen.findByText('Connector gallery')).toBeInTheDocument();
     expect(screen.queryByText('Directory')).not.toBeInTheDocument();
     expect(screen.queryByText('MCP & skills')).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
+  });
+
+  it('renders Connections as the live mobile pairing destination', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="connections" />);
+
+    expect(await screen.findByText('Live mobile pairing workflow')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Control this Mac' })).toBeInTheDocument();
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
   });
 
