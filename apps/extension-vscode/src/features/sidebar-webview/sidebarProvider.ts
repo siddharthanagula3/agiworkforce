@@ -13,6 +13,7 @@ import { type DiffDecorationProvider } from '../../providers/diffDecorationProvi
 import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
 import { Config } from '../../platform/config';
 import { ChatStateManager, type ExtToWebviewMessage } from './ChatStateManager';
+import { shouldShowOnboarding } from '../onboarding/onboardingState';
 import { getWebviewContent, getNonce } from './webviewContent';
 import { parseWebviewMessage } from '../../protocol/webviewMessages';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
@@ -86,6 +87,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this._stateManager.meterCollapsed,
       // VSCODE-PICKER-TIER-01: gate the <select> roster on the resolved tier.
       resolveTierSync(this._extensionContext),
+      shouldShowOnboarding(this._extensionContext.globalState),
     );
 
     this._messageListener?.dispose();
@@ -127,6 +129,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** Push the current browser/device-auth state into the visible account control. */
   public pushAccountStatus(): void {
     void this._stateManager.pushAccountStatus();
+  }
+
+  /** Replay the persisted first-run experience in an already-open sidebar. */
+  public showOnboarding(): void {
+    this._stateManager.showOnboarding();
   }
 
   /** Clear conversation history and notify the webview. */

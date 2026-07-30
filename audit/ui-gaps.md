@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 150ec0b6181f82460208dcc3846cbc4c211da3ca70d17478cd9cfb5eeaf47d1f -->
+<!-- ui-gaps-csv-sha256: 332fd8967df63fe130719f7e66e35cc0938badd0ac1fbdaac07062afcf43e2d4 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 122 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 120 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  326 |
+| Open        |  324 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   15 |
+| Done        |   17 |
 | Not Planned |    0 |
 
 ## P0
@@ -2925,24 +2925,24 @@ Add a 'Browse the web' menu item that invokes the same web-search/browse tool ot
 
 - `claude_reference/134-claude-code-vscode-ext-extension-attach-menu-upload-context-browse-web.png`
 
-### GAP-127 — No autonomy, fallibility or account/data disclosure in the IDE surface
+### GAP-127 — Autonomy, fallibility, and active account/data boundaries are disclosed before first use
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-copy
 - **Reference:** Codex · VS Code extension · Autonomy / mistakes / account disclosure
 
 **Gap**
 
-Reference states three things before first use: you decide how much autonomy to grant (docs link), the agent can make mistakes so review the code it writes and commands it runs, and it runs on your account subject to your plan's rate limits and training-data preferences. agiworkforce's extension never tells the user which account/trust boundary is paying for a turn, that output must be reviewed, or where retention preferences live — despite the repo's own rule that Local, BYOK and Managed Cloud are separate trust boundaries with visible provider labels.
+The final first-run step now explains that users choose Ask, Auto, Plan, or Bypass; that AGI can make mistakes and generated code and commands require review; and that the header names the live Local, BYOK, or Managed Cloud boundary. It resolves live boundary/account copy and links permission docs plus retention/training settings. Account & Usage repeats the same disclosure and states that the signed-in Cloud plan is not used for the Local developer session.
 
 **Evidence**
 
-Searched apps/extension-vscode/src for 'mistake|training data|rate limit|review the code|autonomy|disclaimer' — no user-facing copy (only comments in surface.ts:13 and desktopBridge.ts:23). The runtime/provider pills at webviewContent.ts:1197-1206 are hidden until a source is reported and carry no explanatory text.
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts renders the three disclosures, live boundary/plan-owner status, and explicit documentation/settings actions. accountPresentation.ts builds condensed autonomy, review, Local-boundary, and privacy rows for Account & Usage; commandSetup.ts wires the Web handoffs. onboarding.webview.test.ts, accountPresentation.test.ts, chatStateManager.test.ts, and runtimePill.webview.test.ts exercise the disclosures, links, and boundary copy.
 
 **Suggested fix**
 
-Add a three-bullet disclosure to the final onboarding step and repeat a condensed version in the account menu: autonomy level with a link to permission docs, 'review generated code and commands', and the active trust boundary (Local / BYOK / Managed Cloud) with the account identity and a link to retention/training-data settings on web.
+Completed. Keep Local, BYOK, and Managed Cloud ownership distinct; retain explicit review copy and runtime-resolved boundary/account labels when new execution modes are added.
 
 **Reference screenshot(s)**
 
@@ -2994,24 +2994,24 @@ Completed. Keep normal settings entry points on agi-workforce.openSettings and t
 
 - `chatgpt_reference/024-codex-vscode-ext-settings-plugins-open-external-site-confirm-modal.png`
 
-### GAP-130 — VS Code sidebar has no first-run onboarding flow
+### GAP-130 — VS Code sidebar provides a persisted four-step first-run onboarding flow
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · First-run onboarding carousel (step 1 of 4)
 
 **Gap**
 
-Reference paginates four intro cards inside the sidebar (composer preview, cloud handoff, TODO-to-task, autonomy/trust) with Back/Next and a disabled Back on step 1. agiworkforce drops a first-time user straight into the chat empty state ('Build with AGI' + /explain /fix /tests /docs chips) with no explanation of what the agent can do, where it runs, or which account powers it.
+First use now opens a four-step, keyboard-readable sidebar flow covering repository-scoped capabilities, the explicit foreground-editor versus hosted-Web task boundary, TODO-to-native-diff review, and autonomy/trust. Back is disabled on step one; Next, Skip, final completion, and replay are wired. Completion persists globally, while a contributed VS Code Getting Started walkthrough provides the extension-gallery entry point.
 
 **Evidence**
 
-Searched apps/extension-vscode/src for 'onboard|welcome|walkthrough|getting started|Skip' — only unrelated matches (codeLensProvider.ts:117, patchEngine.ts:627). Empty state is apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1250-1262.
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts owns the four rendered steps and navigation. onboardingState.ts owns agiWorkforce.onboardingSeen; ChatStateManager.ts persists completion and can replay; sidebarProvider.ts gates first render; commandSetup.ts registers Show Getting Started and the explicit Web Tasks handoff. package.json contributes the four-step walkthrough with real Markdown media. onboarding.webview.test.ts and onboarding.test.ts cover navigation, copy, persistence policy, replay, runtime validation, and contribution/media integrity.
 
 **Suggested fix**
 
-Add a paged intro rendered in the same webview before the chat log (4 steps: what it does in your repo, task handoff, TODO-to-task, autonomy + trust boundary), persisted via ExtensionContext.globalState 'agiWorkforce.onboardingSeen', with Back/Next/Skip and a command to replay it. Also contribute a VS Code walkthrough in package.json for the extension gallery entry point.
+Completed. Preserve the honest unavailable-here copy for hosted background tasks until GAP-128 supplies a real IDE task list; do not imply that a foreground local prompt is a background Cloud run.
 
 **Reference screenshot(s)**
 
