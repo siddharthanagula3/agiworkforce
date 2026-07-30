@@ -24,6 +24,7 @@ import {
   CheckSquare,
   AlertTriangle,
   AlertOctagon,
+  ChevronRight,
   Info,
   Moon,
   Clock,
@@ -41,6 +42,7 @@ import {
 import { useThemeColors } from '@/src/ui/theme';
 import type { ColorScheme } from '@/src/ui/theme';
 import type { LucideIcon } from 'lucide-react-native';
+import { NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_COPY } from './categories';
 
 // ---------------------------------------------------------------------------
 // Category metadata
@@ -55,36 +57,29 @@ interface CategoryMeta {
 }
 
 function getCategories(c: ColorScheme): CategoryMeta[] {
-  return [
-    {
-      id: 'approvals',
-      label: 'Approvals',
-      description: 'Agent action approval requests',
+  const presentation: Record<NotificationCategory, Pick<CategoryMeta, 'icon' | 'iconColor'>> = {
+    approvals: {
       icon: CheckSquare,
       iconColor: c.agentWarning,
     },
-    {
-      id: 'task_updates',
-      label: 'Task Updates',
-      description: 'Task completed, paused, or resumed',
+    task_updates: {
       icon: Info,
       iconColor: c.teal,
     },
-    {
-      id: 'errors',
-      label: 'Errors & Stops',
-      description: 'Agent failures and emergency stops',
+    errors: {
       icon: AlertOctagon,
       iconColor: c.agentError,
     },
-    {
-      id: 'status',
-      label: 'Status Updates',
-      description: 'Heartbeat and connection info',
+    status: {
       icon: AlertTriangle,
       iconColor: c.textMuted,
     },
-  ];
+  };
+  return NOTIFICATION_CATEGORIES.map((id) => ({
+    id,
+    ...NOTIFICATION_CATEGORY_COPY[id],
+    ...presentation[id],
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -312,14 +307,8 @@ function TimePickerModal({
 export default function NotificationPreferencesScreen() {
   const colors = useThemeColors();
   const router = useRouter();
-  const {
-    categoryEnabled,
-    vibrationEnabled,
-    quietHours,
-    setCategoryEnabled,
-    setVibrationEnabled,
-    setQuietHours,
-  } = useNotificationPrefsStore();
+  const { categoryEnabled, vibrationEnabled, quietHours, setVibrationEnabled, setQuietHours } =
+    useNotificationPrefsStore();
   const CATEGORIES = getCategories(colors);
 
   const [timePickerField, setTimePickerField] = useState<'start' | 'end' | null>(null);
@@ -397,7 +386,20 @@ export default function NotificationPreferencesScreen() {
             return (
               <View key={cat.id}>
                 {idx > 0 && <Separator />}
-                <View className="flex-row items-center justify-between py-3 px-1">
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(app)/settings/notifications/[category]',
+                      params: { category: cat.id },
+                    } as unknown as Parameters<typeof router.push>[0])
+                  }
+                  accessibilityLabel={`${cat.label}. ${categoryEnabled[cat.id] ? 'Push' : 'Off'}`}
+                  accessibilityRole="button"
+                  className="flex-row items-center justify-between py-3 px-1 rounded-lg"
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                  })}
+                >
                   <View className="flex-row items-center gap-3 flex-1 mr-3">
                     <Icon size={18} color={cat.iconColor} />
                     <View className="flex-1">
@@ -409,12 +411,14 @@ export default function NotificationPreferencesScreen() {
                       </Text>
                     </View>
                   </View>
-                  <Switch
-                    accessibilityLabel={cat.label}
-                    value={categoryEnabled[cat.id]}
-                    onValueChange={(v) => setCategoryEnabled(cat.id, v)}
-                  />
-                </View>
+                  <Text
+                    className="text-xs font-medium mr-1"
+                    style={{ color: colors.textSecondary }}
+                  >
+                    {categoryEnabled[cat.id] ? 'Push' : 'Off'}
+                  </Text>
+                  <ChevronRight size={17} color={colors.textMuted} />
+                </Pressable>
               </View>
             );
           })}
