@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: f0d2d3def4dcda418c17e432b1c353aa1154d9057fd0dd7daf609e59d48adb63 -->
+<!-- ui-gaps-csv-sha256: bf7193bab7bfb911507a13ad62fae104f9a82d14045df544fed89b6b33b554d8 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 83 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 82 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  287 |
+| Open        |  286 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   42 |
-| Not Planned |   12 |
+| Not Planned |   13 |
 
 ## P0
 
@@ -625,24 +625,24 @@ Completed as a deliberate capability-honest divergence. Do not add a same-accoun
 
 - `chatgpt_reference/027-codex-ios-remote-setup-intro-signin-instructions.png`
 
-### GAP-027 — No remote project/folder browser for the paired desktop on mobile
+### GAP-027 — Mobile states that paired Desktop folders remain Desktop-controlled
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** Codex · iOS · Remote — projects on the paired computer
 
 **Gap**
 
-Once paired, the reference shows the desktop hostname with a live dot and lists the machine's project folders; each row drills into subfolders and has an inline compose action that starts a chat scoped to that folder, with a Search Chats field and Chat FAB pinned at the bottom. agiworkforce's companion screen only shows running agents, approvals and connection banners — there is no way to see or select what is on the paired machine, so the phone cannot initiate work against a specific project.
+The reference exposes projects and folders from a paired computer. AGI Workforce deliberately does not present a remote browser because the authenticated companion contract supports prompt dispatch, cancellation, status, approvals, and agent updates but has no workspace-list request or path-scoped task field. The connected screen now states that pairing does not grant Mobile permission to browse files or projects and directs people to choose allowed folders and start path-scoped work on Desktop.
 
 **Evidence**
 
-apps/mobile/app/(app)/companion/index.tsx (renders QRScanner, PairingStatus, AgentDashboard, DesktopInfoCard, StatusBanners only); apps/mobile/src/features/companion/components/\* has no folder/workspace/repo references; apps/mobile/src/features/code-sessions/index.tsx is a cloud repo/branch session list, not the paired machine
+packages/contracts/types/src/cross-device.ts defines dispatch.task.create with prompt/title only; apps/desktop/src/services/coworkDispatch.ts parses that bounded contract and submits the prompt without a path; apps/desktop/src/features/settings/AllowedDirectoriesSettings.tsx and apps/desktop/src-tauri/src/sys/security/tool_guard.rs keep directory grants Desktop-authoritative; RemoteWorkspaceBoundaryNotice.tsx is mounted in DesktopInfoCard.tsx; remote-workspace-boundary-notice.test.tsx pins the disclosure.
 
 **Suggested fix**
 
-Add a remote-workspace list view under app/(app)/companion backed by a control-channel 'listProjects' request (allowed directories only, reusing the desktop AllowedDirectoriesSettings boundary), with per-row drill-in and a compose action that opens a chat pinned to that path.
+Not planned until the signed companion protocol has a Desktop-authorized request that returns only allowed roots as opaque handles, rejects traversal, validates the selected handle again at task dispatch, supports revocation, and has replay, size-limit, and cross-device authorization tests. Do not expose raw filesystem paths or imply that pairing itself grants path authority.
 
 **Reference screenshot(s)**
 
