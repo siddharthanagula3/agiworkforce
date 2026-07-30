@@ -75,9 +75,15 @@ function getGreeting(name: string | null): { headline: string; subline: string }
 
 interface BrandedGreetingProps {
   className?: string;
+  workspaceLabel?: string | null;
+  onSelectWorkspace?: () => void;
 }
 
-export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ className }) => {
+export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({
+  className,
+  workspaceLabel,
+  onSelectWorkspace,
+}) => {
   const user = useUnifiedAuthStore(selectUser);
   const firstName = useMemo(() => {
     if (!user?.name) return null;
@@ -86,9 +92,10 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ className }) =
   }, [user?.name]);
 
   const { headline, subline } = useMemo(() => getGreeting(firstName), [firstName]);
+  const scopedWorkspace = workspaceLabel?.trim() || null;
 
   return (
-    <div className={cn('flex flex-col items-center gap-3 text-center select-none', className)}>
+    <div className={cn('flex flex-col items-center gap-3 text-center', className)}>
       {/* Animated brand icon. Token-driven like every sibling in the pane —
           the previous violet/indigo gradient existed nowhere in the chat
           palette and did not repaint under [data-chat-theme]. */}
@@ -104,12 +111,36 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({ className }) =
       <h1
         className="text-[32px] leading-[40px] font-normal tracking-[-0.01em] text-[var(--chat-text-primary)]"
         style={{ fontFamily: 'var(--chat-font-display)' }}
+        aria-label={scopedWorkspace ? `What should we build in ${scopedWorkspace}?` : undefined}
       >
-        {headline}
+        {scopedWorkspace ? (
+          <>
+            What should we build in{' '}
+            {onSelectWorkspace ? (
+              <button
+                type="button"
+                onClick={onSelectWorkspace}
+                className="rounded-sm underline decoration-[var(--chat-text-muted)] underline-offset-4 transition-colors hover:text-[var(--chat-accent-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+                aria-label={`Change workspace from ${scopedWorkspace}`}
+              >
+                {scopedWorkspace}
+              </button>
+            ) : (
+              <span className="underline decoration-[var(--chat-text-muted)] underline-offset-4">
+                {scopedWorkspace}
+              </span>
+            )}
+            ?
+          </>
+        ) : (
+          headline
+        )}
       </h1>
 
       {/* Branded sub-tagline */}
-      <p className="text-sm text-[var(--chat-text-secondary)] font-medium">{subline}</p>
+      {!scopedWorkspace && (
+        <p className="text-sm text-[var(--chat-text-secondary)] font-medium">{subline}</p>
+      )}
     </div>
   );
 };
