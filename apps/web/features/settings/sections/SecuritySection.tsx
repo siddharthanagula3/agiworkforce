@@ -28,6 +28,7 @@ import {
   type SecuritySettingsFormData,
 } from '@features/settings/schemas/settings-validation';
 import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor';
+import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
 
 export function SecuritySection() {
   const { data: serverSettings, isLoading } = useUserSettings();
@@ -121,6 +122,8 @@ export function SecuritySection() {
           onToggleShowConfirmPassword={() => setShowConfirmPassword((p) => !p)}
         />
       )}
+
+      <AuditLogPanel />
     </div>
   );
 }

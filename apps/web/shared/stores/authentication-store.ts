@@ -75,10 +75,7 @@ function invokeStateMethod(state: unknown, method: string): boolean {
  * removes its durable payload and both sign-out paths navigate away afterwards.
  */
 const STORE_RESET_METHODS = ['resetOnLogout', 'reset', 'clearAll', 'clear'] as const;
-const MODULE_TEARDOWN_METHODS = new Set([
-  'cleanupWorkforceSubscription',
-  'stopMissionCleanupInterval',
-]);
+const MODULE_TEARDOWN_METHODS = new Set(['stopMissionCleanupInterval']);
 
 /** Reset a store's in-memory state through whichever clearing action it exposes. */
 function resetStoreState(handle: ZustandStoreHandle): void {
@@ -96,7 +93,6 @@ function resetStoreState(handle: ZustandStoreHandle): void {
  * cleanup list.
  */
 const USER_SCOPED_STORE_MODULES: ReadonlyArray<{ label: string; load: () => Promise<unknown> }> = [
-  { label: 'workforce-store', load: () => import('./workforce-store') },
   { label: 'mission-control-store', load: () => import('./mission-control-store') },
   { label: 'notification-store', load: () => import('./notification-store') },
   { label: 'artifact-store', load: () => import('./artifact-store') },
