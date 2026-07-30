@@ -1,0 +1,1474 @@
+import type * as vscode from 'vscode';
+import type { SettingsPanelState, SettingsSection } from './settingsProtocol';
+
+function serializeForInlineScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</gu, '\\u003c')
+    .replace(/\u2028/gu, '\\u2028')
+    .replace(/\u2029/gu, '\\u2029');
+}
+
+export function getSettingsWebviewContent(
+  webview: vscode.Webview,
+  nonce: string,
+  initialState: SettingsPanelState,
+  initialSection: SettingsSection,
+): string {
+  const serializedState = serializeForInlineScript(initialState);
+  const serializedSection = serializeForInlineScript(initialSection);
+
+  return /* html */ `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AGI Settings</title>
+    <style nonce="${nonce}">
+      :root {
+        color-scheme: light dark;
+        font-family: var(--vscode-font-family, system-ui, sans-serif);
+        font-size: var(--vscode-font-size, 13px);
+        color: var(--vscode-foreground);
+        background: var(--vscode-editor-background);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+        background: var(--vscode-editor-background);
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button,
+      select,
+      input {
+        color: var(--vscode-input-foreground);
+      }
+
+      button:focus-visible,
+      select:focus-visible,
+      input:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+      }
+
+      .settings-shell {
+        display: grid;
+        grid-template-columns: minmax(190px, 232px) minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        height: 100vh;
+        padding: 24px 14px;
+        border-right: 1px solid var(--vscode-panel-border);
+        background: var(--vscode-sideBar-background);
+        overflow-y: auto;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 8px 20px;
+      }
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--vscode-activityBarBadge-background);
+        border-radius: 9px;
+        color: var(--vscode-activityBarBadge-foreground);
+        background: var(--vscode-activityBarBadge-background);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+      }
+
+      .brand-copy {
+        min-width: 0;
+      }
+
+      .brand-title {
+        display: block;
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .brand-subtitle {
+        display: block;
+        margin-top: 1px;
+        color: var(--vscode-descriptionForeground);
+        font-size: 11px;
+      }
+
+      .nav-label {
+        margin: 6px 10px 8px;
+        color: var(--vscode-descriptionForeground);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .nav {
+        display: grid;
+        gap: 3px;
+      }
+
+      .nav-button {
+        width: 100%;
+        padding: 8px 10px;
+        border: 0;
+        border-radius: 6px;
+        color: var(--vscode-sideBar-foreground);
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .nav-button:hover {
+        background: var(--vscode-list-hoverBackground);
+      }
+
+      .nav-button[aria-current='page'] {
+        color: var(--vscode-list-activeSelectionForeground);
+        background: var(--vscode-list-activeSelectionBackground);
+        font-weight: 600;
+      }
+
+      .sidebar-footer {
+        margin-top: 22px;
+        padding: 14px 8px 0;
+        border-top: 1px solid var(--vscode-panel-border);
+      }
+
+      .raw-settings-button {
+        width: 100%;
+        padding: 7px 10px;
+        border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+        border-radius: 5px;
+        color: var(--vscode-button-secondaryForeground);
+        background: var(--vscode-button-secondaryBackground);
+        cursor: pointer;
+      }
+
+      .raw-settings-button:hover {
+        background: var(--vscode-button-secondaryHoverBackground);
+      }
+
+      .content {
+        width: min(100%, 980px);
+        padding: 40px clamp(28px, 5vw, 68px) 64px;
+      }
+
+      .page-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 26px;
+      }
+
+      .page-kicker {
+        margin: 0 0 7px;
+        color: var(--vscode-descriptionForeground);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .page-title {
+        margin: 0;
+        font-size: clamp(24px, 4vw, 32px);
+        font-weight: 650;
+        letter-spacing: -0.025em;
+      }
+
+      .page-description {
+        max-width: 650px;
+        margin: 9px 0 0;
+        color: var(--vscode-descriptionForeground);
+        line-height: 1.55;
+      }
+
+      .scope-stack {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 7px;
+      }
+
+      .pill {
+        padding: 4px 8px;
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 999px;
+        color: var(--vscode-descriptionForeground);
+        background: var(--vscode-editorWidget-background);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .pill.warning {
+        color: var(--vscode-inputValidation-warningForeground);
+        border-color: var(--vscode-inputValidation-warningBorder);
+        background: var(--vscode-inputValidation-warningBackground);
+      }
+
+      .status {
+        min-height: 20px;
+        margin: -12px 0 12px;
+        color: var(--vscode-descriptionForeground);
+        font-size: 12px;
+      }
+
+      .status[data-kind='error'] {
+        color: var(--vscode-errorForeground);
+      }
+
+      .override-notice {
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        border: 1px solid var(--vscode-inputValidation-infoBorder);
+        border-radius: 7px;
+        background: var(--vscode-inputValidation-infoBackground);
+        color: var(--vscode-inputValidation-infoForeground);
+        line-height: 1.45;
+      }
+
+      .section[hidden] {
+        display: none;
+      }
+
+      .section-heading {
+        margin-bottom: 14px;
+      }
+
+      .section-heading h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 650;
+      }
+
+      .section-heading p {
+        margin: 6px 0 0;
+        color: var(--vscode-descriptionForeground);
+        line-height: 1.5;
+      }
+
+      .card {
+        margin-bottom: 14px;
+        border: 1px solid var(--vscode-panel-border);
+        border-radius: 9px;
+        background: var(--vscode-editorWidget-background);
+        overflow: hidden;
+      }
+
+      .card-heading {
+        padding: 15px 18px 10px;
+        border-bottom: 1px solid var(--vscode-panel-border);
+      }
+
+      .card-heading h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .card-heading p {
+        margin: 5px 0 0;
+        color: var(--vscode-descriptionForeground);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .setting-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(168px, 42%);
+        align-items: center;
+        gap: 22px;
+        padding: 15px 18px;
+      }
+
+      .setting-row + .setting-row {
+        border-top: 1px solid var(--vscode-panel-border);
+      }
+
+      .setting-name {
+        display: block;
+        font-weight: 600;
+      }
+
+      .setting-description {
+        display: block;
+        margin-top: 4px;
+        color: var(--vscode-descriptionForeground);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .setting-description.danger {
+        color: var(--vscode-inputValidation-warningForeground);
+      }
+
+      .control-stack {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .text-input,
+      .number-input,
+      .select-input {
+        width: 100%;
+        min-height: 30px;
+        padding: 5px 8px;
+        border: 1px solid var(--vscode-input-border, transparent);
+        border-radius: 4px;
+        color: var(--vscode-input-foreground);
+        background: var(--vscode-input-background);
+      }
+
+      .number-input {
+        max-width: 130px;
+      }
+
+      .select-input {
+        cursor: pointer;
+      }
+
+      .secondary-button,
+      .primary-button {
+        min-height: 30px;
+        padding: 5px 11px;
+        border-radius: 4px;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .secondary-button {
+        border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+        color: var(--vscode-button-secondaryForeground);
+        background: var(--vscode-button-secondaryBackground);
+      }
+
+      .secondary-button:hover {
+        background: var(--vscode-button-secondaryHoverBackground);
+      }
+
+      .primary-button {
+        border: 1px solid var(--vscode-button-border, transparent);
+        color: var(--vscode-button-foreground);
+        background: var(--vscode-button-background);
+      }
+
+      .primary-button:hover {
+        background: var(--vscode-button-hoverBackground);
+      }
+
+      .toggle {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 38px;
+        height: 22px;
+        flex: 0 0 auto;
+      }
+
+      .toggle input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+      }
+
+      .toggle-track {
+        width: 38px;
+        height: 22px;
+        border: 1px solid var(--vscode-checkbox-border, var(--vscode-panel-border));
+        border-radius: 999px;
+        background: var(--vscode-checkbox-background);
+        transition:
+          background 120ms ease,
+          border-color 120ms ease;
+      }
+
+      .toggle-track::after {
+        content: '';
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--vscode-checkbox-foreground);
+        transition: transform 120ms ease;
+      }
+
+      .toggle input:checked + .toggle-track {
+        border-color: var(--vscode-button-background);
+        background: var(--vscode-button-background);
+      }
+
+      .toggle input:checked + .toggle-track::after {
+        transform: translateX(16px);
+        background: var(--vscode-button-foreground);
+      }
+
+      .toggle input:focus-visible + .toggle-track {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+      }
+
+      .account-summary,
+      .empty-capability {
+        padding: 20px 18px;
+      }
+
+      .account-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .account-state {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-weight: 600;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--vscode-descriptionForeground);
+      }
+
+      .status-dot.connected {
+        background: var(--vscode-testing-iconPassed);
+      }
+
+      .empty-capability h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .empty-capability p {
+        max-width: 680px;
+        margin: 7px 0 14px;
+        color: var(--vscode-descriptionForeground);
+        line-height: 1.5;
+      }
+
+      .action-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      @media (max-width: 760px) {
+        .settings-shell {
+          display: block;
+        }
+
+        .sidebar {
+          position: sticky;
+          z-index: 2;
+          height: auto;
+          padding: 12px 14px 10px;
+          border-right: 0;
+          border-bottom: 1px solid var(--vscode-panel-border);
+        }
+
+        .brand {
+          padding: 0 2px 10px;
+        }
+
+        .nav-label,
+        .sidebar-footer {
+          display: none;
+        }
+
+        .nav {
+          display: flex;
+          gap: 5px;
+          overflow-x: auto;
+          padding-bottom: 2px;
+        }
+
+        .nav-button {
+          width: auto;
+          flex: 0 0 auto;
+          white-space: nowrap;
+        }
+
+        .content {
+          padding: 26px 18px 48px;
+        }
+
+        .page-header {
+          display: block;
+        }
+
+        .scope-stack {
+          justify-content: flex-start;
+          margin-top: 14px;
+        }
+
+        .setting-row {
+          grid-template-columns: 1fr;
+          gap: 11px;
+        }
+
+        .control-stack {
+          justify-content: flex-start;
+        }
+
+        .number-input {
+          max-width: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="settings-shell">
+      <aside class="sidebar" aria-label="Settings navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">A</span>
+          <span class="brand-copy">
+            <span class="brand-title">AGI Settings</span>
+            <span class="brand-subtitle">VS Code extension</span>
+          </span>
+        </div>
+        <p class="nav-label">Settings</p>
+        <nav class="nav">
+          <button class="nav-button" type="button" data-section="general">General</button>
+          <button class="nav-button" type="button" data-section="configuration">Configuration</button>
+          <button class="nav-button" type="button" data-section="personalization">Personalization</button>
+          <button class="nav-button" type="button" data-section="usage">Usage &amp; billing</button>
+          <button class="nav-button" type="button" data-section="mcp">MCP servers</button>
+          <button class="nav-button" type="button" data-section="hooks">Hooks</button>
+          <button class="nav-button" type="button" data-section="plugins">Plugins</button>
+          <button class="nav-button" type="button" data-section="account">Account</button>
+        </nav>
+        <div class="sidebar-footer">
+          <button
+            class="raw-settings-button"
+            type="button"
+            data-command="openRawSettings"
+          >
+            Open raw settings
+          </button>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="page-header">
+          <div>
+            <p class="page-kicker">Workspace-scoped developer tools</p>
+            <h1 class="page-title" id="pageTitle">Settings</h1>
+            <p class="page-description" id="pageDescription">
+              Configure how AGI works in VS Code. Changes are stored in your VS Code user settings.
+            </p>
+          </div>
+          <div class="scope-stack" aria-label="Configuration scope">
+            <span class="pill">User settings</span>
+            <span class="pill" id="trustPill">Trusted workspace</span>
+          </div>
+        </header>
+
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+        <div class="override-notice" id="overrideNotice" hidden></div>
+
+        <section class="section" id="section-general" data-settings-section="general">
+          <div class="section-heading">
+            <h2 tabindex="-1">General</h2>
+            <p>Choose the default model, autonomy, and reasoning behavior for new sessions.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Model and reasoning</h3>
+              <p>The local runtime remains the owner of workspace chat and tool execution.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-model">Model preference</label>
+                <span class="setting-description">
+                  Auto routes each turn using the models available to your current plan.
+                </span>
+              </div>
+              <div class="control-stack">
+                <input
+                  class="text-input"
+                  id="setting-model"
+                  data-setting="model"
+                  data-kind="string"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button class="secondary-button" type="button" data-command="selectModel">
+                  Choose
+                </button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-agent-mode">Agent mode</label>
+                <span class="setting-description">
+                  Controls when the agent asks before editing files or running commands.
+                </span>
+                <span class="setting-description danger">
+                  Bypass Permissions requires a separate risk confirmation before it can activate.
+                </span>
+              </div>
+              <select
+                class="select-input"
+                id="setting-agent-mode"
+                data-setting="agent.mode"
+                data-kind="string"
+              >
+                <option value="ask">Ask before edits and commands</option>
+                <option value="auto">Auto — safe reads, approve writes</option>
+                <option value="plan">Plan before changes</option>
+                <option value="bypass">Bypass Permissions</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-agent-effort">Reasoning effort</label>
+                <span class="setting-description">
+                  Used only by providers that expose an explicit reasoning-effort control.
+                </span>
+              </div>
+              <select
+                class="select-input"
+                id="setting-agent-effort"
+                data-setting="agent.effort"
+                data-kind="string"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="max">Max</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-agent-thinking">Extended thinking</label>
+                <span class="setting-description">
+                  Applies to cloud-backed editor utilities, not local developer sessions.
+                </span>
+              </div>
+              <label class="toggle" title="Extended thinking">
+                <input
+                  id="setting-agent-thinking"
+                  data-setting="agent.thinking"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Session behavior</h3>
+              <p>Defaults used when the extension starts a new workspace-scoped session.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-streaming">Stream responses</label>
+                <span class="setting-description">Show response output as it arrives.</span>
+              </div>
+              <label class="toggle" title="Stream responses">
+                <input
+                  id="setting-streaming"
+                  data-setting="streamingEnabled"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-context-lines">Context lines</label>
+                <span class="setting-description">
+                  Surrounding editor lines included with cloud-backed utility requests.
+                </span>
+              </div>
+              <input
+                class="number-input"
+                id="setting-context-lines"
+                data-setting="contextLines"
+                data-kind="number"
+                type="number"
+                min="0"
+                max="500"
+                step="1"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section
+          class="section"
+          id="section-configuration"
+          data-settings-section="configuration"
+          hidden
+        >
+          <div class="section-heading">
+            <h2 tabindex="-1">Configuration</h2>
+            <p>Runtime paths, cloud utility endpoints, and local Desktop availability.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Local developer runtime</h3>
+              <p>AGI chat remains local and workspace scoped unless you explicitly use a cloud utility.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-cli-path">AGI CLI path</label>
+                <span class="setting-description">
+                  Executable used to start the local <code>app-server</code>. Existing runtimes restart after a change.
+                </span>
+              </div>
+              <input
+                class="text-input"
+                id="setting-cli-path"
+                data-setting="cliPath"
+                data-kind="string"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Cloud-backed editor utilities</h3>
+              <p>These settings do not move local chat history into Web, Mobile, or Desktop chat.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-api-endpoint">API endpoint</label>
+                <span class="setting-description">
+                  User-scoped endpoint for legacy cloud editor utilities.
+                </span>
+              </div>
+              <input
+                class="text-input"
+                id="setting-api-endpoint"
+                data-setting="apiEndpoint"
+                data-kind="string"
+                type="url"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-gateway-url">Gateway URL</label>
+                <span class="setting-description">
+                  User-scoped gateway used only when provider streaming is enabled.
+                </span>
+              </div>
+              <input
+                class="text-input"
+                id="setting-gateway-url"
+                data-setting="gatewayUrl"
+                data-kind="string"
+                type="url"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-provider-stream">Provider streaming</label>
+                <span class="setting-description">
+                  Use the account-authenticated gateway for cloud editor utilities.
+                </span>
+              </div>
+              <label class="toggle" title="Provider streaming">
+                <input
+                  id="setting-provider-stream"
+                  data-setting="useProviderStream"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-auto-apply">Auto-apply fixes</label>
+                <span class="setting-description danger">
+                  Applies AI-suggested fixes without opening a review diff. Leave off for review-first workflows.
+                </span>
+              </div>
+              <label class="toggle" title="Auto-apply fixes">
+                <input
+                  id="setting-auto-apply"
+                  data-setting="autoApplyFixes"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Desktop availability bridge</h3>
+              <p>Shows authenticated Desktop availability without moving IDE sessions out of the local runtime.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-desktop-bridge">Enable bridge</label>
+                <span class="setting-description">Connect to the local authenticated health bridge.</span>
+              </div>
+              <label class="toggle" title="Desktop availability bridge">
+                <input
+                  id="setting-desktop-bridge"
+                  data-setting="desktopBridge.enabled"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-desktop-port">Bridge port</label>
+                <span class="setting-description">Local port exposed by AGI Desktop.</span>
+              </div>
+              <input
+                class="number-input"
+                id="setting-desktop-port"
+                data-setting="desktopBridge.port"
+                data-kind="number"
+                type="number"
+                min="1024"
+                max="65535"
+                step="1"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section
+          class="section"
+          id="section-personalization"
+          data-settings-section="personalization"
+          hidden
+        >
+          <div class="section-heading">
+            <h2 tabindex="-1">Personalization</h2>
+            <p>Choose where AGI appears in the editor and how optional suggestions behave.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Editor surfaces</h3>
+              <p>All editor decorations are opt-in so AGI does not crowd native VS Code controls.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-hover">Hover actions</label>
+                <span class="setting-description">Show AGI quick actions when hovering identifiers.</span>
+              </div>
+              <label class="toggle" title="Hover actions">
+                <input
+                  id="setting-hover"
+                  data-setting="hoverEnabled"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-code-lens">Code lenses</label>
+                <span class="setting-description">
+                  Show AGI actions above functions and classes.
+                </span>
+              </div>
+              <label class="toggle" title="Code lenses">
+                <input
+                  id="setting-code-lens"
+                  data-setting="codeLensEnabled"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Inline completions</h3>
+              <p>
+                Opting in sends bounded surrounding code to the cloud completion utility. Sensitive files are excluded.
+              </p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-inline-completions">Ghost-text completions</label>
+                <span class="setting-description">
+                  Requires AGI Cloud sign-in or a configured API key.
+                </span>
+              </div>
+              <label class="toggle" title="Inline completions">
+                <input
+                  id="setting-inline-completions"
+                  data-setting="inlineCompletions.enabled"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-inline-delay">Request delay</label>
+                <span class="setting-description">Milliseconds to wait after typing.</span>
+              </div>
+              <input
+                class="number-input"
+                id="setting-inline-delay"
+                data-setting="inlineCompletions.debounceMs"
+                data-kind="number"
+                type="number"
+                min="50"
+                max="2000"
+                step="10"
+              />
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-inline-length">Maximum suggestion length</label>
+                <span class="setting-description">Maximum returned characters per suggestion.</span>
+              </div>
+              <input
+                class="number-input"
+                id="setting-inline-length"
+                data-setting="inlineCompletions.maxLength"
+                data-kind="number"
+                type="number"
+                min="50"
+                max="5000"
+                step="50"
+              />
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Telemetry</h3>
+              <p>Extension telemetry remains off unless both VS Code and this setting allow it.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-telemetry">Share anonymous telemetry</label>
+                <span class="setting-description">Send bounded product-usage events.</span>
+              </div>
+              <label class="toggle" title="Anonymous telemetry">
+                <input
+                  id="setting-telemetry"
+                  data-setting="telemetryEnabled"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-telemetry-endpoint">Telemetry endpoint</label>
+                <span class="setting-description">User-scoped destination for extension telemetry.</span>
+              </div>
+              <input
+                class="text-input"
+                id="setting-telemetry-endpoint"
+                data-setting="telemetryEndpoint"
+                data-kind="string"
+                type="url"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-usage" data-settings-section="usage" hidden>
+          <div class="section-heading">
+            <h2 tabindex="-1">Usage &amp; billing</h2>
+            <p>Review the resolved plan and continue to Web for account-level usage or billing.</p>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
+              <h3>Plan resolution</h3>
+              <p>The override is intended for local testing; BYOK uses the live resolved account tier.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <span class="setting-name">Current resolved tier</span>
+                <span class="setting-description">Read-only value cached from the account or Desktop bridge.</span>
+              </div>
+              <div class="control-stack">
+                <span class="pill" id="currentTier">Unknown</span>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-tier">Tier override</label>
+                <span class="setting-description">
+                  Leave on BYOK to use the actual resolved tier for normal use.
+                </span>
+              </div>
+              <select class="select-input" id="setting-tier" data-setting="tier" data-kind="string">
+                <option value="local">Local only</option>
+                <option value="byok">BYOK / resolved account</option>
+                <option value="free">Free</option>
+                <option value="basic">Basic</option>
+                <option value="pro">Pro</option>
+                <option value="max">Max 5x</option>
+                <option value="max_15x">Max 15x</option>
+                <option value="team">Team</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="empty-capability">
+              <h3>Account-level controls live on Web</h3>
+              <p>
+                Usage limits, invoices, payment recovery, and organization administration are account-scoped and never inferred from workspace files.
+              </p>
+              <div class="action-row">
+                <button class="primary-button" type="button" data-command="showAccountUsage">
+                  Session usage
+                </button>
+                <button class="secondary-button" type="button" data-command="manageUsage">
+                  Manage usage on Web
+                </button>
+                <button class="secondary-button" type="button" data-command="manageBilling">
+                  Billing
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-mcp" data-settings-section="mcp" hidden>
+          <div class="section-heading">
+            <h2 tabindex="-1">MCP servers</h2>
+            <p>Keep cloud editor utilities and the local developer runtime on explicit boundaries.</p>
+          </div>
+
+          <div class="card">
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-mcp">MCP for cloud editor utilities</label>
+                <span class="setting-description">
+                  This toggle does not configure or enable MCP inside the local <code>app-server</code>.
+                </span>
+              </div>
+              <label class="toggle" title="MCP for cloud editor utilities">
+                <input
+                  id="setting-mcp"
+                  data-setting="mcp.enabled"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="empty-capability">
+              <h3>Local MCP is runtime-owned</h3>
+              <p>
+                The workspace-scoped AGI CLI discovers local MCP servers and reports their status in chat. Cloud connectors are a separate Managed Cloud capability.
+              </p>
+              <div class="action-row">
+                <button class="secondary-button" type="button" data-command="manageConnectors">
+                  Manage Cloud connectors
+                </button>
+                <button class="secondary-button" type="button" data-command="openDocs">
+                  Open AGI docs
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-hooks" data-settings-section="hooks" hidden>
+          <div class="section-heading">
+            <h2 tabindex="-1">Hooks</h2>
+            <p>Automation hooks are local runtime configuration, not extension-owned cloud state.</p>
+          </div>
+          <div class="card">
+            <div class="empty-capability">
+              <h3>No extension hooks to configure</h3>
+              <p>
+                This VS Code extension does not currently contribute hook settings. Configure supported hooks through the local AGI CLI so they remain workspace scoped and reviewable.
+              </p>
+              <div class="action-row">
+                <button class="secondary-button" type="button" data-command="openDocs">
+                  Open AGI docs
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-plugins" data-settings-section="plugins" hidden>
+          <div class="section-heading">
+            <h2 tabindex="-1">Plugins</h2>
+            <p>Extension capabilities stay explicit about where installation and data access occur.</p>
+          </div>
+          <div class="card">
+            <div class="empty-capability">
+              <h3>No VS Code plugin registry is installed</h3>
+              <p>
+                Local developer tools come from the AGI CLI and MCP configuration. Managed Cloud connectors are installed and permissioned on Web; they do not silently gain access to this workspace.
+              </p>
+              <div class="action-row">
+                <button class="secondary-button" type="button" data-command="manageConnectors">
+                  Open Cloud directory
+                </button>
+                <button class="secondary-button" type="button" data-command="openDocs">
+                  Learn about extensions
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-account" data-settings-section="account" hidden>
+          <div class="section-heading">
+            <h2 tabindex="-1">Account</h2>
+            <p>Cloud sign-in is explicit and never required for local workspace chat.</p>
+          </div>
+          <div class="card">
+            <div class="account-summary">
+              <div class="account-line">
+                <div class="account-state">
+                  <span class="status-dot" id="accountDot" aria-hidden="true"></span>
+                  <span id="accountStatus">Checking AGI Cloud connection…</span>
+                </div>
+                <div class="action-row">
+                  <button
+                    class="primary-button"
+                    id="signInButton"
+                    type="button"
+                    data-command="signIn"
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    class="secondary-button"
+                    id="signOutButton"
+                    type="button"
+                    data-command="signOut"
+                    hidden
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="empty-capability">
+              <h3>Account and organization</h3>
+              <p>
+                Review session usage here or continue to Web for plan usage, billing, connectors, and Team administration.
+              </p>
+              <div class="action-row">
+                <button class="secondary-button" type="button" data-command="showAccountUsage">
+                  Account &amp; usage
+                </button>
+                <button class="secondary-button" type="button" data-command="manageUsage">
+                  Open account on Web
+                </button>
+                <button class="secondary-button" type="button" data-command="manageTeam">
+                  Team &amp; Enterprise
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script nonce="${nonce}">
+      (function () {
+        var vscode = acquireVsCodeApi();
+        var state = ${serializedState};
+        var activeSection = ${serializedSection};
+        var statusTimer;
+        var sectionCopy = {
+          general: {
+            title: 'General',
+            description: 'Configure the model, autonomy, reasoning, and session defaults used by AGI in VS Code.'
+          },
+          configuration: {
+            title: 'Configuration',
+            description: 'Manage the local runtime, cloud utility endpoints, and Desktop availability bridge.'
+          },
+          personalization: {
+            title: 'Personalization',
+            description: 'Choose where AGI appears in the editor and how optional suggestions behave.'
+          },
+          usage: {
+            title: 'Usage & billing',
+            description: 'Review the resolved plan and continue to Web for account-level usage and billing.'
+          },
+          mcp: {
+            title: 'MCP servers',
+            description: 'Configure the extension MCP boundary without conflating it with local runtime servers.'
+          },
+          hooks: {
+            title: 'Hooks',
+            description: 'Understand which automation belongs to the local AGI runtime.'
+          },
+          plugins: {
+            title: 'Plugins',
+            description: 'Review the explicit installation and permission boundaries for extension capabilities.'
+          },
+          account: {
+            title: 'Account',
+            description: 'Manage explicit AGI Cloud sign-in while keeping local workspace chat independent.'
+          }
+        };
+        var settingLabels = {
+          apiEndpoint: 'API endpoint',
+          model: 'Model',
+          cliPath: 'CLI path',
+          streamingEnabled: 'Streaming',
+          contextLines: 'Context lines',
+          telemetryEnabled: 'Telemetry',
+          hoverEnabled: 'Hover actions',
+          codeLensEnabled: 'Code lenses',
+          autoApplyFixes: 'Auto-apply fixes',
+          'inlineCompletions.enabled': 'Inline completions',
+          'inlineCompletions.debounceMs': 'Inline completion delay',
+          'inlineCompletions.maxLength': 'Inline completion length',
+          'agent.mode': 'Agent mode',
+          'agent.effort': 'Reasoning effort',
+          'agent.thinking': 'Extended thinking',
+          'mcp.enabled': 'MCP',
+          'desktopBridge.enabled': 'Desktop bridge',
+          'desktopBridge.port': 'Desktop bridge port',
+          telemetryEndpoint: 'Telemetry endpoint',
+          useProviderStream: 'Provider streaming',
+          gatewayUrl: 'Gateway URL',
+          tier: 'Tier override'
+        };
+
+        function setStatus(message, kind) {
+          var status = document.getElementById('status');
+          window.clearTimeout(statusTimer);
+          status.textContent = message || '';
+          status.dataset.kind = kind || '';
+          if (message && kind !== 'error') {
+            statusTimer = window.setTimeout(function () {
+              status.textContent = '';
+              status.dataset.kind = '';
+            }, 2600);
+          }
+        }
+
+        function setSection(section, moveFocus) {
+          if (!sectionCopy[section]) return;
+          activeSection = section;
+          document.querySelectorAll('[data-settings-section]').forEach(function (panel) {
+            panel.hidden = panel.getAttribute('data-settings-section') !== section;
+          });
+          document.querySelectorAll('.nav-button[data-section]').forEach(function (button) {
+            var selected = button.getAttribute('data-section') === section;
+            if (selected) {
+              button.setAttribute('aria-current', 'page');
+            } else {
+              button.removeAttribute('aria-current');
+            }
+          });
+          document.getElementById('pageTitle').textContent = sectionCopy[section].title;
+          document.getElementById('pageDescription').textContent = sectionCopy[section].description;
+          if (moveFocus) {
+            var heading = document.querySelector(
+              '[data-settings-section="' + section + '"] h2'
+            );
+            if (heading) heading.focus();
+          }
+        }
+
+        function applySnapshot(nextState) {
+          state = nextState;
+          document.querySelectorAll('[data-setting]').forEach(function (control) {
+            var key = control.getAttribute('data-setting');
+            if (!key || !Object.prototype.hasOwnProperty.call(state.values, key)) return;
+            var value = state.values[key];
+            if (control instanceof HTMLInputElement && control.type === 'checkbox') {
+              control.checked = Boolean(value);
+            } else if (
+              control instanceof HTMLInputElement ||
+              control instanceof HTMLSelectElement
+            ) {
+              control.value = String(value);
+            }
+            control.disabled = false;
+          });
+
+          document.getElementById('currentTier').textContent =
+            String(state.values.currentTier || 'unknown').replace(/_/g, ' ');
+
+          var trustPill = document.getElementById('trustPill');
+          trustPill.textContent = state.workspaceTrusted
+            ? 'Trusted workspace'
+            : 'Restricted workspace';
+          trustPill.classList.toggle('warning', !state.workspaceTrusted);
+
+          var overrideNotice = document.getElementById('overrideNotice');
+          if (state.workspaceOverrides.length > 0) {
+            var labels = state.workspaceOverrides.map(function (key) {
+              return settingLabels[key] || key;
+            });
+            overrideNotice.textContent =
+              'Workspace settings currently override these user values: ' +
+              labels.join(', ') +
+              '. Use Open raw settings to inspect or remove those overrides.';
+            overrideNotice.hidden = false;
+          } else {
+            overrideNotice.hidden = true;
+            overrideNotice.textContent = '';
+          }
+
+          var connected = state.accountConnected;
+          var accountDot = document.getElementById('accountDot');
+          var accountStatus = document.getElementById('accountStatus');
+          var signInButton = document.getElementById('signInButton');
+          var signOutButton = document.getElementById('signOutButton');
+          accountDot.classList.toggle('connected', connected === true);
+          if (connected === null) {
+            accountStatus.textContent = 'Checking AGI Cloud connection…';
+            signInButton.hidden = true;
+            signOutButton.hidden = true;
+          } else if (connected) {
+            accountStatus.textContent = 'Connected to AGI Cloud';
+            signInButton.hidden = true;
+            signOutButton.hidden = false;
+          } else {
+            accountStatus.textContent = 'Local workspace mode — AGI Cloud not connected';
+            signInButton.hidden = false;
+            signOutButton.hidden = true;
+          }
+        }
+
+        function readControlValue(control) {
+          if (control instanceof HTMLInputElement && control.type === 'checkbox') {
+            return control.checked;
+          }
+          if (control.getAttribute('data-kind') === 'number') {
+            return Number(control.value);
+          }
+          return control.value;
+        }
+
+        document.querySelectorAll('.nav-button[data-section]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            setSection(button.getAttribute('data-section'), true);
+          });
+        });
+
+        document.querySelectorAll('[data-setting]').forEach(function (control) {
+          control.addEventListener('change', function () {
+            var key = control.getAttribute('data-setting');
+            if (!key) return;
+            control.disabled = true;
+            setStatus('Saving ' + (settingLabels[key] || key) + '…');
+            vscode.postMessage({
+              type: 'settings.update',
+              key: key,
+              value: readControlValue(control)
+            });
+          });
+        });
+
+        document.querySelectorAll('[data-command]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            var command = button.getAttribute('data-command');
+            if (!command) return;
+            vscode.postMessage({ type: 'settings.command', command: command });
+          });
+        });
+
+        window.addEventListener('message', function (event) {
+          var message = event.data;
+          if (!message || typeof message !== 'object') return;
+          if (message.type === 'settings.snapshot') {
+            applySnapshot(message.state);
+          } else if (message.type === 'settings.saved') {
+            setStatus((settingLabels[message.key] || message.key) + ' saved.');
+          } else if (message.type === 'settings.error') {
+            setStatus(message.message || 'The setting could not be saved.', 'error');
+            applySnapshot(state);
+          } else if (message.type === 'settings.navigate') {
+            setSection(message.section, true);
+          }
+        });
+
+        applySnapshot(state);
+        setSection(activeSection, false);
+        vscode.postMessage({ type: 'settings.ready' });
+      })();
+    </script>
+  </body>
+</html>`;
+}

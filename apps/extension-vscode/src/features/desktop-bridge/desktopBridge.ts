@@ -432,10 +432,7 @@ export class DesktopBridge implements vscode.Disposable {
         if (choice === 'Reconnect') {
           void this.reconnect();
         } else if (choice === 'Open Settings') {
-          void vscode.commands.executeCommand(
-            'workbench.action.openSettings',
-            'agiWorkforce.desktopBridge',
-          );
+          void vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
         }
       });
   }
@@ -577,9 +574,13 @@ export function activateDesktopBridge(context: vscode.ExtensionContext): vscode.
       if (bridge !== undefined) {
         await bridge.reconnect();
       } else {
-        vscode.window.showWarningMessage(
+        const action = await vscode.window.showWarningMessage(
           'AGI Workforce: Desktop bridge is not enabled. Enable it in settings.',
+          'Open Settings',
         );
+        if (action === 'Open Settings') {
+          await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
+        }
       }
     }),
   );

@@ -146,6 +146,17 @@ function reconcileCurrentPremises(record) {
       suggestedFix:
         'Completed. Keep all future agent-mode mutation paths on setAgentModeWithConsent, retain the raw-setting reconciliation listener, and increment the consent version whenever the granted scope or risk contract changes.',
     },
+    'GAP-012': {
+      status: 'Done',
+      owner: 'VS Code',
+      title: 'VS Code exposes a branded, complete settings editor',
+      detail:
+        'The extension now opens a branded AGI Settings editor with the reference information architecture: General, Configuration, Personalization, Usage & billing, MCP servers, Hooks, Plugins, and Account. Every active mutable agiWorkforce option has a described, typed control; deprecated planMode and read-only currentTier are not presented as writable settings. The surface distinguishes local developer sessions from cloud-backed utilities, shows account and tier context, reports workspace overrides, and keeps raw VS Code settings as an explicit escape hatch.',
+      evidence:
+        'apps/extension-vscode/src/features/settings/SettingsPanel.ts owns the singleton WebviewPanel, validated host actions, account state, configuration refresh, and fixed external destinations. settingsWebviewContent.ts provides the responsive theme-token UI, complete section navigation, loading/status/error feedback, and labeled controls. settingsProtocol.ts rejects malformed keys, values, commands, URLs, and numeric ranges. platform/config.ts exposes the full active setting manifest and one typed user-scope write boundary; agent.mode still routes through setAgentModeWithConsent. commandSetup.ts, ChatStateManager.ts, desktopBridge.ts, package commands, and the sidebar title action route normal settings entry points to the branded panel. GAP-012-settings-panel.test.ts, GAP-012-settings-webview.webview.test.ts, settingsProtocol.test.ts, configDefaults.test.ts, and commandParity.test.ts cover singleton hosting, CSP, interaction, protocol validation, option completeness, registration, raw-settings escape, and bypass cancellation. Desktop and compact browser QA passed with no overflow, console errors, duplicate IDs, unnamed buttons, or unlabeled inputs.',
+      suggestedFix:
+        'Completed. Keep SETTINGS_PANEL_SETTING_KEYS in parity with every non-deprecated mutable package contribution, keep webview messages runtime-validated, and route future privileged settings through their enforcement or consent boundary. Hooks and a VS Code plugin registry remain capability-honest empty states until their local runtimes exist; per-server MCP management remains tracked in the P1 extensibility epic.',
+    },
     'GAP-096': {
       title: 'Connections mounts live pairing, but multi-device management remains incomplete',
       detail:

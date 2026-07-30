@@ -6,6 +6,7 @@
  *   1. The extension activates without throwing.
  *   2. At least one of the package.json commands is registered and resolvable.
  *   3. The `@agi` chat participant is registered (catches registration order bugs).
+ *   4. The branded settings editor opens inside a real extension host.
  *
  * Requires: pnpm add -D mocha @types/mocha glob @types/glob
  */
@@ -61,5 +62,14 @@ suite('AGI Workforce extension — smoke', () => {
       'command "agi-workforce.newConversation" is not registered at runtime',
     );
     await vscode.commands.executeCommand('agi-workforce.newConversation');
+  });
+
+  test('branded settings command opens without throwing', async () => {
+    const all = await vscode.commands.getCommands(true);
+    assert.ok(
+      all.includes('agi-workforce.openSettings'),
+      'command "agi-workforce.openSettings" is not registered at runtime',
+    );
+    await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
   });
 });
