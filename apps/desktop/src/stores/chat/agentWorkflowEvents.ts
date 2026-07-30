@@ -145,6 +145,8 @@ export interface ToolConfirmationSummary {
   tool_display_name: string;
   description: string;
   parameters_summary: string;
+  args?: Record<string, unknown>;
+  summary_hash?: string;
   risk_level: string;
   safety_tier: string;
   reason: string;
@@ -749,17 +751,16 @@ export function applyToolConfirmationRequired(payload: ToolConfirmationSummary):
     details: {
       tool: payload.tool_display_name,
       toolName: payload.tool_name,
-      parameters: payload.parameters_summary,
+      arguments: payload.args,
+      parametersSummary: payload.parameters_summary,
+      summaryHash: payload.summary_hash ?? '',
       reason: payload.reason,
       reversible: payload.reversible,
+      undoDescription: payload.undo_description,
       safetyTier: payload.safety_tier,
-      signatureUnavailableReason:
-        'Backend confirmation payload does not include canonical MCP parameters.',
     },
     timeoutSeconds: 120,
   });
-
-  focusSidecarSectionFromEvent('approval');
 }
 
 export function applyToolConfirmationTimeout(payload: { request_id: string }): void {

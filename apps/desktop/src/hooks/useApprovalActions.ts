@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { invoke } from '../lib/tauri-mock';
-import type { ApprovalRequest } from '../stores/unifiedChatStore';
-import { useUnifiedChatStore } from '../stores/unifiedChatStore';
+import { useToolStore, type ApprovalRequest } from '../stores/chat/toolStore';
 import { respondToolConfirmation } from '../api/toolConfirmation';
 
 interface ResolveOptions {
@@ -10,9 +9,9 @@ interface ResolveOptions {
 }
 
 export function useApprovalActions() {
-  const approveOperation = useUnifiedChatStore((state) => state.approveOperation);
-  const rejectOperation = useUnifiedChatStore((state) => state.rejectOperation);
-  const recordTrustedAction = useUnifiedChatStore((state) => state.recordTrustedAction);
+  const approveOperation = useToolStore((state) => state.approveOperation);
+  const rejectOperation = useToolStore((state) => state.rejectOperation);
+  const recordTrustedAction = useToolStore((state) => state.recordTrustedAction);
 
   const resolveApproval = useCallback(
     async (approval: ApprovalRequest, decision: 'approve' | 'reject', options?: ResolveOptions) => {
@@ -27,6 +26,10 @@ export function useApprovalActions() {
           decision === 'approve',
           options?.trust ?? false,
           options?.reason,
+          false,
+          typeof approval.details['toolName'] === 'string'
+            ? approval.details['toolName']
+            : undefined,
         );
 
         if (decision === 'approve') {

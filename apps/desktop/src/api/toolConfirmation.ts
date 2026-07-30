@@ -45,6 +45,8 @@ export interface ToolConfirmationSummary {
   tool_display_name: string;
   description: string;
   parameters_summary: string;
+  args: Record<string, unknown>;
+  summary_hash: string;
   risk_level: RiskLevel;
   safety_tier: SafetyTier;
   reason: string;
@@ -64,12 +66,16 @@ export interface ToolConfirmationSummary {
  * @param approved - Whether the user approved the tool execution
  * @param rememberChoice - Whether to remember this choice for future executions
  * @param reason - Optional reason for the decision
+ * @param rememberForSession - Whether to approve this tool for the current session
+ * @param toolName - Canonical tool name required for session-scoped approval
  */
 export async function respondToolConfirmation(
   requestId: string,
   approved: boolean,
   rememberChoice: boolean = false,
   reason?: string,
+  rememberForSession: boolean = false,
+  toolName?: string,
 ): Promise<void> {
   if (!requestId || requestId.trim().length === 0) {
     throw new Error('[toolConfirmation] requestId is required');
@@ -80,6 +86,8 @@ export async function respondToolConfirmation(
       approved,
       rememberChoice,
       reason,
+      rememberForSession,
+      toolName,
     });
     return;
   }
@@ -91,6 +99,8 @@ export async function respondToolConfirmation(
       requestId: requestId,
       approved,
       rememberChoice: rememberChoice,
+      rememberForSession,
+      toolName: toolName ?? null,
       reason: reason ?? null,
     });
   } catch (error) {

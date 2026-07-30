@@ -44,6 +44,7 @@ import {
 import { CloudVoiceActionDialog } from '../voice/CloudVoiceActionDialog';
 import { useCloudVoiceController } from '../voice/useCloudVoiceController';
 import { createDesktopCloudShare } from '../../services/desktopCloudShares';
+import { McpToolConfirmationPrompt } from '../chat/McpToolConfirmationPrompt';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -543,6 +544,7 @@ export function DesktopShellV3({
             onUseAsText={cloudVoice.useActionAsText}
             onCancel={cloudVoice.cancelAction}
           />
+          <McpToolConfirmationPrompt />
         </div>
       </div>
     </CapabilityProvider>
