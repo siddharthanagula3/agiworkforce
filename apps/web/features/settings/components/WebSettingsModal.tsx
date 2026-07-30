@@ -12,6 +12,7 @@
  *   account      -> AccountSection  (sessions, user ID, logout)
  *   team         -> TeamSection     (workspace + member administration)
  *   security     -> SecuritySection (2FA, session timeout, change password)
+ *   safety       -> SafetySection (strict content admission)
  *   privacy      -> PrivacySection  (toggles, export, delete)
  *   archived     -> ArchivedChatsSection (restore + permanent delete)
  *   shared-links -> SharedLinksSection (review + revoke)
@@ -40,6 +41,7 @@ import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
 import { TeamSection } from '../sections/TeamSection';
 import { SecuritySection } from '../sections/SecuritySection';
+import { SafetySection } from '../sections/SafetySection';
 import { PrivacySection } from '../sections/PrivacySection';
 import { ArchivedChatsSection } from '../sections/ArchivedChatsSection';
 import { SharedLinksSection } from '../sections/SharedLinksSection';
@@ -84,6 +86,7 @@ const SECTION_TO_SEGMENT: Record<string, string> = {
   account: 'account',
   team: 'team',
   security: 'security',
+  safety: 'safety',
   privacy: 'privacy',
   archived: 'archived',
   'shared-links': 'shared-links',
@@ -501,6 +504,7 @@ export function WebSettingsModal({
     account: <AccountSection />,
     team: <TeamSection />,
     security: <SecuritySection />,
+    safety: <SafetySection />,
     privacy: <PrivacySection />,
     archived: <ArchivedChatsSection />,
     'shared-links': <SharedLinksSection />,

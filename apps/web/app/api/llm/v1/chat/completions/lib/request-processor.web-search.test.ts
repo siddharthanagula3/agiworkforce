@@ -18,6 +18,26 @@ vi.mock('@/lib/services/free-trial-service', async (importOriginal) => {
     settleFreeTrialRequest: vi.fn(async () => undefined),
   };
 });
+
+vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>();
+  return {
+    ...actual,
+    enforceManagedContentSafetyPreference: vi.fn(async () => ({
+      enabled: false,
+      allowed: true,
+    })),
+  };
+});
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async (request: NextRequest) => ({
+    db: {},
+    userId: request.headers.get('idempotency-key')?.startsWith('free-') ? 'user-free' : 'user-pro',
+  })),
+}));
+
 import {
   applyWorkMode,
   getWorkModeEntitlementError,

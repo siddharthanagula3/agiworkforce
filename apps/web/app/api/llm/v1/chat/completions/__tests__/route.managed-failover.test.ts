@@ -284,7 +284,10 @@ beforeEach(() => {
     current_period_start: new Date().toISOString(),
     current_period_end: new Date(Date.now() + 30 * 86400 * 1000).toISOString(),
   });
-  rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
+  rlsMocks.getUserScopedDb.mockResolvedValue({
+    db: { query: vi.fn(async () => []) },
+    userId: 'user-1',
+  });
   mockCheckAvailable.mockResolvedValue(true);
   mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
   mockGetBalance.mockResolvedValue({

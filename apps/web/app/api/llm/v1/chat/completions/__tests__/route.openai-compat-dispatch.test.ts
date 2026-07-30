@@ -327,7 +327,10 @@ describe.each(COMPAT_CASES)(
       vi.clearAllMocks();
       mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
       mockGetSubscription.mockResolvedValue(makeSubscription());
-      rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
+      rlsMocks.getUserScopedDb.mockResolvedValue({
+        db: { query: vi.fn(async () => []) },
+        userId: 'user-1',
+      });
       mockCheckAvailable.mockResolvedValue(true);
       mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
       mockGetBalance.mockResolvedValue({
@@ -367,6 +370,10 @@ describe('Managed Web provider admission', () => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
     mockGetSubscription.mockResolvedValue(makeSubscription());
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      db: { query: vi.fn(async () => []) },
+      userId: 'user-1',
+    });
     mockGetProviderFromModel.mockReturnValue(provider);
 
     const response = await POST(makeRequest(model));
@@ -408,7 +415,10 @@ describe('Managed Web AGI Work dispatch', () => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
-    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      db: { query: vi.fn(async () => []) },
+      userId: 'user-1',
+    });
     mockCheckAvailable.mockResolvedValue(true);
     mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
     mockGetBalance.mockResolvedValue({
@@ -533,7 +543,10 @@ describe('Per-model tools capability gate', () => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
-    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      db: { query: vi.fn(async () => []) },
+      userId: 'user-1',
+    });
     mockCheckAvailable.mockResolvedValue(true);
     mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
     mockGetBalance.mockResolvedValue({
