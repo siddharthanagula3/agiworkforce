@@ -4,9 +4,11 @@
  * the composer-side pre-check before the (authoritative) server validation.
  */
 const mockPost = jest.fn();
+const mockPut = jest.fn();
 jest.mock('../services/api', () => ({
   api: {
     post: (...args: unknown[]) => mockPost(...args),
+    put: (...args: unknown[]) => mockPut(...args),
     get: jest.fn(),
     delete: jest.fn(),
   },
@@ -15,7 +17,10 @@ jest.mock('../services/api', () => ({
 import {
   addCustomConnector,
   fetchConnectorDirectory,
+  fetchConnectorToolPermissions,
   getGitHubInstallWebUrl,
+  resetConnectorToolPermission,
+  setConnectorToolPermission,
 } from '../services/connectors';
 import { isLikelyHttpsUrl } from '../src/features/settings/cloud-connectors/AddCustomConnectorModal';
 
@@ -103,6 +108,53 @@ describe('fetchConnectorDirectory', () => {
     mockGet.mockResolvedValue({ connectors: [], available: 'everything' });
 
     await expect(fetchConnectorDirectory()).rejects.toThrow('Invalid connectors response');
+  });
+});
+
+describe('connector tool permissions', () => {
+  it('accepts only saved wire-level tool decisions', async () => {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    mockGet.mockResolvedValue({
+      permissions: [
+        { connectorId: 'github', toolName: 'create_issue', level: 'ask' },
+        { connectorId: 'custom-ab12', toolName: 'deploy_preview', level: 'deny' },
+      ],
+    });
+
+    await expect(fetchConnectorToolPermissions()).resolves.toEqual([
+      { connectorId: 'github', toolName: 'create_issue', level: 'ask' },
+      { connectorId: 'custom-ab12', toolName: 'deploy_preview', level: 'deny' },
+    ]);
+    expect(mockGet).toHaveBeenCalledWith('/api/connectors/permissions');
+  });
+
+  it('rejects display-label or malformed permission responses', async () => {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    mockGet.mockResolvedValue({
+      permissions: [{ connectorId: 'github', toolName: 'Create issue', level: 'sometimes' }],
+    });
+
+    await expect(fetchConnectorToolPermissions()).rejects.toThrow(
+      'Invalid connector permissions response',
+    );
+  });
+
+  it('persists and resets exact connector/tool keys through the server API', async () => {
+    const mockDelete = jest.requireMock('../services/api').api.delete as jest.Mock;
+    mockPut.mockResolvedValue({ success: true });
+    mockDelete.mockResolvedValue({ success: true });
+
+    await setConnectorToolPermission('custom-ab12', 'deploy preview', 'deny');
+    await resetConnectorToolPermission('custom-ab12', 'deploy preview');
+
+    expect(mockPut).toHaveBeenCalledWith('/api/connectors/permissions', {
+      connectorId: 'custom-ab12',
+      toolName: 'deploy preview',
+      level: 'deny',
+    });
+    expect(mockDelete).toHaveBeenCalledWith(
+      '/api/connectors/permissions?connectorId=custom-ab12&toolName=deploy%20preview',
+    );
   });
 });
 
