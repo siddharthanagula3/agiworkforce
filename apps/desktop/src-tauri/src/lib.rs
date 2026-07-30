@@ -2578,7 +2578,6 @@ pub fn run() {
             crate::sys::commands::list_autonomous_task_checkpoints,
             crate::sys::commands::list_autonomous_task_checkpoints_by_task,
             crate::sys::commands::llm_list_ollama_models,
-            crate::sys::commands::mark_setup_completed,
             crate::sys::commands::memory_archive_compacted_logs,
             crate::sys::commands::memory_compact_old_logs,
             crate::sys::commands::memory_decay_single,

@@ -1,14 +1,5 @@
 import { formatDistanceToNow } from 'date-fns';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  DollarSign,
-  Trophy,
-  UserPlus,
-  XCircle,
-  Zap,
-} from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, DollarSign, Trophy, XCircle, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ScrollArea } from '@/components/ui/ScrollArea';
@@ -24,10 +15,7 @@ function ActivityIcon({ type, status }: ActivityIconProps) {
   let Icon = Zap;
   let colorClass = 'text-primary bg-primary/10';
 
-  if (type === 'employee_hired') {
-    Icon = UserPlus;
-    colorClass = 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-950';
-  } else if (type === 'milestone_achieved') {
+  if (type === 'milestone_achieved') {
     Icon = Trophy;
     colorClass = 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-950';
   } else if (type === 'goal_completed') {

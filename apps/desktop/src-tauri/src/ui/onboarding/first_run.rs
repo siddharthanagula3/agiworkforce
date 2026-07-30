@@ -76,8 +76,8 @@ impl FirstRunExperience {
             ))
         })?;
         conn.execute(
-            "INSERT INTO first_run_sessions (id, user_id, started_at, step, recommended_employees, selected_employee_id, demo_results, time_to_value_seconds, hired_employee)
-             VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, 0, 0)",
+            "INSERT INTO first_run_sessions (id, user_id, started_at, step, recommended_demos, selected_demo_id, demo_results, time_to_value_seconds)
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL, NULL, 0)",
             params![
                 &session_id,
                 user_id,
@@ -321,7 +321,7 @@ impl FirstRunExperience {
             ))
         })?;
         conn.execute(
-            "UPDATE first_run_sessions SET selected_employee_id = ?1, updated_at = ?2 WHERE id = ?3",
+            "UPDATE first_run_sessions SET selected_demo_id = ?1, updated_at = ?2 WHERE id = ?3",
             params![demo_id, Utc::now().timestamp(), session_id],
         )?;
         Ok(())
@@ -368,20 +368,6 @@ impl FirstRunExperience {
         Ok(())
     }
 
-    pub fn mark_setup_completed(&self, session_id: &str) -> Result<(), FirstRunError> {
-        let conn = self.db.safe_lock().map_err(|e| {
-            FirstRunError::Database(rusqlite::Error::SqliteFailure(
-                rusqlite::ffi::Error::new(1),
-                Some(format!("Lock error: {}", e)),
-            ))
-        })?;
-        conn.execute(
-            "UPDATE first_run_sessions SET hired_employee = 1, updated_at = ?1 WHERE id = ?2",
-            params![Utc::now().timestamp(), session_id],
-        )?;
-        Ok(())
-    }
-
     pub fn complete(&self, session_id: &str) -> Result<(), FirstRunError> {
         let conn = self.db.safe_lock().map_err(|e| {
             FirstRunError::Database(rusqlite::Error::SqliteFailure(
@@ -407,7 +393,7 @@ impl FirstRunExperience {
 
         let (id, user_id, step_json, recommended_json, demo_json, time_to_value, selected_demo_id, started_at):
             (String, String, String, String, Option<String>, i64, Option<String>, i64) = conn.query_row(
-            "SELECT id, user_id, step, recommended_employees, demo_results, time_to_value_seconds, selected_employee_id, started_at
+            "SELECT id, user_id, step, recommended_demos, demo_results, time_to_value_seconds, selected_demo_id, started_at
              FROM first_run_sessions WHERE id = ?1",
             [session_id],
             |row| Ok((
@@ -459,14 +445,6 @@ impl FirstRunExperience {
             )
             .unwrap_or(0);
 
-        let hired_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM first_run_sessions WHERE hired_employee = 1",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(0);
-
         let avg_time_to_value: f64 = conn.query_row(
             "SELECT AVG(time_to_value_seconds) FROM first_run_sessions WHERE completed_at IS NOT NULL",
             [],
@@ -478,12 +456,6 @@ impl FirstRunExperience {
             completed_sessions: completed_sessions as u32,
             completion_rate: if total_sessions > 0 {
                 (completed_sessions as f64 / total_sessions as f64) * 100.0
-            } else {
-                0.0
-            },
-            hired_count: hired_count as u32,
-            hire_rate: if completed_sessions > 0 {
-                (hired_count as f64 / completed_sessions as f64) * 100.0
             } else {
                 0.0
             },
@@ -508,7 +480,7 @@ pub struct FirstRunSession {
 #[serde(rename_all = "snake_case")]
 pub enum OnboardingStep {
     Welcome,
-    ChooseEmployee,
+    ChooseDemo,
     RunningDemo,
     ViewingResults,
     QuickSetup,
@@ -546,7 +518,5 @@ pub struct FirstRunStatistics {
     pub total_sessions: u32,
     pub completed_sessions: u32,
     pub completion_rate: f64,
-    pub hired_count: u32,
-    pub hire_rate: f64,
     pub average_time_to_value_seconds: u64,
 }
