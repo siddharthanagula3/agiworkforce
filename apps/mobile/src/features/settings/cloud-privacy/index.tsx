@@ -2,9 +2,9 @@
  * Cloud Privacy Settings Screen
  *
  * Aligns with the web PrivacySection. Shows cloud-scoped privacy controls:
- * data retention acknowledgement, telemetry opt-out info, and a link to the
- * full privacy policy. The actual toggles that affect behaviour live on the
- * server; this screen surfaces their documentation + the data-export path.
+ * data retention acknowledgement, telemetry policy, and links to the full
+ * privacy policy. Product-wide guarantees are rendered as policy states, not
+ * cosmetic switches.
  *
  * Cloud-only surface. Local privacy is handled by Data Controls.
  */
@@ -25,8 +25,8 @@ import { View } from 'react-native';
 const PRIVACY_ITEMS = [
   {
     key: 'no-training',
-    label: 'Not used for training',
-    body: 'Your AGI Cloud conversations are never used to train AI models without explicit consent.',
+    label: 'AGI model training: Always off',
+    body: 'AGI does not use customer prompts, responses, or files to train AGI-owned models. There is no training opt-in because this data path does not exist.',
   },
   {
     key: 'telemetry',
