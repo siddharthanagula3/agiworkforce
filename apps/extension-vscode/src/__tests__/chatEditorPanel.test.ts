@@ -1,9 +1,9 @@
 /**
  * chatEditorPanel.test.ts — C13: chat in main editor (WebviewPanel)
  *
- * Verifies that `agi-workforce.openChatInEditor` is registered, creates a
- * WebviewPanel, and that repeated calls reveal the existing panel rather than
- * creating a new one (singleton pattern).
+ * Verifies that `agi-workforce.openChatInEditor` is registered, creates an
+ * independent WebviewPanel per invocation, and keeps the auxiliary agent-mode
+ * command focused on the most recent live tab.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,18 +54,25 @@ function makeMockContext(): vscode.ExtensionContext {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('agi-workforce.openChatInEditor', () => {
+  interface PanelHarness {
+    panel: vscode.WebviewPanel;
+    reveal: ReturnType<typeof vi.fn>;
+    postMessage: ReturnType<typeof vi.fn>;
+    receiveMessage?: (message: unknown) => Promise<void>;
+    dispose?: () => void;
+    changeViewState?: (active: boolean) => void;
+  }
+
   let handlers: Map<string, (...args: unknown[]) => unknown>;
   let panelCreations: Array<{ viewType: string; title: string }>;
-  let webviewMessageHandler: ((message: unknown) => Promise<void>) | undefined;
-  let panelPostMessage: ReturnType<typeof vi.fn>;
+  let panels: PanelHarness[];
   let originalRegister: typeof vscode.commands.registerCommand;
   let originalCreatePanel: typeof vscode.window.createWebviewPanel;
 
   beforeEach(() => {
     handlers = new Map();
     panelCreations = [];
-    webviewMessageHandler = undefined;
-    panelPostMessage = vi.fn().mockResolvedValue(true);
+    panels = [];
 
     originalRegister = vscode.commands.registerCommand;
     originalCreatePanel = vscode.window.createWebviewPanel;
@@ -77,29 +84,48 @@ describe('agi-workforce.openChatInEditor', () => {
       return { dispose: () => undefined } as vscode.Disposable;
     });
 
-    const mockPanel = {
-      webview: {
-        options: {},
-        html: '',
-        postMessage: panelPostMessage,
-        onDidReceiveMessage: vi.fn((handler: (message: unknown) => Promise<void>) => {
-          webviewMessageHandler = handler;
-          return { dispose: () => undefined };
-        }),
-        cspSource: 'vscode-resource:',
-        asWebviewUri: vi.fn((uri: vscode.Uri) => uri),
-      },
-      reveal: vi.fn(),
-      onDidDispose: vi.fn().mockReturnValue({ dispose: () => undefined }),
-      dispose: vi.fn(),
-      viewColumn: vscode.ViewColumn.One,
-    } as unknown as vscode.WebviewPanel;
-
     (
       vscode.window as { createWebviewPanel: typeof vscode.window.createWebviewPanel }
     ).createWebviewPanel = vi.fn((viewType: string, title: string) => {
       panelCreations.push({ viewType, title });
-      return mockPanel;
+      const harness: PanelHarness = {
+        panel: undefined as unknown as vscode.WebviewPanel,
+        reveal: vi.fn(),
+        postMessage: vi.fn().mockResolvedValue(true),
+      };
+      const panel = {
+        active: true,
+        webview: {
+          options: {},
+          html: '',
+          postMessage: harness.postMessage,
+          onDidReceiveMessage: vi.fn((handler: (message: unknown) => Promise<void>) => {
+            harness.receiveMessage = handler;
+            return { dispose: () => undefined };
+          }),
+          cspSource: 'vscode-resource:',
+          asWebviewUri: vi.fn((uri: vscode.Uri) => uri),
+        },
+        reveal: harness.reveal,
+        onDidChangeViewState: vi.fn(
+          (handler: (event: vscode.WebviewPanelOnDidChangeViewStateEvent) => void) => {
+            harness.changeViewState = (active: boolean) => {
+              panel.active = active;
+              handler({ webviewPanel: panel } as vscode.WebviewPanelOnDidChangeViewStateEvent);
+            };
+            return { dispose: () => undefined };
+          },
+        ),
+        onDidDispose: vi.fn((handler: () => void) => {
+          harness.dispose = handler;
+          return { dispose: () => undefined };
+        }),
+        dispose: vi.fn(),
+        viewColumn: vscode.ViewColumn.One,
+      } as unknown as vscode.WebviewPanel & { active: boolean };
+      harness.panel = panel;
+      panels.push(harness);
+      return panel;
     });
 
     activate(makeMockContext());
@@ -130,40 +156,72 @@ describe('agi-workforce.openChatInEditor', () => {
     expect(chatPanels[0]!.title).toBe('AGI Chat');
   });
 
-  it('calls reveal on the existing panel instead of creating a second one', () => {
-    const mockReveal = vi.fn();
-    const mockPanel = {
-      webview: {
-        options: {},
-        html: '',
-        postMessage: vi.fn().mockResolvedValue(true),
-        onDidReceiveMessage: vi.fn().mockReturnValue({ dispose: () => undefined }),
-        cspSource: 'vscode-resource:',
-        asWebviewUri: vi.fn((uri: vscode.Uri) => uri),
-      },
-      reveal: mockReveal,
-      onDidDispose: vi.fn().mockReturnValue({ dispose: () => undefined }),
-      dispose: vi.fn(),
-      viewColumn: vscode.ViewColumn.One,
-    } as unknown as vscode.WebviewPanel;
-
-    let callCount = 0;
-    (
-      vscode.window as { createWebviewPanel: typeof vscode.window.createWebviewPanel }
-    ).createWebviewPanel = vi.fn(() => {
-      callCount++;
-      return mockPanel;
-    });
-
-    // Reset singleton so this test gets a clean slate independent of beforeEach
-    ChatEditorPanel.__resetForTests();
-
+  it('creates independent, distinguishable tabs on repeated calls', () => {
     const handler = handlers.get('agi-workforce.openChatInEditor')!;
-    handler(); // first call — creates panel
-    handler(); // second call — should reveal, not create
+    handler();
+    handler();
 
-    expect(callCount).toBe(1);
-    expect(mockReveal).toHaveBeenCalledTimes(1);
+    expect(panels).toHaveLength(2);
+    expect(panelCreations.filter((panel) => panel.viewType === ChatEditorPanel.viewType)).toEqual([
+      { viewType: ChatEditorPanel.viewType, title: 'AGI Chat' },
+      { viewType: ChatEditorPanel.viewType, title: 'AGI Chat 2' },
+    ]);
+    expect(panels[0]!.reveal).not.toHaveBeenCalled();
+    expect(panels[1]!.reveal).not.toHaveBeenCalled();
+  });
+
+  it('keeps agentMode focused on the most recently active live tab', () => {
+    const open = handlers.get('agi-workforce.openChatInEditor')!;
+    const focus = handlers.get('agi-workforce.agentMode')!;
+    open();
+    open();
+    panels[0]!.changeViewState?.(true);
+
+    focus();
+
+    expect(panels).toHaveLength(2);
+    expect(panels[0]!.reveal).toHaveBeenCalledOnce();
+    expect(panels[1]!.reveal).not.toHaveBeenCalled();
+  });
+
+  it('removes only the disposed tab from most-recent routing', () => {
+    const open = handlers.get('agi-workforce.openChatInEditor')!;
+    const focus = handlers.get('agi-workforce.agentMode')!;
+    open();
+    open();
+    panels[1]!.dispose?.();
+
+    focus();
+
+    expect(panels).toHaveLength(2);
+    expect(panels[0]!.reveal).toHaveBeenCalledOnce();
+    expect(panels[1]!.reveal).not.toHaveBeenCalled();
+  });
+
+  it('restarts tab numbering after every editor chat is closed', () => {
+    const open = handlers.get('agi-workforce.openChatInEditor')!;
+    open();
+    open();
+    panels[0]!.dispose?.();
+    panels[1]!.dispose?.();
+
+    open();
+
+    expect(panelCreations.at(-1)).toEqual({
+      viewType: ChatEditorPanel.viewType,
+      title: 'AGI Chat',
+    });
+  });
+
+  it('keeps conversation events isolated to the originating tab', async () => {
+    const open = handlers.get('agi-workforce.openChatInEditor')!;
+    open();
+    open();
+
+    await panels[0]!.receiveMessage?.({ type: 'newChat' });
+
+    expect(panels[0]!.postMessage).toHaveBeenCalledWith({ type: 'conversationCleared' });
+    expect(panels[1]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
   });
 
   it('does not interfere with sidebar webview registration', () => {
@@ -186,14 +244,14 @@ describe('agi-workforce.openChatInEditor', () => {
     } as unknown as vscode.TextEditor;
 
     handlers.get('agi-workforce.openChatInEditor')!();
-    expect(webviewMessageHandler).toBeDefined();
-    await webviewMessageHandler!({
+    expect(panels[0]!.receiveMessage).toBeDefined();
+    await panels[0]!.receiveMessage!({
       type: 'proposeDiff',
       payload: { code: 'const x = 1;', language: 'typescript' },
     });
 
     expect(showDiff).toHaveBeenCalledOnce();
-    expect(panelPostMessage).toHaveBeenCalledWith({
+    expect(panels[0]!.postMessage).toHaveBeenCalledWith({
       type: 'diffProposed',
       payload: { sessionId: 'diff-editor-1', filePath: 'src/app.ts' },
     });

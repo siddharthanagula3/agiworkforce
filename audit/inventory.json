@@ -1784,8 +1784,8 @@
   {
     "item": "parallel-conversation-tabs",
     "surface": "apps/ide-extensions",
-    "status": "broken",
-    "evidence": "apps/extension-vscode/src/providers/chatEditorPanel.ts:18-36 ChatEditorPanel is a hard singleton: 'private static instance: ChatEditorPanel | undefined' and createOrShow() reveals the existing instance instead of creating a new one when one already exists (line 34-37: 'if (ChatEditorPanel.instance !== undefined) { ChatEditorPanel.instance.panel.reveal(column); return ChatEditorPanel.instance; }'). apps/extension-vscode/src/core/commandSetup.ts:246 wires agi-workforce.openChatInEditor to this same singleton."
+    "status": "built",
+    "evidence": "apps/extension-vscode/src/providers/chatEditorPanel.ts tracks a Set of live panels instead of a singleton. createNew() gives every agi-workforce.openChatInEditor invocation its own WebviewPanel, ChatStateManager, local-runtime thread state, message channel, cancellation lifecycle, and distinguishable AGI Chat / AGI Chat N title; disposal removes only that instance. revealMostRecentOrCreate() preserves focus semantics for the auxiliary agentMode command. chatEditorPanel.test.ts covers parallel creation, active-tab routing, independent disposal, message isolation, and diff routing; the real VS Code 1.131 Extension Host smoke suite asserts that two commands produce two agi-workforce.chatPanel tabs."
   },
   {
     "item": "webview-host",
