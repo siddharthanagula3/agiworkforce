@@ -1,18 +1,25 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert, AlertDescription } from '@/components/ui/Alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { RefreshCw, Search, Server, Wrench, Settings, Key } from 'lucide-react';
+import { Key, Package, RefreshCw, Search, Server, Settings, Wrench } from 'lucide-react';
 import type { McpServerInfo } from '../../types/mcp';
 import MCPServerCard from './MCPServerCard';
 import MCPToolBrowser from './MCPToolBrowser';
 import MCPCredentialManager from './MCPCredentialManager';
 import MCPConfigEditor from './MCPConfigEditor';
 
+const MCPBundleBrowser = lazy(() =>
+  import('./MCPBundleBrowser').then((module) => ({
+    default: module.MCPBundleBrowser,
+  })),
+);
+
 export default function MCPWorkspace() {
+  const [activeTab, setActiveTab] = useState('servers');
   const {
     servers,
     tools,
@@ -106,11 +113,15 @@ export default function MCPWorkspace() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <Tabs defaultValue="servers" className="h-full flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
           <TabsList className="w-full justify-start border-b rounded-none px-4">
             <TabsTrigger value="servers" className="gap-2">
               <Server className="w-4 h-4" />
               Servers
+            </TabsTrigger>
+            <TabsTrigger value="bundles" className="gap-2">
+              <Package className="w-4 h-4" />
+              Bundle Registry
             </TabsTrigger>
             <TabsTrigger value="tools" className="gap-2">
               <Wrench className="w-4 h-4" />
@@ -151,6 +162,21 @@ export default function MCPWorkspace() {
                 </div>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent
+            value="bundles"
+            className="h-[min(720px,70vh)] min-h-[520px] overflow-hidden p-0"
+          >
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Loading bundle registry...
+                </div>
+              }
+            >
+              <MCPBundleBrowser onConfigureServer={() => setActiveTab('config')} />
+            </Suspense>
           </TabsContent>
 
           <TabsContent value="tools" className="flex-1 overflow-auto p-4">

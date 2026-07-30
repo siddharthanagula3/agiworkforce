@@ -140,6 +140,23 @@ describe('Core data commands return expected shapes', () => {
     expect(typeof result.supports_tools).toBe('boolean');
     expect(typeof result.context_length).toBe('number');
   });
+
+  it('supports the MCP bundle registry lifecycle without host mutations', async () => {
+    const invoke = await getRealInvoke();
+    const bundles = await invoke<Array<{ id: string; installed: boolean }>>('mcpb_fetch_registry');
+    const bundleId = bundles[0]?.id;
+
+    expect(bundleId).toBeDefined();
+    await invoke('mcpb_install_bundle', { bundleId });
+
+    const installed = await invoke<Array<{ id: string; installed: boolean }>>(
+      'mcpb_get_installed_bundles',
+    );
+    expect(installed).toContainEqual(expect.objectContaining({ id: bundleId, installed: true }));
+
+    await invoke('mcpb_uninstall_bundle', { bundleId });
+    expect(await invoke('mcpb_get_installed_bundles')).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
