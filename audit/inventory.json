@@ -3596,8 +3596,8 @@
   {
     "item": "a11y-kit",
     "surface": "packages/platform",
-    "status": "unwired",
-    "evidence": "apps/web/shared/lib/accessibility.ts:1-359 is a complete, real implementation (FocusManager, ScreenReaderUtils, HighContrastDetector, MotionPreferences, ariaHelpers, ContrastUtils) but repo-wide grep for its exported symbols (ScreenReaderUtils, HighContrastDetector, MotionPreferences, ariaHelpers, ContrastUtils) and for the import path 'shared/lib/accessibility' outside the file itself returns zero matches — nothing in apps/web/app, features, or shared components imports it. The companion apps/web/shared/components/accessibility/AccessibilitySettings.tsx:2-25 is an explicit stub ('Stub types and hooks for accessibility context (module not available)', no-op updateSettings) and is itself not referenced from apps/web/app or apps/web/features. No equivalent kit exists under apps/desktop/src or apps/mobile/src (both searches for *accessibility* files came up empty)."
+    "status": "missing",
+    "evidence": "The duplicate orphaned apps/web/shared/lib/accessibility.ts utility and the unmounted AccessibilitySettings.tsx panel with literal no-op setters were removed. Neither had a live app, test, barrel, or package-entry consumer. The separate used accessibility components and hooks under apps/web/shared/components/accessibility and shared/hooks/useAccessibility.ts remain; no cross-platform a11y kit is claimed."
   },
   {
     "item": "screen-reader-support",
@@ -3620,8 +3620,8 @@
   {
     "item": "high-contrast",
     "surface": "packages/platform",
-    "status": "unwired",
-    "evidence": "Detection exists only inside the unwired a11y-kit: apps/web/shared/lib/accessibility.ts:186-231 (HighContrastDetector.isHighContrastMode/onHighContrastChange checking prefers-contrast/forced-colors). Repo-wide grep for 'forced-colors' or 'prefers-contrast' across every *.css and *.ts* file (apps + packages) returns only that one file — no product stylesheet (apps/web/app/globals.css, apps/desktop/src/styles/globals.css) contains a forced-colors/prefers-contrast media query, and the only other UI reference (apps/mobile/src/features/settings/cloud-connectors/index.tsx:565) is a code comment describing a static pill style, not a responsive high-contrast feature."
+    "status": "partial",
+    "evidence": "Web and Desktop now respond in their shipped global stylesheets to `prefers-contrast: more` by strengthening semantic text/border/focus tokens and to `forced-colors: active` by using Windows system colors for controls, links, focus, selection, selected states, and transparent gradient text. Source contract tests pin both surfaces. Mobile still has no verified app-level high-contrast adapter, so cross-platform support remains Partial."
   },
   {
     "item": "safety-classifier-hook",
