@@ -86,11 +86,7 @@ pub fn assemble_system_prompt(
         .ok()
         .map(|cwd| memory::load_rules(&cwd))
         .unwrap_or_default();
-    let rules_context = if rules.is_empty() {
-        String::new()
-    } else {
-        memory::rules_context_prompt(&rules, &[])
-    };
+    let rules_context = memory::always_on_rules_context(&rules);
 
     let combined_memory = if persistent_memory.is_empty() {
         memory_context

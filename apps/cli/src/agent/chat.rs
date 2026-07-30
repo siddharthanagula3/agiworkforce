@@ -512,6 +512,12 @@ impl AgentSession {
         // construction, cost attribution).
         self.re_resolve_auto_route_for_turn(user_input);
 
+        // Bring path-scoped rules into the conversation before the first model
+        // call. Explicit file attachments activate through
+        // `attach_context_files`; this covers paths mentioned directly in the
+        // user's turn.
+        self.activate_rules_from_user_input(user_input);
+
         // Context compaction is shared across agent hosts. Provider-reported
         // input usage calibrates the tokenizer-independent local estimate;
         // output capacity remains reserved before applying the thresholds.
@@ -1281,6 +1287,33 @@ impl TurnHostAdapter<'_> {
                 };
             }
         };
+
+        // Hooks may rewrite a tool's path, so rule activation must use the
+        // effective arguments that will actually reach execution.
+        let rule_paths = super::rule_paths_from_tool_call(&call.name, &effective_args);
+        let activated_rules = self.session.activate_rules_for_paths(&rule_paths);
+        if !activated_rules.is_empty() {
+            self.hook_additional_contexts.push(activated_rules);
+
+            // A read can complete before the continuation sees the newly
+            // applicable instructions. A mutation cannot: fail this first
+            // attempt closed, publish the rule context, and let the model
+            // re-evaluate and retry against it.
+            if super::is_rule_sensitive_mutation_tool(&call.name) {
+                return Prepared::PreEmpted {
+                    block: ResultBlock {
+                        tool_use_id: call.id.clone(),
+                        content: serde_json::json!({
+                            "ok": false,
+                            "error": "conditional_rules_activated",
+                            "message": "Path-scoped project rules were activated before this mutation. Re-evaluate the change against the new rule context, then retry the tool call."
+                        })
+                        .to_string(),
+                        is_error: true,
+                    },
+                };
+            }
+        }
 
         let legacy_args = value_to_legacy_args(&effective_args);
         if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
@@ -2483,6 +2516,58 @@ mod tests {
             outcome,
             PreToolUseOutcome::Proceed(serde_json::json!({"path":"TODO.md"}))
         );
+    }
+
+    #[tokio::test]
+    async fn newly_activated_file_rule_preempts_first_mutation() {
+        let mut session = make_local_session();
+        session.workspace_rules = vec![crate::memory::Rule {
+            globs: vec!["src/**/*.rs".to_string()],
+            body: "Never mutate Rust without reviewing this rule.".to_string(),
+            source: std::path::PathBuf::from("/rules/rust.md"),
+            kind: Some(crate::memory::MemoryKind::Feedback),
+        }];
+        session.active_rule_sources.clear();
+        session.hooks_config = pre_tool_hook_config(
+            "printf '%s' '{\"updated_input\":{\"path\":\"src/core/main.rs\",\"old_string\":\"old\",\"new_string\":\"new\"}}'",
+        );
+        let config = CliConfig::default();
+        let mut adapter = TurnHostAdapter {
+            session: &mut session,
+            config: &config,
+            tool_defs: Vec::new(),
+            available_tool_names: HashSet::from(["edit_file".to_string()]),
+            concurrency_safe_names: HashSet::new(),
+            plan_mode_mutating_names: HashSet::new(),
+            max_tokens: 1_024,
+            first_on_chunk: None,
+            hook_additional_contexts: Vec::new(),
+        };
+
+        let prepared = adapter
+            .prepare_tool_inner(
+                &tool_call(
+                    "edit_file",
+                    serde_json::json!({
+                        "path": "README.md",
+                        "old_string": "old",
+                        "new_string": "new"
+                    }),
+                ),
+                DispatchMode::Sequential,
+            )
+            .await;
+
+        let Prepared::PreEmpted { block } = prepared else {
+            panic!("first mutation must be preempted while its rule activates");
+        };
+        assert!(block.content.contains("conditional_rules_activated"));
+        adapter.commit_tool_results(vec![block], 0).await;
+        drop(adapter);
+
+        assert!(session.messages.iter().any(|message| message
+            .text_content()
+            .contains("Never mutate Rust without reviewing this rule.")));
     }
 
     // -----------------------------------------------------------------------

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -505,32 +506,41 @@ fn parse_globs_field(frontmatter: &str) -> Vec<String> {
     globs
 }
 
-/// Filter rules that match any of the given file paths using glob patterns.
-///
-/// Rules with no globs are always included. Returns the combined prompt text.
-pub fn rules_context_prompt(rules: &[Rule], active_files: &[&str]) -> String {
-    let matched: Vec<&Rule> = rules
-        .iter()
-        .filter(|rule| {
-            if rule.globs.is_empty() {
-                return true; // No globs = always active
-            }
-            rule.globs.iter().any(|pattern| {
-                let glob_pat = glob::Pattern::new(pattern).ok();
-                glob_pat.is_some_and(|pat| {
-                    active_files.iter().any(|f| {
-                        let p = Path::new(f);
-                        // Match against full path and just the filename
-                        pat.matches_path(p)
-                            || p.file_name()
-                                .and_then(|n| n.to_str())
-                                .is_some_and(|n| pat.matches(n))
-                    })
+fn rule_matches_active_files(rule: &Rule, active_files: &[&str]) -> bool {
+    if rule.globs.is_empty() {
+        return true;
+    }
+    rule.globs.iter().any(|pattern| {
+        let glob_pat = glob::Pattern::new(pattern).ok();
+        glob_pat.is_some_and(|pat| {
+            active_files.iter().any(|f| {
+                let p = Path::new(f);
+                if pat.matches_path(p)
+                    || p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| pat.matches(n))
+                {
+                    return true;
+                }
+
+                // Attached files are canonical absolute paths, while project
+                // rules are normally written as `src/**/*.rs`. Match every
+                // relative suffix so those forms meet without weakening the
+                // glob itself.
+                let components: Vec<_> = p.components().collect();
+                (0..components.len()).any(|start| {
+                    let mut suffix = PathBuf::new();
+                    for component in &components[start..] {
+                        suffix.push(component.as_os_str());
+                    }
+                    pat.matches_path(&suffix)
                 })
             })
         })
-        .collect();
+    })
+}
 
+fn format_rules_context(matched: &[&Rule]) -> String {
     if matched.is_empty() {
         return String::new();
     }
@@ -545,7 +555,7 @@ pub fn rules_context_prompt(rules: &[Rule], active_files: &[&str]) -> String {
     let mut project = Vec::new();
     let mut reference = Vec::new();
     let mut untyped = Vec::new();
-    for rule in &matched {
+    for rule in matched {
         match rule.kind {
             Some(MemoryKind::Feedback) => feedback.push(*rule),
             Some(MemoryKind::User) => user.push(*rule),
@@ -588,6 +598,49 @@ pub fn rules_context_prompt(rules: &[Rule], active_files: &[&str]) -> String {
     }
     prompt.push_str("\n</rules>");
     prompt
+}
+
+/// Build the prompt fragment for every rule that applies to the active files.
+///
+/// Rules without globs are always included. Callers that add rule context
+/// incrementally should use [`activate_matching_rules`] to avoid duplicates.
+pub fn rules_context_prompt(rules: &[Rule], active_files: &[&str]) -> String {
+    let matched: Vec<&Rule> = rules
+        .iter()
+        .filter(|rule| rule_matches_active_files(rule, active_files))
+        .collect();
+    format_rules_context(&matched)
+}
+
+/// Build the startup prompt fragment containing only unconditional rules.
+pub fn always_on_rules_context(rules: &[Rule]) -> String {
+    let always_on: Vec<&Rule> = rules.iter().filter(|rule| rule.globs.is_empty()).collect();
+    format_rules_context(&always_on)
+}
+
+/// Activate rules matching the supplied files exactly once per session.
+///
+/// `active_sources` is session-owned state. It should be seeded with the
+/// unconditional rule sources already present in the startup system prompt.
+pub fn activate_matching_rules(
+    rules: &[Rule],
+    active_files: &[&str],
+    active_sources: &mut HashSet<PathBuf>,
+) -> String {
+    let newly_matched: Vec<&Rule> = rules
+        .iter()
+        .filter(|rule| {
+            !rule.globs.is_empty()
+                && !active_sources.contains(&rule.source)
+                && rule_matches_active_files(rule, active_files)
+        })
+        .collect();
+
+    for rule in &newly_matched {
+        active_sources.insert(rule.source.clone());
+    }
+
+    format_rules_context(&newly_matched)
 }
 
 // ---------------------------------------------------------------------------
@@ -726,6 +779,42 @@ mod tests {
         fs::write(&path, "---\nglobs: [\"*.rs\"]\n---\nUse cargo fmt.").unwrap();
         let rule = parse_rule_file(&path).expect("rule should parse");
         assert_eq!(rule.kind, None);
+    }
+
+    #[test]
+    fn test_activate_matching_rules_handles_absolute_paths_once() {
+        let conditional_source = PathBuf::from("/rules/rust.md");
+        let rules = vec![
+            Rule {
+                globs: Vec::new(),
+                body: "Always active.".to_string(),
+                source: PathBuf::from("/rules/always.md"),
+                kind: None,
+            },
+            Rule {
+                globs: vec!["src/**/*.rs".to_string()],
+                body: "Run rustfmt before finishing.".to_string(),
+                source: conditional_source.clone(),
+                kind: Some(MemoryKind::Project),
+            },
+        ];
+        let mut active_sources = HashSet::from([PathBuf::from("/rules/always.md")]);
+
+        let first = activate_matching_rules(
+            &rules,
+            &["/workspace/project/src/core/main.rs"],
+            &mut active_sources,
+        );
+        assert!(first.contains("Run rustfmt before finishing."));
+        assert!(!first.contains("Always active."));
+        assert!(active_sources.contains(&conditional_source));
+
+        let repeated = activate_matching_rules(
+            &rules,
+            &["src/core/main.rs"],
+            &mut active_sources,
+        );
+        assert!(repeated.is_empty());
     }
 
     /// Phase 9: rules_context_prompt groups by kind and emits the
