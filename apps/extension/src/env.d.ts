@@ -7,6 +7,8 @@ declare const process: {
 
 interface ImportMetaEnv {
   readonly DEV: boolean;
+  readonly VITE_AGI_WEB_API_BASE_URL?: string;
+  readonly VITE_API_BASE_URL?: string;
 }
 
 interface ImportMeta {

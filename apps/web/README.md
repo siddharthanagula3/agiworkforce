@@ -54,7 +54,10 @@ Runtime API boundaries live under `app/api`, `api`, `lib`, and shared packages. 
 
 ## Environment / Secrets
 
-Use `apps/web/.env.example` as the local template. Never commit `.env.local`, production secrets, Clerk secret keys, Neon database URLs, Stripe live keys, provider API keys, or webhook secrets.
+Use `apps/web/.env.example` as the complete deployment contract and copy
+`apps/web/.env.local.example` to `.env.local` for local development. Never
+commit `.env.local`, production secrets, Clerk secret keys, Neon database URLs,
+Stripe live keys, provider API keys, or webhook secrets.
 
 ## Security, Privacy, Data Boundaries
 

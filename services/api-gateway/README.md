@@ -55,7 +55,10 @@ Reusable schemas must live in `packages/contracts/types`; provider calls must go
 
 ## Environment / Secrets
 
-Use `.env.example` as the template. Never commit JWT secrets, Neon service-role keys, provider keys, webhook secrets, managed compute tokens, or production URLs that imply secret access.
+Use `.env.example` as the key/reference contract and export local values from
+the shell; the gateway runtime does not load `.env` or `.env.local`. Never
+commit JWT secrets, Neon service-role keys, provider keys, webhook secrets,
+managed compute tokens, or production URLs that imply secret access.
 
 `NEON_DATABASE_URL` backs two separate connection strategies out of `src/lib/neonClients.ts`:
 
