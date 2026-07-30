@@ -29,7 +29,7 @@
       "name": "agiworkforce-licensing",
       "path": "crates/agiworkforce-licensing",
       "kind": "crate",
-      "purpose": "Offline, panic-free verification of enterprise-Local **licenses** (`.agilicense`) and **org policies** (`.agipolicy`) — the Rust half of the P7 Enterprise Local licensing foundation (design `docs/enterprise/enterprise-local-design.md` §2..."
+      "purpose": "Offline, panic-free verification of Enterprise Local license and org-policy fixture contracts. It has no runtime consumer and is retained as the Rust half of the cross-language compatibility foundation accepted by `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`."
     },
     {
       "name": "agiworkforce-llm",
@@ -48,12 +48,6 @@
       "path": "crates/agiworkforce-model-registry",
       "kind": "crate",
       "purpose": "Typed Rust access to AGI Workforce's generated model registry and Auto routing policy."
-    },
-    {
-      "name": "agiworkforce-network-proxy",
-      "path": "crates/agiworkforce-network-proxy",
-      "kind": "crate",
-      "purpose": "Rust network proxy crate for controlled network access in AGI Workforce runtimes."
     },
     {
       "name": "agiworkforce-protocol",
@@ -239,7 +233,7 @@
       "name": "@agiworkforce/licensing",
       "path": "packages/contracts/licensing",
       "kind": "package",
-      "purpose": "`@agiworkforce/licensing` is the pure, offline-verifiable primitive for Enterprise Local licensing (design `docs/enterprise/enterprise-local-design.md` §2.1–§2.2). It verifies signed `.agilicense` and `.agipolicy` files with **zero I/O a..."
+      "purpose": "Pure, offline verification of Enterprise Local license and org-policy fixture contracts. It has no runtime consumer and is retained as the TypeScript half of the cross-language compatibility foundation accepted by `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`."
     },
     {
       "name": "@agiworkforce/trust-boundaries",

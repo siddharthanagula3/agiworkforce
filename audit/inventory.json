@@ -2049,7 +2049,7 @@
     "item": "ephemeral-message",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'postEphemeral'/'chat.postEphemeral'/'ephemeral' in a Slack context — zero hits (the only 'ephemeral' hits found are unrelated: prompt-cache 'ephemeral' cache_control in crates/agiworkforce-llm and ephemeral network ports in crates/agiworkforce-network-proxy)."
+    "evidence": "Grepped whole repo for 'postEphemeral'/'chat.postEphemeral'/'ephemeral' in a Slack context — zero hits; the remaining 'ephemeral' hits are unrelated cache-control, temporary-session, and OS-assigned-port concepts."
   },
   {
     "item": "block-kit-blocks",
@@ -2889,7 +2889,7 @@
     "item": "private-network-tunnel",
     "surface": "packages/tools/mcp",
     "status": "missing",
-    "evidence": "Repo-wide grep for tunnel/ngrok/cloudflared/localtunnel across apps, packages, crates, services turned up only crates/agiworkforce-network-proxy/src/{mitm.rs,http_proxy.rs} HTTP CONNECT-tunnel code for an unrelated egress/sandbox network proxy. The desktop's own local MCP server explicitly binds 127.0.0.1 and rejects non-loopback peers (apps/desktop/src-tauri/src/core/mcp/server/http_server.rs:65-69) with no mechanism to expose it beyond localhost."
+    "evidence": "Repo-wide grep for tunnel/ngrok/cloudflared/localtunnel across apps, packages, crates, and services found no private-network tunnel implementation. The desktop's own local MCP server explicitly binds 127.0.0.1 and rejects non-loopback peers (apps/desktop/src-tauri/src/core/mcp/server/http_server.rs:65-69), with no mechanism to expose it beyond localhost."
   },
   {
     "item": "connector-observability",
@@ -3675,7 +3675,7 @@
     "item": "egress-controls",
     "surface": "packages/safety",
     "status": "partial",
-    "evidence": "App/WebView layer is genuinely built and shared: packages/contracts/trust-boundaries/src/egress-policy.ts:90 isOurCloudHost() (boundary-safe suffix match over a reconciled our-cloud host list) is consumed by apps/desktop/src/lib/egressGuard.ts:99 guardedFetch() and apps/mobile/lib/egressGuard.ts:165 guardedFetch(), which fail-closed-block our-cloud egress whenever the app is in Local/BYOK trust boundary. guardedFetch is wired into real network call sites: apps/desktop/src/App.tsx, api/cloudApi.ts, runtime/CloudRuntime.ts, services/cloudAccountAuth.ts, services/desktopCloudAttachments.ts, services/desktopCloudProjectKnowledge.ts, lib/cloudChatPersistence.ts. Separately, apps/web/lib/egress-policy.ts's assertResolvedPublicHostname() SSRF-guards the url_fetch tool (see url-safety-check). A dedicated Rust HTTP/SOCKS5 MITM egress-policy proxy exists at crates/agiworkforce-network-proxy/src/{http_proxy,socks5,mitm,network_policy}.rs and is a declared dependency of crates/agiworkforce-protocol (Cargo.toml:20), surfaced only as an Option<SessionNetworkProxyRuntime> field (crates/agiworkforce-protocol/src/protocol.rs:3636), which is always constructed as None (protocol.rs:5246) and never set to Some(...) anywhere in the repo; no binary/CLI target spawns it either."
+    "evidence": "App/WebView layer is genuinely built and shared: packages/contracts/trust-boundaries/src/egress-policy.ts:90 isOurCloudHost() (boundary-safe suffix match over a reconciled our-cloud host list) is consumed by apps/desktop/src/lib/egressGuard.ts:99 guardedFetch() and apps/mobile/lib/egressGuard.ts:165 guardedFetch(), which fail-closed-block our-cloud egress whenever the app is in Local/BYOK trust boundary. guardedFetch is wired into real network call sites: apps/desktop/src/App.tsx, api/cloudApi.ts, runtime/CloudRuntime.ts, services/cloudAccountAuth.ts, services/desktopCloudAttachments.ts, services/desktopCloudProjectKnowledge.ts, lib/cloudChatPersistence.ts. Separately, apps/web/lib/egress-policy.ts's assertResolvedPublicHostname() SSRF-guards the url_fetch tool (see url-safety-check). The previously isolated Rust HTTP/SOCKS5 proxy was deleted after cargo metadata and call-site tracing proved that no executable instantiated it; an environment-variable proxy would not be an enforceable egress boundary because child processes can bypass it. Global OS-level egress enforcement remains incomplete, so this item stays partial."
   },
   {
     "item": "refusal-and-appeal-surface",

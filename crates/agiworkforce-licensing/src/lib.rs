@@ -1,6 +1,6 @@
 //! `agiworkforce-licensing` — the Rust half of the offline enterprise-Local
-//! licensing verify primitive (design `docs/enterprise/enterprise-local-design.md`
-//! §2.1 / §2.2).
+//! licensing verify primitive (retention boundary:
+//! `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`).
 //!
 //! This crate is a byte-for-byte re-implementation of the TypeScript
 //! `@agiworkforce/licensing` package (`packages/contracts/licensing`), including its

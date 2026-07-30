@@ -2,8 +2,8 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-06-25
-Last verified against implementation: 2026-06-25
+Last updated: 2026-07-30
+Last verified against implementation: 2026-07-30
 Audience: Architects, surface engineers, and AI agents making structural changes
 Layer: docs/00-foundation
 Document ID: AGI-DOC-0003
@@ -19,14 +19,14 @@ A polyglot monorepo: **pnpm workspace** (`apps/*`, `packages/*`, `packages/ai/pr
 
 - **Surfaces** (`apps/`): web, desktop, mobile, cli, extension (Chrome), extension-vscode, sandbox. (`AGI-SURF-0001`.)
 - **Shared TypeScript** (`packages/`, 21): contracts (`types`), suite spine (`unified-chat`), provider adapters (`providers/*`), `provider-protocol`, `provider-runtime`, `routing`, `mcp`, `browser-tool`, `local-llm`, `compliance`, `runtime`, `data-layer`, `ui`, `stores`, `skills`, `api`, etc.
-- **Shared Rust** (`crates/`, 17): `protocol`, `apply-patch`, `network-proxy`, `execpolicy`, `sandbox-policy`, `plugin-runtime`, `command-registry`, `task-runtime`, `app-server`, utility crates.
+- **Shared Rust** (`crates/`, 12): `agent-core`, `app-server`, `command-registry`, `execpolicy`, `licensing`, `llm`, `mcp`, `model-registry`, `protocol`, `sandbox-policy`, and two utility crates.
 - **Services** (`services/`): `api-gateway` (Express 5 managed-compute proxy), `signaling-server` (WebRTC pairing).
 - **Database**: `apps/web/db/neon` (canonical Neon Postgres migrations, `0001`–`0042`).
 
 ## 2. Layering (Current)
 
 1. **Contracts** — `packages/contracts/types` (`suite-contracts.ts`, `models.json` SSOT), `crates/agiworkforce-protocol`.
-2. **Mechanics** — provider adapters, `provider-protocol`, `provider-runtime`, `routing`, `mcp`, `browser-tool`; Rust `execpolicy`/`sandbox-policy`/`network-proxy`.
+2. **Mechanics** — provider adapters, `provider-protocol`, `provider-runtime`, `routing`, `mcp`, `browser-tool`; Rust `execpolicy` and `sandbox-policy`.
 3. **Orchestration** — `packages/ui/unified-chat` (suite spine) + per-surface runtimes.
 4. **Surfaces** — the seven apps.
 
@@ -71,7 +71,7 @@ Invariants: `AGI-TRUST-0001`…`AGI-TRUST-0004`, `AGI-SYNC-0001` ([requirement-i
 ## 8. Security model (Current)
 
 - Trust boundaries enforced in code (`suite-contracts.ts`; CLI `agent/mod.rs::validate_privacy_boundary`; desktop `egressGuard.ts`). Egress guard is **opt-in / fetch-scoped** today, not a global interceptor.
-- Secrets: OS keychain + Stronghold vault (desktop), secure-store (mobile), keyring (CLI). Rust policy crates (`execpolicy`, `sandbox-policy`, `network-proxy`). Extension threat model in `apps/extension/THREAT_MODEL.md`.
+- Secrets: OS keychain + Stronghold vault (desktop), secure-store (mobile), keyring (CLI). Rust policy crates (`execpolicy`, `sandbox-policy`). Extension threat model in `apps/extension/THREAT_MODEL.md`.
 - Compliance: EU AI Act Article 50 disclosure + provenance + Chinese-HQ-provider opt-in (`packages/contracts/compliance`, `AGI-COMP-0001`).
 
 ## 9. Identity (Current)

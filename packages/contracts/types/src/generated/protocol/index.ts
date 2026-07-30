@@ -224,7 +224,6 @@ export * from './ReviewRequest';
 export * from './ReviewTarget';
 export * from './ServiceTier';
 export * from './SessionConfiguredEvent';
-export * from './SessionNetworkProxyRuntime';
 export * from './SkillDependencies';
 export * from './SkillErrorInfo';
 export * from './SkillInterface';

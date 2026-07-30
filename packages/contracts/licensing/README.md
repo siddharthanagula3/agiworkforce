@@ -2,15 +2,16 @@
 
 Status: Current
 Owner role: Platform lead
-Last updated: 2026-07-15
+Last updated: 2026-07-30
 Kind: ts-package
 Criticality: high
 
 ## Purpose
 
 `@agiworkforce/licensing` is the pure, offline-verifiable primitive for
-Enterprise Local licensing (design `docs/enterprise/enterprise-local-design.md`
-§2.1–§2.2). It verifies signed `.agilicense` and `.agipolicy` files with
+Enterprise Local licensing (retention boundary:
+`docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`). It verifies
+signed `.agilicense` and `.agipolicy` files with
 **zero I/O and zero network** so Local deployments license offline, and it NEVER throws and NEVER
 gates data access — only enterprise _features_ are gated, and any invalid or
 expired-past-grace license resolves to a structured verdict the caller uses to
@@ -19,15 +20,15 @@ degrade to the free Local tier.
 This package is the mechanism only. It is NOT wired into any app runtime, UI, or
 enforcement path — that is a later, separately-scoped step. Editions, per-seat
 pricing, the concrete `features[]` flag list, seat true-up posture, and the
-activation-ping option are founder decisions (design §4) and are intentionally
-absent: `features[]` is validated as an OPEN string array and never enumerated.
+activation-ping option require a complete, approved runtime design and are
+intentionally absent: `features[]` is validated as an OPEN string array and
+never enumerated.
 
 ## Consumers
 
-- `@agiworkforce/services` — transitional compatibility re-export for the
-  `./org-policy` subpath.
-- `crates/agiworkforce-licensing` is the Rust counterpart and replays the same
-  fixture corpus; app enforcement remains deliberately unwired.
+No runtime consumers. `crates/agiworkforce-licensing` is the Rust counterpart
+and replays the same fixture corpus; both modules are retained solely as the
+cross-language contract-test foundation accepted by the retention ADR.
 
 ## Public API / Exports
 

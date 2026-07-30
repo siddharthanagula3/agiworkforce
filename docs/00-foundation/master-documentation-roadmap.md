@@ -2292,7 +2292,7 @@ The complete documentation hierarchy. Each volume maps to the planned IA and, fo
 - **Chapters:**
   - **CH-26.04.01 — Next.js 16 proxy.ts and the proxy function (naming lock)** — depends-on: none · references: `apps/web/proxy.ts`, constitution §35, Article IV (naming lock) · related features: edge routing · est pages: 14 · difficulty: high · review checklist: proxy.ts not renamed; naming lock honored
   - **CH-26.04.02 — Host-based rewrites and surface routing** — depends-on: CH-26.04.01 · references: `apps/web/proxy.ts` · related features: multi-surface routing · est pages: 12 · difficulty: med · review checklist: evidence-cited; no invented hosts
-  - **CH-26.04.03 — Edge SSRF surface and hardening pointers** — depends-on: CH-26.04.01 · references: Security Spec (SSRF — referenced), `crates/network-proxy` · related features: SSRF defense · est pages: 12 · difficulty: high · review checklist: references Security Spec not restating; trust-boundary correct
+  - **CH-26.04.03 — Edge SSRF surface and hardening pointers** — depends-on: CH-26.04.01 · references: Security Spec (SSRF — referenced), `apps/web/lib/egress-policy.ts`, `packages/contracts/trust-boundaries/src/egress-policy.ts` · related features: SSRF defense · est pages: 12 · difficulty: high · review checklist: references Security Spec not restating; trust-boundary correct
 
 ---
 

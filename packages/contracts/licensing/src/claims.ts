@@ -1,16 +1,17 @@
 /**
  * License claims — the signed payload of an `.agilicense` file.
  *
- * Mirrors `docs/enterprise/enterprise-local-design.md` §2.1 exactly. The claims
- * are a plain JSON document; the `.agilicense` container (see `container.ts`)
- * wraps them with a detached Ed25519 signature.
+ * Contract fixture retained under
+ * `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`. The
+ * claims are a plain JSON document; the `.agilicense` container (see
+ * `container.ts`) wraps them with a detached Ed25519 signature.
  *
  * Design invariants encoded here:
  *   - `features[]` is an OPEN string array. This package deliberately does NOT
  *     enumerate product capability flags — the concrete flag list is a founder
- *     pricing/edition decision (design §4.1) populated out-of-band by the
- *     issuer. Verification treats them as opaque strings.
- *   - `edition` is the only closed enum (`team` | `enterprise`), per the design.
+ *     pricing/edition decision populated out-of-band by the issuer.
+ *     Verification treats them as opaque strings.
+ *   - `edition` is the only closed enum (`team` | `enterprise`).
  *   - `issuedAt` / `expiresAt` are Unix epoch MILLISECONDS as integers. Integer
  *     epochs are chosen over ISO strings so the Rust `agiworkforce-licensing`
  *     crate can replay the same fixture corpus without date-parsing ambiguity.
@@ -21,17 +22,17 @@
 
 import { z } from 'zod';
 
-/** License editions. The only closed enum in the claims (design §2.1). */
+/** License editions. The only closed enum in the claims fixture contract. */
 export const EditionSchema = z.enum(['team', 'enterprise']);
 export type Edition = z.infer<typeof EditionSchema>;
 
 /**
- * `LicenseClaims` — the exact claim set from design §2.1.
+ * `LicenseClaims` — the exact claim set used by the shared fixture contract.
  *
  * Note on `features`/`edition`/`seats` VALUES: the mechanism is defined here,
  * but which features each edition grants, the seat semantics, and the price are
- * founder-gated (design §4). This schema validates SHAPE only; it never asserts
- * that any particular feature flag exists.
+ * outside this verifier boundary. This schema validates SHAPE only; it never
+ * asserts that any particular feature flag exists.
  */
 export const LicenseClaimsSchema = z
   .object({

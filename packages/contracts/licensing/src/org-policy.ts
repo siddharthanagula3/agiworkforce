@@ -1,6 +1,6 @@
 /**
- * Signed **org policy** (enterprise Local, design
- * `docs/enterprise/enterprise-local-design.md` §2.2).
+ * Signed **org policy** fixture contract retained under
+ * `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`.
  *
  * An org policy is a signed data document that admins distribute (file drop,
  * MDM, or self-hosted gateway) and every all-mode surface enforces locally. It
@@ -18,9 +18,9 @@
  * tightens against.
  *
  * Scope note: this pass ships the schema + verifier + fixtures only. It is not
- * wired into any surface's enforcement path (design §2.2 enforcement points are
- * a later, per-surface step). The `packages/contracts/types/src/suite-contracts.ts`
- * mirror named in the design remains intentionally deferred.
+ * wired into any surface's enforcement path. Any future enforcement path
+ * requires the complete design and superseding ADR described by the retention
+ * decision.
  */
 
 import { z } from 'zod';
