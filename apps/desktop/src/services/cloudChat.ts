@@ -3,7 +3,6 @@ import type {
   ManagedCloudMessage,
   ManagedCloudUpdateConversationRequest,
 } from '@agiworkforce/cloud-contracts';
-import { invoke } from '@tauri-apps/api/core';
 import { getDesktopCloudChatPersistenceClient } from '../lib/cloudChatPersistence';
 import {
   assertManagedCloudBoundary,
@@ -51,12 +50,6 @@ export interface CloudMessage {
   tool_results: unknown | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
-}
-
-export interface TransferResult {
-  conversation_id: string;
-  messages_transferred: number;
-  direction: 'local_to_cloud' | 'cloud_to_local';
 }
 
 const readyConversationIds = new Set<string>();
@@ -355,30 +348,4 @@ export async function createCloudMessage(params: CreateCloudMessageParams): Prom
     metadata: null,
     created_at: now,
   };
-}
-
-// Explicit user-approved boundary transfers remain native because the Rust
-// side owns local DB access, redaction, payload preview, and source deletion.
-export async function transferLocalToCloud(
-  conversationId: number,
-  userId: string,
-  deleteSource: boolean,
-): Promise<TransferResult> {
-  return invoke<TransferResult>('transfer_local_to_cloud', {
-    conversationId,
-    userId,
-    deleteSource,
-  });
-}
-
-export async function transferCloudToLocal(
-  cloudConversationId: string,
-  userId: string,
-  deleteSource: boolean,
-): Promise<TransferResult> {
-  return invoke<TransferResult>('transfer_cloud_to_local', {
-    cloudConversationId,
-    userId,
-    deleteSource,
-  });
 }

@@ -13,7 +13,6 @@ pub mod agent_mode;
 pub mod attachments;
 pub mod branching;
 pub mod browser_context;
-pub mod cloud;
 pub mod compaction;
 pub mod context_monitor;
 pub mod control;
@@ -41,7 +40,6 @@ pub mod tool_events;
 pub mod tool_execution;
 pub mod tool_timeouts;
 pub mod tools;
-pub mod transfer;
 pub mod types;
 #[cfg(test)]
 pub use crate::sys::commands::chat::state::should_stop_generation;
@@ -49,7 +47,6 @@ pub use crate::sys::commands::chat::state::{
     reset_stop_flag, should_stop_for_conversation, AppDatabase,
 };
 pub use branching::*;
-pub use cloud::*;
 pub use compaction::*;
 pub use control::*;
 pub use conversation::*;
@@ -59,7 +56,6 @@ pub use intent::*;
 pub use maintenance::*;
 pub use search::*;
 pub use send_message::*;
-pub use transfer::*;
 pub use types::*;
 
 use crate::sys::commands::chat::agent_mode::{detect_agent_mode, is_explicit_model_selection};
