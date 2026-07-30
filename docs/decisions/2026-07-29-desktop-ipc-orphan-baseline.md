@@ -1,6 +1,6 @@
 # Baseline Desktop IPC Registrations Without Literal Callers
 
-Status: Accepted
+Status: Accepted — reconciled
 
 Date: 2026-07-29
 
@@ -14,10 +14,9 @@ sources for literal command calls. After removing phantom frontend calls and
 unregistered renderer-exposed billing commands, 97 registered commands remain
 without a statically discoverable caller.
 
-Some commands are invoked through runtime-selected names, while the rest are
-preexisting integration debt that must be wired or cut in Ticket 1C. Failing
-the entire branch before that bounded reconciliation would prevent the guard
-from landing and allow new orphan registrations to accumulate.
+Some commands were invoked through runtime-selected names, while the rest were
+preexisting integration debt to wire or cut in Ticket 1C. The temporary
+baseline allowed the guard to land without permitting new orphan registrations.
 
 ## Decision
 
@@ -26,7 +25,6 @@ registered command without a literal production caller.
 
 - Every entry names one registered command and gives a substantive reason.
 - Entries with confirmed runtime-selected call sites identify that mechanism.
-- Other entries explicitly say they are temporary Ticket 1C debt.
 - The checker rejects duplicate, unregistered, or newly called entries as
   stale.
 - Adding a new entry requires updating this decision or superseding it; the
@@ -38,9 +36,9 @@ The integration inventory remains authoritative for product status.
 ## Consequences
 
 CI now fails on every new frontend-to-native mismatch, every unregistered
-Tauri command, and every new orphan registration. Ticket 1C has a finite,
-machine-enforced baseline to reconcile without weakening checks for subsequent
-changes.
+Tauri command definition, and every new orphan registration. Ticket 1C is
+reconciled: the only reviewed exceptions are three runtime-selected local-model
+commands with verified dispatch tables.
 
 ## Ticket 1C Progress
 
@@ -59,3 +57,7 @@ changes.
   queue, debug analysis, native GitHub browser, and `/doctor` endpoints. Mounted
   background-agent/Git paths and sanitized startup diagnostics remain. The
   reviewed allowance count decreased from 77 to 55.
+- 2026-07-30: removed the final 52 uncalled Tauri registrations and their
+  command attributes, retaining internal Rust functions where they still have
+  native callers. Obsolete development mocks were pruned. Ticket 1C closes with
+  zero temporary exceptions and three reviewed runtime-dispatch entries.

@@ -432,7 +432,6 @@ pub struct VaultMigrationReport {
 /// Requires the vault to be unlocked. Each table's pass runs inside its
 /// own SQLite transaction so a crash mid-migration leaves the schema in
 /// a consistent state.
-#[tauri::command]
 pub async fn master_password_migrate_credentials(
     encryption: State<'_, crate::sys::security::MasterPasswordEncryption>,
     db: State<'_, crate::sys::commands::AppDatabase>,

@@ -21,7 +21,6 @@ pub async fn budget_get_status(
 
 /// Update the per-day cap. Returns the new cap so the caller can confirm
 /// the value the guard now enforces (in case it was clamped).
-#[tauri::command]
 pub async fn budget_set_cap_usd(
     new_cap_usd: f64,
     guard: State<'_, DailyBudgetGuard>,
@@ -32,7 +31,6 @@ pub async fn budget_set_cap_usd(
 /// Record a completed-call cost into today's bucket. Called by the LLM
 /// router after `cost_calculator` returns, so the budget reflects
 /// post-stream actuals rather than pre-flight estimates.
-#[tauri::command]
 pub async fn budget_record_actual(
     user_id: String,
     actual_cost_usd: f64,

@@ -181,7 +181,6 @@ const ALLOWED_GENERIC_COMMANDS = new Set([
   'export_roi_report',
   'export_user_data',
   'favorite_workflow',
-  'fetch_credit_balance',
   'fetch_user_profile',
   'find_all_elements_semantic',
   'find_by_role',

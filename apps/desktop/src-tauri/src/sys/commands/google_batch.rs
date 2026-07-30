@@ -480,7 +480,6 @@ pub async fn google_batch_create_jsonl(
 /// Compatibility command the frontend can poll to decide whether to render a
 /// Google Batch unavailable/local-preview banner. The command name is retained
 /// for existing UI bindings.
-#[tauri::command]
 pub async fn google_batch_is_beta_stub() -> Result<bool, String> {
     Ok(!google_batch_local_preview_enabled())
 }

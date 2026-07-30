@@ -40,7 +40,6 @@ impl CodebaseServiceState {
 // Tauri commands
 // ---------------------------------------------------------------------------
 
-#[tauri::command]
 pub async fn index_workspace_file(
     file_path: String,
     state: tauri::State<'_, CodebaseServiceState>,
@@ -50,7 +49,6 @@ pub async fn index_workspace_file(
     indexer.index_file(&path).await
 }
 
-#[tauri::command]
 pub async fn search_symbols(
     query: String,
     limit: Option<usize>,
@@ -60,7 +58,6 @@ pub async fn search_symbols(
     indexer.search_symbols(&query, limit.unwrap_or(50)).await
 }
 
-#[tauri::command]
 pub async fn get_file_symbols(
     file_path: String,
     state: tauri::State<'_, CodebaseServiceState>,
@@ -69,7 +66,6 @@ pub async fn get_file_symbols(
     indexer.get_file_symbols(&file_path).await
 }
 
-#[tauri::command]
 pub async fn get_index_stats(
     state: tauri::State<'_, CodebaseServiceState>,
 ) -> Result<IndexStats, String> {

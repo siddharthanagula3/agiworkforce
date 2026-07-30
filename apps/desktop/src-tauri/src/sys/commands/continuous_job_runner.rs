@@ -2875,7 +2875,6 @@ async fn run_continuous_loop(
     handle.take();
 }
 
-#[tauri::command]
 pub async fn continuous_job_runner_start(
     app_handle: AppHandle,
     mut request: ContinuousJobRunnerRequest,
@@ -2997,7 +2996,6 @@ pub async fn continuous_job_runner_start(
     Ok(read_status().await)
 }
 
-#[tauri::command]
 pub async fn continuous_job_runner_stop(
     reason: Option<String>,
 ) -> Result<ContinuousJobRunnerStatus, String> {
@@ -3021,7 +3019,6 @@ pub async fn continuous_job_runner_stop(
     Ok(read_status().await)
 }
 
-#[tauri::command]
 pub async fn continuous_job_runner_status() -> Result<ContinuousJobRunnerStatus, String> {
     Ok(read_status().await)
 }

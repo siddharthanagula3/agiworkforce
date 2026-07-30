@@ -96,7 +96,6 @@ pub async fn document_create_word(
     Ok(resolved_path)
 }
 
-#[tauri::command]
 pub async fn document_create_word_manifest(
     output_path: String,
     config: WordDocumentConfig,
@@ -142,7 +141,6 @@ pub async fn document_create_excel(
     Ok(resolved_path)
 }
 
-#[tauri::command]
 pub async fn document_create_excel_manifest(
     output_path: String,
     config: ExcelDocumentConfig,
@@ -212,7 +210,6 @@ pub async fn document_create_pdf(
     Ok(resolved_path)
 }
 
-#[tauri::command]
 pub async fn document_create_pdf_manifest(
     output_path: String,
     config: PdfDocumentConfig,
@@ -257,7 +254,6 @@ pub async fn document_create_powerpoint(
     Ok(resolved_path)
 }
 
-#[tauri::command]
 pub async fn document_create_powerpoint_manifest(
     output_path: String,
     config: PresentationConfig,
