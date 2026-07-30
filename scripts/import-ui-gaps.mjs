@@ -157,6 +157,64 @@ function reconcileCurrentPremises(record) {
       suggestedFix:
         'Completed. Keep SETTINGS_PANEL_SETTING_KEYS in parity with every non-deprecated mutable package contribution, keep webview messages runtime-validated, and route future privileged settings through their enforcement or consent boundary. Hooks and a VS Code plugin registry remain capability-honest empty states until their local runtimes exist; per-server MCP management remains tracked in the P1 extensibility epic.',
     },
+    'GAP-124': {
+      status: 'Done',
+      owner: 'VS Code',
+      title: 'Max reasoning plus Bypass Permissions requires compound-risk consent',
+      detail:
+        'The extension now treats Bypass Permissions plus Max reasoning as a distinct elevated state. Entering the pair from either direction opens a cancelable modal that names command, network-tool, granted-file, plan-limit, mistake, and prompt-injection impact. Cancel preserves the prior mode and effort; confirmation is remembered only while the exact elevated pair remains active, so leaving and re-entering requires fresh acknowledgement.',
+      evidence:
+        'apps/extension-vscode/src/features/permissions/agentModeConsent.ts owns both the base bypass consent and the Max-plus-Bypass compound-risk boundary. setAgentModeWithConsent and setAgentEffortWithConsent validate the resulting pair before either configuration write; raw settings edits fail closed to Auto or High and use the same modal before restoration. platform/config.ts, commandSetup.ts, ChatStateManager.ts, SettingsPanel.ts, and extension.ts route branded Settings, both QuickPick surfaces, sidebar messages, activation, and configuration-change reconciliation through that boundary. agentModeConsent.test.ts covers cancellation, scope/risk copy, active-pair acknowledgement, raw-edit reconciliation, and fresh consent after leaving the pair; GAP-012-settings-panel.test.ts verifies the branded editor cannot bypass it.',
+      suggestedFix:
+        'Completed. Keep agent.mode and agent.effort writes centralized in the two consent-aware setters, version the acknowledgement when risk copy or scope changes, and preserve the raw-settings fail-closed reconciliation.',
+    },
+    'GAP-129': {
+      status: 'Done',
+      owner: 'VS Code',
+      title: 'VS Code opens the branded AGI Settings editor instead of raw settings',
+      detail:
+        'The extension now opens a branded in-editor Settings tab with the reference section rail: General, Configuration, Personalization, Usage & billing, MCP servers, Hooks, Plugins, and Account. Normal entry points no longer fall back to the raw key/value page; raw VS Code settings remain available only through an explicit escape-hatch button. Plugin, hook, and per-server MCP runtime depth remains separately tracked by GAP-133 through GAP-138.',
+      evidence:
+        'apps/extension-vscode/src/features/settings/SettingsPanel.ts owns the singleton editor and settingsWebviewContent.ts renders the complete information architecture. commandSetup.ts registers agi-workforce.openSettings and contributes a sidebar title action; ChatStateManager.ts, desktopBridge.ts, and the account menu route to it. GAP-012-settings-panel.test.ts, GAP-012-settings-webview.webview.test.ts, commandParity.test.ts, and the real Extension Host smoke suite verify hosting, navigation, entry-point registration, and the explicit raw-settings escape hatch.',
+      suggestedFix:
+        'Completed. Keep normal settings entry points on agi-workforce.openSettings and track missing runtime-backed hook, plugin, and MCP management in their dedicated rows rather than reopening this duplicate screen-level finding.',
+    },
+    'GAP-131': {
+      title: 'VS Code Configuration lacks runtime-backed approval and sandbox policy controls',
+      detail:
+        'The branded Configuration section now exposes user-scoped extension and bridge settings, and General exposes the consent-aware agent-mode control. It still has no allowed-directory editor, command allow/deny policy, or sandbox scope backed by the local runtime, so the durable enforcement rules remain undiscoverable and uneditable from VS Code.',
+      evidence:
+        'apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders Configuration and the agent-mode control, while platform/config.ts covers extension-owned settings only. Searched apps/extension-vscode/src for runtime-backed sandbox, allowed-directory, and command-policy configuration; no extension integration exists. Desktop counterparts remain AllowedDirectoriesSettings.tsx and AgentExecutionSettings.tsx.',
+      suggestedFix:
+        'Extend the branded Configuration section only after the local app-server exposes a typed read/write policy contract: show allowed workspace directories, command allow/deny rules, and sandbox scope with copy naming the enforcing boundary. Do not mirror values that the runtime will ignore.',
+    },
+    'GAP-133': {
+      title: 'Hooks has an honest empty state but cannot enumerate or manage runtime hooks',
+      detail:
+        'The branded VS Code Settings editor now includes a Hooks section and accurately states that hooks are local-runtime configuration rather than extension-owned cloud state. It cannot yet read configured hooks, show event/command/source/trust, refresh them, or disable an individual hook, so users still cannot audit code that may run on their machine.',
+      evidence:
+        'apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders the Hooks section, no-extension-hooks empty state, and documentation handoff. No protocol, localRuntimeClient capability, or command currently returns hook inventory to the extension.',
+      suggestedFix:
+        'Add a typed app-server hook-inventory capability, then render event, command, source (config vs plugin), trust status, refresh, and per-hook disable in the existing Hooks section. Preserve the current empty state when the runtime reports no hooks.',
+    },
+    'GAP-134': {
+      title: 'MCP Settings lacks a runtime server list, per-server toggle, config, and Add server',
+      detail:
+        'The branded MCP servers section now makes the trust boundary explicit and retains the extension-owned cloud-utility master toggle. The local CLI remains runtime-owned, but the extension still cannot list its servers, show connected/failed state, disable one server, open its config, or add a server.',
+      evidence:
+        'apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders the MCP section, mcp.enabled master control, local-runtime ownership copy, and connector/docs handoffs. platform/config.ts exposes only mcp.enabled; localRuntimeClient and the settings protocol expose no per-server inventory or mutation contract.',
+      suggestedFix:
+        'Add a typed local-runtime MCP status/config capability, then populate the existing section with connected/failed rows, per-server enable controls, configure actions, and an Add server flow. Keep the current global boolean scoped to cloud editor utilities.',
+    },
+    'GAP-137': {
+      title: 'VS Code Plugins section cannot list or control installed plugins and skills',
+      detail:
+        'The branded Settings editor now has a Plugins destination, an honest no-registry state, and explicit Web/docs handoffs. It still lacks a runtime-backed installed plugin or skill list, counts, provenance, enablement controls, and composer integration, so developers cannot inspect which local capabilities are active from the IDE.',
+      evidence:
+        'apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders the Plugins section and capability-honest empty state. No extension protocol or localRuntimeClient capability returns installed plugins, commands, skills, or agents; the desktop resolver and web catalogue remain separate implementations.',
+      suggestedFix:
+        'Expose a typed installed-capability inventory from the local runtime, then populate the existing Plugins section with counts, provenance, availability, per-item controls where enforcement exists, and a catalogue handoff. Keep the no-registry state when that capability is absent.',
+    },
     'GAP-096': {
       title: 'Connections mounts live pairing, but multi-device management remains incomplete',
       detail:

@@ -129,7 +129,8 @@ export class SettingsPanel {
         await this.refresh();
         await this.post({
           type: 'settings.error',
-          message: 'Bypass Permissions was not enabled. Your previous agent mode is unchanged.',
+          message:
+            'The elevated control combination was not enabled. Your previous settings are unchanged.',
         });
         return;
       }

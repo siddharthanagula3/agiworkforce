@@ -46,7 +46,10 @@ import {
 } from '../features/model-picker/modelConstants';
 import * as telemetry from './telemetry';
 import { recordFailure } from './subsystemHealth';
-import { setAgentModeWithConsent } from '../features/permissions/agentModeConsent';
+import {
+  setAgentEffortWithConsent,
+  setAgentModeWithConsent,
+} from '../features/permissions/agentModeConsent';
 import { SettingsPanel } from '../features/settings';
 
 const execFileAsync = promisify(execFile);
@@ -846,12 +849,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           });
           const selectedEffort = effortPick?.value;
           if (selectedEffort !== undefined) {
-            await vscode.workspace
-              .getConfiguration('agiWorkforce')
-              .update('agent.effort', selectedEffort, vscode.ConfigurationTarget.Global);
-            vscode.window.showInformationMessage(
-              `AGI Workforce effort set to: ${cap(selectedEffort)}`,
-            );
+            if (await setAgentEffortWithConsent(context, selectedEffort)) {
+              vscode.window.showInformationMessage(
+                `AGI Workforce effort set to: ${cap(selectedEffort)}`,
+              );
+            }
           }
           break;
         }
@@ -1042,12 +1044,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         matchOnDescription: true,
       });
       if (effortPick?.detail !== undefined) {
-        await vscode.workspace
-          .getConfiguration('agiWorkforce')
-          .update('agent.effort', effortPick.detail, vscode.ConfigurationTarget.Global);
-        vscode.window.showInformationMessage(
-          `AGI Workforce effort set to: ${capEffort(effortPick.detail)}`,
-        );
+        const selectedEffort = effortPick.detail as 'low' | 'medium' | 'high' | 'max';
+        if (await setAgentEffortWithConsent(context, selectedEffort)) {
+          vscode.window.showInformationMessage(
+            `AGI Workforce effort set to: ${capEffort(selectedEffort)}`,
+          );
+        }
       }
     }),
 

@@ -19,6 +19,7 @@
 import * as vscode from 'vscode';
 import {
   enforceAgentModeConsent,
+  setAgentEffortWithConsent,
   setAgentModeWithConsent,
   type ExtensionAgentMode,
 } from '../features/permissions/agentModeConsent';
@@ -322,6 +323,9 @@ export const Config = {
   async update(context: vscode.ExtensionContext, update: ConfigSettingUpdate): Promise<boolean> {
     if (update.key === 'agent.mode') {
       return setAgentModeWithConsent(context, update.value);
+    }
+    if (update.key === 'agent.effort') {
+      return setAgentEffortWithConsent(context, update.value);
     }
     await vscode.workspace
       .getConfiguration('agiWorkforce')

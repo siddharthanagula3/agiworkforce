@@ -152,7 +152,42 @@ describe('SettingsPanel', () => {
     expect(panelPostMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'settings.error',
-        message: expect.stringContaining('Bypass Permissions was not enabled'),
+        message: expect.stringContaining('elevated control combination was not enabled'),
+      }),
+    );
+  });
+
+  it('routes Max effort through the compound-risk guard while bypass is active', async () => {
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce({
+      title: 'Turn On Bypass Permissions',
+    });
+    SettingsPanel.createOrShow(context);
+    await webviewMessageHandler!({
+      type: 'settings.update',
+      key: 'agent.mode',
+      value: 'bypass',
+    });
+    configurationUpdate.mockClear();
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce({
+      title: 'Keep Safer Settings',
+      isCloseAffordance: true,
+    });
+
+    await webviewMessageHandler!({
+      type: 'settings.update',
+      key: 'agent.effort',
+      value: 'max',
+    });
+
+    expect(configurationUpdate).not.toHaveBeenCalledWith(
+      'agent.effort',
+      'max',
+      vscode.ConfigurationTarget.Global,
+    );
+    expect(panelPostMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'settings.error',
+        message: expect.stringContaining('elevated control combination was not enabled'),
       }),
     );
   });
