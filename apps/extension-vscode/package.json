@@ -694,8 +694,14 @@
             "plan",
             "bypass"
           ],
+          "enumDescriptions": [
+            "Ask before edits and commands.",
+            "Run safe, read-only operations automatically; require approval for writes and commands.",
+            "Propose a plan before making edits.",
+            "Skip approval prompts for workspace/additional-directory, terminal, network-capable command, and configured MCP tool access. Selecting this requires a modal risk confirmation."
+          ],
           "default": "auto",
-          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' runs safe, read-only operations automatically while writes and commands still require approval, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts."
+          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' runs safe, read-only operations automatically while writes and commands still require approval, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation."
         },
         "agiWorkforce.agent.effort": {
           "type": "string",
