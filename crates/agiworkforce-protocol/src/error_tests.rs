@@ -84,7 +84,6 @@ fn sandbox_denied_uses_aggregated_output_when_stderr_empty() {
     };
     let err = AgiworkforceErr::Sandbox(SandboxErr::Denied {
         output: Box::new(output),
-        network_policy_decision: None,
     });
     assert_eq!(get_error_message_ui(&err), "aggregate detail");
 }
@@ -101,7 +100,6 @@ fn sandbox_denied_reports_both_streams_when_available() {
     };
     let err = AgiworkforceErr::Sandbox(SandboxErr::Denied {
         output: Box::new(output),
-        network_policy_decision: None,
     });
     assert_eq!(get_error_message_ui(&err), "stderr detail\nstdout detail");
 }
@@ -118,7 +116,6 @@ fn sandbox_denied_reports_stdout_when_no_stderr() {
     };
     let err = AgiworkforceErr::Sandbox(SandboxErr::Denied {
         output: Box::new(output),
-        network_policy_decision: None,
     });
     assert_eq!(get_error_message_ui(&err), "stdout only");
 }
@@ -162,7 +159,6 @@ fn sandbox_denied_reports_exit_code_when_no_output_available() {
     };
     let err = AgiworkforceErr::Sandbox(SandboxErr::Denied {
         output: Box::new(output),
-        network_policy_decision: None,
     });
     assert_eq!(
         get_error_message_ui(&err),

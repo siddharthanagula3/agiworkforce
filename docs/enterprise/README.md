@@ -9,11 +9,10 @@ Purpose: durable enterprise-readiness plans, commercial guardrails, admin-contro
 
 1. [`profit-first-enterprise-readiness.md`](./profit-first-enterprise-readiness.md) - bootstrapped enterprise posture and launch gates.
 2. [`control-plane.md`](./control-plane.md) - shared contracts, database tables, API routes, and Web admin entry point.
-3. [`enterprise-local-design.md`](./enterprise-local-design.md) - Enterprise Local edition design (offline licensing, signed org policy, audit export, self-hosted gateway); verify primitive built (TS `@agiworkforce/licensing` + Rust `agiworkforce-licensing`), implementation gated on founder §4 decisions.
-4. [`enterprise-local-pricing-decisions.md`](./enterprise-local-pricing-decisions.md) - Recommended answers to the four §4 decisions (editions/pricing, seat true-up, identity tier, activation ping) for founder sign-off.
-5. [`../current/commercial-and-launch.md`](../current/commercial-and-launch.md) - commercial, payment-risk, and managed-compute gates.
-6. [`../current/technical-architecture.md`](../current/technical-architecture.md) - enterprise control-plane architecture and ownership.
-7. [`../decisions/CURRENT_DECISIONS.md`](../decisions/CURRENT_DECISIONS.md) - current managed-cloud and mobile-v1 decisions.
+3. [`../decisions/2026-07-30-enterprise-local-verifier-retention.md`](../decisions/2026-07-30-enterprise-local-verifier-retention.md) - the accepted boundary for the offline TypeScript/Rust verification primitives; no Enterprise Local runtime or entitlement claim is currently shipped.
+4. [`../current/commercial-and-launch.md`](../current/commercial-and-launch.md) - commercial, payment-risk, and managed-compute gates.
+5. [`../current/technical-architecture.md`](../current/technical-architecture.md) - enterprise control-plane architecture and ownership.
+6. [`../decisions/CURRENT_DECISIONS.md`](../decisions/CURRENT_DECISIONS.md) - current managed-cloud and mobile-v1 decisions.
 
 ## Rules
 

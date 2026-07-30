@@ -17,7 +17,6 @@ chardetng = "0.1.17"
 chrono = { version = "0.4.43", features = ["serde"] }
 async-trait = "0.1.89"
 agiworkforce-execpolicy = { path = "../agiworkforce-execpolicy" }
-agiworkforce-network-proxy = { path = "../agiworkforce-network-proxy" }
 agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
 agiworkforce-utils-image = { path = "../agiworkforce-utils-image" }
 regex-lite = "0.1.8"
@@ -37,7 +36,7 @@ strum = "0.27.2"
 strum_macros = "0.28.0"
 sys-locale = "0.3.2"
 thiserror = "2.0.17"
-tokio = "1"
+tokio = { version = "1", features = ["macros", "rt", "time"] }
 tracing = "0.1.44"
 ts-rs = { version = "11", features = [ "uuid-impl", "serde-json-impl", "no-serde-warnings", ] }
 uuid = { version = "1", features = ["serde", "v7", "v4"] }

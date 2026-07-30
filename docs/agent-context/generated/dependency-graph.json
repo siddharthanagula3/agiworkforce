@@ -738,7 +738,6 @@
       "agiworkforce-llm",
       "agiworkforce-mcp",
       "agiworkforce-model-registry",
-      "agiworkforce-network-proxy",
       "agiworkforce-protocol",
       "agiworkforce-sandbox-policy",
       "agiworkforce-utils-absolute-path",
@@ -830,16 +829,8 @@
         "to": "agiworkforce-protocol"
       },
       {
-        "from": "agiworkforce-network-proxy",
-        "to": "agiworkforce-utils-absolute-path"
-      },
-      {
         "from": "agiworkforce-protocol",
         "to": "agiworkforce-execpolicy"
-      },
-      {
-        "from": "agiworkforce-protocol",
-        "to": "agiworkforce-network-proxy"
       },
       {
         "from": "agiworkforce-protocol",

@@ -23,7 +23,6 @@ pub mod message_history;
 #[path = "generated/model_registry.rs"]
 pub mod model_registry;
 pub mod models;
-pub mod network_policy;
 pub mod num_format;
 pub mod openai_models;
 pub mod parse_command;

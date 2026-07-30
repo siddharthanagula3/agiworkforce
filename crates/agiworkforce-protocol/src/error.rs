@@ -5,7 +5,6 @@ use crate::auth::PlanType;
 pub use crate::auth::RefreshTokenFailedError;
 pub use crate::auth::RefreshTokenFailedReason;
 use crate::exec_output::ExecToolCallOutput;
-use crate::network_policy::NetworkPolicyDecisionPayload;
 use crate::protocol::AgiworkforceErrorInfo;
 use crate::protocol::ErrorEvent;
 use crate::protocol::RateLimitSnapshot;
@@ -37,7 +36,6 @@ pub enum SandboxErr {
     )]
     Denied {
         output: Box<ExecToolCallOutput>,
-        network_policy_decision: Option<NetworkPolicyDecisionPayload>,
     },
 
     /// Error from linux seccomp filter setup

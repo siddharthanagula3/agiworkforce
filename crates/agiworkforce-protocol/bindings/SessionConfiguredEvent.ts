@@ -6,7 +6,6 @@ import type { EventMsg } from './EventMsg';
 import type { PermissionProfile } from './PermissionProfile';
 import type { ReasoningEffort } from './ReasoningEffort';
 import type { ServiceTier } from './ServiceTier';
-import type { SessionNetworkProxyRuntime } from './SessionNetworkProxyRuntime';
 import type { ThreadId } from './ThreadId';
 
 export type SessionConfiguredEvent = {
@@ -58,10 +57,6 @@ export type SessionConfiguredEvent = {
    * When present, UIs can use these to seed the history.
    */
   initial_messages: Array<EventMsg> | null;
-  /**
-   * Runtime proxy bind addresses, when the managed proxy was started for this session.
-   */
-  network_proxy?: SessionNetworkProxyRuntime;
   /**
    * Path in which the rollout is stored. Can be `None` for ephemeral threads
    */

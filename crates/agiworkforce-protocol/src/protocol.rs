@@ -3574,12 +3574,6 @@ pub struct SkillsListEntry {
     pub errors: Vec<SkillErrorInfo>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, TS, PartialEq, Eq)]
-pub struct SessionNetworkProxyRuntime {
-    pub http_addr: String,
-    pub socks_addr: String,
-}
-
 #[derive(Debug, Clone, Serialize, JsonSchema, TS)]
 pub struct SessionConfiguredEvent {
     pub session_id: ThreadId,
@@ -3630,11 +3624,6 @@ pub struct SessionConfiguredEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_messages: Option<Vec<EventMsg>>,
 
-    /// Runtime proxy bind addresses, when the managed proxy was started for this session.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub network_proxy: Option<SessionNetworkProxyRuntime>,
-
     /// Path in which the rollout is stored. Can be `None` for ephemeral threads
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rollout_path: Option<PathBuf>,
@@ -3667,7 +3656,6 @@ impl<'de> Deserialize<'de> for SessionConfiguredEvent {
             history_log_id: u64,
             history_entry_count: usize,
             initial_messages: Option<Vec<EventMsg>>,
-            network_proxy: Option<SessionNetworkProxyRuntime>,
             rollout_path: Option<PathBuf>,
         }
 
@@ -3698,7 +3686,6 @@ impl<'de> Deserialize<'de> for SessionConfiguredEvent {
             history_log_id: wire.history_log_id,
             history_entry_count: wire.history_entry_count,
             initial_messages: wire.initial_messages,
-            network_proxy: wire.network_proxy,
             rollout_path: wire.rollout_path,
         })
     }
@@ -5243,7 +5230,6 @@ mod tests {
                 history_log_id: 0,
                 history_entry_count: 0,
                 initial_messages: None,
-                network_proxy: None,
                 rollout_path: Some(rollout_file.path().to_path_buf()),
             }),
         };
