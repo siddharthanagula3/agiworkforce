@@ -32,9 +32,13 @@ use crate::core::llm::job_autofill_runtime::build_job_autofill_eval_script;
 use crate::core::llm::{ToolCall, ToolDefinition};
 use crate::sys::commands::chat::{has_pending_messages, peek_pending_messages};
 use crate::sys::commands::settings::SettingsState;
-use crate::sys::commands::tool_confirmation::{request_tool_confirmation, ToolConfirmationState};
+use crate::sys::commands::tool_confirmation::{
+    request_folder_access_confirmation, request_tool_confirmation, ToolConfirmationState,
+    FOLDER_ACCESS_TOOL_NAME,
+};
 use crate::sys::commands::undo::UndoState;
-use crate::sys::security::ToolSafetyTier;
+use crate::sys::security::tool_guard::RiskLevel;
+use crate::sys::security::{ToolConfirmationRequest, ToolSafetyTier};
 use crate::ui::events::tool_stream::{
     emit_tool_completed, emit_tool_error, emit_tool_output_chunk, emit_tool_progress,
     emit_tool_started, OutputChunkType,
@@ -45,7 +49,7 @@ use crate::ui::events::{
 };
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -670,6 +674,303 @@ impl ToolExecutor {
         path_str.to_string()
     }
 
+    fn tool_may_touch_local_paths(tool_name: &str) -> bool {
+        let name = tool_name.to_ascii_lowercase();
+        name.starts_with("file_")
+            || name.starts_with("mcp__filesystem__")
+            || name.starts_with("git_")
+            || name.starts_with("worktree_")
+            || name.starts_with("document_")
+            || name.starts_with("coding_checkpoint_")
+            || name.starts_with("undo_")
+            || matches!(
+                name.as_str(),
+                "terminal_execute"
+                    | "code_execute"
+                    | "code_analyze"
+                    | "code_search"
+                    | "grep_search"
+                    | "glob_search"
+                    | "test_run"
+                    | "background_agent_start"
+                    | "multi_edit"
+                    | "apply_patch"
+                    | "edit_exact_replace"
+                    | "api_upload"
+                    | "api_download"
+                    | "cloud_upload"
+                    | "cloud_download"
+                    | "image_ocr"
+                    | "image_analyze"
+                    | "browser_autofill_job_application"
+            )
+    }
+
+    fn collect_path_strings(value: &Value, output: &mut Vec<String>) {
+        match value {
+            Value::String(path) if !path.trim().is_empty() => {
+                output.push(path.trim().to_string());
+            }
+            Value::Array(values) => {
+                for value in values {
+                    Self::collect_path_strings(value, output);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn local_paths_from_args(tool_name: &str, args: &HashMap<String, Value>) -> Vec<String> {
+        if !Self::tool_may_touch_local_paths(tool_name) {
+            return Vec::new();
+        }
+
+        const PATH_KEYS: &[&str] = &[
+            "path",
+            "paths",
+            "file_path",
+            "filepath",
+            "target_path",
+            "directory",
+            "dir",
+            "location",
+            "cwd",
+            "workdir",
+            "working_directory",
+            "root",
+            "root_path",
+            "repo_path",
+            "destination",
+            "save_path",
+            "output_path",
+            "local_path",
+            "resume_path",
+            "cover_letter_path",
+            "image_path",
+            "files",
+        ];
+
+        fn visit(value: &Value, tool_name: &str, output: &mut Vec<String>) {
+            match value {
+                Value::Object(object) => {
+                    for (key, value) in object {
+                        let key = key.to_ascii_lowercase();
+                        let is_filesystem_source =
+                            key == "source" && tool_name.starts_with("mcp__filesystem__");
+                        if PATH_KEYS.contains(&key.as_str()) || is_filesystem_source {
+                            ToolExecutor::collect_path_strings(value, output);
+                        } else {
+                            visit(value, tool_name, output);
+                        }
+                    }
+                }
+                Value::Array(values) => {
+                    for value in values {
+                        visit(value, tool_name, output);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut paths = Vec::new();
+        let object = Value::Object(
+            args.iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        );
+        visit(&object, &tool_name.to_ascii_lowercase(), &mut paths);
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+    fn folder_capabilities_for_tool(tool_name: &str) -> Vec<&'static str> {
+        let name = tool_name.to_ascii_lowercase();
+        if matches!(
+            name.as_str(),
+            "terminal_execute" | "code_execute" | "test_run" | "background_agent_start"
+        ) {
+            return vec!["execute"];
+        }
+
+        let modifies = [
+            "write", "delete", "create", "update", "remove", "move", "rename", "edit", "patch",
+            "format", "commit", "clone", "init", "download", "rewind", "undo",
+        ]
+        .iter()
+        .any(|operation| name.contains(operation));
+        if modifies {
+            vec!["modify"]
+        } else {
+            vec!["read"]
+        }
+    }
+
+    async fn resolve_folder_consent_target(path: String) -> Result<(PathBuf, PathBuf)> {
+        tokio::task::spawn_blocking(move || {
+            let requested = PathBuf::from(&path);
+            if !requested.is_absolute() {
+                return Err(anyhow!(
+                    "Access denied: Folder consent path '{}' did not resolve to an absolute path.",
+                    path
+                ));
+            }
+            if requested
+                .components()
+                .any(|component| matches!(component, std::path::Component::ParentDir))
+            {
+                return Err(anyhow!(
+                    "Access denied: Path '{}' contains directory traversal ('..').",
+                    path
+                ));
+            }
+
+            let mut existing_ancestor = requested.as_path();
+            while !existing_ancestor.exists() {
+                existing_ancestor = existing_ancestor.parent().ok_or_else(|| {
+                    anyhow!(
+                        "Access denied: Could not resolve an existing parent for '{}'.",
+                        path
+                    )
+                })?;
+            }
+            let canonical_ancestor = std::fs::canonicalize(existing_ancestor)
+                .map_err(|error| anyhow!("Could not resolve '{}': {}", path, error))?;
+            let suffix = requested
+                .strip_prefix(existing_ancestor)
+                .unwrap_or_else(|_| Path::new(""));
+            let canonical_target = canonical_ancestor.join(suffix);
+
+            if crate::sys::security::blocked_paths::is_blocked(&canonical_target) {
+                return Err(anyhow!(
+                    "Access denied: Path '{}' is a protected system path.",
+                    path
+                ));
+            }
+
+            let grant_root = if requested.is_dir() {
+                canonical_target.clone()
+            } else if requested.exists() {
+                canonical_target
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .ok_or_else(|| anyhow!("Access denied: '{}' has no grantable parent.", path))?
+            } else {
+                canonical_ancestor
+            };
+
+            if grant_root.parent().is_none()
+                || crate::sys::security::blocked_paths::is_blocked(&grant_root)
+            {
+                return Err(anyhow!(
+                    "Access denied: '{}' would require granting a protected or root directory.",
+                    path
+                ));
+            }
+
+            Ok((canonical_target, grant_root))
+        })
+        .await
+        .map_err(|error| anyhow!("Folder access resolution task failed: {}", error))?
+    }
+
+    async fn ensure_folder_access(
+        &self,
+        tool_name: &str,
+        args: &HashMap<String, Value>,
+        action_id: &str,
+    ) -> Result<()> {
+        let raw_paths = Self::local_paths_from_args(tool_name, args);
+        if raw_paths.is_empty() {
+            return Ok(());
+        }
+
+        // Unit-level executor tests intentionally run without a Tauri runtime;
+        // their existing path validator remains fail-closed outside configured
+        // temp/project roots. Production executors always carry an AppHandle.
+        let Some(app_handle) = self.app_handle.as_ref() else {
+            return Ok(());
+        };
+        let confirmation_state = app_handle
+            .try_state::<ToolConfirmationState>()
+            .ok_or_else(|| anyhow!("Access denied: Folder confirmation system is unavailable."))?;
+
+        let mut requested_paths = BTreeSet::new();
+        let mut requested_directories = BTreeSet::new();
+
+        for raw_path in raw_paths {
+            let resolved = self.resolve_path(&raw_path);
+            match self.canonicalize_validated_path(&resolved).await {
+                Ok(_) => continue,
+                Err(error) => {
+                    let message = error.to_string();
+                    if message.contains("protected system path")
+                        || message.contains("directory traversal")
+                    {
+                        return Err(error);
+                    }
+                }
+            }
+
+            let (target, directory) = Self::resolve_folder_consent_target(resolved.clone()).await?;
+            requested_paths.insert(target.to_string_lossy().to_string());
+            requested_directories.insert(directory.to_string_lossy().to_string());
+        }
+
+        if requested_paths.is_empty() {
+            return Ok(());
+        }
+
+        let capabilities = Self::folder_capabilities_for_tool(tool_name);
+        let request = ToolConfirmationRequest {
+            request_id: format!("folder-access:{}:{}", action_id, Uuid::new_v4()),
+            tool_name: FOLDER_ACCESS_TOOL_NAME.to_string(),
+            tool_description: format!(
+                "Allow {} to access new folders",
+                tool_name.replace('_', " ")
+            ),
+            parameters: json!({
+                "requesting_tool": tool_name,
+                "paths": requested_paths,
+                "directories": requested_directories,
+                "capabilities": capabilities,
+            }),
+            risk_level: RiskLevel::High,
+            safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+            reason:
+                "The agent requested local paths that are outside your current Allowed Directories."
+                    .to_string(),
+            reversible: true,
+            undo_description: Some(
+                "Persistent folders can be removed in Settings → Allowed Directories.".to_string(),
+            ),
+        };
+
+        let approved = request_folder_access_confirmation(
+            app_handle,
+            &confirmation_state,
+            request,
+            TOOL_CONFIRMATION_TIMEOUT_SECS,
+        )
+        .await
+        .map_err(|error| anyhow!(error))?;
+        if !approved {
+            return Err(anyhow!(
+                "You declined access to the requested local folders."
+            ));
+        }
+
+        // Re-check the real enforcement boundary after approval. This catches
+        // persistence/state failures and guarantees the tool never runs merely
+        // because the renderer displayed an Allow decision.
+        for requested in requested_paths {
+            self.canonicalize_validated_path(&requested).await?;
+        }
+
+        Ok(())
+    }
+
     async fn validate_path(&self, path_str: &str) -> Result<()> {
         self.canonicalize_validated_path(path_str).await.map(|_| ())
     }
@@ -689,14 +990,11 @@ impl ToolExecutor {
                 settings.allowed_directories.clone()
             };
 
-            let allowed = if configured_dirs.is_empty() {
+            let mut allowed = if configured_dirs.is_empty() {
                 let mut defaults = Vec::new();
 
                 if let Some(ref project_folder) = self.project_folder {
                     defaults.push(PathBuf::from(project_folder));
-                }
-                if let Some(home) = dirs::home_dir() {
-                    defaults.push(home);
                 }
                 if let Ok(cwd) = std::env::current_dir() {
                     defaults.push(cwd);
@@ -710,6 +1008,11 @@ impl ToolExecutor {
                     .map(PathBuf::from)
                     .collect::<Vec<_>>()
             };
+            if let Some(confirmation_state) = app_handle.try_state::<ToolConfirmationState>() {
+                allowed.extend(confirmation_state.get_session_allowed_paths());
+            }
+            allowed.sort();
+            allowed.dedup();
 
             if allowed.is_empty() {
                 return Err(anyhow!("Access denied: No allowed directories configured."));
@@ -950,6 +1253,48 @@ impl ToolExecutor {
                     .unwrap_or_else(|| ".".to_string());
                 args.insert("path".to_string(), json!(fallback_path));
             }
+        }
+
+        if let Err(error) = self
+            .ensure_folder_access(&tool_call.name, &args, &action_id)
+            .await
+        {
+            let message = error.to_string();
+            let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));
+            self.emit_tool_action(
+                &action_id,
+                &tool_call.name,
+                "blocked",
+                &metadata_snapshot,
+                Some(message.clone()),
+            );
+            self.emit_tool_metrics(
+                &action_id,
+                &tool_call.name,
+                start_time.elapsed().as_millis() as u64,
+                false,
+            );
+            if let Some(app_handle) = &self.app_handle {
+                emit_tool_error(
+                    app_handle,
+                    &action_id,
+                    &message,
+                    start_time.elapsed().as_millis() as u64,
+                    false,
+                );
+            }
+            return Ok(ToolResult {
+                success: false,
+                data: json!({
+                    "folder_access_denied": true,
+                    "success": false,
+                }),
+                error: Some(message),
+                metadata: HashMap::from([
+                    ("folder_access_denied".to_string(), json!(true)),
+                    ("tool_name".to_string(), json!(tool_call.name)),
+                ]),
+            });
         }
 
         let metadata_snapshot = serde_json::to_value(&args).unwrap_or(json!({}));

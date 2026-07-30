@@ -302,6 +302,46 @@ describe('agentWorkflowEvents', () => {
     expect(approval?.details['messageId']).toBe(messageId);
   });
 
+  it('preserves the native GAP-002 folder consent contract for the mounted dialog', () => {
+    createAssistantMessage();
+
+    applyToolConfirmationRequired({
+      request_id: 'folder-access:request-1',
+      tool_name: 'folder_access',
+      tool_display_name: 'Folder Access',
+      description: 'Allow file read to access new folders',
+      parameters_summary: 'folder access',
+      args: {
+        requesting_tool: 'file_read',
+        paths: ['/Users/sid/Projects/notes.txt'],
+        directories: ['/Users/sid/Projects'],
+        capabilities: ['read'],
+      },
+      summary_hash: 'c'.repeat(64),
+      risk_level: 'high',
+      safety_tier: 'RequiresExplicitApproval',
+      reason: 'The path is outside Allowed Directories.',
+      reversible: true,
+      undo_description: 'Remove the folder in Settings.',
+    });
+
+    const approval = useToolStore
+      .getState()
+      .pendingApprovals.find((entry) => entry.id === 'folder-access:request-1');
+    expect(approval).toMatchObject({
+      type: 'mcp_tool',
+      riskLevel: 'high',
+      details: {
+        toolName: 'folder_access',
+        arguments: {
+          paths: ['/Users/sid/Projects/notes.txt'],
+          directories: ['/Users/sid/Projects'],
+          capabilities: ['read'],
+        },
+      },
+    });
+  });
+
   it('escalates dangerous MCP confirmations and retains the full canonical arguments', () => {
     createAssistantMessage();
 

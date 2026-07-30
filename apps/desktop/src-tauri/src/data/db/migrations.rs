@@ -5284,6 +5284,7 @@ fn apply_migration_v63(conn: &Connection) -> Result<()> {
         "file_open_with_default_app",
         "playwright_evaluate",
         "terminal_execute",
+        "folder_access",
     ];
     for tool_name in PURGE_TOOL_NAMES {
         conn.execute(

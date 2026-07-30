@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 5b6942eb1c542f5d7bf4440bb5a4a08278dc491c472e485daf6cb4c5bfe71173 -->
+<!-- ui-gaps-csv-sha256: 1d35762c21919bf0e03570fe741f68ff1fe5fba6cecd0b60f12f65f3e5927358 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 5 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 4 P0, 126 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  335 |
+| Open        |  334 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |    6 |
+| Done        |    7 |
 | Not Planned |    0 |
 
 ## P0
@@ -65,24 +65,24 @@ Completed for the supported read-only Managed Cloud catalog. Keep Mobile install
 
 - `chatgpt_reference/072-chatgpt-ios-skills-empty-state-search-bar-no-skills.png`
 
-### GAP-002 — No just-in-time folder-access consent dialog before an agent touches new paths
+### GAP-002 — Desktop requires task-scoped consent before local tools access new folders
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Cowork folder access consent modal
 
 **Gap**
 
-Claude shows a task-scoped modal listing the exact resolved paths an agent is about to read, modify, or execute within, with Cancel/Allow and an optional persistent grant. agiworkforce has a static allowed-directory settings surface and a CloudFolderAttachSheet that explicitly gates managed-cloud file attachment egress, but neither is a just-in-time gate for a local agent tool call that introduces a new path.
+The Desktop tool executor now stops every recognized local path-bearing tool before it can cross the Allowed Directories boundary. A native-authoritative consent request lists the exact canonical targets, grant roots, and read, modify, or execute capabilities. Access is limited to the active chat task by default; only the unchecked Remember option persists the roots in Settings.
 
 **Evidence**
 
-apps/desktop/src/features/settings/AllowedDirectoriesSettings.tsx manages persistent folders. apps/desktop/src/features/context-handoff/CloudFolderAttachSheet.tsx gates files leaving the device in Managed Cloud. No FolderAccessConsent-style surface is wired into the local filesystem/tool-call path before a previously unapproved resolved directory is accessed.
+apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs performs path extraction, canonical resolution, protected-path rejection, explicit consent, and post-approval enforcement revalidation before dispatch. tool_confirmation.rs keeps the native request authoritative, manages task-only and persisted grants, and synchronizes ToolGuard plus the live filesystem MCP server; App.tsx revokes task grants on new-chat and conversation changes. FolderAccessConsentDialog.tsx is mounted by McpToolConfirmationPrompt.tsx with Cancel autofocus, exact targets and roots, capability disclosure, and an unchecked persistent-grant option. GAP-002-folder-access-consent.test.tsx, agentWorkflowEvents.test.ts, and the named gap_002, folder_request, session_folder_grants, and empty_allowed_paths_update Rust tests cover the contract and enforcement seams.
 
 **Suggested fix**
 
-Add a task-scoped FolderAccessConsentDialog at the local filesystem/tool-call authorization boundary. List resolved paths and requested capabilities, default to Cancel, and only persist a grant when the user explicitly selects a 'remember these folders' option that updates AllowedDirectoriesSettings.
+Completed. Keep every new local path-bearing tool on this native authorization boundary, never trust renderer-supplied paths or tool names, revoke task-only grants when the active chat changes, and persist roots only after the explicit Remember option succeeds natively.
 
 **Reference screenshot(s)**
 

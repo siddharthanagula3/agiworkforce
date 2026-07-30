@@ -300,6 +300,24 @@ impl McpState {
     /// This allows the MCP filesystem server to access multiple directories.
     /// Returns Ok(true) if the server was restarted, Ok(false) if no change needed.
     pub async fn update_filesystem_roots(&self, new_roots: &[String]) -> Result<bool, String> {
+        self.update_filesystem_roots_inner(new_roots, true).await
+    }
+
+    /// Apply task/session-scoped filesystem roots without writing them into
+    /// the persistent MCP configuration. A relaunch (or explicit session
+    /// clear) therefore restores the durable roots from Settings.
+    pub async fn update_filesystem_roots_for_session(
+        &self,
+        new_roots: &[String],
+    ) -> Result<bool, String> {
+        self.update_filesystem_roots_inner(new_roots, false).await
+    }
+
+    async fn update_filesystem_roots_inner(
+        &self,
+        new_roots: &[String],
+        persist: bool,
+    ) -> Result<bool, String> {
         // Validate all paths first
         for new_root in new_roots {
             let root_path = std::path::Path::new(new_root);
@@ -353,9 +371,11 @@ impl McpState {
             return Ok(false);
         }
 
-        self.persist_config_snapshot(&config_snapshot)
-            .await
-            .map_err(|e| format!("Failed to persist filesystem MCP config: {}", e))?;
+        if persist {
+            self.persist_config_snapshot(&config_snapshot)
+                .await
+                .map_err(|e| format!("Failed to persist filesystem MCP config: {}", e))?;
+        }
 
         // Restart the server to apply new config
         let server_config = self.config.lock().mcp_servers.get("filesystem").cloned();
