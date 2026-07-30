@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -254,30 +253,18 @@ describe('Cloud Connectors screen — shipped-feature state', () => {
     });
   });
 
-  it('does not execute an account-A disconnect confirmation with account B credentials', async () => {
-    const alert = jest.spyOn(Alert, 'alert');
-    const { getByLabelText, rerender } = render(<CloudConnectorsScreen />);
+  it('opens a connected connector detail instead of disconnecting from the directory row', async () => {
+    const { getByLabelText } = render(<CloudConnectorsScreen />);
 
     await waitFor(() => expect(getByLabelText('Internal tools. Connected')).toBeTruthy());
     fireEvent.press(getByLabelText('Internal tools. Connected'));
-    const disconnectAction = alert.mock.calls[0]?.[2]?.find(
-      (button) => button.text === 'Disconnect',
-    );
 
-    act(() => {
-      mockAccountOwner = 'user-b';
-      mockAccountEpoch = 2;
-      mockAuthState.clerkUserId = 'user-b';
-      rerender(<CloudConnectorsScreen />);
-      disconnectAction?.onPress?.();
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/connectors/[id]',
+      params: { id: 'custom-ab12' },
     });
-
     expect(mockDeleteCustom).not.toHaveBeenCalled();
     expect(mockDisconnect).not.toHaveBeenCalled();
-    await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(2));
-    await act(async () => {
-      await Promise.resolve();
-    });
   });
 
   it('ignores an account-A connect completion after account B activates', async () => {
