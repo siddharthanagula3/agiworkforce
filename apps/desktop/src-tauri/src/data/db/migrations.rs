@@ -5937,7 +5937,7 @@ fn apply_migration_v75(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Migration v76: remove the retired "AI employee hiring" data model.
+/// Migration v76: remove the retired employee data model.
 ///
 /// Onboarding keeps reusable demo/session history, and ROI keeps
 /// automation-oriented metrics. Existing local databases are rebuilt in place
@@ -6163,7 +6163,7 @@ mod tests {
                  selected_employee_id TEXT,
                  demo_results TEXT,
                  time_to_value_seconds INTEGER NOT NULL DEFAULT 0,
-                 hired_employee INTEGER NOT NULL DEFAULT 0,
+                 legacy_state INTEGER NOT NULL DEFAULT 0,
                  updated_at INTEGER NOT NULL
              );
              INSERT INTO first_run_sessions VALUES
@@ -6175,7 +6175,7 @@ mod tests {
                  employee_id TEXT NOT NULL,
                  ran_at INTEGER NOT NULL,
                  results TEXT NOT NULL,
-                 led_to_hire INTEGER NOT NULL DEFAULT 0
+                 legacy_outcome INTEGER NOT NULL DEFAULT 0
              );
              INSERT INTO demo_runs VALUES ('r1', 'u1', 'demo-1', 11, '{}', 1);
 
@@ -6219,7 +6219,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(selected_demo, "demo-1");
-        assert!(!table_has_column(&conn, "first_run_sessions", "hired_employee").unwrap());
+        assert!(!table_has_column(&conn, "first_run_sessions", "legacy_state").unwrap());
 
         let demo_id: String = conn
             .query_row("SELECT demo_id FROM demo_runs WHERE id = 'r1'", [], |row| {
@@ -6227,7 +6227,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(demo_id, "demo-1");
-        assert!(!table_has_column(&conn, "demo_runs", "led_to_hire").unwrap());
+        assert!(!table_has_column(&conn, "demo_runs", "legacy_outcome").unwrap());
 
         let automation_name: Option<String> = conn
             .query_row(
