@@ -301,6 +301,14 @@ export interface ChatInterfaceProps {
   canUseAgiWork?: boolean;
   /** Host/account overrides layered over runtime quick-action capabilities. */
   quickChipAvailability?: QuickChipAvailability;
+  /**
+   * Host-owned, enforcement-backed controls rendered in the shared composer.
+   * Desktop uses this for native sandbox/workspace context that the package
+   * cannot safely derive.
+   */
+  composerHostControls?: ReactNode;
+  /** Host-persisted composer submission shortcut. */
+  composerSendShortcut?: 'enter' | 'mod-enter';
   /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
   onNavigateView?: (view: string) => void;
   /** Explicit host-owned bridge for conversation selection and persistence. */
@@ -364,6 +372,8 @@ export function ChatInterface({
   projectPicker,
   canUseAgiWork = true,
   quickChipAvailability,
+  composerHostControls,
+  composerSendShortcut,
   onNavigateView,
   hostBridge = null,
   onAddMessage,
@@ -816,6 +826,8 @@ export function ChatInterface({
                 onModelSelectorClick={handleModelSelectorClick}
                 allowModelFallbackModels={allowModelFallbackModels}
                 supportsAgentControl={runtime?.supportsAgentControl !== false}
+                hostControls={composerHostControls}
+                sendShortcut={composerSendShortcut}
                 onSelectFolder={onSelectFolderProp ? handleSelectFolder : undefined}
                 onRecordSkill={onRecordSkill}
                 currentFolderLabel={currentFolderLabel}

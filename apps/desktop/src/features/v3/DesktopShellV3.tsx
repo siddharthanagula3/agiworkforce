@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { toast } from 'sonner';
+import { Terminal as TerminalIcon, X } from 'lucide-react';
 import { updateCloudConversationTitle } from '@/api/cloudApi';
 import {
   ChatInterface,
@@ -23,9 +24,15 @@ const DesktopLibrary = lazy(() => import('@/features/library/DesktopLibrary'));
 const DesktopTasks = lazy(() => import('@/features/tasks/DesktopTasks'));
 // Account-owned schedules that continue to run after Desktop closes.
 const DesktopCloudSchedules = lazy(() => import('@/features/schedules/DesktopCloudSchedules'));
+const DesktopTerminalWorkspace = lazy(() =>
+  import('@/features/terminal/TerminalWorkspace').then((module) => ({
+    default: module.TerminalWorkspace,
+  })),
+);
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/projectStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { selectPlan, useUnifiedAuthStore } from '../../stores/auth';
@@ -45,6 +52,7 @@ import { CloudVoiceActionDialog } from '../voice/CloudVoiceActionDialog';
 import { useCloudVoiceController } from '../voice/useCloudVoiceController';
 import { createDesktopCloudShare } from '../../services/desktopCloudShares';
 import { McpToolConfirmationPrompt } from '../chat/McpToolConfirmationPrompt';
+import { ComposerContextControls } from './ComposerContextControls';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -107,6 +115,21 @@ export function DesktopShellV3({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [libraryInitialQuery, setLibraryInitialQuery] = useState('');
+  const [terminalDockOpen, setTerminalDockOpen] = useState(() => {
+    try {
+      return localStorage.getItem('desktop-terminal-dock-open') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('desktop-terminal-dock-open', String(terminalDockOpen));
+    } catch {
+      // Persistence is optional; the dock remains usable for this session.
+    }
+  }, [terminalDockOpen]);
 
   // Artifact panel is driven by the same artifactStore that AgiWorkArtifacts writes.
   // conversationId is optional on ArtifactPanel so it works in the gallery context.
@@ -129,6 +152,9 @@ export function DesktopShellV3({
   const quickChipAvailability = isManagedCloud
     ? { image: canUseDesktopCloudImageGeneration(accountPlan) }
     : undefined;
+  const composerSendShortcut = useSettingsStore(
+    (state) => state.chatPreferences.sendShortcut ?? 'enter',
+  );
 
   // Cloud folder flow: picking a folder opens the consent sheet rather than
   // scoping the session. Approved files are injected into the composer as an
@@ -195,6 +221,7 @@ export function DesktopShellV3({
   // membership transition. Cloud persists the conversation's project_id;
   // Local updates the native project projection.
   const projects = useProjectStore((s) => s.projects);
+  const currentFolderPath = useProjectStore((s) => s.currentFolder);
   const pickerProjects = useMemo(
     () => projects.filter((p) => !p.isArchived).map((p) => ({ id: p.id, name: p.name })),
     [projects],
@@ -422,129 +449,172 @@ export function DesktopShellV3({
           }}
         />
 
-        <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
-          {activePanel === 'chat' ? (
-            <ChatInterface
-              runtime={runtime}
-              className="h-full w-full"
-              externalSendRequest={externalSendRequest}
-              manageTheme={false}
-              enableShortcuts={true}
-              hostBridge={hostBridge}
-              onModelSelectorClick={onModelSelectorClick}
-              conversationActions={conversationActions}
-              onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
-              pendingAttachments={pendingAttachments}
-              voiceInputController={isManagedCloud ? cloudVoice.controller : undefined}
-              onRecordSkill={
-                privacyMode === 'local' ? () => setActivePanel('record-skill') : undefined
-              }
-              currentFolderLabel={folderSeamEnabled ? currentFolderLabel : null}
-              onClearFolder={folderSeamEnabled ? clearFolder : undefined}
-              projectPicker={composerProjectPicker}
-              canUseAgiWork={canUseAgiWork}
-              quickChipAvailability={quickChipAvailability}
-              onNavigateView={handleNavigateView}
-              sidebarSlot={null}
-              emptyStateSlot={<EmptyChat />}
-              enableSearchOverlay={false}
-              showProvenanceFooter={true}
-            />
-          ) : activePanel === 'record-skill' && privacyMode === 'local' ? (
-            <ActionRecorder
-              onClose={() => setActivePanel('chat')}
-              onSkillCreated={() => setActivePanel('chat')}
-            />
-          ) : activePanel === 'projects' ? (
-            <AgiWorkProjects
-              onCreateProject={handleCreateProject}
-              onNewChat={(projectId) => handleNewChat(projectId)}
-              onOpenConversation={handleOpenProjectConversation}
-            />
-          ) : activePanel === 'library' && privacyMode !== 'local' ? (
-            // The shell clips overflow, so the panel owns its own scrolling or
-            // a long grid is simply unreachable.
-            <div className="h-full overflow-y-auto px-6 py-6">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="relative min-h-0 flex-1 overflow-hidden">
+            {activePanel === 'chat' ? (
+              <ChatInterface
+                runtime={runtime}
+                className="h-full w-full"
+                externalSendRequest={externalSendRequest}
+                manageTheme={false}
+                enableShortcuts={true}
+                hostBridge={hostBridge}
+                onModelSelectorClick={onModelSelectorClick}
+                conversationActions={conversationActions}
+                onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
+                pendingAttachments={pendingAttachments}
+                voiceInputController={isManagedCloud ? cloudVoice.controller : undefined}
+                onRecordSkill={
+                  privacyMode === 'local' ? () => setActivePanel('record-skill') : undefined
+                }
+                currentFolderLabel={folderSeamEnabled ? currentFolderLabel : null}
+                onClearFolder={folderSeamEnabled ? clearFolder : undefined}
+                projectPicker={composerProjectPicker}
+                canUseAgiWork={canUseAgiWork}
+                quickChipAvailability={quickChipAvailability}
+                composerHostControls={
+                  <ComposerContextControls
+                    mode={privacyMode}
+                    folderPath={currentFolderPath}
+                    folderLabel={folderSeamEnabled ? currentFolderLabel : null}
+                    onSelectFolder={folderSeamEnabled ? handleSelectFolder : undefined}
+                  />
+                }
+                composerSendShortcut={composerSendShortcut}
+                onNavigateView={handleNavigateView}
+                sidebarSlot={null}
+                emptyStateSlot={<EmptyChat />}
+                enableSearchOverlay={false}
+                showProvenanceFooter={true}
+              />
+            ) : activePanel === 'record-skill' && privacyMode === 'local' ? (
+              <ActionRecorder
+                onClose={() => setActivePanel('chat')}
+                onSkillCreated={() => setActivePanel('chat')}
+              />
+            ) : activePanel === 'projects' ? (
+              <AgiWorkProjects
+                onCreateProject={handleCreateProject}
+                onNewChat={(projectId) => handleNewChat(projectId)}
+                onOpenConversation={handleOpenProjectConversation}
+              />
+            ) : activePanel === 'library' && privacyMode !== 'local' ? (
+              // The shell clips overflow, so the panel owns its own scrolling or
+              // a long grid is simply unreachable.
+              <div className="h-full overflow-y-auto px-6 py-6">
+                <Suspense fallback={null}>
+                  <DesktopLibrary
+                    initialQuery={libraryInitialQuery}
+                    onStartChat={() => handleNewChat()}
+                  />
+                </Suspense>
+              </div>
+            ) : activePanel === 'tasks' && privacyMode !== 'local' ? (
+              // TasksPage's root is h-full, which collapses to zero unless it is
+              // given a parent with a resolved height. Without this wrapper the
+              // panel mounted and rendered nothing at all.
+              <div className="h-full overflow-y-auto">
+                <Suspense fallback={null}>
+                  <DesktopTasks
+                    onOpenConversation={handleOpenProjectConversation}
+                    onStartChat={() => handleNewChat()}
+                  />
+                </Suspense>
+              </div>
+            ) : activePanel === 'cloud-schedules' && privacyMode === 'managed' ? (
               <Suspense fallback={null}>
-                <DesktopLibrary
-                  initialQuery={libraryInitialQuery}
-                  onStartChat={() => handleNewChat()}
-                />
+                <DesktopCloudSchedules />
               </Suspense>
-            </div>
-          ) : activePanel === 'tasks' && privacyMode !== 'local' ? (
-            // TasksPage's root is h-full, which collapses to zero unless it is
-            // given a parent with a resolved height. Without this wrapper the
-            // panel mounted and rendered nothing at all.
-            <div className="h-full overflow-y-auto">
-              <Suspense fallback={null}>
-                <DesktopTasks
-                  onOpenConversation={handleOpenProjectConversation}
-                  onStartChat={() => handleNewChat()}
-                />
-              </Suspense>
-            </div>
-          ) : activePanel === 'cloud-schedules' && privacyMode === 'managed' ? (
-            <Suspense fallback={null}>
-              <DesktopCloudSchedules />
-            </Suspense>
-          ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
-            <AgiWorkArtifacts onNewChat={() => handleNewChat()} />
-          ) : activePanel === 'scheduled' && privacyMode === 'local' ? (
-            <AgiWorkScheduled />
-          ) : (
-            <AgiWorkProjects
-              onCreateProject={handleCreateProject}
-              onNewChat={(projectId) => handleNewChat(projectId)}
-              onOpenConversation={handleOpenProjectConversation}
-            />
-          )}
-          <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
+            ) : activePanel === 'artifacts' && privacyMode === 'local' ? (
+              <AgiWorkArtifacts onNewChat={() => handleNewChat()} />
+            ) : activePanel === 'scheduled' && privacyMode === 'local' ? (
+              <AgiWorkScheduled />
+            ) : (
+              <AgiWorkProjects
+                onCreateProject={handleCreateProject}
+                onNewChat={(projectId) => handleNewChat(projectId)}
+                onOpenConversation={handleOpenProjectConversation}
+              />
+            )}
+            <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
 
-          {/* Artifact viewer panel — mounts when the artifact store requests it open.
+            {/* Artifact viewer panel — mounts when the artifact store requests it open.
             Shares the same artifactStore instance that AgiWorkArtifacts writes,
             so setActiveArtifact + openPanel in the grid card opens this panel. */}
-          {privacyMode === 'local' && artifactPanelOpen && (
-            <div
-              data-testid="v3-artifact-panel"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                zIndex: 20,
-                display: 'flex',
-                flexDirection: 'column',
-                background: 'var(--chat-surface-base)',
+            {privacyMode === 'local' && artifactPanelOpen && (
+              <div
+                data-testid="v3-artifact-panel"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  zIndex: 20,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  background: 'var(--chat-surface-base)',
+                }}
+              >
+                <ArtifactPanel onClose={closeArtifactPanel} />
+              </div>
+            )}
+            <SelectedContextReview onAccept={handleSelectedContextAccept} />
+            <CloudFolderAttachSheet
+              folderPath={cloudFolderPath}
+              sourceSessionId={activeCloudConversationId ?? 'new-conversation'}
+              onClose={() => setCloudFolderPath(null)}
+              onApprove={handleFolderFilesApproved}
+            />
+            <ProjectSettingsDialog
+              open={createProjectOpen}
+              onOpenChange={setCreateProjectOpen}
+              mode="create"
+              onCreated={(project) => {
+                useProjectStore.getState().setActiveProject(project.id);
+                setActivePanel('projects');
               }}
-            >
-              <ArtifactPanel onClose={closeArtifactPanel} />
-            </div>
+            />
+            <CloudVoiceActionDialog
+              action={cloudVoice.pendingAction}
+              error={cloudVoice.error}
+              isExecuting={cloudVoice.controller.state === 'executing'}
+              requiresComputerUseConsent={cloudVoice.requiresComputerUseConsent}
+              onApprove={() => void cloudVoice.approveAction()}
+              onUseAsText={cloudVoice.useActionAsText}
+              onCancel={cloudVoice.cancelAction}
+            />
+            <McpToolConfirmationPrompt />
+          </div>
+
+          {privacyMode === 'local' && (
+            <>
+              {terminalDockOpen && (
+                <div className="relative h-80 shrink-0 border-t border-[var(--chat-border)] bg-background">
+                  <Suspense fallback={null}>
+                    <DesktopTerminalWorkspace />
+                  </Suspense>
+                  <button
+                    type="button"
+                    onClick={() => setTerminalDockOpen(false)}
+                    className="absolute right-2 top-2 z-10 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Close terminal dock"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+              {!terminalDockOpen && (
+                <div className="flex h-9 shrink-0 items-center border-t border-[var(--chat-border)] px-3">
+                  <button
+                    type="button"
+                    onClick={() => setTerminalDockOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                  >
+                    <TerminalIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                    Open terminal
+                  </button>
+                </div>
+              )}
+            </>
           )}
-          <SelectedContextReview onAccept={handleSelectedContextAccept} />
-          <CloudFolderAttachSheet
-            folderPath={cloudFolderPath}
-            sourceSessionId={activeCloudConversationId ?? 'new-conversation'}
-            onClose={() => setCloudFolderPath(null)}
-            onApprove={handleFolderFilesApproved}
-          />
-          <ProjectSettingsDialog
-            open={createProjectOpen}
-            onOpenChange={setCreateProjectOpen}
-            mode="create"
-            onCreated={(project) => {
-              useProjectStore.getState().setActiveProject(project.id);
-              setActivePanel('projects');
-            }}
-          />
-          <CloudVoiceActionDialog
-            action={cloudVoice.pendingAction}
-            error={cloudVoice.error}
-            isExecuting={cloudVoice.controller.state === 'executing'}
-            requiresComputerUseConsent={cloudVoice.requiresComputerUseConsent}
-            onApprove={() => void cloudVoice.approveAction()}
-            onUseAsText={cloudVoice.useActionAsText}
-            onCancel={cloudVoice.cancelAction}
-          />
-          <McpToolConfirmationPrompt />
         </div>
       </div>
     </CapabilityProvider>

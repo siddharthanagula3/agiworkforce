@@ -52,6 +52,26 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     cleanup();
   });
 
+  it('renders host-owned enforcement controls without interpreting them', () => {
+    renderComposer({
+      hostControls: <span data-testid="host-policy">Terminal: Read-only</span>,
+    });
+
+    expect(screen.getByTestId('host-policy').textContent).toBe('Terminal: Read-only');
+  });
+
+  it('uses the host-selected Command/Ctrl+Enter submission gesture', () => {
+    const { onSend, textarea } = renderComposer({ sendShortcut: 'mod-enter' });
+    fireEvent.change(textarea, { target: { value: 'Keep Enter for a newline' } });
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSend).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true });
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Send message (Cmd/Ctrl+Enter)' })).not.toBeNull();
+  });
+
   it('renders no toggle and keeps the unchanged send signature when the host feeds no picker', () => {
     const { onSend, textarea } = renderComposer();
 

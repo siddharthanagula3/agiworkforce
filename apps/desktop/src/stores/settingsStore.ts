@@ -116,6 +116,10 @@ interface WindowPreferences {
   dyslexicFont?: boolean;
   /** Selected chat font family: default | sans | mono | dyslexic */
   chatFont?: ChatFont;
+  /** Persisted application scale, expressed as a root-font percentage. */
+  uiScale?: 90 | 100 | 110;
+  /** User override for reduced motion, independent of the OS preference. */
+  reduceMotion?: boolean;
 }
 
 // ChatPreferences and AgentMode are defined in ./settings/chatPrefs and re-exported above.
@@ -232,6 +236,8 @@ interface SettingsState {
   setSelectedTheme: (themeId: string | undefined) => void;
   setDyslexicFont: (enabled: boolean) => void;
   setChatFont: (font: ChatFont) => void;
+  setUiScale: (scale: 90 | 100 | 110) => void;
+  setReduceMotion: (enabled: boolean) => void;
   setLanguage: (language: Language) => void;
   setStartupPosition: (position: 'center' | 'remember') => void;
   setDockOnStartup: (dock: 'left' | 'right' | null) => void;
@@ -239,6 +245,7 @@ interface SettingsState {
   setPromptCompletionEnabled: (enabled: boolean) => void;
   setAlwaysUseAgentMode: (enabled: boolean) => void;
   setCompactMode: (enabled: boolean) => void;
+  setSendShortcut: (shortcut: 'enter' | 'mod-enter') => void;
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
   setAutoInjectSkills: (enabled: boolean) => void;
   setAutoSaveMemories: (enabled: boolean) => Promise<void>;
@@ -346,11 +353,14 @@ const defaultSettings: Pick<
     language: 'en',
     startupPosition: 'center',
     dockOnStartup: null,
+    uiScale: 100,
+    reduceMotion: false,
   },
   chatPreferences: {
     promptCompletionEnabled: true, // AI-powered ghost text enabled by default
     alwaysUseAgentMode: false, // Off by default - only use agent mode for action requests
     compactMode: true, // Show simple status messages like ChatGPT/Claude/Gemini
+    sendShortcut: 'enter' as const,
     autoApproveTools: false, // Off by default - show confirmation dialogs
     autoInjectSkills: true, // Auto-inject relevant skills based on message intent
     memoryEnabled: false, // Privacy-safe opt-in: no retrieval or generation until enabled
@@ -421,7 +431,7 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v25: Added vllmUrl to llmConfig (vLLM local runtime)
 // v26: Normalized persisted model aliases to canonical catalog IDs
 // v27: Added the authoritative memory master and tool-assisted generation scope
-const SETTINGS_STORE_VERSION = 27;
+const SETTINGS_STORE_VERSION = 28;
 
 function normalizeKnownCatalogModelId(modelId: string | undefined): string | null {
   if (!modelId) return null;
@@ -1000,6 +1010,32 @@ export const useSettingsStore = create<SettingsState>()(
           }
         },
 
+        setUiScale: (scale: 90 | 100 | 110) => {
+          set(
+            (state) => ({
+              windowPreferences: { ...state.windowPreferences, uiScale: scale },
+            }),
+            undefined,
+            'settings/setUiScale',
+          );
+          if (typeof document !== 'undefined') {
+            document.documentElement.style.fontSize = `${scale}%`;
+          }
+        },
+
+        setReduceMotion: (enabled: boolean) => {
+          set(
+            (state) => ({
+              windowPreferences: { ...state.windowPreferences, reduceMotion: enabled },
+            }),
+            undefined,
+            'settings/setReduceMotion',
+          );
+          if (typeof document !== 'undefined') {
+            document.documentElement.classList.toggle('reduce-motion', enabled);
+          }
+        },
+
         setLanguage: (language: Language) => {
           set(
             (state) => ({
@@ -1057,6 +1093,16 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setCompactMode',
+          );
+        },
+
+        setSendShortcut: (shortcut: 'enter' | 'mod-enter') => {
+          set(
+            (state) => ({
+              chatPreferences: { ...state.chatPreferences, sendShortcut: shortcut },
+            }),
+            undefined,
+            'settings/setSendShortcut',
           );
         },
 
@@ -1682,6 +1728,8 @@ export const useSettingsStore = create<SettingsState>()(
               selectedTheme: state.windowPreferences.selectedTheme,
               chatFont: state.windowPreferences.chatFont,
               dyslexicFont: state.windowPreferences.dyslexicFont,
+              uiScale: state.windowPreferences.uiScale,
+              reduceMotion: state.windowPreferences.reduceMotion,
             },
             chatPreferences: state.chatPreferences,
             executionPreferences: state.executionPreferences,
@@ -2097,6 +2145,20 @@ export const useSettingsStore = create<SettingsState>()(
             cp.memoryEnabled = cp.autoSaveMemories === true;
             cp.autoSaveMemories = cp.memoryEnabled;
             cp.allowToolAssistedMemoryGeneration = false;
+          }
+
+          if (version < 28 && state.windowPreferences) {
+            state.windowPreferences = {
+              ...state.windowPreferences,
+              uiScale: state.windowPreferences.uiScale ?? 100,
+              reduceMotion: state.windowPreferences.reduceMotion ?? false,
+            };
+          }
+          if (version < 28 && state.chatPreferences) {
+            state.chatPreferences = {
+              ...state.chatPreferences,
+              sendShortcut: state.chatPreferences.sendShortcut ?? 'enter',
+            };
           }
 
           return state as SettingsState;

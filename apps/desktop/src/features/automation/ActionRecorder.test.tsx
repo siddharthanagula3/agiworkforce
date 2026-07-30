@@ -109,9 +109,9 @@ describe('ActionRecorder', () => {
     expect(mocks.openRecorderHudWindow).toHaveBeenCalledOnce();
     await user.click(await screen.findByRole('button', { name: 'Done' }));
 
-    expect(
-      await screen.findByText(/No actions were captured. Grant Input Monitoring/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('That recording has nothing to learn from')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record again' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Describe it instead' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create skill' })).not.toBeInTheDocument();
   });
 

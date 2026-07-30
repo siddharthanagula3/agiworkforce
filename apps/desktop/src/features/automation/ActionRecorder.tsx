@@ -40,6 +40,7 @@ import { Label } from '@/components/ui/Label';
 import { ScrollArea } from '@/components/ui/ScrollArea';
 import { cn } from '@/lib/utils';
 import { closeRecorderHudWindow, openRecorderHudWindow } from '@/services/recorderHudWindow';
+import { useChatStore as useSharedChatStore } from '@agiworkforce/unified-chat';
 
 interface ActionRecorderProps {
   onSkillCreated?: (skillName: string) => void;
@@ -127,6 +128,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
   const [skillDescription, setSkillDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emptyCapture, setEmptyCapture] = useState(false);
 
   const missingPermissions = useMemo(() => {
     if (!permissions) return [];
@@ -143,12 +145,12 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
     setCurrentRecording(recording);
     setRecordedActions(recording.actions);
     if (recording.actions.length === 0) {
-      setError(
-        'No actions were captured. Grant Input Monitoring, then record at least one click or keystroke.',
-      );
+      setEmptyCapture(true);
+      setError(null);
       setShowSaveDialog(false);
       return;
     }
+    setEmptyCapture(false);
     setError(null);
     setShowSaveDialog(true);
   }, []);
@@ -182,6 +184,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
             : 0,
         );
         setIsRecording(true);
+        setEmptyCapture(false);
         setError(null);
       }),
       listen<unknown>('automation:recording_stopped', (event) => {
@@ -196,6 +199,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
           setCurrentRecording(null);
           setShowSaveDialog(false);
           setDuration(0);
+          setEmptyCapture(false);
           setError(null);
         }
         void closeRecorderHudWindow();
@@ -254,6 +258,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
         throw cause;
       }
       setError(null);
+      setEmptyCapture(false);
       setRecordedActions([]);
       setCurrentRecording(null);
       setDuration(0);
@@ -287,7 +292,13 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
     setRecordedActions([]);
     setCurrentRecording(null);
     setDuration(0);
+    setEmptyCapture(false);
     setError(null);
+  };
+
+  const describeCaptureInstead = () => {
+    useSharedChatStore.getState().setDraftContent('I was trying to demonstrate this workflow: ');
+    onClose?.();
   };
 
   const saveSkill = async () => {
@@ -452,6 +463,36 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
             <AlertTitle>Recording needs attention</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
+        )}
+
+        {emptyCapture && !isRecording && (
+          <div
+            className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4"
+            role="alert"
+          >
+            <h3 className="text-sm font-semibold">That recording has nothing to learn from</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Desktop received no click or keyboard steps, so it did not create a skill or pretend
+              the capture succeeded.
+            </p>
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+              <li>No input events were captured during the recording.</li>
+              <li>
+                Input Monitoring may need to be granted again after an app update or macOS restart.
+              </li>
+              <li>
+                Start the recording before the visible workflow, then keep the relevant app focused.
+              </li>
+            </ul>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="button" size="sm" onClick={() => void startRecording()}>
+                Record again
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={describeCaptureInstead}>
+                Describe it instead
+              </Button>
+            </div>
+          </div>
         )}
 
         {permissions && missingPermissions.length > 0 && !isRecording && (

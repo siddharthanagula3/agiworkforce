@@ -22,6 +22,7 @@ export interface ChatPreferences {
   autoSaveMemories?: boolean;
   agentMode: AgentMode;
   chatStorageMode: 'local' | 'cloud';
+  sendShortcut?: 'enter' | 'mod-enter';
   autoTTS?: boolean;
 }
 
@@ -54,6 +55,7 @@ export const defaultChatPreferences: ChatPreferences = {
   autoSaveMemories: false,
   agentMode: 'build' as AgentMode,
   chatStorageMode: 'local',
+  sendShortcut: 'enter',
   autoTTS: true,
 };
 

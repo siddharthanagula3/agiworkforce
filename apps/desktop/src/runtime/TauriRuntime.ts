@@ -415,6 +415,14 @@ async function encodeAttachmentsForIpc(files: File[]): Promise<TauriAttachmentPa
 // ---------------------------------------------------------------------------
 
 export class TauriRuntime implements ChatRuntime {
+  /**
+   * The native chat request does not accept the shared composer's
+   * Ask/Auto/Plan/Bypass value. Keep the shared control hidden until that value
+   * reaches a native enforcement boundary; rendering it would falsely imply a
+   * per-conversation permission change.
+   */
+  readonly supportsAgentControl = false;
+
   // Track active stop requests keyed by conversationId so stopGeneration()
   // can signal Tauri and wait for its authoritative stream-end acknowledgement.
   private readonly _stopFlags = new Map<string, boolean>();

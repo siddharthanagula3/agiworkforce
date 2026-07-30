@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, ShieldAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useApprovalActions } from '@/hooks/useApprovalActions';
@@ -50,39 +50,74 @@ export function McpToolConfirmationPrompt() {
   );
   const approval = confirmations[0];
 
+  const toolName = approval
+    ? (readDetail(approval, 'tool') ?? readDetail(approval, 'toolName') ?? 'MCP tool')
+    : 'MCP tool';
+  const reason = approval ? readDetail(approval, 'reason') : null;
+  const safetyTier = approval ? readDetail(approval, 'safetyTier') : null;
+  const summaryHash = approval ? readDetail(approval, 'summaryHash') : null;
+  const undoDescription = approval ? readDetail(approval, 'undoDescription') : null;
+  const argumentsText = approval ? formatArguments(approval) : '{}';
+  const isResolving = Boolean(approval && resolvingId === approval.id);
+  const error =
+    approval && resolutionError?.approvalId === approval.id ? resolutionError.message : null;
+  const isFolderAccess = approval
+    ? toolName === 'folder access' || readDetail(approval, 'toolName') === 'folder_access'
+    : false;
+
+  const resolve = useCallback(
+    async (decision: 'approve' | 'reject') => {
+      if (!approval) return;
+      setResolvingId(approval.id);
+      setResolutionError(null);
+      try {
+        await resolveApproval(approval, decision, {
+          reason: decision === 'reject' ? 'Denied by user' : undefined,
+        });
+      } catch (cause) {
+        setResolutionError({
+          approvalId: approval.id,
+          message: cause instanceof Error ? cause.message : 'Could not send your decision.',
+        });
+      } finally {
+        setResolvingId((currentId) => (currentId === approval.id ? null : currentId));
+      }
+    },
+    [approval, resolveApproval],
+  );
+
+  useEffect(() => {
+    if (!approval || isFolderAccess || isResolving) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.matches('input, textarea, select, button') || target.isContentEditable)
+      ) {
+        return;
+      }
+      if (event.repeat) return;
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void resolve('approve');
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        void resolve('reject');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [approval, isFolderAccess, isResolving, resolve]);
+
   if (!approval) {
     return null;
   }
 
-  const toolName = readDetail(approval, 'tool') ?? readDetail(approval, 'toolName') ?? 'MCP tool';
-  const reason = readDetail(approval, 'reason');
-  const safetyTier = readDetail(approval, 'safetyTier');
-  const summaryHash = readDetail(approval, 'summaryHash');
-  const undoDescription = readDetail(approval, 'undoDescription');
-  const argumentsText = formatArguments(approval);
-  const isResolving = resolvingId === approval.id;
-  const error = resolutionError?.approvalId === approval.id ? resolutionError.message : null;
-
-  if (toolName === 'folder access' || readDetail(approval, 'toolName') === 'folder_access') {
+  if (isFolderAccess) {
     return <FolderAccessConsentDialog approval={approval} pendingCount={confirmations.length} />;
   }
-
-  const resolve = async (decision: 'approve' | 'reject') => {
-    setResolvingId(approval.id);
-    setResolutionError(null);
-    try {
-      await resolveApproval(approval, decision, {
-        reason: decision === 'reject' ? 'Denied by user' : undefined,
-      });
-    } catch (cause) {
-      setResolutionError({
-        approvalId: approval.id,
-        message: cause instanceof Error ? cause.message : 'Could not send your decision.',
-      });
-    } finally {
-      setResolvingId((currentId) => (currentId === approval.id ? null : currentId));
-    }
-  };
 
   return (
     <div
@@ -192,13 +227,23 @@ export function McpToolConfirmationPrompt() {
             variant="outline"
             disabled={isResolving}
             onClick={() => void resolve('reject')}
+            aria-label="Deny"
           >
             <X className="mr-2 h-4 w-4" aria-hidden="true" />
             Deny
+            <kbd className="ml-2 rounded border border-border px-1 text-[10px]">Esc</kbd>
           </Button>
-          <Button type="button" disabled={isResolving} onClick={() => void resolve('approve')}>
+          <Button
+            type="button"
+            disabled={isResolving}
+            onClick={() => void resolve('approve')}
+            aria-label="Approve"
+          >
             <Check className="mr-2 h-4 w-4" aria-hidden="true" />
             Approve
+            <kbd className="ml-2 rounded border border-primary-foreground/30 px-1 text-[10px]">
+              Return
+            </kbd>
           </Button>
         </div>
       </div>
