@@ -73,11 +73,40 @@ if [[ ! "${EAS_PROJECT_ID}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-
 fi
 log_ok "EAS project linked: ${EAS_PROJECT_ID}"
 
+UPDATES_URL="$({
+  cd "${MOBILE_DIR}"
+  node -e 'const url = require("./app.config.js").expo?.updates?.url; process.stdout.write(typeof url === "string" ? url : "")'
+})"
+if [[ "${UPDATES_URL}" != "https://u.expo.dev/${EAS_PROJECT_ID}" ]]; then
+  die "Expo Updates URL must target the linked EAS project: https://u.expo.dev/${EAS_PROJECT_ID}"
+fi
+
+RUNTIME_VERSION_POLICY="$({
+  cd "${MOBILE_DIR}"
+  node -e 'const policy = require("./app.config.js").expo?.runtimeVersion?.policy; process.stdout.write(typeof policy === "string" ? policy : "")'
+})"
+if [[ "${RUNTIME_VERSION_POLICY}" != "fingerprint" ]]; then
+  die "Expo runtimeVersion.policy must be fingerprint for native compatibility"
+fi
+log_ok "Expo Updates URL and fingerprint runtime policy are configured"
+
 # Confirm the profile exists.
 if ! jq -e ".build.\"${PROFILE}\"" "${MOBILE_DIR}/eas.json" >/dev/null; then
   die "profile '${PROFILE}' not defined in eas.json"
 fi
 log_ok "profile '${PROFILE}' defined in eas.json"
+
+UPDATE_CHANNEL="$(jq -r ".build.\"${PROFILE}\".channel // empty" "${MOBILE_DIR}/eas.json")"
+if [[ -z "${UPDATE_CHANNEL}" ]]; then
+  EXTENDED_PROFILE="$(jq -r ".build.\"${PROFILE}\".extends // empty" "${MOBILE_DIR}/eas.json")"
+  if [[ -n "${EXTENDED_PROFILE}" ]]; then
+    UPDATE_CHANNEL="$(jq -r ".build.\"${EXTENDED_PROFILE}\".channel // empty" "${MOBILE_DIR}/eas.json")"
+  fi
+fi
+if [[ -z "${UPDATE_CHANNEL}" ]]; then
+  die "profile '${PROFILE}' must declare or inherit an EAS Update channel"
+fi
+log_ok "profile '${PROFILE}' uses update channel '${UPDATE_CHANNEL}'"
 
 # --- Submit credentials (store beta / production only) ------------------
 
