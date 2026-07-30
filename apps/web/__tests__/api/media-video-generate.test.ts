@@ -367,8 +367,8 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(403);
-      expect(data.error.code).toBe('FORBIDDEN');
-      expect(data.error.message).toContain('Access denied');
+      expect(data.error.code).toBe('plan_upgrade_required');
+      expect(data.error.required_plans).toEqual(['max_15x', 'enterprise']);
     });
 
     it('should return 403 when plan tier is hobby', async () => {
@@ -378,7 +378,7 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(403);
-      expect(data.error.code).toBe('FORBIDDEN');
+      expect(data.error.code).toBe('plan_upgrade_required');
     });
 
     it('should reject Pro even when the subscription is active', async () => {

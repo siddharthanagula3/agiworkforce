@@ -37,6 +37,25 @@ export {
   parseDiscoveredChatModels,
 } from './lib/modelInfo';
 export type { DiscoveredChatModel, DiscoveredChatModelRecord } from './lib/modelInfo';
+export {
+  BUILT_IN_SLASH_COMMANDS,
+  BUILT_IN_COMMAND_IDS,
+  clearSlashCommands,
+  filterSlashCommands,
+  filterSlashCommandsByCapability,
+  getSlashCommand,
+  listSlashCommands,
+  parseSlashCommand,
+  registerBuiltinSlashCommands,
+  registerSlashCommand,
+} from './lib/slashCommands';
+export type {
+  ParsedSlashCommand,
+  SlashCommand,
+  SlashCommandContext,
+  SlashCommandDefinition,
+  SlashCommandIconName,
+} from './lib/slashCommands';
 // Stores — prefixed to avoid collisions with host-app store names
 export { useChatStore } from './stores/chatStore';
 export { useModelStore as useChatModelStore } from './stores/modelStore';
@@ -102,6 +121,7 @@ export { ChatInput } from './components/ChatInput';
 export type {
   ChatInputProps,
   ChatInputProjectPicker,
+  ChatInputSlashCommandHost,
   ChatWorkMode,
   ChatWorkScope,
   ComposerVoiceController,
@@ -395,8 +415,8 @@ export type {
 } from './components/KeyboardShortcutsOverlay';
 export { ChatStream } from './components/ChatStream';
 export type { ChatStreamProps } from './components/ChatStream';
-export { ChatInputToolbar } from './components/ChatInputToolbar';
-export type { ChatInputToolbarProps } from './components/ChatInputToolbar';
+export { ChatInputToolbar, PlanModeToggle } from './components/ChatInputToolbar';
+export type { ChatInputToolbarProps, PlanModeToggleProps } from './components/ChatInputToolbar';
 export { SlashCommandMenu } from './components/SlashCommandMenu';
 export type { SlashCommandMenuProps, CommandSuggestion } from './components/SlashCommandMenu';
 export { SkillMentionPicker } from './components/SkillMentionPicker';

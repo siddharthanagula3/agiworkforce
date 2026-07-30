@@ -15,6 +15,128 @@
  * built-ins toggle.
  */
 
+import type { PlatformCapability } from '@agiworkforce/types';
+
+/**
+ * Framework-neutral icon names used by the shared slash menu catalog. Hosts
+ * resolve these to their icon system at the component boundary.
+ */
+export type SlashCommandIconName =
+  | 'Globe'
+  | 'Brain'
+  | 'Image'
+  | 'FileText'
+  | 'Code'
+  | 'MonitorPlay'
+  | 'Terminal'
+  | 'Database'
+  | 'Undo2'
+  | 'Minimize2'
+  | 'Sparkles'
+  | 'History'
+  | 'ListChecks'
+  | 'CircleHelp';
+
+/**
+ * Canonical menu metadata for prompt-transforming commands. This used to live
+ * in the web app while Desktop maintained a second, much larger hard-coded
+ * catalog. Keeping the framework-neutral definitions here lets every surface
+ * render the package menu while still capability-filtering commands it cannot
+ * execute.
+ */
+export interface SlashCommandDefinition {
+  id: string;
+  /** Display label including the leading slash. */
+  label: string;
+  description: string;
+  example?: string;
+  iconName: SlashCommandIconName;
+  isCustom?: boolean;
+  isSkill?: boolean;
+  requiredCapability?: PlatformCapability;
+}
+
+/** Prompt commands supported by the managed chat composer. */
+export const BUILT_IN_SLASH_COMMANDS: SlashCommandDefinition[] = [
+  {
+    id: 'search',
+    label: '/search',
+    description: 'Search the web',
+    example: '/search latest AI news',
+    iconName: 'Globe',
+  },
+  {
+    id: 'think',
+    label: '/think',
+    description: 'Extended reasoning',
+    example: '/think solve this problem step by step',
+    iconName: 'Brain',
+  },
+  {
+    id: 'image',
+    label: '/image',
+    description: 'Generate an image',
+    example: '/image a futuristic city at dusk',
+    iconName: 'Image',
+  },
+  {
+    id: 'code',
+    label: '/code',
+    description: 'Write or explain code',
+    example: '/code sort an array in Python',
+    iconName: 'Code',
+  },
+  {
+    id: 'browser',
+    label: '/browser',
+    description: 'Automate browser actions',
+    example: '/browser https://example.com',
+    iconName: 'MonitorPlay',
+    requiredCapability: 'canUseBrowserAutomation',
+  },
+  {
+    id: 'terminal',
+    label: '/terminal',
+    description: 'Execute shell commands',
+    example: '/terminal ls -la',
+    iconName: 'Terminal',
+    requiredCapability: 'canUseTerminal',
+  },
+  {
+    id: 'database',
+    label: '/database',
+    description: 'Run database queries',
+    example: '/database SELECT * FROM users',
+    iconName: 'Database',
+    requiredCapability: 'canUseLocalDatabase',
+  },
+];
+
+export const BUILT_IN_COMMAND_IDS = new Set(BUILT_IN_SLASH_COMMANDS.map((command) => command.id));
+
+export function filterSlashCommandsByCapability(
+  commands: SlashCommandDefinition[],
+  isCapabilityEnabled: (capability: PlatformCapability) => boolean,
+): SlashCommandDefinition[] {
+  return commands.filter(
+    (command) => !command.requiredCapability || isCapabilityEnabled(command.requiredCapability),
+  );
+}
+
+export function filterSlashCommands(
+  query: string,
+  commands: SlashCommandDefinition[] = BUILT_IN_SLASH_COMMANDS,
+): SlashCommandDefinition[] {
+  if (!query) return commands;
+  const normalizedQuery = query.toLowerCase();
+  return commands.filter(
+    (command) =>
+      command.id.startsWith(normalizedQuery) ||
+      command.label.slice(1).startsWith(normalizedQuery) ||
+      command.description.toLowerCase().includes(normalizedQuery),
+  );
+}
+
 export interface SlashCommand {
   /** The slash trigger without leading slash, e.g. `'rewind'`, `'plan'`. */
   name: string;

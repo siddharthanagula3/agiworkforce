@@ -37,6 +37,8 @@ import type { WritingStyle } from '../lib/writingStyle';
 import { syncPackageStoreFromHost, useHostBridgeSync } from '../hooks/useHostBridgeSync';
 import { SettingsModal } from './SettingsModal';
 import { ArtifactPanel } from './ArtifactPanel';
+import { RewindTimeline } from './RewindTimeline';
+import { useAgentControlStore } from '../stores/agentControlStore';
 import { cn } from '../lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -446,6 +448,33 @@ export function ChatInterface({
   const toggleSearchModal = useUIStore((s) => s.toggleSearchModal);
 
   const hasMessages = messages.length > 0;
+  const [rewindTimelineOpen, setRewindTimelineOpen] = useState(false);
+
+  const slashCommandHost = useMemo(() => {
+    if (!hostBridge?.createConversation) return undefined;
+    return {
+      togglePlanMode: () => {
+        let conversationId = useChatStore.getState().activeConversationId;
+        if (!conversationId) {
+          conversationId = hostBridge.createConversation?.('New chat') ?? null;
+          if (conversationId) {
+            hostBridge.selectConversation?.(conversationId);
+            syncPackageStoreFromHost(hostBridge);
+          }
+        }
+        if (!conversationId) return;
+        const projectId = projectPicker?.activeProjectId ?? null;
+        const agentControl = useAgentControlStore.getState();
+        const currentMode = agentControl.resolve(conversationId, projectId).mode;
+        agentControl.setMode(conversationId, currentMode === 'plan' ? 'ask' : 'plan');
+      },
+      ...(hostBridge.fetchCodingCheckpoints && hostBridge.rewindCodingCheckpoint
+        ? {
+            openRewindTimeline: () => setRewindTimelineOpen(true),
+          }
+        : {}),
+    };
+  }, [hostBridge, projectPicker?.activeProjectId]);
 
   useEffect(() => {
     loadedConversationIdsRef.current.clear();
@@ -720,7 +749,7 @@ export function ChatInterface({
       // independent blocks (flex-1 content + bottom-pinned composer) they split
       // into a centered greeting and a window-edge composer with ~350px of dead
       // canvas between them.
-      <div className={cn('flex h-full flex-col', !hasMessages && 'justify-center')}>
+      <div className={cn('relative flex h-full flex-col', !hasMessages && 'justify-center')}>
         {/* Header — only rendered when a conversation with messages is active */}
         {hasMessages && activeConversationId && (
           <ConversationHeader
@@ -804,6 +833,7 @@ export function ChatInterface({
                 attachmentPolicy={runtime?.attachmentPolicy}
                 pendingAttachments={pendingAttachments}
                 voiceInputController={voiceInputController}
+                slashCommandHost={slashCommandHost}
               />
               {/* Sample-prompt mode chips below the composer (claude.ai parity —
                   ref: claude_reference/015). This is a composer-area element shown
@@ -824,6 +854,39 @@ export function ChatInterface({
             </>
           )}
         </div>
+
+        {rewindTimelineOpen &&
+          activeConversationId &&
+          hostBridge?.fetchCodingCheckpoints &&
+          hostBridge.rewindCodingCheckpoint && (
+            <div className="absolute inset-0 z-50 flex justify-end bg-black/35">
+              <section
+                className="flex h-full w-full max-w-sm flex-col border-l border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-2xl"
+                aria-label="Rewind checkpoints"
+              >
+                <header className="flex items-center justify-between border-b border-[var(--chat-border)] px-4 py-3">
+                  <h2 className="text-sm font-semibold text-[var(--chat-text-primary)]">
+                    Rewind checkpoints
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setRewindTimelineOpen(false)}
+                    className="rounded p-1 text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                    aria-label="Close rewind checkpoints"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </header>
+                <div className="min-h-0 flex-1">
+                  <RewindTimeline
+                    conversationId={activeConversationId}
+                    fetchCheckpoints={hostBridge.fetchCodingCheckpoints}
+                    rewindCheckpoint={hostBridge.rewindCodingCheckpoint}
+                  />
+                </div>
+              </section>
+            </div>
+          )}
       </div>
     );
   };

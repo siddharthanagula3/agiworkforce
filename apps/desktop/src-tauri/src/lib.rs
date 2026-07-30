@@ -1684,7 +1684,6 @@ pub fn run() {
             crate::sys::commands::ollama_pull_model,
             crate::sys::commands::ollama_delete_model,
 
-            crate::sys::commands::vision_analyze_screenshot,
             crate::sys::commands::vision_extract_text,
             crate::sys::commands::vision_compare_images,
 

@@ -10,7 +10,7 @@
  * visible, browsable work surface (Cowork "Active task list" parity).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { ListChecks, Loader2, MessageSquare, RotateCcw, X } from 'lucide-react';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
@@ -75,12 +75,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  // Recreate lazily; the client is cheap and stateless.
-  const clientRef = useRef<ManagedCloudAgentRunClient | null>(null);
-  const getClient = useCallback(() => {
-    clientRef.current ??= transport.client;
-    return clientRef.current;
-  }, []);
+  const getClient = useCallback(() => transport.client, [transport.client]);
 
   const load = useCallback(
     async (nextFilter: TaskFilter, cursor: string | null) => {
@@ -126,7 +121,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
         setCancellingId(null);
       }
     },
-    [getClient],
+    [getClient, transport],
   );
 
   const openConversation = useCallback(

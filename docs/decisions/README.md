@@ -8,6 +8,10 @@ For higher-level architectural narrative, see `docs/architecture/foundation-2026
 
 ## Index
 
+### Current integration decisions
+
+- [2026-07-30-web-message-surface-adapters.md](2026-07-30-web-message-surface-adapters.md) — keep Web message/thinking orchestration as a surface adapter while sharing host-neutral renderers and the canonical ToolCallCard.
+
 ### Foundation Sprint architectural ADRs (12)
 
 - [2026-05-09-bridge-over-rewrite-store-migration.md](2026-05-09-bridge-over-rewrite-store-migration.md) — bridge 12 zustand stores into `appStateStore` rather than rewriting; preserves 1,622 desktop tests.

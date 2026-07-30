@@ -32,6 +32,7 @@ import {
   resolveDesktopChatOwnerId,
   useChatStore as useDesktopChatStore,
 } from './stores/chat/chatStore';
+import { useCodingCheckpointStore } from './stores/codingCheckpointStore';
 import { createDesktopChatRuntimeWithLabeling } from './runtime/sessionLabeling';
 import { registerActiveDesktopChatRuntime } from './runtime/desktopChatRuntime';
 import type { CommandOption } from './features/chat/CommandPalette';
@@ -1453,6 +1454,28 @@ const DesktopShell = () => {
           throw new Error(`HTTP ${res.status}`);
         }
         return res.blob();
+      },
+      fetchCodingCheckpoints: async () => {
+        const checkpoints = await useCodingCheckpointStore.getState().listCheckpoints();
+        return checkpoints.map((checkpoint) => {
+          const firstFilePath = Object.keys(checkpoint.fileSnapshots)[0];
+          const parsedTimestamp = Date.parse(checkpoint.timestamp);
+          return {
+            id: checkpoint.id,
+            toolName: 'file-edit',
+            ...(firstFilePath ? { filePath: firstFilePath } : {}),
+            createdAtMs: Number.isNaN(parsedTimestamp) ? Date.now() : parsedTimestamp,
+            description: checkpoint.name,
+          };
+        });
+      },
+      rewindCodingCheckpoint: async (checkpointId: string) => {
+        const restoredPaths = await useCodingCheckpointStore
+          .getState()
+          .rewindToCheckpoint(checkpointId);
+        if (!restoredPaths) {
+          throw new Error('The desktop runtime could not restore this checkpoint.');
+        }
       },
     }),
     [],

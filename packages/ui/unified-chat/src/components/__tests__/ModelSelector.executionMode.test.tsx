@@ -47,13 +47,6 @@ const fableModel: ModelInfo = {
   provider: 'anthropic',
 };
 
-const haikuModel: ModelInfo = {
-  ...byokModel,
-  id: 'claude-sonnet-5',
-  name: 'Claude Haiku 4.5',
-  provider: 'anthropic',
-};
-
 const solModel: ModelInfo = {
   ...byokModel,
   id: 'gpt-5.6-sol',

@@ -21,7 +21,7 @@ import { syncPackageStoreFromHost } from './useHostBridgeSync';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
 import { CLOUD_FALLBACK_MODELS, useModelStore } from '../stores/modelStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { getSendQueue, defaultBrowserStorage } from '../queue/sendQueue';
+import { defaultBrowserStorage, enqueuePrompt, getSendQueue } from '../queue/sendQueue';
 import { CONTINUE_GENERATION_INSTRUCTION, isMessageContinuable } from '../lib/continue-generation';
 import {
   getModelMetadataById,
@@ -913,7 +913,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       // also doesn't preempt an in-flight `now`-priority interrupt.
       const queue = sendQueueRef.current;
       try {
-        queue.enqueue({ value: content, mode: 'prompt' });
+        enqueuePrompt(queue, content);
       } catch (err) {
         if (err instanceof QueueFullError) {
           toast.error(`Queue is full (lane "${err.lane}"). Please wait for prior sends to drain.`);
