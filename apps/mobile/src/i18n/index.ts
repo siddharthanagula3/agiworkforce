@@ -26,6 +26,7 @@ import {
 
 export { SUPPORTED_LANGUAGES };
 export const LANGUAGE_STORAGE_KEY = 'agiworkforce-language';
+export const DEVICE_LANGUAGE_PREFERENCE = 'device';
 
 /**
  * The device's preferred language, if we translate it.
@@ -34,7 +35,7 @@ export const LANGUAGE_STORAGE_KEY = 'agiworkforce-language';
  * by the base subtag, so a Brazilian device gets Portuguese rather than falling
  * all the way back to English over a region suffix.
  */
-function deviceLanguage(): string {
+export function getDeviceLanguage(): string {
   for (const locale of getLocales()) {
     const base = locale.languageCode ?? locale.languageTag?.split('-')[0];
     if (base && isSupportedLanguage(base)) return base;
@@ -45,9 +46,9 @@ function deviceLanguage(): string {
 void i18n.use(initReactI18next).init({
   ...baseInitOptions,
   // Start on the device language so the very first frame is already correct;
-  // a stored override is applied by `restoreStoredLanguage` once AsyncStorage
-  // answers, which it cannot do synchronously.
-  lng: deviceLanguage(),
+  // a stored override is applied by `restoreStoredLanguage` once encrypted
+  // MMKV is ready.
+  lng: getDeviceLanguage(),
   supportedLngs: SUPPORTED_LANGUAGES.map((l) => l.code),
   react: { useSuspense: false },
 });
@@ -59,21 +60,32 @@ void i18n.use(initReactI18next).init({
  * the app calls rather than work done on import.
  */
 export async function restoreStoredLanguage(): Promise<void> {
+  const preference = await readStoredLanguagePreference();
+  const language = preference === DEVICE_LANGUAGE_PREFERENCE ? getDeviceLanguage() : preference;
+  if (language !== i18n.language) await i18n.changeLanguage(language);
+}
+
+export async function readStoredLanguagePreference(): Promise<string> {
   try {
     const stored = await mmkvStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (stored && isSupportedLanguage(stored) && stored !== i18n.language) {
-      await i18n.changeLanguage(stored);
-    }
+    if (stored === DEVICE_LANGUAGE_PREFERENCE || isSupportedLanguage(stored)) return stored;
   } catch {
-    // A failed preference read must not stop the app from rendering; the
-    // device language stands.
+    // A failed preference read falls back to the device without blocking UI.
   }
+  return DEVICE_LANGUAGE_PREFERENCE;
 }
 
 /** Change language and remember it across launches. */
 export async function setLanguage(code: string): Promise<void> {
-  if (!isSupportedLanguage(code)) return;
-  await i18n.changeLanguage(code);
+  const language =
+    code === DEVICE_LANGUAGE_PREFERENCE
+      ? getDeviceLanguage()
+      : isSupportedLanguage(code)
+        ? code
+        : undefined;
+  if (!language) return;
+
+  await i18n.changeLanguage(language);
   try {
     await mmkvStorage.setItem(LANGUAGE_STORAGE_KEY, code);
   } catch {

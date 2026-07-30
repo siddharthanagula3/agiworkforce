@@ -101,6 +101,7 @@ export default function AppLayout() {
         <Drawer.Screen name="settings/personalization" options={HIDDEN} />
         <Drawer.Screen name="settings/capabilities" options={HIDDEN} />
         <Drawer.Screen name="settings/auto-approve" options={HIDDEN} />
+        <Drawer.Screen name="settings/app-language" options={HIDDEN} />
 
         {/* Notifications */}
         <Drawer.Screen name="notifications/index" options={HIDDEN} />
