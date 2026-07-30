@@ -23,10 +23,11 @@ move between validation and deployment.
   uses the same successful-`CI` and exact-SHA gate. A manual Railway/Fly run
   first queries GitHub for a successful push-triggered `CI` run on the selected
   SHA and fails closed if no such run exists.
-- The API gateway has a container definition but no canonical deployed host.
-  Step 18 of the production roadmap owns that topology. Its future deployment
-  job must reuse the exact-SHA successful-`CI` gate before it can mutate
-  staging or production.
+- API gateway staging and production are owned by
+  `.github/workflows/deploy-production.yml`. After the same exact-SHA gate it
+  builds one `linux/amd64` image, deploys and probes it in staging, then promotes
+  the identical registry digest to production. Production first verifies the
+  migration ledger without applying or baselining schema.
 
 The former local environment-push and global Fly setup helpers were deleted;
 neither is a deployment path. Production environment values belong in the
@@ -107,6 +108,19 @@ The `production-web` GitHub environment owns:
 Vercel owns the application runtime values pulled by `vercel pull`. Railway and
 Fly secrets stay in their existing protected production environments. No
 workflow prints secret values.
+
+The gateway uses two protected GitHub environments:
+
+- `staging-gateway`: `FLY_API_TOKEN` plus
+  `FLY_GATEWAY_STAGING_APP` and `GATEWAY_STAGING_URL` variables.
+- `production-gateway`: `FLY_API_TOKEN`, read-only deployment
+  `AGI_DATABASE_URL`, plus `FLY_GATEWAY_PRODUCTION_APP` and
+  `GATEWAY_PRODUCTION_URL` variables.
+
+Runtime gateway secrets live on each Fly app. Staging and production must be in
+the same Fly organization because production pulls the staging-tested private
+registry digest. Both remain at one machine until the pending WebSocket command
+state and scheduling durability ticket passes its two-replica proof.
 
 ## Local fast gate
 
