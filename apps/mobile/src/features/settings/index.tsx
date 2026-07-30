@@ -318,6 +318,14 @@ export default function SettingsTabScreen() {
             onPress: openCloudRoute('/(app)/settings/cloud-account'),
           },
           {
+            key: 'account-security',
+            label: 'Account Security',
+            icon: Shield,
+            tag: cloudAccessTag,
+            tone: 'cloud',
+            onPress: openCloudRoute('/(app)/settings/account-security'),
+          },
+          {
             key: 'account-subscription',
             label: 'Subscription',
             icon: CreditCard,

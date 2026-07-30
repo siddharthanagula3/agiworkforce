@@ -96,6 +96,7 @@ export default function AppLayout() {
 
         {/* Settings sub-pages */}
         <Drawer.Screen name="settings/index" options={HIDDEN} />
+        <Drawer.Screen name="settings/account-security" options={HIDDEN} />
         <Drawer.Screen name="settings/memory" options={HIDDEN} />
         <Drawer.Screen name="settings/integrations" options={HIDDEN} />
         <Drawer.Screen name="settings/notifications" options={HIDDEN} />

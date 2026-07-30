@@ -10,7 +10,6 @@ import {
   ChevronRight,
   CreditCard,
   Database,
-  ExternalLink,
   LogOut,
   MessageSquare,
   Shield,
@@ -31,7 +30,6 @@ import {
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
-import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -260,12 +258,10 @@ export default function ProfileScreen() {
                 value="Manage"
               />
               <ProfileRow
-                icon={ExternalLink}
-                label="Account"
-                onPress={() => {
-                  void openExternalUrl('https://agiworkforce.com/account');
-                }}
-                value="Web"
+                icon={Shield}
+                label="Account Security"
+                onPress={push('/(app)/settings/account-security')}
+                value="Manage"
               />
               <ProfileRow
                 icon={LogOut}
