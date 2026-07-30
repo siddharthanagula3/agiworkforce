@@ -429,6 +429,8 @@ import {
   sendApprovalResponse,
   requestAgentRefresh,
   sendAgentCommand,
+  sendDispatchTask,
+  cancelDispatchTask,
   sendHeartbeatPing,
   sendEmergencyStop,
   manualReconnect,
@@ -752,6 +754,49 @@ describe('Connection Store — sendControl delegation', () => {
     setConnectionStatus('error');
     sendAgentCommand('agent-xyz', 'pause');
     expect(mockSendControl).not.toHaveBeenCalled();
+  });
+
+  it('sendDispatchTask creates a versioned new-task request while connected', () => {
+    setConnectionStatus('connected');
+    const requestId = sendDispatchTask({
+      prompt: 'Prepare release notes',
+      title: 'Release notes',
+    });
+
+    expect(requestId).toEqual(expect.any(String));
+    expect(mockSendControl).toHaveBeenCalledWith(
+      'dispatch.task.create',
+      expect.objectContaining({
+        version: 1,
+        requestId,
+        prompt: 'Prepare release notes',
+        title: 'Release notes',
+        sentAt: expect.any(String),
+      }),
+    );
+  });
+
+  it('sendDispatchTask rejects empty input and disconnected sessions', () => {
+    setConnectionStatus('connected');
+    expect(sendDispatchTask({ prompt: '   ' })).toBeNull();
+
+    setConnectionStatus('disconnected');
+    expect(sendDispatchTask({ prompt: 'Do the work' })).toBeNull();
+    expect(mockSendControl).not.toHaveBeenCalled();
+  });
+
+  it('cancelDispatchTask sends the request-to-task cancellation mapping', () => {
+    setConnectionStatus('connected');
+    cancelDispatchTask('request-1', 'goal-1');
+    expect(mockSendControl).toHaveBeenCalledWith(
+      'dispatch.task.cancel',
+      expect.objectContaining({
+        version: 1,
+        requestId: 'request-1',
+        taskId: 'goal-1',
+        sentAt: expect.any(String),
+      }),
+    );
   });
 
   it('sendHeartbeatPing sends a heartbeat control message when connected', () => {
@@ -1660,7 +1705,7 @@ describe('startHealthChecks / stopHealthChecks', () => {
     jest.advanceTimersByTime(30_001);
 
     expect(mockSendControl).toHaveBeenCalledWith(
-      'ping',
+      'heartbeat',
       expect.objectContaining({ timestamp: expect.any(Number) }),
     );
 

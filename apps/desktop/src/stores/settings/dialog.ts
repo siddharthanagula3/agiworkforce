@@ -9,6 +9,7 @@ export type SettingsTab =
   | 'agents'
   | 'skills'
   | 'connections'
+  | 'cowork'
   | 'connectors'
   | 'plugins'
   | 'notifications'

@@ -8,9 +8,11 @@
  */
 
 import { useConnectionStore } from '@/stores/connectionStore';
+import { useDispatchTaskStore } from '@/stores/dispatchTaskStore';
 import type { ConnectionQuality } from '@/stores/connectionStore';
 import type { RiskLevel } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import * as Crypto from 'expo-crypto';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -115,6 +117,61 @@ export function sendAgentCommand(agentId: string, command: 'pause' | 'resume' | 
     kind: 'agent_command',
     agentId,
     command,
+    sentAt: new Date().toISOString(),
+  });
+}
+
+export interface NewDispatchTaskInput {
+  prompt: string;
+  title?: string;
+}
+
+function createDispatchRequestId(): string | null {
+  const globalCrypto = globalThis.crypto as { randomUUID?: () => string } | undefined;
+  const globalUuid = globalCrypto?.randomUUID?.();
+  if (globalUuid) return globalUuid;
+
+  const expoUuid = Crypto.randomUUID?.();
+  return expoUuid || null;
+}
+
+export function sendDispatchTask(input: NewDispatchTaskInput): string | null {
+  const { sendControl, status } = useConnectionStore.getState();
+  const prompt = input.prompt.trim();
+  const title = input.title?.trim() || prompt.slice(0, 80);
+  if (
+    status !== 'connected' ||
+    !FEATURES.companion ||
+    !FEATURES.dispatch ||
+    !prompt ||
+    prompt.length > 20_000 ||
+    title.length > 160
+  ) {
+    return null;
+  }
+
+  const requestId = createDispatchRequestId();
+  if (!requestId) return null;
+  const sentAt = new Date().toISOString();
+  useDispatchTaskStore.getState().addOutgoingTask({ requestId, prompt, title, sentAt });
+  sendControl('dispatch.task.create', {
+    version: 1,
+    requestId,
+    prompt,
+    title,
+    sentAt,
+  });
+  return requestId;
+}
+
+export function cancelDispatchTask(requestId: string, taskId?: string): void {
+  const { sendControl, status } = useConnectionStore.getState();
+  if (status !== 'connected' || !FEATURES.companion || !FEATURES.dispatch) return;
+
+  sendControl('dispatch.task.cancel', {
+    version: 1,
+    requestId,
+    ...(taskId ? { taskId } : {}),
     sentAt: new Date().toISOString(),
   });
 }

@@ -11,7 +11,7 @@ jest.mock('react-native-webrtc', () => ({
 jest.mock('expo-crypto', () => ({
   getRandomBytes: jest.fn(() => new Uint8Array(16)),
   getRandomBytesAsync: jest.fn(async () => new Uint8Array(16)),
-  digestStringAsync: jest.fn(),
+  digestStringAsync: jest.fn(async () => 'a'.repeat(64)),
   CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
 }));
 
@@ -33,14 +33,14 @@ import {
   buildRelayControlMessage,
   ingestApprovalRequestPayload,
   parseApprovalRequest,
+  parseDispatchTaskStatus,
   useConnectionStore,
 } from '../stores/connectionStore';
 import { useAgentStore } from '../stores/agentStore';
 import { notifyCompanionMessage } from '../services/companionNotifications';
-import { SignalingClient } from '@agiworkforce/utils/signaling';
+import { FEATURES } from '../lib/v1FeatureFlags';
 
 const mockNotifyCompanionMessage = notifyCompanionMessage as jest.Mock;
-const mockSignalingClient = SignalingClient as unknown as jest.Mock;
 
 describe('Wave 1 control relay fixes', () => {
   beforeEach(() => {
@@ -135,18 +135,40 @@ describe('Wave 1 control relay fixes', () => {
     expect(mockNotifyCompanionMessage).not.toHaveBeenCalled();
   });
 
-  it('does not open a companion connection while Dispatch is feature-gated', () => {
-    useConnectionStore.setState({
-      status: 'disconnected',
-      pairingCode: null,
-      pairToken: null,
-      connectionQuality: 'disconnected',
+  it('validates the bounded Dispatch task status contract', () => {
+    expect(
+      parseDispatchTaskStatus({
+        action: 'dispatch.task.status',
+        version: 1,
+        requestId: 'request-1',
+        taskId: 'goal-1',
+        status: 'running',
+        message: 'Working on Desktop',
+        updatedAt: '2026-07-30T12:00:00.000Z',
+      }),
+    ).toEqual({
+      action: 'dispatch.task.status',
+      version: 1,
+      requestId: 'request-1',
+      taskId: 'goal-1',
+      status: 'running',
+      message: 'Working on Desktop',
+      updatedAt: '2026-07-30T12:00:00.000Z',
     });
 
-    useConnectionStore.getState().connect(`agiw:ABCDEF123456:${'a'.repeat(64)}`);
+    expect(
+      parseDispatchTaskStatus({
+        action: 'dispatch.task.status',
+        version: 1,
+        requestId: 'request-1',
+        status: 'invented',
+        updatedAt: '2026-07-30T12:00:00.000Z',
+      }),
+    ).toBeNull();
+  });
 
-    expect(mockSignalingClient).not.toHaveBeenCalled();
-    expect(useConnectionStore.getState().status).toBe('disconnected');
-    expect(useConnectionStore.getState().pairingCode).toBeNull();
+  it('ships the authenticated companion and Dispatch lifecycle enabled', () => {
+    expect(FEATURES.companion).toBe(true);
+    expect(FEATURES.dispatch).toBe(true);
   });
 });

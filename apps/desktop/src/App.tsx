@@ -66,6 +66,7 @@ import {
 import { ErrorBoundary } from './features/error-handling';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
+import { initializeCoworkDispatchRuntime } from './services/coworkDispatch';
 import { initializeWebAuth, cloudAccountAuth } from './services/cloudAccountAuth';
 import {
   canUseDesktopCloudCodeExecution,
@@ -584,6 +585,7 @@ const DesktopShell = () => {
     registerCleanup(() => cleanupExecutionListeners());
     registerCleanup(() => cleanupAgentWorkflowEventListeners());
     registerCleanup(() => cleanupRuntimeActivityEventListeners());
+    registerCleanup(initializeCoworkDispatchRuntime());
 
     void runStartupStep('Execution goal subscription', async () => {
       initializeExecutionGoalSubscription();

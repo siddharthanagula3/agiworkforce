@@ -95,11 +95,11 @@ export const FEATURES = {
   agents: false,
 
   /**
-   * Legacy Desktop Dispatch / WebRTC companion kill switch. Mobile no longer
-   * exposes Dispatch UI or sends Dispatch tasks; keep this false while the
-   * separately gated companion transport remains in the tree.
+   * Authenticated Desktop Dispatch. New tasks use the versioned
+   * dispatch.task.create/status/cancel contract and are accepted only when the
+   * paired Desktop has explicitly enabled Settings → Cowork → Dispatch.
    */
-  dispatch: false,
+  dispatch: true,
 
   /** Cloud scheduled task execution. The shared API contract, idempotent run
    *  endpoint, recurrence editor, run history, and notification deep links are
@@ -107,7 +107,7 @@ export const FEATURES = {
   schedules: true,
 
   /** Desktop companion pairing + QR code flow. */
-  companion: false,
+  companion: true,
 
   /** Connectors directory. The server returns both connected rows and the
    *  deployment's live `available` ids. Mobile offers Connect only for that
