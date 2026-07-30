@@ -256,6 +256,17 @@ impl RealtimeServer {
         self.pair_token.read().await.clone()
     }
 
+    /// Report whether an authenticated realtime client is connected for the
+    /// exact protocol user id. Used by bridge diagnostics; listening on the
+    /// port alone is not evidence that the VS Code extension connected.
+    pub async fn has_authenticated_user(&self, user_id: &str) -> bool {
+        self.clients
+            .lock()
+            .await
+            .values()
+            .any(|client| client.user_id.as_deref() == Some(user_id))
+    }
+
     /// SEV-DESK-01: returns true if `ip` is currently in the lockout window.
     /// Also opportunistically clears expired lockouts so the map does not
     /// grow without bound for transient offenders.
@@ -1963,6 +1974,70 @@ mod tests {
 
         assert!(!branch.contains("extension::LATEST_PAGE_CONTEXT"));
         assert!(branch.contains("stage_selected_context_handoff"));
+    }
+
+    #[test]
+    fn vscode_health_frames_use_the_realtime_event_contract() {
+        let auth: RealtimeEvent = serde_json::from_value(json!({
+            "type": "Authenticate",
+            "user_id": "vscode-extension",
+            "team_id": null,
+            "token": "desktop-token"
+        }))
+        .expect("VS Code auth must deserialize through RealtimeEvent");
+        match auth {
+            RealtimeEvent::Authenticate {
+                user_id,
+                team_id,
+                token,
+            } => {
+                assert_eq!(user_id, "vscode-extension");
+                assert_eq!(team_id, None);
+                assert_eq!(token.as_deref(), Some("desktop-token"));
+            }
+            other => panic!("unexpected auth variant: {other:?}"),
+        }
+
+        let ping: RealtimeEvent = serde_json::from_value(json!({
+            "type": "NativeMessage",
+            "id": "vscode-ping-1",
+            "payload": { "type": "ping" }
+        }))
+        .expect("VS Code ping must deserialize through RealtimeEvent");
+        match ping {
+            RealtimeEvent::NativeMessage { id, payload } => {
+                assert_eq!(id, "vscode-ping-1");
+                assert_eq!(payload, json!({ "type": "ping" }));
+            }
+            other => panic!("unexpected ping variant: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn authenticated_user_status_requires_the_exact_live_user() {
+        let database = Arc::new(TokioMutex::new(
+            rusqlite::Connection::open_in_memory().expect("in-memory presence database"),
+        ));
+        let presence = Arc::new(PresenceManager::new(database));
+        let server = RealtimeServer::new(
+            presence,
+            Arc::new(TokioRwLock::new("desktop-token".to_string())),
+            None,
+        );
+
+        assert!(!server.has_authenticated_user("vscode-extension").await);
+        server.clients.lock().await.insert(
+            "client-1".to_string(),
+            WebSocketClient {
+                id: "client-1".to_string(),
+                user_id: Some("vscode-extension".to_string()),
+                team_id: None,
+                current_resource: None,
+            },
+        );
+
+        assert!(server.has_authenticated_user("vscode-extension").await);
+        assert!(!server.has_authenticated_user("chrome-extension").await);
     }
 
     // ── E2: /pair endpoint tests ──────────────────────────────────────────────

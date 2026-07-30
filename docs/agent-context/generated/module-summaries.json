@@ -29,7 +29,7 @@
       "name": "agiworkforce-licensing",
       "path": "crates/agiworkforce-licensing",
       "kind": "crate",
-      "purpose": "Offline, panic-free verification of Enterprise Local license and org-policy fixture contracts. It has no runtime consumer and is retained as the Rust half of the cross-language compatibility foundation accepted by `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`."
+      "purpose": "Offline, panic-free verification of enterprise-Local **licenses** (`.agilicense`) and **org policies** (`.agipolicy`) — the Rust half of the P7 Enterprise Local licensing contract-test foundation (retention boundary: `docs/decisions/2026..."
     },
     {
       "name": "agiworkforce-llm",
@@ -233,7 +233,7 @@
       "name": "@agiworkforce/licensing",
       "path": "packages/contracts/licensing",
       "kind": "package",
-      "purpose": "Pure, offline verification of Enterprise Local license and org-policy fixture contracts. It has no runtime consumer and is retained as the TypeScript half of the cross-language compatibility foundation accepted by `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`."
+      "purpose": "`@agiworkforce/licensing` is the pure, offline-verifiable primitive for Enterprise Local licensing (retention boundary: `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`). It verifies signed `.agilicense` and `.agipolicy..."
     },
     {
       "name": "@agiworkforce/trust-boundaries",

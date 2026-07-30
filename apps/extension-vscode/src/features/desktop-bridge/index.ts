@@ -7,16 +7,7 @@ export {
   DesktopBridge,
   activateDesktopBridge,
   getDesktopBridge,
-  getBridgeAuthHeaders,
+  getDesktopTokenPaths,
   readBridgeToken,
-  ALLOWED_OUTBOUND_TYPES,
-  ALLOWED_INBOUND_TYPES,
-  ALLOWED_BRIDGE_COMMANDS,
 } from './desktopBridge';
-export type {
-  DesktopBridgeConfig,
-  BridgeMessage,
-  BridgeResponse,
-  BridgeMessageHandler,
-  BridgeStatus,
-} from './desktopBridge';
+export type { BridgeStatus } from './desktopBridge';

@@ -123,8 +123,6 @@ describe('extension command registration', () => {
       'agi-workforce.openConversation',
       'agi-workforce.deleteConversation',
       'agi-workforce.refreshConversations',
-      'agi-workforce.sendToDesktop',
-      'agi-workforce.syncContextToDesktop',
     ];
     for (const cmd of REQUIRED) {
       expect(PACKAGE_COMMANDS).toContain(cmd);
