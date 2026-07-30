@@ -39,7 +39,6 @@ export type NativeMessageType =
   | 'RESUME_CHAT_RUN'
   | 'RESOLVE_CHAT_APPROVAL'
   | 'OPEN_SIDE_PANEL'
-  | 'OPEN_IN_DESKTOP'
   | 'GET_COOKIES'
   | 'SET_COOKIE'
   | 'CLEAR_COOKIES'
@@ -86,9 +85,9 @@ export type NativeMessageType =
   | 'SET_QUICK_MODE';
 
 /** Internal-only messages between extension contexts — NOT sent to native host. */
-export type InternalMessageType = 'CHAT_CHUNK' | 'PAYWALL_HIT';
+export type InternalMessageType = 'CHAT_CHUNK';
 
-export type InternalMessage = ChatChunkMessage | PaywallHitMessage;
+export type InternalMessage = ChatChunkMessage;
 
 // Base message structure
 export interface BaseMessage {
@@ -559,18 +558,6 @@ export interface ChatChunkMessage {
   };
 }
 
-/**
- * Paywall hit — sent from background to all extension views (popup, side panel)
- * when the API returns 429 + { kind:'paywall', feature, requiredTier, reason }.
- * Mirrors PaywallFeature / PaywallRequiredTier from providerStreamClient.ts.
- */
-export interface PaywallHitMessage {
-  type: 'PAYWALL_HIT';
-  feature: string;
-  requiredTier: string;
-  reason?: string;
-}
-
 export interface ChatMessageResponse {
   success: boolean;
   error?: string;
@@ -579,11 +566,6 @@ export interface ChatMessageResponse {
 // Open side panel — sent from content script FAB button to background (intra-extension only, not native messaging)
 export interface OpenSidePanelMessage extends BaseMessage {
   type: 'OPEN_SIDE_PANEL';
-}
-
-// Open in desktop — forwarded to the desktop app via native bridge (Claude/Comet parity)
-export interface OpenInDesktopMessage extends BaseMessage {
-  type: 'OPEN_IN_DESKTOP';
 }
 
 export interface GetCookiesMessage extends BaseMessage {
@@ -1035,7 +1017,6 @@ export type ExtensionMessage =
   | ResumeChatRunMessage
   | ResolveChatApprovalMessage
   | OpenSidePanelMessage
-  | OpenInDesktopMessage
   | GetCookiesMessage
   | SetCookieMessage
   | ClearCookiesMessage

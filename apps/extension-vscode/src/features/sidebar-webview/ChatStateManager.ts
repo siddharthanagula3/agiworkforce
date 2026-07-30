@@ -138,6 +138,7 @@ export type ExtToWebviewMessage =
       };
     }
   | { type: 'diffProposed'; payload: { sessionId: string; filePath: string } }
+  | { type: 'diffProposalFailed'; payload: { message: string } }
   | {
       type: 'attachFilesAck';
       payload: {
@@ -640,15 +641,15 @@ export class ChatStateManager {
         ).payload;
         const editor = vscode.window.activeTextEditor;
         if (editor === undefined) {
-          vscode.window.showWarningMessage(
-            'Open a file in the editor to apply this code suggestion.',
-          );
+          const message = 'Open a file in the editor to review this code suggestion.';
+          void vscode.window.showWarningMessage(message);
+          this._post({ type: 'diffProposalFailed', payload: { message } });
           break;
         }
         if (this._diffDecorationProvider === undefined) {
-          vscode.window.showWarningMessage(
-            'Diff provider is not available. Please reload the extension.',
-          );
+          const message = 'Diff provider is not available. Please reload the extension.';
+          void vscode.window.showWarningMessage(message);
+          this._post({ type: 'diffProposalFailed', payload: { message } });
           break;
         }
         const selection = editor.selection;
@@ -658,16 +659,24 @@ export class ChatStateManager {
         const originalText = selection.isEmpty ? '' : editor.document.getText(selection);
         void language; // language recorded for future syntax-aware diffing
 
-        const session = this._diffDecorationProvider.showDiff(editor, originalText, code, range, {
-          filePath: vscode.workspace.asRelativePath(editor.document.uri),
-        });
-        this._post({
-          type: 'diffProposed',
-          payload: {
-            sessionId: session.id,
-            filePath: vscode.workspace.asRelativePath(editor.document.uri),
-          },
-        });
+        try {
+          const filePath = vscode.workspace.asRelativePath(editor.document.uri);
+          const session = this._diffDecorationProvider.showDiff(editor, originalText, code, range, {
+            filePath,
+          });
+          this._post({
+            type: 'diffProposed',
+            payload: {
+              sessionId: session.id,
+              filePath,
+            },
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Could not open the proposed diff.';
+          void vscode.window.showErrorMessage(`AGI Workforce: ${message}`);
+          this._post({ type: 'diffProposalFailed', payload: { message } });
+        }
         break;
       }
     }

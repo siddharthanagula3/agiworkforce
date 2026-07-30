@@ -142,21 +142,6 @@
         "icon": "$(history)"
       },
       {
-        "command": "agi-workforce.sendToDesktop",
-        "title": "AGI Workforce: Send Code to Desktop Agent",
-        "icon": "$(export)"
-      },
-      {
-        "command": "agi-workforce.syncContextToDesktop",
-        "title": "AGI Workforce: Sync Workspace Context to Desktop",
-        "icon": "$(sync)"
-      },
-      {
-        "command": "agi-workforce.triggerAgentAction",
-        "title": "AGI Workforce: Trigger Agent Action on Desktop",
-        "icon": "$(play)"
-      },
-      {
         "command": "agi.git.status",
         "title": "AGI: Git Status",
         "icon": "$(source-control)"
@@ -731,12 +716,12 @@
         "agiWorkforce.mcp.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable MCP for cloud-backed editor utilities and the optional Desktop bridge. This does not control the local app-server; configure developer-session MCP through the AGI CLI."
+          "description": "Enable MCP for cloud-backed editor utilities. This does not control the local app-server; configure developer-session MCP through the AGI CLI."
         },
         "agiWorkforce.desktopBridge.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Connect to AGI Workforce desktop app for extended agent capabilities"
+          "description": "Show authenticated AGI Desktop availability over the local health bridge"
         },
         "agiWorkforce.desktopBridge.port": {
           "type": "number",

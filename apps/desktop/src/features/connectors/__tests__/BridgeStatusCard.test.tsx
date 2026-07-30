@@ -21,6 +21,7 @@ function buildDiagnostics(
         extension_id: 'kbfnbcaeplbcioakkpcpgfkobkghlhen',
         ready: true,
       },
+      vscode_connection: { state: 'connected', ready: true },
     },
     commands: ['extension_status'],
     ...overrides,
@@ -44,13 +45,29 @@ describe('BridgeStatusCard', () => {
     expect(row).toHaveTextContent('Connected');
   });
 
-  it('shows VS Code bridge as connected when overall status ok and websocket port present', async () => {
+  it('shows VS Code bridge as connected only for an authenticated realtime client', async () => {
     const fetcher = vi.fn().mockResolvedValue(buildDiagnostics());
     render(<BridgeStatusCard fetcher={fetcher} isTauriHost={true} />);
     const row = await screen.findByTestId('bridge-row-vscode');
     expect(row).toHaveTextContent('VS Code extension');
     expect(row).toHaveTextContent('Connected');
     expect(row).toHaveTextContent('ws://127.0.0.1:8787');
+  });
+
+  it('does not treat a listening WebSocket port as a connected VS Code client', async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      buildDiagnostics({
+        diagnostics: {
+          recommendations: [],
+          realtime_token: { exists: true, valid: true, path: '/x/.ipc_token', error: null },
+          native_connection: { state: 'connected', extension_id: 'abc', ready: true },
+          vscode_connection: { state: 'disconnected', ready: false },
+        },
+      }),
+    );
+    render(<BridgeStatusCard fetcher={fetcher} isTauriHost={true} />);
+    const row = await screen.findByTestId('bridge-row-vscode');
+    expect(row).toHaveTextContent('Not connected');
   });
 
   it('marks both bridges in error when realtime token is invalid', async () => {
@@ -61,6 +78,7 @@ describe('BridgeStatusCard', () => {
           recommendations: ['Restart the desktop app to regenerate .ipc_token.'],
           realtime_token: { exists: true, valid: false, path: '/x/.ipc_token', error: 'empty' },
           native_connection: { state: 'connected', extension_id: 'abc', ready: false },
+          vscode_connection: { state: 'connected', ready: false },
         },
       }),
     );
@@ -79,6 +97,7 @@ describe('BridgeStatusCard', () => {
           recommendations: ['Reconnect the browser extension.'],
           realtime_token: { exists: true, valid: true, path: '/x/.ipc_token', error: null },
           native_connection: { state: 'disconnected', extension_id: null, ready: false },
+          vscode_connection: { state: 'connected', ready: true },
         },
       }),
     );
@@ -94,6 +113,7 @@ describe('BridgeStatusCard', () => {
           recommendations: [],
           realtime_token: { exists: true, valid: true, path: '/x/.ipc_token', error: null },
           native_connection: { state: 'connecting', extension_id: null, ready: false },
+          vscode_connection: { state: 'disconnected', ready: false },
         },
       }),
     );

@@ -22,8 +22,6 @@ export async function validateAdvancedFeatureFlags(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   const inlineEnabled = Config.inlineCompletionsEnabled();
-  const mcpEnabled = Config.mcpEnabled();
-  const desktopBridgeEnabled = Config.desktopBridgeEnabled();
 
   if (inlineEnabled) {
     const [accountToken, apiKey] = await Promise.all([
@@ -42,11 +40,5 @@ export async function validateAdvancedFeatureFlags(
           }
         });
     }
-  }
-
-  if (mcpEnabled && !desktopBridgeEnabled) {
-    void vscode.window.showWarningMessage(
-      'AGI Workforce MCP is enabled, but desktop bridge is disabled. Enable desktop bridge to use local MCP tools.',
-    );
   }
 }

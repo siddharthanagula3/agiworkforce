@@ -71,12 +71,27 @@ describe('ChatStateManager local turn lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vscode.workspace.isTrusted = true;
+    vscode.window.activeTextEditor = undefined;
     vscode.workspace.workspaceFolders = [
       { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
     ];
     setContextPanelInstance({
       getContextFiles: () => ['/workspace/src/context.ts'],
     } as ContextPanelProvider);
+  });
+
+  it('acknowledges an Apply failure when no editor is open', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({
+      type: 'proposeDiff',
+      payload: { code: 'const answer = 42;', language: 'typescript' },
+    });
+
+    expect(harness.posted).toContainEqual({
+      type: 'diffProposalFailed',
+      payload: { message: 'Open a file in the editor to review this code suggestion.' },
+    });
   });
 
   it('does not launch the privileged local runtime for an untrusted workspace', async () => {

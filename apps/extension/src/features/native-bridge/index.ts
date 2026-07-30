@@ -7,9 +7,7 @@
  *
  * Exports:
  *   - pairing: desktop ↔ extension pairing state machine (POST /pair)
- *   - providerStreamClient: SSE stream client (api-gateway bridge)
  *   - sendQueue: chrome.storage-backed send-pipeline queue
  */
 export * from './pairing';
-export * from './providerStreamClient';
 export * from './sendQueue';

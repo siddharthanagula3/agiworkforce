@@ -25,7 +25,6 @@ import {
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
-import { getDesktopBridge } from '../features/desktop-bridge';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
 import {
@@ -535,109 +534,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    // ── desktop bridge commands ─────────────────────────────────────────────────
-    register('agi-workforce.sendToDesktop', async () => {
-      const bridge = getDesktopBridge();
-      if (bridge === undefined || bridge.status !== 'connected') {
-        vscode.window.showWarningMessage(
-          'AGI Workforce: Desktop bridge is not connected. Enable it in settings.',
-        );
-        return;
-      }
-
-      const editor = vscode.window.activeTextEditor;
-      if (editor === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: No active editor.');
-        return;
-      }
-
-      const selection = editor.selection;
-      const code = editor.document.getText(selection.isEmpty ? undefined : selection);
-      if (code.trim() === '') {
-        vscode.window.showWarningMessage('AGI Workforce: No code to send.');
-        return;
-      }
-
-      const result = await bridge.sendCodeSnippet(
-        code,
-        editor.document.languageId,
-        editor.document.uri.fsPath,
-      );
-
-      if (result.ok) {
-        vscode.window.showInformationMessage('AGI Workforce: Code sent to desktop agent.');
-      } else {
-        vscode.window.showErrorMessage(`AGI Workforce: ${result.error ?? 'Failed to send code.'}`);
-      }
-    }),
-
-    register('agi-workforce.syncContextToDesktop', async () => {
-      const bridge = getDesktopBridge();
-      if (bridge === undefined || bridge.status !== 'connected') {
-        vscode.window.showWarningMessage(
-          'AGI Workforce: Desktop bridge is not connected. Enable it in settings.',
-        );
-        return;
-      }
-
-      const result = await bridge.shareContext();
-      if (result.ok) {
-        vscode.window.showInformationMessage('AGI Workforce: Workspace context synced to desktop.');
-      } else {
-        vscode.window.showErrorMessage(
-          `AGI Workforce: ${result.error ?? 'Failed to sync context.'}`,
-        );
-      }
-    }),
-
-    register('agi-workforce.triggerAgentAction', async () => {
-      const bridge = getDesktopBridge();
-      if (bridge === undefined || bridge.status !== 'connected') {
-        vscode.window.showWarningMessage(
-          'AGI Workforce: Desktop bridge is not connected. Enable it in settings.',
-        );
-        return;
-      }
-
-      const AGENT_ACTIONS: vscode.QuickPickItem[] = [
-        { label: 'open-chat', description: 'Open the AGI Workforce chat panel on the desktop' },
-        { label: 'run-task', description: 'Trigger an autonomous task run on the desktop agent' },
-        { label: 'open-tool', description: 'Open a specific tool in the desktop app' },
-      ];
-
-      const picked = await vscode.window.showQuickPick(AGENT_ACTIONS, {
-        title: 'AGI Workforce — Trigger Agent Action',
-        placeHolder: 'Select an action to trigger on the desktop app',
-        matchOnDescription: true,
-      });
-
-      if (picked === undefined) return;
-
-      let params: Record<string, unknown> = {};
-      if (picked.label === 'run-task') {
-        const taskDescription = await vscode.window.showInputBox({
-          title: 'AGI Workforce — Task Description',
-          prompt: 'Describe the task for the desktop agent to run',
-          placeHolder: 'e.g. Summarize the open project and suggest improvements',
-          ignoreFocusOut: true,
-          validateInput: (v) => (v.trim() === '' ? 'Task description cannot be empty.' : undefined),
-        });
-        if (taskDescription === undefined) return;
-        params = { description: taskDescription.trim() };
-      }
-
-      const result = await bridge.triggerAgentAction(picked.label, params);
-      if (result.ok) {
-        vscode.window.showInformationMessage(
-          `AGI Workforce: Agent action "${picked.label}" sent to desktop.`,
-        );
-      } else {
-        vscode.window.showErrorMessage(
-          `AGI Workforce: ${result.error ?? `Failed to trigger action "${picked.label}".`}`,
-        );
-      }
-    }),
-
     // ── feedback ────────────────────────────────────────────────────────────────
     register('agi-workforce.sendFeedback', async () => {
       const FEEDBACK_TYPES: vscode.QuickPickItem[] = [
@@ -674,25 +570,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         : picked.label.includes('Feature')
           ? 'feature'
           : 'general';
-
-      const bridge = getDesktopBridge();
-      if (bridge !== undefined && bridge.status === 'connected') {
-        const result = await bridge.sendToDesktop('feedback', {
-          type: feedbackType,
-          message: feedbackText.trim(),
-          extensionVersion: getExtensionVersion(),
-          vscodeVersion: vscode.version,
-          platform: process.platform,
-        });
-        if (result.ok) {
-          vscode.window.showInformationMessage('AGI Workforce: Thank you for your feedback!');
-          telemetry.logEvent(telemetry.TelemetryEvents.EXTENSION_ACTIVATED, {
-            action: 'feedback_sent',
-            feedbackType,
-          });
-          return;
-        }
-      }
 
       const encoded = encodeURIComponent(
         `**Type**: ${feedbackType}\n**VS Code**: ${vscode.version}\n**Extension**: ${getExtensionVersion()}\n**Platform**: ${process.platform}\n\n${feedbackText.trim()}`,

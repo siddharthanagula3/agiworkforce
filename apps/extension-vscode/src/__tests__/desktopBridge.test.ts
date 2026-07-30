@@ -1,344 +1,142 @@
-/**
- * desktopBridge.test.ts — Tests for DesktopBridge and bridge handler registration
- *
- * Verifies:
- * - Message handlers are registered and called after bridge is re-enabled
- * - onDesktopMessage Disposable correctly removes the handler
- * - Bridge status changes fire the onStatusChange event
- * - registerBridgeHandlers wires up expected message types
- */
+import { once } from 'events';
+import { chmodSync, writeFileSync } from 'fs';
+import { mkdtemp, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { type AddressInfo } from 'net';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { WebSocketServer } from 'ws';
+import { DesktopBridge, getDesktopTokenPaths, readBridgeToken } from '../features/desktop-bridge';
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as vscode from 'vscode';
-import { DesktopBridge, getBridgeAuthHeaders } from '../features/desktop-bridge';
-import type { BridgeMessage } from '../features/desktop-bridge';
+const disposables: Array<() => void | Promise<void>> = [];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+afterEach(async () => {
+  while (disposables.length > 0) await disposables.pop()?.();
+  vi.restoreAllMocks();
+});
 
-function makeBridgeMessage(type: string, payload: Record<string, unknown> = {}): BridgeMessage {
-  return { type, payload, timestamp: Date.now() };
-}
-
-// ─── DesktopBridge unit tests ─────────────────────────────────────────────────
-
-describe('DesktopBridge', () => {
-  let bridge: DesktopBridge;
-
-  beforeEach(() => {
-    bridge = new DesktopBridge(8787);
+describe('DesktopBridge token contract', () => {
+  it('resolves the same macOS app-data candidates as Desktop', () => {
+    expect(getDesktopTokenPaths('darwin', '/Users/test', {})).toEqual([
+      '/Users/test/Library/Containers/com.agiworkforce.desktop/Data/Library/Application Support/com.agiworkforce.desktop/.ipc_token',
+      '/Users/test/Library/Application Support/com.agiworkforce.desktop/.ipc_token',
+    ]);
   });
 
-  afterEach(() => {
-    bridge.dispose();
-    vi.unstubAllGlobals();
+  it('resolves Linux and Windows app-data token paths', () => {
+    expect(getDesktopTokenPaths('linux', '/home/test', {})).toEqual([
+      '/home/test/.local/share/com.agiworkforce.desktop/.ipc_token',
+    ]);
+    expect(
+      getDesktopTokenPaths('win32', 'C:\\Users\\test', {
+        LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local',
+      }),
+    ).toEqual([join('C:\\Users\\test\\AppData\\Local', 'com.agiworkforce.desktop', '.ipc_token')]);
   });
 
-  it('starts with disconnected status', () => {
+  it('reads Desktop .ipc_token through one checked file descriptor', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agi-vscode-token-'));
+    disposables.push(() => rm(dir, { recursive: true, force: true }));
+    const tokenPath = join(dir, '.ipc_token');
+    writeFileSync(tokenPath, ' desktop-token \n', { mode: 0o600 });
+    expect(readBridgeToken([tokenPath])).toBe('desktop-token');
+  });
+
+  it.runIf(process.platform !== 'win32')('rejects a group-readable token', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'agi-vscode-token-'));
+    disposables.push(() => rm(dir, { recursive: true, force: true }));
+    const tokenPath = join(dir, '.ipc_token');
+    writeFileSync(tokenPath, 'desktop-token', { mode: 0o600 });
+    chmodSync(tokenPath, 0o640);
+    expect(readBridgeToken([tokenPath])).toBeUndefined();
+  });
+});
+
+describe('DesktopBridge realtime integration', () => {
+  it('authenticates with Desktop RealtimeEvent and proves a ping response round trip', async () => {
+    const server = new WebSocketServer({ port: 0 });
+    await once(server, 'listening');
+    disposables.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+    const address = server.address() as AddressInfo;
+    const received: unknown[] = [];
+
+    server.on('connection', (socket) => {
+      socket.on('message', (bytes) => {
+        const message = JSON.parse(String(bytes)) as { type: string; id?: string };
+        received.push(message);
+        if (message.type === 'Authenticate') {
+          socket.send(JSON.stringify({ type: 'Authenticated', user_id: 'vscode-extension' }));
+        } else if (message.type === 'NativeMessage' && message.id) {
+          socket.send(
+            JSON.stringify({
+              type: 'NativeResponse',
+              id: message.id,
+              success: true,
+              data: { pong: true },
+              error: null,
+            }),
+          );
+        }
+      });
+    });
+
+    const bridge = new DesktopBridge(address.port, () => 'desktop-token');
+    disposables.push(() => bridge.dispose());
+    await bridge.connect();
+    await vi.waitFor(() => expect(bridge.status).toBe('connected'));
+
+    await expect(bridge.healthCheck()).resolves.toBe(true);
+    expect(received[0]).toEqual({
+      type: 'Authenticate',
+      user_id: 'vscode-extension',
+      team_id: null,
+      token: 'desktop-token',
+    });
+    expect(received[1]).toMatchObject({
+      type: 'NativeMessage',
+      payload: { type: 'ping' },
+    });
+  });
+
+  it('stays neutrally disconnected when Desktop has not created a token', async () => {
+    const bridge = new DesktopBridge(8787, () => undefined);
+    disposables.push(() => bridge.dispose());
+    const statusBar = bridge.initStatusBar();
+    await bridge.connect();
     expect(bridge.status).toBe('disconnected');
-  });
-
-  it('treats an unpaired optional Desktop app as neutral, not as an error', async () => {
-    const unpairedBridge = new DesktopBridge(8787, () => undefined);
-    const statusBar = unpairedBridge.initStatusBar();
-
-    await unpairedBridge.connect();
-
-    expect(unpairedBridge.status).toBe('disconnected');
     expect(statusBar.text).toBe('$(plug) Desktop: Not connected');
     expect(statusBar.backgroundColor).toBeUndefined();
-    expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
-    unpairedBridge.dispose();
   });
 
-  it('exposes the correct baseUrl and wsUrl', () => {
-    const b = new DesktopBridge(9090);
-    expect(b.baseUrl).toBe('http://127.0.0.1:9090');
-    expect(b.wsUrl).toBe('ws://127.0.0.1:9090/ws');
-  });
+  it('fails a health check when Desktop returns a non-pong response', async () => {
+    const server = new WebSocketServer({ port: 0 });
+    await once(server, 'listening');
+    disposables.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+    const address = server.address() as AddressInfo;
 
-  it('fires onStatusChange when status changes', () => {
-    const listener = vi.fn();
-    bridge.onStatusChange(listener);
-    // Directly invoke disconnect which triggers a status update to 'disconnected'
-    // (no-op if already disconnected — so we need to reach into internals)
-    // We test via the public API: disposing sets internal state
-    bridge.dispose();
-    // After dispose, status should remain disconnected (already was)
-    // The important thing is no error is thrown
-    expect(typeof bridge.status).toBe('string');
-  });
-
-  describe('onDesktopMessage', () => {
-    it('registers a handler that receives messages', () => {
-      const handler = vi.fn();
-      bridge.onDesktopMessage(handler);
-
-      const msg = makeBridgeMessage('test:event', { value: 42 });
-      // Access private _handlers via type assertion to simulate message delivery
-      const bridgeAny = bridge as unknown as {
-        _handlers: Array<(m: BridgeMessage) => void>;
-      };
-      for (const h of bridgeAny._handlers) h(msg);
-
-      expect(handler).toHaveBeenCalledOnce();
-      expect(handler).toHaveBeenCalledWith(msg);
-    });
-
-    it('returns a Disposable that removes the handler', () => {
-      const handler = vi.fn();
-      const disposable = bridge.onDesktopMessage(handler);
-
-      // Dispose → handler should be removed
-      disposable.dispose();
-
-      const msg = makeBridgeMessage('test:event');
-      const bridgeAny = bridge as unknown as {
-        _handlers: Array<(m: BridgeMessage) => void>;
-      };
-      for (const h of bridgeAny._handlers) h(msg);
-
-      expect(handler).not.toHaveBeenCalled();
-    });
-
-    it('supports multiple independent handlers', () => {
-      const h1 = vi.fn();
-      const h2 = vi.fn();
-      bridge.onDesktopMessage(h1);
-      bridge.onDesktopMessage(h2);
-
-      const msg = makeBridgeMessage('multi');
-      const bridgeAny = bridge as unknown as {
-        _handlers: Array<(m: BridgeMessage) => void>;
-      };
-      for (const h of bridgeAny._handlers) h(msg);
-
-      expect(h1).toHaveBeenCalledOnce();
-      expect(h2).toHaveBeenCalledOnce();
-    });
-
-    it('disposing one handler does not affect others', () => {
-      const h1 = vi.fn();
-      const h2 = vi.fn();
-      const d1 = bridge.onDesktopMessage(h1);
-      bridge.onDesktopMessage(h2);
-
-      d1.dispose();
-
-      const msg = makeBridgeMessage('selective');
-      const bridgeAny = bridge as unknown as {
-        _handlers: Array<(m: BridgeMessage) => void>;
-      };
-      for (const h of bridgeAny._handlers) h(msg);
-
-      expect(h1).not.toHaveBeenCalled();
-      expect(h2).toHaveBeenCalledOnce();
-    });
-  });
-
-  describe('updatePort', () => {
-    it('updates the port when value changes', () => {
-      const b = new DesktopBridge(8787);
-      b.updatePort(9000);
-      expect(b.baseUrl).toBe('http://127.0.0.1:9000');
-    });
-
-    it('does nothing when the same port is set', () => {
-      const b = new DesktopBridge(8787);
-      // Should not throw or change state
-      b.updatePort(8787);
-      expect(b.baseUrl).toBe('http://127.0.0.1:8787');
-    });
-  });
-
-  describe('dispose', () => {
-    it('clears all handlers on dispose', () => {
-      const handler = vi.fn();
-      bridge.onDesktopMessage(handler);
-      bridge.dispose();
-
-      const bridgeAny = bridge as unknown as {
-        _handlers: Array<(m: BridgeMessage) => void>;
-      };
-      expect(bridgeAny._handlers).toHaveLength(0);
-    });
-
-    it('is safe to dispose multiple times', () => {
-      expect(() => {
-        bridge.dispose();
-        bridge.dispose();
-      }).not.toThrow();
-    });
-  });
-
-  describe('WebSocket protocol fallback', () => {
-    it('healthCheck uses authenticated WebSocket state instead of HTTP fetch', async () => {
-      const fetchMock = vi.fn();
-      vi.stubGlobal('fetch', fetchMock);
-      const send = vi.fn();
-      const bridgeAny = bridge as unknown as {
-        _setStatus: (s: string) => void;
-        _authOk: boolean;
-        _ws: { readyState: number; send: (payload: string) => void; close: () => void };
-      };
-      bridgeAny._setStatus('connected');
-      bridgeAny._authOk = true;
-      bridgeAny._ws = { readyState: 1, send, close: vi.fn() };
-
-      await expect(bridge.healthCheck()).resolves.toBe(true);
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(send).toHaveBeenCalledOnce();
-      expect(JSON.parse(send.mock.calls[0]?.[0] as string)).toMatchObject({
-        type: 'vscode:ping',
+    server.on('connection', (socket) => {
+      socket.on('message', (bytes) => {
+        const message = JSON.parse(String(bytes)) as { type: string; id?: string };
+        if (message.type === 'Authenticate') {
+          socket.send(JSON.stringify({ type: 'Authenticated', user_id: 'vscode-extension' }));
+        } else if (message.id) {
+          socket.send(
+            JSON.stringify({
+              type: 'NativeResponse',
+              id: message.id,
+              success: false,
+              data: null,
+              error: 'not a pong',
+            }),
+          );
+        }
       });
     });
 
-    it('sendToDesktop sends supported commands over WebSocket without HTTP POST', async () => {
-      const fetchMock = vi.fn();
-      vi.stubGlobal('fetch', fetchMock);
-      const send = vi.fn();
-      const bridgeAny = bridge as unknown as {
-        _setStatus: (s: string) => void;
-        _authOk: boolean;
-        _ws: { readyState: number; send: (payload: string) => void; close: () => void };
-      };
-      bridgeAny._setStatus('connected');
-      bridgeAny._authOk = true;
-      bridgeAny._ws = { readyState: 1, send, close: vi.fn() };
-
-      await expect(bridge.sendToDesktop('code-snippet', { code: 'x' })).resolves.toEqual({
-        ok: true,
-      });
-      expect(fetchMock).not.toHaveBeenCalled();
-      const sent = JSON.parse(send.mock.calls[0]?.[0] as string) as BridgeMessage;
-      expect(sent.type).toBe('vscode:code-snippet');
-      expect(sent.payload).toEqual({ code: 'x' });
-    });
-
-    it('sendToDesktop fails closed for unsupported HTTP-only commands', async () => {
-      const fetchMock = vi.fn();
-      vi.stubGlobal('fetch', fetchMock);
-      const send = vi.fn();
-      const bridgeAny = bridge as unknown as {
-        _setStatus: (s: string) => void;
-        _authOk: boolean;
-        _ws: { readyState: number; send: (payload: string) => void; close: () => void };
-      };
-      bridgeAny._setStatus('connected');
-      bridgeAny._authOk = true;
-      bridgeAny._ws = { readyState: 1, send, close: vi.fn() };
-
-      const result = await bridge.sendToDesktop('feedback', { message: 'hello' });
-      expect(result.ok).toBe(false);
-      expect(result.error).toContain('not supported');
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(send).not.toHaveBeenCalled();
-    });
-  });
-});
-
-describe('bridge HTTP auth headers', () => {
-  it('includes bearer and bridge-token headers when a token is available', () => {
-    expect(getBridgeAuthHeaders(' test-token ')).toEqual({
-      Authorization: 'Bearer test-token',
-      'X-AGI-Bridge-Token': 'test-token',
-      'X-AGI-App-Server-Token': 'test-token',
-    });
-  });
-
-  it('fails closed when no bridge token is available', () => {
-    expect(getBridgeAuthHeaders('')).toBeUndefined();
-  });
-});
-
-// ─── Message handler registration tests ──────────────────────────────────────
-
-describe('Bridge message handler re-registration', () => {
-  it('handlers registered on a new bridge instance receive messages independently', () => {
-    const bridge1 = new DesktopBridge(8787);
-    const bridge2 = new DesktopBridge(8788);
-
-    const handler1 = vi.fn();
-    const handler2 = vi.fn();
-
-    bridge1.onDesktopMessage(handler1);
-    bridge2.onDesktopMessage(handler2);
-
-    const msg1 = makeBridgeMessage('desktop:show-message', { text: 'from bridge1' });
-    const msg2 = makeBridgeMessage('desktop:show-message', { text: 'from bridge2' });
-
-    const b1Any = bridge1 as unknown as { _handlers: Array<(m: BridgeMessage) => void> };
-    const b2Any = bridge2 as unknown as { _handlers: Array<(m: BridgeMessage) => void> };
-
-    for (const h of b1Any._handlers) h(msg1);
-    for (const h of b2Any._handlers) h(msg2);
-
-    expect(handler1).toHaveBeenCalledWith(msg1);
-    expect(handler1).not.toHaveBeenCalledWith(msg2);
-    expect(handler2).toHaveBeenCalledWith(msg2);
-    expect(handler2).not.toHaveBeenCalledWith(msg1);
-
-    bridge1.dispose();
-    bridge2.dispose();
-  });
-
-  it('disposed bridge1 handlers are not called when bridge2 receives messages', () => {
-    const bridge1 = new DesktopBridge(8787);
-    const bridge2 = new DesktopBridge(8788);
-
-    const staleHandler = vi.fn();
-    bridge1.onDesktopMessage(staleHandler);
-
-    // Simulate bridge1 being disposed and replaced with bridge2
-    bridge1.dispose();
-
-    const newHandler = vi.fn();
-    bridge2.onDesktopMessage(newHandler);
-
-    const msg = makeBridgeMessage('desktop:run-command', { command: 'test.command' });
-    const b2Any = bridge2 as unknown as { _handlers: Array<(m: BridgeMessage) => void> };
-    for (const h of b2Any._handlers) h(msg);
-
-    expect(newHandler).toHaveBeenCalledOnce();
-    expect(staleHandler).not.toHaveBeenCalled();
-
-    bridge2.dispose();
-  });
-
-  it('onStatusChange emitter fires for status transitions', () => {
-    const bridge = new DesktopBridge(8787);
-    const statusChanges: string[] = [];
-
-    bridge.onStatusChange((status) => {
-      statusChanges.push(status);
-    });
-
-    // Access private _setStatus to simulate transitions in unit tests
-    const bridgeAny = bridge as unknown as {
-      _setStatus: (s: string) => void;
-    };
-
-    bridgeAny._setStatus('connecting');
-    bridgeAny._setStatus('connected');
-    bridgeAny._setStatus('disconnected');
-
-    expect(statusChanges).toEqual(['connecting', 'connected', 'disconnected']);
-
-    bridge.dispose();
-  });
-
-  it('onStatusChange does not fire when status is set to the same value', () => {
-    const bridge = new DesktopBridge(8787);
-    const listener = vi.fn();
-    bridge.onStatusChange(listener);
-
-    const bridgeAny = bridge as unknown as {
-      _setStatus: (s: string) => void;
-    };
-
-    // Already 'disconnected' — setting same value should not fire
-    bridgeAny._setStatus('disconnected');
-    expect(listener).not.toHaveBeenCalled();
-
-    bridge.dispose();
+    const bridge = new DesktopBridge(address.port, () => 'desktop-token');
+    disposables.push(() => bridge.dispose());
+    await bridge.connect();
+    await vi.waitFor(() => expect(bridge.status).toBe('connected'));
+    await expect(bridge.healthCheck()).resolves.toBe(false);
   });
 });

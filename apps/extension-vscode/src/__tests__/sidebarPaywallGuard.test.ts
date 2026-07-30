@@ -42,19 +42,19 @@ describe('resolveTier workspace-spoofing hardening', () => {
   it('ignores a workspace-scoped max override', async () => {
     stubTierInspect(undefined, 'max');
 
-    await expect(resolveTier(makeContext(), false)).resolves.toBe('byok');
+    await expect(resolveTier(makeContext())).resolves.toBe('byok');
   });
 
   it('respects a legitimate global max override', async () => {
     stubTierInspect('max', undefined);
 
-    await expect(resolveTier(makeContext(), false)).resolves.toBe('max');
+    await expect(resolveTier(makeContext())).resolves.toBe('max');
   });
 
   it('uses the cached account tier when no global override exists', async () => {
     stubTierInspect(undefined, undefined);
 
-    await expect(resolveTier(makeContext('basic'), false)).resolves.toBe('basic');
+    await expect(resolveTier(makeContext('basic'))).resolves.toBe('basic');
   });
 
   it.each(['free', 'max_15x', 'team', 'enterprise'] as const)(
@@ -62,13 +62,13 @@ describe('resolveTier workspace-spoofing hardening', () => {
     async (tier) => {
       stubTierInspect(undefined, undefined);
 
-      await expect(resolveTier(makeContext(tier), false)).resolves.toBe(tier);
+      await expect(resolveTier(makeContext(tier))).resolves.toBe(tier);
     },
   );
 
   it('keeps cross-provider switching locked after a workspace tier spoof', async () => {
     stubTierInspect(undefined, 'max');
-    const tier = await resolveTier(makeContext(), false);
+    const tier = await resolveTier(makeContext());
 
     expect(guardProviderSwitch('claude-sonnet-4.6', 'gpt-5.6-sol', tier)).toBe('upgrade-required');
   });

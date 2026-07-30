@@ -107,6 +107,20 @@ describe('executeChromeManagedChat', () => {
     expect(deps.streamChat).toHaveBeenCalledTimes(1);
   });
 
+  it('carries quota exhaustion through the production managed-chat path', async () => {
+    const deps = dependencies({
+      streamChat: vi.fn(() =>
+        stream({ type: 'error', message: 'Usage limit reached', code: 'quota_exceeded' }),
+      ),
+    });
+    const result = await executeChromeManagedChat(
+      { id: 'stream-quota', text: 'Hello', modelSelection: 'auto' },
+      deps,
+    );
+
+    expect(result).toMatchObject({ status: 'error', code: 'quota_exceeded' });
+  });
+
   it.each(['free', 'basic'])(
     'stops the %s plan before it enters the Pro-only Chrome AGI Work path',
     async (subscriptionTier) => {

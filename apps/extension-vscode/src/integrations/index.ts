@@ -30,5 +30,5 @@ export {
 } from './patchEngine';
 export type { PatchConfidence, PatchBlock, PatchResult, BatchResult } from './patchEngine';
 
-export { TIER_ORDER, tierAtLeast, fetchTierFromBridge, resolveTier } from './tierResolver';
+export { TIER_ORDER, tierAtLeast, resolveTier } from './tierResolver';
 export type { Tier } from './tierResolver';

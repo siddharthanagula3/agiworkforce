@@ -294,7 +294,7 @@ statement outside a module` and `initialize()` (which registers
     TRACKED MED/LOW (from both full-read agents; complete-or-remove): task-notif
     toggle only gates the pre-run notice (Completed/Failed fire regardless);
     scheduled prompt-task Managed-Cloud output is dropped (burns a paid turn, no
-    consumer); OPEN_IN_DESKTOP + capture_page report/inflate success with no desktop;
+    consumer); capture_page reports/inflates success with no desktop;
     in-page Console panel permanently empty (dead Refresh/Clear); scroll-hidden FAB
     stays clickable (opacity not visibility); in-page provider pill reads
     never-written agi_default_provider/model (fake label); page-metadata.ts dead
@@ -322,10 +322,11 @@ statement outside a module` and `initialize()` (which registers
     ALLOWED_BRIDGE_HOSTS only, minimal {extensionId} payload, validated response
     token. (5) managed cloud — cloudAgentClient.callCloud validateGatewayUrl +
     Bearer+CSRF+Idempotency, forwards already-redacted text; screenshots the
-    documented allowlist+ask-gated image residual. FINDING (MED/LOW, not egress
-    risk): native-bridge providerStreamClient.streamFromProvider has ZERO callers —
-    an unwired dead export (re-exported via the barrel but never invoked), so it is
-    NOT a live egress path; delete-or-wire. Other verified-correct: manifest
+    documented allowlist+ask-gated image residual. RESOLVED 2026-07-30: the
+    zero-caller native-bridge providerStreamClient, its PAYWALL_HIT-only harness,
+    and the unconsumed OPEN_IN_DESKTOP route were deleted. Production managed chat
+    continues to surface quota_exceeded through freeTrialClient → handleChatMessage
+    → the side-panel quota UI. Other verified-correct: manifest
     command/menu/alarm listeners all live; autofill filler.ts production-grade.
 - MOBILE-IOS-BUILD-BLOCKED (2026-07-21): attempted the mobile real-UI path (Maestro
   flow scripts/qa/maestro-dev-smoke.yaml needs the app on an iOS sim). `expo

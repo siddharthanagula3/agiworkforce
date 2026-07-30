@@ -60,6 +60,10 @@ export interface ExtensionStatusDiagnostics {
       extension_id?: string | null;
       ready?: boolean;
     };
+    vscode_connection?: {
+      state?: string;
+      ready?: boolean;
+    };
   };
   commands?: string[];
 }

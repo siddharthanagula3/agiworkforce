@@ -526,12 +526,9 @@ mod tests {
     #[test]
     fn test_get_model_for_task_anthropic_fast_completion() {
         let model = Provider::Anthropic.get_model_for_task(TaskType::FastCompletion);
-        // Haiku is the fast completion model
-        assert!(
-            model.contains("haiku"),
-            "Anthropic FastCompletion should use Haiku, got: {}",
-            model
-        );
+        // The current registry has no separately admitted Anthropic fast model,
+        // so task routing intentionally falls back to the provider default.
+        assert_eq!(model, Provider::Anthropic.default_model());
     }
 
     #[test]
