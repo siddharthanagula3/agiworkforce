@@ -1186,3 +1186,72 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(113, 113, 122, 0.8);
 }
+
+/*
+ * System-owned contrast preferences for the Desktop WebView. The increased
+ * contrast path strengthens semantic tokens; Windows forced-colors switches
+ * controls, selection, links, and focus indicators to OS color keywords.
+ */
+@media (prefers-contrast: more) {
+  :root {
+    --muted-foreground: 215 25% 28%;
+    --border: 215 35% 38%;
+    --input: 215 35% 38%;
+    --ring: 221 100% 32%;
+    --chat-text-secondary: #303030;
+    --chat-border-subtle: rgba(0, 0, 0, 0.45);
+    --chat-border-strong: #4a4a4a;
+  }
+
+  .dark {
+    --muted-foreground: 210 30% 86%;
+    --border: 0 0% 68%;
+    --input: 0 0% 68%;
+    --ring: 210 100% 75%;
+    --chat-text-secondary: #e5e7eb;
+    --chat-border-subtle: rgba(255, 255, 255, 0.5);
+    --chat-border-strong: #d1d5db;
+  }
+
+  *:focus-visible {
+    outline-width: 3px;
+    outline-offset: 3px;
+  }
+}
+
+@media (forced-colors: active) {
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  :where(button, [role='button'], input, select, textarea) {
+    border: 1px solid ButtonBorder !important;
+  }
+
+  a {
+    color: LinkText;
+  }
+
+  :where(*:focus-visible, [data-composer-textarea]:focus-visible) {
+    outline: 3px solid Highlight !important;
+    outline-offset: 3px;
+  }
+
+  :where([aria-current='page'], [aria-selected='true'], [data-state='active']) {
+    outline: 2px solid Highlight;
+  }
+
+  ::selection {
+    color: HighlightText;
+    background: Highlight;
+  }
+
+  :where([class*='bg-gradient'], [class*='gradient-']) {
+    background-image: none !important;
+  }
+
+  [class*='text-transparent'] {
+    color: CanvasText !important;
+  }
+}
