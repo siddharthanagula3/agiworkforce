@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 6c563c70544adcb03f370d90d8f72e22584b55ecb49bac3d7f8e5ab97a21b75f -->
+<!-- ui-gaps-csv-sha256: 178e3d9d82194b9148539f4a0c4ddc362bd5e4611264045cd82b40e5a6e89e41 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 117 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 116 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  321 |
+| Open        |  320 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   20 |
+| Done        |   21 |
 | Not Planned |    0 |
 
 ## P0
@@ -3178,24 +3178,24 @@ Expose a typed installed-capability inventory from the local runtime, then popul
 
 - `chatgpt_reference/021-codex-vscode-ext-settings-plugins-documents-pdf-sites-chrome-list.png`
 
-### GAP-138 — No per-surface 'unavailable here' state for surface-bound capabilities
+### GAP-138 — VS Code keeps surface-bound capabilities visible with honest availability
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-state
 - **Reference:** Codex · VS Code extension · Settings — Plugins, 'Unavailable in this context'
 
 **Gap**
 
-Reference keeps surface-incompatible plugins visible but dims the name and appends 'Unavailable in this context' (Browser, Computer Use inside the IDE), so the capability is discoverable without pretending it works. agiworkforce ships genuinely surface-bound capabilities (computer use, browser control, Chrome extension features, desktop bridge) but has no such state anywhere — which is exactly the 'fake availability badge' failure its own rules forbid.
+Reference keeps surface-incompatible plugins visible but dims the name and appends 'Unavailable in this context' (Browser, Computer Use inside the IDE), so the capability is discoverable without pretending it works. AGI Workforce now applies the same pattern to Managed Cloud plugins, Browser control, and Computer use in VS Code.
 
 **Evidence**
 
-Searched apps/extension-vscode/src, apps/desktop/src and apps/web/features for 'Unavailable in this context|not available on this surface|notSupportedHere' — zero matches. Surface-bound features exist at apps/desktop/src/features/computer-use, apps/desktop/src/features/settings/tabs/AgiInChrome/index.tsx and apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts.
+packages/contracts/types/src/capabilities.ts owns an exhaustive availability descriptor across Web, Desktop, Mobile, CLI, VS Code, and Chrome plus shared presentation copy. settingsWebviewContent.ts renders all three capabilities as dimmed, non-interactive rows with the inline 'Unavailable in this context' state and a visible/title description naming the shipped surfaces. capabilities.test.ts and GAP-012-settings-webview.webview.test.ts pin the matrix, labels, DOM state, and accessibility metadata.
 
 **Suggested fix**
 
-Add a per-capability availability descriptor keyed by surface (web / desktop / mobile / extension / extension-vscode) and render unsupported entries dimmed with an inline 'Unavailable in this context' label and a tooltip naming the surface where it does run, instead of hiding them or showing an enabled control that silently fails.
+Completed. Add future surface-bound capabilities to the shared descriptor and render the shared presentation instead of hiding them or exposing controls that cannot run.
 
 **Reference screenshot(s)**
 
