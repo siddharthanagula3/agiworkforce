@@ -11,6 +11,7 @@
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
+import type { ApiKeyScope } from '@/lib/api-key-scopes';
 
 // =============================================================================
 // TOTP 2FA Configuration
@@ -254,6 +255,7 @@ export interface APIKey {
   id: string;
   name: string;
   key_prefix: string;
+  scopes: ApiKeyScope[];
   created_at: string;
   last_used_at?: string;
 }
@@ -868,6 +870,7 @@ class SettingsService {
    */
   async createAPIKey(
     name: string,
+    scopes: ApiKeyScope[],
   ): Promise<{ data: APIKey | null; error?: string; fullKey?: string }> {
     try {
       const token = await getAuthToken();
@@ -884,7 +887,7 @@ class SettingsService {
           Authorization: `Bearer ${token}`,
           'x-csrf-token': csrfToken,
         },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, scopes }),
       });
 
       if (!res.ok) {

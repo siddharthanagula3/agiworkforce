@@ -16,6 +16,7 @@ import {
 } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { ApiKeysManager } from '../components/Settings/ApiKeys';
 
 function formatDateTime(value: Date | null | undefined): string {
   if (!value) return '—';
@@ -238,6 +239,8 @@ export function AccountSection() {
           </div>
         )}
       </section>
+
+      <ApiKeysManager />
 
       {/* Delete account — real, working flow (confirm dialog -> DELETE /api/user/delete-account) */}
       <section

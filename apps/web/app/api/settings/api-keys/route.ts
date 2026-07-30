@@ -12,9 +12,15 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import type { ApiKeyRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { ApiKeyService } from '@/lib/services/api-key-service';
+import { API_KEY_SCOPE_VALUES, resolveApiKeyScopes } from '@/lib/api-key-scopes';
 
 const CreateKeySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be at most 100 characters'),
+  scopes: z
+    .array(z.enum(API_KEY_SCOPE_VALUES))
+    .min(1, 'Select at least one scope')
+    .max(API_KEY_SCOPE_VALUES.length)
+    .refine((scopes) => new Set(scopes).size === scopes.length, 'Scopes must be unique'),
 });
 
 function maskRow(row: ApiKeyRow) {
@@ -22,6 +28,7 @@ function maskRow(row: ApiKeyRow) {
     id: row.id,
     name: row.name,
     key_prefix: row.key_prefix,
+    scopes: resolveApiKeyScopes(row.scopes),
     created_at: row.created_at,
     last_used_at: row.last_used_at ?? null,
   };
@@ -69,7 +76,7 @@ async function handleCreate(request: NextRequest) {
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
-  const { name } = parsed.data;
+  const { name, scopes } = parsed.data;
 
   const db = getNeonDb();
 
@@ -85,7 +92,7 @@ async function handleCreate(request: NextRequest) {
 
   // Argon2id-hashed sk_live_<keyId>_<secret> key, verified via ApiKeyService
   // in lib/api-auth.ts's Bearer-token path.
-  const { apiKey: row, rawKey } = await ApiKeyService.createApiKey(db, userId, name);
+  const { apiKey: row, rawKey } = await ApiKeyService.createApiKey(db, userId, name, scopes);
 
   logger.info({ userId, keyId: row.id }, 'API key created');
 

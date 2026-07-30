@@ -1,5 +1,6 @@
-import React from 'react';
-import { type UseFormReturn } from 'react-hook-form';
+import React, { useState } from 'react';
+import { useForm, type UseFormReturn } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
   Button,
+  Checkbox,
   Input,
 } from '@agiworkforce/ui';
 import {
@@ -27,12 +29,24 @@ import {
   FormMessage,
 } from '@shared/ui/form';
 import { Plus, Key, Copy, Trash2, Loader2, AlertTriangle } from 'lucide-react';
-import type { CreateApiKeyFormData } from '@features/settings/schemas/settings-validation';
+import { toast } from 'sonner';
+import {
+  createApiKeySchema,
+  type CreateApiKeyFormData,
+} from '@features/settings/schemas/settings-validation';
+import {
+  useAPIKeys,
+  useCreateAPIKey,
+  useDeleteAPIKey,
+  type CreateAPIKeyResult,
+} from '@features/settings/hooks/use-settings-queries';
+import { API_KEY_SCOPE_OPTIONS, type ApiKeyScope } from '@/lib/api-key-scopes';
 
 interface ApiKey {
   id: string;
   name: string;
   key_prefix: string;
+  scopes: ApiKeyScope[];
   created_at: string;
   last_used_at?: string | null;
 }
@@ -44,6 +58,7 @@ interface ApiKeysPanelProps {
   generatedAPIKey: string;
   keyToDelete: string | null;
   isCreatePending: boolean;
+  isLoading?: boolean;
   onSetShowAPIKeyDialog: (open: boolean) => void;
   onSetKeyToDelete: (id: string | null) => void;
   onGenerateAPIKey: (data: CreateApiKeyFormData) => void;
@@ -59,6 +74,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
   generatedAPIKey,
   keyToDelete,
   isCreatePending,
+  isLoading = false,
   onSetShowAPIKeyDialog,
   onSetKeyToDelete,
   onGenerateAPIKey,
@@ -86,7 +102,12 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {apiKeys.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading API keys...
+            </div>
+          ) : apiKeys.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               <Key className="mx-auto mb-2 h-12 w-12 opacity-50" />
               <p>No API keys yet</p>
@@ -102,6 +123,15 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                   <p className="truncate font-medium text-foreground">{apiKey.name}</p>
                   <p className="font-mono text-sm text-muted-foreground">{apiKey.key_prefix}...</p>
                   <p className="text-xs text-muted-foreground">
+                    {apiKey.scopes
+                      .map(
+                        (scope) =>
+                          API_KEY_SCOPE_OPTIONS.find((option) => option.value === scope)?.label ??
+                          scope,
+                      )
+                      .join(' · ')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
                     Created: {new Date(apiKey.created_at).toLocaleDateString()}
                     {apiKey.last_used_at &&
                       ` - Last used: ${new Date(apiKey.last_used_at).toLocaleDateString()}`}
@@ -111,15 +141,8 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => onCopyAPIKey(apiKey.key_prefix)}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
                     onClick={() => onSetKeyToDelete(apiKey.id)}
+                    aria-label={`Delete ${apiKey.name}`}
                     className="text-red-400 hover:text-red-300"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -177,6 +200,46 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                           <FormDescription>
                             A descriptive name to identify this API key
                           </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={apiKeyForm.control}
+                      name="scopes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-foreground">Scopes</FormLabel>
+                          <FormDescription>
+                            Choose only the public API capabilities this key needs.
+                          </FormDescription>
+                          <div className="space-y-3 rounded-md border border-border p-3">
+                            {API_KEY_SCOPE_OPTIONS.map((option) => (
+                              <label
+                                key={option.value}
+                                className="flex cursor-pointer items-start gap-3"
+                              >
+                                <Checkbox
+                                  checked={field.value.includes(option.value)}
+                                  onCheckedChange={(checked) => {
+                                    field.onChange(
+                                      checked === true
+                                        ? [...field.value, option.value]
+                                        : field.value.filter((scope) => scope !== option.value),
+                                    );
+                                  }}
+                                />
+                                <span>
+                                  <span className="block text-sm font-medium text-foreground">
+                                    {option.label}
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {option.description}
+                                  </span>
+                                </span>
+                              </label>
+                            ))}
+                          </div>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -247,3 +310,76 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
     </AlertDialog>
   </>
 );
+
+const DEFAULT_API_KEY_FORM: CreateApiKeyFormData = {
+  name: '',
+  scopes: ['models:read', 'inference:write'],
+};
+
+/**
+ * Reachable Account-settings adapter for the API-key service. The older
+ * full-page settings implementation still passes ApiKeysPanel explicit props;
+ * this wrapper owns the same real query/mutation contract for WebSettingsModal.
+ */
+export function ApiKeysManager() {
+  const { data: apiKeys = [], isLoading } = useAPIKeys();
+  const createMutation = useCreateAPIKey();
+  const deleteMutation = useDeleteAPIKey();
+  const apiKeyForm = useForm<CreateApiKeyFormData>({
+    resolver: zodResolver(createApiKeySchema),
+    mode: 'onChange',
+    defaultValues: DEFAULT_API_KEY_FORM,
+  });
+  const [showAPIKeyDialog, setShowAPIKeyDialog] = useState(false);
+  const [generatedAPIKey, setGeneratedAPIKey] = useState('');
+  const [keyToDelete, setKeyToDelete] = useState<string | null>(null);
+
+  const setDialogOpen = (open: boolean) => {
+    setShowAPIKeyDialog(open);
+    if (!open) {
+      setGeneratedAPIKey('');
+      apiKeyForm.reset(DEFAULT_API_KEY_FORM);
+    }
+  };
+
+  const generateAPIKey = (data: CreateApiKeyFormData) => {
+    createMutation.mutate(data, {
+      onSuccess: (result: CreateAPIKeyResult) => {
+        setGeneratedAPIKey(result.fullKey);
+        apiKeyForm.reset(DEFAULT_API_KEY_FORM);
+      },
+    });
+  };
+
+  const deleteAPIKey = () => {
+    if (!keyToDelete) return;
+    deleteMutation.mutate(keyToDelete, {
+      onSettled: () => setKeyToDelete(null),
+    });
+  };
+
+  const copyAPIKey = (key: string) => {
+    void navigator.clipboard
+      .writeText(key)
+      .then(() => toast.success('API key copied to clipboard'))
+      .catch(() => toast.error('Could not copy the API key'));
+  };
+
+  return (
+    <ApiKeysPanel
+      apiKeys={apiKeys}
+      apiKeyForm={apiKeyForm}
+      showAPIKeyDialog={showAPIKeyDialog}
+      generatedAPIKey={generatedAPIKey}
+      keyToDelete={keyToDelete}
+      isCreatePending={createMutation.isPending}
+      isLoading={isLoading}
+      onSetShowAPIKeyDialog={setDialogOpen}
+      onSetKeyToDelete={setKeyToDelete}
+      onGenerateAPIKey={generateAPIKey}
+      onDeleteAPIKey={deleteAPIKey}
+      onCopyAPIKey={copyAPIKey}
+      onDismissGeneratedKey={() => setDialogOpen(false)}
+    />
+  );
+}

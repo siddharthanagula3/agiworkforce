@@ -11,11 +11,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
-import {
-  getModelMetadataById,
-  getRoutingSlotModel,
-  isModelLive,
-} from '@agiworkforce/types';
+import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiworkforce/types';
 
 const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions';
 
@@ -89,7 +85,7 @@ async function handleTranscriptions(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'audio-transcription');
   if (rateLimitResponse) return rateLimitResponse;
 
-  await getClerkAuthUser(request);
+  await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
 
   const managedGateResponse = buildManagedComputeGateResponse(
     request,
@@ -238,8 +234,7 @@ async function handleTranscriptions(request: NextRequest) {
   }
 
   const modelValue = formData.get('model');
-  const requestedModel =
-    typeof modelValue === 'string' ? getModelMetadataById(modelValue) : null;
+  const requestedModel = typeof modelValue === 'string' ? getModelMetadataById(modelValue) : null;
   const selectedModel =
     requestedModel?.provider === 'openai' &&
     requestedModel.modelType === 'stt' &&
