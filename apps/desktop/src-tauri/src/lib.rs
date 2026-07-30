@@ -1305,18 +1305,6 @@ pub fn run() {
             crate::sys::commands::window_close_floating,
             crate::sys::commands::tray_set_unread_badge,
 
-            // Cloud CRUD commands (explicit cloud boundary; fails closed when unavailable)
-            crate::sys::commands::cloud_get_conversations,
-            crate::sys::commands::cloud_create_conversation,
-            crate::sys::commands::cloud_delete_conversation,
-            crate::sys::commands::cloud_get_messages,
-            crate::sys::commands::cloud_create_message,
-            crate::sys::commands::cloud_update_conversation_title,
-
-            // Transfer commands (local ↔ cloud)
-            crate::sys::commands::transfer_local_to_cloud,
-            crate::sys::commands::transfer_cloud_to_local,
-
             crate::sys::commands::chat_create_conversation,
             crate::sys::commands::chat_get_conversations,
             crate::sys::commands::chat_get_conversation,

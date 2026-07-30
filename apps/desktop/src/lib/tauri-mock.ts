@@ -5,7 +5,6 @@ import {
   getCloudConversation,
   getCloudModels,
   listCloudConversations,
-  updateCloudConversationTitle,
 } from '../api/cloudApi';
 import { getTaskModelForProvider } from '../constants/llm';
 import { isCloudWeb, isDesktopUiDevLocal, isTauri, isTestEnvironment } from './runtimeEnvironment';
@@ -156,40 +155,6 @@ async function handleCloudWebCommand<T>(
         status: 'streaming_via_cloud',
         message: frontendMessageId ? { id: frontendMessageId } : undefined,
       } as T;
-    }
-
-    case 'cloud_get_conversations': {
-      return (await listCloudConversations()) as T;
-    }
-
-    case 'cloud_create_conversation': {
-      const req = args?.['request'] as Record<string, unknown> | undefined;
-      return (await createCloudConversation(
-        (req?.['title'] as string) ?? 'New Conversation',
-        (req?.['model'] as string) ?? '',
-      )) as T;
-    }
-
-    case 'cloud_get_messages': {
-      const id = args?.['conversationId'] as string | undefined;
-      if (!id) return [] as T;
-      const result = await getCloudConversation(id);
-      return (result.messages ?? []) as T;
-    }
-
-    case 'cloud_delete_conversation': {
-      const id = args?.['conversationId'] as string | undefined;
-      if (id) await deleteCloudConversation(id);
-      return undefined as T;
-    }
-
-    case 'cloud_update_conversation_title': {
-      const id = args?.['conversationId'] as string | undefined;
-      const title = args?.['title'] as string | undefined;
-      if (id && title) {
-        await updateCloudConversationTitle(id, title);
-      }
-      return undefined as T;
     }
 
     // LLM model listing — delegate to cloudApi

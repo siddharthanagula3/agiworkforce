@@ -352,8 +352,6 @@ const ALLOWED_GENERIC_COMMANDS = new Set([
   'test_selector_strategies',
   'toggle_trigger',
   'track_workflow_view',
-  'transfer_cloud_to_local',
-  'transfer_local_to_cloud',
   'transfer_team_ownership',
   'trigger_workflow_on_event',
   'type_semantic',
