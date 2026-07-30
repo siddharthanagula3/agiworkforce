@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 4261c52ad2c6a2934d9674929008e0e13c873626b79d4d0282e62b1899dfe35a -->
+<!-- ui-gaps-csv-sha256: 32a205677858307e9312de2186e2aa9a311e8fc5cc367f27c188bae9372ed9ae -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 85 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 84 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  289 |
+| Open        |  288 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   42 |
-| Not Planned |   10 |
+| Not Planned |   11 |
 
 ## P0
 
@@ -1108,24 +1108,24 @@ Not planned until Plugins is an operable account product rather than a marketing
 
 - `chatgpt_reference/077-chatgpt-ios-sidebar-nav-recents-chat-history-fab.png`
 
-### GAP-048 — Connectors never generate suggested tasks — work mode opens with a blank canvas
+### GAP-048 — Background connector scanning for suggested tasks is declined under the request-scoped source policy
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Work mode empty state
 
 **Gap**
 
-The reference's work surface opens with connector-derived task suggestions, each tagged with its source icon (GitHub), so a connected repo immediately produces actionable starting points. agiworkforce connects GitHub (server-owned App installation) and 80+ services but no surface anywhere turns connector state into suggestions; the work/agiwork empty state shows nothing.
+The reference proactively scans connected accounts to derive task suggestions. agiworkforce's connector contract is narrower: a connected service makes runtime tools available after an explicit user request, but connection alone does not authorize background repository, issue, branch, message, or document inspection. There is no suggestion endpoint, scan consent, source cursor, minimization policy, or revocation/cache lifecycle. Mobile Work mode now states that connected sources remain request-scoped, that AGI does not scan repositories or accounts in the background, and links directly to connector management instead of silently showing a blank canvas or fabricated suggestions.
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-connectors/index.tsx:257-258, 790-796 (GitHub install flow exists); grep 'suggested task|suggestedTasks|taskSuggestion' across apps/mobile/src|app — no match
+WorkModeSourceNotice.tsx presents the request-scoped boundary and Manage connected services action when the Cloud composer is in agiwork mode; app/(app)/(tabs)/chat.tsx mounts it only for that state. apps/web/app/api/connectors/route.ts treats connection rows as tool enablement gates, and the chat tool loop invokes tools within a user-initiated turn. Repository searches find no authenticated connector-suggestion endpoint, scheduled scanner, scan cursor, suggestion cache, or consent record. work-mode-source-notice.test.tsx verifies the privacy copy and action; chat-tab-mode-toggle.test.tsx and add-to-chat.test.tsx retain coverage of Cloud mode and the real Work mode switch.
 
 **Suggested fix**
 
-Add a suggestions endpoint that derives 3-5 candidate tasks from the user's connected sources (open PRs/issues assigned to them, recent branches) and render them as source-badged rows on the work-mode empty state, each seeding the composer with a scoped prompt.
+Not planned under the current request-scoped connector authorization. Reconsider source-derived suggestions only with explicit opt-in per connector/source, a least-privilege typed query contract, bounded scan frequency and data retention, deletion/revocation, source citations, stale-result handling, tenant isolation, abuse/rate limits, and tests proving that connecting a service alone never triggers content access.
 
 **Reference screenshot(s)**
 

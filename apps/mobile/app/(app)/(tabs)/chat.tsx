@@ -57,6 +57,7 @@ import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { useAuthStore } from '@/src/features/auth/store';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
+import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
 
 function getTimeOfDayGreeting(): string {
   const hour = new Date().getHours();
@@ -105,6 +106,7 @@ export default function ChatTabScreen() {
   const clearError = useChatStore((s) => s.clearError);
   const setSendError = useChatStore((s) => s.setSendError);
   const imageGenerationEnabled = useChatStore((s) => s.features.imageGen);
+  const workMode = useChatStore((s) => s.workMode);
 
   // Error state lives in the shared chat store, not scoped per-conversation --
   // without this, a stale error banner from a previous conversation (e.g. "no
@@ -627,7 +629,8 @@ export default function ChatTabScreen() {
           contentContainerStyle={{
             // Centre the greeting block in the free space above the composer
             // (founder decision 2026-07-29, superseding the 2026-07-19
-            // bottom-anchored variant). Still NO suggestion cards.
+            // bottom-anchored variant). Connector-derived cards stay absent
+            // until an explicit, consented source-scan contract exists.
             flexGrow: 1,
             alignItems: 'center',
             justifyContent: 'center',
@@ -657,17 +660,22 @@ export default function ChatTabScreen() {
             {getTimeOfDayGreeting()}
           </Text>
           {activeMode === 'cloud' ? (
-            <Text
-              style={{
-                fontSize: 14,
-                lineHeight: 20,
-                color: c.textMuted,
-                textAlign: 'center',
-                maxWidth: 300,
-              }}
-            >
-              {modeDescription}
-            </Text>
+            <>
+              <Text
+                style={{
+                  fontSize: 14,
+                  lineHeight: 20,
+                  color: c.textMuted,
+                  textAlign: 'center',
+                  maxWidth: 300,
+                }}
+              >
+                {modeDescription}
+              </Text>
+              {workMode === 'agiwork' ? (
+                <WorkModeSourceNotice onOpenConnectors={handleOpenConnectors} />
+              ) : null}
+            </>
           ) : (
             <View style={{ width: '100%', marginTop: 8 }}>
               {!hasReadyLocalModel && (
