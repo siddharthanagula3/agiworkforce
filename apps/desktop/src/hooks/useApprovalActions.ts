@@ -21,7 +21,7 @@ export function useApprovalActions() {
       // response channel, not the agent approval channel.
       if (approval.type === 'mcp_tool') {
         // For MCP/tool confirmations, use the tool confirmation response command
-        await respondToolConfirmation(
+        const resolution = await respondToolConfirmation(
           approval.id,
           decision === 'approve',
           options?.trust ?? false,
@@ -37,7 +37,7 @@ export function useApprovalActions() {
         } else {
           rejectOperation(approval.id, options?.reason);
         }
-        return;
+        return resolution;
       }
 
       // For agent-level approvals (non-MCP tools), use agent_resolve_approval
@@ -56,6 +56,7 @@ export function useApprovalActions() {
       } else {
         rejectOperation(approval.id, options?.reason);
       }
+      return undefined;
     },
     [approveOperation, recordTrustedAction, rejectOperation],
   );

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { useApprovalActions } from '@/hooks/useApprovalActions';
 import { useToolStore, type ApprovalRequest } from '@/stores/chat/toolStore';
 import { cn } from '@/lib/utils';
+import { FolderAccessConsentDialog } from './FolderAccessConsentDialog';
 
 function readDetail(approval: ApprovalRequest, key: string): string | null {
   const value = approval.details[key];
@@ -61,6 +62,10 @@ export function McpToolConfirmationPrompt() {
   const argumentsText = formatArguments(approval);
   const isResolving = resolvingId === approval.id;
   const error = resolutionError?.approvalId === approval.id ? resolutionError.message : null;
+
+  if (toolName === 'folder access' || readDetail(approval, 'toolName') === 'folder_access') {
+    return <FolderAccessConsentDialog approval={approval} pendingCount={confirmations.length} />;
+  }
 
   const resolve = async (decision: 'approve' | 'reject') => {
     setResolvingId(approval.id);

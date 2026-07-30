@@ -95,6 +95,58 @@ fn test_terminal_registry_does_not_expose_model_shell_override() {
 }
 
 #[test]
+fn gap_002_extracts_nested_paths_and_assigns_capabilities() {
+    let args = HashMap::from([(
+        "edits".to_string(),
+        serde_json::json!([
+            {"path": "src/one.rs", "old_text": "a", "new_text": "b"},
+            {"path": "src/two.rs", "old_text": "c", "new_text": "d"}
+        ]),
+    )]);
+    assert_eq!(
+        ToolExecutor::local_paths_from_args("multi_edit", &args),
+        vec!["src/one.rs".to_string(), "src/two.rs".to_string()]
+    );
+    assert_eq!(
+        ToolExecutor::folder_capabilities_for_tool("multi_edit"),
+        vec!["modify"]
+    );
+    assert_eq!(
+        ToolExecutor::folder_capabilities_for_tool("terminal_execute"),
+        vec!["execute"]
+    );
+    assert_eq!(
+        ToolExecutor::folder_capabilities_for_tool("file_read"),
+        vec!["read"]
+    );
+}
+
+#[tokio::test]
+async fn gap_002_resolves_exact_target_and_existing_grant_root() {
+    let directory = tempfile::tempdir().expect("temp folder");
+    let requested = directory.path().join("new").join("notes.txt");
+    let (target, root) =
+        ToolExecutor::resolve_folder_consent_target(requested.to_string_lossy().to_string())
+            .await
+            .expect("new file path should resolve against its existing ancestor");
+
+    let canonical_root = std::fs::canonicalize(directory.path()).expect("canonical temp folder");
+    assert_eq!(target, canonical_root.join("new").join("notes.txt"));
+    assert_eq!(root, canonical_root);
+}
+
+#[tokio::test]
+async fn gap_002_rejects_traversal_before_consent() {
+    let directory = tempfile::tempdir().expect("temp folder");
+    let requested = directory.path().join("child").join("..").join("secret.txt");
+    let error =
+        ToolExecutor::resolve_folder_consent_target(requested.to_string_lossy().to_string())
+            .await
+            .expect_err("traversal must never reach the consent dialog");
+    assert!(error.to_string().contains("directory traversal"));
+}
+
+#[test]
 fn test_git_registry_matches_executor_defaults() {
     let registry = create_registry_with_all_tools();
     let git_add = registry
