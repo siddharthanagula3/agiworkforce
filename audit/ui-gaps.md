@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: bbdc07f00e4f3aa17a68ee97b9eb8ed9fda8beac9c80fcdbe86f52bc1da3c4bf -->
+<!-- ui-gaps-csv-sha256: 6c563c70544adcb03f370d90d8f72e22584b55ecb49bac3d7f8e5ab97a21b75f -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 118 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 117 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  322 |
+| Open        |  321 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   19 |
+| Done        |   20 |
 | Not Planned |    0 |
 
 ## P0
@@ -2902,24 +2902,24 @@ Completed. Keep device-token identity separate from API-key/BYOK ownership, reta
 
 - `chatgpt_reference/013-codex-vscode-ext-account-menu-profile-dropdown-settings-logout.png`
 
-### GAP-126 — No 'Browse the web' option in the attach/plus menu (or anywhere in the extension)
+### GAP-126 — Browse the web is a first-class one-turn context source
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-control
 - **Reference:** Claude · VS Code extension · Attach (+) menu
 
 **Gap**
 
-Claude's plus-menu includes 'Browse the web' as a first-class context source alongside file upload and context add. agiworkforce's plus-menu (Workspace files / Plan mode / Tools and actions) has no web-browsing or web-search capability at all in the VS Code extension.
+The plus menu now exposes Browse the web beside Workspace files. Selecting it shows a removable composer context chip and attaches a validated one-turn browse flag without rewriting the visible user message. The host turns that flag into an explicit web_search tool requirement, routes Auto through the research task type, requires source URLs, and treats web content as untrusted. The UI and runtime directive both state the honest failure boundary: CLI search must be configured and Local privacy mode refuses network access instead of pretending a search ran.
 
 **Evidence**
 
-apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts lines 1266-1290 (plus-menu items); searched 'browse the web'/'web search'/'webSearch' across apps/extension-vscode/src — no matches
+webviewContent.ts owns the keyboard-native checked menu item, removable context chip, one-turn reset, and original-message presentation. webviewMessages.ts validates browseWeb as boolean only. ChatStateManager.ts translates the flag at the trusted host boundary into the real CLI web_search request and research routing; existing localRuntimeClient tool-event handling renders web-search/web-fetch progress and results. browseWeb.webview.test.ts, browseWeb.test.ts, chatStateManager.test.ts, popoverKeyboard.webview.test.ts, and webviewContent.webview.test.ts cover interaction, reset, protocol rejection, runtime input/routing, keyboard behavior, and limitation copy.
 
 **Suggested fix**
 
-Add a 'Browse the web' menu item that invokes the same web-search/browse tool other agiworkforce surfaces use (e.g., web app's research/browsing service), threaded through the extension's tool-execution bridge.
+Completed. Keep browsing one-turn and explicit, preserve the visible original prompt, require configured CLI search, and never bypass the CLI's Local/BYOK/Managed privacy enforcement or fabricate results when network access is unavailable.
 
 **Reference screenshot(s)**
 

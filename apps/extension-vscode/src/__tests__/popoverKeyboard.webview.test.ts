@@ -63,7 +63,7 @@ describe('composer popover keyboard support', () => {
     const plusBtn = document.getElementById('plusBtn')!;
     plusBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const items = document.querySelectorAll('#plusMenu [role="menuitem"]');
+    const items = document.querySelectorAll('#plusMenu [role^="menuitem"]');
     expect(items.length).toBeGreaterThan(0);
     expect(document.activeElement).toBe(items[0]);
   });
@@ -74,7 +74,7 @@ describe('composer popover keyboard support', () => {
     plusBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     const menu = document.getElementById('plusMenu')!;
-    const items = Array.from(menu.querySelectorAll('[role="menuitem"]'));
+    const items = Array.from(menu.querySelectorAll('[role^="menuitem"]'));
 
     press(menu, 'ArrowDown');
     expect(document.activeElement).toBe(items[1]);
@@ -104,7 +104,7 @@ describe('composer popover keyboard support', () => {
     boot();
     document.getElementById('plusBtn')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const items = Array.from(document.querySelectorAll('#plusMenu [role="menuitem"]'));
+    const items = Array.from(document.querySelectorAll('#plusMenu [role^="menuitem"]'));
     const tabbable = items.filter((i) => i.getAttribute('tabindex') === '0');
     // Otherwise Tab walks every entry instead of leaving the menu.
     expect(tabbable).toHaveLength(1);

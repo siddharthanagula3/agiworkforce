@@ -784,6 +784,10 @@ export function getWebviewContent(
       font-family: inherit;
     }
     .plus-menu-item:hover { background: var(--bg-overlay); color: var(--text-primary); }
+    .plus-menu-item[aria-checked="true"] {
+      background: var(--vscode-list-activeSelectionBackground);
+      color: var(--vscode-list-activeSelectionForeground);
+    }
     .plus-menu-item .pm-icon { font-size: 13px; flex-shrink: 0; }
     .plus-menu-label {
       color: var(--text-secondary);
@@ -1390,6 +1394,13 @@ export function getWebviewContent(
       flex-shrink: 0;
     }
     .attachment-chip__remove:hover { color: var(--text-primary); }
+
+    .browse-context-strip {
+      display: flex;
+      padding: 6px 10px 0;
+    }
+    .browse-context-strip[hidden] { display: none; }
+    .browse-context-strip .attachment-chip { max-width: 100%; }
   </style>
 </head>
 <body>
@@ -1601,6 +1612,19 @@ export function getWebviewContent(
           <span class="plus-menu-description">Pin files from the open workspace</span>
         </span>
       </button>
+      <button
+        type="button"
+        class="plus-menu-item"
+        id="plusMenuBrowse"
+        role="menuitemcheckbox"
+        aria-checked="false"
+      >
+        <span class="pm-icon codicon codicon-globe" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Browse the web</span>
+          <span class="plus-menu-description">CLI search · Local privacy mode refuses network</span>
+        </span>
+      </button>
       <button type="button" class="plus-menu-item" id="plusMenuPlanMode" role="menuitem">
         <span class="pm-icon codicon codicon-lightbulb" aria-hidden="true"></span>
         <span class="plus-menu-copy">
@@ -1623,6 +1647,24 @@ export function getWebviewContent(
 
     <!-- Composer card -->
     <div class="composer-card" id="composerCard">
+      <div
+        class="browse-context-strip"
+        id="browseContextStrip"
+        role="list"
+        aria-label="Web browsing context"
+        hidden
+      >
+        <span class="attachment-chip" role="listitem">
+          <span class="codicon codicon-globe" aria-hidden="true"></span>
+          <span class="attachment-chip__name">Browse the web for current sources</span>
+          <button
+            type="button"
+            class="attachment-chip__remove"
+            id="browseContextRemove"
+            aria-label="Remove web browsing"
+          >&#215;</button>
+        </span>
+      </div>
       <!-- Attachment chips strip — populated by drag-drop / paste / +menu -->
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
@@ -1664,6 +1706,9 @@ export function getWebviewContent(
     const modelPopoverEl = document.getElementById('modelPopover');
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
+    const plusMenuBrowse = document.getElementById('plusMenuBrowse');
+    const browseContextStrip = document.getElementById('browseContextStrip');
+    const browseContextRemove = document.getElementById('browseContextRemove');
     const actionsBtn = document.getElementById('actionsBtn');
     const accountBtn = document.getElementById('accountBtn');
     const accountStatusDot = document.getElementById('accountStatusDot');
@@ -1972,6 +2017,7 @@ export function getWebviewContent(
     let currentAssistantEl = null;
     let accumulatedContent = '';
     let pendingAttachmentCount = 0;
+    let browseWebEnabled = false;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function addMessage(role, text) {
@@ -1981,6 +2027,14 @@ export function getWebviewContent(
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       return div;
+    }
+
+    function setBrowseWebEnabled(enabled) {
+      browseWebEnabled = Boolean(enabled);
+      if (plusMenuBrowse) {
+        plusMenuBrowse.setAttribute('aria-checked', String(browseWebEnabled));
+      }
+      if (browseContextStrip) browseContextStrip.hidden = !browseWebEnabled;
     }
 
     function showTyping() {
@@ -2240,8 +2294,9 @@ export function getWebviewContent(
 
       vscode.postMessage({
         type: 'sendMessage',
-        payload: { text }
+        payload: { text, browseWeb: browseWebEnabled }
       });
+      setBrowseWebEnabled(false);
     }
 
     // ── Event listeners ───────────────────────────────────────────────────────
@@ -2408,6 +2463,14 @@ export function getWebviewContent(
           vscode.postMessage({ type: 'openFilePicker' });
         });
       }
+      if (plusMenuBrowse) {
+        plusMenuBrowse.addEventListener('click', () => {
+          plusMenu.classList.remove('open');
+          plusBtn.setAttribute('aria-expanded', 'false');
+          setBrowseWebEnabled(!browseWebEnabled);
+          userInput.focus();
+        });
+      }
       // The menu label and action both open the agent-mode picker.
       var plusMenuAgentMode = document.getElementById('plusMenuPlanMode');
       if (plusMenuAgentMode) {
@@ -2423,6 +2486,13 @@ export function getWebviewContent(
           vscode.postMessage({ type: 'openActionSheet' });
         });
       }
+    }
+
+    if (browseContextRemove) {
+      browseContextRemove.addEventListener('click', function() {
+        setBrowseWebEnabled(false);
+        userInput.focus();
+      });
     }
 
     // Model pill opens inline model popover (v3)

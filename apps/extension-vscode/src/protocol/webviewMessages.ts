@@ -30,6 +30,7 @@ const sendMessage = z.object({
   payload: z.object({
     text: z.string().min(1).max(100_000),
     model: z.string().min(1).max(200).optional(),
+    browseWeb: z.boolean().optional(),
   }),
 });
 

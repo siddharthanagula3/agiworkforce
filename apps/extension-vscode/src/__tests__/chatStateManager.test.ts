@@ -498,6 +498,42 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('routes a one-turn browse request through the real web-search tool boundary', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'What changed in the latest Rust release?',
+        browseWeb: true,
+      },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routingTaskType: 'research',
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'text',
+            text: expect.stringMatching(
+              /Use the web_search tool[\s\S]*Local privacy boundary refuses network access[\s\S]*latest Rust release/u,
+            ),
+          }),
+        ]),
+      }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
   it('keeps the same runtime thread when a model changes within one catalog provider', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
