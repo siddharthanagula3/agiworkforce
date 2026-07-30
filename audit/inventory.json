@@ -410,8 +410,8 @@
   {
     "item": "indexeddb-cache",
     "surface": "apps/web",
-    "status": "unwired",
-    "evidence": "apps/web/shared/lib/cache.ts:31-370 implements a full multi-backend cache including a real IndexedDB backend (indexedDB.open at line 202, case 'indexedDB' at line 370). `grep -rln \"lib/cache'\" apps/web` returns zero importers anywhere in the app — the module is dead code. The app's actual offline persistence (apps/web/lib/offline/offlineQueue.ts:15,26) uses localStorage, not this IndexedDB module."
+    "status": "missing",
+    "evidence": "The orphaned apps/web/shared/lib/cache.ts implementation and its equally unreferenced useCache.ts hook were removed. Neither file was imported by a live app, test, barrel, or package entry point, so the IndexedDB backend never opened a database or persisted product data. Real Web offline retry persistence remains in apps/web/lib/offline/offlineQueue.ts and uses its own localStorage contract; no product surface advertises a general IndexedDB cache."
   },
   {
     "item": "code-splitting",
