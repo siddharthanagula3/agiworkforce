@@ -82,7 +82,7 @@ Does it have state or render UI?
 - `app/(app)/` — authenticated app shell
   - `(tabs)/` — legacy tab-nav (kept for compat; drawer is the v1 target per `/docs/surfaces/mobile.md`)
   - `chat/[id].tsx` — primary chat screen
-  - `settings/`, `connectors/`, `dispatch/`, `agents/`, `profile/`, etc.
+  - `settings/`, `connectors/`, `skills/`, `agents/`, `profile/`, etc.
 - `app/legal/` — legal pages (article-50, etc.) — accessible without auth via deep link
 
 ## Mobile runtime — three-tier model

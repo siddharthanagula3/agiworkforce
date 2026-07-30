@@ -29,8 +29,6 @@ describe('authenticated drawer route contract', () => {
   });
 
   it('does not register retired dead-end surfaces', () => {
-    expect(layoutSource).not.toMatch(
-      /name="(?:code(?:\/|")|dispatch(?:\/|")|skills(?:\/|")|switch-probe")/,
-    );
+    expect(layoutSource).not.toMatch(/name="(?:code(?:\/|")|dispatch(?:\/|")|switch-probe")/);
   });
 });

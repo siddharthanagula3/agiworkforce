@@ -9,4 +9,4 @@ Purpose: Mobile settings domains, including mode status, capabilities, notificat
 
 - Keep settings screens and setting-specific domain folders here.
 - Platform permission calls belong in `src/platform` or approved services.
-- Mobile settings must show Local Mode and local LLMs as active. Cloud Managed account/subscription access is public alpha, open by default (sign-in gated, no invite/waitlist — see `MOB-CLOUD-INVITE-RESIDUAL-01`). Connectors, plugins, and skills are separate, genuinely-unshipped features still gated behind their own feature flags with honest coming-soon copy, not cloud-access waitlisting.
+- Mobile settings must show Local Mode and local LLMs as active. Cloud Managed account/subscription access is public alpha, open by default (sign-in gated, no invite/waitlist — see `MOB-CLOUD-INVITE-RESIDUAL-01`). Plugins remain genuinely unshipped. Connectors and the read-only Skills catalog have supported, separately gated Cloud contracts; none of these capabilities should be presented as broad cloud-access waitlisting.
