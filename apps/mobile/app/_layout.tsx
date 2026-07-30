@@ -51,6 +51,7 @@ import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloudSyncEngine';
 import { getAuthToken } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
+import { restoreStoredLanguage } from '@/src/i18n';
 
 // Expo Router only wires up a route's error boundary when the route file
 // itself has a named `ErrorBoundary` export — a separate ./error.tsx file is
@@ -246,7 +247,10 @@ export default function RootLayout() {
   // screen on every cold start regardless of user preference.
   useEffect(() => {
     initMmkvEncryption()
-      .then(() => setIsMmkvReady(true))
+      .then(async () => {
+        await restoreStoredLanguage();
+        setIsMmkvReady(true);
+      })
       .catch((err) => {
         console.warn('[RootLayout] MMKV encryption init failed:', err);
         setIsMmkvReady(true);

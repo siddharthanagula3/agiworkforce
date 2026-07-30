@@ -2,6 +2,7 @@ import {
   BarChart3,
   Box,
   HardDrive,
+  Languages,
   MessageSquareDashed,
   Smartphone,
   Vibrate,
@@ -15,16 +16,22 @@ import {
   SettingsSwitchRow,
 } from '@/src/features/settings/common';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { languageFor } from '@agiworkforce/i18n';
+import '@/src/i18n';
 
 export default function GeneralSettingsScreen() {
   const router = useRouter();
+  const { t, i18n } = useTranslation(['settings']);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const setHapticsEnabled = useSettingsStore((s) => s.setHapticsEnabled);
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
   const setTemporaryChat = useSettingsStore((s) => s.setTemporaryChat);
+  const activeLanguage =
+    languageFor((i18n.resolvedLanguage ?? i18n.language).split('-')[0])?.nativeName ?? 'English';
 
   return (
-    <SettingsScreenShell title="General">
+    <SettingsScreenShell title={t('settings:general')}>
       <SettingsInfo
         title="Local defaults"
         body="These controls affect this device only. AGI Cloud settings are managed separately."
@@ -47,6 +54,14 @@ export default function GeneralSettingsScreen() {
       </SettingsGroup>
       <SettingsGroup>
         <SettingsRow
+          label={t('settings:language')}
+          icon={Languages}
+          value={activeLanguage}
+          onPress={() =>
+            router.push('/(app)/settings/app-language' as Parameters<typeof router.push>[0])
+          }
+        />
+        <SettingsRow
           label="Models"
           icon={Box}
           onPress={() => router.push('/(app)/models' as Parameters<typeof router.push>[0])}
@@ -59,7 +74,7 @@ export default function GeneralSettingsScreen() {
           }
         />
         <SettingsRow
-          label="Storage"
+          label={t('settings:storage')}
           icon={HardDrive}
           isLast
           onPress={() =>

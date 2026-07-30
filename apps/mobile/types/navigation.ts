@@ -82,6 +82,7 @@ export interface AppRouteParams {
   '/(app)/profile': undefined;
   '/(app)/schedules': undefined;
   '/(app)/schedules/create': ScheduleCreateRouteParams | undefined;
+  '/(app)/settings/app-language': undefined;
   '/(app)/settings/memory': undefined;
   '/(app)/messaging': undefined;
   '/onboarding': undefined;
