@@ -27,3 +27,5 @@ export {
   isMobileScheduleRecurrenceSupported,
 } from './policy';
 export type { MobileSupportedScheduleRecurrence } from './policy';
+export { SCHEDULE_TEMPLATES, getScheduleTemplate } from './templates';
+export type { ScheduleTemplate } from './templates';
