@@ -14,9 +14,18 @@ Each implementation agent should:
 
 1. Pick one row or one tightly related group of rows.
 2. Inspect the listed AGI paths before editing.
-3. Verify competitor behavior from the listed source or `/Users/siddhartha/Desktop/claude_reference` when the row depends on UI parity.
+3. Verify competitor behavior from the listed source or the reference libraries at
+   `/Users/siddhartha/Desktop/references-2`,
+   `/Users/siddhartha/Desktop/claude_reference`, and
+   `/Users/siddhartha/Desktop/chatgpt_reference` when the row depends on UI
+   parity.
 4. Implement the smallest end-to-end slice: UI control, state/store, backend/runtime path, persistence, permission/trust label, and test.
 5. Mark incomplete behavior as a tracked gap. Do not claim parity from placeholder UI or passing typecheck alone.
+
+The cross-product capability intake is tracked separately in
+`audit/capability-gaps.csv`. It captures runtime and enterprise gaps that are
+not necessarily visible UI differences and records explicit defer/decline
+decisions so screenshot comparison does not silently expand product scope.
 
 Status labels:
 

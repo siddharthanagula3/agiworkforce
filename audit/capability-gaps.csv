@@ -1,0 +1,45 @@
+id,concept,sourceRecords,auditClass,effort,lane,decision,status,owner,tracking
+CAP-001,Customer-managed encryption keys,CMEK;EnterpriseKeyManagement,absent,L,Phase 3,Defer,Deferred,Enterprise,One enterprise encryption-key capability after deduplicating two audit labels
+CAP-002,CarPlay and Android Auto,CarPlay,absent,L,Product divergence,Decline,Not Planned,Product,No driving-surface strategy or entitlement exists
+CAP-003,Declared deployment topology,ClusterTopology,absent,L,Phase 2,Build,Open,Infrastructure,Track replica and region topology as production infrastructure rather than custom inference orchestration
+CAP-004,Organization IP allowlist,IPAllowlist,absent,M,Phase 3,Defer,Deferred,Enterprise,Requires tenant administration and break-glass enforcement
+CAP-005,First-party inference kernels,InferenceKernels,absent,L,Product divergence,Decline,Not Planned,Platform,Provider and local-runtime adapters remain the intentional execution seam
+CAP-006,Suppress an irrelevant memory source,IrrelevantSource,absent,L,Phase 1,Build,Open,Memory,Add source-level suppression only with attribution and retrieval enforcement
+CAP-007,Condition-triggered monitoring tasks,MonitoringTasks,absent,M,Phase 2,Build,Open,Automation,Extend durable schedules with observation state and change-only notification
+CAP-008,Plugin plan entitlements,PluginEntitlements,absent,L,Phase 3,Defer,Deferred,Extensibility,Requires an authoritative installation and execution lifecycle first
+CAP-009,Organization plugin governance,PluginPolicies;PluginPolicy;PluginFilters,mixed,L,Phase 1,Wire,Open,Extensibility,Unify the duplicate policy labels around one persisted and enforced contract
+CAP-010,Organization skill policies,SkillPolicies,absent,M,Phase 3,Defer,Deferred,Extensibility,Requires tenant policy ownership and request-path enforcement
+CAP-011,Socratic learning mode,SocraticQuestions,absent,M,Product decision,Defer,Deferred,Product,Do not create a learning vertical from comparison evidence alone
+CAP-012,Regional residency and EU inference,ResidencyPolicy;EUInference,mixed,L,Phase 3,Defer,Deferred,Enterprise,One residency program covering storage routing inference routing and claims
+CAP-013,Fraud rules,FraudRules,planned,L,Phase 3,Defer,Deferred,Billing,Do not expose contract-only risk states until events and enforcement exist
+CAP-014,Organization usage analytics,AGIworkAnalytics,partial-unwired,M,Phase 3,Defer,Deferred,Enterprise,Wire ledger writers aggregation and an admin surface together
+CAP-015,Published artifact embedding,ArtifactEmbedding,partial-unwired,L,Phase 1,Wire or cut,Open,Web,Resolve the inert publisher and explicit frame-ancestor boundary together
+CAP-016,Provider batch tier,BatchTier,partial-unwired,M,Phase 1,Wire or cut,Open,Desktop,Remove preview-only Google batch code unless a real backend pricing and caller are selected
+CAP-017,Compliance export API,ComplianceAPI,partial-unwired,M,Phase 3,Defer,Deferred,Enterprise,Needs cursor reads durable export jobs retention and signed downloads
+CAP-018,Synchronized connected files,ConnectedFiles,partial-unwired,M,Phase 1,Wire,Open,Platform,Persist remote identity revision sync state and project-knowledge ingestion
+CAP-019,Organization browse-domain policy,DomainPolicy,partial-unwired,M,Phase 1,Wire,Open,Security,Persist the declared setting and enforce it on every browse and fetch path
+CAP-020,Reasoning-effort access policy,EffortAccess,partial-unwired,M,Phase 2,Wire,Open,Platform,Clamp server-side entitlements and show unavailable effort levels honestly
+CAP-021,Provider flex service tier,FlexTier,partial-unwired,M,Phase 2,Wire or cut,Open,Platform,Connect request contract provider option retry semantics and tier pricing
+CAP-022,Meeting transcription,MeetingTranscription,partial-unwired,L,Phase 1,Wire or cut,Open,Desktop,Delete misleading stubs unless meeting capture diarization and persistence are selected
+CAP-023,Messaging-platform bot presence,MessagingBot,partial-unwired,L,Deferred backlog,Defer,Deferred,Integrations,Inbound Slack Teams and WhatsApp apps remain outside the current phases
+CAP-024,Scored moderation thresholds,ModerationThresholds,partial-unwired,M,Phase 2,Wire,Open,Safety,Replace toggle-only regex behavior only with scored policy and logged enforcement
+CAP-025,Organization feature enablement,OrganizationEnablement,partial-unwired,M,Phase 3,Defer,Deferred,Enterprise,Requires an admin mutation contract and consumers on every affected surface
+CAP-026,Unprompted proactive suggestions,ProactiveSuggestions,partial-unwired,L,Product divergence,Decline,Not Planned,Product,Background connector scanning remains disallowed without separate consent
+CAP-027,Project-only memory,ProjectOnlyMemory,partial-unwired,M,Phase 1,Wire,Open,Memory,Add project scope and the ability to exclude global memory end to end
+CAP-028,First-party SAML and SCIM,SAMLSSO,partial-unwired,L,Phase 3,Defer,Deferred,Enterprise,Configuration storage is not authentication or provisioning
+CAP-029,Mounted spreadsheet viewer,SpreadsheetViewer,partial-unwired,M,Phase 1,Wire,Open,Desktop,Mount a real workbook parser and multi-sheet view or remove the unreachable workspace
+CAP-030,Enforced tenant restrictions,TenantRestrictions,partial-unwired,M,Phase 2,Wire,Open,Enterprise,Consume the stored policies on sync compute provider and connector paths
+CAP-031,Understanding checks,UnderstandingChecks,partial-unwired,M,Product decision,Wire or cut,Deferred,Product,Resolve the unreachable learn mode before adding grading state
+CAP-032,Unified chat code and work shell,UnifiedApp,partial-unwired,M,Phase 1,Wire,Open,Desktop,Mount or remove the orphaned desktop code-mode panels
+CAP-033,Uploaded learning materials,UploadedMaterials,partial-unwired,M,Product decision,Defer,Deferred,Product,Do not invent course and lesson state until learning mode is selected
+CAP-034,Workspace and organization switcher,WorkspaceSwitcher,partial-unwired,M,Phase 3,Defer,Deferred,Enterprise,Requires real multi-organization selection and request propagation
+CAP-035,Conversation branching across surfaces,BranchChat,implemented-unwired,M,Phase 1,Wire,Open,Multi-surface,Desktop branching exists while shared web and mobile paths remain unmounted
+CAP-036,Extension access enforcement,ExtensionAccess,implemented-unwired,S,Phase 2,Wire,Open,Extensions,Enforce stored per-surface cloud-sync policy on request paths
+CAP-037,Authoritative extension directory,ExtensionDirectory,implemented-unwired,M,Phase 1,Wire or cut,Open,Extensibility,Replace static catalog claims or label the curated offline scope
+CAP-038,Docked inspector pane,InspectorPane,implemented-unwired,S,Phase 1,Wire,Open,Desktop,Mount the shared sidecar as a resizable rail instead of a full-area overlay
+CAP-039,Retrying job queue with dead-letter handling,JobQueue,implemented-unwired,S,Phase 2,Harden,Open,Platform,Durable agent-run work needs retries backoff leases and a dead-letter path
+CAP-040,Recoverable reauthentication prompt,LoginPrompt,implemented-unwired,S,Phase 1,Wire,Open,Multi-surface,Preserve and retry an interrupted turn after sign-in
+CAP-041,Shared mention menu,MentionMenu,implemented-unwired,S,Phase 1,Wire,Open,Multi-surface,Mount existing file and skill pickers and connect authoritative search
+CAP-042,Mounted navigation tree,NavigationTree,implemented-unwired,M,Phase 1,Wire or cut,Open,Desktop,Mount the file or project tree in a supported mode or delete the orphaned implementations
+CAP-043,Reachable PDF editing,PDFEditing,implemented-unwired,S,Phase 1,Wire or cut,Open,Desktop,Expose bounded native edit commands and UI or remove library-only editor claims
+CAP-044,Cloud-triggered tasks,TriggeredTasks,implemented-unwired,M,Phase 2,Wire,Open,Automation,Add a durable authenticated trigger path instead of localhost and type-only variants

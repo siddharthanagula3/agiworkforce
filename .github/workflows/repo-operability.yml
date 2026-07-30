@@ -142,6 +142,9 @@ jobs:
       - name: Validate integration inventory
         run: pnpm check:audit-inventory
 
+      - name: Validate capability comparison backlog
+        run: pnpm check:capability-gaps
+
       - name: Validate UI gap tracker
         run: pnpm check:ui-gaps
 
