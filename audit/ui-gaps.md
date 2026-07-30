@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: c5895eeee93612222f8c1f412b65f5e8ffb01701175a3495c0d3ba6d6414a10b -->
+<!-- ui-gaps-csv-sha256: 02b2f0a5c2cbd8241e3cb61fed40272979f30ee98302e55cecc50dd34ca7913f -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 88 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 87 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  292 |
+| Open        |  291 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   42 |
-| Not Planned |    7 |
+| Not Planned |    8 |
 
 ## P0
 
@@ -832,24 +832,24 @@ Completed for channels the product can actually deliver. Keep Email non-interact
 
 - `chatgpt_reference/065-chatgpt-ios-settings-notifications-codex-chats-projects-usage.png`
 
-### GAP-036 — Notification categories cover agent ops only, not responses/projects/usage
+### GAP-036 — Unsupported project usage and marketing notification categories are declined until delivery producers exist
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Settings > Notifications
 
 **Gap**
 
-The reference's categories are product-level: Codex, Group chats, Marketing, Personalized tips, Projects, Responses, Tasks, Usage. agiworkforce only offers Approvals, Task Updates, Errors & Stops and Status Updates, so there is no way to control a 'your reply is ready' ping, a project or schedule notification, or a plan-usage warning — and no consent surface for marketing/product email, which most jurisdictions require to be separately opt-in.
+The reference exposes categories backed by its own project, usage-warning, tips, and marketing delivery systems. agiworkforce has no project notification event, usage-threshold dispatcher, product-tip scheduler, marketing sender, or consent/unsubscribe consumer in the repository. Adding toggles would store preferences no runtime reads. Mobile instead names its existing persisted task_updates lane Work Updates and states its actual scope: task results, schedule runs, and chat replies. That backwards-compatible lane gates the supported task_completed, agent_paused, schedule_triggered, and chat_message event vocabulary without inventing new state.
 
 **Evidence**
 
-apps/mobile/src/features/settings/notifications/index.tsx:57-88 (getCategories: approvals, task_updates, errors, status)
+apps/mobile/services/notifications.ts defines the supported event vocabulary but no projects, usage limits, tips, or marketing event. apps/mobile/stores/notificationPrefsStore.ts maps task_completed, agent_paused, schedule_triggered, and chat_message to the backwards-compatible task_updates preference consumed by notificationAllowed and companion dispatch. categories.ts presents that lane as Work Updates with explicit task, schedule, and reply scope. Repository push infrastructure registers and unregisters device tokens, while companionNotifications.ts is the only local producer; searches of apps/web and services/api-gateway find no Expo push dispatcher for projects, usage, tips, or marketing. Web NotificationsSection.tsx independently removes dead email/mobile groups for the same no-consumer reason. notificationPrefs.test.ts pins every supported work event to the persisted lane and notification-category-settings.test.ts verifies the visible summary.
 
 **Suggested fix**
 
-Extend NotificationCategory with responses, projects, schedules/tasks, usage-limits and marketing/tips, group them under 'Product' vs 'Agent activity' headings, and default marketing to off with explicit consent copy.
+Not planned for categories with no delivery producer. Keep the honest grouped Work Updates control. Add separate Responses, Projects, Schedules, Usage, Tips, or Marketing categories only alongside typed events, a real sender/trigger, deep-link handling, default and migration policy, delivery tests, and—for marketing—explicit opt-in, unsubscribe, and account-level consent enforcement.
 
 **Reference screenshot(s)**
 
