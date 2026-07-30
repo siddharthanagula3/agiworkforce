@@ -57,7 +57,10 @@ Reusable contracts belong in `packages/contracts/types`, `packages/client/client
 
 ## Environment / Secrets
 
-Use `.env.example` templates only. Never commit `.env.local`, production signing credentials, provider API keys, MCP OAuth tokens, local file indexes, or user data.
+Use `.env.example` as the complete renderer/build contract and copy
+`.env.local.example` to `.env.local` for local development. Never commit
+`.env.local`, production signing credentials, provider API keys, MCP OAuth
+tokens, local file indexes, or user data.
 
 ## Security, Privacy, Data Boundaries
 
