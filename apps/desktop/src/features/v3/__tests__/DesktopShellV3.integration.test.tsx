@@ -20,6 +20,7 @@ vi.mock('react-i18next', () => ({
         'sidebar.modes.chat': 'Chat',
         'sidebar.nav.projects': 'Projects',
         'sidebar.nav.artifacts': 'Artifacts',
+        'sidebar.nav.tasks': 'Tasks',
         'sidebar.nav.scheduled': 'Scheduled',
         'sidebar.nav.customize': 'Customize',
         'sidebar.nav.liveArtifacts': 'Live artifacts',
