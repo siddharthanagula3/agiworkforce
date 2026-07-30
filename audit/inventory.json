@@ -698,8 +698,8 @@
   {
     "item": "mcp-one-click-install",
     "surface": "apps/desktop",
-    "status": "unwired",
-    "evidence": "Full backend exists: apps/desktop/src-tauri/src/sys/commands/mcpb.rs has mcpb_fetch_registry/search_bundles/get_bundle_details/install_bundle (line 2343)/uninstall_bundle/check_updates, registered lib.rs:1992-2001, state at lib.rs:717. Frontend store apps/desktop/src/stores/mcpbStore.ts:40-41 wraps install/uninstallBundle. The only UI consumer, apps/desktop/src/features/mcp/MCPBundleBrowser.tsx:531-854, is never imported by any other file in the repo (grep for 'MCPBundleBrowser' across apps/desktop/src returns only its own definition/default-export lines) and `useMcpbStore`/`installBundle`/`searchBundles` are called nowhere else."
+    "status": "built",
+    "evidence": "The reachable Desktop Settings -> Connectors -> Tool Management workspace now exposes a lazy Bundle Registry tab backed by MCPBundleBrowser and mcpbStore. Users can browse/search reviewed and remote-only entries, inspect tools and credentials, install/update/remove installable npm-backed bundles with live progress, and continue directly to server configuration. Entries without an npm package are labeled manual-only, remote registry responses cannot self-attest verification, unverified installs require explicit risk confirmation, and newly installed servers remain disabled until configured."
   },
   {
     "item": "plugin-manager",

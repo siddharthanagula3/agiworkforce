@@ -135,17 +135,41 @@ export const useMcpbStore = create<McpbState>()(
       },
 
       installBundle: async (bundleId: string) => {
-        set({ isInstalling: true, error: null });
+        set({
+          isInstalling: true,
+          error: null,
+          installProgress: {
+            bundleId,
+            status: 'pending',
+            progress: 0,
+            message: 'Preparing bundle installation...',
+          },
+        });
         try {
           await mcpbApi.installBundle(bundleId);
-          // Refresh installed bundles after installation
-          const installedBundles = await mcpbApi.getInstalledBundles();
-          set({ installedBundles, isInstalling: false, installProgress: null });
-        } catch (error) {
+          await get().fetchRegistry();
           set({
-            error: error instanceof Error ? error.message : `Failed to install bundle ${bundleId}`,
             isInstalling: false,
-            installProgress: null,
+            installProgress: {
+              bundleId,
+              status: 'completed',
+              progress: 100,
+              message: 'Installation complete.',
+            },
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : `Failed to install bundle ${bundleId}`;
+          set({
+            error: message,
+            isInstalling: false,
+            installProgress: {
+              bundleId,
+              status: 'failed',
+              progress: 0,
+              message: 'Installation failed.',
+              error: message,
+            },
           });
         }
       },
@@ -154,9 +178,8 @@ export const useMcpbStore = create<McpbState>()(
         set({ isInstalling: true, error: null });
         try {
           await mcpbApi.uninstallBundle(bundleId);
-          // Refresh installed bundles after uninstallation
-          const installedBundles = await mcpbApi.getInstalledBundles();
-          set({ installedBundles, isInstalling: false });
+          await get().fetchRegistry();
+          set({ isInstalling: false });
         } catch (error) {
           set({
             error:
@@ -201,17 +224,41 @@ export const useMcpbStore = create<McpbState>()(
       },
 
       updateBundle: async (bundleId: string) => {
-        set({ isInstalling: true, error: null });
+        set({
+          isInstalling: true,
+          error: null,
+          installProgress: {
+            bundleId,
+            status: 'pending',
+            progress: 0,
+            message: 'Preparing bundle update...',
+          },
+        });
         try {
           await mcpbApi.updateBundle(bundleId);
-          // Refresh installed bundles after update
-          const installedBundles = await mcpbApi.getInstalledBundles();
-          set({ installedBundles, isInstalling: false, installProgress: null });
-        } catch (error) {
+          await get().fetchRegistry();
           set({
-            error: error instanceof Error ? error.message : `Failed to update bundle ${bundleId}`,
             isInstalling: false,
-            installProgress: null,
+            installProgress: {
+              bundleId,
+              status: 'completed',
+              progress: 100,
+              message: 'Update complete.',
+            },
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : `Failed to update bundle ${bundleId}`;
+          set({
+            error: message,
+            isInstalling: false,
+            installProgress: {
+              bundleId,
+              status: 'failed',
+              progress: 0,
+              message: 'Update failed.',
+              error: message,
+            },
           });
         }
       },

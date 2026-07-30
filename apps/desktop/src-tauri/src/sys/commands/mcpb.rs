@@ -2187,7 +2187,18 @@ async fn fetch_remote_registry() -> Result<Vec<McpBundle>, String> {
         .await
         .map_err(|e| format!("Failed to parse registry response: {}", e))?;
 
-    Ok(bundles)
+    // A remote response cannot self-attest publisher verification. Until the
+    // registry response is signature-verified against a bundled trust root,
+    // every remote-only entry must pass through the renderer's explicit
+    // unverified-install confirmation. Embedded entries retain their reviewed
+    // verification metadata when the two sources are merged by id.
+    Ok(bundles
+        .into_iter()
+        .map(|mut bundle| {
+            bundle.verified = false;
+            bundle
+        })
+        .collect())
 }
 
 // ============================================================================

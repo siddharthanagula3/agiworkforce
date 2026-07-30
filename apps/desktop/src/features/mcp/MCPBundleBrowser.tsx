@@ -4,14 +4,14 @@
  * One-click MCP server installation with real-time progress tracking.
  * Integrates with the mcpbStore for state management.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { listen } from '../../lib/tauri-mock';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { ScrollArea } from '@/components/ui/ScrollArea';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import {
   Search,
   Download,
@@ -40,12 +40,7 @@ import {
   selectFilteredBundles,
   selectBundlesWithUpdates,
 } from '../../stores/mcpbStore';
-import type {
-  McpBundle,
-  McpBundleCategory,
-  BundleInstallProgress,
-  McpbEventPayload,
-} from '../../types/mcp';
+import type { McpBundle, McpBundleCategory, BundleInstallProgress } from '../../types/mcp';
 
 const CATEGORY_CONFIG: Record<
   McpBundleCategory | 'all',
@@ -67,9 +62,11 @@ const CATEGORY_CONFIG: Record<
 function InstallProgressModal({
   progress,
   onClose,
+  onConfigureServer,
 }: {
   progress: BundleInstallProgress;
   onClose: () => void;
+  onConfigureServer?: () => void;
 }) {
   const isComplete = progress.status === 'completed';
   const isFailed = progress.status === 'failed';
@@ -161,7 +158,17 @@ function InstallProgressModal({
             <Button variant="outline" onClick={onClose} className="flex-1">
               Close
             </Button>
-            <Button className="flex-1">Configure Server</Button>
+            {onConfigureServer && (
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  onClose();
+                  onConfigureServer();
+                }}
+              >
+                Configure Server
+              </Button>
+            )}
           </div>
         )}
       </Card>
@@ -220,6 +227,8 @@ function BundleDetailsModal({
   onUninstall: (bundleId: string) => void;
   isInstalling: boolean;
 }) {
+  const canInstall = Boolean(bundle.npmPackage);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-hidden bg-surface-elevated shadow-2xl">
@@ -280,6 +289,16 @@ function BundleDetailsModal({
 
             {/* Description */}
             <p className="text-foreground mb-6">{bundle.description}</p>
+
+            {!bundle.verified && (
+              <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="text-sm font-medium text-amber-300">Unverified registry entry</p>
+                <p className="mt-1 text-xs text-amber-200/80">
+                  Review the publisher, package, source, requested credentials, and tools before
+                  installing. This package has not been verified by AGI Workforce.
+                </p>
+              </div>
+            )}
 
             {/* Details */}
             <div className="grid grid-cols-2 gap-4 mb-6">
@@ -421,15 +440,17 @@ function BundleDetailsModal({
               ) : (
                 <Button
                   onClick={() => onInstall(bundle.id)}
-                  disabled={isInstalling}
+                  disabled={isInstalling || !canInstall}
                   className="flex-1 flex items-center gap-2"
                 >
-                  {isInstalling ? (
+                  {!canInstall ? (
+                    <ExternalLink className="w-4 h-4" />
+                  ) : isInstalling ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <Download className="w-4 h-4" />
                   )}
-                  Install Bundle
+                  {canInstall ? 'Install Bundle' : 'Manual setup required'}
                 </Button>
               )}
             </div>
@@ -452,6 +473,8 @@ function BundleCard({
   onInstall: (bundleId: string) => void;
   isInstalling: boolean;
 }) {
+  const canInstall = Boolean(bundle.npmPackage);
+
   return (
     <Card className="p-4 hover:border-blue-500/50 transition-all duration-200 bg-surface-elevated">
       <div className="flex items-start gap-3 mb-3">
@@ -515,11 +538,11 @@ function BundleCard({
           <Button
             size="sm"
             onClick={() => onInstall(bundle.id)}
-            disabled={isInstalling}
+            disabled={isInstalling || !canInstall}
             className="flex items-center gap-1"
           >
-            <Download className="w-3 h-3" />
-            Install
+            {canInstall && <Download className="w-3 h-3" />}
+            {canInstall ? 'Install' : 'Manual'}
           </Button>
         )}
       </div>
@@ -528,7 +551,11 @@ function BundleCard({
 }
 
 // Main Component
-export function MCPBundleBrowser() {
+export interface MCPBundleBrowserProps {
+  onConfigureServer?: () => void;
+}
+
+export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
   const {
     bundles,
     featuredBundles,
@@ -543,6 +570,7 @@ export function MCPBundleBrowser() {
     searchBundles,
     filterByCategory,
     installBundle,
+    updateBundle,
     uninstallBundle,
     clearError,
     setInstallProgress,
@@ -561,14 +589,16 @@ export function MCPBundleBrowser() {
       searchBundles: state.searchBundles,
       filterByCategory: state.filterByCategory,
       installBundle: state.installBundle,
+      updateBundle: state.updateBundle,
       uninstallBundle: state.uninstallBundle,
       clearError: state.clearError,
       setInstallProgress: state.setInstallProgress,
     })),
   );
 
-  const filteredBundles = useMcpbStore(selectFilteredBundles);
-  const bundlesWithUpdates = useMcpbStore(selectBundlesWithUpdates);
+  const filteredBundles = useMcpbStore(useShallow(selectFilteredBundles));
+  const bundlesWithUpdates = useMcpbStore(useShallow(selectBundlesWithUpdates));
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const [selectedBundle, setSelectedBundle] = useState<McpBundle | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -578,64 +608,6 @@ export function MCPBundleBrowser() {
     fetchRegistry();
   }, [fetchRegistry]);
 
-  // Listen for MCPB events from Tauri
-  useEffect(() => {
-    let isMounted = true;
-    let unlistenFn: (() => void) | null = null;
-
-    listen<McpbEventPayload>('mcpb:event', (event) => {
-      if (!isMounted) return;
-
-      const payload = event.payload;
-
-      if (payload.type === 'install_started') {
-        setInstallProgress({
-          bundleId: payload.bundleId,
-          status: 'downloading',
-          progress: 0,
-          message: `Starting installation of ${payload.bundleName || payload.bundleId}...`,
-        });
-      } else if (payload.type === 'install_progress') {
-        setInstallProgress({
-          bundleId: payload.bundleId,
-          status: 'installing',
-          progress: payload.progress || 50,
-          message: payload.message || 'Installing...',
-        });
-      } else if (payload.type === 'install_completed') {
-        setInstallProgress({
-          bundleId: payload.bundleId,
-          status: 'completed',
-          progress: 100,
-          message: 'Installation complete!',
-        });
-        // Refresh registry to update installed status
-        fetchRegistry();
-      } else if (payload.type === 'install_failed') {
-        setInstallProgress({
-          bundleId: payload.bundleId,
-          status: 'failed',
-          progress: 0,
-          message: 'Installation failed',
-          error: payload.error,
-        });
-      }
-    }).then((fn) => {
-      if (isMounted) {
-        unlistenFn = fn;
-      } else {
-        fn();
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      if (unlistenFn) {
-        unlistenFn();
-      }
-    };
-  }, [fetchRegistry, setInstallProgress]);
-
   const handleViewDetails = useCallback((bundle: McpBundle) => {
     setSelectedBundle(bundle);
     setDetailsOpen(true);
@@ -643,18 +615,51 @@ export function MCPBundleBrowser() {
 
   const handleInstall = useCallback(
     async (bundleId: string) => {
-      await installBundle(bundleId);
+      const bundle =
+        bundles.find((candidate) => candidate.id === bundleId) ??
+        featuredBundles.find((candidate) => candidate.id === bundleId);
+      if (!bundle?.npmPackage) return;
+
+      if (!bundle.verified) {
+        const accepted = await confirm({
+          title: `Install unverified bundle “${bundle.name}”?`,
+          description: `This runs npm install -g for ${bundle.npmPackage} and adds a disabled MCP server configuration on this device. Review the publisher, source, tools, and requested credentials before continuing.`,
+          confirmText: 'Install unverified bundle',
+          cancelText: 'Cancel',
+          variant: 'destructive',
+        });
+        if (!accepted) return;
+      }
+
+      if (bundle.installed) {
+        await updateBundle(bundleId);
+      } else {
+        await installBundle(bundleId);
+      }
     },
-    [installBundle],
+    [bundles, confirm, featuredBundles, installBundle, updateBundle],
   );
 
   const handleUninstall = useCallback(
     async (bundleId: string) => {
+      const bundle =
+        bundles.find((candidate) => candidate.id === bundleId) ??
+        featuredBundles.find((candidate) => candidate.id === bundleId);
+      const accepted = await confirm({
+        title: `Remove ${bundle?.name ?? 'this MCP bundle'}?`,
+        description:
+          'This removes the MCP server from AGI Workforce configuration. The globally installed npm package is retained so other applications are not broken.',
+        confirmText: 'Remove bundle',
+        cancelText: 'Cancel',
+        variant: 'destructive',
+      });
+      if (!accepted) return;
+
       await uninstallBundle(bundleId);
       setDetailsOpen(false);
       setSelectedBundle(null);
     },
-    [uninstallBundle],
+    [bundles, confirm, featuredBundles, uninstallBundle],
   );
 
   const handleCloseProgress = useCallback(() => {
@@ -845,8 +850,13 @@ export function MCPBundleBrowser() {
 
       {/* Install Progress Modal */}
       {installProgress && (
-        <InstallProgressModal progress={installProgress} onClose={handleCloseProgress} />
+        <InstallProgressModal
+          progress={installProgress}
+          onClose={handleCloseProgress}
+          onConfigureServer={onConfigureServer}
+        />
       )}
+      {confirmDialog}
     </div>
   );
 }
