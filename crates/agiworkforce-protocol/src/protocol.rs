@@ -1113,15 +1113,6 @@ pub enum SandboxPolicy {
         network_access: bool,
     },
 
-    /// Indicates the process is already in an external sandbox. Allows full
-    /// disk access while honoring the provided network setting.
-    #[serde(rename = "external-sandbox")]
-    ExternalSandbox {
-        /// Whether the external sandbox permits outbound network traffic.
-        #[serde(default)]
-        network_access: NetworkAccess,
-    },
-
     /// Same as `ReadOnly` but additionally grants write access to the current
     /// working directory ("workspace").
     #[serde(rename = "workspace-write")]
@@ -1259,8 +1250,6 @@ impl SandboxPolicy {
     pub fn has_full_disk_read_access(&self) -> bool {
         match self {
             SandboxPolicy::DangerFullAccess => true,
-            // An external sandbox manages its own read scope; treat as full.
-            SandboxPolicy::ExternalSandbox { .. } => true,
             // Honor a Restricted read configuration instead of failing open: a
             // read-restricted policy must NOT report full disk read access, or
             // consumers gating on this method silently skip read enforcement.
@@ -1274,7 +1263,6 @@ impl SandboxPolicy {
     pub fn has_full_disk_write_access(&self) -> bool {
         match self {
             SandboxPolicy::DangerFullAccess => true,
-            SandboxPolicy::ExternalSandbox { .. } => true,
             SandboxPolicy::ReadOnly { .. } => false,
             SandboxPolicy::WorkspaceWrite { .. } => false,
         }
@@ -1283,7 +1271,6 @@ impl SandboxPolicy {
     pub fn has_full_network_access(&self) -> bool {
         match self {
             SandboxPolicy::DangerFullAccess => true,
-            SandboxPolicy::ExternalSandbox { network_access } => network_access.is_enabled(),
             SandboxPolicy::ReadOnly { network_access, .. } => *network_access,
             SandboxPolicy::WorkspaceWrite { network_access, .. } => *network_access,
         }
@@ -1295,7 +1282,6 @@ impl SandboxPolicy {
     pub fn get_writable_roots_with_cwd(&self, cwd: &Path) -> Vec<WritableRoot> {
         match self {
             SandboxPolicy::DangerFullAccess => Vec::new(),
-            SandboxPolicy::ExternalSandbox { .. } => Vec::new(),
             SandboxPolicy::ReadOnly { .. } => Vec::new(),
             SandboxPolicy::WorkspaceWrite {
                 writable_roots,
@@ -4294,21 +4280,6 @@ mod tests {
     }
 
     #[test]
-    fn external_sandbox_reports_full_access_flags() {
-        let restricted = SandboxPolicy::ExternalSandbox {
-            network_access: NetworkAccess::Restricted,
-        };
-        assert!(restricted.has_full_disk_write_access());
-        assert!(!restricted.has_full_network_access());
-
-        let enabled = SandboxPolicy::ExternalSandbox {
-            network_access: NetworkAccess::Enabled,
-        };
-        assert!(enabled.has_full_disk_write_access());
-        assert!(enabled.has_full_network_access());
-    }
-
-    #[test]
     fn read_only_reports_network_access_flags() {
         let restricted = SandboxPolicy::new_read_only_policy();
         assert!(!restricted.has_full_network_access());
@@ -4318,6 +4289,17 @@ mod tests {
             network_access: true,
         };
         assert!(enabled.has_full_network_access());
+    }
+
+    #[test]
+    fn sandbox_policy_rejects_removed_external_mode() {
+        let removed_policy = serde_json::json!({
+            "external-sandbox": {
+                "network_access": "restricted",
+            },
+        });
+
+        assert!(serde_json::from_value::<SandboxPolicy>(removed_policy).is_err());
     }
 
     #[test]
@@ -4649,12 +4631,6 @@ mod tests {
         let writable_root = AbsolutePathBuf::resolve_path_against_base("writable", cwd.path());
         let policies = [
             SandboxPolicy::DangerFullAccess,
-            SandboxPolicy::ExternalSandbox {
-                network_access: NetworkAccess::Restricted,
-            },
-            SandboxPolicy::ExternalSandbox {
-                network_access: NetworkAccess::Enabled,
-            },
             SandboxPolicy::ReadOnly {
                 access: ReadOnlyAccess::FullAccess,
                 network_access: false,
