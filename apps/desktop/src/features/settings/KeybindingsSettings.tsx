@@ -415,8 +415,8 @@ export function KeybindingsSettings() {
           while editing to cancel.
         </p>
         <p>
-          Conflicting shortcuts are marked with a warning icon. The most recently bound shortcut
-          takes precedence.
+          A shortcut already assigned to another action cannot be reused. Rebind the other action
+          first.
         </p>
         <p>Leader-key sequences (Ctrl+Space, then a key) are independent of these shortcuts.</p>
         <p>

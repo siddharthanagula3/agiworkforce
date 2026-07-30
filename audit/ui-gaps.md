@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 5af144c750d4c2138bd605c1c126b182c3d21646eaf0543e018532a2c6495b9b -->
+<!-- ui-gaps-csv-sha256: 86c3d9f6b53d1c89328be579da6b46d615b6a5c6e8ee3e8d1ce90dac4cc1d79a -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 59 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 0 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  263 |
+| Open        |  204 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   48 |
-| Not Planned |   30 |
+| Done        |   65 |
+| Not Planned |   72 |
 
 ## P0
 
@@ -1131,1358 +1131,1358 @@ Not planned under the current request-scoped connector authorization. Reconsider
 
 - `chatgpt_reference/076-chatgpt-ios-work-mode-task-list-github-suggested-tasks.png`
 
-### GAP-049 — No post-pairing success state with follow-on setup toggles
+### GAP-049 — Post-pairing setup toggles are declined for the current ephemeral companion session
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · 'You're connected' post-pairing modal
 
 **Gap**
 
-After a device pairs, the reference shows a success modal (checkmark hero, 'You're connected', 'You can change these later in Settings') with three immediately actionable toggles — Keep this Mac awake, Use your Mac apps while locked (+ Learn more), Set up Chrome extension — and a Done button. agiworkforce's desktop pairing card exposes only status text and a Disconnect button, so the moment of highest intent teaches nothing and configures nothing.
+The reference configures durable device access, but agiworkforce pairing authorizes one short-lived Desktop and Mobile session. There is no device-scoped keep-awake, locked-app access, or extension-install state to persist, and presenting those toggles after pairing would imply durable authority the protocol does not grant.
 
 **Evidence**
 
-apps/desktop/src/features/mobile-companion/MobileCompanionPanel.tsx (connected branch renders a status strip + Disconnect only); apps/desktop/src/features/mobile-companion/QRPairingCard.tsx
+MobileCompanionPanel.tsx and QRPairingCard.tsx expose the supported connect, status, approval, and disconnect lifecycle. The companion stores and signed cross-device contracts keep pairing authority session-scoped and provide no per-device setup-preference fields or native locked-session entitlement.
 
 **Suggested fix**
 
-On transition to peerConnected, present a one-time success dialog with the follow-on toggles that actually apply to agiworkforce (prevent sleep during remote sessions, allow remote approvals while locked, install the Chrome extension) plus a Done action, persisted so it shows once per device.
+Not planned for the current companion contract. Add a post-pairing setup flow only after durable, independently revocable device identities and native-backed sleep, lock-screen, and extension-install capabilities exist.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/052-codex-macos-settings-connections-search-remote-control-connected-modal.png`
 
-### GAP-050 — Fully built terminal workspace is unreachable — no bottom dock in the shell
+### GAP-050 — Desktop exposes the real multi-session terminal in a persistent bottom dock
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Bottom terminal dock
 
 **Gap**
 
-The reference docks a real shell under the chat: tab per session named after the workspace, close per tab, '+' to open another, panel close on the right, and a prompt already cd'd into the project. agiworkforce implements exactly this (xterm with fit/search/webgl addons, multi-session store, shell selection, AI assist) in features/terminal, but DesktopShellV3 never mounts it and there is no bottom-panel region at all, so users cannot open a terminal.
+Desktop Local mode now mounts the existing xterm-backed TerminalWorkspace in a bottom dock instead of leaving the implementation orphaned. The dock can be opened and closed from the shell and its open state survives a restart.
 
 **Evidence**
 
-apps/desktop/src/features/terminal/TerminalWorkspace.tsx:32 (tabs, createSession/closeSession) and features/terminal/Terminal.tsx (xterm); grep 'TerminalWorkspace' across apps/desktop/src returns only its own definition
+apps/desktop/src/features/v3/DesktopShellV3.tsx lazy-loads TerminalWorkspace in a Local-only bottom dock, persists desktop-terminal-dock-open, and exposes labelled open/close controls. DesktopShellV3.test.tsx verifies that the real workspace mount appears, persists, and closes.
 
 **Suggested fix**
 
-Add a resizable bottom dock to DesktopShellV3 hosting TerminalWorkspace, opened from the tool launcher and a shortcut, with the session cwd defaulting to the scoped folder and the dock state persisted per workspace.
+Completed for the supported Local terminal runtime. Keep the dock Local-only and continue using TerminalWorkspace as the single owner of sessions, tabs, shell selection, and terminal lifecycle.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/081-codex-macos-terminal-panel-shell-prompt.png`
 
-### GAP-051 — Desktop empty chat has no quick-action cards to start a task
+### GAP-051 — Desktop empty chat exposes capability-aware quick actions
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Chat empty state
 
 **Gap**
 
-The reference offers four capability cards (Explore and understand code / Build a new feature, app, or tool / Review code and suggest changes / Fix issues and failures) that both teach the agent's competencies and seed the first prompt. agiworkforce's desktop empty state renders only a rotating time-of-day greeting and subline, so a new user gets no entry point.
+The audit inspected EmptyChat in isolation, but the mounted Desktop shell delegates the composer empty state to shared unified-chat, where QuickChips render below the greeting and seed the first prompt. Cloud chip availability is further constrained by the hydrated account tier.
 
 **Evidence**
 
-apps/desktop/src/features/v3/EmptyChat.tsx (renders BrandedGreeting only); apps/desktop/src/features/chat/BrandedGreeting.tsx
+apps/desktop/src/features/v3/DesktopShellV3.tsx passes quickChipAvailability and an empty-state slot to ChatInterface. packages/ui/unified-chat/src/components/ChatInterface.tsx and QuickChips.tsx own the mounted quick actions and prompt seeding. DesktopShellV3.test.tsx verifies the quick-chip mount and Cloud tier projection.
 
 **Suggested fix**
 
-Add a four-card grid under the greeting in EmptyChat that prefills the composer with a scoped prompt per card, tailored to the active mode (code-oriented cards in Local with a folder selected, general cards otherwise).
+Closed as a stale component-level finding. Keep quick actions in the shared composer owner and gate every chip by the runtime and account capability that can actually execute it.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/079-codex-macos-chat-empty-state-agiworkforce-quick-actions.png`
 
-### GAP-052 — Missing transcript text-size/width controls and local-session safety toggles for AGI Code
+### GAP-052 — Reference-specific AGI Code transcript and session toggles are declined without runtime consumers
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Claude Code settings > Appearance + Local sessions
 
 **Gap**
 
-Reference exposes interface font choice, transcript text size (Small/Medium/Large), transcript width (Narrow/Medium/Wide), and three local-session toggles: allow bypass permissions mode (with security-risk warning + link), enable remote control by default, and dynamic (parallel-agent) workflows. None of these exist in agiworkforce's AgiCode tab.
+Desktop now has app-wide persisted UI scale and reduced motion, but it has no separate transcript renderer policy or coding-session executor that consumes transcript width, bypass-permissions, remote-control-default, or parallel-workflow flags. Adding those controls to the thin AGI Code settings tab would create saved preferences with no enforcement owner.
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/AgiCode/index.tsx only imports InstructionFilesSettings; grep for 'bypass permissions mode', 'remote control by default', 'dynamic workflows' returned no matches under apps/desktop
+apps/desktop/src/features/settings/tabs/AgiCode/index.tsx owns instruction-file settings only. ThemeSettings.tsx and App.tsx now own real app-wide scale. Repository searches find no coding-session consumer for transcript width, bypass permission, remote-control default, or dynamic workflow settings.
 
 **Suggested fix**
 
-Build an AgiCode Appearance section (font/transcript size/width) and a Local sessions section (bypass-permissions toggle with warning copy + best-practices link, remote-control-by-default toggle, dynamic-workflows toggle).
+Not planned until a mounted coding-session runtime defines typed, native-enforced semantics for these settings. Keep general accessibility in Appearance and do not duplicate security toggles that cannot constrain execution.
 
 **Reference screenshot(s)**
 
 - `claude_reference/149-claude-desktop-settings-claude-code-appearance-transcript.png`
 
-### GAP-053 — No per-device authorization-token management for AGI Code sessions
+### GAP-053 — Per-device coding authorization-token management is declined without an account token API
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Claude · macOS desktop · Claude Code settings > Authorization tokens
 
 **Gap**
 
-Reference lists every device/app authorized to sign in to Claude Code with its scopes (file_upload, inference, mcp_servers, profile, sessions) and a way to revoke a token to sign that device out, plus a 'delete sessions stored by Anthropic' action and sharing-settings management. agiworkforce exposes none of this for its coding agent.
+The reference manages server-issued device tokens and cloud coding sessions. agiworkforce Desktop has no owner-scoped token inventory, scope vocabulary, revocation endpoint, or cloud-session deletion contract for a coding product, so a list or revoke button would fabricate security state.
 
 **Evidence**
 
-searched 'authorization token', 'revoke token', 'Delete sessions stored' across apps/ — no relevant UI matches (only unrelated web billing/auth code)
+Repository searches across Desktop settings, auth services, and Cloud contracts find no coding-device token list/revoke operation, token-scope model, cloud-session deletion endpoint, or sharing-policy owner. Existing sign-in credentials are not exposed as a manageable coding-token catalog.
 
 **Suggested fix**
 
-Add an Authorization tokens list (device, scopes, connected-time, revoke action) plus a 'delete cloud-stored sessions' and sharing-settings control to AgiCode settings, backed by a per-device token API.
+Not planned until the account service publishes authenticated token inventory, scope, revoke, session deletion, sharing, audit, and current-device semantics with cross-account tests.
 
 **Reference screenshot(s)**
 
 - `claude_reference/152-claude-desktop-settings-claude-code-auth-tokens.png`
 
-### GAP-054 — No code-diff theme picker (light/dark) or code font setting for AGI Code
+### GAP-054 — Separate AGI Code diff themes and font are declined without a consuming diff renderer
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Claude · macOS desktop · Claude Code settings > General + Code appearance
 
 **Gap**
 
-Reference lets users pick separate light/dark syntax themes for the coding agent's diff view with a live before/after code preview, plus a custom monospace code font field. agiworkforce's AgiCode settings tab only renders InstructionFilesSettings — there is no theme or font control at all.
+A separate light/dark coding theme and code-font preference would currently be dead state: the AGI Code settings surface does not own an independent diff transcript, and existing diff viewers use the application theme and editor configuration.
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/AgiCode/index.tsx (only LazyInstructionFilesSettings); grepped 'code theme', 'Claude Light', 'JetBrains Mono' equivalents — no match in apps/desktop/src/features/settings
+AgiCode/index.tsx mounts only InstructionFilesSettings. Existing Desktop git and file diff components do not read any AGI Code theme or font preference, and no settings schema or runtime contract defines one.
 
 **Suggested fix**
 
-Add a CodeAppearanceSettings panel to the AgiCode tab with light/dark diff-theme selects and a code-font input, rendering a live diff preview like the reference.
+Not planned until a distinct coding transcript/diff renderer owns these preferences end to end. If introduced, connect the setting, live preview, renderer, persistence migration, and contrast tests in one change.
 
 **Reference screenshot(s)**
 
 - `claude_reference/148-claude-desktop-settings-claude-code-general-code-theme.png`
 
-### GAP-055 — No git worktree-location setting or in-app browser-tools controls for AGI Code
+### GAP-055 — AGI Code worktree and browser-tool settings are declined without session ownership
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Claude Code settings > worktree location + Browser tools
 
 **Gap**
 
-Reference lets users choose where git worktrees for isolated coding sessions are stored, and configure whether the agent can start dev servers / browse in an in-app browser, whether shared links open in that browser panel, cookie/session persistence mode (Don't keep/Shared/Separate), and a manage-allowed-sites list. agiworkforce has none of this for its coding agent.
+The requested controls assume an isolated-worktree coding runtime and a dedicated browser session with cookie, allow-site, and persistence ownership. Desktop has neither contract under AGI Code; reusing unrelated git, MCP, or Chrome-extension state would conflate trust boundaries.
 
 **Evidence**
 
-grep -i 'worktree' under apps/desktop/src/features/settings — no match (only unrelated hits in extension-vscode); grep -i 'browser tools|browser panel' finds only apps/desktop MCP tooling files, unrelated to AgiCode
+Repository searches find no AGI Code worktree allocator, worktree-location consumer, in-app coding browser session, cookie jar, allowed-site evaluator, or link-routing preference. Existing browser, extension, and git modules are independently owned.
 
 **Suggested fix**
 
-Add a Worktree-location select and a Browser section (enable browser tools, open-links-in-panel toggle, session-persistence mode select, allowed-sites manager) to the AgiCode settings tab.
+Not planned until a coding-session service defines worktree lifecycle and a browser owner defines isolated storage, permissions, retention, clear-data, and allowed-origin enforcement.
 
 **Reference screenshot(s)**
 
 - `claude_reference/150-claude-desktop-settings-claude-code-worktree-browser-tools.png`
 
-### GAP-056 — Agent access policy is invisible at send time — 'Full access' is only in Settings
+### GAP-056 — Composer shows the native terminal access policy at send time
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Composer access-mode indicator
 
 **Gap**
 
-The reference prints the active permission mode in the composer in warning orange ('⚠ Full access') next to the attach button, so a dangerous mode is impossible to forget. agiworkforce's equivalent setting (Read-only / Workspace write / Danger full access) exists only in Settings > Agent Execution and is never rendered or switchable in the chat surface.
+The Desktop composer now shows the resolved terminal sandbox policy as a severity-coloured chip. Sandbox off and danger-full-access are explicit danger states; read-only and workspace-write reflect their native-backed policies, and the chip opens Agent Execution settings.
 
 **Evidence**
 
-apps/desktop/src/features/settings/AgentExecutionSettings.tsx:304-319 ('Access policy' Select, the sole reference to danger-full-access in the app); grep 'accessPolicy|Full access' across apps/desktop/src returns only that file
+apps/desktop/src/features/v3/ComposerContextControls.tsx reads executionPreferences.terminalSandbox and renders the point-of-use policy. DesktopShellV3.tsx mounts it through the shared composer's hostControls seam. ComposerContextControls.test.tsx verifies the enforced workspace-write state, sandbox-off warning, and settings navigation.
 
 **Suggested fix**
 
-Surface the terminal-sandbox access policy as a composer chip with severity colouring and a click-through menu to change it, and show a confirm dialog when switching into danger-full-access from the chat surface.
+Completed. Keep the chip derived from the native-synchronised settings store and never infer access from presentation state. Any future inline mutation must preserve native confirmation and rollback behavior.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/079-codex-macos-chat-empty-state-agiworkforce-quick-actions.png`
 
-### GAP-057 — Composer shows no workspace / environment / git-branch context chips
+### GAP-057 — Composer shows workspace, environment, and verified git-branch context
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-ia
 - **Reference:** Codex · macOS desktop · Composer context bar
 
 **Gap**
 
-The reference pins a context bar to the composer showing the active workspace folder, the execution environment ('Local'), and the current git branch, so the user always knows what the agent will touch before sending. agiworkforce has all three facts (projectStore current folder, privacyMode local/managed, git status branch) but surfaces none of them at the composer; the StatusBar shows only provider/model/tokens/online.
+Desktop now places the active Local, Cloud, or BYOK environment, selected folder, and live repository branch beside the send controls. Folder selection remains mode-aware, and branch display is omitted when native git status cannot verify it.
 
 **Evidence**
 
-apps/desktop/src/hooks/useFolderSelection.ts (current folder + mode-aware scoping); apps/desktop/src/features/git/GitStatusPanel.tsx:421-422 (status.branch, panel unmounted); apps/desktop/src/features/layout/StatusBar.tsx:20-41 (no folder/branch props)
+ComposerContextControls.tsx reads the selected folder and privacy mode supplied by DesktopShellV3, calls the existing gitStatus API only for a Tauri Local/BYOK folder, and fails closed by hiding unavailable branch data. ComposerContextControls.test.tsx covers folder, environment, live branch, and Cloud no-branch behavior.
 
 **Suggested fix**
 
-Render a chip row above the composer with folder name (click to re-scope via useFolderSelection), environment badge (Local/Cloud, click to switch), and branch from the git status poller when the folder is a repo.
+Completed. Keep these labels sourced from the same folder-scoping, privacy-mode, and native git contracts used for execution so the composer never overstates its scope.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/079-codex-macos-chat-empty-state-agiworkforce-quick-actions.png`
 
-### GAP-058 — No persistent 'Skip all approvals is on' risk banner when auto-approve is active
+### GAP-058 — Automatic tool approval remains visibly warned at the composer
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-state
 - **Reference:** Claude · macOS desktop · Cowork agent task view
 
 **Gap**
 
-Claude shows a standing amber banner above the composer whenever the session has approvals disabled: 'Skip all approvals is on. Claude never pauses, even for unsafe actions. This includes using your connectors and apps on your computer. You can turn off individual connectors in the + menu. See safe use tips.' with a dismiss (X). AGIW has an equivalent underlying setting (AgentsSettings 'Auto-approve safe actions', AgentExecutionSettings 'Auto-approve') but no in-transcript persistent warning surfaces when that mode is engaged, and no inline composer dropdown to change the approval mode without leaving the conversation.
+When the native-synchronised global auto-approve setting is active, the composer now carries a persistent red Approvals: Auto warning at the point of execution. The warning opens Agent Execution settings; it is not dismissible, so elevated posture cannot become silently hidden.
 
 **Evidence**
 
-grep -ri 'Skip all approvals', 'never pauses', 'safe use tips' across apps/desktop/src and apps/web — no matches. features/settings/AgentsSettings.tsx and AgentExecutionSettings.tsx expose the toggle only inside Settings, not as a composer-adjacent control.
+ComposerContextControls.tsx derives the warning from chatPreferences.autoApproveTools and links to agent-execution settings. settingsStore.ts synchronises setAutoApproveTools with the native set_auto_approve_all command and rolls UI state back on failure. ComposerContextControls.test.tsx verifies visibility and navigation.
 
 **Suggested fix**
 
-Add a dismissible risk banner component shown above the composer whenever the active conversation/session has auto-approve or full-access enabled, plus a small approval-mode dropdown (mirroring Claude's 'Skip'/'Ask' chip) next to the model picker so users can change it without opening Settings.
+Completed for the supported global approval contract. Keep the warning persistent while auto-approve is active; add a conversation-scoped selector only if the native executor gains an authoritative per-conversation policy.
 
 **Reference screenshot(s)**
 
 - `claude_reference/098-claude-desktop-cowork-agent-task-view-tool-call-timeline.png`
 
-### GAP-059 — Composer has no per-conversation permission-mode selector (Skip / Manual)
+### GAP-059 — Per-conversation approval mode is declined while native approval policy is global
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Cowork home (new task composer)
 
 **Gap**
 
-Both reference desktop screens expose the agent's approval posture inline in the composer: '⚠ Skip ˅' on the home composer and '✋ Manual ˅' on the task composer, letting the user set how much autonomy the run gets before sending and see it at a glance during the run. agiworkforce only exposes auto-approval deep in settings (desktop AgentExecutionSettings / mobile /settings/auto-approve), so the user cannot see or change approval mode from the place where they launch work.
+Desktop now makes global automatic approval visibly dangerous at the composer, but the native executor and persisted settings expose a global policy rather than a conversation-bound override. A Manual or Skip selector in one chat would falsely imply isolation the backend does not enforce.
 
 **Evidence**
 
-searched 'permissionMode|Ask every time|Skip permissions|approvalMode' in apps/web/features/chat/components/Composer — no match; auto-approve exists only at apps/desktop/src/features/settings/AgentExecutionSettings.tsx, apps/desktop/src/stores/chat/toolStore.ts and apps/mobile/app/(app)/settings/auto-approve.tsx
+settingsStore.ts synchronises autoApproveTools through set_auto_approve_all and rolls back on failure; the command has no conversation identifier. ComposerContextControls.tsx shows the real global state. The chat and cross-device contracts carry no per-conversation approval-policy field.
 
 **Suggested fix**
 
-Add a permission-mode dropdown chip to the composer control row (left of the model picker) with Manual / Auto-approve safe tools / Skip all approvals, backed by the existing toolStore auto-approve state, scoped per conversation with a warning icon and hover copy for the non-default modes.
+Not planned under the current native contract. Add a selector only after the executor accepts, persists, enforces, revokes, and audits a conversation-scoped policy with a non-bypassable safety floor.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-05-processing-zero-steps.png`
 
-### GAP-060 — Recorder has no mic / narration toggle with live input level during capture
+### GAP-060 — Recorder provides consent-first narration with a live level meter
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Cowork skill recording — active capture HUD
 
 **Gap**
 
-The reference HUD carries a mic button plus a live audio-level meter so the user can narrate intent while demonstrating ('now I open the report and filter by region'), which is what makes a silent click stream interpretable as a skill. agiworkforce's recorder captures only mouse and keyboard events; there is no audio capture, no mute state, and no level feedback anywhere in the recording flow.
+The skill recorder now offers narration as an explicit default-off control during capture, renders a 24-bar live input meter, and records timestamped spoken annotations through the local Whisper path so narration can be associated with the demonstrated actions.
 
 **Evidence**
 
-apps/desktop/src/features/automation/ActionRecorder.tsx (RecordedAction = actionType/target/value only; no audio); searched 'narrat' and 'mic|microphone' under apps/desktop/src/features/automation — no match; mic exists only for chat voice input (features/voice/\*, hooks/useVoiceTranscription.ts)
+apps/desktop/src/features/automation/ActionRecorder.tsx owns the Narration off/on control, level meter, local transcription lifecycle, and timestamped narration actions. ActionRecorder.test.tsx covers the recorder states and the recovery flow without silently enabling microphone capture.
 
 **Suggested fix**
 
-Add an optional narration track: mic toggle + 24-bar level meter in the HUD, persisted as a per-recording audio clip with timestamps, transcribed on stop and merged into the step list as spoken annotations attached to the nearest action. Default the toggle off and label the off state 'Narration off' for consent clarity.
+Completed for local, opt-in narration. Keep microphone capture off by default, visibly disclose its state, release it on stop/cancel, and keep narrated content inside the same local recording boundary.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-04-active-capture-zero-steps.png`
 
-### GAP-061 — Task rail lacks Progress/Outputs/Context grouping and any Outputs section
+### GAP-061 — A unified Progress, Outputs, and Context rail is declined without a durable run journal
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-ia
 - **Reference:** Claude · macOS desktop · Cowork task rail — Progress / Outputs / Context
 
 **Gap**
 
-The reference rail is three always-visible accordions — Progress (plan/steps), Outputs (files the task produced), Context (tools and referenced files) — so a user can answer 'what did this task make?' without leaving the chat. agiworkforce's chat rail is ExecutionSidecar with Timeline/Screen/Browser/Terminal/Approvals tabs: it is execution-observability oriented, has no deliverables section, and the only file surface (FilesPanel) is a Monaco diff viewer mounted in a separate ExecutionDashboard.
+ExecutionSidecar can show live execution observations, but Desktop has no authoritative per-run aggregate for produced files, referenced context, and provenance. Merging transient tool events and unrelated artifact stores into an Outputs section would be incomplete and could mislabel files as task products.
 
 **Evidence**
 
-apps/desktop/src/features/execution-sidecar/ExecutionSidecarHeader.tsx:14-20 (TABS list); apps/desktop/src/features/execution/FilesPanel.tsx used only by apps/desktop/src/features/execution/ExecutionDashboard.tsx:306; searched 'Outputs' across apps/desktop/src/features — no rail section
+ExecutionSidecar owns Timeline, Screen, Browser, Terminal, and Approvals observations. FilesPanel belongs to ExecutionDashboard, while artifact and chat stores have separate lifecycles. No typed run journal links output paths, context references, provenance, retention, and conversation identity.
 
 **Suggested fix**
 
-Restructure the sidecar into three collapsible sections above the existing tabs: Progress (agenticLoopStatus steps), Outputs (artifacts + files written during the run, each with open/reveal/save-as), Context (tools invoked + files referenced). Persist expand state per conversation and keep Timeline/Screen/Terminal as detail views inside Progress.
+Not planned until the executor emits a durable task-bound run journal with typed progress, output, and context records, safe path handling, provenance, reopen behavior, and cleanup semantics.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-06-task-progress-outputs-context.png`
 
-### GAP-062 — A finished recording is never attached to the conversation as a message artifact
+### GAP-062 — Conversation recording attachments are declined without a persisted recording entity
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-ia
 - **Reference:** Claude · macOS desktop · Cowork task — recording attached to the conversation
 
 **Gap**
 
-In the reference the capture becomes a first-class conversation attachment — the thread titles itself 'Recorded demonstration (9.9s)', the user message carries a 'Recorded demonstration · 9.9s' card, and the assistant reasons over it. agiworkforce's recorder is a terminal side panel: the action list exists only in local component state and is either turned into a skill via skillCreateFromRecording or thrown away on close, so a recording can never be discussed, re-sent, revisited or shared.
+The current recorder deliberately creates a local skill from captured actions; recordings are component-local and have no message attachment schema, storage lifecycle, retention rule, or replay contract. A conversation card would promise durable content that cannot be reopened.
 
 **Evidence**
 
-apps/desktop/src/features/automation/ActionRecorder.tsx:202-230 (saveSkill is the only sink; state is cleared afterwards) and :91-103 (recordedActions held in component state); apps/desktop/src/features/v3/DesktopShellV3.tsx:452-456 (panel closes back to chat with no payload)
+ActionRecorder.tsx sends reviewed actions to skillCreateFromRecording and clears its local capture state. Desktop and shared message attachment contracts define supported file/media shapes but no timestamped action-recording entity or storage owner.
 
 **Suggested fix**
 
-On Done, persist the recording as an attachment entity and offer two paths from the review screen: 'Send to chat' (inserts a recording attachment card into the composer and auto-titles the conversation '<name> (Ns)') and the existing 'Create skill'. Render the card in the message list with icon, label, duration and a disclosure chevron.
+Not planned until a versioned recording entity defines storage, message attachment metadata, consent, retention/deletion, replay, export, and local-versus-cloud boundaries.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-06-task-progress-outputs-context.png`
 
-### GAP-063 — No promo/onboarding surface for cross-device task pickup, and cloud persistence unverified
+### GAP-063 — Computer-off cross-device pickup claims are declined without a durable remote worker
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-copy
 - **Reference:** Claude · macOS desktop · Cross-device Cowork task continuity onboarding modal
 
 **Gap**
 
-Reference shows a first-run modal explaining that a task started on desktop keeps running in the cloud and can be picked up from phone or web even after the computer is off, with a live preview of the mobile 'daily brief task' card. agiworkforce has a BackgroundTasksPanel on desktop (apps/desktop/src/features/background-tasks/BackgroundTasksPanel.tsx) plus a shared cloud Tasks page (apps/web/features/tasks/components/TasksPage.tsx via @agiworkforce/unified-chat) and a mobile Dispatch screen (apps/mobile/app/(app)/dispatch/index.tsx), but nothing in the reviewed source states or demonstrates that a task continues executing independent of the desktop app being open, and there is no onboarding UI introducing this capability to users the first time it's relevant.
+The reference promise requires server-owned task persistence and execution after the Desktop disconnects. Current companion control is an ephemeral peer session and Local work depends on the machine, so onboarding that promises pickup while the computer is off would be false.
 
 **Evidence**
 
-Searched apps/desktop/src, apps/web/features/tasks, apps/mobile/app/(app)/dispatch for 'keeps running', 'even when your computer is off', 'cross-device' — no matching copy found; grep -n -i 'runs even when|keeps running|computer is off' returned nothing.
+The companion protocol and connection stores require an active Desktop peer for local dispatch and clear session authority on disconnect. Managed Cloud tasks are a separate authenticated runtime and are not an automatic continuation of a Local companion task.
 
 **Suggested fix**
 
-Confirm/build true cloud-side task persistence (not desktop-tethered), and add a one-time promo card (in the desktop app and/or mobile Tasks/Dispatch screen) explaining that tasks keep running server-side and can be resumed from another device, mirroring the reference's 'Pick up your Cowork tasks from anywhere' framing.
+Not planned until a durable task handoff contract can prove ownership transfer, encrypted state persistence, resumability, status delivery, cancellation, and explicit Local-to-Cloud consent.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-01-cross-device-onboarding.png`
 
-### GAP-064 — No 'Cowork' agentic mode toggle on the home composer
+### GAP-064 — Desktop composer exposes the shared Chat and AGI Work scope switch
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Claude · macOS desktop · Home launcher composer — Chat/Cowork mode toggle
 
 **Gap**
 
-Claude's home launcher composer has a Chat/Cowork segmented toggle: Chat is a normal conversation, Cowork spins up an autonomous background agent task (with its own 'Active' task list below). agiworkforce's home/empty-chat composer has no equivalent mode toggle — 'Cowork' appears nowhere in the desktop codebase except as a comparison in code comments.
+The mounted Desktop composer already uses the shared Chat/AGI Work control and project or folder picker. Availability is projected from Local/Cloud mode and the hydrated account tier rather than duplicated in Desktop-only empty-state code.
 
 **Evidence**
 
-apps/desktop/src/features/v3/EmptyChat.tsx, apps/desktop/src/features/chat/BrandedGreeting.tsx (no mode toggle); apps/desktop/src/features/settings/ComputerUseSettings.tsx:472,657 (only mentions 'Claude Cowork' in comparison comments); searched 'cowork' across apps/desktop/src — no implemented feature
+DesktopShellV3.tsx passes canUseAgiWork, projectPicker, folder selection, and currentFolderLabel into the unified ChatInterface. ChatInput.tsx owns the Chat/AGI Work switch and WorkScopePicker. DesktopShellV3.test.tsx verifies Local folder scoping, Cloud scan-root semantics, project membership, and tier gating.
 
 **Suggested fix**
 
-If agiworkforce has an equivalent autonomous/background-agent execution mode (e.g., under features/agent or features/background-tasks), surface it as a Chat/Cowork-style composer toggle on the home screen with its own 'Active tasks' list, matching this IA.
+Closed as stale. Retain the shared composer as the single interaction owner and keep Desktop responsible only for capability and scope inputs.
 
 **Reference screenshot(s)**
 
 - `claude_reference/137-claude-desktop-home-launcher-cowork-mode-recents-list.png`
 
-### GAP-065 — No browsable plugin catalog — installing requires typing 'plugin-name@marketplace'
+### GAP-065 — Interactive plugin catalog installation is declined while marketplace state is preview-only
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Plugins marketplace
 
 **Gap**
 
-The reference makes Plugins a top-level sidebar destination with Plugins|Skills tabs, a search field, an Installed icon strip, an Imported-plugins list and a two-column Featured grid where each card has an Install button. agiworkforce buries plugins in a settings tab whose only install path is a free-text `plugin-name@marketplace` input plus an Install button — the user must already know the exact identifier. The marketplace code that does exist (marketplaceStore.fetchFeatured, DiscoverTab, WorkflowCard) is for workflows, not plugins.
+The repository does not have an account-bound plugin install lifecycle. A browsable Desktop installer would create optimistic installed state without authoritative catalog, entitlement, permission, version, or uninstall ownership.
 
 **Evidence**
 
-apps/desktop/src/features/settings/SkillsPluginsSettings.tsx:648-682 (text input placeholder 'plugin-name@marketplace' + 'Install plugin'); apps/desktop/src/features/settings/tabs/Plugins/index.tsx (settings tab only, no nav entry); apps/desktop/src/features/v3/Sidebar.tsx navItemsForMode has no plugins entry; apps/web/app/plugins/page.tsx is a marketing catalogue preview ('hosted marketplace installation is not open yet')
+Web's plugin route identifies itself as a catalog preview and its plugin store disables installation. Desktop SkillsPluginsSettings resolves local configuration but has no hosted marketplace install API or authenticated installed inventory.
 
 **Suggested fix**
 
-Promote Plugins to a sidebar destination reusing the marketplace store's featured/trending fetch shape, render Installed / Imported / Featured sections with per-card Install and overflow menus, and keep the identifier text field as an advanced 'Install from identifier' escape hatch.
+Not planned until a server-owned catalog and install/uninstall API, permissions, entitlement, versioning, revocation, audit, and error recovery are implemented and shared across clients.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/087-codex-macos-plugins-marketplace-installed-featured.png`
 
-### GAP-066 — No 'Finish setup' state for installed plugins/connectors whose auth is incomplete
+### GAP-066 — Plugin and connector Finish setup state is declined without an authoritative setup lifecycle
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · Plugins marketplace — Imported plugins
 
 **Gap**
 
-The reference shows Gmail installed but not usable, with a prominent 'Finish setup' button on the row, while fully configured entries (Vercel) show only an overflow menu. agiworkforce has no half-configured state for plugins or connectors — an entry is either present or absent, so a plugin that installed but never completed OAuth looks identical to a working one and fails silently at call time.
+A Finish setup badge requires the product to know that installation succeeded but authorization or configuration remains incomplete. No shared plugin install record or connector setup-state machine publishes that distinction to Desktop.
 
 **Evidence**
 
-grepped 'Finish setup|finish_setup|needs setup|Complete setup|setup required' across apps — only unrelated CloudStoragePanel.tsx:542 prose and a VS Code 'Local runtime needs setup' string; apps/desktop/src/features/settings/SkillsPluginsSettings.tsx InstalledPluginRecord carries no setup/auth status field
+Desktop connector surfaces expose their own concrete connection flows, while SkillsPluginsSettings has no account-bound installed/setup status. Repository contracts contain no generic setup_required state, resumable setup URL, or completion callback shared by plugins and connectors.
 
 **Suggested fix**
 
-Add a `setupState: 'ready' | 'needs_auth' | 'error'` field to the installed-plugin and connector records, render a 'Finish setup' primary action on rows that are not ready, and block tool invocation with a pointer to that action rather than a runtime failure.
+Not planned until each integration publishes authoritative installed, setup-required, ready, failed, and revoked states plus a resumable owner-scoped setup action.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/087-codex-macos-plugins-marketplace-installed-featured.png`
 
-### GAP-067 — No pull-requests surface on desktop despite git and PR APIs already existing
+### GAP-067 — A Desktop pull-request inbox is declined without remote review ownership
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Pull requests list
 
 **Gap**
 
-The reference ships a full PR workspace: All/Reviewing/Authored segmented tabs, 'Search pull requests' with a filter button, and a master-detail layout. agiworkforce's desktop has git plumbing (api/git.ts incl. gitCreatePr and PR description generation) and GitPanel/GitStatusPanel components, but no PR screen and no mount site for the git panels at all, so review work cannot start in the app.
+Local git commands and helper APIs do not constitute an authenticated pull-request product. Desktop lacks a provider-neutral PR list/detail contract, remote account selection, pagination, review permissions, and mutation audit trail.
 
 **Evidence**
 
-apps/desktop/src/api/git.ts:639-660 (gitCreatePr); apps/desktop/src/features/git/GitPanel.tsx and GitStatusPanel.tsx are imported by nothing outside features/git; grep 'pull request' across apps/desktop/src returns only connector descriptions
+apps/desktop/src/features/git and api/git.ts own local repository status, diff, commit, push, and pull operations. Repository searches find no mounted owner-scoped PR inbox service or Desktop remote-provider authorization and review contract.
 
 **Suggested fix**
 
-Add a Pull requests panel backed by the GitHub connector: tabs for All/Reviewing/Authored, search + filter, list rows with repo/branch/status, and a detail pane that reuses EnhancedDiffViewer for review.
+Not planned until a remote provider layer owns repository identity, authenticated PR list/detail/review mutations, pagination, errors, rate limits, and audit behavior.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/084-codex-macos-pull-requests-list-empty-error-state.png`
 
-### GAP-068 — No 'Processing' state between Done and the recording result
+### GAP-068 — A fabricated recording Processing state is declined for synchronous local capture
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-state
 - **Reference:** Claude · macOS desktop · Recorder HUD — Processing state
 
 **Gap**
 
-After Done the reference HUD swaps the recording dot for a spinner and reads 'Processing · 0 steps', keeping the step count visible while the capture is compiled. agiworkforce goes straight from stopRecording() to either the save dialog or a terse error, with no intermediate progress affordance, so a slow compile looks like a hang and a zero-step capture appears as an abrupt failure.
+The current recorder stops and immediately presents the captured action review; it does not submit an asynchronous media-processing job. Adding a timed Processing screen would be ornamental latency and would not reflect real work.
 
 **Evidence**
 
-apps/desktop/src/features/automation/ActionRecorder.tsx:168-185 (stopRecording sets state then either setError or setShowSaveDialog; no isProcessing flag anywhere in the file)
+ActionRecorder.tsx receives the native stop result, finalizes optional local narration, and transitions directly to review or the structured empty-capture recovery. No processing job identifier, progress event, retry contract, or background worker exists.
 
 **Suggested fix**
 
-Add an isProcessing state set before automationRecordStop() resolves; render a spinner + 'Processing · N steps' in both the HUD and the panel header, disable Discard/Done while it runs, and surface a cancel affordance if processing exceeds ~5s.
+Not planned while processing is synchronous. Add a real state only if a future media pipeline publishes durable queued, processing, failed, retryable, and complete statuses.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-05-processing-zero-steps.png`
 
-### GAP-069 — No in-thread recording playback timeline with app-switch events and elapsed timestamps
+### GAP-069 — In-thread recording playback is declined without a durable timeline asset
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Claude · macOS desktop · Recording playback — expanded event timeline
 
 **Gap**
 
-Expanding the reference card reveals an inline playback timeline: alternating 'Screenshot · 0.2s' frames and semantic events ('→ Switched to Google Chrome', '→ Switched to Claude') with right-aligned elapsed times, scrollable within the message and collapsible from the header. agiworkforce's equivalent list lives only in the recorder panel, is limited to click/type/hotkey rows with raw x,y coordinates, records no application-focus events, and disappears once the skill is saved.
+Timestamped actions and narration support skill creation, but the product does not retain a recording asset after review. A playback card with elapsed time and app-switch events would be nonfunctional without persisted timeline and media ownership.
 
 **Evidence**
 
-apps/desktop/src/features/automation/ActionRecorder.tsx:406-464 (step list markup: actionType, value, 'Position x, y'); :49-80 (normalizeRecordedAction has no app/window field); searched 'Switched to'/'app switch'/'focus change' across apps/desktop — no match
+ActionRecorder.tsx holds capture events locally and its supported sink is skillCreateFromRecording. Message schemas and artifact stores do not define a replayable recording timeline, duration, app-switch event, or retrieval URL.
 
 **Suggested fix**
 
-Extend RecordedAction with an app_focus event type (app name, bundle id) plus a screenshot ref, and build a RecordingPlaybackCard rendered inside the message list: collapsed header ('<name> · 9.9s' + chevron), expanded body interleaving frames and events with elapsed timestamps, a scroll-to-latest pill, and click-to-zoom on frames.
+Not planned until the recording-attachment contract described in GAP-062 exists with seekable timing, event validation, storage, retention, and reopen tests.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-07-recording-playback-events-a.png`
 
-### GAP-070 — Recorded steps carry no screenshot frames, so captures cannot be visually verified
+### GAP-070 — Per-step recorder screenshots are declined without consented frame capture and storage
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Recording playback — screenshot frames per event
 
 **Gap**
 
-Every reference event is anchored to a labelled screenshot ('Screenshot · 6.7s'), which is what lets both the user and the model tell a good capture from a useless one and lets the model infer intent from on-screen content. agiworkforce's recorder captures no imagery at all — a step is an action type, an optional typed value and a coordinate pair — so a mis-aimed or empty recording is indistinguishable from a good one until replay fails.
+The recorder currently captures input actions and optional narration, not screen frames. Adding screenshot thumbnails requires a new screen-recording consent boundary, redaction policy, storage lifecycle, and secure association with steps.
 
 **Evidence**
 
-apps/desktop/src/features/automation/ActionRecorder.tsx (no 'screenshot'/'image' reference anywhere in the file; step rows render only actionLabel, value and 'Position x, y' at :429-446); screen-capture primitives exist but are unused by the recorder: apps/desktop/src/features/screen-capture/ScreenCaptureButton.tsx, CapturePreview.tsx
+The native recording result and ActionRecorder RecordedAction model contain action metadata but no image bytes, frame identifiers, redaction status, or storage reference. Current screen capture features use separate consent and execution paths.
 
 **Suggested fix**
 
-Capture a downscaled, redaction-filtered frame on every recorded action (and on app-focus change), store it alongside the action, and render it as a thumbnail with a 'Screenshot · Ns' caption in both the review list and the playback card. Gate frame capture behind an explicit 'Include screenshots' toggle on the consent screen and state in the consent copy that frames stay local.
+Not planned until native capture explicitly authorizes frames and defines redaction, sensitive-window handling, encryption, retention/deletion, size limits, thumbnail generation, and local/cloud egress policy.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-08-recording-playback-events-b.png`
 
-### GAP-071 — No right-side tool panel (Review/Terminal/Browser/Files); panels unmounted
+### GAP-071 — A single Review, Terminal, Browser, and Files right rail is declined; terminal uses its real dock
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Right tool panel launcher
 
 **Gap**
 
-The reference dedicates the right pane to a tool launcher listing Review, Terminal, Browser and Files with their shortcuts, each opening a working panel beside the chat. agiworkforce's right pane only ever hosts the artifact viewer; the Terminal, Browser and file-tree/diff implementations in the tree are imported by nothing, so none of these tools can be opened by a user.
+The terminal reachability defect is fixed with a bottom dock, but the remaining panels have different owners and lifecycles. Combining local review, browser automation, file diff, and terminal into a cosmetic rail would duplicate existing surfaces and blur approval boundaries.
 
 **Evidence**
 
-apps/desktop/src/features/v3/DesktopShellV3.tsx:503-518 (ArtifactPanel is the only right-side panel); grep for TerminalWorkspace / BrowserVisualization / VisualEditor / CodeWorkspace across apps/desktop/src finds no mount site
+DesktopShellV3.tsx now mounts TerminalWorkspace in the conventional bottom dock. ExecutionSidecar, ExecutionDashboard, BrowserPanel, FilesPanel, and git review components remain contextual to their respective execution or review owners; no shared panel-state or run-artifact contract unifies them.
 
 **Suggested fix**
 
-Add a right-panel launcher list in DesktopShellV3 (Review diff, Terminal, Browser, Files) that mounts the existing TerminalWorkspace, BrowserVisualization and FileTreeWithChanges/EnhancedDiffViewer components, with a per-panel close and remembered last-used panel.
+Not planned as a monolithic rail. Keep terminal in the bottom dock and mount each other panel only from an authoritative execution or review context; revisit shared navigation after a run journal exists.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/080-codex-macos-right-panel-shortcuts-review-terminal-browser-files.png`
 
-### GAP-072 — Scheduled tasks has no starter templates — users face a blank cron builder
+### GAP-072 — Scheduler starter templates are declined until Local and Cloud share a typed template contract
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Scheduled tasks — Suggestions
 
 **Gap**
 
-The reference seeds the Scheduled screen with a 'Suggestions' section of three one-tap templates, each with an icon, name, human cadence and outcome sentence: Daily brief (Weekdays at 8:00 AM), Weekly review (Fridays at 4:00 PM), Follow-up monitor (Weekdays at 9:00 AM). agiworkforce sends the user straight into CreateTaskModal with nothing pre-filled, which is the main reason scheduling features go unused. No surface (desktop, web /chat/schedules, mobile /schedules) ships templates.
+Desktop exposes separate Local and Managed Cloud scheduling implementations with different persistence and execution boundaries. Hard-coded visual templates would drift or prefill unsupported fields without a shared product-owned template schema.
 
 **Evidence**
 
-apps/desktop/src/features/v3/AgiWorkScheduled.tsx:78-160 (header + list + EmptyState, no suggestions block); grepped 'template|preset|suggestion|Daily brief' across features/scheduler/CreateTaskModal.tsx, apps/web/features/schedules/ and apps/mobile/app/(app)/schedules/ — no match
+AgiWorkScheduled and the Cloud schedules surface use separate stores/services and submit different runtime contracts. Repository searches find no versioned scheduler-template catalog, applicability metadata, migration policy, or server-owned template identifiers.
 
 **Suggested fix**
 
-Add a Suggestions section above the task list (and inside the empty state) with 3-5 templates that prefill CreateTaskModal's prompt + cron, sourced from a shared constant so desktop, web and mobile show the same starter set. Hide a template once an equivalent task exists.
+Not planned until a template contract declares supported target runtime, prompt, schedule fields, required capabilities, version, localization, and safe preview for both schedulers.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/086-codex-macos-scheduled-tasks-daily-weekly-followup-suggestions.png`
 
-### GAP-073 — Account settings missing Organization ID, in-app Delete account, and Log out of all devices
+### GAP-073 — Organization ID, in-app account deletion, and logout-all are declined without account APIs
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Account
 
 **Gap**
 
-Claude's Account settings show the org's Organization ID (copyable UUID), a 'Delete account' button (blocked with guidance until subscription is canceled), and a 'Log out of all devices' action. agiworkforce's AccountSettings.tsx only has Manage account / Manage subscription / single-device Sign out rows.
+These are server-authoritative account operations, not renderer settings. Desktop has no organization-membership fact, deletion challenge/status contract, or session-revocation endpoint that could back the requested controls safely.
 
 **Evidence**
 
-apps/desktop/src/features/settings/AccountSettings.tsx (full file reviewed, rows array has profile/plan/period/linked-device/sign-out only — no org ID, no delete-account, no logout-all)
+Account settings consume the supported profile and billing facts. Searches across Desktop API clients and Cloud contracts find no organization ID field, delete-account operation, logout-all endpoint, reauthentication challenge, or deletion recovery state.
 
 **Suggested fix**
 
-Add an Organization ID row (read from the auth/account store, if orgs are modeled), a Delete-account row that guards on active subscription status the same way Claude does, and a 'Log out of all devices' action that revokes all sessions server-side.
+Not planned until the account service owns organization identity, destructive deletion with reauthentication and status, and all-session revocation with current-session behavior and audit tests.
 
 **Reference screenshot(s)**
 
 - `claude_reference/140-claude-desktop-settings-account-org-id-trusted-devices.png`
 
-### GAP-074 — No cross-surface Active Sessions table (device, location, created/updated, current badge)
+### GAP-074 — Cross-surface Active Sessions is declined without a session inventory service
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Account — Active sessions table
 
 **Gap**
 
-Claude shows a full active-sessions audit table spanning iOS/Desktop/Chrome with Location, Created, and Updated timestamps and a 'Current' badge for the active session. agiworkforce's Connected Devices list (TeamAccountSettings.tsx) shows device icon/name and a disconnect button only — no location, no created/updated timestamps, no current-session indicator.
+A trustworthy device/session table requires server-issued session identifiers, device metadata, timestamps, current-session marking, and individual revocation. None is published to Desktop, so deriving rows from local tokens or companion peers would be incomplete and security-sensitive.
 
 **Evidence**
 
-apps/desktop/src/features/settings/TeamAccountSettings.tsx lines 230-260 (Connected Devices renders icon + name + disconnect only)
+Desktop auth state contains the current credentials but no authenticated session inventory or revoke-by-session action. Companion connections are ephemeral peer sessions and are not interchangeable with account login sessions.
 
 **Suggested fix**
 
-Extend the device/session model to capture location (coarse, from IP) and created/updated timestamps, and render them as table columns plus a 'Current' badge on the session matching the active device ID.
+Not planned until an owner-scoped session API provides normalized device/location metadata, privacy rules, current marker, last activity, revoke/revoke-all, expiry, and cross-account isolation tests.
 
 **Reference screenshot(s)**
 
 - `claude_reference/141-claude-desktop-settings-account-active-sessions-device-list.png`
 
-### GAP-075 — UI font size is not a setting and ⌘+/− zoom is not persisted across restarts
+### GAP-075 — Desktop UI scale is user-selectable and persisted
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Appearance — Preferences
 
 **Gap**
 
-The reference has 'UI font size · Adjust the base size used for the ChatGPT UI' as a numeric stepper (14 px). agiworkforce's only text-scaling control is a menu-driven zoom that multiplies documentElement.style.fontSize by 1.1 at runtime and never writes to settingsStore, so a low-vision user's adjustment is silently discarded on every app restart. Web has a 'Chat Font Size' setting; desktop's FontSelector controls font family only.
+Desktop Appearance now provides Small, Default, and Large interface sizes. The selected 90, 100, or 110 percent scale is persisted in the settings store and applied at the document root on launch.
 
 **Evidence**
 
-apps/desktop/src/App.tsx:1053-1060 (zoom_in/zoom_out/actual_size mutate document.documentElement.style.fontSize directly, no store write); apps/desktop/src/features/settings/FontSelector.tsx:7 ('--chat-font-family' only); apps/web/features/settings/components/AppearanceSettings.tsx has 'Chat Font Size'
+ThemeSettings.tsx renders the Interface size control. settingsStore.ts persists windowPreferences.uiScale with a versioned migration, and App.tsx applies the root font size. ThemeSettings.accessibility.test.tsx verifies the control and persistence behavior.
 
 **Suggested fix**
 
-Add a `uiFontSizePx` preference (default 14) to settingsStore, apply it to the root element on hydrate, drive the zoom menu actions through it so they persist, and render it as a stepper in the Appearance tab next to Chat Font.
+Completed. Keep scale values bounded and migrated, and apply them once at the app root so feature surfaces inherit a consistent size.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/095-codex-macos-settings-appearance-dark-theme-preferences.png`
 
-### GAP-076 — No in-app Reduce motion override — only the OS media query is honoured
+### GAP-076 — Desktop provides a persisted Reduce motion override
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Appearance — Preferences
 
 **Gap**
 
-The reference offers 'Reduce motion · Reduce animations or match your system' as a three-way System | On | Off segmented control, so a user can suppress animation inside the app without changing an OS-wide setting. agiworkforce reads prefers-reduced-motion via useReducedMotion but provides no override, so users who want motion reduced only in this app (or who are on a platform where the OS flag is awkward to reach) cannot get it.
+Appearance now includes an in-app Reduce motion switch independent of the operating-system preference. Its persisted root class suppresses nonessential animation, transition, and smooth scrolling throughout the Desktop UI.
 
 **Evidence**
 
-apps/desktop/src/features/chat/SearchModal.tsx:17,89 and features/chat/CommandPalette.tsx:19 (useReducedMotion from unified-chat); apps/desktop/src/features/auth/AuthPage.tsx:49 (raw matchMedia); grepped 'reduce.motion|reducedMotion' across settings — no setting exists; ThemeSettings Accessibility section contains only Dyslexic Friendly Font
+ThemeSettings.tsx exposes the switch; settingsStore.ts persists windowPreferences.reduceMotion with a migration; App.tsx applies reduce-motion at the root; styles/globals.css defines the override. ThemeSettings.accessibility.test.tsx covers the setting.
 
 **Suggested fix**
 
-Add `reduceMotion: 'system' | 'on' | 'off'` to settingsStore, have unified-chat's useReducedMotion consult the override before the media query, and render the segmented control in ThemeSettings' existing Accessibility section beside Dyslexic Friendly Font.
+Completed. Continue respecting the OS media query while treating this switch as an additional user override, and exempt only motion that is essential to understanding state.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/095-codex-macos-settings-appearance-dark-theme-preferences.png`
 
-### GAP-077 — Desktop Memory tab lacks memory toggles, cross-provider import, and tool-access/connector-search controls
+### GAP-077 — Desktop exposes the supported memory policy controls without fabricated imports
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Capabilities — Memory + General
 
 **Gap**
 
-Claude's Capabilities screen bundles memory-related toggles (Search and reference chats, Generate memory from chat history), an 'Import memory from other AI providers' flow, and General controls (Tool access mode dropdown, Connector search toggle, Switch-models-when-flagged toggle) all in one place. agiworkforce's desktop MemoryTab (Memory.tsx) only renders a raw fact-editor (add/edit/remove/clear) with none of these surrounding settings, and has no memory-import flow even though mobile already has one.
+The current Memory surface includes native-backed enablement, automatic saving, and tool-assisted memory controls. Cross-provider import, connector search, and other reference-specific behaviors have no ingestion or authorization contract and are intentionally not presented as working controls.
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/Memory.tsx (full file — MemoryEditor only); apps/mobile/app/(app)/settings/memory-import.tsx exists but has no desktop counterpart; searched 'Tool access mode', 'Connector search', 'Switch models when' in Capabilities/index.tsx and Memory.tsx — no matches
+apps/desktop/src/features/settings/MemorySettings.tsx and the memory preference actions in settingsStore.ts expose and synchronise the supported memory policy. Repository searches find no provider-import adapter, connector-memory search contract, provenance format, or rollback lifecycle that could safely back the additional reference controls.
 
 **Suggested fix**
 
-Port the mobile memory-import flow to desktop, add the Search-and-reference / Generate-from-history toggles above the MemoryEditor, and add Tool access mode + Connector search + flagged-switch controls to the desktop Capabilities tab (features/settings/tabs/Capabilities/index.tsx).
+Closed for the supported scope. Keep real memory policy controls available; add provider import or connector search only with typed ingestion, provenance, deduplication, deletion, authorization, and rollback contracts.
 
 **Reference screenshot(s)**
 
 - `claude_reference/146-claude-desktop-settings-capabilities-memory-tools.png`
 
-### GAP-078 — AGI in Chrome settings tab lacks an enable toggle and site-permission policy control
+### GAP-078 — Desktop Chrome enablement and site-policy controls are declined because the extension owns enforcement
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Claude in Chrome
 
 **Gap**
 
-Reference's Claude in Chrome settings page has an 'Enable Claude in Chrome' master toggle and a Site permissions section with a 'Default for all sites' policy dropdown, described as applying to both the extension and the in-app Browser in Claude Code Desktop. agiworkforce's AgiInChromeTab renders only a BridgeStatusCard (connection diagnostics) with no enable toggle or site-permission policy; the only site-allowlist UI lives in the Chrome extension's own options page, unreachable from desktop settings.
+The Desktop AGI in Chrome tab reports the native bridge connection, while extension enablement and origin allowlisting are enforced in the browser extension. Duplicating switches in Desktop without a signed bridge command would create two disagreeing policy stores.
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/AgiInChrome/index.tsx (LazyBridgeStatusCard only); apps/extension/src/options.ts has SITE_ALLOWLIST_KEY / approved-sites UI but it is not linked from or mirrored in desktop settings
+apps/desktop/src/features/settings/tabs/AgiInChrome/index.tsx mounts BridgeStatusCard. apps/extension owns agi_site_allowlist and browser permission behavior. Current native bridge contracts expose status and context handoff but no authoritative Desktop mutation for extension enabled state or site policy.
 
 **Suggested fix**
 
-Add an 'Enable AGI in Chrome' toggle and a 'Default policy for all sites' selector to the AgiInChrome desktop tab, and surface/manage the extension's site allowlist from that same screen (or deep-link to it).
+Not planned until a versioned authenticated bridge supports read, update, acknowledgement, conflict resolution, and revocation for the extension-owned policy.
 
 **Reference screenshot(s)**
 
 - `claude_reference/154-claude-desktop-settings-claude-in-chrome-permissions.png`
 
-### GAP-079 — No diagnose/reinstall self-repair path for the local tool runtime
+### GAP-079 — Local tool-runtime self-repair is declined without typed health and reinstall commands
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Configuration — Workspace Dependencies
 
 **Gap**
 
-The reference gives the user three recovery affordances for the local execution bundle: a 'Codex dependencies' toggle, 'Diagnose issues in Codex Workspace → Diagnose' (checks the current bundle and records diagnostic logs) and 'Reset and install Workspace → Reinstall' (destructive, downloads a fresh bundle and reloads tools), with the current bundle version printed underneath. agiworkforce exposes 'Runtime backend' and 'Runtime executable' text fields but no health check, no repair action and no version readout — when the sandbox runtime is broken the only signal is failing tool calls.
+A Diagnose or Reinstall button would perform privileged mutation. The native layer does not expose a bounded health report, verified package source, repair plan, progress, rollback, or restart result for the local tool runtime.
 
 **Evidence**
 
-apps/desktop/src/features/settings/AgentExecutionSettings.tsx:322-330 (Runtime executable Input, placeholder 'srt'); grepped 'Diagnose|Reinstall|repair|health check|doctor' across apps/desktop/src \*.tsx — only MonacoEditor LSP diagnostics, FeedbackDialog log attachment and StartupRecovery (app-launch failure, not tool runtime)
+Existing settings and runtime surfaces can report concrete MCP or provider failures, but repository searches find no generic tool-runtime diagnose/reinstall command or signed artifact verification path that Desktop can invoke safely.
 
 **Suggested fix**
 
-Add a Workspace Dependencies group to the Agents/Configuration tab with a Diagnose button that probes the runtime binary + sandbox and writes a diagnostic log, a destructive Reinstall action, and a printed runtime version. Reuse the startup-recovery export-diagnostics command for the log path.
+Not planned until native owns structured diagnostics and a platform-specific repair transaction with verified artifacts, explicit consent, progress, rollback, logs, and post-repair validation.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/097-codex-macos-settings-configuration-approval-sandbox-model-features.png`
 
-### GAP-080 — No trusted-device list: no master allow toggle, per-device revoke, or last-connected
+### GAP-080 — Trusted multi-device history is declined for single-session ephemeral pairing
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Connections
 
 **Gap**
 
-Reference shows 'Devices that can control this Mac' with a refresh action, an Add button, a master 'Allow connections' toggle, and one row per device ('iOS 26.5.2 iPhone', 'Last connected 1m', 'Revoke access'). agiworkforce's desktop connection state is a single live session (status/peerConnected) with a Disconnect button — no persistent device registry, so a user cannot see which phones have ever been paired or revoke one that is not currently connected.
+The companion protocol deliberately authorizes one active Desktop and Mobile role per short-lived session and does not persist reusable device credentials. A trusted-device list, revoke row, or last-connected timestamp would imply reusable access that does not exist.
 
 **Evidence**
 
-apps/desktop/src/features/mobile-companion/MobileCompanionPanel.tsx (single isPaired branch, stopSession only); grep -i 'revoke access|paired device|trusted device|last connected' across apps/desktop/src — no match
+Desktop and Mobile connection stores keep singleton signaling, peer, data-channel, heartbeat, and session-key state and clear authority on disconnect. The signed cross-device contract has no durable device identity, token rotation, device inventory, or revoke-by-device operation.
 
 **Suggested fix**
 
-Persist paired devices (id, platform, name, lastConnectedAt, enabled) in connectionStore, render them as rows with per-device enable toggle and Revoke access, add a global Allow connections switch that refuses new pairings when off, and a refresh + Add (QR) action in the section header.
+Not planned until a device authorization service provides independently revocable identities, encrypted refresh authority, history, expiry, rotation, active-target selection, and adversarial routing tests.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/053-codex-macos-settings-connections-control-this-mac-devices.png`
 
-### GAP-081 — No 'Allow connections' master switch to disable remote control of the desktop
+### GAP-081 — A remote-control master switch is declined while no durable listener exists
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Connections > Control this Mac
 
 **Gap**
 
-The reference gates all inbound remote control behind a single 'Allow connections' toggle inside the Devices card, so a user can revoke remote access instantly without unpairing. agiworkforce has no such switch anywhere in the desktop app — searching for 'allow connections', 'remote access' and 'remote control' across apps/desktop/src returns nothing; the only stop control is the per-session stopSession() inside the unmounted companion panel.
+Current inbound companion control begins through an explicit ephemeral pairing session and ends on disconnect; there is no background reusable-access listener to leave enabled. A saved Allow connections switch would not gate any durable authority.
 
 **Evidence**
 
-grep -i 'allow connections|remote access|remote control' apps/desktop/src — no matches; apps/desktop/src/stores/connectionStore.ts exposes stopSession but no persisted enable flag; apps/desktop/src/features/settings/tabs/\* has no connections tab
+MobileCompanionPanel starts the supported pairing flow and exposes Disconnect. Connection state and session keys are process/session scoped, and native settings expose no global companion listener enable flag or rejection policy.
 
 **Suggested fix**
 
-Persist a remoteControlEnabled flag in settingsStore, honour it in connectionStore before accepting signaling offers, and surface it as the first row of the new Connections tab with a short explainer of what remote devices can do.
+Not planned for ephemeral pairing. Add a kill switch only with a durable inbound connection service, default-off policy, native enforcement, paired-device count, immediate teardown, and restart tests.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/032-codex-macos-settings-connections-control-this-mac-allow-toggle.png`
 
-### GAP-082 — No run-on-startup, voice-shortcut, menu-bar-visibility, or keep-awake toggles in Desktop General settings
+### GAP-082 — Startup, global voice, menu-bar, and keep-awake toggles are declined without native lifecycle owners
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Desktop app > General
 
 **Gap**
 
-Reference's Desktop app > General page has: Run on startup (auto-launch on login), a Voice shortcut (separate from the message quick-access shortcut), a Menu bar visibility toggle, and a Keep computer awake toggle (so scheduled tasks can run while idle). agiworkforce's General tab has a Global Hotkey control (partial match for quick-access shortcut) but none of the other four.
+These settings require platform-native autostart registration, global shortcut ownership, tray/window lifecycle, and power assertions. The current Tauri command surface does not expose the complete set, so renderer toggles would persist promises the operating system never applied.
 
 **Evidence**
 
-grep -i 'run on startup|launch.{0,10}login' apps/desktop/src — no match; grep -i 'menu bar icon|tray icon' — no match; grep -i 'keep.\*awake|idle.sleep' — no match; grep -i 'voice shortcut' — no match
+GeneralSettings and the native command inventory have no verified run-on-startup, keep-awake, or menu-bar-visibility transaction with rollback. Voice settings own in-app capture rather than an OS-global voice shortcut lifecycle.
 
 **Suggested fix**
 
-Add Run-on-startup, Voice-shortcut, Menu-bar-visibility, and Keep-computer-awake toggles to apps/desktop/src/features/settings/tabs/General/index.tsx, backed by the Tauri autostart/tray/power APIs.
+Not planned until native implements each capability with support detection, permission/error state, rollback, startup restoration, and macOS lifecycle tests. Land controls one capability at a time with its native owner.
 
 **Reference screenshot(s)**
 
 - `claude_reference/155-claude-desktop-settings-desktop-general-shortcuts.png`
 
-### GAP-083 — No local MCP server list/detail view (status, command, arguments, View Logs, Edit Config)
+### GAP-083 — Desktop Connections exposes the live local MCP workspace and server configuration
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Claude · web · Settings > Developer > Local MCP servers list + detail panel
 
 **Gap**
 
-Reference's Developer settings shows a master list of local MCP servers (Filesystem, Excel, Apple Notes, Apify, etc.) with a detail panel per server showing running/stopped status, the launch command, full arguments, an 'Edit Config' button, and a 'View Logs' button. agiworkforce's Developer tab only renders DotfileSettings (config.toml editor) and AgentExecutionSettings — no per-server MCP list/detail UI exists in desktop or web.
+The audit premise is stale: Desktop settings mounts the production MCPWorkspace, which lists configured servers and exposes status, command/configuration, logs, editing, enablement, restart, and removal behaviors supported by the native MCP manager.
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/Developer/index.tsx (DotfileSettings + AgentExecutionSettings only); apps/desktop/src/features/settings/MCPServerSettings.tsx is a single local-server start/stop control, not a multi-server list with Command/Arguments/View Logs; grep -i 'Local MCP server|Edit Config|view logs' under apps/web found no implementation, only marketing copy
+apps/desktop/src/features/settings/tabs/Connections/index.tsx mounts MCPWorkspace. apps/desktop/src/features/mcp/MCPWorkspace.tsx and its server/configuration components own the list, detail, status, logs, edit, restart, enable, and remove flows against the existing native API.
 
 **Suggested fix**
 
-Build a Local MCP servers panel for the Developer tab: a left list of configured servers and a right detail pane showing status, command, arguments, Edit Config, and View Logs, matching the reference's master-detail layout.
+Closed as stale. Keep MCP server lifecycle inside MCPWorkspace and avoid duplicating server state in a second settings implementation.
 
 **Reference screenshot(s)**
 
 - `claude_reference/158-claude-web-settings-developer-mcp-filesystem-server-detail.png`
 
-### GAP-084 — No 'Prevent sleep while running' toggle — long agent tasks die when the Mac sleeps
+### GAP-084 — Prevent-sleep is declined until native power assertions are implemented
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** ChatGPT · macOS desktop · Settings > General
 
 **Gap**
 
-The reference has 'Prevent sleep while running · Keep your computer awake while ChatGPT is running a task'. agiworkforce runs multi-minute agent tasks, scheduled tasks and background tasks on desktop but never asserts a power-management hold and offers no setting for it, so a scheduled or long-running task silently dies when the machine sleeps.
+A renderer preference cannot keep a Mac awake. No native task-bound power assertion, crash cleanup, reference counting, or visible active state exists, so a toggle would create false reliability for long tasks.
 
 **Evidence**
 
-grepped 'prevent sleep|preventSleep|keep awake|caffeinate' across apps/desktop/src — no match; apps/desktop/src/features/settings/GeneralSettings.tsx Window Preferences covers only global hotkey, theme and language
+Repository searches find no Tauri power-management command consumed by Agent execution and no lifecycle that acquires and releases an assertion around active runs.
 
 **Suggested fix**
 
-Add a `preventSleepWhileRunning` preference to settingsStore, and in the Tauri layer acquire a power-save-blocker (IOPMAssertion on macOS / equivalent on Windows+Linux) while any agent, scheduled or background task is active. Render it as a switch in General with the reference's explanatory sub-line.
+Not planned until native owns task-bound acquire/release, crash and quit cleanup, multiple-run reference counting, battery disclosure, unsupported-platform behavior, and integration tests.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/091-chatgpt-macos-settings-general-permissions-full-access-defaults.png`
 
-### GAP-085 — No 'Show in menu bar' toggle — closing the window fully exits the app
+### GAP-085 — Menu-bar persistence is declined until tray and close semantics are native-backed
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** ChatGPT · macOS desktop · Settings > General
 
 **Gap**
 
-The reference has 'Show in menu bar · Keep ChatGPT in the macOS menu bar when the main window is closed'. agiworkforce desktop ships a global hotkey ('Open AGI Workforce from anywhere') and a system-wide quick-query overlay, both of which presuppose a resident process, but there is no tray/menu-bar persistence setting, so the always-available promise breaks the moment the user closes the window.
+Showing in the menu bar changes macOS application lifecycle and whether closing a window quits or hides. Desktop has no supported tray preference contract with reliable restore and quit behavior, so a switch would be inert or misleading.
 
 **Evidence**
 
-grepped 'menu bar|menuBar|tray' across apps/desktop/src/features/settings and stores/settingsStore.ts — no match; apps/desktop/src/features/settings/GeneralSettings.tsx:65-97 (Global Hotkey group, no tray option); apps/desktop/src/features/quick-query/index.tsx:1-12
+Settings and the current renderer bridge expose no menu-bar visibility mutation or acknowledged close-window lifecycle preference. Existing window controls do not establish a persistent background tray owner.
 
 **Suggested fix**
 
-Add a `showInMenuBar` preference plus a Tauri tray icon with New chat / Quick query / Show window / Quit items, and change the window close handler to hide-to-tray when the preference is on.
+Not planned until native implements tray creation/removal, close-versus-quit semantics, launch restoration, explicit Quit, update behavior, and platform tests.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/091-chatgpt-macos-settings-general-permissions-full-access-defaults.png`
 
-### GAP-086 — No 'Send shortcut' preference — Enter vs newline behaviour is not user-configurable
+### GAP-086 — Desktop send behavior is configurable and persisted
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > General — Composer
 
 **Gap**
 
-The reference has a Composer group with 'Send shortcut → Enter ⌄' and the copy 'Choose when Enter sends a prompt or inserts a new line'. agiworkforce has no such preference on any surface; Enter behaviour is fixed by the shared composer. This is one of the most commonly requested settings in chat products and affects every message a user writes.
+General settings now lets users choose Enter to send with Shift+Enter for a newline, or Command/Ctrl+Enter to send with Enter for a newline. The shared composer consumes the persisted preference and labels the send affordance accordingly.
 
 **Evidence**
 
-grepped 'Send shortcut|sendShortcut|sendOnEnter|Enter to send' across apps/desktop/src and apps/web/features — no match; apps/desktop/src/features/settings/GeneralSettings.tsx has no Composer group
+GeneralSettings.tsx renders the Send shortcut selector. chatPrefs.ts and settingsStore.ts persist sendShortcut with a versioned migration. DesktopShellV3.tsx passes composerSendShortcut to ChatInterface; ChatInput.tsx enforces it and SendButton.tsx exposes the matching label. ChatInput.workScope.test.tsx covers both key modes.
 
 **Suggested fix**
 
-Add a `composer.sendShortcut: 'enter' | 'mod+enter'` preference to settingsStore, read it in the shared unified-chat composer key handler, and render it as a Select in a new Composer group in desktop General (mirrored into web /settings/general and mobile /settings/general).
+Completed. Keep keyboard behavior and accessible send labels driven from the same preference so displayed and executed shortcuts cannot diverge.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/092-codex-macos-settings-general-composer-notifications-popout.png`
 
-### GAP-087 — No follow-up behaviour control (Queue vs Steer) for typing while an agent run is in flight
+### GAP-087 — Queue versus Steer follow-ups are declined without executor semantics
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-interaction
 - **Reference:** Codex · macOS desktop · Settings > General — Composer
 
 **Gap**
 
-The reference lets the user choose what happens when they submit while a run is active — 'Queue' (hold the message until the run finishes) or 'Steer' (inject it into the running turn) — plus a documented one-message override (⌘↵ does the opposite). agiworkforce has no equivalent setting or per-message override, so mid-run input behaviour is implicit and unchangeable. For an agentic product with long-running tasks this is a core interaction, not a nicety.
+The current run contract does not define a queued follow-up or an in-flight steering event. A composer preference could not guarantee ordering, cancellation, replay, or what context the active agent observes.
 
 **Evidence**
 
-grepped 'follow-up behavior|followUpBehavior|steer|queue' across apps/desktop/src and apps/web/features — only unrelated task-queue/toast-queue hits (backgroundTaskStore.ts, useToast.ts, TauriRuntime.ts)
+Desktop chat and native workflow events have send, status, tool, approval, and cancellation behavior but no typed queue-item or steer-current-run operation and no persisted ordering contract.
 
 **Suggested fix**
 
-Add a `composer.followUpBehavior: 'queue' | 'steer'` setting rendered as a segmented control in the Composer group, implement both paths in the run controller, and wire ⌘↵ as the per-message inverse. Show the active mode as a hint in the composer while a run is streaming.
+Not planned until the executor defines both operations, acknowledgement, ordering, race handling, cancellation, recovery after restart, and mode-specific UI state.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/092-codex-macos-settings-general-composer-notifications-popout.png`
 
-### GAP-088 — Notification settings lack completion scope, permission alerts and input-needed alerts
+### GAP-088 — Desktop notification settings expose native completion, attention, permission, and reminder scopes
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > General — Notifications
 
 **Gap**
 
-The reference offers 'Turn completion notifications → Only when unfocused ⌄' (scope choice for when the app tells you it finished), 'Enable permission notifications' (alert when a notification permission is required) and 'Enable question notifications' (alert when input is needed to continue). agiworkforce desktop's Notifications panel renders only two switches: Desktop Notifications and Sound Effects. For long-running agent work the input-needed alert is the one that actually keeps a run from stalling silently.
+Notification settings now map the actual native enabled_types contract into understandable controls for task completion, failures or input needed, permission and system alerts, and reminders, alongside master notifications and badge behavior.
 
 **Evidence**
 
-apps/desktop/src/features/settings/NotificationsSettings.tsx:5 docstring 'Handles: Desktop Notifications, Sound Effects toggles', :44-59 (only those two Labels); LOCAL_NOTIFICATION_SETTINGS in SettingsPanel.tsx:69-84 lists enabled_types including task_complete/agent_activity but no UI exposes per-type control
+NotificationsSettings.tsx reads and writes the native notification config fields enabled, badge_enabled, and enabled_types, treating an empty enabled_types array as the backend's all-types default. NotificationsSettings.test.tsx verifies category projection and persistence.
 
 **Suggested fix**
 
-Expose the existing `enabled_types` array as per-type switches, add a `completionNotificationScope: 'always' | 'unfocused' | 'never'` Select, and add an explicit 'input needed to continue' notification type wired to the approval/question path so a blocked run always surfaces an OS notification.
+Completed for the native event vocabulary. Add future categories only when a producer and native delivery type exist, then extend the same mapping and tests.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/092-codex-macos-settings-general-composer-notifications-popout.png`
 
-### GAP-089 — Shortcuts cannot be unbound — no Unassigned state and no delete affordance
+### GAP-089 — Unbinding shortcuts is declined until shortcut ownership is reconciled
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts
 
 **Gap**
 
-Every reference row carries a trash icon per binding and shows 'Unassigned' with a pencil when no binding exists (Open in new window, Switch chat…, most git/app actions). agiworkforce's ShortcutRow offers only Edit (capture a replacement) and, when customized, Reset-to-default — there is no path to remove a binding. A user who wants ⌘L free for something else, or who needs to clear a combo that collides with an OS or IME shortcut, is stuck.
+The visible settings catalog and the Rust/global shortcut store do not currently share a complete action ID and dispatch contract. Allowing an empty binding in only the renderer would report an action as unbound while another owner could still handle its default.
 
 **Evidence**
 
-apps/desktop/src/features/settings/KeybindingsSettings.tsx:110-170 (ShortcutRow renders kbd + Edit + conditional reset only); resolveShortcut always falls back to the built-in default, so an empty custom value cannot represent 'unbound'
+KeybindingsSettings reads the Desktop shortcut definitions, while native shortcut persistence and runtime dispatch cover a different subset and generic useShortcutActions does not own every listed action. The current capture flow safely rejects conflicts but has no authoritative disabled state.
 
 **Suggested fix**
 
-Allow the empty string as a sentinel for unbound in customKeybindings, render it as an 'Unassigned' pill, add a trash button per row that writes the sentinel, and make the runtime shortcut matcher skip unbound entries. Sync the sentinel to the Rust shortcut store.
+Not planned as a cosmetic clear action. First unify action IDs, owner, defaults, persistence, global versus window scope, and dispatch; then add an explicit disabled value with migration and end-to-end no-dispatch tests.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/101-codex-macos-settings-keyboard-shortcuts-chat-navigation-basics.png`
 
-### GAP-090 — Shortcuts Tips copy promises conflict precedence the code actively refuses
+### GAP-090 — Keyboard-shortcut conflict guidance matches enforced behavior
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-copy
 - **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts
 
 **Gap**
 
-The Tips block tells the user 'Conflicting shortcuts are marked with a warning icon. The most recently bound shortcut takes precedence.' But handleEditCapture rejects any conflicting combo outright — it fires toast.warning('Combo already used by …'), closes the editor and never writes the binding. The documented precedence behaviour is unreachable; the warning icon and conflicts map only ever fire for collisions among built-in defaults. This is misleading guidance attached to a control that behaves differently.
+The shortcut tips no longer claim that a most-recent assignment wins. They accurately state that an already-used shortcut cannot be assigned until its conflict is changed.
 
 **Evidence**
 
-apps/desktop/src/features/settings/KeybindingsSettings.tsx:213-228 (conflict → toast.warning + setEditingId(null) + early return, no setCustomKeybinding) vs the Tips paragraph rendered near the end of the same file
+apps/desktop/src/features/settings/KeybindingsSettings.tsx now describes the rejecting conflict behavior implemented by its capture flow instead of promising precedence the code does not support.
 
 **Suggested fix**
 
-Pick one behaviour and make copy and code agree. Preferred: allow the rebind, show the warning icon on both rows, and implement last-bound-wins in the matcher (then the Tips text is true). Otherwise rewrite the tip to 'A combo already in use cannot be assigned — clear the other shortcut first.'
+Completed. Keep instructional copy pinned to the actual conflict resolver if shortcut ownership is redesigned.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/101-codex-macos-settings-keyboard-shortcuts-chat-navigation-basics.png`
 
-### GAP-091 — No keyboard chat switching: no next/previous chat, recently-viewed cycling or ⌘1-⌘9 jump
+### GAP-091 — Direct chat-switch shortcuts are declined without a canonical runtime dispatcher
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-interaction
 - **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts — chat switching
 
 **Gap**
 
-The reference binds Next chat (⇧⌘], ⌥⌘Right), Previous chat (⇧⌘[, ⌥⌘Left), Next/Previous recently viewed chat (^Tab / ^⇧Tab) and a 'Switch chat…' quick switcher, and renders ⌘1-⌘6 badges next to pinned/project conversations in the sidebar for direct jumps. agiworkforce's 21 default shortcuts include none of these, and the sidebar renders no per-conversation shortcut badge — the only keyboard route to another conversation is opening search (⌘K).
+Next, previous, recent-history, and numbered jumps require one authoritative visible-conversation ordering and shortcut dispatcher. Current sidebar grouping, projects, pinning, search, and generic shortcut settings do not share that contract.
 
 **Evidence**
 
-apps/desktop/src/constants/shortcuts.ts (21 entries: new-chat, clear, copy-last, voice-input, settings, search, navigate-_, model-_, agent-_, tool-timeline, window-_); grepped 'Digit[1-9]|cmd\+[1-9]' across apps/desktop/src — no match; apps/desktop/src/features/v3/Sidebar.tsx:479 is the only ⌘ badge (⌘K on the search row)
+DEFAULT_SHORTCUTS has no chat-switch actions, ConversationRow exposes no assigned key, and the current shortcut action layer does not own Sidebar's grouped ordering or project membership. Search remains the supported keyboard navigation route.
 
 **Suggested fix**
 
-Add next-chat / previous-chat / next-recent / previous-recent shortcut definitions plus mod+1..9 direct-jump bindings driven by the sidebar's visible pinned+recent ordering, and render the assigned combo as a right-aligned badge on ConversationRow the way the ⌘K search row already does.
+Not planned until shortcut ownership is unified and Sidebar publishes a deterministic accessible conversation order with focus, archived/project filtering, conflict, and remapping semantics.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/102-codex-macos-settings-keyboard-shortcuts-tab-chat-switching.png`
 
-### GAP-092 — No AI-model-training consent toggle ('Help improve our AI models') or location-metadata toggle
+### GAP-092 — Model-training and location toggles are declined because neither data use exists
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Privacy
 
 **Gap**
 
-Claude's Privacy settings include a 'Help improve our AI models' toggle (opt-in to using chats/coding sessions for model training) and a 'Location metadata' toggle (coarse city/region use). Neither concept exists anywhere in agiworkforce's Privacy tab or elsewhere in the desktop app.
+agiworkforce does not train an AGI-owned model on customer conversations, and Desktop has no coarse-location collection or consumer. Persisted toggles would imply optional processing pathways that do not exist and could make the always-off policy less clear.
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/Privacy/index.tsx (full section list: DataPrivacySection, AnalyticsPrivacySection, GovernancePrivacySection, Cloud data, Master Password — no training-consent or location-metadata toggle); searched 'train'/'improve model'/'model training' across apps/desktop/src — no matches
+docs/00-foundation/platform-constitution.md states that AGI is not a foundation-model company. Product privacy pages state that customer conversation content is not used to train AGI-owned models. Repository searches find no training-data pipeline, improve-model preference consumer, coarse-location collection, or location-metadata flag.
 
 **Suggested fix**
 
-Add both toggles to the Privacy tab with matching explainer copy and backend flags, since these are standard-expectation privacy controls for an AI product and their absence is a compliance/trust gap, not just a feature gap.
+Not planned while both purposes are absent. Keep privacy text explicit that model training is always off and location is not collected for personalization; add consent only alongside a separately approved purpose and end-to-end enforcement.
 
 **Reference screenshot(s)**
 
 - `claude_reference/142-claude-desktop-settings-privacy-data-controls-export-sharing.png`
 
-### GAP-093 — No dictation dictionary — names and jargon mis-transcribe every time
+### GAP-093 — A dictation dictionary is declined until transcription providers support a shared bias contract
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Voice — Dictation dictionary
 
 **Gap**
 
-The reference has a 'Dictation dictionary' card ('Words or phrases dictation should recognize') with an '+ Add entry' button and editable entry rows with per-row delete. agiworkforce has a deep voice stack (Whisper STT models, transcription providers, post-processing, wake word) but no custom-vocabulary list, so proper nouns, product names and technical terms are mis-transcribed on every dictation with no user remedy.
+Desktop supports multiple transcription paths with different vocabulary-bias mechanisms. Saving words without feeding every active provider and the correction pass would create a control that appears effective but is silently ignored.
 
 **Evidence**
 
-grepped 'dictionary|vocabulary|custom words|customWords' across apps — only unrelated hits (roiStore.ts trends dictionary comment); apps/desktop/src/features/settings/VoiceSettings.tsx has Transcription Provider / Whisper STT Models / Post-Processing but no vocabulary list
+VoiceSettings configures provider, local Whisper models, and post-processing, but current request adapters expose no normalized phrase-list or initial-prompt field and no capability metadata for providers that cannot bias recognition.
 
 **Suggested fix**
 
-Add a `dictationDictionary: string[]` setting with an add/edit/delete list UI, and feed the entries into the STT request as an initial-prompt/biasing hint (Whisper `initial_prompt`, provider phrase-list equivalents) and into the post-processing correction pass.
+Not planned until a typed vocabulary contract defines normalization, limits, per-provider adapters, unsupported-provider disclosure, local storage privacy, deletion, and transcription tests.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/096-codex-macos-settings-voice-dictation-hotkeys-dictionary.png`
 
-### GAP-094 — No Browser settings for the in-app browser (control, destinations, clear data, downloads)
+### GAP-094 — A broad Desktop Browser settings page is declined without one browser runtime owner
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Settings › Browser
 
 **Gap**
 
-Reference gives the built-in browser its own settings screen: a master 'let the assistant control the browser' toggle, web/local URL open destinations, 'Clear all browsing data', annotation-screenshot policy, password/contact autofill managers and a downloads location. agiworkforce ships browser viewing/automation surfaces but exposes none of these controls, so a user cannot disable browser control or clear what the agent browsed.
+Existing browser views, execution automation, system link opening, and the Chrome extension are separate capabilities. Desktop has no single cookie jar, autofill store, download manager, clear-data operation, or navigation-control policy to back the reference settings.
 
 **Evidence**
 
-apps/desktop/src/features/browser/{BrowserViewer,BrowserActionLog,BrowserDebugTabs}.tsx and features/execution/BrowserPanel.tsx exist; apps/desktop/src/features/settings/tabs/AgiInChrome/index.tsx only renders BridgeStatusCard; searched 'browsing data', 'default browser' and 'downloads folder' in apps/desktop/src — no match
+BrowserViewer, BrowserPanel, execution browser events, and the extension use different stores and trust boundaries. Repository searches find no Desktop-owned browsing-data inventory, cookie clear command, downloads-location contract, or browser autofill manager.
 
 **Suggested fix**
 
-Add a Browser settings tab with: enable/disable browser control, link-open destination (in-app vs system default), 'Clear browsing data' with a scope dropdown, downloads location + 'ask where to save', and a link across to the extension's autofill profile.
+Not planned until a dedicated browser service owns session isolation, storage, control enablement, navigation destination, clear-data scopes, downloads, autofill, retention, and audit semantics.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/113-codex-macos-settings-browser-general-autofill-downloads.png`
 
-### GAP-095 — No approval policy or per-site permission overrides for agent-opened websites on desktop
+### GAP-095 — Desktop per-site browser policy is declined until origin enforcement is shared
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Browser (permissions & developer mode)
 
 **Gap**
 
-Reference has an 'Approval' dropdown controlling whether the assistant asks before opening websites, plus a 'Site permissions' list with +Add and a 'No site-specific permissions yet' empty state. On desktop agiworkforce only has a sandbox 'Allowed network domains' field for terminal commands; browser navigation by the agent has no approval policy or per-origin overrides. The Chrome extension does have an allowlist, so the two surfaces disagree.
+The extension owns its current site allowlist, while Desktop terminal network domains apply to a different sandbox. A second per-origin list or approval dropdown in Desktop would not constrain either owner consistently.
 
 **Evidence**
 
-apps/desktop/src/features/settings/AgentExecutionSettings.tsx:336-356 (terminal sandbox domains only), apps/extension/src/options.ts:16,452,486 (agi_site_allowlist under 'Permissions'), searched 'site permission'/'per-site' in apps/desktop/src — no match
+apps/extension owns agi_site_allowlist and browser permissions. AgentExecutionSettings allowed network domains constrain terminal execution, not browser navigation. The native bridge has no normalized origin-policy read/update/evaluate contract.
 
 **Suggested fix**
 
-Add a Permissions block to the new Browser settings tab: an approval policy select (Always ask / Ask for new sites / Always allow) and a per-origin override list with Add/Remove and an empty state, sharing storage with the extension allowlist through the native bridge.
+Not planned until a shared authority defines origin normalization, ask/allow/block decisions, redirects, private-network handling, extension synchronisation, revocation, and audit tests.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/114-codex-macos-settings-browser-permissions-developer-mode-cdp.png`
 
-### GAP-096 — Connections mounts live pairing, but multi-device management remains incomplete
+### GAP-096 — Connections remains intentionally limited to supported inbound ephemeral pairing
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-ia
 - **Reference:** Codex · macOS desktop · Settings › Connections › Control this Mac
 
 **Gap**
 
-The reference combines inbound control, outbound devices, SSH, paired-device history, last-connected timestamps, and access revocation. agiworkforce now mounts its real inbound mobile-control pairing and approval workflow in Settings > Connections. The remaining gap is narrower: existing connected-device management is still separate, and no supported outbound-device or SSH runtime exists.
+Settings now mounts the real Control this Mac pairing flow. Outbound-device, SSH, and reusable device-history tabs are declined because no corresponding production runtime or durable device authorization exists.
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/Connections/index.tsx mounts MobileCompanionPanel for the supported control-this-Mac flow. packages/ui/ui/src/settings-nav.ts makes Connections searchable and reachable. TeamAccountSettings.tsx still owns a separate Connected Devices list, while current code has no production outbound-device or SSH session contract.
+apps/desktop/src/features/settings/tabs/Connections/index.tsx mounts MobileCompanionPanel and MCPWorkspace. Current cross-device contracts support the ephemeral inbound companion session; repository searches find no outbound-device controller, SSH session owner, or reusable device inventory.
 
 **Suggested fix**
 
-Move the real connected-device history and revoke controls into Connections, backed by the same device/session source of truth. Add Control other devices and SSH tabs only alongside implemented connection runtimes, not as placeholder settings surfaces.
+Not planned beyond the supported inbound flow. Add tabs only alongside implemented, authenticated runtimes and move device history here if a durable device service is introduced.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/117-codex-macos-settings-connections-control-this-mac-iphone.png`
 
-### GAP-097 — No master 'Allow connections' kill switch for remote control of this machine
+### GAP-097 — Connections master allow is declined for the same ephemeral pairing boundary
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Connections › Control this Mac
 
 **Gap**
 
-Reference puts an 'Allow connections' switch above the paired-device list so remote control can be shut off instantly without unpairing. agiworkforce can only disconnect devices one at a time and has no global remote-access switch — a trust-boundary control the product's local/remote split needs.
+There is no durable remote-access listener to disable globally: a user explicitly starts pairing and can disconnect the single active peer. Persisting an Allow connections switch would not gate reusable access.
 
 **Evidence**
 
-apps/desktop/src/features/settings/TeamAccountSettings.tsx:277-296 (per-device Disconnect only), apps/desktop/src/stores/connectionStore.ts:473 (pairing-code request path); searched 'allow connections'/'remote access' in apps/desktop/src/features/settings — no master toggle
+The Connections tab mounts MobileCompanionPanel's explicit pair/disconnect lifecycle. Connection stores clear singleton session authority on disconnect and expose no native master-listener setting.
 
 **Suggested fix**
 
-Add an 'Allow connections' switch in the new Connections tab that gates the pairing listener and rejects inbound companion sessions while off, with a status line showing how many devices are currently paired.
+Not planned until durable inbound access exists. If introduced, the master switch must be native-enforced, default safe, terminate active sessions immediately, and remain independent of per-device revocation.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/117-codex-macos-settings-connections-control-this-mac-iphone.png`
 
-### GAP-098 — No Git settings: branch prefix, merge method, force-push, draft PRs, instructions
+### GAP-098 — Agent Git policy settings are declined until push and PR consumers are authoritative
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Settings › Git
 
 **Gap**
 
-Reference gives agent-driven git its own settings screen — branch prefix for agent-created branches, merge vs squash, 'always force push (--force-with-lease)', draft-PR default, inline vs detached review delivery, plus free-text commit-message and PR-description instructions saved into the generation prompts. agiworkforce has a git panel that commits/pushes but no policy or prompt-guidance settings, so agent git behaviour cannot be constrained per team convention.
+Branch prefix, merge strategy, force push, draft PR, and generated-text instructions must constrain actual git and remote-provider operations. Current Desktop git is local-operation focused and has no shared agent branch/PR policy consumer.
 
 **Evidence**
 
-apps/desktop/src/features/git/{GitPanel,GitCommitDialog,GitDiffViewer,GitStatusPanel}.tsx and apps/desktop/src/api/git.ts exist (push/pull/commit); searched 'branch prefix', 'force-with-lease', 'draft pull request', 'squash', 'commit instructions' across apps/ — no match
+GitPanel and api/git.ts expose local status, diff, commit, pull, and push primitives. Repository searches find no agent-created branch owner, provider-neutral PR creation policy, merge-method consumer, or commit/PR prompt pipeline reading these settings.
 
 **Suggested fix**
 
-Add a Git settings tab persisting branchPrefix, mergeMethod, forcePushWithLease, draftPullRequests, reviewDelivery plus commitInstructions/prInstructions textareas with explicit Save, and read those values in the commit/PR generation prompts and push path.
+Not planned until an agent git service owns branch creation, guarded force-with-lease, remote PR creation, merge policy, instruction injection, audit, and repository-level overrides.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/118-codex-macos-settings-git-branch-prefix-pr-instructions.png`
 
-### GAP-099 — No lifecycle hooks feature or settings screen at all
+### GAP-099 — Lifecycle hooks are declined until a sandboxed hook runtime exists
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Settings › Hooks (empty state)
 
 **Gap**
 
-Reference ships a Hooks screen ('Manage lifecycle hooks from config and enabled plugins') with a refresh action and a 'No hooks found / Configured hooks will appear here' empty state, letting users run their own commands around agent tool calls. agiworkforce has no hook concept: a hooksStore once existed and was deleted as dead code, so plugins cannot register lifecycle behaviour and users cannot inspect what runs around tool calls.
+The product has no lifecycle-hook execution contract. A Hooks settings screen would either be an empty placeholder or invite arbitrary command configuration without ownership, sandboxing, consent, timeout, secrets, and audit controls.
 
 **Evidence**
 
-apps/desktop/src/stores/logoutCleanup.ts:36,168 (hooksStore listed among stores 'deleted as dead code'); searched 'lifecycle hook', 'PreToolUse', 'PostToolUse' across apps/desktop/src and apps/web/features — no match
+The former hooks store is recorded as deleted dead code, and searches find no PreToolUse, PostToolUse, session hook resolver, plugin hook registry, or native hook executor.
 
 **Suggested fix**
 
-Introduce a hooks config (per-user and per-project) with pre/post tool-use, session-start and session-end events, resolve hooks from config plus enabled plugins, and add a Hooks settings tab listing source, event, command and enabled state with refresh and the empty state.
+Not planned until a reviewed hook runtime defines events, precedence, project trust, command sandbox, environment/secrets policy, confirmation, timeout, failure behavior, logs, disable/recovery, and plugin provenance.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/116-codex-macos-settings-hooks-empty-state-no-hooks.png`
 
-### GAP-100 — Shortcuts cannot be unassigned — no 'Unassigned' state or clear action
+### GAP-100 — Shortcut Unassigned state is declined until renderer and native shortcut stores converge
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · Settings › Keyboard shortcuts
 
 **Gap**
 
-Reference renders 'Unassigned' for unbound actions and a trash icon that clears an assigned combo, so users can free a system-conflicting key. agiworkforce always renders the resolved default combo in a <kbd> and offers only Edit plus 'reset to default'; there is no way to leave an action unbound.
+This duplicate of GAP-089 depends on the same missing ownership contract. Rendering Unassigned or writing an empty renderer value cannot guarantee that native/global or default dispatch has stopped.
 
 **Evidence**
 
-apps/desktop/src/features/settings/KeybindingsSettings.tsx:132-168 (kbd always shows formatComboDisplay of resolved default; only Edit + RotateCcw reset), apps/desktop/src/constants/shortcuts.ts (every ShortcutDefinition has a mandatory key+modifiers)
+KeybindingsSettings, DEFAULT_SHORTCUTS, native shortcut persistence, and runtime action dispatch cover different action subsets. No end-to-end disabled-binding representation is consumed by every owner.
 
 **Suggested fix**
 
-Allow customKeybindings[id] === '' to mean unbound: render 'Unassigned' in ShortcutRow, add a trash button next to Edit that writes the empty binding, and make useShortcutActions skip empty combos.
+Not planned independently. Resolve GAP-089's shortcut ownership and then implement one explicit disabled state, clear action, migration, conflict release, and no-dispatch verification across renderer and native handlers.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/105-codex-macos-settings-keyboard-shortcuts-undo-redo-approve-close-tab.png`
 
-### GAP-101 — No keyboard shortcuts to approve/decline a pending agent approval request
+### GAP-101 — Live native tool approvals support Return to approve and Escape to deny
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-interaction
 - **Reference:** Codex · macOS desktop · Settings › Keyboard shortcuts
 
 **Gap**
 
-Reference binds Return to 'Approve request' and Escape to 'Decline request' so an agent run can be unblocked without reaching for the mouse. agiworkforce ships a blocking ApprovalModal but no shortcut action exists for approving or declining.
+The blocking native MCP approval prompt can now be resolved by keyboard while it is active. Return approves and Escape denies, repeated events and text-entry targets are ignored, and the button labels show the available keys.
 
 **Evidence**
 
-apps/desktop/src/features/governance/ApprovalModal.tsx:58,184 (Approve Request button); apps/desktop/src/constants/shortcuts.ts DEFAULT_SHORTCUTS has no approval entries — searched 'approve request' and 'decline' across apps/desktop/src, no shortcut match
+apps/desktop/src/features/chat/McpToolConfirmationPrompt.tsx installs a modal-scoped key handler and sends the decision through the existing native response path. DesktopShellV3.test.tsx verifies approve and deny against real pending native tool-confirmation state.
 
 **Suggested fix**
 
-Add 'approval.approve' (Return) and 'approval.decline' (Escape) ShortcutDefinitions in a new 'approvals' category, dispatch them from useShortcutActions only while governanceStore has a pending request, and show the combo inline in ApprovalModal's buttons.
+Completed for the authoritative live MCP approval surface. Reuse the same modal-scoped pattern for any future native approval owner rather than dispatching through the currently disconnected generic shortcut catalog.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/105-codex-macos-settings-keyboard-shortcuts-undo-redo-approve-close-tab.png`
 
-### GAP-102 — Installed plugins cannot be disabled — only updated or removed
+### GAP-102 — Plugin disable switches are declined without authoritative installed-plugin state
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Plugins
 
 **Gap**
 
-Every reference plugin row carries an on/off switch, so a plugin can be silenced without losing its install/config. agiworkforce's PluginRow exposes only Update and Remove, so the only way to stop a misbehaving plugin is to uninstall it.
+The current plugin surface cannot reliably enumerate account-installed plugins or enforce an enabled flag in tool and command resolution. A switch on local rows would not disable hosted integration behavior and could create a false security boundary.
 
 **Evidence**
 
-apps/desktop/src/features/settings/SkillsPluginsSettings.tsx:171-260 (PluginRow renders scope badge, version, Update, Remove — no Switch), searched 'enabled'/'Switch' inside SkillsPluginsSettings.tsx — the file imports no toggle for plugins
+SkillsPluginsSettings exposes locally resolved plugin metadata and update/remove affordances, while the hosted marketplace store disables install lifecycle. No shared installed-plugin entity or resolver contract consumes a per-account enabled flag.
 
 **Suggested fix**
 
-Add an `enabled` flag per resolved plugin persisted in settingsStore, render a Switch on the right of each PluginRow, and have the plugin/skill resolver skip disabled plugins when building the tool and slash-command catalog.
+Not planned until the plugin lifecycle owns installed identity, scope, enabled state, tool and command resolution, connector revocation, synchronisation, audit, and rollback.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/112-codex-macos-settings-plugins-plugin-list-toggles-on.png`
 
-### GAP-103 — Billing has no credits balance card with Buy credits and auto-reload
+### GAP-103 — Credits purchase and auto-reload are declined without billing product contracts
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Usage & billing
 
 **Gap**
 
-Reference shows current credit balance, a 'Buy credits' button and a 'Set up auto-reload' link with the explainer 'Buy credits or turn on auto-reload to continue if you hit a limit'. agiworkforce's desktop Billing tab shows only plan/subscription/renewal plus a Stripe portal button; credits are read-only in a different section and there is no purchase or auto-reload path.
+Desktop can show subscription facts and open the authoritative Stripe billing portal, but there is no top-up price catalog, credit checkout session, balance ledger mutation, threshold rule, payment mandate, or auto-reload API.
 
 **Evidence**
 
-apps/desktop/src/features/settings/BillingSettings.tsx:70-104 (Plan/Subscription/Renews + Manage billing only), apps/desktop/src/features/settings/AccountSettings.tsx:203,246 (read-only CreditsSection), searched 'auto-reload'/'buy credits' across apps/ — only apps/desktop/src/App.tsx:1748 onBuyTopUp which just opens the billing tab
+BillingSettings.tsx presents plan/subscription data and Manage billing. CreditsSection is read-only, and App.tsx routes top-up intent to Billing. Repository searches find no typed buy-credit or auto-reload contract that could safely execute these controls.
 
 **Suggested fix**
 
-Add a Credits card to BillingSettings showing balance from the billing store with 'Buy credits' (Stripe checkout for a top-up price) and an auto-reload configuration (threshold + amount), and point App.tsx's onBuyTopUp at it instead of the generic tab.
+Not planned until Billing owns price and entitlement definitions, checkout, webhook reconciliation, credit ledger, auto-reload consent and limits, failure notifications, cancellation, refunds, and tenant-isolation tests.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/109-codex-macos-settings-billing-plan-credits-usage-limits.png`
 
-### GAP-104 — Chats are not nested under their project in the sidebar
+### GAP-104 — Desktop deliberately keeps project membership in Projects and navigation in flat Recents
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-ia
 - **Reference:** Codex · macOS desktop · Sidebar projects with nested chats
 
 **Gap**
 
-The reference nests each project's chats directly beneath the project row, with a 'Show more' overflow and a per-project 'No chats' empty state, so project context is visible while navigating. agiworkforce renders projects as flat rows and puts every conversation in a separate time-grouped Recents list, so a project's conversations can only be found by opening the project panel.
+Desktop's information architecture uses the Projects workspace to inspect project membership and a single time-grouped Recents list for conversation navigation. Nesting the same chats under projects would duplicate rows, hide cross-project chronology, and require ambiguous placement for moved or unscoped conversations.
 
 **Evidence**
 
-apps/desktop/src/features/v3/Sidebar.tsx:583-595 (ProjectRow list) and 598-640 (separate Recents groups); features/v3/ProjectRow.tsx (row-level menu, no children)
+Sidebar.tsx renders top-level ProjectRow entries and one chronological Recents owner; AgiWorkProjects owns project conversation membership and opening. DesktopShellV3.test.tsx verifies project selection updates both conversation and project membership.
 
 **Suggested fix**
 
-Make ProjectRow expandable, rendering that project's conversations (capped with a 'Show more') and an explicit 'No chats' row when empty, and filter those conversations out of the ungrouped Recents list.
+Not planned for the current IA. Keep project membership in the Projects workspace and Recents as the canonical conversation navigator; revisit only with usability evidence and one-row ownership rules for pinned, moved, archived, and unscoped chats.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/083-codex-macos-sidebar-nav-projects-recent-chats.png`
 
-### GAP-105 — No MFA precondition gate before enabling remote device control
+### GAP-105 — An MFA gate is declined until the account service publishes verified MFA state
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · Turn on Multi-Factor Authentication gate modal
 
 **Gap**
 
-The reference blocks enabling remote control until the account has MFA, with an illustrated modal, plain-language reason and a 'Continue on chatgpt.com' deep link to the account security page. agiworkforce has no equivalent: the desktop app contains no MFA/2FA logic at all, and the web 2FA control is self-described as unimplemented ('Two-factor via an authenticator app is coming to web'). Remote control of a developer machine is exactly the capability that warrants a step-up requirement under the repo's trust-boundary rules.
+Blocking remote pairing on a renderer assumption would be insecure and could lock users out. Desktop has no authenticated MFA-enrolled fact, step-up challenge, recovery lifecycle, or server-enforced remote-control policy to evaluate.
 
 **Evidence**
 
-grep -i 'multi-factor|mfa|two-factor|2fa|totp' apps/desktop/src returns only DesktopCloudSettingsModal.tsx:1072 (a description string); apps/web/features/settings/components/Settings/TwoFactor.tsx:73-82
+Desktop auth/account contracts do not expose verified MFA status or a step-up token. The existing Web TwoFactor surface states that authenticator enrollment is not implemented, and companion pairing has no signed MFA claim.
 
 **Suggested fix**
 
-Add an MfaRequiredDialog to the Connections tab that renders when the account lacks a verified second factor, with a 'Continue on agiworkforce.com' button deep-linking to /settings/security, and land a real TOTP enrollment flow behind that link.
+Not planned until the account service implements enrollment, recovery, verified status, step-up, and server-side policy enforcement, and the signed companion authorization binds that proof before session creation.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/033-codex-macos-settings-connections-mfa-required-modal.png`
 
-### GAP-106 — Unusable capture fails with a terse alert, no diagnosis, no re-record path
+### GAP-106 — Empty recorder captures provide diagnosis and immediate recovery
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-state
 - **Reference:** Claude · macOS desktop · Unusable-capture failure response
 
 **Gap**
 
-The reference explains exactly what it saw ('mostly black for about 7 seconds, a brief switch to Chrome, then back'), states why that is not enough to build a skill, offers two concrete hypotheses (recording started before anything visible happened; the action happened in a window that was not captured), and asks the user to describe the intent or re-record with the relevant window in view. agiworkforce shows a single destructive Alert — 'No actions were captured. Grant Input Monitoring, then record at least one click or keystroke.' — with no restart button, so the user's only route back is to find the Start recording button again.
+A zero-action recording now produces a structured result rather than a terse destructive alert. It explains the signals available, offers Record again, and can return to chat with a concrete description prompt already seeded.
 
 **Evidence**
 
-apps/desktop/src/features/automation/ActionRecorder.tsx:175-180 (zero-action error string) and :356-363 (generic 'Recording needs attention' Alert with no actions)
+ActionRecorder.tsx owns the emptyCapture state, signal-based bullets, Record again action, and Describe it instead composer handoff. ActionRecorder.test.tsx verifies both recovery paths.
 
 **Suggested fix**
 
-Replace the zero-step alert with a structured failure state: a headline ('That recording has nothing to learn from'), a per-cause bullet list chosen from the actual signals (no input events / all frames blank / no app focus change / permission not granted), and two buttons — 'Record again' (restarts capture immediately) and 'Describe it instead' (opens the composer prefilled with 'I was trying to demonstrate…').
+Completed for the signals the current recorder can truthfully observe. Extend diagnosis only alongside new captured signals such as frame validity or focus transitions.
 
 **Reference screenshot(s)**
 
 - `references-2/claude-desktop-cowork-record-skill-09-black-capture-failure-response.png`
 
-### GAP-107 — Agent access scope is invisible at point of use — no permission chip in the composer
+### GAP-107 — Composer exposes the native-backed access scope at point of use
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** ChatGPT · macOS desktop · Work mode empty state — composer permission chip
 
 **Gap**
 
-The reference puts an amber '⚠ Full access' chip directly in the composer footer, so the user always knows what the agent is allowed to do before pressing send, and can change it from there. In agiworkforce the equivalent scope (Read-only / Workspace write / Danger full access) lives only inside Settings > Agent Execution — nothing in the chat surface reflects it. Given the repo's Local/BYOK/Managed trust-boundary rules, an unlabelled elevated-permission state in the composer is a real trust defect.
+The same composer policy chip that closes GAP-056 makes read-only, workspace-write, full-access, and sandbox-off posture visible next to provider/environment context before every send.
 
 **Evidence**
 
-grepped 'Full access|approvalMode|sandboxMode' across apps/desktop/src — matches only in stores/settingsStore.ts, DotfileSettings.tsx, AgentsSettings.tsx, AgentExecutionSettings.tsx; no chat/composer file references the sandbox policy
+ComposerContextControls.tsx derives its label and severity from executionPreferences.terminalSandbox and opens Agent Execution settings. DesktopShellV3.tsx mounts it through ChatInterface composerHostControls; focused component and shell tests cover the seam.
 
 **Suggested fix**
 
-Render the resolved terminal-sandbox/approval policy as a composer footer chip (neutral for read-only, amber for full access) that opens the Agent Execution settings on click, alongside the existing provider/mode label so scope and provider are read together.
+Completed. Preserve a single native-backed access-policy projection so duplicated composer implementations cannot drift from the executor.
 
 **Reference screenshot(s)**
 

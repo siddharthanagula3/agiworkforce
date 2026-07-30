@@ -268,6 +268,8 @@ const DesktopShell = () => {
 
   // Apply dyslexic font class from persisted settings on mount
   const dyslexicFont = useSettingsStore((s) => s.windowPreferences?.dyslexicFont ?? false);
+  const uiScale = useSettingsStore((s) => s.windowPreferences?.uiScale ?? 100);
+  const reduceMotion = useSettingsStore((s) => s.windowPreferences?.reduceMotion ?? false);
   useEffect(() => {
     if (dyslexicFont) {
       document.documentElement.classList.add('dyslexic-font');
@@ -275,6 +277,14 @@ const DesktopShell = () => {
       document.documentElement.classList.remove('dyslexic-font');
     }
   }, [dyslexicFont]);
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${uiScale}%`;
+  }, [uiScale]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('reduce-motion', reduceMotion);
+  }, [reduceMotion]);
 
   const toggleTheme = useCallback(() => {
     const newTheme = theme === 'light' ? 'dark' : 'light';

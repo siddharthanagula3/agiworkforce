@@ -37,6 +37,8 @@ export interface SendButtonProps {
   onClick: () => void;
   /** Optional extra class names forwarded to the root button element. */
   className?: string;
+  /** Human-readable composer shortcut used in the accessible send label. */
+  sendShortcutLabel?: string;
 }
 
 export function SendButton({
@@ -46,6 +48,7 @@ export function SendButton({
   disabled = false,
   onClick,
   className,
+  sendShortcutLabel = 'Enter',
 }: SendButtonProps) {
   // ── Stop state ──────────────────────────────────────────────────────────
   if (mode === 'stop') {
@@ -106,8 +109,8 @@ export function SendButton({
           : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)] cursor-not-allowed',
         className,
       )}
-      title={isSending ? 'Sending…' : 'Send message (Enter)'}
-      aria-label={isSending ? 'Sending message…' : 'Send message (Enter)'}
+      title={isSending ? 'Sending…' : `Send message (${sendShortcutLabel})`}
+      aria-label={isSending ? 'Sending message…' : `Send message (${sendShortcutLabel})`}
     >
       {isSending ? (
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
