@@ -19,7 +19,8 @@ This folder is the compact source-of-truth layer for AGI Workforce. It replaces 
 9. [`provider-capability-matrix.md`](./provider-capability-matrix.md) - provider route capabilities, privacy claims, and routing constraints.
 10. [`commercial-and-launch.md`](./commercial-and-launch.md) - bootstrap-safe monetization, enterprise posture, and launch rules.
 11. [`agent-and-repo-operability.md`](./agent-and-repo-operability.md) - repo organization, docs rules, agent-native workflow, and A+ criteria.
-12. [`../engineering/naming-conventions.md`](../engineering/naming-conventions.md) - locked naming rules for product, CLI, repo files, packages, branches, commits, docs, and releases.
+12. [`ci-deployment-policy.md`](./ci-deployment-policy.md) - green-CI production promotion, exact-SHA/path gates, protected configuration, and runner-minute budget.
+13. [`../engineering/naming-conventions.md`](../engineering/naming-conventions.md) - locked naming rules for product, CLI, repo files, packages, branches, commits, docs, and releases.
 
 ## Canonical Root Docs
 

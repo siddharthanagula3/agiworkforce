@@ -67,6 +67,8 @@ requireIncludes('.github/workflows/ci.yml', 'image: postgres:16-alpine');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- apply --target ci');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- verify');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:rls-probe -- --target ci');
+requireIncludes('.github/workflows/ci.yml', 'node scripts/production-deploy-scope.mjs');
+requireIncludes('.github/workflows/ci.yml', "if: needs.check.outputs.native_changed == 'true'");
 requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
 requireIncludes('.github/workflows/ci.yml', '--filter=agi-workforce');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter agi-workforce package');
@@ -81,6 +83,83 @@ requireIncludes(
   'cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib',
 );
 requireIncludes('.github/workflows/ci.yml', 'bash apps/desktop/check-wiring.sh');
+
+requireIncludes('.github/workflows/deploy-production.yml', "workflows: ['CI']");
+requireIncludes(
+  '.github/workflows/deploy-production.yml',
+  "github.event.workflow_run.conclusion == 'success'",
+);
+requireIncludes(
+  '.github/workflows/deploy-production.yml',
+  'github.event.workflow_run.head_repository.full_name == github.repository',
+);
+requireIncludes('.github/workflows/deploy-production.yml', 'vercel build --prod');
+requireIncludes('.github/workflows/deploy-production.yml', 'vercel deploy --prebuilt --prod');
+requireIncludes('.github/workflows/deploy-production.yml', 'vercel@58.4.0');
+requireIncludes('.github/workflows/deploy-production.yml', 'environment=production');
+requireIncludes('.github/workflows/deploy-production.yml', 'environment:');
+requireIncludes(
+  '.github/workflows/deploy-signaling-server.yml',
+  "github.event.workflow_run.conclusion == 'success'",
+);
+requireIncludes(
+  '.github/workflows/deploy-signaling-server.yml',
+  'Verify manually selected ref passed CI',
+);
+requireNotIncludes('.github/workflows/deploy-signaling-server.yml', "github.event_name == 'push'");
+requireNotIncludes('scripts/deploy/push-prod-env-to-vercel.sh', 'vercel --prod');
+requireNotIncludes('scripts/setup-global-deployment.sh', 'flyctl deploy');
+
+const vercelConfig = JSON.parse(readText('vercel.json'));
+if (vercelConfig.git?.deploymentEnabled?.main !== false) {
+  errors.push(
+    'vercel.json must disable automatic main deployments so CI owns production promotion',
+  );
+}
+
+const productionMutationOwners = new Set([
+  '.github/workflows/deploy-production.yml',
+  '.github/workflows/deploy-signaling-server.yml',
+]);
+const productionMutationPatterns = [
+  /\bvercel(?:\s+deploy)?\s+[^\n]*--prod\b/,
+  /\bflyctl\s+deploy\b/,
+  /\brailway\s+up\b/,
+];
+const repositoryFiles = spawnSync(
+  'git',
+  ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+  {
+    cwd: root,
+    encoding: 'utf8',
+  },
+);
+if (repositoryFiles.status !== 0) {
+  errors.push('Unable to inventory repository files for production deployment bypasses');
+} else {
+  for (const relativePath of repositoryFiles.stdout.split('\0').filter(Boolean)) {
+    if (
+      productionMutationOwners.has(relativePath) ||
+      relativePath.startsWith('docs/') ||
+      relativePath.includes('.test.') ||
+      relativePath === 'scripts/check-ci-guardrails.mjs'
+    ) {
+      continue;
+    }
+
+    let body;
+    try {
+      body = readText(relativePath);
+    } catch {
+      continue;
+    }
+    if (productionMutationPatterns.some((pattern) => pattern.test(body))) {
+      errors.push(
+        `${relativePath} contains a production mutation outside the CI-owned deploy workflows`,
+      );
+    }
+  }
+}
 
 requireIncludes('.github/workflows/ci.yml', 'Semgrep (security audit)');
 requireIncludes('.github/workflows/ci.yml', 'continue-on-error: true');
