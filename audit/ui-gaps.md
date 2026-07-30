@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: d6520904e713a3370794c5218c081d4ac937de44149457d96c5c868afc2af3a3 -->
+<!-- ui-gaps-csv-sha256: 569eb4acf9eaf85739352077e668356734b6600ccb3c58e52caff6ccff68b0e0 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 1 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 126 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  331 |
+| Open        |  330 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   10 |
+| Done        |   11 |
 | Not Planned |    0 |
 
 ## P0
@@ -278,24 +278,24 @@ Completed. Keep all future agent-mode mutation paths on setAgentModeWithConsent,
 
 - `chatgpt_reference/009-codex-vscode-ext-permission-confirm-modal-turn-on-full-access-warning.png`
 
-### GAP-012 — Extension has no settings UI — every option is a raw VS Code settings row
+### GAP-012 — VS Code exposes a branded, complete settings editor
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Settings editor tab — General
 
 **Gap**
 
-Reference opens a branded settings webview as an editor tab with a left nav (General, Configuration, Personalization, Usage & billing, MCP servers, Hooks, Plugins, Account) and grouped cards with descriptions, dropdowns, segmented controls and toggles. agiworkforce forwards every settings entry point to workbench.action.openSettings filtered on 'agiWorkforce', so users configure agent mode, effort, MCP, runtime path, telemetry and endpoints through unlabelled JSON-schema rows with no grouping, no explanatory copy and no account/usage context.
+The extension now opens a branded AGI Settings editor with the reference information architecture: General, Configuration, Personalization, Usage & billing, MCP servers, Hooks, Plugins, and Account. Every active mutable agiWorkforce option has a described, typed control; deprecated planMode and read-only currentTier are not presented as writable settings. The surface distinguishes local developer sessions from cloud-backed utilities, shows account and tier context, reports workspace overrides, and keeps raw VS Code settings as an explicit escape hatch.
 
 **Evidence**
 
-apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:262-264 and core/commandSetup.ts:1469 both call workbench.action.openSettings. Searched apps/extension-vscode/src for createWebviewPanel — only providers/chatEditorPanel.ts:40 ('AGI Chat') and features/model-picker/modelMetrics.ts:119; no settings panel exists.
+apps/extension-vscode/src/features/settings/SettingsPanel.ts owns the singleton WebviewPanel, validated host actions, account state, configuration refresh, and fixed external destinations. settingsWebviewContent.ts provides the responsive theme-token UI, complete section navigation, loading/status/error feedback, and labeled controls. settingsProtocol.ts rejects malformed keys, values, commands, URLs, and numeric ranges. platform/config.ts exposes the full active setting manifest and one typed user-scope write boundary; agent.mode still routes through setAgentModeWithConsent. commandSetup.ts, ChatStateManager.ts, desktopBridge.ts, package commands, and the sidebar title action route normal settings entry points to the branded panel. GAP-012-settings-panel.test.ts, GAP-012-settings-webview.webview.test.ts, settingsProtocol.test.ts, configDefaults.test.ts, and commandParity.test.ts cover singleton hosting, CSP, interaction, protocol validation, option completeness, registration, raw-settings escape, and bypass cancellation. Desktop and compact browser QA passed with no overflow, console errors, duplicate IDs, unnamed buttons, or unlabeled inputs.
 
 **Suggested fix**
 
-Add a SettingsPanel webview (reuse the chatEditorPanel scaffolding and the desktop settings information architecture in apps/desktop/src/features/settings/SettingsPanel.tsx) with the same section list, writing through the typed accessors in src/platform/config.ts; keep workbench.action.openSettings as an 'Open raw settings' escape hatch.
+Completed. Keep SETTINGS_PANEL_SETTING_KEYS in parity with every non-deprecated mutable package contribution, keep webview messages runtime-validated, and route future privileged settings through their enforcement or consent boundary. Hooks and a VS Code plugin registry remain capability-honest empty states until their local runtimes exist; per-server MCP management remains tracked in the P1 extensibility epic.
 
 **Reference screenshot(s)**
 

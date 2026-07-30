@@ -10,19 +10,96 @@
  *   4. Discoverability — every setting key the extension actually reads is in
  *      ONE file; new settings get a typed entry here
  *
- * Trust-restricted accessors live in `utils/api.ts` (`getCloudApiEndpoint`,
- * `getGatewayUrl`) — they read `inspect().globalValue` only, refusing the
- * workspace override. This module covers the non-trust-sensitive keys.
- *
- * Settings NOT covered by this module:
- *   - `apiEndpoint` / `gatewayUrl` / `modelEndpoint` — see `utils/api.ts`
+ * Trust-restricted runtime accessors also live in `utils/api.ts`
+ * (`getCloudApiEndpoint`, `getGatewayUrl`). The settings panel uses the
+ * user-scoped accessors here so an untrusted workspace can never supply or
+ * receive a sensitive endpoint value through the webview.
  */
 
 import * as vscode from 'vscode';
-import { enforceAgentModeConsent } from '../features/permissions/agentModeConsent';
+import {
+  enforceAgentModeConsent,
+  setAgentModeWithConsent,
+  type ExtensionAgentMode,
+} from '../features/permissions/agentModeConsent';
+
+export type ExtensionAgentEffort = 'low' | 'medium' | 'high' | 'max';
+export type ExtensionTier =
+  | 'local'
+  | 'byok'
+  | 'free'
+  | 'basic'
+  | 'pro'
+  | 'max'
+  | 'max_15x'
+  | 'team'
+  | 'enterprise';
+
+/** Mutable settings exposed by the branded settings panel. */
+export interface MutableConfigValues {
+  apiEndpoint: string;
+  model: string;
+  cliPath: string;
+  streamingEnabled: boolean;
+  contextLines: number;
+  telemetryEnabled: boolean;
+  hoverEnabled: boolean;
+  codeLensEnabled: boolean;
+  autoApplyFixes: boolean;
+  'inlineCompletions.enabled': boolean;
+  'inlineCompletions.debounceMs': number;
+  'inlineCompletions.maxLength': number;
+  'agent.mode': ExtensionAgentMode;
+  'agent.effort': ExtensionAgentEffort;
+  'agent.thinking': boolean;
+  'mcp.enabled': boolean;
+  'desktopBridge.enabled': boolean;
+  'desktopBridge.port': number;
+  telemetryEndpoint: string;
+  useProviderStream: boolean;
+  gatewayUrl: string;
+  tier: ExtensionTier;
+}
+
+export type MutableConfigKey = keyof MutableConfigValues;
+export type ConfigSettingUpdate = {
+  [K in MutableConfigKey]: { key: K; value: MutableConfigValues[K] };
+}[MutableConfigKey];
+
+export const SETTINGS_PANEL_SETTING_KEYS = [
+  'apiEndpoint',
+  'model',
+  'cliPath',
+  'streamingEnabled',
+  'contextLines',
+  'telemetryEnabled',
+  'hoverEnabled',
+  'codeLensEnabled',
+  'autoApplyFixes',
+  'inlineCompletions.enabled',
+  'inlineCompletions.debounceMs',
+  'inlineCompletions.maxLength',
+  'agent.mode',
+  'agent.effort',
+  'agent.thinking',
+  'mcp.enabled',
+  'desktopBridge.enabled',
+  'desktopBridge.port',
+  'telemetryEndpoint',
+  'useProviderStream',
+  'gatewayUrl',
+  'tier',
+] as const satisfies readonly MutableConfigKey[];
+
+export interface ExtensionSettingsSnapshot {
+  values: MutableConfigValues & { currentTier: string };
+  workspaceOverrides: MutableConfigKey[];
+  workspaceTrusted: boolean;
+}
 
 /** Default values mirror those declared in `package.json` `contributes.configuration`. */
 const DEFAULTS = {
+  apiEndpoint: 'https://agiworkforce.com/api/llm/v1',
   agentPlanMode: false,
   agentMode: 'auto',
   agentEffort: 'medium',
@@ -32,6 +109,7 @@ const DEFAULTS = {
   // from the context menu and the sidebar. Opt-in via agiWorkforce.codeLensEnabled.
   codeLensEnabled: false,
   hoverEnabled: false,
+  autoApplyFixes: false,
   inlineCompletionsEnabled: false,
   inlineCompletionsDebounceMs: 300,
   inlineCompletionsMaxLength: 500,
@@ -47,13 +125,27 @@ const DEFAULTS = {
   tier: 'byok',
   currentTier: 'unknown',
   cliPath: 'agi',
+  gatewayUrl: 'https://api.agiworkforce.com',
 } as const;
 
 function get<T>(key: string, fallback: T): T {
   return vscode.workspace.getConfiguration('agiWorkforce').get<T>(key) ?? fallback;
 }
 
-/** Single-call helpers for the non-trust-sensitive settings. */
+function getUserScoped<T>(key: string, fallback: T): T {
+  const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<T>(key);
+  return inspected?.globalValue ?? inspected?.defaultValue ?? fallback;
+}
+
+function workspaceOverrides(): MutableConfigKey[] {
+  const configuration = vscode.workspace.getConfiguration('agiWorkforce');
+  return SETTINGS_PANEL_SETTING_KEYS.filter((key) => {
+    const inspected = configuration.inspect<unknown>(key);
+    return inspected?.workspaceValue !== undefined || inspected?.workspaceFolderValue !== undefined;
+  });
+}
+
+/** Single-call helpers and the typed settings-panel write boundary. */
 export const Config = {
   // ── Agent mode ──────────────────────────────────────────────────────────
   agentPlanMode(): boolean {
@@ -65,7 +157,7 @@ export const Config = {
    *  2. Otherwise, fall back to `agent.planMode` backwards-compat alias:
    *     `true` → 'plan', `false` → 'auto'.
    */
-  agentMode(): 'ask' | 'auto' | 'plan' | 'bypass' {
+  agentMode(): ExtensionAgentMode {
     const raw = get<string>('agent.mode', DEFAULTS.agentMode);
     if (raw === 'ask' || raw === 'auto' || raw === 'plan' || raw === 'bypass') {
       return enforceAgentModeConsent(raw);
@@ -73,7 +165,7 @@ export const Config = {
     // Backwards-compat: fall through to deprecated planMode alias
     return get<boolean>('agent.planMode', false) ? 'plan' : 'auto';
   },
-  agentEffort(): 'low' | 'medium' | 'high' | 'max' {
+  agentEffort(): ExtensionAgentEffort {
     const raw = get<string>('agent.effort', DEFAULTS.agentEffort);
     if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'max') return raw;
     return 'medium';
@@ -90,6 +182,9 @@ export const Config = {
   // ── CodeLens / inline completions ───────────────────────────────────────
   codeLensEnabled(): boolean {
     return get<boolean>('codeLensEnabled', DEFAULTS.codeLensEnabled);
+  },
+  autoApplyFixes(): boolean {
+    return get<boolean>('autoApplyFixes', DEFAULTS.autoApplyFixes);
   },
   inlineCompletionsEnabled(): boolean {
     return get<boolean>('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
@@ -113,6 +208,12 @@ export const Config = {
   },
   useProviderStream(): boolean {
     return get<boolean>('useProviderStream', DEFAULTS.useProviderStream);
+  },
+  apiEndpoint(): string {
+    return getUserScoped<string>('apiEndpoint', DEFAULTS.apiEndpoint);
+  },
+  gatewayUrl(): string {
+    return getUserScoped<string>('gatewayUrl', DEFAULTS.gatewayUrl);
   },
 
   // ── MCP + desktop bridge ────────────────────────────────────────────────
@@ -140,8 +241,22 @@ export const Config = {
    * Returns 'byok' (the default) when not set by the user.
    * The tierResolver uses this as priority-1 in its resolution chain.
    */
-  tier(): string {
-    return get<string>('tier', DEFAULTS.tier);
+  tier(): ExtensionTier {
+    const raw = get<string>('tier', DEFAULTS.tier);
+    if (
+      raw === 'local' ||
+      raw === 'byok' ||
+      raw === 'free' ||
+      raw === 'basic' ||
+      raw === 'pro' ||
+      raw === 'max' ||
+      raw === 'max_15x' ||
+      raw === 'team' ||
+      raw === 'enterprise'
+    ) {
+      return raw;
+    }
+    return DEFAULTS.tier;
   },
 
   /**
@@ -165,6 +280,53 @@ export const Config = {
       return inspected?.globalValue ?? inspected?.defaultValue ?? DEFAULTS.cliPath;
     }
     return get<string>('cliPath', DEFAULTS.cliPath);
+  },
+
+  settingsSnapshot(): ExtensionSettingsSnapshot {
+    return {
+      values: {
+        apiEndpoint: this.apiEndpoint(),
+        model: this.model(),
+        cliPath: this.cliPath(),
+        streamingEnabled: this.streamingEnabled(),
+        contextLines: this.contextLines(),
+        telemetryEnabled: this.telemetryEnabled(),
+        hoverEnabled: this.hoverEnabled(),
+        codeLensEnabled: this.codeLensEnabled(),
+        autoApplyFixes: this.autoApplyFixes(),
+        'inlineCompletions.enabled': this.inlineCompletionsEnabled(),
+        'inlineCompletions.debounceMs': this.inlineCompletionsDebounceMs(),
+        'inlineCompletions.maxLength': this.inlineCompletionsMaxLength(),
+        'agent.mode': this.agentMode(),
+        'agent.effort': this.agentEffort(),
+        'agent.thinking': this.agentThinking(),
+        'mcp.enabled': this.mcpEnabled(),
+        'desktopBridge.enabled': this.desktopBridgeEnabled(),
+        'desktopBridge.port': this.desktopBridgePort(),
+        telemetryEndpoint: this.telemetryEndpoint(),
+        useProviderStream: this.useProviderStream(),
+        gatewayUrl: this.gatewayUrl(),
+        tier: this.tier(),
+        currentTier: this.currentTier(),
+      },
+      workspaceOverrides: workspaceOverrides(),
+      workspaceTrusted: vscode.workspace.isTrusted,
+    };
+  },
+
+  /**
+   * Persist a validated setting at user scope. Agent mode is deliberately
+   * routed through the versioned bypass-consent boundary instead of writing
+   * directly.
+   */
+  async update(context: vscode.ExtensionContext, update: ConfigSettingUpdate): Promise<boolean> {
+    if (update.key === 'agent.mode') {
+      return setAgentModeWithConsent(context, update.value);
+    }
+    await vscode.workspace
+      .getConfiguration('agiWorkforce')
+      .update(update.key, update.value, vscode.ConfigurationTarget.Global);
+    return true;
   },
 } as const;
 
