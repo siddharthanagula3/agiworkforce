@@ -60,6 +60,8 @@ Shared message schemas belong in `packages/contracts/types`; reusable queue/runt
 
 Use `.env.example` as the template. Never commit service tokens, Neon credentials,
 production URLs with credentials, pairing secrets, or relay credentials.
+Production operators should export the same keys from their secret store and run
+`pnpm env:doctor -- --scope signaling --mode production` before deployment.
 
 ## Security, Privacy, Data Boundaries
 

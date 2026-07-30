@@ -1,9 +1,9 @@
 # Mobile continuity
 
-## Purpose
-
-Explain the existing Managed Cloud task lifecycle when an account first enters Cloud mode, and
-keep the explanation replayable from Settings → Capabilities.
+Status: Current
+Owner role: Mobile lead
+Last updated: 2026-07-30
+Purpose: Explain the existing Managed Cloud task lifecycle when an account first enters Cloud mode and keep the explanation replayable from Settings → Capabilities.
 
 ## Boundaries
 

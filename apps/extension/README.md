@@ -90,6 +90,7 @@ The build reads the public values documented in `.env.example`:
 Copy `.env.local.example` to `.env.local` for local development. Production
 packages require a live Clerk key, both Clerk origins, and the CRX public key;
 the package script fails closed when they are absent or malformed.
+Run `pnpm env:doctor -- --scope extension --mode production` before packaging.
 
 ## Cloud Account Contract
 
