@@ -224,6 +224,7 @@ describe('getWebviewContent — structural smoke', () => {
     expect(doc.querySelector('#messages')?.getAttribute('role')).toBe('log');
     expect(doc.querySelector('#messages')?.getAttribute('aria-live')).toBe('polite');
     expect(doc.querySelector('#plusMenuUpload')?.tagName).toBe('BUTTON');
+    expect(doc.querySelector('#plusMenuBrowse')?.tagName).toBe('BUTTON');
     expect(doc.querySelector('#plusMenuPlanMode')?.tagName).toBe('BUTTON');
     expect(doc.querySelector('#plusBtn')?.getAttribute('aria-label')).toBe('Attach or use tools');
     expect(doc.querySelector('#meterDismissBtn')?.getAttribute('aria-label')).toBe(
@@ -247,6 +248,10 @@ describe('getWebviewContent — structural smoke', () => {
     expect(doc.querySelector('#composerHint')?.textContent).toContain('to send');
     expect(doc.querySelector('#plusMenuLabel')?.textContent).toBe('Add to this chat');
     expect(doc.querySelector('#plusMenuUpload')?.textContent).toContain('Workspace files');
+    expect(doc.querySelector('#plusMenuBrowse')?.textContent).toContain('Browse the web');
+    expect(doc.querySelector('#plusMenuBrowse')?.textContent).toContain(
+      'Local privacy mode refuses network',
+    );
     expect(doc.querySelector('#plusMenuPlanMode')?.textContent).toContain('Plan mode');
     expect(doc.querySelector('#plusMenuActions')?.textContent).toContain('Tools and actions');
   });
