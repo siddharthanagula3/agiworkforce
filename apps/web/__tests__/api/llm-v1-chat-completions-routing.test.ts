@@ -316,7 +316,10 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'pro-user-id', email: 'pro@example.com' });
 
     mockGetSubscription.mockResolvedValue(makeProSubscription());
-    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'pro-user-id' });
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      db: { query: vi.fn(async () => []) },
+      userId: 'pro-user-id',
+    });
 
     managedUsageMocks.reserve.mockImplementation(async (input) => ({
       db: input.db,

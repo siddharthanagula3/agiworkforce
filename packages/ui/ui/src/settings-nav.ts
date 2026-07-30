@@ -17,6 +17,7 @@ import {
   Code2,
   Globe,
   Lock,
+  EyeOff,
   Clock3,
   Activity,
   Users,
@@ -60,6 +61,7 @@ export type SettingsNavKey =
   // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
   // desktop panel renderer — see apps/desktop settings-ia contract test).
   | 'security'
+  | 'safety'
   | 'team'
   | 'reflect'
   | 'time-focus'
@@ -277,6 +279,7 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'usage', label: 'Usage', icon: Gauge },
       { key: 'capabilities', label: 'Capabilities', icon: Zap },
       { key: 'security', label: 'Security', icon: Lock },
+      { key: 'safety', label: 'Safety', icon: EyeOff },
       { key: 'notifications', label: 'Notifications', icon: Bell },
       { key: 'reflect', label: 'Reflect', icon: Activity },
       { key: 'time-focus', label: 'Time and focus', icon: Clock3 },

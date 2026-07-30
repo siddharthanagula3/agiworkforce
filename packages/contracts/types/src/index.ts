@@ -39,6 +39,9 @@ export * from './voice';
 // Cross-surface break reminders and quiet-hours settings
 export * from './time-focus';
 
+// Deterministic strict-content policy shared by Local and Managed Cloud sends.
+export * from './content-safety';
+
 // Shared conversation and message contracts
 export * from './conversation';
 

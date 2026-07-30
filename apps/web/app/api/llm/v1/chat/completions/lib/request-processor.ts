@@ -101,6 +101,10 @@ import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-att
 import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 // GOV-18: real `X-Quota-Warning` derivation, replacing the hardcoded null.
 import { buildQuotaWarningHeader } from '@/lib/server/managed-usage-policy';
+import {
+  enforceManagedContentSafetyPreference,
+  ManagedContentSafetyPolicyError,
+} from '@/lib/services/managed-content-safety-service';
 
 // OpenAI-compatible request schema
 export const ChatCompletionRequestSchema = z.object({
@@ -1316,6 +1320,51 @@ export async function processRequest(
         ),
       };
     }
+  }
+
+  try {
+    userScopedDb ??= await getUserScopedDb(request);
+    if (userScopedDb.userId !== userId) {
+      throw new ManagedContentSafetyPolicyError('Managed content safety owner mismatch');
+    }
+    const latestUserPrompt = extractTextContent(
+      [...chatRequest.messages].reverse().find((message) => message.role === 'user')?.content ?? '',
+    );
+    const contentSafety = await enforceManagedContentSafetyPreference(userScopedDb.db, {
+      userId,
+      prompt: latestUserPrompt,
+    });
+    if (!contentSafety.allowed) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: contentSafety.refusal,
+              type: 'invalid_request_error',
+              code: 'reduce_sensitive_content',
+            },
+          },
+          { status: 422 },
+        ),
+      };
+    }
+  } catch (error) {
+    logger.error({ error, userId }, 'Managed content safety preference could not be enforced');
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message:
+              'Your content safety preference could not be verified. No model request was sent.',
+            type: 'server_error',
+            code: 'content_safety_preference_unavailable',
+          },
+        },
+        { status: 503 },
+      ),
+    };
   }
 
   try {
