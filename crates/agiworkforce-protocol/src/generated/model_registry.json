@@ -2683,7 +2683,13 @@
       }
     },
     "legacyTiers": {
-      "economy": ["gpt-5.4-mini", "gpt-5.6-luna", "gemini-3.5-flash-lite", "gemini-3.6-flash"],
+      "economy": [
+        "gpt-5.4-mini",
+        "gpt-5.6-luna",
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "qwen-3.5-flash"
+      ],
       "pro_additions": [
         "gpt-5.6-terra",
         "claude-sonnet-5",
@@ -2691,7 +2697,6 @@
         "deepseek-v4-flash",
         "deepseek-v4-pro",
         "qwen-3.7-plus",
-        "qwen-3.5-flash",
         "glm-5.2",
         "kimi-k3"
       ],

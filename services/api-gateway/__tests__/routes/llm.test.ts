@@ -176,7 +176,7 @@ describe('llm route — every Basic provider has a representative model', () => 
       if (provider) providersInBasic.add(provider);
     }
 
-    expect([...providersInBasic].sort()).toEqual(['anthropic', 'google', 'openai']);
+    expect([...providersInBasic].sort()).toEqual(['google', 'openai', 'qwen']);
   });
 });
 
