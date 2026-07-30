@@ -16,15 +16,20 @@ import { type DiffDecorationProvider } from './diffDecorationProvider';
 
 export class ChatEditorPanel {
   public static readonly viewType = 'agi-workforce.chatPanel';
-  private static instance: ChatEditorPanel | undefined;
+  private static readonly instances = new Set<ChatEditorPanel>();
+  private static mostRecent: ChatEditorPanel | undefined;
+  private static nextPanelNumber = 1;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly stateManager: ChatStateManager;
 
   static __resetForTests(): void {
-    ChatEditorPanel.instance = undefined;
+    ChatEditorPanel.instances.clear();
+    ChatEditorPanel.mostRecent = undefined;
+    ChatEditorPanel.nextPanelNumber = 1;
   }
 
-  static createOrShow(
+  /** Create an independent developer conversation in a new editor tab. */
+  static createNew(
     extensionUri: vscode.Uri,
     secrets: vscode.SecretStorage,
     context: vscode.ExtensionContext,
@@ -33,16 +38,14 @@ export class ChatEditorPanel {
     diffDecorationProvider: DiffDecorationProvider,
   ): ChatEditorPanel {
     const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One;
-    if (ChatEditorPanel.instance !== undefined) {
-      ChatEditorPanel.instance.panel.reveal(column);
-      return ChatEditorPanel.instance;
-    }
-    const panel = vscode.window.createWebviewPanel(ChatEditorPanel.viewType, 'AGI Chat', column, {
+    const panelNumber = ChatEditorPanel.nextPanelNumber++;
+    const title = panelNumber === 1 ? 'AGI Chat' : `AGI Chat ${panelNumber}`;
+    const panel = vscode.window.createWebviewPanel(ChatEditorPanel.viewType, title, column, {
       enableScripts: true,
       retainContextWhenHidden: true,
       localResourceRoots: [extensionUri],
     });
-    ChatEditorPanel.instance = new ChatEditorPanel(
+    const instance = new ChatEditorPanel(
       panel,
       extensionUri,
       secrets,
@@ -51,7 +54,33 @@ export class ChatEditorPanel {
       conversationTreeProvider,
       diffDecorationProvider,
     );
-    return ChatEditorPanel.instance;
+    ChatEditorPanel.instances.add(instance);
+    ChatEditorPanel.mostRecent = instance;
+    return instance;
+  }
+
+  /** Reveal the most recently active editor chat, creating one when none exists. */
+  static revealMostRecentOrCreate(
+    extensionUri: vscode.Uri,
+    secrets: vscode.SecretStorage,
+    context: vscode.ExtensionContext,
+    localRuntimes: LocalRuntimePool,
+    conversationTreeProvider: ConversationTreeProvider,
+    diffDecorationProvider: DiffDecorationProvider,
+  ): ChatEditorPanel {
+    if (ChatEditorPanel.mostRecent !== undefined) {
+      const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One;
+      ChatEditorPanel.mostRecent.panel.reveal(column);
+      return ChatEditorPanel.mostRecent;
+    }
+    return ChatEditorPanel.createNew(
+      extensionUri,
+      secrets,
+      context,
+      localRuntimes,
+      conversationTreeProvider,
+      diffDecorationProvider,
+    );
   }
 
   private constructor(
@@ -96,12 +125,21 @@ export class ChatEditorPanel {
           parsed as unknown as Parameters<ChatStateManager['handleMessage']>[0],
         );
       }),
+      this.panel.onDidChangeViewState((event) => {
+        if (event.webviewPanel.active) ChatEditorPanel.mostRecent = this;
+      }),
     );
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
   }
 
   private dispose(): void {
-    ChatEditorPanel.instance = undefined;
+    ChatEditorPanel.instances.delete(this);
+    if (ChatEditorPanel.instances.size === 0) {
+      ChatEditorPanel.mostRecent = undefined;
+      ChatEditorPanel.nextPanelNumber = 1;
+    } else if (ChatEditorPanel.mostRecent === this) {
+      ChatEditorPanel.mostRecent = Array.from(ChatEditorPanel.instances).at(-1);
+    }
     this.stateManager.cancelInFlight();
     for (const disposable of this.disposables) disposable.dispose();
     this.disposables.length = 0;

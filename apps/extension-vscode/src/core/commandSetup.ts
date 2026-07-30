@@ -252,7 +252,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.openChatInEditor', () => {
-      ChatEditorPanel.createOrShow(
+      ChatEditorPanel.createNew(
         context.extensionUri,
         context.secrets,
         context,
@@ -263,7 +263,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.agentMode', () => {
-      ChatEditorPanel.createOrShow(
+      ChatEditorPanel.revealMostRecentOrCreate(
         context.extensionUri,
         context.secrets,
         context,
