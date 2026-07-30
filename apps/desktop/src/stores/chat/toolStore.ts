@@ -629,8 +629,16 @@ export const useToolStore = create<ToolState>()(
               undefined,
               'tool/addApprovalRequest',
             );
-            // Start the approval timeout timer after the state update
-            get().startApprovalTimeout(request.id);
+            // Native MCP confirmations are owned by the Rust request channel.
+            // Starting the configurable frontend timer here can hide the prompt
+            // early or, worse, apply an "auto-approve" UI policy while Rust is
+            // still waiting. The backend emits tool:confirmation_timeout after
+            // its fixed fail-closed deadline, and that event removes the prompt.
+            if (request.type === 'mcp_tool') {
+              get().clearApprovalTimeout(request.id);
+            } else {
+              get().startApprovalTimeout(request.id);
+            }
           },
 
           approveOperation: (id) => {
@@ -1014,6 +1022,14 @@ export const useToolStore = create<ToolState>()(
             const approval = get().pendingApprovals.find((a) => a.id === approvalId);
             if (!approval) {
               // Approval was already handled (approved/rejected manually)
+              return;
+            }
+
+            // A native MCP request may only be resolved by
+            // respond_tool_confirmation or the backend timeout event. Never
+            // apply the configurable UI timeout policy to this trust boundary.
+            if (approval.type === 'mcp_tool') {
+              get().clearApprovalTimeout(approvalId);
               return;
             }
 

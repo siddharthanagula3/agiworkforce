@@ -1512,6 +1512,55 @@ mod tests {
         assert!(state.get_remembered_choice("file_read").is_none());
     }
 
+    #[tokio::test]
+    async fn pending_confirmation_channel_preserves_approve_and_deny_decisions() {
+        for approved in [true, false] {
+            let state = ToolConfirmationState::new();
+            let request_id = format!("decision-{approved}");
+            let receiver = state.register_pending(request_id.clone());
+
+            state
+                .resolve_pending(ToolConfirmationResponse {
+                    request_id: request_id.clone(),
+                    approved,
+                    remember_choice: false,
+                    reason: (!approved).then(|| "Denied by user".to_string()),
+                })
+                .expect("registered confirmation should resolve");
+
+            let response = receiver
+                .await
+                .expect("confirmation receiver should stay connected");
+            assert_eq!(response.request_id, request_id);
+            assert_eq!(response.approved, approved);
+            assert_eq!(state.pending_count(), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn unanswered_confirmation_expires_without_an_approval() {
+        let state = ToolConfirmationState::new();
+        let request_id = "unanswered-confirmation".to_string();
+        let receiver = state.register_pending(request_id.clone());
+
+        let result = tokio::time::timeout(std::time::Duration::from_millis(1), receiver).await;
+        assert!(result.is_err(), "no response must reach the timeout path");
+
+        state.cancel_pending(&request_id);
+        assert_eq!(state.pending_count(), 0);
+        assert!(
+            state
+                .resolve_pending(ToolConfirmationResponse {
+                    request_id,
+                    approved: true,
+                    remember_choice: false,
+                    reason: None,
+                })
+                .is_err(),
+            "a timed-out request must not be approvable afterwards"
+        );
+    }
+
     #[test]
     fn test_safety_tier_lookup() {
         let state = ToolConfirmationState::new();
