@@ -221,6 +221,16 @@ export function ScheduleForm({
           {errors.prompt ? (
             <Text className="text-xs text-red-400 mt-1">{errors.prompt}</Text>
           ) : null}
+          <View
+            accessibilityLabel="Schedules use saved prompt text only"
+            className="mt-3 rounded-lg border border-white/10 bg-surface-elevated p-3"
+          >
+            <Text className="text-xs font-semibold text-white">Prompt-only context</Text>
+            <Text className="mt-1 text-xs leading-4 text-white/50">
+              Camera, Photos, Files, and chat attachments are not saved or reused when this schedule
+              runs. Put essential context in the prompt.
+            </Text>
+          </View>
         </View>
 
         {/* Model selector */}

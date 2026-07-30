@@ -54,6 +54,12 @@ describe('Mobile schedule form', () => {
     expect(screen.queryByLabelText('Recurrence: Custom')).toBeNull();
     expect(screen.queryByLabelText('Recurrence: Interval')).toBeNull();
     expect(screen.getByDisplayValue('2030-07-15')).toBeTruthy();
+    expect(screen.getByLabelText('Schedules use saved prompt text only')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Camera, Photos, Files, and chat attachments are not saved or reused when this schedule runs. Put essential context in the prompt.',
+      ),
+    ).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('Create Schedule'));
 
@@ -65,6 +71,7 @@ describe('Mobile schedule form', () => {
         timezone: 'America/New_York',
       }),
     );
+    expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('attachments');
   });
 
   it('does not silently rewrite a legacy unsupported cadence when editing', () => {
