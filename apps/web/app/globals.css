@@ -6872,9 +6872,72 @@
 
 [data-design='agi'] .agi-device-auth-alert a,
 [data-design='agi'] .agi-device-auth-note a,
-[data-design='agi'] .agi-device-auth-cancel a {
+[data-design='agi'] .agi-device-auth-cancel a,
+[data-design='agi'] .agi-device-auth-legal a {
   color: var(--agi-ink);
   font-weight: 600;
+}
+
+[data-design='agi'] .agi-device-auth-account {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--agi-rule-strong);
+  border-radius: 0.75rem;
+  background: var(--agi-bg-2);
+}
+
+[data-design='agi'] .agi-device-auth-account div {
+  display: grid;
+  min-width: 0;
+}
+
+[data-design='agi'] .agi-device-auth-account span,
+[data-design='agi'] .agi-device-auth-request > span {
+  color: var(--agi-ink-quiet);
+  font-family: var(--agi-font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+
+[data-design='agi'] .agi-device-auth-account strong,
+[data-design='agi'] .agi-device-auth-account small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-design='agi'] .agi-device-auth-account strong {
+  color: var(--agi-ink);
+  font-size: 0.9rem;
+}
+
+[data-design='agi'] .agi-device-auth-account small {
+  color: var(--agi-ink-2);
+  font-size: 0.76rem;
+}
+
+[data-design='agi'] .agi-device-auth-account button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--agi-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-design='agi'] .agi-device-auth-account button:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 [data-design='agi'] .agi-device-auth-form {
@@ -6924,6 +6987,63 @@
   color: var(--agi-success);
 }
 
+[data-design='agi'] .agi-device-auth-request {
+  padding: 0.875rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--agi-success) 35%, var(--agi-rule));
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--agi-success) 7%, var(--agi-bg-2));
+}
+
+[data-design='agi'] .agi-device-auth-request h2 {
+  margin: 0.2rem 0 0.75rem;
+  color: var(--agi-ink);
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+[data-design='agi'] .agi-device-auth-request p {
+  margin: 0 0 0.5rem;
+  color: var(--agi-ink-2);
+  font-size: 0.78rem;
+}
+
+[data-design='agi'] .agi-device-auth-request ul {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-design='agi'] .agi-device-auth-request li {
+  display: grid;
+  gap: 0.1rem;
+  padding-left: 1rem;
+  position: relative;
+}
+
+[data-design='agi'] .agi-device-auth-request li::before {
+  position: absolute;
+  top: 0.35rem;
+  left: 0;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--agi-success);
+  content: '';
+}
+
+[data-design='agi'] .agi-device-auth-request li strong {
+  color: var(--agi-ink);
+  font-size: 0.8rem;
+}
+
+[data-design='agi'] .agi-device-auth-request li small {
+  color: var(--agi-ink-2);
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
 [data-design='agi'] .agi-device-auth-submit {
   justify-content: center;
   min-height: 3rem;
@@ -6956,6 +7076,21 @@
   color: var(--agi-ink-2);
   font-size: 0.875rem;
   text-align: center;
+}
+
+[data-design='agi'] .agi-device-auth-legal {
+  margin: 0.75rem 0 0;
+  color: var(--agi-ink-quiet);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (max-width: 440px) {
+  [data-design='agi'] .agi-device-auth-account {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 /* ── inline anonymous waitlist form (/waitlist page) ────────────────── */

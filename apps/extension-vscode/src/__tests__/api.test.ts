@@ -13,6 +13,7 @@ import {
   getAccountAuthState,
   getAccountToken,
   getApiKey,
+  parseAccountIdentityResponse,
   parseTierInfoResponse,
   setAccountToken,
   setApiKey,
@@ -143,6 +144,67 @@ describe('AGI Cloud subscription hydration', () => {
       subscriptionStatus: 'past_due',
       usagePercentage: 82,
     });
+  });
+});
+
+describe('AGI Cloud account identity projection', () => {
+  const meResponse = {
+    id: 'user-123',
+    email: 'ada@example.com',
+    name: 'Ada Lovelace',
+    profile: {
+      display_name: 'Ada L.',
+      preferred_name: 'Ada',
+      work_description: null,
+    },
+    avatar_url: null,
+    created_at: null,
+    updated_at: 1_750_000_000,
+    plan: {
+      tier: 'pro',
+      display_name: 'Pro',
+      status: 'active',
+      current_period_end: null,
+    },
+    feature_flags: {
+      beta_features: true,
+      advanced_model_access: true,
+    },
+    routing_preferences: {},
+  };
+
+  it('uses canonical profile identity and labels an individual plan', () => {
+    expect(parseAccountIdentityResponse(meResponse)).toEqual({
+      displayName: 'Ada L.',
+      email: 'ada@example.com',
+      accountType: 'Personal account',
+      planName: 'Pro',
+      tier: 'pro',
+    });
+  });
+
+  it('labels Team and Enterprise plans as organization accounts', () => {
+    expect(
+      parseAccountIdentityResponse({
+        ...meResponse,
+        plan: { ...meResponse.plan, tier: 'team', display_name: 'Team' },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        accountType: 'Organization account',
+        planName: 'Team',
+        tier: 'team',
+      }),
+    );
+  });
+
+  it('rejects malformed identity responses instead of showing untrusted fields', () => {
+    expect(
+      parseAccountIdentityResponse({
+        ...meResponse,
+        email: 42,
+      }),
+    ).toBeUndefined();
   });
 });
 

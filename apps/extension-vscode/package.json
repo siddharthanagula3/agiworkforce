@@ -896,6 +896,7 @@
   },
   "dependencies": {
     "@agiworkforce/agent-core": "workspace:*",
+    "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",

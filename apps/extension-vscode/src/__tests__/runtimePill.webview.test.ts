@@ -75,6 +75,26 @@ function postUsageMeter(source: string): void {
   );
 }
 
+function postSignedInAccount(): void {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        type: 'accountStatus',
+        payload: {
+          status: 'signed-in',
+          identity: {
+            displayName: 'Ada Lovelace',
+            email: 'ada@example.com',
+            accountType: 'Personal account',
+            planName: 'Pro',
+            tier: 'pro',
+          },
+        },
+      },
+    }),
+  );
+}
+
 function pill() {
   return {
     root: document.getElementById('runtimePill'),
@@ -140,5 +160,27 @@ describe('header trust-boundary pill', () => {
     // Never silently claim "Local" for a source this webview does not know.
     expect(pill().label?.textContent).toBe('Cloud');
     expect(pill().root?.dataset.boundary).toBe('cloud');
+  });
+
+  it('shows the Managed Cloud plan owner in the boundary and account tooltips', () => {
+    executeWebviewScript();
+    postUsageMeter('managed-plan');
+    postSignedInAccount();
+
+    expect(pill().root?.title).toContain('Account: Ada Lovelace (ada@example.com)');
+    expect(pill().root?.title).toContain('Pro plan');
+    const accountButton = document.getElementById('accountBtn');
+    expect(accountButton?.title).toContain('Ada Lovelace (ada@example.com)');
+    expect(accountButton?.title).toContain('Personal account · Pro plan');
+    expect(accountButton?.getAttribute('aria-label')).toBe(accountButton?.title);
+  });
+
+  it('identifies the signed-in account in BYOK without claiming it pays the provider', () => {
+    executeWebviewScript();
+    postUsageMeter('user-api-key');
+    postSignedInAccount();
+
+    expect(pill().root?.title).toContain('AGI Cloud sign-in: Ada Lovelace');
+    expect(pill().root?.title).toContain('not used for provider billing');
   });
 });
