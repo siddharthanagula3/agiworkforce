@@ -7,7 +7,7 @@
 
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Alert, Clipboard, Image, View } from 'react-native';
-import { Copy, Check, LogOut, Smartphone, Trash2, UserRound } from 'lucide-react-native';
+import { Copy, Check, LogOut, Mail, Smartphone, Trash2, UserRound } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -19,6 +19,7 @@ import {
 } from '@/src/features/settings/common';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
+import { openExternalUrl } from '@/lib/safeOpenURL';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -67,6 +68,31 @@ export default function CloudAccountScreen() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [userId]);
+
+  const handleChangeEmail = useCallback(() => {
+    const account = captureVisibleAccount();
+    if (!account || !userEmail) return;
+    Alert.alert(
+      'Change your email',
+      `To change ${userEmail}, continue to AGI Workforce on the web.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: () => {
+            if (!isCloudAccountEpochCurrent(account)) {
+              Alert.alert(
+                'Account changed',
+                'This email-change confirmation is no longer valid. Open it again for the current account.',
+              );
+              return;
+            }
+            void openExternalUrl('https://agiworkforce.com/settings/account');
+          },
+        },
+      ],
+    );
+  }, [captureVisibleAccount, userEmail]);
 
   const handleSignOut = useCallback(() => {
     const account = captureVisibleAccount();
@@ -220,6 +246,16 @@ export default function CloudAccountScreen() {
         body={userEmail ? `Signed in as ${userEmail}` : 'Manage your AGI Cloud account.'}
         icon={UserRound}
       />
+
+      <SettingsGroup>
+        <SettingsRow
+          label="Email"
+          icon={Mail}
+          value={userEmail ?? 'Unavailable'}
+          onPress={userEmail ? handleChangeEmail : undefined}
+          isLast
+        />
+      </SettingsGroup>
 
       {/* Current session */}
       <SettingsGroup>

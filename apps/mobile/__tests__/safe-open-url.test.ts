@@ -37,6 +37,8 @@ describe('isAllowedExternalUrl — accepts', () => {
     'https://stripe.com/customers/cus_xyz',
     'https://billing.stripe.com/p/login/abc',
     'https://checkout.stripe.com/pay/cs_xyz',
+    'https://apps.apple.com/account/subscriptions',
+    'https://play.google.com/store/account/subscriptions',
   ])('accepts %s', (url) => {
     expect(isAllowedExternalUrl(url)).toBe(true);
   });
@@ -75,6 +77,8 @@ describe('isAllowedExternalUrl — rejects', () => {
     ['lookalike domain', 'https://agiworkforce.evil.com/billing'],
     ['suffix-spoof of stripe', 'https://attacker-stripe.com/checkout'],
     ['suffix-spoof of agiworkforce', 'https://attacker-agiworkforce.com/x'],
+    ['Apple sibling host', 'https://developer.apple.com/account/subscriptions'],
+    ['Google sibling host', 'https://accounts.google.com/store/account/subscriptions'],
     ['prefix-spoof', 'https://stripeagiworkforce.com/x'],
   ])('rejects spoof: %s', (_label, url) => {
     expect(isAllowedExternalUrl(url)).toBe(false);

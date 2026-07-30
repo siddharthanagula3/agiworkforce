@@ -22,19 +22,26 @@
  * enforces a strict allowlist:
  *   - protocol must be exactly `https:`
  *   - hostname must equal `agiworkforce.com`, end in `.agiworkforce.com`,
- *     end in `.stripe.com`, or equal `stripe.com` (Stripe Customer Portal
- *     uses subdomains like billing.stripe.com).
+ *     end in `.stripe.com`, equal `stripe.com`, or equal one of the two
+ *     first-party subscription-management hosts used by Apple and Google.
  *
  * Returns `true` if the URL passed validation AND `Linking.openURL`
  * succeeded; `false` otherwise. Callers can use the boolean to fall back
  * to a static URL or show an error.
  *
  * Stripe is included because the portal flow needs to land on
- * `billing.stripe.com`; AGI account routes stay on agiworkforce.com.
+ * `billing.stripe.com`; `apps.apple.com` and `play.google.com` are included
+ * only as exact hosts for native subscription management. AGI account routes
+ * stay on agiworkforce.com.
  */
 import * as Linking from 'expo-linking';
 
-const ALLOWED_HOSTS_EXACT: ReadonlySet<string> = new Set(['agiworkforce.com', 'stripe.com']);
+const ALLOWED_HOSTS_EXACT: ReadonlySet<string> = new Set([
+  'agiworkforce.com',
+  'stripe.com',
+  'apps.apple.com',
+  'play.google.com',
+]);
 
 const ALLOWED_HOST_SUFFIXES: ReadonlyArray<string> = ['.agiworkforce.com', '.stripe.com'];
 

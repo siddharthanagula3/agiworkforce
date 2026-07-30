@@ -23,7 +23,7 @@ import {
   SYNCED_APP_SURFACES,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
-import type { MeResponse } from '@agiworkforce/cloud-contracts';
+import type { MeResponse, MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import {
@@ -35,6 +35,23 @@ const PatchMeSchema = z.object({
   display_name: z.string().min(1).max(120).optional(),
   avatar_url: z.string().url().nullable().optional(),
 });
+
+function resolveSubscriptionSource(
+  subscription:
+    | {
+        stripe_subscription_id?: string | null;
+        apple_original_transaction_id?: string | null;
+        google_purchase_token?: string | null;
+      }
+    | null
+    | undefined,
+): MeSubscriptionSource {
+  if (!subscription) return 'none';
+  if (subscription.stripe_subscription_id) return 'stripe';
+  if (subscription.apple_original_transaction_id) return 'apple';
+  if (subscription.google_purchase_token) return 'google';
+  return 'manual';
+}
 
 async function handleGetMe(request: NextRequest) {
   // Rate limiting
@@ -166,6 +183,7 @@ async function handleGetMe(request: NextRequest) {
       current_period_end: subscription?.current_period_end
         ? new Date(subscription.current_period_end).getTime() / 1000
         : null,
+      subscription_source: resolveSubscriptionSource(subscription),
     };
 
     // Typed against the shared /api/me contract (packages/services

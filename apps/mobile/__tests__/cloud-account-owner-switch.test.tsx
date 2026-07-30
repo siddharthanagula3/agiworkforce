@@ -34,6 +34,11 @@ jest.mock('../services/api', () => ({
   },
 }));
 
+const mockOpenExternalUrl = jest.fn();
+jest.mock('../lib/safeOpenURL', () => ({
+  openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
+}));
+
 jest.mock('../src/ui/theme', () => ({
   useThemeColors: () => ({
     surfaceElevated: '#111111',
@@ -88,6 +93,7 @@ jest.mock('lucide-react-native', () => {
     Copy: Icon,
     Check: Icon,
     LogOut: Icon,
+    Mail: Icon,
     Smartphone: Icon,
     Trash2: Icon,
     UserRound: Icon,
@@ -149,6 +155,24 @@ describe('Cloud Account destructive action ownership', () => {
       'Account changed',
       expect.stringContaining('no longer valid'),
     );
+  });
+
+  it('confirms the current email before handing account management to Web', () => {
+    render(<CloudAccountScreen />);
+    fireEvent.press(screen.getByLabelText('Email'));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Change your email',
+      'To change a@example.com, continue to AGI Workforce on the web.',
+      expect.any(Array),
+    );
+    const call = (Alert.alert as jest.Mock).mock.calls.findLast(
+      ([title]) => title === 'Change your email',
+    );
+    const buttons = call?.[2] as Array<{ text?: string; onPress?: () => void }>;
+    buttons.find((button) => button.text === 'Continue')?.onPress?.();
+
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/account');
   });
 
   it('does not sign out account B when account A’s deletion response resolves late', async () => {

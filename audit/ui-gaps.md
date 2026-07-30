@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 178e3d9d82194b9148539f4a0c4ddc362bd5e4611264045cd82b40e5a6e89e41 -->
+<!-- ui-gaps-csv-sha256: d9a854d129efd8e39b88fc3f9be6c9423fe259a98c525d3c4464a6044d93499a -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 116 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 113 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  320 |
+| Open        |  317 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   21 |
+| Done        |   24 |
 | Not Planned |    0 |
 
 ## P0
@@ -303,70 +303,70 @@ Completed. Keep SETTINGS_PANEL_SETTING_KEYS in parity with every non-deprecated 
 
 ## P1
 
-### GAP-013 — No change-email flow and no 'continue on the web' confirm dialog
+### GAP-013 — Mobile exposes an actionable and account-safe change-email handoff
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Account > Change email confirm dialog
 
 **Gap**
 
-The reference makes the Email row actionable: tapping it raises 'Change your email — To change <address>, continue to ChatGPT on the web.' with Cancel/Continue, so the capability is discoverable even though it is completed elsewhere. In agiworkforce the Email row opens a read-only account screen and there is no way, in-app or by hand-off, to change the account email.
+The Mobile Cloud Account screen now presents Email as a first-class settings row. Tapping it names the current address in a cancelable confirmation and Continue opens the authenticated Web account settings. The captured Cloud account epoch is revalidated before opening the handoff, so a stale confirmation cannot act after an account switch.
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-account/index.tsx (email rendered as text only; rows are Current session, Copy User ID, Log Out, Delete Account); grep 'change.\*email|updateEmail' across apps/mobile/src — no match
+apps/mobile/src/features/settings/cloud-account/index.tsx mounts the Email SettingsRow and Change your email Alert with Cancel and Continue, then revalidates captureVisibleAccount before calling openExternalUrl for /settings/account. cloud-account-owner-switch.test.tsx verifies the current-address copy and Web handoff.
 
 **Suggested fix**
 
-Make the Email row tappable and show an Alert with the current address, Cancel and Continue, where Continue opens the web account settings via openExternalUrl; once the API exists, replace it with an in-app verify-new-address flow.
+Completed. Keep the captured-account revalidation on the handoff and replace the Web destination only when Mobile owns a complete verify-new-address lifecycle.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/069-chatgpt-ios-settings-account-modal-change-email-confirm.png`
 
-### GAP-014 — Restore purchases gives no success or 'nothing to restore' feedback
+### GAP-014 — Restore purchases reports every terminal outcome and offers retry
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-state
 - **Reference:** ChatGPT · iOS · Billing > Restore purchases result
 
 **Gap**
 
-In the reference, Restore purchases always resolves into a modal that tells the user what happened (here: the subscription lives on another platform, OK-only). In agiworkforce the restore flow marks success silently — the row label reverts from 'Restoring…' and only an error path renders text — so a restore that finds zero purchases is indistinguishable from a successful one.
+Restore purchases now returns a typed terminal outcome instead of silently reverting the row label. Mobile shows a named restored-plan alert, an Apple ID or Google Play no-purchases alert, or a failure alert with a real retry action while retaining the existing inline error as persistent fallback.
 
 **Evidence**
 
-apps/mobile/src/features/billing/useIapPurchaseFlow.ts:214-247 (markSuccess with no user-facing message); apps/mobile/src/features/settings/cloud-billing/index.tsx:84-93 (only status==='error' renders text)
+apps/mobile/src/features/billing/useIapPurchaseFlow.ts returns restored, none, failed, or account-changed outcomes after store reconciliation and server verification. apps/mobile/src/features/settings/cloud-billing/index.tsx renders platform-aware Alerts and retries the restore operation. use-iap-purchase-flow.test.tsx and cloud-billing-page.test.tsx cover restored tiers, zero purchases, failure, and retry.
 
 **Suggested fix**
 
-After restore, show an Alert for each outcome: purchases restored (naming the plan), no purchases found for this Apple ID, or failure with a retry; keep the inline error text as the persistent fallback.
+Completed. Keep server verification authoritative before reporting restoration success and preserve explicit no-result and retry states when the native IAP library changes.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/071-chatgpt-ios-settings-billing-modal-restore-purchases-ok-only.png`
 
-### GAP-015 — No 'purchased on another platform' guard — user can be double-charged via IAP
+### GAP-015 — Mobile prevents cross-platform duplicate subscription purchases
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-state
 - **Reference:** ChatGPT · iOS · Billing > cross-platform subscription block
 
 **Gap**
 
-The reference detects that the active subscription was bought outside the App Store and blocks in-app changes with an explicit dialog naming where to manage it (OK / Learn more). agiworkforce stores no purchase platform: with FEATURES.iap on, Subscription/Manage/Upgrade always open the native paywall sheet, so a user who already pays through Stripe on web can start a second, parallel StoreKit subscription with no warning.
+The entitlement response now names the server-authoritative subscription owner as none, Stripe, Apple, Google, or manual. Mobile persists that owner and fails closed before native purchase or plan-change entry points whenever an entitled subscription does not belong to the current device store. The blocking dialog names the management surface, explains the double-charge risk, and links to Web, App Store, or Google Play management when available.
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-billing/index.tsx:154-173 (handleUpgrade/handleManageBilling always expand the paywall sheet); apps/mobile/src/features/billing/store.ts (tier/status only, no billing source); grep "billingSource|subscriptionSource|'apple'|'stripe'" — no platform field
+packages/contracts/cloud-contracts/src/me.ts and apps/web/app/api/me/route.ts define and emit plan.subscription_source from persisted billing identifiers. apps/mobile/src/features/billing/store.ts persists the owner; subscriptionSource.ts centralizes current-store comparison, labels, and management links. useIapPurchaseFlow.ts blocks purchase requests as a second enforcement seam, while cloud-billing/index.tsx blocks Upgrade, Adjust plan, and Manage subscription with explicit guidance. safeOpenURL.ts permits the Apple and Google subscription destinations as exact hosts without broadening either domain family. Shared contract, Web route, tier-store, pure guard, safe-URL, purchase-flow, and billing-screen tests cover every source and the duplicate-purchase boundary.
 
 **Suggested fix**
 
-Return the subscription's origin (stripe | apple | google) from the entitlement API, store it in the tier store, and when it is not the current store show a blocking dialog ('You purchased this subscription on another platform…') with OK plus a link to the correct management surface; disable Upgrade/Manage rows in that state.
+Completed. Keep the source server-authoritative, fail unknown entitled ownership closed, and route every future Mobile purchase entry point through the shared subscription guard in addition to the existing server-side verification conflict check.
 
 **Reference screenshot(s)**
 
