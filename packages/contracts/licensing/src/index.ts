@@ -1,8 +1,8 @@
 /**
  * @agiworkforce/licensing
  *
- * Pure, offline-verifiable enterprise licensing primitives (design
- * `docs/enterprise/enterprise-local-design.md` §2.1). No I/O, no network, no
+ * Pure, offline-verifiable enterprise licensing primitives (retention boundary:
+ * `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`). No I/O, no network, no
  * throwing: `verifyLicense` returns a structured verdict so callers degrade to
  * the free Local tier on any failure and NEVER block data access.
  *

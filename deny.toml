@@ -61,11 +61,11 @@ confidence-threshold = 0.8
 # (agiworkforce-desktop, agiworkforce-cli, agiworkforce-app-server,
 # agiworkforce-command-registry, agiworkforce-sandbox-policy — matches this
 # repo's actual posture, a proprietary codebase per THIRD_PARTY_LICENSES.md);
-# ten more declare no `license` field at all (agiworkforce-agent-core,
+# nine more declare no `license` field at all (agiworkforce-agent-core,
 # agiworkforce-execpolicy, agiworkforce-licensing, agiworkforce-llm,
-# agiworkforce-mcp, agiworkforce-model-registry, agiworkforce-network-proxy,
-# agiworkforce-protocol, agiworkforce-utils-absolute-path,
-# agiworkforce-utils-image). "Proprietary" is not a valid SPDX identifier —
+# agiworkforce-mcp, agiworkforce-model-registry, agiworkforce-protocol,
+# agiworkforce-utils-absolute-path, agiworkforce-utils-image). "Proprietary"
+# is not a valid SPDX identifier —
 # cargo-deny cannot even parse it as a license expression, so it can never
 # satisfy `allow` or `exceptions` (both require parseable SPDX; verified by
 # running `cargo deny check licenses` against a "Proprietary" exceptions
@@ -73,20 +73,14 @@ confidence-threshold = 0.8
 # rejection). `clarify` cannot help either — it matches license *text* in a
 # LICENSE file, and these crates carry none.
 #
-# GENUINE OPEN FINDING (see W5 guardrail-batch report): the only real fix is
-# `publish = false` on all fifteen manifests, which makes `private.ignore`
-# below actually skip them. Adding that is out of this file's scope (it edits
-# fifteen separate Cargo.toml package manifests, four of which are currently
-# co-dirty with the in-flight M6 crate-merge lane) — reported as a delta, not
-# silently suppressed. Until that lands, `cargo deny check licenses` fails on
-# these fifteen crates; that failure is expected and tracked, not a config
-# bug.
+# All fourteen first-party package manifests now declare `publish = false`.
+# `licenses.private.ignore = true` below therefore excludes them as intended;
+# no invalid SPDX exception or text-based clarification is needed.
 exceptions = []
 
 [licenses.private]
-# Forward-compatible: currently a no-op because no manifest sets
-# `publish = false` yet (see the open finding above); flip this workspace to
-# skip-by-default once that follow-up lands, no config edit required then.
+# First-party packages are private (`publish = false`); third-party dependency
+# licensing remains enforced.
 ignore = true
 
 # This workspace has no crate publishing to a private registry today.
@@ -110,8 +104,8 @@ allow-workspace = false
 unknown-registry = "deny"
 # Deny by default (crates-io only, per the W5 guardrail-batch spec); the two
 # git-sourced crates below are an intentional, documented exception — see
-# root Cargo.toml's `[patch.crates-io]` (websocket-handshake-hardening fork
-# consumed by the network-proxy crate), not an unreviewed drive-by git dep.
+# root Cargo.toml's `[patch.crates-io]` (websocket-handshake-hardening forks
+# consumed by current WebSocket clients), not an unreviewed drive-by git dep.
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [

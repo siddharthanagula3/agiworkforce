@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Rust platform
-Last updated: 2026-07-15
+Last updated: 2026-07-30
 Kind: rust-crate
 Criticality: high
 
@@ -10,8 +10,8 @@ Criticality: high
 
 Offline, panic-free verification of enterprise-Local **licenses**
 (`.agilicense`) and **org policies** (`.agipolicy`) — the Rust half of the P7
-Enterprise Local licensing foundation (design
-`docs/enterprise/enterprise-local-design.md` §2.1 / §2.2).
+Enterprise Local licensing contract-test foundation (retention boundary:
+`docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`).
 
 This crate is a byte-for-byte re-implementation of the TypeScript
 `@agiworkforce/licensing` package (`packages/contracts/licensing`), including its
@@ -43,9 +43,9 @@ Regenerate the corpus from the TS side only
 
 ## Consumers
 
-None yet — this is the verify primitive, deliberately unwired. Future
-per-surface enforcement (desktop/CLI/gateway) will consume `verify_license` /
-`verify_org_policy`; that wiring is a separate, founder-gated step.
+None — this is the verify primitive, deliberately unwired. A future
+per-surface enforcement design requires a superseding ADR; importing
+`verify_license` or `verify_org_policy` alone is explicitly insufficient.
 
 ## Public API / Exports
 
@@ -71,7 +71,7 @@ Error taxonomies mirror the TS side exactly: license
 ## What Does Not Belong Here
 
 - License signing/issuance or activation flows.
-- Product feature-flag semantics, editions, or pricing (design §4 — founder-gated).
+- Product feature-flag semantics, editions, or pricing.
 - Any runtime wiring, enforcement points, or UI.
 
 ## Key Files

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-15",
+  "lastUpdated": "2026-07-30",
   "canonicalAgentDoc": "AGENTS.md",
   "surfaces": [
     {
@@ -87,7 +87,7 @@
       "name": "Rust crates",
       "path": "crates",
       "owner": "Rust platform",
-      "purpose": "Reusable Rust protocol, command registry, sandbox-policy, agent-core, MCP, licensing, network-proxy, execpolicy, and utility crates (the former task-runtime and plugin-runtime crates were removed in the 2026-07-08 restructure — zero dependents)",
+      "purpose": "Reusable Rust protocol, command registry, sandbox-policy, agent-core, MCP, licensing, execpolicy, and utility crates (the former task-runtime, plugin-runtime, and dormant network-proxy crates were removed after their zero-consumer paths were verified)",
       "primaryChecks": ["cargo check --workspace", "cargo test --workspace --lib"],
       "rule": "Reusable runtime belongs in crates only when there is a second consumer."
     },
@@ -945,17 +945,6 @@
       "evidence": ["crates/agiworkforce-model-registry/Cargo.toml", "cargo metadata"]
     },
     {
-      "path": "crates/agiworkforce-network-proxy",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform and security",
-      "consumers": ["crates/agiworkforce-protocol"],
-      "deployability": "library",
-      "trustBoundary": "sandbox network proxy and egress policy",
-      "status": "active-isolated-security-domain",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-network-proxy/Cargo.toml", "cargo metadata"]
-    },
-    {
       "path": "crates/agiworkforce-protocol",
       "kind": "crate",
       "canonicalOwner": "Rust platform",
@@ -981,11 +970,7 @@
       "path": "crates/agiworkforce-utils-absolute-path",
       "kind": "crate",
       "canonicalOwner": "Rust platform",
-      "consumers": [
-        "crates/agiworkforce-execpolicy",
-        "crates/agiworkforce-network-proxy",
-        "crates/agiworkforce-protocol"
-      ],
+      "consumers": ["crates/agiworkforce-execpolicy", "crates/agiworkforce-protocol"],
       "deployability": "library",
       "trustBoundary": "filesystem path validation",
       "status": "active-reused",
