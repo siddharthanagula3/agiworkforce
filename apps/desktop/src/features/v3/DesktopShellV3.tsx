@@ -489,7 +489,13 @@ export function DesktopShellV3({
                 composerSendShortcut={composerSendShortcut}
                 onNavigateView={handleNavigateView}
                 sidebarSlot={null}
-                emptyStateSlot={<EmptyChat />}
+                emptyStateSlot={
+                  <EmptyChat
+                    workspaceLabel={folderSeamEnabled ? currentFolderLabel : null}
+                    onSelectWorkspace={folderSeamEnabled ? handleSelectFolder : undefined}
+                    onOpenScheduled={() => handleNavigateView('work-scheduled')}
+                  />
+                }
                 enableSearchOverlay={false}
                 showProvenanceFooter={true}
               />

@@ -59,9 +59,8 @@ describe('DesktopShellV3 real render', () => {
 
     expect(screen.getByText('New chat')).toBeInTheDocument();
     expect(screen.queryByText('Dispatch')).not.toBeInTheDocument();
-    // EmptyChat is composer-only as of the 2026-06-13 greeting removal (it renders
-    // null), so the mode badge no longer appears in the empty state. The shell
-    // still mounting (New chat present) is what proves no error boundary fired.
+    // The v3 empty state has no legacy mode badge; the shell still mounting
+    // (New chat present) proves no error boundary fired.
     expect(screen.queryByText('Cloud Sync')).not.toBeInTheDocument();
   });
 
