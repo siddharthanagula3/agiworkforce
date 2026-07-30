@@ -89,4 +89,16 @@ describe('Voice settings', () => {
     expect(getByText("Cloud voice isn't available on mobile yet.")).toBeTruthy();
     expect(queryByText('Requires AGI Cloud access.')).toBeNull();
   });
+
+  it('explains that voice never keeps the microphone active in the background', () => {
+    const { getByText, queryByRole } = render(<VoiceSettingsScreen />);
+
+    expect(getByText('Foreground conversations only')).toBeTruthy();
+    expect(
+      getByText(
+        'Voice listening and speech stop when AGI moves to the background or the device locks. The microphone does not stay active in other apps.',
+      ),
+    ).toBeTruthy();
+    expect(queryByRole('switch', { name: /background conversations/i })).toBeNull();
+  });
 });

@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: e4806e08bfb1d31c3abaeb2b63f87ed7b848e7e37ae024a0b99d30469cc4fba3 -->
+<!-- ui-gaps-csv-sha256: 17054b188ddbc45f25d04eb60038d807b8c49542f90f2e286d06c90dc533440e -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 95 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 94 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  299 |
+| Open        |  298 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   38 |
-| Not Planned |    4 |
+| Not Planned |    5 |
 
 ## P0
 
@@ -1039,24 +1039,24 @@ Add /(app)/settings/trusted-contact with the consent-first explainer, a Get star
 
 - `chatgpt_reference/062-chatgpt-ios-settings-trusted-contact-crisis-support-get-started.png`
 
-### GAP-045 — Voice settings has no 'Background conversations' toggle or its consent copy
+### GAP-045 — Background voice is declined; Mobile now enforces and explains foreground-only capture
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > Voice
 
 **Gap**
 
-The reference exposes a 'Background conversations' switch with explainer copy ('Keep the conversation going in other apps or while your screen is off') and a Learn more link. agiworkforce's Voice screen has Voice Input, Auto-listen, provider, presets and speed/pitch, but nothing governs whether a voice session may continue in the background — and no copy tells the user what happens to the mic when they leave the app.
+The reference offers an ongoing voice-call runtime in other apps and under screen lock. agiworkforce Mobile currently uses foreground on-device utterance recognition and system speech, not a durable background voice call. The iOS target declares background fetch only, the Android app has no reviewed microphone foreground service, and the voice surface releases recognition and speech on backgrounding. Voice Settings now states that listening and speech stop when AGI leaves the foreground or the device locks and that the microphone does not remain active in other apps.
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice/index.tsx (no background option); grep for 'background conversation|backgroundAudio|background mode' across apps/mobile — no match
+useVoiceConversation.ts subscribes to AppState and, for inactive/background states, disarms auto-listen and push-to-talk, marks any capture consumed, aborts the native recognizer, stops speech, resets the UI, and never resumes on foreground without another user gesture. settings/voice/index.tsx exposes Foreground conversations only with the mic behavior. Info.plist contains UIBackgroundModes fetch but not audio. Current expo-speech-recognition documentation for installed 3.1.3 covers continuous recognition after silence plus iOS audio-session categories, but does not provide an application-background lifecycle or Android microphone foreground-service contract. voice-conversation-ptt.test.tsx verifies background abort/no auto-resume/listener cleanup; voice-settings.test.tsx verifies the disclosure and absence of a cosmetic switch.
 
 **Suggested fix**
 
-Add a 'Background conversations' SettingsSwitchRow to the Voice screen backed by a persisted preference plus the iOS audio background mode, with a SettingsInfo/footnote explaining mic behaviour when the app is backgrounded and a Learn more link to the voice privacy doc.
+Not planned for the current foreground recognizer. Keep the privacy-safe stop behavior and visible copy. Reconsider only with a reviewed background-call architecture: iOS audio entitlement and lock-screen behavior, Android microphone foreground service and persistent disclosure, interruption/routing handling, explicit consent and revocation, battery limits, native-device tests, and store-policy review.
 
 **Reference screenshot(s)**
 
