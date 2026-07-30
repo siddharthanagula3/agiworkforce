@@ -5,4 +5,5 @@ export * from './components/DesktopInfoCard';
 export * from './components/ExecutionStream';
 export * from './components/PairingStatus';
 export * from './components/QRScanner';
+export * from './components/RemoteWorkspaceBoundaryNotice';
 export * from './components/StatusBanners';
