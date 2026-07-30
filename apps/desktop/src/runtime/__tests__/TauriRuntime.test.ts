@@ -80,6 +80,11 @@ vi.mock('../../stores/settingsStore', () => ({
 }));
 
 describe('TauriRuntime', () => {
+  it('does not advertise the shared per-conversation agent control without a native wire field', async () => {
+    const { TauriRuntime } = await import('../TauriRuntime');
+    expect(new TauriRuntime().supportsAgentControl).toBe(false);
+  });
+
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();

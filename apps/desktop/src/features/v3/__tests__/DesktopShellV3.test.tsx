@@ -121,6 +121,14 @@ vi.mock('../../updates', () => ({
   UpdatePill: () => null,
 }));
 
+vi.mock('@/features/terminal/TerminalWorkspace', async () => {
+  const React = await vi.importActual<typeof import('react')>('react');
+  return {
+    TerminalWorkspace: () =>
+      React.createElement('div', { 'data-testid': 'terminal-workspace' }, 'Terminal workspace'),
+  };
+});
+
 vi.mock('@agiworkforce/unified-chat', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
   const sharedStoreState = {
@@ -185,6 +193,7 @@ describe('DesktopShellV3 duplication ownership', () => {
     nativeHandoffMock.listen.mockReset();
     nativeHandoffMock.invoke.mockReset();
     nativeHandoffMock.unlisten.mockReset();
+    localStorage.removeItem('desktop-terminal-dock-open');
     nativeHandoffMock.listen.mockImplementation(
       async (eventName: string, callback: (event: { payload: unknown }) => void) => {
         nativeHandoffMock.listeners.set(eventName, callback);
@@ -321,6 +330,64 @@ describe('DesktopShellV3 duplication ownership', () => {
     ).toMatchObject({
       status: 'failed',
       error: 'Denied by user',
+    });
+  });
+
+  it('approves or denies the live native MCP request from Return and Escape', async () => {
+    applyToolConfirmationRequired({
+      request_id: 'mcp-keyboard-approve-1',
+      tool_name: 'mcp__filesystem__write_file',
+      tool_display_name: 'Write file',
+      description: 'Write /tmp/report.txt',
+      parameters_summary: 'path: "/tmp/report.txt"',
+      args: { path: '/tmp/report.txt', content: 'ready' },
+      summary_hash: '5'.repeat(64),
+      risk_level: 'medium',
+      safety_tier: 'RequiresExplicitApproval',
+      reason: 'The connector wants to write a local file.',
+      reversible: true,
+    });
+
+    const { unmount } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+    fireEvent.keyDown(window, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(nativeHandoffMock.invoke).toHaveBeenCalledWith(
+        'respond_tool_confirmation',
+        expect.objectContaining({
+          requestId: 'mcp-keyboard-approve-1',
+          approved: true,
+        }),
+      );
+    });
+    unmount();
+
+    nativeHandoffMock.invoke.mockClear();
+    applyToolConfirmationRequired({
+      request_id: 'mcp-keyboard-deny-1',
+      tool_name: 'mcp__filesystem__delete_file',
+      tool_display_name: 'Delete file',
+      description: 'Delete /tmp/report.txt',
+      parameters_summary: 'path: "/tmp/report.txt"',
+      args: { path: '/tmp/report.txt' },
+      summary_hash: '6'.repeat(64),
+      risk_level: 'high',
+      safety_tier: 'RequiresExplicitApproval',
+      reason: 'The connector wants to delete a local file.',
+      reversible: false,
+    });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(nativeHandoffMock.invoke).toHaveBeenCalledWith(
+        'respond_tool_confirmation',
+        expect.objectContaining({
+          requestId: 'mcp-keyboard-deny-1',
+          approved: false,
+        }),
+      );
     });
   });
 
@@ -617,6 +684,22 @@ describe('DesktopShellV3 duplication ownership', () => {
     };
     expect(picker.projects).toEqual([{ id: 'p1', name: 'Apollo' }]);
     expect(picker.activeProjectId).toBeNull();
+  });
+
+  it('opens the real terminal workspace from a persistent Local-mode bottom dock', async () => {
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open terminal' }));
+
+    expect(await screen.findByTestId('terminal-workspace')).toBeInTheDocument();
+    expect(localStorage.getItem('desktop-terminal-dock-open')).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close terminal dock' }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('terminal-workspace')).not.toBeInTheDocument();
+      expect(localStorage.getItem('desktop-terminal-dock-open')).toBe('false');
+    });
   });
 
   it('offers the folder seam in Cloud mode, but as a scan root rather than a capability grant', () => {

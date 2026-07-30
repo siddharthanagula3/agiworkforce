@@ -468,6 +468,10 @@ export function ThemeSettings() {
   const setTheme = useSettingsStore((s) => s.setTheme);
   const dyslexicFont = useSettingsStore((s) => s.windowPreferences.dyslexicFont ?? false);
   const setDyslexicFont = useSettingsStore((s) => s.setDyslexicFont);
+  const uiScale = useSettingsStore((s) => s.windowPreferences.uiScale ?? 100);
+  const setUiScale = useSettingsStore((s) => s.setUiScale);
+  const reduceMotion = useSettingsStore((s) => s.windowPreferences.reduceMotion ?? false);
+  const setReduceMotion = useSettingsStore((s) => s.setReduceMotion);
 
   // Use a counter to force re-render after custom theme mutations
   const [customThemes, setCustomThemes] = useState<ThemeDefinition[]>(() => getCustomThemes());
@@ -659,8 +663,66 @@ export function ThemeSettings() {
           <Type className="h-4 w-4 text-muted-foreground" />
           <h4 className="text-sm font-medium">Accessibility</h4>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center justify-between">
+        <div className="space-y-4 rounded-lg border border-border bg-card p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Interface size</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Persists across restarts and scales the complete Desktop interface.
+            </p>
+            <div className="mt-3 inline-flex rounded-lg border border-border p-1">
+              {(
+                [
+                  [90, 'Small'],
+                  [100, 'Default'],
+                  [110, 'Large'],
+                ] as const
+              ).map(([scale, label]) => (
+                <button
+                  key={scale}
+                  type="button"
+                  onClick={() => setUiScale(scale)}
+                  aria-pressed={uiScale === scale}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                    uiScale === scale
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-border pt-4">
+            <div className="flex-1 pr-4">
+              <p className="text-sm font-medium text-foreground">Reduce motion</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Disables non-essential animation even when the OS preference is off.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={reduceMotion}
+              aria-label="Reduce motion"
+              onClick={() => setReduceMotion(!reduceMotion)}
+              className={cn(
+                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+                reduceMotion ? 'bg-primary' : 'bg-muted',
+              )}
+            >
+              <span
+                className={cn(
+                  'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+                  reduceMotion ? 'translate-x-6' : 'translate-x-1',
+                )}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-border pt-4">
             <div className="flex-1 pr-4">
               <p className="text-sm font-medium text-foreground">Dyslexic Friendly Font</p>
               <p className="mt-0.5 text-xs text-muted-foreground">

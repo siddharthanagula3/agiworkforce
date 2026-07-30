@@ -546,6 +546,15 @@
     font-family: 'OpenDyslexic', sans-serif !important;
   }
 
+  .reduce-motion *,
+  .reduce-motion *::before,
+  .reduce-motion *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+
   .message-body {
     @apply flex-1 min-w-0;
   }

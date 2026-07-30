@@ -22,6 +22,7 @@ import { VoiceSettings } from './VoiceSettings';
 import { FontSelector } from './FontSelector';
 import { SUPPORTED_LANGUAGES } from '../../i18n';
 import type { Language, GlobalHotkeyPreferences } from '../../stores/settingsStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 interface GeneralSettingsProps {
   resolvedGlobalHotkeyPreferences: GlobalHotkeyPreferences;
@@ -43,6 +44,8 @@ export function GeneralSettings({
   onLanguageChange,
 }: GeneralSettingsProps) {
   const [hotkeyError, setHotkeyError] = useState<string | null>(null);
+  const sendShortcut = useSettingsStore((state) => state.chatPreferences.sendShortcut ?? 'enter');
+  const setSendShortcut = useSettingsStore((state) => state.setSendShortcut);
 
   const handleHotkeyBlur = (value: string) => {
     const hotkeyPattern = /^(ctrl|cmd|alt|shift)(\+(ctrl|cmd|alt|shift))*\+\w+$/i;
@@ -129,6 +132,24 @@ export function GeneralSettings({
                     {lang.nativeName}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="sendShortcut">Send messages with</Label>
+            <Select
+              value={sendShortcut}
+              onValueChange={(value) =>
+                setSendShortcut(value === 'mod-enter' ? 'mod-enter' : 'enter')
+              }
+            >
+              <SelectTrigger id="sendShortcut">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="enter">Enter (Shift+Enter for newline)</SelectItem>
+                <SelectItem value="mod-enter">Command/Ctrl+Enter (Enter for newline)</SelectItem>
               </SelectContent>
             </Select>
           </div>

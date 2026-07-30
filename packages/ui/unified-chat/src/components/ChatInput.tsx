@@ -8,6 +8,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react';
 import {
   Check,
@@ -139,6 +140,16 @@ export interface ChatInputProps {
   allowModelFallbackModels?: boolean;
   /** Show Ask/Auto/Plan/Bypass only when the active runtime enforces it. */
   supportsAgentControl?: boolean;
+  /** Keyboard gesture that submits the composer. */
+  sendShortcut?: 'enter' | 'mod-enter';
+  /**
+   * Host-owned controls rendered in the composer's left control row.
+   *
+   * This is intentionally presentation-only: the shared package cannot infer
+   * native filesystem/sandbox policy, a desktop working directory, or a live
+   * git branch. Hosts must render only state their runtime actually enforces.
+   */
+  hostControls?: ReactNode;
   /**
    * Called when the user picks "Select folder" from the attachment menu.
    * Host apps that expose `canUseWorkingDirectory` (desktop) should provide
@@ -220,6 +231,8 @@ export function ChatInput({
   onModelSelectorClick,
   allowModelFallbackModels = true,
   supportsAgentControl = true,
+  sendShortcut = 'enter',
+  hostControls,
   onSelectFolder,
   onRecordSkill,
   currentFolderLabel = null,
@@ -764,10 +777,11 @@ export function ChatInput({
         }
       }
 
-      // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
-      // convention). Cmd/Ctrl+Enter also sends. IME composition (e.g. CJK) must not
-      // submit mid-candidate, so guard on isComposing.
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      // The host chooses plain Enter or Cmd/Ctrl+Enter. IME composition (e.g.
+      // CJK) must never submit mid-candidate.
+      const shortcutMatches =
+        sendShortcut === 'mod-enter' ? (e.metaKey || e.ctrlKey) && !e.shiftKey : !e.shiftKey;
+      if (e.key === 'Enter' && shortcutMatches && !e.nativeEvent.isComposing) {
         e.preventDefault();
         handleSend();
       }
@@ -780,6 +794,7 @@ export function ChatInput({
       slashMenuOpen,
       slashSelectedIndex,
       slashSuggestions,
+      sendShortcut,
     ],
   );
 
@@ -984,6 +999,8 @@ export function ChatInput({
                 </div>
               )}
 
+              {hostControls}
+
               {/* Agent control chips stay visually attached to the plus button. */}
               {showAgentControl && conversationId && (
                 <AgentControl
@@ -1054,6 +1071,7 @@ export function ChatInput({
                 hasContent={hasTextContent || attachedFiles.length > 0}
                 disabled={disabled || noModelSelected}
                 onClick={isStreaming ? onStop : handleSend}
+                sendShortcutLabel={sendShortcut === 'mod-enter' ? 'Cmd/Ctrl+Enter' : 'Enter'}
                 className="shrink-0"
               />
             </div>
