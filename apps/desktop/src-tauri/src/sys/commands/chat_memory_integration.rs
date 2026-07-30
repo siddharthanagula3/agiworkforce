@@ -18,9 +18,19 @@ use tracing::info;
 pub async fn chat_load_project_memories(
     memory_state: State<'_, MemoryState>,
     project_context: State<'_, ProjectContextState>,
+    settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
 ) -> Result<LoadProjectMemoriesResponse> {
     let project_path = project_context.get_folder().await;
-    let handler = ChatMemoryHandler::new(Some(memory_state.manager.clone()))?;
+    let mut config = memory_state.injection_config.read().await.clone();
+    config.enabled = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|preferences| preferences.memory_enabled)
+            .unwrap_or(false)
+    };
+    let handler = ChatMemoryHandler::with_config(Some(memory_state.manager.clone()), config)?;
 
     handler.load_project_memories(project_path.as_deref())
 }
@@ -30,7 +40,19 @@ pub async fn chat_load_project_memories(
 pub async fn chat_detect_and_save_decision(
     message: String,
     memory_state: State<'_, MemoryState>,
+    settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
 ) -> Result<Option<SaveDecisionResponse>> {
+    let memory_enabled = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|preferences| preferences.memory_enabled && preferences.auto_save_memories)
+            .unwrap_or(false)
+    };
+    if !memory_enabled {
+        return Ok(None);
+    }
     let handler = ChatMemoryHandler::new(Some(memory_state.manager.clone()))?;
     handler.detect_and_save_decision(&message)
 }
@@ -56,7 +78,9 @@ pub async fn chat_configure_memory_injection(
     enabled: bool,
     max_memories: usize,
     min_importance: i32,
+    allow_tool_assisted_generation: bool,
     memory_state: State<'_, MemoryState>,
+    settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
 ) -> Result<()> {
     let new_config = MemoryInjectionConfig {
         enabled,
@@ -71,6 +95,18 @@ pub async fn chat_configure_memory_injection(
 
     let mut config = memory_state.injection_config.write().await;
     *config = new_config;
+    drop(config);
+
+    // Keep the authoritative per-turn policy in lockstep with the process-local
+    // injector. The frontend persists the same value through settings_save;
+    // updating it here closes the interval before that disk write completes.
+    let mut settings = settings_state.settings.lock().await;
+    let preferences = settings
+        .chat_preferences
+        .get_or_insert_with(Default::default);
+    preferences.memory_enabled = enabled;
+    preferences.auto_save_memories = enabled;
+    preferences.allow_tool_assisted_memory_generation = allow_tool_assisted_generation;
 
     info!(
         "[ChatMemoryIntegration] Memory injection config updated: enabled={}, max={}, min_importance={}",

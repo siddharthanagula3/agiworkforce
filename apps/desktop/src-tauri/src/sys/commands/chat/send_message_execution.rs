@@ -2,7 +2,7 @@ use super::*;
 use crate::core::llm::cost_calculator::CostCalculator;
 use crate::core::llm::sse_parser::TokenUsage;
 use crate::core::llm::{ChatMessage, LLMRequest};
-use crate::sys::commands::chat::send_message_setup::PreparedSendMessage;
+use crate::sys::commands::chat::send_message_setup::{should_generate_memory, PreparedSendMessage};
 
 #[derive(Clone)]
 pub(super) struct SendMessageRuntime {
@@ -138,8 +138,11 @@ fn spawn_streaming_deep_research(
         conversation,
         provider_enum,
         model,
+        memory_handler,
         flags,
         cloud_sync_enabled,
+        auto_save_memories,
+        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
@@ -249,6 +252,20 @@ fn spawn_streaming_deep_research(
                     }
                 };
 
+                if should_generate_memory(
+                    auto_save_memories,
+                    allow_tool_assisted_memory_generation,
+                    true,
+                    flags.incognito,
+                ) {
+                    if let Err(error) = memory_handler.detect_and_save_decision(&result.report) {
+                        warn!(
+                            "[Chat] Failed to auto-save research memory (non-fatal): {}",
+                            error
+                        );
+                    }
+                }
+
                 let _ = runtime.app_handle.emit(
                     "chat:stream-end",
                     serde_json::json!({
@@ -309,8 +326,11 @@ fn spawn_streaming_agent(
         provider_enum,
         model,
         agent_instruction,
+        memory_handler,
         flags,
         cloud_sync_enabled,
+        auto_save_memories,
+        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
@@ -550,6 +570,20 @@ fn spawn_streaming_agent(
                     }
                 };
 
+                if should_generate_memory(
+                    auto_save_memories,
+                    allow_tool_assisted_memory_generation,
+                    true,
+                    flags.incognito,
+                ) {
+                    if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
+                        warn!(
+                            "[Chat] Failed to auto-save agent memory (non-fatal): {}",
+                            error
+                        );
+                    }
+                }
+
                 let _ = runtime.app_handle.emit(
                     "chat:stream-end",
                     serde_json::json!({
@@ -616,8 +650,11 @@ fn spawn_streaming_chat(
         provider_enum,
         model,
         tool_registry,
+        memory_handler,
         flags,
         cloud_sync_enabled,
+        auto_save_memories,
+        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
@@ -1262,6 +1299,17 @@ fn spawn_streaming_chat(
                     }
                 };
 
+                if should_generate_memory(
+                    auto_save_memories,
+                    allow_tool_assisted_memory_generation,
+                    has_tool_calls || flags.is_web_focus,
+                    flags.incognito,
+                ) {
+                    if let Err(error) = memory_handler.detect_and_save_decision(&full_content) {
+                        warn!("[Chat] Failed to auto-save memory (non-fatal): {}", error);
+                    }
+                }
+
                 let pending_at_end = peek_pending_messages_for_conversation(conversation.id);
 
                 info!(
@@ -1338,8 +1386,11 @@ async fn run_nonstreaming_deep_research(
         request,
         provider_enum,
         model,
+        memory_handler,
         flags,
         cloud_sync_enabled,
+        auto_save_memories,
+        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
@@ -1365,6 +1416,20 @@ async fn run_nonstreaming_deep_research(
         flags.incognito,
         cloud_sync_enabled,
     )?;
+
+    if should_generate_memory(
+        auto_save_memories,
+        allow_tool_assisted_memory_generation,
+        true,
+        flags.incognito,
+    ) {
+        if let Err(error) = memory_handler.detect_and_save_decision(&result.report) {
+            warn!(
+                "[Chat] Failed to auto-save research memory (non-fatal): {}",
+                error
+            );
+        }
+    }
 
     let stats = compute_or_skip_stats(&runtime.db, conversation.id, flags.incognito)?;
 
@@ -1394,8 +1459,11 @@ async fn run_nonstreaming_agent(
         provider_enum,
         model,
         agent_instruction,
+        memory_handler,
         flags,
         cloud_sync_enabled,
+        auto_save_memories,
+        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
@@ -1502,6 +1570,20 @@ async fn run_nonstreaming_agent(
         cloud_sync_enabled,
     )?;
 
+    if should_generate_memory(
+        auto_save_memories,
+        allow_tool_assisted_memory_generation,
+        true,
+        flags.incognito,
+    ) {
+        if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
+            warn!(
+                "[Chat] Failed to auto-save agent memory (non-fatal): {}",
+                error
+            );
+        }
+    }
+
     let stats = compute_or_skip_stats(&runtime.db, conversation.id, flags.incognito)?;
 
     Ok(ChatSendMessageResponse {
@@ -1530,6 +1612,8 @@ async fn run_nonstreaming_chat(
         tool_registry,
         flags,
         cloud_sync_enabled,
+        auto_save_memories,
+        allow_tool_assisted_memory_generation,
         ..
     } = prepared;
 
@@ -1689,7 +1773,12 @@ async fn run_nonstreaming_chat(
 
                 let stats = compute_or_skip_stats(&runtime.db, conversation.id, flags.incognito)?;
 
-                if prepared.auto_save_memories {
+                if should_generate_memory(
+                    auto_save_memories,
+                    allow_tool_assisted_memory_generation,
+                    tool_iteration > 0 || flags.is_web_focus,
+                    flags.incognito,
+                ) {
                     if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
                         warn!("[Chat] Failed to auto-save decision (non-fatal): {}", error);
                     }

@@ -14,6 +14,7 @@
 import { invoke, isTauriContext } from '../lib/tauri-mock';
 import { McpClient } from '../api/mcp';
 import { getTimeoutConfig, setTimeoutConfig, minutesToSeconds } from '../api/timeout';
+import { configureMemoryInjection } from '../api/memory';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
@@ -241,6 +242,8 @@ interface SettingsState {
   setAutoApproveTools: (enabled: boolean) => Promise<void>;
   setAutoInjectSkills: (enabled: boolean) => void;
   setAutoSaveMemories: (enabled: boolean) => Promise<void>;
+  setMemoryEnabled: (enabled: boolean) => Promise<void>;
+  setAllowToolAssistedMemoryGeneration: (enabled: boolean) => Promise<void>;
   setAgentMode: (mode: AgentMode) => Promise<void>;
   setChatStorageMode: (mode: 'local' | 'cloud') => void;
 
@@ -350,6 +353,8 @@ const defaultSettings: Pick<
     compactMode: true, // Show simple status messages like ChatGPT/Claude/Gemini
     autoApproveTools: false, // Off by default - show confirmation dialogs
     autoInjectSkills: true, // Auto-inject relevant skills based on message intent
+    memoryEnabled: false, // Privacy-safe opt-in: no retrieval or generation until enabled
+    allowToolAssistedMemoryGeneration: false,
     autoSaveMemories: false, // Off by default - avoid implicit memory growth
     agentMode: 'build' as AgentMode, // Default to Build mode
     chatStorageMode: 'local' as const, // Local-only by default (privacy-preserving)
@@ -414,7 +419,9 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
 // v23: Added terminalSandbox execution preferences
 // v24: Added lmstudioUrl/llamacppUrl to llmConfig (LM Studio/llama.cpp local runtimes)
 // v25: Added vllmUrl to llmConfig (vLLM local runtime)
-const SETTINGS_STORE_VERSION = 26;
+// v26: Normalized persisted model aliases to canonical catalog IDs
+// v27: Added the authoritative memory master and tool-assisted generation scope
+const SETTINGS_STORE_VERSION = 27;
 
 function normalizeKnownCatalogModelId(modelId: string | undefined): string | null {
   if (!modelId) return null;
@@ -1063,19 +1070,81 @@ export const useSettingsStore = create<SettingsState>()(
           );
         },
 
-        setAutoSaveMemories: async (enabled: boolean) => {
+        setMemoryEnabled: async (enabled: boolean) => {
+          const previous = get().chatPreferences;
+
+          // Apply the native enforcement boundary before the UI claims the new
+          // value. chat_send_message also reads the persisted master switch on
+          // every turn, so a restart or transient command failure fails closed.
+          await configureMemoryInjection(
+            enabled,
+            10,
+            5,
+            previous.allowToolAssistedMemoryGeneration === true,
+          );
           set(
             (state) => ({
-              chatPreferences: { ...state.chatPreferences, autoSaveMemories: enabled },
+              chatPreferences: {
+                ...state.chatPreferences,
+                memoryEnabled: enabled,
+                // The former auto-save toggle had no mounted control. Keep it
+                // as a wire-compatible mirror of the new master policy.
+                autoSaveMemories: enabled,
+              },
             }),
             undefined,
-            'settings/setAutoSaveMemories',
+            'settings/setMemoryEnabled',
+          );
+
+          try {
+            await get().saveSettings();
+          } catch (error) {
+            set({ chatPreferences: previous }, undefined, 'settings/setMemoryEnabled/rollback');
+            try {
+              await configureMemoryInjection(
+                previous.memoryEnabled === true,
+                10,
+                5,
+                previous.allowToolAssistedMemoryGeneration === true,
+              );
+            } catch (rollbackError) {
+              console.error('Failed to roll back native memory policy:', rollbackError);
+            }
+            throw error;
+          }
+        },
+
+        setAllowToolAssistedMemoryGeneration: async (enabled: boolean) => {
+          const previous = get().chatPreferences.allowToolAssistedMemoryGeneration === true;
+          set(
+            (state) => ({
+              chatPreferences: {
+                ...state.chatPreferences,
+                allowToolAssistedMemoryGeneration: enabled,
+              },
+            }),
+            undefined,
+            'settings/setAllowToolAssistedMemoryGeneration',
           );
           try {
             await get().saveSettings();
           } catch (error) {
-            console.error('Failed to persist auto-save memories setting:', error);
+            set(
+              (state) => ({
+                chatPreferences: {
+                  ...state.chatPreferences,
+                  allowToolAssistedMemoryGeneration: previous,
+                },
+              }),
+              undefined,
+              'settings/setAllowToolAssistedMemoryGeneration/rollback',
+            );
+            throw error;
           }
+        },
+
+        setAutoSaveMemories: async (enabled: boolean) => {
+          await get().setMemoryEnabled(enabled);
         },
 
         setAutoApproveTools: async (enabled: boolean) => {
@@ -1447,6 +1516,21 @@ export const useSettingsStore = create<SettingsState>()(
                 undefined,
                 'settings/loadSettings/hydrateAgentModeFromBackend',
               );
+            }
+
+            // Re-apply the persisted memory master switch to the process-local
+            // native injection policy after every launch. Missing legacy values
+            // are treated as disabled; chat_send_message independently checks
+            // the same persisted flag before both retrieval and generation.
+            try {
+              await configureMemoryInjection(
+                mergedChatPreferences.memoryEnabled === true,
+                10,
+                5,
+                mergedChatPreferences.allowToolAssistedMemoryGeneration === true,
+              );
+            } catch (error) {
+              console.error('Failed to restore native memory policy:', error);
             }
 
             // Keep backend capability enforcement in sync with loaded settings.
@@ -2003,6 +2087,16 @@ export const useSettingsStore = create<SettingsState>()(
                   : { provider: 'managed_cloud', model: 'auto' };
               }
             }
+          }
+
+          // Migration from v26 to v27: replace the unmounted auto-save toggle
+          // with one explicit master policy. Preserve the old opt-in when it
+          // exists; otherwise fail closed instead of silently enabling memory.
+          if (version < 27 && state.chatPreferences) {
+            const cp = state.chatPreferences as Partial<ChatPreferences>;
+            cp.memoryEnabled = cp.autoSaveMemories === true;
+            cp.autoSaveMemories = cp.memoryEnabled;
+            cp.allowToolAssistedMemoryGeneration = false;
           }
 
           return state as SettingsState;

@@ -38,6 +38,7 @@ pub(super) struct PreparedSendMessage {
     pub flags: SendMessageFlags,
     pub cloud_sync_enabled: bool,
     pub auto_save_memories: bool,
+    pub allow_tool_assisted_memory_generation: bool,
 }
 
 pub(super) fn log_chat_request(request: &ChatSendMessageRequest, correlation_id: &str) {
@@ -203,6 +204,8 @@ pub(super) async fn prepare_send_message(
     flags: SendMessageFlags,
     cloud_sync_enabled: bool,
     auto_save_memories: bool,
+    memory_enabled: bool,
+    allow_tool_assisted_memory_generation: bool,
 ) -> Result<PreparedSendMessage, String> {
     if flags.incognito {
         debug!("[Chat] Incognito mode active: skipping all persistence");
@@ -236,8 +239,16 @@ pub(super) async fn prepare_send_message(
     }];
     debug!("[Chat] Added default AGI Workforce system prompt");
 
-    let memory_handler = memory_handler::ChatMemoryHandler::new(Some(memory_state.manager.clone()))
-        .map_err(|e| format!("Failed to initialize memory handler: {e}"))?;
+    let mut memory_config = memory_state.injection_config.read().await.clone();
+    // The persisted master setting is checked for every turn. The in-memory
+    // config supplies selection limits only and can never bypass a disabled
+    // persisted policy.
+    memory_config.enabled = memory_enabled;
+    let memory_handler = memory_handler::ChatMemoryHandler::with_config(
+        Some(memory_state.manager.clone()),
+        memory_config,
+    )
+    .map_err(|e| format!("Failed to initialize memory handler: {e}"))?;
 
     if !flags.incognito {
         inject_memory_context(
@@ -466,7 +477,19 @@ pub(super) async fn prepare_send_message(
         flags,
         cloud_sync_enabled,
         auto_save_memories,
+        allow_tool_assisted_memory_generation,
     })
+}
+
+/// Single automatic-generation gate shared by streaming/non-streaming paths.
+/// Manual memory edits are intentionally unaffected by this policy.
+pub(crate) fn should_generate_memory(
+    auto_save_memories: bool,
+    allow_tool_assisted_memory_generation: bool,
+    tool_assisted: bool,
+    incognito: bool,
+) -> bool {
+    auto_save_memories && !incognito && (allow_tool_assisted_memory_generation || !tool_assisted)
 }
 
 fn resolve_routing_strategy(model: &str) -> RoutingStrategy {
@@ -1048,7 +1071,7 @@ mod tests {
     use super::{
         build_router_preferences, derive_cloud_sync_enabled, format_project_scope_prompt,
         load_project_scope_prompt, resolve_routing_strategy, resolve_thinking_parameter,
-        wrap_injected_skill,
+        should_generate_memory, wrap_injected_skill,
     };
     use crate::core::llm::llm_router::RoutingStrategy;
     use crate::core::llm::{Provider, ThinkingParameter};
@@ -1543,6 +1566,15 @@ mod tests {
             !derive_cloud_sync_enabled(None, false),
             "active_mode=None with storage_mode=local must yield cloud_sync_enabled=false"
         );
+    }
+
+    #[test]
+    fn memory_generation_gate_blocks_disabled_incognito_and_tool_assisted_turns() {
+        assert!(!should_generate_memory(false, true, false, false));
+        assert!(!should_generate_memory(true, true, false, true));
+        assert!(!should_generate_memory(true, false, true, false));
+        assert!(should_generate_memory(true, false, false, false));
+        assert!(should_generate_memory(true, true, true, false));
     }
 
     // ── DESKTOP-PROJECT-SCOPING-UNWIRED-01 seam B: project scope prompt ─────

@@ -85,6 +85,7 @@ describe('managed Reflect recap aggregation', () => {
     expect(isReflectMemoryEnabled({ capabilities: { memory: false } })).toBe(false);
     expect(isReflectMemoryEnabled({ capabilities: { generateFromHistory: false } })).toBe(false);
     expect(isReflectMemoryEnabled({ capabilities: { memory: 'yes' } })).toBe(false);
+    expect(isReflectMemoryEnabled({})).toBe(false);
 
     const query = vi
       .fn()

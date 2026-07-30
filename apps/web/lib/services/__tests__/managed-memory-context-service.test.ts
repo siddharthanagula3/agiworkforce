@@ -4,6 +4,7 @@ import {
   applyManagedMemoryContext,
   formatManagedMemorySystemPrompt,
   loadManagedMemoryContext,
+  loadManagedMemoryPolicy,
   persistManagedAutoMemoryFacts,
 } from '../managed-memory-context-service';
 
@@ -29,6 +30,33 @@ describe('loadManagedMemoryContext', () => {
     expect(query.mock.calls[0]?.[0]).toMatch(/user_id = \$1[\s\S]*is_deleted = false/);
     expect(query.mock.calls[0]?.[0]).toContain('order by pinned desc, updated_at desc');
     expect(query.mock.calls[0]?.[1]).toEqual(['user-1']);
+  });
+});
+
+describe('loadManagedMemoryPolicy', () => {
+  it('fails closed for absent values and enables only explicit booleans', async () => {
+    const disabledQuery = vi.fn().mockResolvedValue([]);
+    await expect(
+      loadManagedMemoryPolicy({ query: disabledQuery }, { userId: 'user-1' }),
+    ).resolves.toEqual({
+      enabled: false,
+      allowToolAssistedGeneration: false,
+    });
+
+    const enabledQuery = vi.fn().mockResolvedValue([
+      {
+        capabilities: {
+          memory: true,
+          allowToolAssistedGeneration: true,
+        },
+      },
+    ]);
+    await expect(
+      loadManagedMemoryPolicy({ query: enabledQuery }, { userId: 'user-1' }),
+    ).resolves.toEqual({
+      enabled: true,
+      allowToolAssistedGeneration: true,
+    });
   });
 });
 

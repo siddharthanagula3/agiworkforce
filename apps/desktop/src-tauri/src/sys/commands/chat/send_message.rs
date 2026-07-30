@@ -43,13 +43,18 @@ pub async fn chat_send_message(
             storage_mode_is_cloud,
         )
     };
-    let auto_save_memories = {
+    let (memory_enabled, auto_save_memories, allow_tool_assisted_memory_generation) = {
         let settings = settings_state.settings.lock().await;
-        settings
+        let preferences = settings
             .chat_preferences
             .as_ref()
-            .map(|prefs| prefs.auto_save_memories)
-            .unwrap_or(false)
+            .cloned()
+            .unwrap_or_default();
+        (
+            preferences.memory_enabled,
+            preferences.memory_enabled && preferences.auto_save_memories,
+            preferences.allow_tool_assisted_memory_generation,
+        )
     };
 
     reset_stop_flag();
@@ -128,6 +133,8 @@ pub async fn chat_send_message(
         flags,
         cloud_sync_enabled,
         auto_save_memories,
+        memory_enabled,
+        allow_tool_assisted_memory_generation,
     )
     .await?;
 

@@ -53,6 +53,9 @@ export const CLOUD_SAFE_SETTINGS_NAMESPACES: readonly string[] = [
   'notifications',
   'language',
   'accessibility',
+  // Account memory policy contains booleans only and must remain identical on
+  // Web and Desktop Managed Cloud. It carries no device path or credential.
+  'capabilities',
   'chat',
   'editor',
 ];
