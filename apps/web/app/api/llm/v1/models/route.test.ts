@@ -24,6 +24,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import { GET } from './route';
+import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 
 function request(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest('https://example.com/api/llm/v1/models', { headers });
@@ -62,6 +63,22 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
     expect(subscriptionMocks.getSubscription).not.toHaveBeenCalled();
   });
 
+  it('returns 403 when a valid API key lacks model-read scope', async () => {
+    authMocks.getClerkAuthUser.mockRejectedValueOnce(
+      new ApiKeyScopeError('API key does not have the required scope'),
+    );
+
+    const response = await GET(request({ Authorization: 'Bearer scoped-key' }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        type: 'invalid_request_error',
+        code: 'insufficient_scope',
+      },
+    });
+  });
+
   it('returns the authenticated subscription catalog for a valid credential', async () => {
     authMocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1' });
     subscriptionMocks.getSubscription.mockResolvedValueOnce({
@@ -77,6 +94,9 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
       x_agi_workforce: { user_tier: 'max' },
     });
     expect(subscriptionMocks.getSubscription).toHaveBeenCalledWith('user-1');
+    expect(authMocks.getClerkAuthUser).toHaveBeenCalledWith(expect.any(NextRequest), {
+      apiKeyScope: 'models:read',
+    });
   });
 
   it.each(['canceled', 'past_due', 'unpaid', 'expired'])(

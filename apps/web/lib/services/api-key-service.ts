@@ -23,6 +23,7 @@ import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 import type { ApiKeyRow } from '@/lib/server/neon-types';
 import argon2 from 'argon2';
+import { API_KEY_SCOPE_VALUES, type ApiKeyScope } from '@/lib/api-key-scopes';
 
 // Argon2id options (OWASP recommended)
 // See: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
@@ -98,8 +99,17 @@ export class ApiKeyService {
     db: DatabaseAdapter,
     userId: string,
     name: string,
-    scopes: string[] = [],
+    scopes: ApiKeyScope[],
   ): Promise<{ apiKey: ApiKeyRow; rawKey: string }> {
+    const uniqueScopes = new Set(scopes);
+    if (
+      scopes.length === 0 ||
+      uniqueScopes.size !== scopes.length ||
+      scopes.some((scope) => !API_KEY_SCOPE_VALUES.includes(scope))
+    ) {
+      throw new Error('At least one unique, supported API key scope is required');
+    }
+
     const { raw, hash, keyId } = await generateKey();
 
     const rows = await db.query<ApiKeyRow>(

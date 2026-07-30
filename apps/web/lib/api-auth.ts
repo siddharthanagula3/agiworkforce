@@ -10,10 +10,21 @@ import {
   isDeveloperTokenRevoked,
   verifyDeveloperTokenSignature,
 } from '@/lib/server/developer-token';
+import { apiKeyHasScope, type ApiKeyScope } from '@/lib/api-key-scopes';
+import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 
 export interface AuthResult {
   userId: string;
   email?: string;
+}
+
+export interface AuthOptions {
+  /**
+   * API keys are denied unless the caller names the public-API capability this
+   * route requires. Clerk sessions and first-party developer tokens are
+   * unaffected.
+   */
+  apiKeyScope?: ApiKeyScope;
 }
 
 /**
@@ -140,11 +151,13 @@ async function verifyBearerToken(token: string): Promise<AuthResult | null> {
  * prefix and dispatched here BEFORE verifyBearerToken runs, keeping the
  * JWT bearer path (verifyBearerToken) untouched for every other token.
  */
-async function verifyApiKey(token: string): Promise<AuthResult | null> {
+async function verifyApiKey(
+  token: string,
+): Promise<(AuthResult & { scopes: readonly string[] }) | null> {
   try {
     const apiKey = await ApiKeyService.verifyKey(token);
     if (!apiKey) return null;
-    return { userId: apiKey.user_id };
+    return { userId: apiKey.user_id, scopes: apiKey.scopes };
   } catch (error) {
     logger.error({ error }, 'API key verification failed');
     return null;
@@ -166,7 +179,10 @@ async function verifyApiKey(token: string): Promise<AuthResult | null> {
  *
  * Only a request with NO Authorization header at all reaches Path 1.
  */
-export async function getClerkAuthUser(request: NextRequest): Promise<AuthResult> {
+export async function getClerkAuthUser(
+  request: NextRequest,
+  options: AuthOptions = {},
+): Promise<AuthResult> {
   const authHeader = request.headers.get('authorization');
 
   // Path 2: Bearer token (desktop/CLI/mobile/API clients, or a browser
@@ -180,8 +196,14 @@ export async function getClerkAuthUser(request: NextRequest): Promise<AuthResult
     if (token.startsWith('sk_live_') || token.startsWith('sk_test_')) {
       const result = await verifyApiKey(token);
       if (result) {
+        if (!options.apiKeyScope) {
+          throw new ApiKeyScopeError('API keys are not permitted for this endpoint');
+        }
+        if (!apiKeyHasScope(result.scopes, options.apiKeyScope)) {
+          throw new ApiKeyScopeError('API key does not have the required scope');
+        }
         await assertAccountActive(result.userId);
-        return result;
+        return { userId: result.userId };
       }
       throw createError.unauthorized();
     }

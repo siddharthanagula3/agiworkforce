@@ -203,6 +203,9 @@ describe('POST /api/voice/transcribe', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(200);
+    expect(mockGetClerkAuthUser).toHaveBeenCalledWith(request, {
+      apiKeyScope: 'inference:write',
+    });
     const data = await response.json();
     expect(data.text).toBe('Hello world');
   });

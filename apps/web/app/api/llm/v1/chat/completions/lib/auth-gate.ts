@@ -12,6 +12,7 @@ import {
   getCloudChatSurfaceCapability,
   resolveCloudChatSurface,
 } from '@/lib/free-chat-surface-policy';
+import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 
 export type AuthGateSuccess = {
   ok: true;
@@ -110,19 +111,22 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
 
   let userId: string;
   try {
-    ({ userId } = await getClerkAuthUser(request));
-  } catch {
+    ({ userId } = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' }));
+  } catch (error) {
+    const insufficientScope = isApiKeyScopeError(error);
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: {
-            message: 'Invalid authentication token',
+            message: insufficientScope
+              ? 'API key does not have the required scope'
+              : 'Invalid authentication token',
             type: 'invalid_request_error',
-            code: 'invalid_api_key',
+            code: insufficientScope ? 'insufficient_scope' : 'invalid_api_key',
           },
         },
-        { status: 401 },
+        { status: insufficientScope ? 403 : 401 },
       ),
     };
   }

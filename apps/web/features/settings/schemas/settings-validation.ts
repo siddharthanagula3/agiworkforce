@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { sanitizeUserInput, sanitizeURL } from '@shared/utils/html-sanitizer';
+import { API_KEY_SCOPE_VALUES } from '@/lib/api-key-scopes';
 
 // ============================================================================
 // XSS SANITIZATION TRANSFORMERS
@@ -184,6 +185,11 @@ export const createApiKeySchema = z.object({
     .min(1, 'API key name is required')
     .max(100, 'API key name must be less than 100 characters')
     .transform((val) => sanitizeUserInput(val, 100)),
+  scopes: z
+    .array(z.enum(API_KEY_SCOPE_VALUES))
+    .min(1, 'Select at least one scope')
+    .max(API_KEY_SCOPE_VALUES.length)
+    .refine((scopes) => new Set(scopes).size === scopes.length, 'Scopes must be unique'),
 });
 
 export type CreateApiKeyFormData = z.infer<typeof createApiKeySchema>;

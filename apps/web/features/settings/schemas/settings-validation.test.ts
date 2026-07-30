@@ -403,6 +403,7 @@ describe('Settings Validation Schemas', () => {
     it('should validate a valid API key name', () => {
       const validKey = {
         name: 'Production API Key',
+        scopes: ['models:read', 'inference:write'],
       };
 
       const result = createApiKeySchema.safeParse(validKey);
@@ -412,6 +413,7 @@ describe('Settings Validation Schemas', () => {
     it('should reject empty API key name', () => {
       const invalidKey = {
         name: '',
+        scopes: ['inference:write'],
       };
 
       const result = createApiKeySchema.safeParse(invalidKey);
@@ -421,6 +423,7 @@ describe('Settings Validation Schemas', () => {
     it('should sanitize XSS in API key name', () => {
       const xssKey = {
         name: '<script>alert("xss")</script>MyKey',
+        scopes: ['inference:write'],
       };
 
       const result = createApiKeySchema.safeParse(xssKey);
@@ -433,10 +436,27 @@ describe('Settings Validation Schemas', () => {
     it('should enforce max length', () => {
       const longName = {
         name: 'a'.repeat(150),
+        scopes: ['inference:write'],
       };
 
       const result = createApiKeySchema.safeParse(longName);
       expect(result.success).toBe(false);
+    });
+
+    it('should require at least one known, unique scope', () => {
+      expect(createApiKeySchema.safeParse({ name: 'No scopes', scopes: [] }).success).toBe(false);
+      expect(
+        createApiKeySchema.safeParse({
+          name: 'Unknown scope',
+          scopes: ['account:admin'],
+        }).success,
+      ).toBe(false);
+      expect(
+        createApiKeySchema.safeParse({
+          name: 'Duplicate scope',
+          scopes: ['usage:read', 'usage:read'],
+        }).success,
+      ).toBe(false);
     });
   });
 

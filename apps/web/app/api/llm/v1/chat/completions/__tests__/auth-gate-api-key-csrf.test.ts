@@ -150,6 +150,7 @@ function makeFakeDb() {
 import { runAuthGate } from '@/app/api/llm/v1/chat/completions/lib/auth-gate';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { getNeonDb } from '@/lib/server/neon-db';
+import type { ApiKeyScope } from '@/lib/api-key-scopes';
 
 // Issuance itself is proven through the real HTTP route (with real CSRF) in
 // lib/__tests__/api-auth.test.ts. This file's subject is the COMPLETIONS
@@ -157,8 +158,12 @@ import { getNeonDb } from '@/lib/server/neon-db';
 // just skipping the settings route's own CSRF token requirement, which
 // would otherwise apply to this file's overridden real csrf.ts and add
 // noise unrelated to what's under test here.
-async function issueKey(userId: string, name = 'completions test key') {
-  return ApiKeyService.createApiKey(getNeonDb(), userId, name); // { apiKey, rawKey }
+async function issueKey(
+  userId: string,
+  name = 'completions test key',
+  scopes: ApiKeyScope[] = ['inference:write'],
+) {
+  return ApiKeyService.createApiKey(getNeonDb(), userId, name, scopes); // { apiKey, rawKey }
 }
 
 function makeCompletionsRequest(bearerToken: string): NextRequest {
@@ -221,6 +226,22 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
     if (!result.ok) {
       expect(result.response.status).toBe(401);
     }
+  });
+
+  it('rejects a valid key that lacks the inference scope', async () => {
+    makeFakeDb();
+    const { rawKey } = await issueKey('models-only-user', 'models only', ['models:read']);
+
+    const result = await runAuthGate(makeCompletionsRequest(rawKey));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(403);
+      await expect(result.response.json()).resolves.toMatchObject({
+        error: { code: 'insufficient_scope' },
+      });
+    }
+    expect(mockGetSubscription).not.toHaveBeenCalled();
   });
 
   it('a garbage sk_-shaped bearer is rejected as invalid authentication', async () => {

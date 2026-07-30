@@ -159,6 +159,7 @@ const SettingsPageContent: React.FC = () => {
     resolver: zodResolver(createApiKeySchema),
     defaultValues: {
       name: '',
+      scopes: ['models:read', 'inference:write'],
     },
   });
 
@@ -355,7 +356,7 @@ const SettingsPageContent: React.FC = () => {
 
   const handleGenerateAPIKey = useCallback(
     (data: CreateApiKeyFormData) => {
-      createAPIKeyMutation.mutate(data.name, {
+      createAPIKeyMutation.mutate(data, {
         onSuccess: (result: CreateAPIKeyResult) => {
           setGeneratedAPIKey(result.fullKey);
           apiKeyForm.reset();

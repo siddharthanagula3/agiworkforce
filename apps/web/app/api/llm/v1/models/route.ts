@@ -16,6 +16,7 @@ import {
   normalizeSubscriptionAccessTier,
   type PickerModelView,
 } from '@agiworkforce/types';
+import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 
 type OpenAiCompatibleModel = {
   id: string;
@@ -108,18 +109,21 @@ async function handleListModels(request: NextRequest) {
   const presentedAuthorization = request.headers.has('authorization');
   let userId: string | null = null;
   try {
-    ({ userId } = await getClerkAuthUser(request));
-  } catch {
+    ({ userId } = await getClerkAuthUser(request, { apiKeyScope: 'models:read' }));
+  } catch (error) {
     if (presentedAuthorization) {
+      const insufficientScope = isApiKeyScopeError(error);
       return NextResponse.json(
         {
           error: {
-            message: 'Invalid authentication token',
+            message: insufficientScope
+              ? 'API key does not have the required scope'
+              : 'Invalid authentication token',
             type: 'invalid_request_error',
-            code: 'invalid_api_key',
+            code: insufficientScope ? 'insufficient_scope' : 'invalid_api_key',
           },
         },
-        { status: 401, headers: getCorsHeaders(request) },
+        { status: insufficientScope ? 403 : 401, headers: getCorsHeaders(request) },
       );
     }
     return listModelsForRequest(request, 'free');

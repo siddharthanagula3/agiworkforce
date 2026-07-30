@@ -35,7 +35,7 @@ async function handleGetBalance(request: NextRequest) {
     return rateLimitResponse;
   }
 
-  const { userId } = await getClerkAuthUser(request);
+  const { userId } = await getClerkAuthUser(request, { apiKeyScope: 'usage:read' });
 
   const [subscriptionResult, balanceResult] = await Promise.allSettled([
     SubscriptionService.getSubscription(userId),
