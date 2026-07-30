@@ -22,11 +22,13 @@ export interface ManagedMemoryContextItem {
 
 export interface ManagedMemoryPolicy {
   enabled: boolean;
+  generateFromHistory: boolean;
   allowToolAssistedGeneration: boolean;
 }
 
 export const DISABLED_MANAGED_MEMORY_POLICY: ManagedMemoryPolicy = {
   enabled: false,
+  generateFromHistory: false,
   allowToolAssistedGeneration: false,
 };
 
@@ -61,6 +63,10 @@ export async function loadManagedMemoryPolicy(
       : {};
   return {
     enabled: capabilities['memory'] === true,
+    // Preserve the pre-toggle behavior for accounts that opted into Memory
+    // before this key existed. An explicit false is the only off value.
+    generateFromHistory:
+      capabilities['memory'] === true && capabilities['generateFromHistory'] !== false,
     allowToolAssistedGeneration: capabilities['allowToolAssistedGeneration'] === true,
   };
 }

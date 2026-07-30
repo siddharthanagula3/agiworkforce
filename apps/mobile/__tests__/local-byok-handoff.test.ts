@@ -28,6 +28,10 @@ jest.mock('@/src/features/memory/services/personalContext', () => ({
   buildPersonalContextBlocks: jest.fn(() => []),
 }));
 
+jest.mock('@/src/features/memory/services/pastChatContext', () => ({
+  retrievePastChatContext: jest.fn(async () => null),
+}));
+
 jest.mock('@/src/features/memory/services/consolidation', () => ({
   consolidateFactsFromTurn: jest.fn(),
 }));

@@ -11,7 +11,8 @@
  *    keys. Structural impossibility = the leak guard.
  *
  * 2. Only cloud-safe namespaces (server SSOT in apps/web/app/api/settings/sync/route.ts):
- *    appearance, personalization, profile, notifications, language, accessibility, chat, editor.
+ *    appearance, personalization, profile, notifications, language, accessibility,
+ *    capabilities, chat, editor.
  *    Any namespace NOT in this list is a server-side DROP — never send it.
  *
  * 3. Inner keys interoperate with web/desktop. The web settings store uses `theme`
@@ -23,7 +24,7 @@
  *    providerMode, selectedVoiceId, selectedPresetId, ttsProvider, speechRate,
  *    speechPitch, speechLanguage (device-specific audio), backgroundFetchEnabled,
  *    hapticsEnabled, biometric settings, autoApproveMode (security policy),
- *    capabilities (toggles that control what the device can do — device-specific),
+ *    device capability-detection results,
  *    isTemporaryChat (session-scoped).
  */
 
@@ -88,12 +89,21 @@ export interface CloudChat {
   autoListen?: boolean;
 }
 
+/** Account memory preferences shared with Web/Desktop Managed Cloud. */
+export interface CloudCapabilities {
+  /** Canonical server key for account-memory retrieval. */
+  memory?: boolean;
+  /** Canonical server key for automatic memory generation from chat turns. */
+  generateFromHistory?: boolean;
+}
+
 /** Full cloud settings payload — only cloud-safe namespaces, no forbidden keys. */
 export interface CloudSettings {
   appearance?: CloudAppearance;
   personalization?: CloudPersonalization;
   notifications?: CloudNotifications;
   language?: CloudLanguage;
+  capabilities?: CloudCapabilities;
   chat?: CloudChat;
   // profile, accessibility, editor: not currently populated by mobile but
   // may be received from web/desktop and must be round-tripped safely.
@@ -123,6 +133,9 @@ export function toCloudSettings(
     | 'notificationsEnabled'
     | 'speechLanguage'
     | 'autoListenEnabled'
+    | 'referencePastChats'
+    | 'generateMemoryFromHistory'
+    | 'memoryPolicyInitialized'
   >,
 ): CloudSettings {
   const {
@@ -133,6 +146,9 @@ export function toCloudSettings(
     notificationsEnabled,
     speechLanguage,
     autoListenEnabled,
+    referencePastChats,
+    generateMemoryFromHistory,
+    memoryPolicyInitialized,
   } = store;
 
   const result: CloudSettings = {
@@ -158,6 +174,14 @@ export function toCloudSettings(
     language: {
       locale: speechLanguage,
     },
+    ...(memoryPolicyInitialized
+      ? {
+          capabilities: {
+            memory: referencePastChats,
+            generateFromHistory: generateMemoryFromHistory,
+          },
+        }
+      : {}),
     chat: {
       autoListen: autoListenEnabled,
     },
@@ -225,6 +249,15 @@ export function applyCloudSettings(partial: CloudSettings): void {
   // language
   if (partial.language?.locale !== undefined) {
     store.setSpeechLanguage(partial.language.locale);
+  }
+
+  // capabilities — only the two account-memory policy keys owned by Mobile.
+  // Recursive sync merging preserves Web's allowToolAssistedGeneration key.
+  if (partial.capabilities?.memory !== undefined) {
+    store.setReferencePastChats(partial.capabilities.memory);
+  }
+  if (partial.capabilities?.generateFromHistory !== undefined) {
+    store.setGenerateMemoryFromHistory(partial.capabilities.generateFromHistory);
   }
 
   // chat

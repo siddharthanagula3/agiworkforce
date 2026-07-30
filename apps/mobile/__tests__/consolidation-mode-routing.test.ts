@@ -57,22 +57,61 @@ describe('consolidateFactsFromTurn — on-device (local) persistence', () => {
   describe('shouldConsolidateMemoryOnClient (call-site gate)', () => {
     it('consolidates on-device for a local, non-temporary turn', () => {
       expect(
-        shouldConsolidateMemoryOnClient({ executionMode: 'local', isTemporaryChat: false }),
+        shouldConsolidateMemoryOnClient({
+          executionMode: 'local',
+          isTemporaryChat: false,
+          memoryEnabled: true,
+          generateMemoryFromHistory: true,
+        }),
       ).toBe(true);
     });
 
     it('does NOT consolidate on the client for a cloud turn (server owns cloud auto-memory)', () => {
       expect(
-        shouldConsolidateMemoryOnClient({ executionMode: 'cloud', isTemporaryChat: false }),
+        shouldConsolidateMemoryOnClient({
+          executionMode: 'cloud',
+          isTemporaryChat: false,
+          memoryEnabled: true,
+          generateMemoryFromHistory: true,
+        }),
       ).toBe(false);
     });
 
     it('never consolidates in a temporary chat, in either mode', () => {
       expect(
-        shouldConsolidateMemoryOnClient({ executionMode: 'local', isTemporaryChat: true }),
+        shouldConsolidateMemoryOnClient({
+          executionMode: 'local',
+          isTemporaryChat: true,
+          memoryEnabled: true,
+          generateMemoryFromHistory: true,
+        }),
       ).toBe(false);
       expect(
-        shouldConsolidateMemoryOnClient({ executionMode: 'cloud', isTemporaryChat: true }),
+        shouldConsolidateMemoryOnClient({
+          executionMode: 'cloud',
+          isTemporaryChat: true,
+          memoryEnabled: true,
+          generateMemoryFromHistory: true,
+        }),
+      ).toBe(false);
+    });
+
+    it('does not learn when either memory preference is off', () => {
+      expect(
+        shouldConsolidateMemoryOnClient({
+          executionMode: 'local',
+          isTemporaryChat: false,
+          memoryEnabled: false,
+          generateMemoryFromHistory: true,
+        }),
+      ).toBe(false);
+      expect(
+        shouldConsolidateMemoryOnClient({
+          executionMode: 'local',
+          isTemporaryChat: false,
+          memoryEnabled: true,
+          generateMemoryFromHistory: false,
+        }),
       ).toBe(false);
     });
   });

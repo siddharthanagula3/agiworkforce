@@ -21,6 +21,9 @@ const DEFAULT_CLOUD_SETTINGS = {
   notificationsEnabled: true,
   speechLanguage: 'en',
   autoListenEnabled: true,
+  referencePastChats: false,
+  generateMemoryFromHistory: true,
+  memoryPolicyInitialized: false,
   personalization: {
     fullName: '',
     nickname: '',
