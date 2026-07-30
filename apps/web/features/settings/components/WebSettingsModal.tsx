@@ -13,6 +13,8 @@
  *   team         -> TeamSection     (workspace + member administration)
  *   security     -> SecuritySection (2FA, session timeout, change password)
  *   privacy      -> PrivacySection  (toggles, export, delete)
+ *   archived     -> ArchivedChatsSection (restore + permanent delete)
+ *   shared-links -> SharedLinksSection (review + revoke)
  *   billing      -> BillingSection  (plan, payment, invoices)
  *   usage        -> UsageSection    (credit bars, analytics)
  *   capabilities -> CapabilitiesSection (memory, tools, artifacts)
@@ -39,6 +41,8 @@ import { AccountSection } from '../sections/AccountSection';
 import { TeamSection } from '../sections/TeamSection';
 import { SecuritySection } from '../sections/SecuritySection';
 import { PrivacySection } from '../sections/PrivacySection';
+import { ArchivedChatsSection } from '../sections/ArchivedChatsSection';
+import { SharedLinksSection } from '../sections/SharedLinksSection';
 import { BillingSection } from '../sections/BillingSection';
 import { UsageSection } from '../sections/UsageSection';
 import { CapabilitiesSection } from '../sections/CapabilitiesSection';
@@ -81,6 +85,8 @@ const SECTION_TO_SEGMENT: Record<string, string> = {
   team: 'team',
   security: 'security',
   privacy: 'privacy',
+  archived: 'archived',
+  'shared-links': 'shared-links',
   billing: 'billing',
   usage: 'usage',
   capabilities: 'capabilities',
@@ -496,6 +502,8 @@ export function WebSettingsModal({
     team: <TeamSection />,
     security: <SecuritySection />,
     privacy: <PrivacySection />,
+    archived: <ArchivedChatsSection />,
+    'shared-links': <SharedLinksSection />,
     billing: <BillingSection />,
     usage: <UsageSection />,
     capabilities: <CapabilitiesSection />,

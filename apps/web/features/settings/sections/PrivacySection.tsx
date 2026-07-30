@@ -2,14 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Switch } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { useBillingStore } from '@shared/stores/web-auth-store';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { setTelemetryConsentCache } from '@/lib/sentry-shared';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
+import {
+  applyBulkConversationAction,
+  type BulkConversationAction,
+} from '../services/conversation-data-service';
 
 const NAMESPACE = 'privacy';
 
@@ -112,8 +118,13 @@ function ExpandableSection({ title, children }: { title: string; children: React
 }
 
 export function PrivacySection() {
+  const router = useRouter();
   const subscription = useBillingStore((s) => s.subscription);
   const hasHostedCloud = subscription?.status === 'active' && subscription.tier !== 'free';
+  const conversations = useChatStore((state) => state.conversations);
+  const streamingConversationIds = useChatStore((state) => state.streamingConversationIds);
+  const updateConversationInStore = useChatStore((state) => state.updateConversation);
+  const deleteConversationFromStore = useChatStore((state) => state.deleteConversation);
   const [state, setState] = useState<Record<ToggleKey, boolean>>(() => defaultPrivacyState());
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
@@ -121,6 +132,9 @@ export function PrivacySection() {
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [bulkAction, setBulkAction] = useState<BulkConversationAction | null>(null);
+  const [conversationActionError, setConversationActionError] = useState<string | null>(null);
+  const [conversationActionNotice, setConversationActionNotice] = useState<string | null>(null);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
@@ -197,6 +211,71 @@ export function PrivacySection() {
       setExportError(err instanceof Error ? err.message : 'Export failed. Please try again.');
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleArchiveAllChats() {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm('Archive every chat? You can restore them from Archived chats.')
+    ) {
+      return;
+    }
+
+    setBulkAction('archive_all');
+    setConversationActionError(null);
+    setConversationActionNotice(null);
+    try {
+      const affectedCount = await applyBulkConversationAction('archive_all');
+      for (const conversation of conversations) {
+        if (!conversation.isArchived) {
+          updateConversationInStore(conversation.id, { isArchived: true });
+        }
+      }
+      setConversationActionNotice(
+        affectedCount === 1 ? 'Archived 1 chat.' : `Archived ${affectedCount} chats.`,
+      );
+    } catch (caught) {
+      setConversationActionError(
+        caught instanceof Error ? caught.message : 'Failed to archive chats',
+      );
+    } finally {
+      setBulkAction(null);
+    }
+  }
+
+  async function handleDeleteAllChats() {
+    if (streamingConversationIds.length > 0) {
+      setConversationActionError('Finish or stop active replies before deleting all chats.');
+      return;
+    }
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        'Permanently delete every chat, including archived chats? This cannot be undone.',
+      )
+    ) {
+      return;
+    }
+
+    setBulkAction('delete_all');
+    setConversationActionError(null);
+    setConversationActionNotice(null);
+    try {
+      const affectedCount = await applyBulkConversationAction('delete_all');
+      for (const conversation of conversations) {
+        deleteConversationFromStore(conversation.id);
+      }
+      router.replace('/chat');
+      setConversationActionNotice(
+        affectedCount === 1 ? 'Deleted 1 chat.' : `Deleted ${affectedCount} chats.`,
+      );
+    } catch (caught) {
+      setConversationActionError(
+        caught instanceof Error ? caught.message : 'Failed to delete chats',
+      );
+    } finally {
+      setBulkAction(null);
     }
   }
 
@@ -387,9 +466,168 @@ export function PrivacySection() {
           Your data
         </div>
 
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+              Shared links
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+              Review and revoke links created from Web conversations.
+            </div>
+          </div>
+          <Link
+            href="/settings/shared-links"
+            style={{
+              fontSize: 13,
+              color: 'var(--text-2)',
+              textDecoration: 'none',
+              padding: '6px 14px',
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+            }}
+          >
+            Manage
+          </Link>
+        </div>
+
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+              Archived chats
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+              Restore archived chats or permanently delete them.
+            </div>
+          </div>
+          <Link
+            href="/settings/archived"
+            style={{
+              fontSize: 13,
+              color: 'var(--text-2)',
+              textDecoration: 'none',
+              padding: '6px 14px',
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+            }}
+          >
+            Manage
+          </Link>
+        </div>
+
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+              Archive all chats
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+              Move every chat out of the sidebar. You can restore them later.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleArchiveAllChats()}
+            disabled={bulkAction !== null}
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--text-1)',
+              background: 'transparent',
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+              cursor: bulkAction !== null ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {bulkAction === 'archive_all' ? 'Archiving…' : 'Archive all'}
+          </button>
+        </div>
+
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+              Delete all chats
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+              Permanently delete every active and archived conversation.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleDeleteAllChats()}
+            disabled={bulkAction !== null || streamingConversationIds.length > 0}
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--chat-accent-primary, #c8892a)',
+              background: 'transparent',
+              border: '1px solid rgba(218,119,86,0.5)',
+              borderRadius: 'var(--radius-md)',
+              cursor:
+                bulkAction !== null || streamingConversationIds.length > 0
+                  ? 'not-allowed'
+                  : 'pointer',
+            }}
+          >
+            {bulkAction === 'delete_all' ? 'Deleting…' : 'Delete all'}
+          </button>
+        </div>
+
+        {conversationActionError || conversationActionNotice ? (
+          <div
+            role={conversationActionError ? 'alert' : 'status'}
+            style={{
+              padding: '10px 20px',
+              borderBottom: '1px solid var(--settings-border)',
+              color: conversationActionError
+                ? 'var(--chat-accent-primary, #c8892a)'
+                : 'var(--text-2)',
+              fontSize: 12,
+            }}
+          >
+            {conversationActionError ?? conversationActionNotice}
+          </div>
+        ) : null}
+
         {/* Export data row */}
         <div
-          id="shared-chats"
+          id="export-data"
           style={{
             padding: '16px 20px',
             borderBottom: '1px solid var(--settings-border)',

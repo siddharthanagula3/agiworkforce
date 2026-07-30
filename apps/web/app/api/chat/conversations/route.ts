@@ -45,6 +45,10 @@ async function handleGetConversations(request: NextRequest) {
   if (rawProjectId !== null && (!projectId || projectId.length > 128)) {
     throw createError.validation('Invalid projectId');
   }
+  const archivedFilter = url.searchParams.get('archived') ?? 'include';
+  if (!['include', 'only', 'exclude'].includes(archivedFilter)) {
+    throw createError.validation('Invalid archived filter');
+  }
 
   // Offset-based pagination so the sidebar can page past the most-recent 50
   // conversations instead of having anything older become unreachable.
@@ -65,6 +69,11 @@ async function handleGetConversations(request: NextRequest) {
     if (q) {
       params.push(`%${q}%`);
       where.push(`title ilike $${params.length}`);
+    }
+    if (archivedFilter === 'only') {
+      where.push('archived = true');
+    } else if (archivedFilter === 'exclude') {
+      where.push('archived = false');
     }
     params.push(limit + 1, offset);
     const limitParameter = params.length - 1;

@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: cd4e676b903c35e9e10fd9ee3f4d1deac2056a5c4a60ac2919ca6ff682ad4f53 -->
+<!-- ui-gaps-csv-sha256: f147c1a8fc5c921d523412e451fc531112dc7aece5837311b9b935dfbf445673 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 71 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 69 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  275 |
+| Open        |  273 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   44 |
+| Done        |   46 |
 | Not Planned |   22 |
 
 ## P0
@@ -2534,24 +2534,24 @@ Add a collapsible right-side panel to the cowork/AGI-Work task view that lists t
 
 - `claude_reference/183-claude-web-cowork-task-outputs-benchmark-spec-files.png`
 
-### GAP-110 — No bulk chat management: Archive all / Delete all / Shared-links manager / Archived-chats manager
+### GAP-110 — Web Data Controls provides owner-scoped bulk chat and link management
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Web
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Data controls — bulk chat management
 
 **Gap**
 
-Reference exposes four dedicated data-control rows: 'Shared links' (Manage), 'Archived chats' (Manage), 'Archive all chats', and 'Delete all chats' — scoped to conversations, distinct from full-account deletion. agiworkforce's Data Controls (PrivacySection) only offers Export data and full account deletion (GDPR); there is no way to bulk-archive, bulk-delete, or centrally manage shared links / archived chats.
+Privacy now has four conversation-specific controls separate from account deletion: Shared links and Archived chats open real managers, Archive all chats moves every live conversation out of the sidebar, and Delete all chats permanently soft-deletes active plus archived conversations after confirmation. Delete all is disabled while this client has an active reply so a visible turn cannot be silently removed.
 
 **Evidence**
 
-apps/web/features/settings/sections/PrivacySection.tsx (no 'Archive'/'Delete all'/'Shared links'/'Archived chats' strings); searched 'archive all', 'delete all chats', 'shared links', 'archived chats' across apps/web — zero matches outside marketing copy
+PrivacySection.tsx renders the four rows and consumes applyBulkConversationAction. POST /api/chat/conversations/bulk validates archive_all, delete_all, or delete_archived, scopes its single atomic UPDATE to the authenticated user, rate-limits and CSRF-protects the mutation, and releases returned conversation sandboxes after deletes. SharedLinksSection uses the existing owner-scoped GET /api/share index and DELETE /api/share/[token] revoke path. ArchivedChatsSection uses the archived-only conversation index and existing per-chat update/delete contracts. Route, service, and UI tests cover owner predicates, action predicates, confirmations, store reconciliation, and manager transitions.
 
 **Suggested fix**
 
-Add bulk-action rows to the Data Controls section: Archive all chats, Delete all chats (with confirmation), a Shared Links manager (list/revoke), and an Archived Chats manager (list/unarchive).
+Completed. Keep new conversation-wide mutations atomic and owner-scoped, keep deletion separate from full-account deletion, and preserve sender/runtime cleanup when future per-conversation resources are added.
 
 **Reference screenshot(s)**
 
@@ -2718,24 +2718,24 @@ Not planned for the current marketplace. Keep the preview explicit and installat
 
 - `claude_reference/161-claude-web-settings-plugins-empty-state-browse-cta.png`
 
-### GAP-118 — Archived conversations are unreachable — no archived chats screen to restore or delete
+### GAP-118 — Archived Web conversations have a reachable restore and delete manager
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Web
 - **Surface/type:** web · missing-screen
 - **Reference:** Codex · macOS desktop · Settings › Archived chats (empty state)
 
 **Gap**
 
-Reference has an Archived chats settings destination with an explicit 'No archived chats' empty state. In agiworkforce a user can archive a conversation, after which the sidebar filters it out and the only way back is ticking 'Include archived conversations' inside the global search dialog — archiving effectively deletes the chat from the UI, with no restore or bulk-delete.
+/settings/archived is a registered settings deep link backed by the Archived Chats modal section. It loads only the authenticated account's archived conversations in bounded pages, shows the explicit No archived chats empty state, restores individual chats to the sidebar, permanently deletes individual chats after confirmation, and can delete all archived chats atomically. Active replies block destructive archived deletion in the current client.
 
 **Evidence**
 
-apps/web/features/chat/pages/WebChatPage.tsx:2269 (archive toggle), apps/web/features/chat/v3/WebSidebar.tsx:43 (filters archived out), apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx:465 ('Include archived conversations'); apps/web/app/settings has no archived route
+ArchivedChatsSection.tsx owns loading, error, retry, pagination, restore, delete, delete-all, empty, and active-reply states. PrivacySection.tsx links to the manager. GET /api/chat/conversations accepts the validated archived=only filter while preserving the inclusive default used by the sidebar, and POST /api/chat/conversations/bulk implements delete_archived with user_id plus archived predicates. /settings/archived routes through SettingsModalRedirect and WebSettingsModal maps the hidden archived section. Focused route, service, and UI tests cover the list filter, empty state, restore, delete-all, store synchronization, and current-route cleanup.
 
 **Suggested fix**
 
-Add /settings/archived (and a matching modal section) listing archived conversations with Restore, Delete and 'Delete all archived', an empty state, and mirror it on desktop where only projects can currently be archived/unarchived.
+Completed for Web. Keep the archived-only query paginated and owner-scoped, and preserve explicit irreversible confirmations plus active-run guards for future bulk operations.
 
 **Reference screenshot(s)**
 
