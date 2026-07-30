@@ -77,6 +77,16 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "agi-workforce.openAgentConfig",
+        "title": "AGI Workforce: Open Agent Configuration",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "agi-workforce.restartLocalRuntime",
+        "title": "AGI Workforce: Restart Local Runtime",
+        "icon": "$(debug-restart)"
+      },
+      {
         "command": "agi-workforce.agentMode",
         "title": "AGI Workforce: Agent Mode",
         "icon": "$(robot)"
@@ -538,7 +548,7 @@
         {
           "type": "tree",
           "id": "agi-workforce.contextPanel",
-          "name": "Context Files",
+          "name": "Context",
           "contextualTitle": "AI Context",
           "visibility": "collapsed"
         },

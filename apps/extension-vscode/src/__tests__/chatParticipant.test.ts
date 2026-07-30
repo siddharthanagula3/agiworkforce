@@ -15,6 +15,7 @@ import {
   type ContextPanelProvider,
 } from '../features/trees/contextPanelProvider';
 import { MEMORY_STORE_KEY } from '../memory/memoryStore';
+import { HOST_CUSTOM_INSTRUCTIONS_KEY } from '../features/instructions';
 
 const editorContext: EditorContext = {
   fileName: '/workspace/src/app.ts',
@@ -157,7 +158,7 @@ describe('chat participant approval lifecycle', () => {
     expect(result.errorDetails?.message).toContain('Trust this workspace');
   });
 
-  it('includes user-curated memory as untrusted local developer context', async () => {
+  it('includes custom instructions and user-curated memory through distinct context boundaries', async () => {
     const listeners = new Set<(event: LocalRuntimeEvent) => void>();
     const runtime = {
       startThread: vi.fn().mockResolvedValue({ id: 'thread-1' }),
@@ -172,6 +173,10 @@ describe('chat participant approval lifecycle', () => {
       forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
     } as unknown as LocalRuntimePool;
     const context = new vscode.ExtensionContext();
+    await context.globalState.update(
+      HOST_CUSTOM_INSTRUCTIONS_KEY,
+      'Prefer narrowly scoped changes.',
+    );
     await context.globalState.update(MEMORY_STORE_KEY, [
       {
         id: 'memory-1',
@@ -179,7 +184,13 @@ describe('chat participant approval lifecycle', () => {
         createdAt: '2026-07-25T00:00:00.000Z',
       },
     ]);
-    const handler = createChatHandler(context.secrets, undefined, context.globalState, pool);
+    const handler = createChatHandler(
+      context.secrets,
+      undefined,
+      context.globalState,
+      pool,
+      context.workspaceState,
+    );
     const response = handler(
       request(undefined, 'Implement the CLI command'),
       { history: [] } as vscode.ChatContext,
@@ -198,6 +209,10 @@ describe('chat participant approval lifecycle', () => {
     expect(runtime.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         input: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'text',
+            text: expect.stringContaining('<custom_instructions>\nPrefer narrowly scoped changes.'),
+          }),
           expect.objectContaining({
             type: 'text',
             text: expect.stringContaining(

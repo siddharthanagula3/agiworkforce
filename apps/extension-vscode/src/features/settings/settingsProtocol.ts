@@ -6,6 +6,8 @@ import {
   type MutableConfigKey,
   type MutableConfigValues,
 } from '../../platform/config';
+import type { CustomInstructionScope, InstructionContextSnapshot } from '../instructions';
+import { MAX_CUSTOM_INSTRUCTION_CHARS } from '../instructions';
 
 export const SETTINGS_SECTIONS = [
   'general',
@@ -31,6 +33,10 @@ export const SETTINGS_COMMANDS = [
   'manageConnectors',
   'manageTeam',
   'openDocs',
+  'openAgentConfig',
+  'restartLocalRuntime',
+  'openConfigDocs',
+  'openInstructionDocs',
 ] as const;
 
 export type SettingsCommand = (typeof SETTINGS_COMMANDS)[number];
@@ -91,20 +97,35 @@ const messageEnvelopeSchema = z.discriminatedUnion('type', [
       command: z.enum(SETTINGS_COMMANDS),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal('settings.instructions.update'),
+      scope: z.enum(['host', 'workspace']),
+      value: z.string().max(MAX_CUSTOM_INSTRUCTION_CHARS),
+    })
+    .strict(),
 ]);
 
 export type SettingsWebviewMessage =
   | { type: 'settings.ready' }
   | { type: 'settings.update'; update: ConfigSettingUpdate }
-  | { type: 'settings.command'; command: SettingsCommand };
+  | { type: 'settings.command'; command: SettingsCommand }
+  | {
+      type: 'settings.instructions.update';
+      scope: CustomInstructionScope;
+      value: string;
+    };
 
 export interface SettingsPanelState extends ExtensionSettingsSnapshot {
   accountConnected: boolean | null;
+  agentConfigPath: string;
+  instructionContext: InstructionContextSnapshot;
 }
 
 export type SettingsHostMessage =
   | { type: 'settings.snapshot'; state: SettingsPanelState }
   | { type: 'settings.saved'; key: MutableConfigKey }
+  | { type: 'settings.instructions.saved'; scope: CustomInstructionScope }
   | { type: 'settings.error'; message: string }
   | { type: 'settings.navigate'; section: SettingsSection };
 
@@ -118,6 +139,7 @@ export function parseSettingsWebviewMessage(input: unknown): SettingsWebviewMess
 
   if (parsed.data.type === 'settings.ready') return parsed.data;
   if (parsed.data.type === 'settings.command') return parsed.data;
+  if (parsed.data.type === 'settings.instructions.update') return parsed.data;
 
   const key = parsed.data.key;
   if (!SETTINGS_PANEL_SETTING_KEYS.some((candidate) => candidate === key)) return undefined;

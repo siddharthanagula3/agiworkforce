@@ -63,6 +63,7 @@ import {
   setAgentModeWithConsent,
 } from '../features/permissions/agentModeConsent';
 import { SettingsPanel } from '../features/settings';
+import { openAgentConfig } from '../features/config/agentConfig';
 
 const execFileAsync = promisify(execFile);
 
@@ -153,6 +154,29 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   context.subscriptions.push(
     register('agi-workforce.openSettings', (section?: unknown) => {
       SettingsPanel.createOrShow(context, section);
+    }),
+    register('agi-workforce.openAgentConfig', async () => {
+      try {
+        const configPath = await openAgentConfig();
+        const action = await vscode.window.showInformationMessage(
+          `AGI Workforce: Opened ${configPath}. Restart the local runtime after changing this file.`,
+          'Restart local runtime',
+        );
+        if (action === 'Restart local runtime') {
+          await vscode.commands.executeCommand('agi-workforce.restartLocalRuntime');
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'The agent configuration could not be opened.';
+        vscode.window.showErrorMessage(`AGI Workforce: ${message}`);
+      }
+    }),
+    register('agi-workforce.restartLocalRuntime', () => {
+      localRuntimes.restartAll();
+      conversationTreeProvider.refresh();
+      vscode.window.showInformationMessage(
+        'AGI Workforce: Local runtime restarted. The next developer turn will use the current configuration.',
+      );
     }),
 
     // ── context panel commands ──────────────────────────────────────────────────

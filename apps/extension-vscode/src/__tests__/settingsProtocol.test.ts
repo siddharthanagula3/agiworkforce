@@ -56,6 +56,34 @@ describe('settings webview protocol', () => {
     ).toBeUndefined();
   });
 
+  it('accepts bounded host and workspace instruction updates only', () => {
+    expect(
+      parseSettingsWebviewMessage({
+        type: 'settings.instructions.update',
+        scope: 'host',
+        value: 'Prefer focused tests.',
+      }),
+    ).toEqual({
+      type: 'settings.instructions.update',
+      scope: 'host',
+      value: 'Prefer focused tests.',
+    });
+    expect(
+      parseSettingsWebviewMessage({
+        type: 'settings.instructions.update',
+        scope: 'repository',
+        value: 'not an allowed scope',
+      }),
+    ).toBeUndefined();
+    expect(
+      parseSettingsWebviewMessage({
+        type: 'settings.instructions.update',
+        scope: 'workspace',
+        value: 'x'.repeat(8_001),
+      }),
+    ).toBeUndefined();
+  });
+
   it('rejects unknown keys, invalid ranges, and non-http endpoints', () => {
     expect(
       parseSettingsWebviewMessage({

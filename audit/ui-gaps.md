@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 332fd8967df63fe130719f7e66e35cc0938badd0ac1fbdaac07062afcf43e2d4 -->
+<!-- ui-gaps-csv-sha256: bbdc07f00e4f3aa17a68ee97b9eb8ed9fda8beac9c80fcdbe86f52bc1da3c4bf -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 120 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 118 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  324 |
+| Open        |  322 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   17 |
+| Done        |   19 |
 | Not Planned |    0 |
 
 ## P0
@@ -3040,24 +3040,24 @@ Extend the branded Configuration section only after the local app-server exposes
 
 - `chatgpt_reference/015-codex-vscode-ext-settings-configuration-config-toml-reasoning-efforts.png`
 
-### GAP-132 — No way to open or discover the agent config file from the extension
+### GAP-132 — Agent configuration is discoverable and safely opened from VS Code
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-control
 - **Reference:** Codex · VS Code extension · Settings — Configuration (config.toml card)
 
 **Gap**
 
-Reference gives a config.toml card with an 'Open config.toml' button, a note that the app must be restarted for changes to apply, and a Docs link. agiworkforce's CLI-backed runtime reads ~/.agiworkforce/config.toml (the desktop app says so explicitly), but the VS Code extension — which drives that same CLI via agiWorkforce.cliPath — never mentions the file, cannot open it, and gives no reload guidance.
+Configuration now shows the actual extension-host path for ~/.agiworkforce/config.toml, explains that the CLI reads it at process start, and provides Open config.toml, Restart local runtime, and Configuration docs actions. Opening creates only a missing host directory/file with private defaults and append semantics, so existing configuration is never truncated. Remote windows resolve the remote extension-host home. Restart disposes every pooled app-server and makes the next developer turn start from current configuration.
 
 **Evidence**
 
-apps/desktop/src/features/settings/DotfileSettings.tsx:116 references ~/.agiworkforce/config.toml. Searched apps/extension-vscode/src for 'config.toml|dotfile|openConfig|.agi/' — zero matches; the only related setting is cliPath in src/platform/config.ts DEFAULTS.
+features/config/agentConfig.ts owns path resolution, private creation, and editor opening. commandSetup.ts registers openAgentConfig and restartLocalRuntime, wires the LocalRuntimePool restart plus conversation refresh, and offers restart immediately after opening. settingsWebviewContent.ts renders the path, lifecycle copy, and three actions; settingsProtocol.ts allowlists them. agentConfig.test.ts, agentConfigCommands.test.ts, GAP-012-settings-panel.test.ts, commandParity.test.ts, and the real Extension Host suite cover path/file semantics, restart behavior, routing, declaration parity, and runtime registration.
 
 **Suggested fix**
 
-Add an 'Open config.toml' command and settings card to the extension that resolves the same path DotfileSettings uses, opens it in an editor, warns that the local runtime pool must be restarted (offer a 'Restart runtime' button wired to localRuntimePool), and links the config docs.
+Completed. Keep the path relative to the active extension host, preserve non-truncating/private creation, and restart the runtime pool rather than claiming a saved TOML file hot-reloads an active process.
 
 **Reference screenshot(s)**
 
@@ -3132,24 +3132,24 @@ Model provenance in the resolved-plugin data (source: user-config | plugin:<id>)
 
 - `chatgpt_reference/019-codex-vscode-ext-settings-mcp-servers-from-plugins-scrolled.png`
 
-### GAP-136 — No user-editable custom instructions in the VS Code extension
+### GAP-136 — VS Code supports auditable host and workspace custom instructions
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-control
 - **Reference:** Codex · VS Code extension · Settings — Personalization, Custom instructions
 
 **Gap**
 
-Reference provides a custom-instructions textarea with a Save button, an explicit scope statement ('for all chats on this host') and a Learn more link. agiworkforce's extension only auto-reads CLAUDE.md / AGENTS.md / .cursorrules from the workspace root; a user with no such file, or who wants personal instructions that are not committed to the repo, has no way to add them — while desktop and web both offer custom instructions.
+Personalization now provides separate 8,000-character host-default and workspace-override editors with explicit storage/scope copy, Save actions, documentation, live counts, and an exact effective-turn-prelude preview. A non-empty workspace value replaces the host default. The effective custom block is the first input on every sidebar, editor-tab, and @agi local developer turn. The Context tree repeats that exact block and lists the bounded project instruction files the local runtime discovers. Project files are deliberately not injected a second time by the extension because the app-server owns repository-instruction prompt assembly.
 
 **Evidence**
 
-apps/extension-vscode/src/data/projectInstructions.ts:20-56 (repo files only, max 2 files / 8 KB). Searched apps/extension-vscode/src for 'customInstructions|custom instructions' — zero matches. Counterparts: apps/desktop/src/features/settings/CustomInstructionsSettings.tsx, apps/web/features/settings/sections/GeneralSection.tsx:367.
+features/instructions/customInstructions.ts owns bounded storage, precedence, delimiter safety, preview state, and UserInput construction. ChatStateManager.ts and chatParticipant.ts prepend the effective block across all developer-chat entry points. projectInstructions.ts exposes structured bounded sources; contextPanelProvider.ts renders the active custom prelude and project sources; SettingsPanel.ts, settingsProtocol.ts, and settingsWebviewContent.ts implement validated editing and refresh. customInstructions.test.ts, chatStateManager.test.ts, chatParticipant.test.ts, contextFileSelection.test.ts, GAP-012-settings-panel.test.ts, and GAP-012-settings-webview.webview.test.ts cover persistence, precedence, injection order, project-source visibility, protocol limits, and browser behavior.
 
 **Suggested fix**
 
-Add a custom-instructions editor to the extension settings panel stored in globalState (host-scoped) plus an optional workspace-scoped override, composed with loadProjectInstructions() and shown in the context panel so the user can see exactly what is being prepended.
+Completed. Keep custom instructions private to VS Code Memento storage, preserve workspace-over-host precedence, show the exact effective prelude, and let the local app-server remain the single owner of repository instruction-file assembly.
 
 **Reference screenshot(s)**
 

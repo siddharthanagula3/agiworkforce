@@ -35,6 +35,23 @@ const initialState: SettingsPanelState = {
   workspaceOverrides: [],
   workspaceTrusted: true,
   accountConnected: false,
+  agentConfigPath: '/host/.agiworkforce/config.toml',
+  instructionContext: {
+    host: 'Prefer focused tests.',
+    workspace: '',
+    effective: 'Prefer focused tests.',
+    effectiveScope: 'host',
+    turnPrelude:
+      '## User-saved custom instructions (this VS Code host)\n\n<custom_instructions>\nPrefer focused tests.\n</custom_instructions>',
+    projectSources: [
+      {
+        fileName: 'AGENTS.md',
+        path: '/workspace/AGENTS.md',
+        content: 'Use pnpm.',
+        truncated: false,
+      },
+    ],
+  },
 };
 
 function render(): string {
@@ -156,5 +173,30 @@ describe('settings webview', () => {
     expect(document.getElementById('overrideNotice')?.hidden).toBe(false);
     expect(document.getElementById('accountStatus')?.textContent).toBe('Connected to AGI Cloud');
     expect((document.getElementById('signOutButton') as HTMLButtonElement).hidden).toBe(false);
+  });
+
+  it('renders instruction sources and emits explicit-scope saves', () => {
+    const postMessage = boot();
+    expect(document.getElementById('agentConfigPath')?.textContent).toBe(
+      '/host/.agiworkforce/config.toml',
+    );
+    expect(document.getElementById('instructionPrelude')?.textContent).toContain(
+      'Prefer focused tests.',
+    );
+    expect(document.getElementById('instructionSources')?.textContent).toContain('AGENTS.md');
+
+    const workspaceInstructions = document.getElementById(
+      'workspaceCustomInstructions',
+    ) as HTMLTextAreaElement;
+    workspaceInstructions.value = 'Use the workspace fixtures.';
+    workspaceInstructions.dispatchEvent(new Event('input', { bubbles: true }));
+    (document.querySelector('[data-instruction-save="workspace"]') as HTMLButtonElement).click();
+
+    expect(document.getElementById('workspaceInstructionCount')?.textContent).toContain('27');
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'settings.instructions.update',
+      scope: 'workspace',
+      value: 'Use the workspace fixtures.',
+    });
   });
 });
