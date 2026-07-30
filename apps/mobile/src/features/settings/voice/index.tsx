@@ -223,6 +223,11 @@ export default function VoiceSettingsScreen() {
           body="Choose how AGI listens and speaks in Local Mode. Cloud voice remains separate from local voice settings."
           icon={Headphones}
         />
+        <SettingsInfo
+          title="Foreground conversations only"
+          body="Voice listening and speech stop when AGI moves to the background or the device locks. The microphone does not stay active in other apps."
+          icon={Lock}
+        />
 
         <SettingsGroup>
           <ToggleRow
