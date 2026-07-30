@@ -15,7 +15,6 @@ use strum_macros::Display;
 use tracing::error;
 use ts_rs::TS;
 
-use crate::protocol::NetworkAccess;
 use crate::protocol::ReadOnlyAccess;
 use crate::protocol::SandboxPolicy;
 use crate::protocol::WritableRoot;
@@ -196,7 +195,6 @@ pub enum FileSystemSandboxKind {
     #[default]
     Restricted,
     Unrestricted,
-    ExternalSandbox,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -339,14 +337,6 @@ impl FileSystemSandboxPolicy {
     pub fn unrestricted() -> Self {
         Self {
             kind: FileSystemSandboxKind::Unrestricted,
-            glob_scan_max_depth: None,
-            entries: Vec::new(),
-        }
-    }
-
-    pub fn external_sandbox() -> Self {
-        Self {
-            kind: FileSystemSandboxKind::ExternalSandbox,
             glob_scan_max_depth: None,
             entries: Vec::new(),
         }
@@ -582,7 +572,7 @@ impl FileSystemSandboxPolicy {
     /// Returns true when filesystem reads are unrestricted.
     pub fn has_full_disk_read_access(&self) -> bool {
         match self.kind {
-            FileSystemSandboxKind::Unrestricted | FileSystemSandboxKind::ExternalSandbox => true,
+            FileSystemSandboxKind::Unrestricted => true,
             FileSystemSandboxKind::Restricted => {
                 self.has_root_access(FileSystemAccessMode::can_read)
                     && !self.has_denied_read_restrictions()
@@ -593,7 +583,7 @@ impl FileSystemSandboxPolicy {
     /// Returns true when filesystem writes are unrestricted.
     pub fn has_full_disk_write_access(&self) -> bool {
         match self.kind {
-            FileSystemSandboxKind::Unrestricted | FileSystemSandboxKind::ExternalSandbox => true,
+            FileSystemSandboxKind::Unrestricted => true,
             FileSystemSandboxKind::Restricted => {
                 self.has_root_access(FileSystemAccessMode::can_write)
                     && !self.has_write_narrowing_entries()
@@ -617,9 +607,7 @@ impl FileSystemSandboxPolicy {
 
     pub fn resolve_access_with_cwd(&self, path: &Path, cwd: &Path) -> FileSystemAccessMode {
         match self.kind {
-            FileSystemSandboxKind::Unrestricted | FileSystemSandboxKind::ExternalSandbox => {
-                return FileSystemAccessMode::Write;
-            }
+            FileSystemSandboxKind::Unrestricted => return FileSystemAccessMode::Write,
             FileSystemSandboxKind::Restricted => {}
         }
 
@@ -988,20 +976,14 @@ impl FileSystemSandboxPolicy {
         cwd: &Path,
     ) -> io::Result<SandboxPolicy> {
         Ok(match self.kind {
-            FileSystemSandboxKind::ExternalSandbox => SandboxPolicy::ExternalSandbox {
-                network_access: if network_policy.is_enabled() {
-                    NetworkAccess::Enabled
-                } else {
-                    NetworkAccess::Restricted
-                },
-            },
             FileSystemSandboxKind::Unrestricted => {
                 if network_policy.is_enabled() {
                     SandboxPolicy::DangerFullAccess
                 } else {
-                    SandboxPolicy::ExternalSandbox {
-                        network_access: NetworkAccess::Restricted,
-                    }
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "legacy sandbox policy cannot represent unrestricted filesystem access with restricted network access",
+                    ));
                 }
             }
             FileSystemSandboxKind::Restricted => {
@@ -1063,9 +1045,10 @@ impl FileSystemSandboxPolicy {
                     return Ok(if network_policy.is_enabled() {
                         SandboxPolicy::DangerFullAccess
                     } else {
-                        SandboxPolicy::ExternalSandbox {
-                            network_access: NetworkAccess::Restricted,
-                        }
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "legacy sandbox policy cannot represent full filesystem write access with restricted network access",
+                        ));
                     });
                 }
 
@@ -1141,7 +1124,6 @@ impl From<&SandboxPolicy> for FileSystemSandboxPolicy {
     fn from(value: &SandboxPolicy) -> Self {
         match value {
             SandboxPolicy::DangerFullAccess => FileSystemSandboxPolicy::unrestricted(),
-            SandboxPolicy::ExternalSandbox { .. } => FileSystemSandboxPolicy::external_sandbox(),
             SandboxPolicy::ReadOnly { .. } => {
                 FileSystemSandboxPolicy::restricted(vec![FileSystemSandboxEntry {
                     path: FileSystemPath::Special {

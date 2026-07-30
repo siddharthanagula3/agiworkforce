@@ -2955,7 +2955,7 @@
     "item": "sandbox-mode",
     "surface": "packages/permissions",
     "status": "built",
-    "evidence": "crates/agiworkforce-sandbox-policy/src/lib.rs:6-11 defines SandboxPolicy{DangerFullAccess,ReadOnly,WorkspaceWrite,ExternalSandbox} with fail-safe default (from_mode_str:14-33 defaults unknown values to WorkspaceWrite, requires explicit 'danger-full-access' to disable). apps/cli/src/sandbox.rs:58-119 SandboxManager wraps this with real OS backend selection/execution (SandboxType::detect at 20-45, execute_sandboxed at 233-357), invoked from apps/cli/src/features/exec/tools/bash/mod.rs:164-192."
+    "evidence": "crates/agiworkforce-sandbox-policy/src/lib.rs defines only DangerFullAccess, ReadOnly, and WorkspaceWrite, with a fail-safe parser that maps unknown and removed mode names to WorkspaceWrite and requires explicit 'danger-full-access' to disable enforcement. apps/cli/src/sandbox.rs wraps this with real OS backend selection/execution and bypasses OS isolation only for explicit DangerFullAccess; apps/cli/src/features/exec/tools/bash/mod.rs invokes that boundary."
   },
   {
     "item": "os-level-fs-isolation",
@@ -2990,8 +2990,8 @@
   {
     "item": "container-adapter",
     "surface": "packages/permissions",
-    "status": "stub",
-    "evidence": "crates/agiworkforce-sandbox-policy/src/lib.rs:10,20,40 and crates/agiworkforce-protocol/src/{models,permissions,protocol}.rs define a `SandboxPolicy::ExternalSandbox` / `FileSystemSandboxKind::ExternalSandbox` variant threaded pervasively through the protocol layer's serialization/enforcement-flag logic (e.g. protocol.rs:1263,1277,1286 always report ExternalSandbox as 'enabled'/'network access on')."
+    "status": "missing",
+    "evidence": "No caller establishes or verifies an outer container boundary, so the former external-isolation claim was cut instead of being treated as enforcement. crates/agiworkforce-sandbox-policy/src/lib.rs safely maps the removed configuration spelling to WorkspaceWrite; apps/cli/src/sandbox.rs bypasses OS isolation only for explicit DangerFullAccess. crates/agiworkforce-protocol/src/{models,permissions,protocol}.rs and generated PermissionProfile TypeScript no longer expose an external mode, reject its old serialized shapes, preserve split filesystem/network permissions as managed, and fail closed when the legacy bridge cannot represent them. Real Seatbelt and bubblewrap adapters remain built."
   },
   {
     "item": "workspace-trust",
