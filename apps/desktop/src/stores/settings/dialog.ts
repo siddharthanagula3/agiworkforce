@@ -8,6 +8,7 @@ export type SettingsTab =
   | 'models-keys'
   | 'agents'
   | 'skills'
+  | 'connections'
   | 'connectors'
   | 'plugins'
   | 'notifications'

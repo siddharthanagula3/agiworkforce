@@ -45,6 +45,7 @@ import { PrivacyTab } from './tabs/Privacy';
 import { ModelsKeysTab } from './tabs/ModelsKeys';
 import { AgentsTab } from './tabs/Agents';
 import { CapabilitiesTab } from './tabs/Capabilities';
+import { ConnectionsTab } from './tabs/Connections';
 import { ConnectorsTab } from './tabs/Connectors';
 import { PluginsTab } from './tabs/Plugins';
 import { NotificationsTab } from './tabs/Notifications';
@@ -679,6 +680,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return <AgentsTab />;
       case 'capabilities':
         return <CapabilitiesTab />;
+      case 'connections':
+        return <ConnectionsTab />;
       case 'connectors':
         return <ConnectorsTab />;
       case 'agi-code':

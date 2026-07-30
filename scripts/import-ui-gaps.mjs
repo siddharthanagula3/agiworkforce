@@ -27,7 +27,7 @@ function normalizeMachineLocalPaths(value) {
     .replaceAll('/tmp/agiw/', '');
 }
 
-function reconcileCurrentP0Premises(record) {
+function reconcileCurrentPremises(record) {
   const currentOverrides = {
     'GAP-001': {
       title: 'Mobile has no supported Skills screen or workflow',
@@ -53,6 +53,25 @@ function reconcileCurrentP0Premises(record) {
         "apps/desktop/src/features/automation/ActionRecorder.tsx owns the live controls and automation:action_recorded listener; apps/desktop/src/features/v3/DesktopShellV3.tsx mounts it only for activePanel === 'record-skill'. apps/desktop/src-tauri/src/ui/overlay/window.rs proves an overlay window primitive exists, but searches find no RecorderHud or recorder overlay integration.",
       suggestedFix:
         'Create a recorder-specific secondary Tauri window using the existing overlay/window primitives. Mount a RecorderHud subscribed to the same event stream, expose step count/mic/Discard/Done, keep the main panel as review, and add a global stop shortcut.',
+    },
+    'GAP-004': {
+      status: 'Done',
+      owner: 'Desktop',
+      title: 'Desktop Connections exposes the supported mobile-control pairing workflow',
+      detail:
+        "The reference dedicates a Connections settings page to remote-control management. agiworkforce now has a canonical, searchable Connections destination in the mounted Desktop Settings panel. It exposes the product's supported contract—pairing the mobile app to monitor this Mac and respond to agent approvals—without presenting unimplemented outbound-device or SSH controls.",
+      evidence:
+        'packages/ui/ui/src/settings-nav.ts registers Connections in the shared Desktop settings navigation. apps/desktop/src/features/settings/tabs/Connections/index.tsx mounts the production MobileCompanionPanel, whose QRPairingCard and RemoteApprovalCard use the authenticated signaling/WebRTC connectionStore and live tool approval state. SettingsPanel.tsx renders the tab; the duplicate features/experimental/MobileCompanionPanel.tsx is removed. GAP-004-connections-settings.test.tsx and SettingsPanel.render.test.tsx verify the nav, mounted panel, and single implementation owner.',
+      suggestedFix:
+        'Completed for the supported control-this-Mac workflow. Add outbound device control or SSH tabs only after those runtimes have real lifecycle, persistence, and revocation contracts; keep the remaining multi-device management work tracked in GAP-096.',
+    },
+    'GAP-005': {
+      status: 'Done',
+      owner: 'Desktop',
+      evidence:
+        'Duplicate GAP-005 is closed by the same canonical Connections nav entry, mounted ConnectionsTab, production MobileCompanionPanel, and removal of the experimental duplicate recorded in GAP-004.',
+      suggestedFix:
+        'Duplicate disposition complete; retain GAP-004 as the canonical P0 record and GAP-096 for the narrower remaining multi-device scope.',
     },
     'GAP-006': {
       suggestedFix:
@@ -97,6 +116,15 @@ function reconcileCurrentP0Premises(record) {
         'apps/extension-vscode/src/features/permissions/agentModeConsent.ts is the sole agent.mode write boundary. It persists versioned consent only while bypass remains active, fails unconfirmed bypass closed to Auto, reverts raw settings edits before prompting, and provides explicit Cancel/Confirm actions with scope and risk copy. Config.agentMode and ChatStateManager enforce the consent state at read/dispatch time. agentModeConsent.test.ts covers cancellation, confirmation, raw-setting reconciliation, and consent revocation.',
       suggestedFix:
         'Completed. Keep all future agent-mode mutation paths on setAgentModeWithConsent, retain the raw-setting reconciliation listener, and increment the consent version whenever the granted scope or risk contract changes.',
+    },
+    'GAP-096': {
+      title: 'Connections mounts live pairing, but multi-device management remains incomplete',
+      detail:
+        'The reference combines inbound control, outbound devices, SSH, paired-device history, last-connected timestamps, and access revocation. agiworkforce now mounts its real inbound mobile-control pairing and approval workflow in Settings > Connections. The remaining gap is narrower: existing connected-device management is still separate, and no supported outbound-device or SSH runtime exists.',
+      evidence:
+        'apps/desktop/src/features/settings/tabs/Connections/index.tsx mounts MobileCompanionPanel for the supported control-this-Mac flow. packages/ui/ui/src/settings-nav.ts makes Connections searchable and reachable. TeamAccountSettings.tsx still owns a separate Connected Devices list, while current code has no production outbound-device or SSH session contract.',
+      suggestedFix:
+        'Move the real connected-device history and revoke controls into Connections, backed by the same device/session source of truth. Add Control other devices and SSH tabs only alongside implemented connection runtimes, not as placeholder settings surfaces.',
     },
   };
 
@@ -158,7 +186,7 @@ const normalized = parsed.records.map((sourceRecord) => {
     ]),
   );
   record.owner = record.owner.trim() || 'Unassigned';
-  return reconcileCurrentP0Premises(record);
+  return reconcileCurrentPremises(record);
 });
 
 writeArtifacts(mergeKnownDuplicate(normalized));
