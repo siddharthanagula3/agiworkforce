@@ -22,6 +22,13 @@ import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
 const DesktopLibrary = lazy(() => import('@/features/library/DesktopLibrary'));
 // Durable Cloud agent runs — the same list web shows at /tasks.
 const DesktopTasks = lazy(() => import('@/features/tasks/DesktopTasks'));
+// Device-owned agent goals. This panel owns auto/sequential/parallel/swarm
+// submission and the live decomposed-task monitor for Local/BYOK sessions.
+const DesktopAgentTasks = lazy(() =>
+  import('@/features/agi/AgentTaskPanel').then((module) => ({
+    default: module.AgentTaskPanel,
+  })),
+);
 // Account-owned schedules that continue to run after Desktop closes.
 const DesktopCloudSchedules = lazy(() => import('@/features/schedules/DesktopCloudSchedules'));
 const DesktopTerminalWorkspace = lazy(() =>
@@ -71,6 +78,7 @@ type V3Panel =
   | 'artifacts'
   | 'library'
   | 'tasks'
+  | 'agent-tasks'
   | 'cloud-schedules'
   | 'scheduled'
   | 'record-skill';
@@ -185,7 +193,7 @@ export function DesktopShellV3({
   useEffect(() => {
     if (
       privacyMode === 'managed' &&
-      ['artifacts', 'scheduled', 'record-skill'].includes(activePanel)
+      ['artifacts', 'scheduled', 'record-skill', 'agent-tasks'].includes(activePanel)
     ) {
       setActivePanel('chat');
     }
@@ -396,9 +404,7 @@ export function DesktopShellV3({
       }
       if (view === 'tasks') {
         if (privacyMode === 'local') {
-          // Tasks are Cloud runs that survive the app closing; a local session
-          // has none, and Scheduled is the device-side equivalent.
-          toast.info('Tasks lists Cloud runs. Device schedules are under Scheduled.');
+          setActivePanel('agent-tasks');
           return;
         }
         setActivePanel('tasks');
@@ -519,6 +525,12 @@ export function DesktopShellV3({
                     onOpenConversation={handleOpenProjectConversation}
                     onStartChat={() => handleNewChat()}
                   />
+                </Suspense>
+              </div>
+            ) : activePanel === 'agent-tasks' && privacyMode === 'local' ? (
+              <div className="h-full overflow-y-auto">
+                <Suspense fallback={null}>
+                  <DesktopAgentTasks />
                 </Suspense>
               </div>
             ) : activePanel === 'cloud-schedules' && privacyMode === 'managed' ? (
