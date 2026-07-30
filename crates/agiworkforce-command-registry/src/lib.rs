@@ -276,7 +276,6 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             false,
             vec!["plugins", "marketplace", "market"],
         ),
-        RegistryCommand::builtin_slash("tasks", "View background tasks", true, false, vec![]),
         RegistryCommand::builtin_slash(
             "status",
             "Show session info (model, tokens, mode)",
@@ -748,9 +747,9 @@ mod tests {
     }
 
     #[test]
-    fn parity_commands_chrome_ide_tasks_agents_are_registered() {
+    fn parity_commands_chrome_ide_and_agents_are_registered() {
         let commands = builtin_slash_registry_commands();
-        for name in ["chrome", "ide", "tasks", "agents"] {
+        for name in ["chrome", "ide", "agents"] {
             assert!(
                 commands.iter().any(|command| command.name == name),
                 "/{name} must be registered (added for Claude Code v2.1.128 parity)"

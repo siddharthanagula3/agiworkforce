@@ -1405,7 +1405,7 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 44);
+        assert_eq!(defs.len(), 38);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
     }
 

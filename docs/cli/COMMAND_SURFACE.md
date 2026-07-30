@@ -55,7 +55,7 @@ Nested subcommand groups are owned by their modules. This artifact only tracks t
 
 The shared builtin slash registry is the advertised builtin slash surface for command palette/help composition. It currently contains 86 builtin commands:
 
-`/model`, `/plan`, `/fast`, `/compact`, `/clear`, `/review`, `/diff`, `/copy`, `/init`, `/new`, `/resume`, `/fork`, `/rename`, `/save`, `/history`, `/export`, `/rewind`, `/mcp`, `/skills`, `/agents`, `/permissions`, `/hooks`, `/chrome`, `/ide`, `/plugin`, `/tasks`, `/status`, `/cost`, `/usage`, `/sandbox`, `/doctor`, `/recap`, `/release-notes`, `/keybindings`, `/output-style`, `/fallback`, `/replay`, `/insights`, `/context`, `/config`, `/models`, `/memory`, `/btw`, `/voice`, `/theme`, `/login`, `/logout`, `/feedback`, `/help`, `/exit`, `/focus`, `/advisor`, `/team-onboarding`, `/terminal-setup`, `/reload-plugins`, `/extra-usage`, `/remote-env`.
+`/model`, `/plan`, `/fast`, `/compact`, `/clear`, `/review`, `/diff`, `/copy`, `/init`, `/new`, `/resume`, `/fork`, `/rename`, `/save`, `/history`, `/export`, `/rewind`, `/mcp`, `/skills`, `/agents`, `/permissions`, `/hooks`, `/chrome`, `/ide`, `/plugin`, `/status`, `/cost`, `/usage`, `/sandbox`, `/doctor`, `/recap`, `/release-notes`, `/keybindings`, `/output-style`, `/fallback`, `/replay`, `/insights`, `/context`, `/config`, `/models`, `/memory`, `/btw`, `/voice`, `/theme`, `/login`, `/logout`, `/feedback`, `/help`, `/exit`, `/focus`, `/advisor`, `/team-onboarding`, `/terminal-setup`, `/reload-plugins`, `/extra-usage`, `/remote-env`.
 
 Important aliases include `/m`, `/sessions`, `/branch`, `/perms`, `/approvals`, `/plugins`, `/marketplace`, `/market`, `/diagnose`, `/health`, `/changelog`, `/keys`, `/ctx`, `/providers`, `/mem`, `/v`, `/bug`, `/h`, `/?`, `/quit`, `/q`, `/onboarding`, `/shell-setup`, and `/pricing`.
 
@@ -87,7 +87,7 @@ The legacy `TuiApp` path has two coverage layers:
 
 Direct TUI match arms currently handle these shared-registry canonical commands:
 
-`model`, `plan`, `fast`, `compact`, `clear`, `review`, `diff`, `copy`, `init`, `new`, `resume`, `fork`, `rename`, `save`, `history`, `export`, `rewind`, `mcp`, `skills`, `permissions`, `hooks`, `plugin`, `tasks`, `status`, `cost`, `usage`, `output-style`, `fallback`, `replay`, `insights`, `context`, `config`, `models`, `memory`, `btw`, `voice`, `theme`, `login`, `logout`, `feedback`, `help`, `exit`, `focus`, `advisor`, `team-onboarding`, `terminal-setup`, `reload-plugins`, `extra-usage`, `remote-env`.
+`model`, `plan`, `fast`, `compact`, `clear`, `review`, `diff`, `copy`, `init`, `new`, `resume`, `fork`, `rename`, `save`, `history`, `export`, `rewind`, `mcp`, `skills`, `permissions`, `hooks`, `plugin`, `status`, `cost`, `usage`, `output-style`, `fallback`, `replay`, `insights`, `context`, `config`, `models`, `memory`, `btw`, `voice`, `theme`, `login`, `logout`, `feedback`, `help`, `exit`, `focus`, `advisor`, `team-onboarding`, `terminal-setup`, `reload-plugins`, `extra-usage`, `remote-env`.
 
 Shared-fallback commands include:
 
