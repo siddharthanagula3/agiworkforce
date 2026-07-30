@@ -211,7 +211,7 @@ fn default_global_hotkey_combo() -> String {
     crate::sys::commands::shortcuts::platform_default_quick_query_combo().to_string()
 }
 
-fn default_allowed_directories() -> Vec<String> {
+pub(crate) fn default_allowed_directories() -> Vec<String> {
     let mut dirs = Vec::new();
 
     // The selected project/workspace is added explicitly when the user chooses
@@ -456,7 +456,30 @@ pub async fn settings_save(
     let mut current_settings = state.settings.lock().await;
     *current_settings = settings.clone();
 
-    // Persist to disk
+    persist_settings_snapshot(&app_handle, &settings).await?;
+
+    if let Some(shortcuts_state) =
+        app_handle.try_state::<Arc<Mutex<crate::sys::commands::shortcuts::ShortcutsState>>>()
+    {
+        crate::sys::commands::shortcuts::apply_quick_query_hotkey_preferences(
+            &app_handle,
+            &shortcuts_state,
+            crate::sys::commands::shortcuts::QuickQueryHotkeyPreferences {
+                enabled: settings.global_hotkey_preferences.enabled,
+                combo: settings.global_hotkey_preferences.combo.clone(),
+            },
+        )
+        .await?;
+    }
+
+    tracing::info!("Settings persisted");
+    Ok(())
+}
+
+pub(crate) async fn persist_settings_snapshot(
+    app_handle: &tauri::AppHandle,
+    settings: &Settings,
+) -> Result<(), String> {
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
@@ -474,22 +497,45 @@ pub async fn settings_save(
         .await
         .map_err(|e| format!("Failed to write settings file: {}", e))?;
 
-    if let Some(shortcuts_state) =
-        app_handle.try_state::<Arc<Mutex<crate::sys::commands::shortcuts::ShortcutsState>>>()
-    {
-        crate::sys::commands::shortcuts::apply_quick_query_hotkey_preferences(
-            &app_handle,
-            &shortcuts_state,
-            crate::sys::commands::shortcuts::QuickQueryHotkeyPreferences {
-                enabled: settings.global_hotkey_preferences.enabled,
-                combo: settings.global_hotkey_preferences.combo.clone(),
-            },
-        )
-        .await?;
-    }
-
     tracing::info!("Settings persisted to {:?}", settings_path);
     Ok(())
+}
+
+/// Persist a native-authoritative extension of the Allowed Directories list.
+///
+/// Used by the just-in-time folder consent flow. The snapshot is written before
+/// the in-memory state is widened, so a disk failure leaves both enforcement
+/// and the settings UI on the previous, fail-closed value.
+pub(crate) async fn add_allowed_directories_persisted(
+    app_handle: &tauri::AppHandle,
+    state: &SettingsState,
+    paths: &[String],
+) -> Result<Vec<String>, String> {
+    let mut current = state.settings.lock().await;
+    let mut updated = current.clone();
+
+    for path in paths {
+        let path = path.trim();
+        if path.is_empty()
+            || updated
+                .allowed_directories
+                .iter()
+                .any(|entry| entry == path)
+        {
+            continue;
+        }
+        updated.allowed_directories.push(path.to_string());
+    }
+
+    updated.allowed_directories.sort();
+    updated.allowed_directories.dedup();
+
+    if updated.allowed_directories != current.allowed_directories {
+        persist_settings_snapshot(app_handle, &updated).await?;
+        *current = updated;
+    }
+
+    Ok(current.allowed_directories.clone())
 }
 
 #[tauri::command]

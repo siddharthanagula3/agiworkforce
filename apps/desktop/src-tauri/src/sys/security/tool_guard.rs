@@ -1527,16 +1527,16 @@ impl ToolExecutionGuard {
     /// Paths are canonicalized to prevent symlink bypass attacks.
     /// This method uses interior mutability via RwLock.
     pub fn set_allowed_paths(&self, paths: Vec<PathBuf>) {
-        if !paths.is_empty() {
-            // Canonicalize each path to resolve symlinks and relative segments,
-            // preventing traversal via symlinks that point outside allowed directories.
-            let canonical_paths: Vec<PathBuf> = paths
-                .into_iter()
-                .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
-                .collect();
-            if let Ok(mut guard) = self.allowed_paths.write() {
-                *guard = canonical_paths;
-            }
+        // Canonicalize each path to resolve symlinks and relative segments,
+        // preventing traversal via symlinks that point outside allowed directories.
+        // An empty list must replace the previous list as well: otherwise removing
+        // the final Allowed Directory leaves a stale capability active in memory.
+        let canonical_paths: Vec<PathBuf> = paths
+            .into_iter()
+            .map(|p| std::fs::canonicalize(&p).unwrap_or(p))
+            .collect();
+        if let Ok(mut guard) = self.allowed_paths.write() {
+            *guard = canonical_paths;
         }
     }
 
@@ -3585,5 +3585,20 @@ mod tests {
         assert!(guard
             .get_safety_tier("video_generate")
             .requires_user_action());
+    }
+
+    #[test]
+    fn empty_allowed_paths_update_revokes_previous_paths() {
+        let guard = ToolExecutionGuard::new();
+        let directory = tempfile::tempdir().expect("temp folder");
+
+        guard.set_allowed_paths(vec![directory.path().to_path_buf()]);
+        assert_eq!(guard.get_allowed_paths().len(), 1);
+
+        guard.set_allowed_paths(Vec::new());
+        assert!(
+            guard.get_allowed_paths().is_empty(),
+            "removing the final Allowed Directory must clear the live guard"
+        );
     }
 }

@@ -13,6 +13,7 @@ import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
 import { guardedFetch } from './lib/egressGuard';
 import { cloudFetch, getAuthHeaders, getCloudModels, CLOUD_API_BASE_URL } from './api/cloudApi';
+import { clearSessionToolApprovals } from './api/toolConfirmation';
 import { initializeAgentTaskEventListeners } from './stores/agentTaskStore';
 import {
   cleanupAgentWorkflowEventListeners,
@@ -429,6 +430,26 @@ const DesktopShell = () => {
   const clearHistory = useUnifiedChatStore((store) => store.clearHistory);
   const ensureActiveConversation = useUnifiedChatStore((store) => store.ensureActiveConversation);
   const addError = useErrorStore((store) => store.addError);
+
+  useEffect(() => {
+    if (!isTauri) return;
+
+    return useDesktopChatStore.subscribe(
+      (state) => state.activeConversationId,
+      (conversationId, previousConversationId) => {
+        if (conversationId === previousConversationId) return;
+        void clearSessionToolApprovals().catch((error) => {
+          console.error(
+            '[FolderAccess] Failed to revoke task-scoped approvals after changing chats:',
+            error,
+          );
+          toast.error(
+            'Folder permissions from the previous chat could not be cleared. Restart AGI before running another local tool.',
+          );
+        });
+      },
+    );
+  }, []);
 
   const isMac =
     typeof navigator !== 'undefined' &&
@@ -1148,6 +1169,15 @@ const DesktopShell = () => {
   }, []);
 
   const startNewChat = useCallback(async () => {
+    if (isTauri) {
+      try {
+        await clearSessionToolApprovals();
+      } catch (error) {
+        console.error('[FolderAccess] Failed to revoke task-scoped approvals:', error);
+        toast.error('Could not start a new chat until task-scoped folder permissions are cleared.');
+        return;
+      }
+    }
     clearHistory();
   }, [clearHistory]);
 

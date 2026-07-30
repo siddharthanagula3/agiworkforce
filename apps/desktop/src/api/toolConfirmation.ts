@@ -54,6 +54,10 @@ export interface ToolConfirmationSummary {
   undo_description: string | null;
 }
 
+export interface ToolConfirmationResolution {
+  allowedDirectories: string[] | null;
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
@@ -76,7 +80,7 @@ export async function respondToolConfirmation(
   reason?: string,
   rememberForSession: boolean = false,
   toolName?: string,
-): Promise<void> {
+): Promise<ToolConfirmationResolution> {
   if (!requestId || requestId.trim().length === 0) {
     throw new Error('[toolConfirmation] requestId is required');
   }
@@ -89,13 +93,13 @@ export async function respondToolConfirmation(
       rememberForSession,
       toolName,
     });
-    return;
+    return { allowedDirectories: null };
   }
 
   try {
     // Tauri converts snake_case Rust params to camelCase in TypeScript
     // So request_id in Rust becomes requestId in TypeScript
-    await invoke<void>('respond_tool_confirmation', {
+    return await invoke<ToolConfirmationResolution>('respond_tool_confirmation', {
       requestId: requestId,
       approved,
       rememberChoice: rememberChoice,
@@ -173,6 +177,21 @@ export async function clearRememberedToolChoices(): Promise<void> {
     console.error('[toolConfirmation] Failed to clear remembered choices:', error);
     throw error;
   }
+}
+
+/**
+ * Revoke approvals that are intentionally limited to the active chat task.
+ *
+ * This also removes session-only folder roots from the native ToolGuard and
+ * live filesystem MCP server.
+ */
+export async function clearSessionToolApprovals(): Promise<void> {
+  if (!isTauri) {
+    console.debug('[toolConfirmation] clearSessionToolApprovals (mock)');
+    return;
+  }
+
+  await invoke<void>('clear_session_tool_approvals');
 }
 
 /**

@@ -15,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 use tokio::sync::oneshot;
 use tracing::{debug, info, warn};
 
@@ -44,11 +44,21 @@ pub const NEVER_REMEMBERABLE: &[&str] = &[
     "file_write_binary",
     "file_open_with_default_app",
     "terminal_execute",
+    // Folder consent remembers the folders in Settings, never a blanket
+    // approval for every future folder request.
+    "folder_access",
     // Tools that emit JS into arbitrary visited pages (Lethal Trifecta
     // exfil primitive). Removed from default registry per F8 but listed
     // here so any re-introduction still cannot be remembered.
     "playwright_evaluate",
 ];
+
+pub const FOLDER_ACCESS_TOOL_NAME: &str = "folder_access";
+
+struct PendingConfirmation {
+    sender: oneshot::Sender<ToolConfirmationResponse>,
+    request: Option<ToolConfirmationRequest>,
+}
 
 /// Returns `true` when `tool_name` is eligible to have a remembered choice
 /// persisted. Currently the inverse of [`NEVER_REMEMBERABLE`] membership.
@@ -118,7 +128,7 @@ pub enum AgentMode {
 /// State for managing pending tool confirmation requests
 pub struct ToolConfirmationState {
     /// Map of request_id to oneshot sender for confirmation response
-    pending_confirmations: Arc<Mutex<HashMap<String, oneshot::Sender<ToolConfirmationResponse>>>>,
+    pending_confirmations: Arc<Mutex<HashMap<String, PendingConfirmation>>>,
     /// Remembered choices for specific tools (tool_name -> approved)
     remembered_choices: Arc<Mutex<HashMap<String, bool>>>,
     /// Tool execution guard for policy lookups
@@ -131,6 +141,9 @@ pub struct ToolConfirmationState {
     /// Session-scoped tool approvals — tools approved for the current session only.
     /// Cleared when session ends or user explicitly resets.
     pub session_approved_tools: Arc<Mutex<HashSet<String>>>,
+    /// Folder roots approved only for the current task/session.
+    /// These never enter settings.json or the persistent MCP configuration.
+    session_allowed_paths: Arc<Mutex<HashSet<PathBuf>>>,
     /// SQLite connection for persisting remembered choices across restarts.
     /// None in test builds / when no DB is available.
     db_conn: Option<Arc<StdMutex<Connection>>>,
@@ -146,6 +159,7 @@ impl ToolConfirmationState {
             auto_approve_all: Arc::new(AtomicBool::new(false)),
             agent_mode: Arc::new(Mutex::new(AgentMode::default())),
             session_approved_tools: Arc::new(Mutex::new(HashSet::new())),
+            session_allowed_paths: Arc::new(Mutex::new(HashSet::new())),
             db_conn: None,
         }
     }
@@ -170,6 +184,7 @@ impl ToolConfirmationState {
             auto_approve_all: Arc::new(AtomicBool::new(false)),
             agent_mode: Arc::new(Mutex::new(AgentMode::Safe)),
             session_approved_tools: Arc::new(Mutex::new(HashSet::new())),
+            session_allowed_paths: Arc::new(Mutex::new(HashSet::new())),
             db_conn: Some(db_conn.clone()),
         };
         state.load_choices_from_db(&db_conn);
@@ -513,7 +528,21 @@ impl ToolConfirmationState {
     /// Clear all session-scoped tool approvals
     pub fn clear_session_approvals(&self) {
         self.session_approved_tools.lock().clear();
+        self.session_allowed_paths.lock().clear();
         info!("[ToolConfirmation] Cleared all session-scoped tool approvals");
+    }
+
+    pub fn add_session_allowed_paths(&self, paths: &[String]) {
+        let mut session_paths = self.session_allowed_paths.lock();
+        for path in paths {
+            let path = PathBuf::from(path);
+            let canonical = std::fs::canonicalize(&path).unwrap_or(path);
+            session_paths.insert(canonical);
+        }
+    }
+
+    pub fn get_session_allowed_paths(&self) -> Vec<PathBuf> {
+        self.session_allowed_paths.lock().iter().cloned().collect()
     }
 
     /// Check if user has a remembered choice for this tool
@@ -567,7 +596,10 @@ impl ToolConfirmationState {
     /// Update the allowed directories in the tool guard.
     /// This is called when settings are loaded to sync user-configured directories.
     pub fn update_allowed_paths(&self, paths: Vec<String>) {
-        let path_bufs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+        let mut path_bufs: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+        path_bufs.extend(self.get_session_allowed_paths());
+        path_bufs.sort();
+        path_bufs.dedup();
         self.tool_guard.set_allowed_paths(path_bufs);
         tracing::info!("Updated tool guard allowed paths");
     }
@@ -586,16 +618,46 @@ impl ToolConfirmationState {
         &self,
         request_id: String,
     ) -> oneshot::Receiver<ToolConfirmationResponse> {
+        self.register_pending_inner(request_id, None)
+    }
+
+    pub fn register_pending_request(
+        &self,
+        request: &ToolConfirmationRequest,
+    ) -> oneshot::Receiver<ToolConfirmationResponse> {
+        self.register_pending_inner(request.request_id.clone(), Some(request.clone()))
+    }
+
+    fn register_pending_inner(
+        &self,
+        request_id: String,
+        request: Option<ToolConfirmationRequest>,
+    ) -> oneshot::Receiver<ToolConfirmationResponse> {
         let (tx, rx) = oneshot::channel();
-        self.pending_confirmations.lock().insert(request_id, tx);
+        self.pending_confirmations.lock().insert(
+            request_id,
+            PendingConfirmation {
+                sender: tx,
+                request,
+            },
+        );
         rx
+    }
+
+    pub fn pending_request(&self, request_id: &str) -> Option<ToolConfirmationRequest> {
+        self.pending_confirmations
+            .lock()
+            .get(request_id)
+            .and_then(|pending| pending.request.clone())
     }
 
     /// Resolve a pending confirmation with the user's response
     pub fn resolve_pending(&self, response: ToolConfirmationResponse) -> Result<(), String> {
         let mut pending = self.pending_confirmations.lock();
-        if let Some(tx) = pending.remove(&response.request_id) {
-            tx.send(response)
+        if let Some(pending) = pending.remove(&response.request_id) {
+            pending
+                .sender
+                .send(response)
                 .map_err(|_| "Failed to send confirmation response".to_string())
         } else {
             Err(format!(
@@ -753,15 +815,129 @@ impl From<&ToolConfirmationRequest> for ToolConfirmationSummary {
 // Tauri Commands
 // ============================================================================
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolConfirmationResolution {
+    /// Present only when a remembered folder grant changed or confirmed the
+    /// native Allowed Directories state. The renderer mirrors this value;
+    /// it never supplies the authoritative paths.
+    pub allowed_directories: Option<Vec<String>>,
+}
+
+fn string_array_parameter(
+    request: &ToolConfirmationRequest,
+    key: &str,
+) -> Result<Vec<String>, String> {
+    let values = request
+        .parameters
+        .get(key)
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("Folder access request is missing '{}'", key))?;
+
+    let mut strings = values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| format!("Folder access '{}' entries must be non-empty strings", key))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    strings.sort();
+    strings.dedup();
+    Ok(strings)
+}
+
+fn validated_folder_roots(request: &ToolConfirmationRequest) -> Result<Vec<String>, String> {
+    if request.tool_name != FOLDER_ACCESS_TOOL_NAME {
+        return Err("Pending request is not a folder access request".to_string());
+    }
+
+    let requested_paths = string_array_parameter(request, "paths")?;
+    let directories = string_array_parameter(request, "directories")?;
+    let capabilities = string_array_parameter(request, "capabilities")?;
+
+    if requested_paths.is_empty() || directories.is_empty() || capabilities.is_empty() {
+        return Err(
+            "Folder access requests require paths, directories, and capabilities".to_string(),
+        );
+    }
+
+    for capability in &capabilities {
+        if !matches!(capability.as_str(), "read" | "modify" | "execute") {
+            return Err(format!(
+                "Unsupported folder access capability '{}'",
+                capability
+            ));
+        }
+    }
+
+    let canonical_directories = directories
+        .into_iter()
+        .map(|directory| {
+            let directory_path = PathBuf::from(&directory);
+            if !directory_path.is_absolute() || directory_path.parent().is_none() {
+                return Err(format!(
+                    "Folder access root must be an absolute, non-root directory: {}",
+                    directory
+                ));
+            }
+            let canonical = std::fs::canonicalize(&directory_path)
+                .map_err(|error| format!("Could not resolve folder '{}': {}", directory, error))?;
+            if !canonical.is_dir() {
+                return Err(format!(
+                    "Folder access root is not a directory: {}",
+                    directory
+                ));
+            }
+            if crate::sys::security::blocked_paths::is_blocked(&canonical) {
+                return Err(format!(
+                    "Folder access root is a protected system path: {}",
+                    directory
+                ));
+            }
+            Ok(canonical.to_string_lossy().to_string())
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    for requested in requested_paths {
+        let requested_path = PathBuf::from(&requested);
+        if !requested_path.is_absolute()
+            || requested_path
+                .components()
+                .any(|component| matches!(component, std::path::Component::ParentDir))
+        {
+            return Err(format!(
+                "Requested folder access path must be absolute and traversal-free: {}",
+                requested
+            ));
+        }
+
+        if !canonical_directories
+            .iter()
+            .any(|root| requested_path.starts_with(root))
+        {
+            return Err(format!(
+                "Requested path '{}' is outside the authoritative folder roots",
+                requested
+            ));
+        }
+    }
+
+    Ok(canonical_directories)
+}
+
 /// Respond to a tool confirmation request.
 /// Called by the frontend when user approves or denies a tool execution.
 ///
-/// `remember_for_session` — when `true` and approved, the tool is added to the
-/// session-scoped approval set so future invocations in this session skip the
-/// confirmation dialog. Requires `tool_name` to be provided.
+/// `remember_for_session` — when `true` and approved, the authoritative native
+/// request's tool is added to the session-scoped approval set so future
+/// invocations in this session skip the confirmation dialog.
 ///
-/// `tool_name` — optional tool name for session-scoped approval. The frontend
-/// receives this in the `ToolConfirmationSummary` and can pass it back here.
+/// `tool_name` — retained for IPC compatibility only. It is never trusted for
+/// authorization because the renderer may be compromised or stale.
 #[tauri::command]
 pub async fn respond_tool_confirmation(
     request_id: String,
@@ -771,7 +947,8 @@ pub async fn respond_tool_confirmation(
     tool_name: Option<String>,
     reason: Option<String>,
     state: State<'_, ToolConfirmationState>,
-) -> Result<(), String> {
+    app_handle: tauri::AppHandle,
+) -> Result<ToolConfirmationResolution, String> {
     info!(
         "[ToolConfirmation] User {} tool execution for request {}{}{}",
         if approved { "approved" } else { "denied" },
@@ -788,9 +965,96 @@ pub async fn respond_tool_confirmation(
         }
     );
 
-    // If the user approved and requested session-scoped approval, store it
+    let pending_request = state.pending_request(&request_id);
+    let _renderer_tool_name = tool_name;
+    let authoritative_tool_name = pending_request
+        .as_ref()
+        .map(|request| request.tool_name.as_str());
+    let mut allowed_directories = None;
+
+    if approved
+        && pending_request
+            .as_ref()
+            .is_some_and(|request| request.tool_name == FOLDER_ACCESS_TOOL_NAME)
+    {
+        let request = pending_request
+            .as_ref()
+            .expect("folder access request checked above");
+        let directories = validated_folder_roots(request)?;
+        let persistent_paths_for_mcp;
+
+        if remember_choice {
+            let settings_state = app_handle
+                .try_state::<crate::sys::commands::settings::SettingsState>()
+                .ok_or_else(|| {
+                    "Settings state is unavailable; folder access remains blocked".to_string()
+                })?;
+            let persisted = crate::sys::commands::settings::add_allowed_directories_persisted(
+                &app_handle,
+                &settings_state,
+                &directories,
+            )
+            .await?;
+            allowed_directories = Some(persisted.clone());
+            persistent_paths_for_mcp = persisted.clone();
+            state.add_session_allowed_paths(&directories);
+            state.update_allowed_paths(persisted);
+        } else {
+            state.add_session_allowed_paths(&directories);
+            let persistent = if let Some(settings_state) =
+                app_handle.try_state::<crate::sys::commands::settings::SettingsState>()
+            {
+                settings_state
+                    .settings
+                    .lock()
+                    .await
+                    .allowed_directories
+                    .clone()
+            } else {
+                Vec::new()
+            };
+            let runtime_persistent = if persistent.is_empty() {
+                crate::sys::commands::settings::default_allowed_directories()
+            } else {
+                persistent
+            };
+            persistent_paths_for_mcp = runtime_persistent.clone();
+            state.update_allowed_paths(runtime_persistent);
+        }
+
+        // Keep the live filesystem MCP server aligned with the effective
+        // native grant. Session-only roots are deliberately not persisted.
+        if let Some(mcp_state) = app_handle.try_state::<crate::sys::commands::mcp::McpState>() {
+            let effective_paths = state.get_allowed_paths();
+            let persistent_sync = if remember_choice && !persistent_paths_for_mcp.is_empty() {
+                mcp_state
+                    .update_filesystem_roots(&persistent_paths_for_mcp)
+                    .await
+            } else {
+                Ok(false)
+            };
+            if let Err(error) = persistent_sync {
+                warn!(
+                    "[ToolConfirmation] Folder grant persisted natively, but persistent filesystem MCP sync failed: {}",
+                    error
+                );
+            }
+            if let Err(error) = mcp_state
+                .update_filesystem_roots_for_session(&effective_paths)
+                .await
+            {
+                warn!(
+                    "[ToolConfirmation] Folder grant applied natively, but live filesystem MCP sync failed: {}",
+                    error
+                );
+            }
+        }
+    }
+
+    // If the user approved and requested session-scoped approval, store the
+    // authoritative pending tool name rather than trusting renderer input.
     if approved && remember_for_session == Some(true) {
-        if let Some(ref name) = tool_name {
+        if let Some(name) = authoritative_tool_name {
             if !name.trim().is_empty() {
                 state.approve_for_session(name);
             }
@@ -804,7 +1068,10 @@ pub async fn respond_tool_confirmation(
         reason,
     };
 
-    state.resolve_pending(response)
+    state.resolve_pending(response)?;
+    Ok(ToolConfirmationResolution {
+        allowed_directories,
+    })
 }
 
 /// Get the safety tier for a specific tool.
@@ -863,8 +1130,44 @@ pub fn clear_remembered_tool_choice(
 /// Call this when starting a new session or when the user wants to revoke
 /// all session-level auto-approvals.
 #[tauri::command]
-pub fn clear_session_tool_approvals(state: State<'_, ToolConfirmationState>) -> Result<(), String> {
+pub async fn clear_session_tool_approvals(
+    state: State<'_, ToolConfirmationState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
     state.clear_session_approvals();
+
+    let persistent = if let Some(settings_state) =
+        app_handle.try_state::<crate::sys::commands::settings::SettingsState>()
+    {
+        settings_state
+            .settings
+            .lock()
+            .await
+            .allowed_directories
+            .clone()
+    } else {
+        Vec::new()
+    };
+    let runtime_persistent = if persistent.is_empty() {
+        crate::sys::commands::settings::default_allowed_directories()
+    } else {
+        persistent
+    };
+    state.update_allowed_paths(runtime_persistent.clone());
+
+    if !runtime_persistent.is_empty() {
+        if let Some(mcp_state) = app_handle.try_state::<crate::sys::commands::mcp::McpState>() {
+            if let Err(error) = mcp_state
+                .update_filesystem_roots_for_session(&runtime_persistent)
+                .await
+            {
+                warn!(
+                    "[ToolConfirmation] Failed to restore persistent MCP roots after session clear: {}",
+                    error
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1297,7 +1600,7 @@ pub async fn request_tool_confirmation(
     }
 
     // Register the pending confirmation
-    let rx = state.register_pending(request_id.clone());
+    let rx = state.register_pending_request(&request);
 
     // Create summary for frontend
     let summary = ToolConfirmationSummary::from(&request);
@@ -1405,7 +1708,7 @@ pub async fn request_tool_confirmation_no_mode_gate(
     }
 
     // Register the pending confirmation
-    let rx = state.register_pending(request_id.clone());
+    let rx = state.register_pending_request(&request);
 
     // Create summary for frontend
     let summary = ToolConfirmationSummary::from(&request);
@@ -1451,6 +1754,60 @@ pub async fn request_tool_confirmation_no_mode_gate(
             );
             Err(format!(
                 "User did not respond within {} seconds",
+                timeout_secs
+            ))
+        }
+    }
+}
+
+/// Folder access is a separate capability boundary from tool approval.
+/// It always requires an explicit point-of-use decision, even when global
+/// auto-approve or a session tool approval is active.
+pub async fn request_folder_access_confirmation(
+    app_handle: &tauri::AppHandle,
+    state: &ToolConfirmationState,
+    request: ToolConfirmationRequest,
+    timeout_secs: u64,
+) -> Result<bool, String> {
+    if request.tool_name != FOLDER_ACCESS_TOOL_NAME {
+        return Err("Folder consent received a non-folder request".to_string());
+    }
+    validated_folder_roots(&request)?;
+
+    let request_id = request.request_id.clone();
+    let rx = state.register_pending_request(&request);
+    let summary = ToolConfirmationSummary::from(&request);
+
+    if let Err(error) = app_handle.emit("tool:confirmation_required", &summary) {
+        state.cancel_pending(&request_id);
+        return Err(format!(
+            "Failed to emit folder confirmation event: {}",
+            error
+        ));
+    }
+
+    info!(
+        "[ToolConfirmation] Waiting for explicit folder access consent (request_id: {})",
+        request_id
+    );
+
+    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
+        Ok(Ok(response)) => Ok(response.approved),
+        Ok(Err(_)) => {
+            state.cancel_pending(&request_id);
+            Err("Folder confirmation channel closed unexpectedly".to_string())
+        }
+        Err(_) => {
+            state.cancel_pending(&request_id);
+            let _ = app_handle.emit(
+                "tool:confirmation_timeout",
+                serde_json::json!({
+                    "request_id": request_id,
+                    "tool_name": FOLDER_ACCESS_TOOL_NAME,
+                }),
+            );
+            Err(format!(
+                "User did not respond to folder access request within {} seconds",
                 timeout_secs
             ))
         }
@@ -1559,6 +1916,99 @@ mod tests {
                 .is_err(),
             "a timed-out request must not be approvable afterwards"
         );
+    }
+
+    #[test]
+    fn folder_request_keeps_authoritative_paths_with_pending_channel() {
+        let state = ToolConfirmationState::new();
+        let directory = tempfile::tempdir().expect("temp folder");
+        let canonical_directory =
+            std::fs::canonicalize(directory.path()).expect("canonical temp folder");
+        let file_path = canonical_directory.join("notes.txt");
+        let request = ToolConfirmationRequest {
+            request_id: "folder-request".to_string(),
+            tool_name: FOLDER_ACCESS_TOOL_NAME.to_string(),
+            tool_description: "Allow file read".to_string(),
+            parameters: serde_json::json!({
+                "requesting_tool": "file_read",
+                "paths": [file_path.to_string_lossy()],
+                "directories": [canonical_directory.to_string_lossy()],
+                "capabilities": ["read"],
+            }),
+            risk_level: crate::sys::security::tool_guard::RiskLevel::High,
+            safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+            reason: "New folder".to_string(),
+            reversible: true,
+            undo_description: None,
+        };
+
+        let _receiver = state.register_pending_request(&request);
+        let stored = state
+            .pending_request(&request.request_id)
+            .expect("native request must remain attached to the pending channel");
+        assert_eq!(stored.tool_name, FOLDER_ACCESS_TOOL_NAME);
+        assert_eq!(
+            stored.parameters["paths"][0].as_str(),
+            Some(file_path.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            validated_folder_roots(&stored).expect("valid folder request"),
+            vec![canonical_directory.to_string_lossy().to_string()]
+        );
+    }
+
+    #[test]
+    fn session_folder_grants_merge_and_clear_without_persisting() {
+        let state = ToolConfirmationState::new();
+        let persistent = tempfile::tempdir().expect("persistent folder");
+        let session = tempfile::tempdir().expect("session folder");
+        let persistent_path =
+            std::fs::canonicalize(persistent.path()).expect("canonical persistent folder");
+        let session_path = std::fs::canonicalize(session.path()).expect("canonical session folder");
+
+        state.add_session_allowed_paths(&[session_path.to_string_lossy().to_string()]);
+        state.update_allowed_paths(vec![persistent_path.to_string_lossy().to_string()]);
+        let effective = state.get_allowed_paths();
+        assert!(effective.contains(&persistent_path.to_string_lossy().to_string()));
+        assert!(effective.contains(&session_path.to_string_lossy().to_string()));
+
+        state.clear_session_approvals();
+        state.update_allowed_paths(vec![persistent_path.to_string_lossy().to_string()]);
+        assert_eq!(
+            state.get_allowed_paths(),
+            vec![persistent_path.to_string_lossy().to_string()]
+        );
+    }
+
+    #[test]
+    fn folder_request_rejects_traversal_and_unknown_capabilities() {
+        let directory = tempfile::tempdir().expect("temp folder");
+        let base = ToolConfirmationRequest {
+            request_id: "folder-request-invalid".to_string(),
+            tool_name: FOLDER_ACCESS_TOOL_NAME.to_string(),
+            tool_description: "Allow file read".to_string(),
+            parameters: serde_json::json!({
+                "paths": [directory.path().join("..").join("secret").to_string_lossy()],
+                "directories": [directory.path().to_string_lossy()],
+                "capabilities": ["read"],
+            }),
+            risk_level: crate::sys::security::tool_guard::RiskLevel::High,
+            safety_tier: ToolSafetyTier::RequiresExplicitApproval,
+            reason: "New folder".to_string(),
+            reversible: true,
+            undo_description: None,
+        };
+        assert!(validated_folder_roots(&base)
+            .expect_err("traversal must fail closed")
+            .contains("traversal-free"));
+
+        let mut unsupported = base;
+        unsupported.parameters["paths"] =
+            serde_json::json!([directory.path().join("file.txt").to_string_lossy()]);
+        unsupported.parameters["capabilities"] = serde_json::json!(["admin"]);
+        assert!(validated_folder_roots(&unsupported)
+            .expect_err("unknown capability must fail closed")
+            .contains("Unsupported"));
     }
 
     #[test]
@@ -2128,6 +2578,7 @@ mod fix_f6_never_rememberable_alignment_tests {
         "file_open_with_default_app",
         "terminal_execute",
         "playwright_evaluate",
+        "folder_access",
     ];
 
     #[test]
