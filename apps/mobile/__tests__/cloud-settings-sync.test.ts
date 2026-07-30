@@ -125,6 +125,9 @@ beforeEach(() => {
     notificationsEnabled: true,
     speechLanguage: 'en',
     autoListenEnabled: true,
+    referencePastChats: false,
+    generateMemoryFromHistory: true,
+    memoryPolicyInitialized: false,
     settingsUpdatedAt: null, // explicit: no local edits on fresh device
     personalization: {
       fullName: '',
@@ -369,6 +372,20 @@ describe('settings sync — dirty detection and push', () => {
     expect(body.baseVersion).toBe('0');
   });
 
+  it('does not let an upgraded dirty snapshot publish unobserved memory defaults', async () => {
+    useCloudSettingsStore.setState({
+      settingsUpdatedAt: '2026-07-29T00:00:00.000Z',
+      memoryPolicyInitialized: false,
+    });
+
+    await syncNow();
+
+    const body = mockPost.mock.calls.find((call) => call[0] === SETTINGS_SYNC_PATH)?.[1] as {
+      settings: Record<string, unknown>;
+    };
+    expect(body.settings['capabilities']).toBeUndefined();
+  });
+
   it('uses the last observed server revision even when the local edit clock is future-skewed', async () => {
     useSettingsSyncStateStore.getState().setSettingsCursor('41');
     useCloudSettingsStore.getState().setThemeMode('dark');
@@ -589,7 +606,14 @@ describe('settings sync — pull applies into useCloudSettingsStore', () => {
     mockGet.mockImplementation(async (path: string) => {
       if (path.startsWith(SETTINGS_SYNC_PATH)) {
         return {
-          settings: { appearance: { theme: 'dark', webOnlyDensity: 'compact' } },
+          settings: {
+            appearance: { theme: 'dark', webOnlyDensity: 'compact' },
+            capabilities: {
+              memory: true,
+              generateFromHistory: true,
+              allowToolAssistedGeneration: true,
+            },
+          },
           cursor: '3',
           hasMore: false,
         } as never;
@@ -616,12 +640,20 @@ describe('settings sync — pull applies into useCloudSettingsStore', () => {
     await syncNow();
 
     const body = mockPost.mock.calls.find((call) => call[0] === SETTINGS_SYNC_PATH)?.[1] as {
-      settings: { appearance: Record<string, unknown> };
+      settings: {
+        appearance: Record<string, unknown>;
+        capabilities: Record<string, unknown>;
+      };
     };
     expect(body.settings.appearance).toMatchObject({
       theme: 'dark',
       accentColor: 'blue',
       webOnlyDensity: 'compact',
+    });
+    expect(body.settings.capabilities).toEqual({
+      memory: true,
+      generateFromHistory: true,
+      allowToolAssistedGeneration: true,
     });
   });
 
@@ -671,6 +703,36 @@ describe('settings sync — pull applies into useCloudSettingsStore', () => {
     expect(p.nickname).toBe('CloudNick');
     expect(p.instructions).toBe('Be concise');
     expect(p.warmth).toBe(80);
+  });
+
+  it('applies pulled account memory preferences without importing Web-only policy keys', async () => {
+    mockGet.mockImplementation(async (path: string) => {
+      if ((path as string).startsWith(SETTINGS_SYNC_PATH))
+        return {
+          settings: {
+            capabilities: {
+              memory: true,
+              generateFromHistory: false,
+              allowToolAssistedGeneration: true,
+            },
+          },
+          cursor: '7',
+          hasMore: false,
+        } as never;
+      if ((path as string).startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      if ((path as string).startsWith('/api/projects/sync')) return emptyProjectPull() as never;
+      return emptyChatPull() as never;
+    });
+
+    await syncNow();
+
+    expect(useCloudSettingsStore.getState().referencePastChats).toBe(true);
+    expect(useCloudSettingsStore.getState().generateMemoryFromHistory).toBe(false);
+    expect(
+      (useCloudSettingsStore.getState() as unknown as Record<string, unknown>)[
+        'allowToolAssistedGeneration'
+      ],
+    ).toBeUndefined();
   });
 
   it('applies pulled language namespace: locale maps to speechLanguage', async () => {
@@ -813,15 +875,27 @@ describe('settings mapping — leak guard (toCloudSettings)', () => {
     expect(payloadJson).not.toContain('sk-openai-');
   });
 
-  it('NEVER emits device-specific fields: voiceEnabled, hapticsEnabled, backgroundFetchEnabled', () => {
+  it('does not publish new memory defaults before this device observes or edits the policy', () => {
     const payload = toCloudSettings(useCloudSettingsStore.getState());
     const payloadJson = JSON.stringify(payload);
 
+    expect(payload.capabilities).toBeUndefined();
+    expect(payloadJson).not.toContain('memoryPolicyInitialized');
+  });
+
+  it('emits only account memory policy after an explicit edit, never device capability results', () => {
+    useCloudSettingsStore.getState().setReferencePastChats(false);
+    const payload = toCloudSettings(useCloudSettingsStore.getState());
+    const payloadJson = JSON.stringify(payload);
+
+    expect(payload.capabilities).toEqual({
+      memory: false,
+      generateFromHistory: true,
+    });
     expect(payloadJson).not.toContain('voiceEnabled');
     expect(payloadJson).not.toContain('hapticsEnabled');
     expect(payloadJson).not.toContain('backgroundFetchEnabled');
     expect(payloadJson).not.toContain('autoApproveMode');
-    expect(payloadJson).not.toContain('capabilities');
     expect(payloadJson).not.toContain('selectedVoiceId');
     expect(payloadJson).not.toContain('selectedPresetId');
     expect(payloadJson).not.toContain('ttsProvider');
@@ -862,6 +936,7 @@ describe('settings mapping — leak guard (toCloudSettings)', () => {
       'notifications',
       'language',
       'accessibility',
+      'capabilities',
       'chat',
       'editor',
     ]);

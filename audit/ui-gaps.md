@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 576b47f4d1777aaa93b781670d1173e055ab6e61ab087cd18954398192d43580 -->
+<!-- ui-gaps-csv-sha256: b94082d268dd08fcf31c6f49e6614bfd7dc32b87c898e289653cbb3f28cf83e4 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 93 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 92 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  297 |
+| Open        |  296 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   39 |
+| Done        |   40 |
 | Not Planned |    5 |
 
 ## P0
@@ -717,24 +717,24 @@ Completed. Add future inline switches only when a persisted value is consumed by
 
 - `claude_reference/127-claude-ios-settings-capabilities-artifacts-code-exec-web-search-toggles.png`
 
-### GAP-031 — No 'Search and reference chats' or 'Generate memory from chat history' toggles
+### GAP-031 — Mobile memory controls gate past-chat context and automatic learning
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** Claude · iOS · Settings > Capabilities (Search/Memory/Tool access)
 
 **Gap**
 
-Claude iOS exposes two distinct memory-related toggles: one lets Claude search past chats for relevant details, another controls whether memory is generated from chat history at all (with a linked 'Memory from past chats' preview). agiworkforce mobile has a Memory settings screen but no equivalent named toggles were found.
+Mobile Memory now exposes the two named controls from the reference. Search and reference chats gates both relevant saved-memory retrieval and a bounded search over physically separate Local or Cloud chat history. Generate memory from chat history independently gates automatic learning and is unavailable while the master reference control is off. Temporary chats bypass both context retrieval and learning; manual memory review and editing remain available.
 
 **Evidence**
 
-searched 'search past chat'/'reference chat' and 'generate memory'/'memory from chat' across apps/mobile, apps/web, apps/desktop — no matches for either concept
+apps/mobile/app/(app)/settings/memory.tsx mounts MemoryControlsCard over the existing memory manager. Local and Cloud settings stores persist separate policies; Cloud maps only memory and generateFromHistory into the account-synced capabilities namespace while recursive merging preserves Web-only keys. chatExecutionStore.ts enforces the reference switch before saved-memory and past-chat retrieval, excludes the active conversation, and injects bounded excerpts as untrusted data; consolidation.ts enforces both switches for Local learning. The Web managed-memory policy now enforces generateFromHistory for server-owned Cloud learning. memory-controls-card.test.tsx, past-chat-context.test.ts, consolidation-mode-routing.test.ts, cloud-settings-sync.test.ts, settings-store.test.tsx, request-processor.memory.test.ts, and managed-memory-context-service.test.ts cover the visible controls, mode boundary, current-chat exclusion, bounding, sync, and runtime gates.
 
 **Suggested fix**
 
-Add both toggles to apps/mobile/app/(app)/settings/memory.tsx (and desktop Memory tab) with the same semantics: one gates historical-chat search, the other gates memory generation from chat history.
+Completed for Mobile and the shared Managed Cloud generation policy. Keep Local and Cloud histories physically separated, keep temporary chats out of retrieval and learning, serialize historical excerpts as bounded untrusted data, and add every future memory-writing path to both policy gates. Desktop-specific memory UI remains independently tracked by GAP-077.
 
 **Reference screenshot(s)**
 

@@ -282,6 +282,9 @@ describe('clearLocalCloudAccountState', () => {
       notificationsEnabled: true,
       speechLanguage: 'en',
       autoListenEnabled: true,
+      referencePastChats: false,
+      generateMemoryFromHistory: true,
+      memoryPolicyInitialized: false,
       personalization: {
         fullName: '',
         nickname: '',

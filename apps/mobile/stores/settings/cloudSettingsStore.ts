@@ -41,6 +41,17 @@ export interface CloudSettingsState {
   speechLanguage: string;
   /** Auto-listen after AI speaks in voice conversation mode */
   autoListenEnabled: boolean;
+  /** Search prior Cloud chats and use relevant account memories while answering */
+  referencePastChats: boolean;
+  /** Generate account memories from eligible Cloud chat turns */
+  generateMemoryFromHistory: boolean;
+  /**
+   * True only after a server pull supplied account-memory policy or the user
+   * explicitly changed one of its controls on this device. Prevents an upgraded
+   * client from publishing newly introduced defaults over an older account
+   * policy before it has observed the server document.
+   */
+  memoryPolicyInitialized: boolean;
   /** User personalization preferences (sent to cloud via cloudSettingsMapping) */
   personalization: Personalization;
   /**
@@ -58,6 +69,8 @@ export interface CloudSettingsState {
   setNotificationsEnabled: (enabled: boolean) => void;
   setSpeechLanguage: (language: string) => void;
   setAutoListenEnabled: (enabled: boolean) => void;
+  setReferencePastChats: (enabled: boolean) => void;
+  setGenerateMemoryFromHistory: (enabled: boolean) => void;
   setPersonalization: (partial: Partial<Personalization>) => void;
   /**
    * Internal: called by applyCloudSettings after a pull to update settingsUpdatedAt
@@ -96,6 +109,10 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
       notificationsEnabled: true,
       speechLanguage: 'en',
       autoListenEnabled: true,
+      // Match the Web privacy-safe default: Cloud memory reads are opt-in.
+      referencePastChats: false,
+      generateMemoryFromHistory: true,
+      memoryPolicyInitialized: false,
       personalization: defaultPersonalization,
       // null = never locally edited in cloud mode; sync engine skips push and
       // pulls server state on the first cloud sync cycle.
@@ -112,6 +129,18 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
         set({ speechLanguage: language, settingsUpdatedAt: nowIso() }),
       setAutoListenEnabled: (enabled) =>
         set({ autoListenEnabled: enabled, settingsUpdatedAt: nowIso() }),
+      setReferencePastChats: (enabled) =>
+        set({
+          referencePastChats: enabled,
+          memoryPolicyInitialized: true,
+          settingsUpdatedAt: nowIso(),
+        }),
+      setGenerateMemoryFromHistory: (enabled) =>
+        set({
+          generateMemoryFromHistory: enabled,
+          memoryPolicyInitialized: true,
+          settingsUpdatedAt: nowIso(),
+        }),
       setPersonalization: (partial) =>
         set({
           personalization: { ...get().personalization, ...partial },
@@ -160,6 +189,9 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
                 notificationsEnabled: s.notificationsEnabled ?? true,
                 speechLanguage: s.speechLanguage ?? 'en',
                 autoListenEnabled: s.autoListenEnabled ?? true,
+                referencePastChats: s.referencePastChats ?? false,
+                generateMemoryFromHistory: s.generateMemoryFromHistory ?? true,
+                memoryPolicyInitialized: s.memoryPolicyInitialized ?? false,
                 personalization: s.personalization ?? defaultPersonalization,
                 // settingsUpdatedAt left null — seeded state is not a local edit.
               });

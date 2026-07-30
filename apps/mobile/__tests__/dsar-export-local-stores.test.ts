@@ -127,6 +127,8 @@ describe('DSAR export local stores', () => {
     // from useLocalSettingsStore (in local mode). Set them there for the export to pick them up.
     useLocalSettingsStore.setState({
       accentColor: 'blue',
+      referencePastChats: false,
+      generateMemoryFromHistory: false,
       personalization: {
         fullName: 'Sid',
         nickname: '',
@@ -170,6 +172,10 @@ describe('DSAR export local stores', () => {
         accent_color: 'blue',
         reduce_sensitive_content: true,
         personalization: expect.objectContaining({ full_name: 'Sid' }),
+        capabilities: expect.objectContaining({
+          referencePastChats: false,
+          generateMemoryFromHistory: false,
+        }),
       }),
     );
     expect(mockShareAsync).toHaveBeenCalledWith(
