@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 6bee485a85d4ecefdada4c1901eb27a6cd1eb7a7a3b7a6b38d8515a29b1799b2 -->
+<!-- ui-gaps-csv-sha256: 18abe1a879040b2383487d163c329d1d46237fcbf0a1c08db9a9a0c87d547a2e -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 8 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 7 P0, 126 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  338 |
+| Open        |  337 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |    3 |
+| Done        |    4 |
 | Not Planned |    0 |
 
 ## P0
@@ -111,29 +111,29 @@ Create a recorder-specific secondary Tauri window using the existing overlay/win
 
 - `references-2/claude-desktop-cowork-record-skill-04-active-capture-zero-steps.png`
 
-### GAP-004 — Desktop has no Connections settings tab; the built pairing UI is unreachable
+### GAP-004 — Desktop Connections exposes the supported mobile-control pairing workflow
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Settings > Connections
 - **Merged from:** GAP-005
 
 **Gap**
 
-Reference dedicates a Connections settings page (tabs: Control this Mac / Control other devices / SSH) to remote-control management. agiworkforce ships a working mobile companion pairing stack on desktop — MobileCompanionPanel, QRPairingCard, RemoteApprovalCard, connectionStore — but no component imports them, and no settings tab exposes them, so the desktop half of the companion feature that mobile's /(app)/companion screen pairs against cannot be opened by a user.
+The reference dedicates a Connections settings page to remote-control management. agiworkforce now has a canonical, searchable Connections destination in the mounted Desktop Settings panel. It exposes the product's supported contract—pairing the mobile app to monitor this Mac and respond to agent approvals—without presenting unimplemented outbound-device or SSH controls.
 
 **Evidence**
 
-grep -rn 'MobileCompanionPanel|QRPairingCard' across apps/desktop/src — only their own definition files plus apps/desktop/src/features/experimental/MobileCompanionPanel.tsx; grep 'Companion' outside those dirs matches only stores/connectionStore.ts; settings tab list (src/features/settings/tabs) has no Connections entry
+packages/ui/ui/src/settings-nav.ts registers Connections in the shared Desktop settings navigation. apps/desktop/src/features/settings/tabs/Connections/index.tsx mounts the production MobileCompanionPanel, whose QRPairingCard and RemoteApprovalCard use the authenticated signaling/WebRTC connectionStore and live tool approval state. SettingsPanel.tsx renders the tab; the duplicate features/experimental/MobileCompanionPanel.tsx is removed. GAP-004-connections-settings.test.tsx and SettingsPanel.render.test.tsx verify the nav, mounted panel, and single implementation owner.
 
-Independent duplicate evidence (GAP-005): apps/desktop/src/features/mobile-companion/MobileCompanionPanel.tsx, apps/desktop/src/features/experimental/MobileCompanionPanel.tsx, apps/desktop/src/features/mobile-companion/QRPairingCard.tsx, apps/desktop/src/features/settings/SettingsPanel.tsx (tab imports list has no connections tab); grep 'MobileCompanionPanel|QRPairingCard|useConnectionStore' across apps/desktop/src/\*_/_.tsx returns only definitions
+Independent duplicate evidence (GAP-005): Duplicate GAP-005 is closed by the same canonical Connections nav entry, mounted ConnectionsTab, production MobileCompanionPanel, and removal of the experimental duplicate recorded in GAP-004.
 
 **Suggested fix**
 
-Add a Connections tab to SETTINGS_NAV that mounts the existing MobileCompanionPanel, with sub-tabs for this machine vs devices this machine controls; delete or merge the duplicate experimental/MobileCompanionPanel.tsx so there is one implementation.
+Completed for the supported control-this-Mac workflow. Add outbound device control or SSH tabs only after those runtimes have real lifecycle, persistence, and revocation contracts; keep the remaining multi-device management work tracked in GAP-096.
 
-Independent duplicate recommendation (GAP-005): Add a 'Connections' entry to SETTINGS_NAV (@agiworkforce/ui) and a apps/desktop/src/features/settings/tabs/Connections/index.tsx that renders MobileCompanionPanel; delete the duplicate features/experimental/MobileCompanionPanel.tsx so there is one owner.
+Independent duplicate recommendation (GAP-005): Duplicate disposition complete; retain GAP-004 as the canonical P0 record and GAP-096 for the narrower remaining multi-device scope.
 
 **Reference screenshot(s)**
 
@@ -2212,7 +2212,7 @@ Add a Permissions block to the new Browser settings tab: an approval policy sele
 
 - `chatgpt_reference/114-codex-macos-settings-browser-permissions-developer-mode-cdp.png`
 
-### GAP-096 — Device pairing UI is built but mounted nowhere — no Connections settings section
+### GAP-096 — Connections mounts live pairing, but multi-device management remains incomplete
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -2221,15 +2221,15 @@ Add a Permissions block to the new Browser settings tab: an approval policy sele
 
 **Gap**
 
-Reference has a Connections screen with Control this Mac / Control other devices / SSH tabs, an Add action and a list of paired devices with last-connected time and Revoke access. agiworkforce has a working pairing flow (QR + pairing code) and a connected-devices list, but QRPairingCard/MobileCompanionPanel are not rendered from any route or tab, and the device list is buried in Team & Collaboration.
+The reference combines inbound control, outbound devices, SSH, paired-device history, last-connected timestamps, and access revocation. agiworkforce now mounts its real inbound mobile-control pairing and approval workflow in Settings > Connections. The remaining gap is narrower: existing connected-device management is still separate, and no supported outbound-device or SSH runtime exists.
 
 **Evidence**
 
-apps/desktop/src/features/mobile-companion/QRPairingCard.tsx and MobileCompanionPanel.tsx are referenced only by each other and by features/experimental/MobileCompanionPanel.tsx (grep 'QRPairingCard'/'MobileCompanionPanel' across apps/desktop/src returns no mounting site); apps/desktop/src/features/settings/TeamAccountSettings.tsx:231-296 (Connected Devices with last seen + Disconnect)
+apps/desktop/src/features/settings/tabs/Connections/index.tsx mounts MobileCompanionPanel for the supported control-this-Mac flow. packages/ui/ui/src/settings-nav.ts makes Connections searchable and reachable. TeamAccountSettings.tsx still owns a separate Connected Devices list, while current code has no production outbound-device or SSH session contract.
 
 **Suggested fix**
 
-Add a Connections settings tab that mounts QRPairingCard under an 'Add device' action and moves the Connected Devices list there, with tabs for devices that control this machine vs devices this machine controls.
+Move the real connected-device history and revoke controls into Connections, backed by the same device/session source of truth. Add Control other devices and SSH tabs only alongside implemented connection runtimes, not as placeholder settings surfaces.
 
 **Reference screenshot(s)**
 
