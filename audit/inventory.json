@@ -3128,8 +3128,8 @@
   {
     "item": "approval-routing",
     "surface": "packages/sessions",
-    "status": "unwired",
-    "evidence": "services/api-gateway/src/services/approvalRouting.ts:1-206 implements a complete owner->admin->approver escalation algorithm (routeApproval(), setTeamRoster(), priority classification, escalation timeouts at lines 64-71/127-205) with an explicit doc comment marking the in-memory teamRosters Map as a placeholder ('replace with DB-backed store in production', line 74-77). Grepped the entire repo (apps/, packages/, services/, excluding node_modules) for 'routeApproval(' and 'approvalRouting' — the only matches are the module itself and its own test file services/api-gateway/__tests__/services/coverage-wave2-approvalRouting.test.ts. No route handler (services/api-gateway/src/routes/agents.ts, mobile.ts, or any apps/web API route) imports or calls routeApproval/setTeamRoster."
+    "status": "missing",
+    "evidence": "The process-local team-roster escalation algorithm and its self-contained test were removed. They had no route, notification, WebSocket, persistence, or package consumer, and their mutable Map could not provide multi-replica-safe approval ownership. The real gateway approval path remains in routes/agents.ts and routes/mobile.ts over owner-scoped agent_approval_requests rows; it does not claim team escalation. Durable team approval routing remains absent rather than simulated."
   },
   {
     "item": "memory-store",
