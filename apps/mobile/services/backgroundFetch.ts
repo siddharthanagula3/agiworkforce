@@ -8,6 +8,10 @@ import { notificationAllowed } from './notificationGate';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import {
+  AGENT_APPROVAL_CATEGORY_IDENTIFIER,
+  registerNotificationCategories,
+} from './notificationCategories';
 
 const BACKGROUND_FETCH_TASK = 'agent-status-check';
 
@@ -102,7 +106,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
                 approvalId: approval.id,
                 route: '/(app)/companion',
               },
-              categoryIdentifier: 'agent-approvals',
+              categoryIdentifier: AGENT_APPROVAL_CATEGORY_IDENTIFIER,
             },
             trigger: null,
           });
@@ -145,6 +149,18 @@ export async function registerBackgroundFetch(): Promise<void> {
   if (status === BackgroundFetch.BackgroundFetchStatus.Restricted) {
     console.warn('[backgroundFetch] Background fetch is restricted');
     return;
+  }
+
+  try {
+    await registerNotificationCategories();
+  } catch (err) {
+    // Background polling is still useful when an OS/build cannot register
+    // categories. Keep the task alive and degrade to a normal tap-to-open
+    // notification instead of disabling approval alerts entirely.
+    console.warn(
+      '[backgroundFetch] Notification action registration failed:',
+      err instanceof Error ? err.message : err,
+    );
   }
 
   const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);

@@ -32,10 +32,14 @@ jest.mock('expo-router', () => ({
 // expo-notifications: capture the response listener callback so we can
 // invoke it directly from a test.
 let capturedResponseListener:
-  | ((response: { notification: { request: { content: { data: unknown } } } }) => void)
+  | ((response: {
+      actionIdentifier: string;
+      notification: { request: { content: { data: unknown } } };
+    }) => void)
   | null = null;
 jest.mock('expo-notifications', () => ({
   __esModule: true,
+  DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
   setNotificationHandler: jest.fn(),
   addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
   addNotificationResponseReceivedListener: jest.fn((cb: typeof capturedResponseListener) => {
@@ -83,6 +87,7 @@ import {
   setNavigatorReady,
   setupNotificationListeners,
 } from '../services/notifications';
+import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from '../services/notificationCategories';
 
 // setupNotificationListeners has a singleton guard — calling it twice
 // short-circuits without re-registering. Register once for the whole
@@ -96,11 +101,15 @@ beforeEach(() => {
   mockRouterPush.mockReset();
 });
 
-function fireNotification(data: Record<string, unknown>): void {
+function fireNotification(
+  data: Record<string, unknown>,
+  actionIdentifier = 'expo.modules.notifications.actions.DEFAULT',
+): void {
   if (!capturedResponseListener) {
     throw new Error('response listener was not captured');
   }
   capturedResponseListener({
+    actionIdentifier,
     notification: { request: { content: { data } } },
   });
 }
@@ -152,10 +161,54 @@ describe('handleNotificationResponse — auth gate', () => {
     expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/companion' });
   });
 
+  it('opens the authenticated approval review surface from the category action', () => {
+    setCurrentSession({
+      access_token: 't',
+      refresh_token: 'r',
+      expires_in: 3600,
+      expires_at: Date.now() / 1000 + 3600,
+      token_type: 'bearer',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    fireNotification(
+      { type: 'agent_approval_needed', approvalId: 'approval-1' },
+      AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER,
+    );
+
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/companion' });
+  });
+
+  it('ignores unknown notification actions', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    setCurrentSession({
+      access_token: 't',
+      refresh_token: 'r',
+      expires_in: 3600,
+      expires_at: Date.now() / 1000 + 3600,
+      token_type: 'bearer',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      user: { id: 'u', app_metadata: {}, user_metadata: {}, aud: 'a', created_at: '' } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    fireNotification({ type: 'agent_approval_needed' }, 'unexpected_action');
+
+    expect(mockRouterPush).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      '[notifications] Ignored unknown notification action:',
+      'unexpected_action',
+    );
+    warn.mockRestore();
+  });
+
   it('does NOT navigate when notification has no data', () => {
     setCurrentSession(null);
     if (!capturedResponseListener) throw new Error('listener missing');
     capturedResponseListener({
+      actionIdentifier: 'expo.modules.notifications.actions.DEFAULT',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       notification: { request: { content: {} as any } },
     });
