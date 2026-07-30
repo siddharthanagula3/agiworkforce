@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 01c3dcfff317bba67d646f40b3ce295b1e50851026d4636588c91e91bea1930b -->
+<!-- ui-gaps-csv-sha256: e1ce14066bfccf7c060933b646fa0ebcf65629f8b1acbc04fc6dca5fb4f5a994 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 104 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 103 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  308 |
+| Open        |  307 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   33 |
+| Done        |   34 |
 | Not Planned |    0 |
 
 ## P0
@@ -648,24 +648,24 @@ Add a remote-workspace list view under app/(app)/companion backed by a control-c
 
 - `chatgpt_reference/038-codex-ios-remote-project-list-projects-sidebar-macbook.png`
 
-### GAP-028 — Scheduled tasks has no suggested-task gallery to teach what to automate
+### GAP-028 — Mobile scheduled tasks teach first-run automation with bounded templates
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-state
 - **Reference:** ChatGPT · iOS · Scheduled tasks
 
 **Gap**
 
-Reference fills the Scheduled screen with dashed suggestion cards (emoji + title + one-line description + '+' to add): Daily brief, Email monitor, Weekend long read, Sale monitor, Concert alerts. agiworkforce's only suggestions are four recurrence phrases inside the QuickSchedule modal ('Every day at 9am'), which describe timing but never a task, so the empty state gives the user no idea what a scheduled task is good for.
+The empty Scheduled tasks state now teaches concrete uses through four accessible dashed template cards: Daily focus, Monday kickoff, Weekly reflection, and Monthly review. Each suggestion is deliberately self-contained and avoids promising email, commerce, calendar, or other connector access that the scheduled-task runtime does not guarantee. Free-plan users continue to see the authoritative Basic upgrade boundary instead of unusable templates.
 
 **Evidence**
 
-apps/mobile/src/features/schedules/components/QuickSchedule.tsx line 184 SUGGESTIONS = recurrence strings only; apps/mobile/app/(app)/schedules/index.tsx EmptyState is a single generic CTA
+apps/mobile/src/features/schedules/templates.ts owns the bounded IDs, display copy, prompts, supported cadence defaults, and getScheduleTemplate allowlist lookup. schedules/index.tsx renders the template gallery only when task creation is available and routes only the selected ID. schedules/create.tsx resolves that ID locally into ScheduleForm initialData, ignores unknown or array-valued route data, and gives an existing saved schedule precedence while editing. schedule-screen.test.tsx, schedule-create-screen.test.tsx, schedule-templates.test.ts, and schedule-form.test.tsx cover visibility, plan gating, ID-only handoff, allowlist resolution, invalid input, edit precedence, supported cadences, and form initialization.
 
 **Suggested fix**
 
-Add a SCHEDULE_TEMPLATES list (emoji, title, description, prompt, default recurrence) rendered as dashed cards above/instead of the empty state; '+' opens the create form pre-filled so the user only confirms time and model.
+Completed. Keep route payloads limited to stable allowlisted IDs, keep every suggested prompt honest about available context, and add connector-dependent templates only when the scheduler has an explicit connector authorization and execution contract.
 
 **Reference screenshot(s)**
 

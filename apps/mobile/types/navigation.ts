@@ -47,6 +47,12 @@ export interface CompanionRouteParams {
   pairingCode?: string;
 }
 
+/** Params for the schedule create/edit screen. */
+export interface ScheduleCreateRouteParams {
+  id?: string;
+  template?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Tab navigation
 // ---------------------------------------------------------------------------
@@ -75,7 +81,7 @@ export interface AppRouteParams {
   '/(app)/companion': CompanionRouteParams | undefined;
   '/(app)/profile': undefined;
   '/(app)/schedules': undefined;
-  '/(app)/schedules/create': undefined;
+  '/(app)/schedules/create': ScheduleCreateRouteParams | undefined;
   '/(app)/settings/memory': undefined;
   '/(app)/messaging': undefined;
   '/onboarding': undefined;

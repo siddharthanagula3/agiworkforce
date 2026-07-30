@@ -134,10 +134,24 @@ describe('Schedules screen Cloud boundary', () => {
 
   it('loads schedules immediately when the route opens in Cloud mode', async () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
-    const { getByText } = render(<SchedulesScreen />);
+    const { getByText, getByLabelText } = render(<SchedulesScreen />);
 
     expect(getByText('No Schedules')).toBeTruthy();
+    expect(getByText('Try a template')).toBeTruthy();
+    expect(getByLabelText('Use Daily focus template')).toBeTruthy();
     await waitFor(() => expect(mockFetchSchedules).toHaveBeenCalledTimes(1));
+  });
+
+  it('opens the create form with only an allowlisted template ID', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByLabelText } = render(<SchedulesScreen />);
+
+    fireEvent.press(getByLabelText('Use Monday kickoff template'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/schedules/create',
+      params: { template: 'monday-kickoff' },
+    });
   });
 
   it('does not contact Cloud when a signed-out session has stale Cloud mode state', () => {
@@ -157,6 +171,7 @@ describe('Schedules screen Cloud boundary', () => {
     const { getByLabelText, queryByLabelText } = render(<SchedulesScreen />);
 
     expect(queryByLabelText('Quick schedule')).toBeNull();
+    expect(queryByLabelText('Use Daily focus template')).toBeNull();
     fireEvent.press(getByLabelText('View plans for scheduled tasks'));
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
   });
