@@ -31,6 +31,10 @@ const mockFetchProducts = jest.fn();
 const mockDeepLinkToSubscriptions = jest.fn();
 const mockGetAvailablePurchases = jest.fn();
 const mockRefreshTier = jest.fn();
+const mockTierState = {
+  billingStatus: 'none',
+  billingSource: 'none',
+};
 
 let mockCapturedOptions: {
   onPurchaseSuccess: (p: any) => void;
@@ -63,7 +67,7 @@ jest.mock('@/services/api', () => ({
 
 jest.mock('@/src/features/billing/store', () => ({
   useTierStore: {
-    getState: () => ({ refreshTier: mockRefreshTier }),
+    getState: () => ({ refreshTier: mockRefreshTier, ...mockTierState }),
   },
 }));
 
@@ -95,6 +99,7 @@ describe('useIapPurchaseFlow — server reconciliation', () => {
     mockRequestPurchase.mockResolvedValue(undefined);
     mockGetAvailablePurchases.mockImplementation(async () => mockAvailablePurchases);
     mockRefreshTier.mockResolvedValue(undefined);
+    Object.assign(mockTierState, { billingStatus: 'none', billingSource: 'none' });
   });
 
   it('reports a completed purchase to /api/mobile/iap/verify before finishing the transaction', async () => {
@@ -233,8 +238,9 @@ describe('useIapPurchaseFlow — server reconciliation', () => {
       iosPurchase({ productId: 'com.agiworkforce.app.sub.max.monthly', purchaseToken: 'tok-2' }),
     ];
 
+    let outcome: Awaited<ReturnType<typeof result.current.restore>> | undefined;
     await act(async () => {
-      await result.current.restore();
+      outcome = await result.current.restore();
     });
 
     expect(mockRestorePurchases).toHaveBeenCalled();
@@ -252,6 +258,23 @@ describe('useIapPurchaseFlow — server reconciliation', () => {
     });
     expect(mockRefreshTier).toHaveBeenCalledTimes(1);
     expect(useIapStore.getState().status).toBe('success');
+    expect(outcome).toEqual({ kind: 'restored', tiers: ['pro', 'max'] });
+  });
+
+  it('returns an explicit no-purchases outcome without calling verification', async () => {
+    mockAvailablePurchases = [];
+    mockRestorePurchases.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useIapPurchaseFlow());
+    let outcome: Awaited<ReturnType<typeof result.current.restore>> | undefined;
+    await act(async () => {
+      outcome = await result.current.restore();
+    });
+
+    expect(outcome).toEqual({ kind: 'none' });
+    expect(mockApiPost).not.toHaveBeenCalled();
+    expect(mockRefreshTier).not.toHaveBeenCalled();
+    expect(useIapStore.getState().status).toBe('success');
   });
 
   it('surfaces an error if any restored purchase fails verification', async () => {
@@ -261,11 +284,28 @@ describe('useIapPurchaseFlow — server reconciliation', () => {
 
     const { result } = renderHook(() => useIapPurchaseFlow());
 
+    let outcome: Awaited<ReturnType<typeof result.current.restore>> | undefined;
     await act(async () => {
-      await result.current.restore();
+      outcome = await result.current.restore();
     });
 
     expect(useIapStore.getState().status).toBe('error');
     expect(useIapStore.getState().errorMessage).toBe('receipt invalid');
+    expect(outcome).toEqual({ kind: 'failed', message: 'receipt invalid' });
+  });
+
+  it('blocks a second store purchase when the active subscription belongs to the web', async () => {
+    Object.assign(mockTierState, { billingStatus: 'active', billingSource: 'stripe' });
+    const { result } = renderHook(() => useIapPurchaseFlow());
+
+    await act(async () => {
+      await result.current.purchase('pro', 'monthly');
+    });
+
+    expect(mockRequestPurchase).not.toHaveBeenCalled();
+    expect(useIapStore.getState()).toMatchObject({
+      status: 'error',
+      errorMessage: expect.stringContaining('AGI Workforce on the web'),
+    });
   });
 });

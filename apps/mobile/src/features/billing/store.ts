@@ -20,6 +20,7 @@ import { api } from '@/services/api';
 import { effectivePlanTier, normalizeBillingPlanTier } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
+import type { MobileBillingSource } from './subscriptionSource';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -35,6 +36,8 @@ interface TierState {
   billingTier: BillingPlanTier;
   /** Raw billing lifecycle status returned by `/api/me`. */
   billingStatus: string;
+  /** Server-authoritative owner of subscription management. */
+  billingSource: MobileBillingSource;
   /** True while a tier refresh network call is in flight. */
   isRefreshing: boolean;
   /** ISO timestamp of the last successful refresh, or null if never refreshed. */
@@ -92,6 +95,7 @@ export const useTierStore = create<TierState>()(
       tier: 'free',
       billingTier: 'free',
       billingStatus: 'none',
+      billingSource: 'unknown',
       isRefreshing: false,
       lastRefreshedAt: null,
       codeExecutionAvailable: false,
@@ -132,6 +136,7 @@ export const useTierStore = create<TierState>()(
             tier,
             billingTier,
             billingStatus: data.plan.status,
+            billingSource: data.plan.subscription_source ?? 'unknown',
             lastRefreshedAt: new Date().toISOString(),
             codeExecutionAvailable:
               (data.feature_flags.code_execution ?? false) &&
@@ -162,6 +167,7 @@ export const useTierStore = create<TierState>()(
           tier: 'free',
           billingTier: 'free',
           billingStatus: 'none',
+          billingSource: 'unknown',
           isRefreshing: false,
           lastRefreshedAt: null,
           codeExecutionAvailable: false,
@@ -188,6 +194,7 @@ export const useTierStore = create<TierState>()(
         tier: state.tier,
         billingTier: state.billingTier,
         billingStatus: state.billingStatus,
+        billingSource: state.billingSource,
         lastRefreshedAt: state.lastRefreshedAt,
         codeExecutionAvailable: state.codeExecutionAvailable,
         genericWebSearchAvailable: state.genericWebSearchAvailable,

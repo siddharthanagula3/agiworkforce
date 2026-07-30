@@ -13,6 +13,7 @@
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -100,24 +101,33 @@ jest.mock('@/lib/safeOpenURL', () => ({ openExternalUrl: jest.fn() }));
 jest.mock('@/src/features/billing/service', () => ({
   fetchPortalSessionUrl: jest.fn().mockResolvedValue('https://example.com/portal'),
 }));
+const mockManageSubscription = jest.fn();
+const mockRestore = jest.fn();
 jest.mock('@/src/features/billing/useIapPurchaseFlow', () => ({
   useIapPurchaseFlow: () => ({
     connected: false,
-    manageSubscription: jest.fn(),
-    restore: jest.fn(),
+    manageSubscription: mockManageSubscription,
+    restore: mockRestore,
   }),
 }));
 jest.mock('@/src/features/billing/iapStore', () => ({
   useIapStore: (selector: (s: { status: string; errorMessage: string | null }) => unknown) =>
     selector({ status: 'idle', errorMessage: null }),
 }));
-jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { iap: false, billing: false } }));
+jest.mock('@/lib/v1FeatureFlags', () => ({
+  FEATURES: { iap: false, billing: false },
+}));
+const mockFeatures = jest.requireMock('@/lib/v1FeatureFlags').FEATURES as {
+  iap: boolean;
+  billing: boolean;
+};
 
 const mockRefreshTier = jest.fn().mockResolvedValue(undefined);
 const mockTierState = {
   tier: 'free',
   billingTier: 'free',
   billingStatus: 'none',
+  billingSource: 'none',
   refreshTier: mockRefreshTier,
 };
 jest.mock('@/src/features/billing/store', () => ({
@@ -136,10 +146,15 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
   beforeEach(() => {
     jest.clearAllMocks();
     mockRefreshTier.mockResolvedValue(undefined);
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    Object.assign(mockFeatures, { iap: false, billing: false });
+    mockManageSubscription.mockResolvedValue(undefined);
+    mockRestore.mockResolvedValue({ kind: 'none' });
     Object.assign(mockTierState, {
       tier: 'free',
       billingTier: 'free',
       billingStatus: 'none',
+      billingSource: 'none',
     });
     Object.assign(mockAuthState, {
       isClerkLoaded: true,
@@ -282,5 +297,102 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     fireEvent.press(getByLabelText('Workspace administration'));
 
     expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/team');
+  });
+
+  it('blocks plan changes owned by Web and links to the correct management surface', () => {
+    Object.assign(mockFeatures, { iap: true });
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'stripe',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByLabelText } = render(<CloudBillingScreen />);
+    fireEvent.press(getByLabelText('Adjust plan'));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Subscription managed elsewhere',
+      expect.stringContaining('AGI Workforce on the web'),
+      expect.any(Array),
+    );
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{
+      text?: string;
+      onPress?: () => void;
+    }>;
+    buttons.find((button) => button.text === 'Manage on web')?.onPress?.();
+    expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/billing');
+
+    fireEvent.press(getByLabelText('Manage subscription'));
+    expect(mockManageSubscription).not.toHaveBeenCalled();
+  });
+
+  it('uses native subscription management when the current store owns the plan', () => {
+    Object.assign(mockFeatures, { iap: true });
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'apple',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByLabelText } = render(<CloudBillingScreen />);
+    fireEvent.press(getByLabelText('Manage subscription'));
+
+    expect(mockManageSubscription).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).not.toHaveBeenCalledWith(
+      'Subscription managed elsewhere',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('reports when restore finds no purchases', async () => {
+    Object.assign(mockFeatures, { iap: true });
+    mockRestore.mockResolvedValue({ kind: 'none' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByLabelText } = render(<CloudBillingScreen />);
+    fireEvent.press(getByLabelText('Restore purchases'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'No purchases found',
+        expect.stringContaining('Apple ID'),
+      );
+    });
+  });
+
+  it('names restored plans and offers a real retry after failure', async () => {
+    Object.assign(mockFeatures, { iap: true });
+    mockRestore
+      .mockResolvedValueOnce({ kind: 'failed', message: 'Store connection failed' })
+      .mockResolvedValueOnce({ kind: 'restored', tiers: ['pro'] });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByLabelText } = render(<CloudBillingScreen />);
+    fireEvent.press(getByLabelText('Restore purchases'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Restore purchases failed',
+        'Store connection failed',
+        expect.any(Array),
+      );
+    });
+    const retryButtons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{
+      text?: string;
+      onPress?: () => void;
+    }>;
+    retryButtons.find((button) => button.text === 'Try again')?.onPress?.();
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Purchases restored',
+        'Restored Pro for this AGI Cloud account.',
+      );
+    });
   });
 });

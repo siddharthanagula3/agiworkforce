@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Alert } from 'react-native';
+import { View, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CreditCard, ExternalLink, FileText, Check } from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
@@ -47,6 +47,8 @@ import { useIapStore } from '@/src/features/billing/iapStore';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAuthStore } from '@/src/features/auth/store';
+import type { IapRestoreOutcome } from '@/src/features/billing/useIapPurchaseFlow';
+import { getIapSubscriptionGuard } from '@/src/features/billing/subscriptionSource';
 
 // Free-tier feature bullets — mirrors web BillingSection
 const FREE_FEATURES = [
@@ -66,24 +68,56 @@ const FREE_FEATURES = [
 // native store connection never initializes while the flag is off.
 // ---------------------------------------------------------------------------
 
-function IapManagementSection() {
+function IapManagementSection({ onBlockedManage }: { onBlockedManage?: () => void }) {
   const colors = useThemeColors();
   const { manageSubscription, restore } = useIapPurchaseFlow();
   const status = useIapStore((s) => s.status);
   const errorMessage = useIapStore((s) => s.errorMessage);
   const isBusy = status === 'purchasing' || status === 'verifying' || status === 'restoring';
+  const handleRestore = useCallback(async () => {
+    async function run(): Promise<void> {
+      const outcome: IapRestoreOutcome | null = await restore();
+      if (!outcome) return;
+      if (outcome.kind === 'restored') {
+        const planNames = outcome.tiers.map((tier) => getBillingPlanPricing(tier).label);
+        Alert.alert(
+          'Purchases restored',
+          planNames.length > 0
+            ? `Restored ${planNames.join(', ')} for this AGI Cloud account.`
+            : 'Your store purchases were restored for this AGI Cloud account.',
+        );
+        return;
+      }
+      if (outcome.kind === 'none') {
+        Alert.alert(
+          'No purchases found',
+          Platform.OS === 'ios'
+            ? 'No AGI subscription purchases were found for this Apple ID.'
+            : 'No AGI subscription purchases were found for this Google Play account.',
+        );
+        return;
+      }
+      Alert.alert('Restore purchases failed', outcome.message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Try again', onPress: () => void run() },
+      ]);
+    }
+    await run();
+  }, [restore]);
 
   return (
     <SettingsGroup>
       <SettingsRow
         label="Manage subscription"
         icon={CreditCard}
-        onPress={isBusy ? undefined : () => void manageSubscription()}
+        onPress={
+          isBusy ? undefined : onBlockedManage ? onBlockedManage : () => void manageSubscription()
+        }
       />
       <SettingsRow
         label={status === 'restoring' ? 'Restoring…' : 'Restore purchases'}
         icon={ExternalLink}
-        onPress={isBusy ? undefined : () => void restore()}
+        onPress={isBusy ? undefined : () => void handleRestore()}
         isLast={!(status === 'error' && errorMessage)}
       />
       {status === 'error' && errorMessage && (
@@ -121,6 +155,7 @@ export default function CloudBillingScreen() {
   const tier = useTierStore((s) => s.tier);
   const billingTier = useTierStore((s) => s.billingTier);
   const billingStatus = useTierStore((s) => s.billingStatus);
+  const billingSource = useTierStore((s) => s.billingSource);
   const refreshTier = useTierStore((s) => s.refreshTier);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
@@ -145,6 +180,31 @@ export default function CloudBillingScreen() {
   const statusLabel = billingStatus.replaceAll('_', ' ');
   const isWorkspacePlan = canUseBillingPlanCapability(tier, 'team_admin');
   const nextUpgradeTier = getNextUpgradeTier(tier);
+  const subscriptionGuard = getIapSubscriptionGuard(
+    billingSource,
+    billingStatus,
+    Platform.OS === 'ios' ? 'ios' : 'android',
+  );
+
+  const showSubscriptionOwnerGuard = useCallback(() => {
+    const buttons: Array<{
+      text: string;
+      style?: 'cancel';
+      onPress?: () => void;
+    }> = [{ text: 'OK', style: 'cancel' }];
+    const managementUrl = subscriptionGuard.managementUrl;
+    if (managementUrl) {
+      buttons.push({
+        text: subscriptionGuard.managementActionLabel,
+        onPress: () => void openExternalUrl(managementUrl),
+      });
+    }
+    Alert.alert(
+      'Subscription managed elsewhere',
+      `You purchased this subscription through ${subscriptionGuard.sourceLabel}. To avoid being charged twice, manage it there before changing plans in this app.`,
+      buttons,
+    );
+  }, [subscriptionGuard]);
 
   // Upgrading/adjusting a plan never opens an external checkout URL — Apple
   // Guideline 3.1.1 requires in-app subscription purchases go through native
@@ -152,8 +212,12 @@ export default function CloudBillingScreen() {
   // itself handles the FEATURES.iap-on (native purchase) vs -off (honest
   // "not available yet" message) branches.
   const handleUpgrade = useCallback(() => {
+    if (subscriptionGuard.blocked) {
+      showSubscriptionOwnerGuard();
+      return;
+    }
     paywallSheetRef.current?.expand();
-  }, []);
+  }, [showSubscriptionOwnerGuard, subscriptionGuard.blocked]);
 
   const handleManageBilling = useCallback(async () => {
     if (FEATURES.billing) {
@@ -318,7 +382,11 @@ export default function CloudBillingScreen() {
         </View>
       </View>
 
-      {FEATURES.iap && <IapManagementSection />}
+      {FEATURES.iap && (
+        <IapManagementSection
+          onBlockedManage={subscriptionGuard.blocked ? showSubscriptionOwnerGuard : undefined}
+        />
+      )}
 
       {/* Invoices */}
       <SettingsGroup>

@@ -35,6 +35,7 @@ import {
   isCloudAccountEpochCurrent,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { getIapSubscriptionGuard } from './subscriptionSource';
 
 function loadReactNativeIap(): {
   useIAP: typeof UseIAP;
@@ -83,9 +84,14 @@ async function reportPurchaseToServer(purchase: Purchase): Promise<void> {
 export interface UseIapPurchaseFlowResult {
   connected: boolean;
   purchase: (tier: PurchasableTier, interval: BillingInterval) => Promise<void>;
-  restore: () => Promise<void>;
+  restore: () => Promise<IapRestoreOutcome | null>;
   manageSubscription: () => Promise<void>;
 }
+
+export type IapRestoreOutcome =
+  | { kind: 'restored'; tiers: PurchasableTier[] }
+  | { kind: 'none' }
+  | { kind: 'failed'; message: string };
 
 interface PurchaseAttempt {
   account: CloudAccountEpoch;
@@ -181,6 +187,18 @@ export function useIapPurchaseFlow(): UseIapPurchaseFlowResult {
         markError('Sign in to AGI Cloud before starting a subscription purchase.');
         return;
       }
+      const tierState = useTierStore.getState();
+      const subscriptionGuard = getIapSubscriptionGuard(
+        tierState.billingSource,
+        tierState.billingStatus,
+        IAP_PLATFORM,
+      );
+      if (subscriptionGuard.blocked) {
+        markError(
+          `This subscription is managed through ${subscriptionGuard.sourceLabel}. Manage it there before starting another store subscription.`,
+        );
+        return;
+      }
       const sku = getIapProductId(tier, interval, IAP_PLATFORM);
       if (!sku) {
         markError(`iap: no product configured for ${tier}/${interval} on ${IAP_PLATFORM}`);
@@ -215,22 +233,29 @@ export function useIapPurchaseFlow(): UseIapPurchaseFlowResult {
     const restoreOwner = captureCloudAccountEpoch();
     if (!restoreOwner) {
       markError('Sign in to AGI Cloud before restoring subscription purchases.');
-      return;
+      return {
+        kind: 'failed',
+        message: 'Sign in to AGI Cloud before restoring subscription purchases.',
+      } satisfies IapRestoreOutcome;
     }
     setStatus('restoring');
     try {
       await restorePurchases();
-      if (!isCloudAccountEpochCurrent(restoreOwner)) return;
+      if (!isCloudAccountEpochCurrent(restoreOwner)) return null;
       // The hook's restore method populates reactive state and returns void.
       // Reading `availablePurchases` here would use this callback's pre-restore
       // render closure. Query the root API for the actual immutable result
       // after StoreKit/Play sync, then reconcile it with the server.
       const restoredPurchases = await getAvailablePurchases();
-      if (!isCloudAccountEpochCurrent(restoreOwner)) return;
+      if (!isCloudAccountEpochCurrent(restoreOwner)) return null;
+      if (restoredPurchases.length === 0) {
+        markSuccess();
+        return { kind: 'none' } satisfies IapRestoreOutcome;
+      }
       const results = await Promise.allSettled(
         restoredPurchases.map((purchase) => reportPurchaseToServer(purchase)),
       );
-      if (!isCloudAccountEpochCurrent(restoreOwner)) return;
+      if (!isCloudAccountEpochCurrent(restoreOwner)) return null;
       const failure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (failure) {
         throw failure.reason instanceof Error
@@ -238,12 +263,24 @@ export function useIapPurchaseFlow(): UseIapPurchaseFlowResult {
           : new Error('One or more restored purchases failed verification');
       }
       await useTierStore.getState().refreshTier();
-      if (!isCloudAccountEpochCurrent(restoreOwner)) return;
+      if (!isCloudAccountEpochCurrent(restoreOwner)) return null;
       markSuccess();
+      const tiers = [
+        ...new Set(
+          restoredPurchases.flatMap((purchase) => {
+            const resolved = resolveTierFromSku(purchase.productId, IAP_PLATFORM);
+            return resolved ? [resolved.tier] : [];
+          }),
+        ),
+      ];
+      return { kind: 'restored', tiers } satisfies IapRestoreOutcome;
     } catch (err) {
       if (isCloudAccountEpochCurrent(restoreOwner)) {
-        markError(err instanceof Error ? err.message : 'Restore purchases failed');
+        const message = err instanceof Error ? err.message : 'Restore purchases failed';
+        markError(message);
+        return { kind: 'failed', message } satisfies IapRestoreOutcome;
       }
+      return null;
     }
   }, [restorePurchases, getAvailablePurchases, setStatus, markSuccess, markError]);
 
