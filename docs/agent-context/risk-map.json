@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-07-15",
+  "risks": [
+    {
+      "id": "privacy-boundary",
+      "severity": "high",
+      "owner": "Security/privacy lead",
+      "paths": [
+        "apps/*",
+        "packages/contracts/types",
+        "packages/ai/providers",
+        "packages/contracts/trust-boundaries",
+        "crates/*",
+        "apps/desktop/src/lib/egressGuard.ts",
+        "apps/mobile/lib/egressGuard.ts",
+        "apps/desktop/src-tauri/src/sys/account"
+      ],
+      "reviewFocus": "Local/BYOK/Managed labels, explicit forks, no silent routing across trust boundaries. Desktop egress guard (egressGuard.ts) is FETCH-ONLY: JS our-cloud fetches must use guardedFetch (eslint-enforced for WEB_APP_URL/API_BASE_URL templates). KNOWN GAP (2026-06-24): Rust-transport egress is NOT covered by the JS guard — sys/account device/profile/credit Tauri commands reqwest www.agiworkforce.com with the Bearer token and no privacy-mode gate, and fire in BYOK (signed-in cloud session). Open decision: is BYOK account-management intended to reach AGI cloud (then correct the egressGuard 'never account data' docstring) or must it be gated Rust-side (then mirror the guard). Do not route chat/file/session payloads on any ungated transport.",
+      "checks": [
+        "rg \"PrivacyMode|privacy_mode|BYOK|Managed|Local\" apps packages crates services",
+        "rg \"reqwest|get_api_base_url|api/me|api/device\" apps/desktop/src-tauri/src/sys/account",
+        "pnpm check:service-domain-ownership"
+      ]
+    },
+    {
+      "id": "provider-routing",
+      "severity": "high",
+      "owner": "Platform lead",
+      "paths": [
+        "packages/ai/providers",
+        "packages/ai/provider-protocol",
+        "packages/ai/model-registry",
+        "packages/ai/routing",
+        "packages/ai/search",
+        "packages/contracts/types/src/models.json",
+        "apps/cli/src/models"
+      ],
+      "reviewFocus": "No hardcoded model IDs; provider capability metadata owns routing decisions",
+      "checks": [
+        "scripts/check-no-hardcoded-models.sh",
+        "pnpm check:service-domain-ownership",
+        "pnpm check:boundaries"
+      ]
+    },
+    {
+      "id": "tool-execution",
+      "severity": "high",
+      "owner": "CLI + Desktop",
+      "paths": [
+        "apps/cli/src/features/exec/tools",
+        "apps/desktop/src-tauri",
+        "packages/tools/apply-patch",
+        "packages/tools/browser-tool"
+      ],
+      "reviewFocus": "Path traversal, shell execution, approvals, provenance, workspace roots",
+      "checks": [
+        "cargo test -p agiworkforce-cli --lib",
+        "pnpm --filter @agiworkforce/apply-patch test"
+      ]
+    },
+    {
+      "id": "native-messaging",
+      "severity": "high",
+      "owner": "Chrome + Desktop",
+      "paths": ["apps/extension", "apps/desktop/src-tauri/src/integrations/native_messaging"],
+      "reviewFocus": "Envelope authentication, downgrade behavior, request/response compatibility",
+      "checks": ["pnpm lint:extension", "pnpm --filter @agiworkforce/extension test"]
+    },
+    {
+      "id": "billing-managed-cloud",
+      "severity": "high",
+      "owner": "Backend + Web",
+      "paths": [
+        "apps/web/app/api/stripe-webhook",
+        "services",
+        "apps/web/db/neon",
+        "packages/contracts/types/src/billing-catalog.ts"
+      ],
+      "reviewFocus": "Idempotency, ledgering, fraud/refund/chargeback handling, managed compute gating",
+      "checks": [
+        "pnpm --filter @agiworkforce/web test",
+        "pnpm --filter @agiworkforce/api-gateway test"
+      ]
+    },
+    {
+      "id": "enterprise-control-plane",
+      "severity": "high",
+      "owner": "Enterprise/platform lead",
+      "paths": [
+        "packages/contracts/types/src/enterprise",
+        "services/api-gateway/src/routes/enterprise.ts",
+        "apps/web/db/neon",
+        "apps/web/app/admin",
+        "apps/web/features/admin",
+        "docs/enterprise"
+      ],
+      "reviewFocus": "Tenant isolation, admin policy defaults, SSO/SCIM data ownership, support privacy labels, managed-credit public launch gates. KNOWN GAP (verified 2026-06-24): audit immutability is NOT enforced — public.security_audit_logs (0014_security.sql) has no REVOKE or trigger, so the app role app_rls can UPDATE/DELETE rows freely. Correct fix is non-trivial: cleanup_old_security_logs (90-day retention) and the GDPR user-purge (0020_functions.sql) are NOT security definer, so a plain REVOKE would break retention + compliance; the migration must make those 2 functions security definer (with injection review) THEN REVOKE UPDATE,DELETE FROM app_rls, and be DB-verified before apply. See known-flaws AUDIT-IMMUT-01.",
+      "checks": [
+        "pnpm --filter @agiworkforce/types test -- enterprise",
+        "pnpm --filter @agiworkforce/api-gateway test -- enterprise",
+        "pnpm --filter @agiworkforce/web typecheck",
+        "rg \"REVOKE|security definer|create trigger\" apps/web/db/neon/*security* apps/web/db/neon/0020_functions.sql"
+      ]
+    },
+    {
+      "id": "mobile-local-data",
+      "severity": "high",
+      "owner": "Mobile lead",
+      "paths": [
+        "apps/mobile/storage",
+        "apps/mobile/services/complianceLedger.ts",
+        "apps/mobile/services/modelDownload.ts"
+      ],
+      "reviewFocus": "Encryption, consent persistence, privacy labels, large-file failure modes",
+      "checks": [
+        "pnpm --filter @agiworkforce/mobile test",
+        "pnpm --filter @agiworkforce/mobile typecheck"
+      ]
+    },
+    {
+      "id": "artifact-rendering",
+      "severity": "medium",
+      "owner": "Web + Desktop",
+      "paths": [
+        "apps/sandbox",
+        "apps/web/features/chat",
+        "apps/desktop/src",
+        "packages/ui/unified-chat"
+      ],
+      "reviewFocus": "Iframe sandboxing, srcDoc fallback, generated file previews, download safety",
+      "checks": [
+        "pnpm --filter @agiworkforce/web test",
+        "pnpm --filter @agiworkforce/sandbox build"
+      ]
+    },
+    {
+      "id": "repo-organization",
+      "severity": "medium",
+      "owner": "Platform lead",
+      "paths": [
+        "AGENTS.md",
+        "CLAUDE.md",
+        "docs/agent-context",
+        "docs/plans/pre-release-repo-organization-2026-05-20.md"
+      ],
+      "reviewFocus": "Agent docs match JSON maps; no root clutter regressions; known flaws are indexed",
+      "checks": ["pnpm check:agent-context", "pnpm check:repo-organization"]
+    }
+  ]
+}
