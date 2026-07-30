@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: f147c1a8fc5c921d523412e451fc531112dc7aece5837311b9b935dfbf445673 -->
+<!-- ui-gaps-csv-sha256: e2372fe10d547a5e7345afad7a1dce323e6cc26ec620374dc4ea7c711af8b8e4 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 69 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 67 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  273 |
+| Open        |  271 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   46 |
+| Done        |   48 |
 | Not Planned |   22 |
 
 ## P0
@@ -2511,24 +2511,24 @@ Not planned until a tenant-owned hosted browser service defines isolated cookie 
 
 - `chatgpt_reference/137-chatgpt-web-settings-cloud-browser-default-permissions-site-cookies.png`
 
-### GAP-109 — No persistent per-task Outputs/Progress/Context side panel for Cowork tasks
+### GAP-109 — Web Tasks provides persistent per-task Outputs/Progress/Context details
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Web
 - **Surface/type:** web · missing-control
 - **Reference:** Claude · web · Cowork task view right-side Outputs/Progress/Context panel
 
 **Gap**
 
-Claude's Cowork task view keeps a collapsible right-side panel showing task Progress, a running count and list of generated Output files (each with a 'Download and open' split button), and a Context section listing referenced files. agiworkforce's cowork mode ('AGI Work') has inline tool-call timelines and artifact cards in the message stream, but no equivalent persistent summary panel that aggregates all files a task has produced with per-file download actions.
+The shared Web Tasks surface now keeps a persistent responsive detail panel beside the selected AGI Work task. It projects only safe durable journal events into Progress, aggregates generated artifacts into Outputs with per-file actions, and shows durable context-compaction summaries plus an explicit source-chat path. The current durable run contract does not persist a trustworthy input filename or folder manifest, so the Context section states that boundary instead of fabricating referenced paths.
 
 **Evidence**
 
-Searched apps/web/features/chat/v3 (WebShellV3.tsx, WebSidebar.tsx) and apps/web/features/chat for 'Outputs', 'Progress' panel, 'Download and open', 'Context' file list components — no matching UI found; only ToolTimeline.tsx and inline ArtifactBlock/ArtifactPreview components exist in the message stream.
+packages/ui/unified-chat/src/components/tasks/TasksPage.tsx selects a task without implicit chat navigation, paginates up to 4,000 durable journal events, supports refresh and cancellation state, and renders TaskDetailPanel.tsx. TaskDetailPanel.tsx uses the shared applyAgentActivityEvent projector, exposes Progress/Outputs/Context sections, permits Download and open only for same-origin /api/files assets, and links to the source conversation for exact attachments. TasksPage.details.test.tsx covers durable progress, artifacts, context, safe file links, explicit source-chat navigation, and multi-page journals; the full unified-chat suite passes 59 files and 739 tests.
 
 **Suggested fix**
 
-Add a collapsible right-side panel to the cowork/AGI-Work task view that lists task Progress (expandable step log), an Outputs section aggregating every file/artifact produced during the task with a per-row 'Download and open' action, and a Context section showing input files/folders referenced by the task.
+Completed. Keep the durable journal and shared activity projector authoritative, never expose private reasoning, never open arbitrary artifact URIs, and add input filenames or folder paths only after an owner-scoped durable manifest exists rather than deriving them from untrusted tool arguments.
 
 **Reference screenshot(s)**
 
@@ -2626,24 +2626,24 @@ Not planned until a server-owned directory contract provides typed entries, sour
 
 - `claude_reference/162-claude-web-plugin-directory-browse-anthropic-category-cards-grid.png`
 
-### GAP-114 — No content-safety 'Reduce sensitive content' preference anywhere
+### GAP-114 — Web and Mobile enforce Reduce sensitive content before model dispatch
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Web
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Safety
 
 **Gap**
 
-ChatGPT has a dedicated Safety settings page with a single high-impact toggle: 'Reduce sensitive content' to add extra safeguards around sensitive topics. agiworkforce's only similarly-named screen (mobile 'Safety & Security') is actually about device App Lock (biometric) and OS permissions — an unrelated concept — and there is no content-moderation-strictness preference on any surface.
+Web now has a dedicated account-synced Settings > Safety control for Reduce sensitive content, while Mobile retains the same already-enforced control in Safety & Security. Both surfaces use one deterministic strict-content policy and block only clearly explicit or harmful how-to prompts; educational, medical, journalistic, and support-seeking discussion remains available. The setting is accurately described as prompt admission, not conversation monitoring, trusted-contact notification, or an emergency-service substitute.
 
 **Evidence**
 
-apps/mobile/src/features/settings/safety-security/index.tsx (App Lock + Permissions only); searched 'reduce sensitive', 'sensitive content' across apps/web with zero matches
+packages/contracts/types/src/content-safety.ts owns the shared policy and tests. apps/mobile/lib/contentFilter.ts delegates to it while preserving Mobile refusal copy, and chatExecutionStore.ts enforces it before Local or Managed Cloud dispatch. apps/web/features/settings/sections/SafetySection.tsx persists the account safety namespace; managed-content-safety-service.ts validates the owner-scoped user_settings document; request-processor.ts enforces the preference before attachment hydration or provider work and fails closed if it cannot be verified. SafetySection.test.tsx, managed-content-safety-service.test.ts, request-processor.content-safety.test.ts, Mobile content-filter/safety/chat tests, and the full Mobile suite cover persistence, blocked and allowed prompts, refusal behavior, and the no-provider-on-failure boundary.
 
 **Suggested fix**
 
-Add a Settings > Safety page (web + mobile) with a 'Reduce sensitive content' toggle wired to the moderation/system-prompt layer, separate from the existing device App Lock screen.
+Completed. Keep the shared deterministic policy as the single pattern owner, enforce Web from the owner-scoped server preference before provider dispatch, enforce Mobile before both Local and Cloud dispatch, fail closed when an enabled account policy cannot be verified, and keep the non-monitoring boundary explicit.
 
 **Reference screenshot(s)**
 

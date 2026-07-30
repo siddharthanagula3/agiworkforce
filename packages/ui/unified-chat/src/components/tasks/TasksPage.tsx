@@ -13,9 +13,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { ListChecks, Loader2, MessageSquare, RotateCcw, X } from 'lucide-react';
-import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
+import type {
+  CloudAgentRun,
+  CloudAgentRunSnapshotPage,
+  ManagedCloudAgentRunClient,
+} from '@agiworkforce/cloud-contracts';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
+import { TaskDetailPanel } from './TaskDetailPanel';
 import {
   TASK_TONE_BADGE_CLASS,
   type AgentTaskState,
@@ -46,6 +51,42 @@ const FILTERS: Array<{ id: TaskFilter; label: string }> = [
   { id: 'all', label: 'All' },
 ];
 
+interface TaskJournalSnapshot extends CloudAgentRunSnapshotPage {
+  truncated: boolean;
+}
+
+const TASK_JOURNAL_PAGE_SIZE = 500;
+const TASK_JOURNAL_MAX_PAGES = 8;
+
+export async function readTaskJournal(
+  client: ManagedCloudAgentRunClient,
+  runId: string,
+  signal?: AbortSignal,
+): Promise<TaskJournalSnapshot> {
+  let afterSequence = -1;
+  let latest: CloudAgentRunSnapshotPage | null = null;
+  const events: CloudAgentRunSnapshotPage['events'] = [];
+
+  for (let pageIndex = 0; pageIndex < TASK_JOURNAL_MAX_PAGES; pageIndex += 1) {
+    const page = await client.getRun(runId, {
+      afterSequence,
+      limit: TASK_JOURNAL_PAGE_SIZE,
+      signal,
+    });
+    latest = page;
+    events.push(...page.events);
+    afterSequence = page.nextAfterSequence;
+    if (afterSequence >= page.run.lastEventSequence || page.events.length === 0) {
+      return { ...page, events, truncated: false };
+    }
+  }
+
+  if (!latest) {
+    throw new Error('Task journal is unavailable');
+  }
+  return { ...latest, events, truncated: afterSequence < latest.run.lastEventSequence };
+}
+
 /**
  * What this surface cannot decide for itself.
  *
@@ -74,6 +115,10 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [journal, setJournal] = useState<TaskJournalSnapshot | null>(null);
+  const [journalLoading, setJournalLoading] = useState(false);
+  const [journalError, setJournalError] = useState<string | null>(null);
 
   const getClient = useCallback(() => transport.client, [transport.client]);
 
@@ -108,12 +153,46 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
     void load(filter, null);
   }, [filter, load]);
 
+  const loadJournal = useCallback(
+    async (runId: string, signal?: AbortSignal) => {
+      setJournalLoading(true);
+      setJournalError(null);
+      try {
+        const next = await readTaskJournal(getClient(), runId, signal);
+        if (!signal?.aborted) setJournal(next);
+      } catch (err) {
+        if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) return;
+        console.error('[Tasks] Failed to load task journal:', err);
+        setJournalError('Could not load this task journal. Retry or open the source chat.');
+      } finally {
+        if (!signal?.aborted) setJournalLoading(false);
+      }
+    },
+    [getClient],
+  );
+
+  useEffect(() => {
+    if (!selectedRunId) {
+      setJournal(null);
+      setJournalError(null);
+      setJournalLoading(false);
+      return;
+    }
+    setJournal(null);
+    const controller = new AbortController();
+    void loadJournal(selectedRunId, controller.signal);
+    return () => controller.abort();
+  }, [loadJournal, selectedRunId]);
+
   const handleCancel = useCallback(
     async (runId: string) => {
       setCancellingId(runId);
       try {
         const updated = await getClient().cancelRun(runId);
         setRuns((prev) => prev.map((r) => (r.id === runId ? updated : r)));
+        setJournal((current) =>
+          current?.run.id === runId ? { ...current, run: updated } : current,
+        );
       } catch (err) {
         console.error('[Tasks] Failed to cancel task:', err);
         transport.notifyError('Could not stop the task. Check its activity before retrying.');
@@ -131,10 +210,13 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
     [transport],
   );
 
+  const selectedRun =
+    journal?.run ?? runs.find((candidate) => candidate.id === selectedRunId) ?? null;
+
   return (
     <div
       data-testid="tasks-view"
-      className="mx-auto flex h-full w-full max-w-3xl flex-col px-4 py-6"
+      className="mx-auto flex h-full w-full max-w-6xl flex-col px-4 py-6"
     >
       <header className="mb-4 flex items-center gap-2">
         <ListChecks className="h-5 w-5 text-primary" />
@@ -146,7 +228,10 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
         {FILTERS.map((f) => (
           <button
             key={f.id}
-            onClick={() => setFilter(f.id)}
+            onClick={() => {
+              setFilter(f.id);
+              setSelectedRunId(null);
+            }}
             className={cn(
               'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
               filter === f.id
@@ -188,83 +273,111 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
           ) : null}
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {runs.map((run) => {
-            const tone = taskStateTone(run.state);
-            const cancellable = isCancellableState(run.state);
-            return (
-              <div
-                key={run.id}
-                className={cn(
-                  'group rounded-lg border p-3 transition-colors',
-                  run.conversationId && 'cursor-pointer hover:bg-accent',
-                )}
-                onClick={() => openConversation(run)}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="truncate text-sm font-medium">
-                      {workModeLabel(run.workMode)}
-                    </span>
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                        TASK_TONE_BADGE_CLASS[tone],
-                      )}
+        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="flex min-w-0 flex-col gap-2">
+            {runs.map((run) => {
+              const tone = taskStateTone(run.state);
+              const cancellable = isCancellableState(run.state);
+              const selected = selectedRunId === run.id;
+              return (
+                <div
+                  key={run.id}
+                  className={cn(
+                    'rounded-lg border p-3 transition-colors',
+                    selected ? 'border-primary bg-primary/5' : 'hover:bg-accent',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      aria-label={`View details for ${workModeLabel(run.workMode)} task`}
+                      aria-pressed={selected}
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => setSelectedRunId(run.id)}
                     >
-                      {taskStateLabel(run.state)}
-                    </span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-medium">
+                          {workModeLabel(run.workMode)}
+                        </span>
+                        <span
+                          className={cn(
+                            'shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                            TASK_TONE_BADGE_CLASS[tone],
+                          )}
+                        >
+                          {taskStateLabel(run.state)}
+                        </span>
+                      </span>
+                      <span className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="truncate">{run.model}</span>
+                        <span aria-hidden>·</span>
+                        <span className="shrink-0">
+                          {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
+                        </span>
+                      </span>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {run.conversationId ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground"
+                          onClick={() => openConversation(run)}
+                        >
+                          <MessageSquare className="mr-1 h-3 w-3" />
+                          Open chat
+                        </Button>
+                      ) : null}
+                      {cancellable ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-muted-foreground"
+                          disabled={cancellingId === run.id}
+                          onClick={() => void handleCancel(run.id)}
+                        >
+                          {cancellingId === run.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              <X className="mr-1 h-3.5 w-3.5" /> Stop
+                            </>
+                          )}
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
-                  {cancellable && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 shrink-0 px-2 text-xs text-muted-foreground"
-                      disabled={cancellingId === run.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleCancel(run.id);
-                      }}
-                    >
-                      {cancellingId === run.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <>
-                          <X className="mr-1 h-3.5 w-3.5" /> Stop
-                        </>
-                      )}
-                    </Button>
-                  )}
                 </div>
-                <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="truncate">{run.model}</span>
-                  <span aria-hidden>·</span>
-                  <span className="shrink-0">
-                    {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
-                  </span>
-                  {run.conversationId && (
-                    <span className="ml-auto flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <MessageSquare className="h-3 w-3" /> Open chat
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
 
-          {nextCursor && (
-            <div className="flex justify-center py-3">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loadingMore}
-                onClick={() => void load(filter, nextCursor)}
-              >
-                {loadingMore ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-                Show more
-              </Button>
-            </div>
-          )}
+            {nextCursor ? (
+              <div className="flex justify-center py-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loadingMore}
+                  onClick={() => void load(filter, nextCursor)}
+                >
+                  {loadingMore ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                  Show more
+                </Button>
+              </div>
+            ) : null}
+          </div>
+
+          <TaskDetailPanel
+            run={selectedRun}
+            events={journal?.events ?? []}
+            loading={journalLoading}
+            error={journalError}
+            truncated={journal?.truncated}
+            onRefresh={() => {
+              if (selectedRunId) void loadJournal(selectedRunId);
+            }}
+            onClose={() => setSelectedRunId(null)}
+            onOpenConversation={(conversationId) => transport.openConversation(conversationId)}
+          />
         </div>
       )}
     </div>
