@@ -28,8 +28,6 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "feedback",
         "bug",
         "focus",
-        "background",
-        "bg",
         "team-onboarding",
         "terminal-setup",
         "shell-setup",
@@ -119,9 +117,6 @@ pub fn handle_shared_command(
         ),
         "/focus" => ParityCommandResult::SystemMessage(
             "Focus mode: hide chrome and maximize composer width. Currently controlled via --no-status-bar at startup.".to_string(),
-        ),
-        "/background" | "/bg" => ParityCommandResult::SystemMessage(
-            "Moving the current turn to the background isn't available yet — it keeps running in the foreground. Use /tasks to view active background tasks.".to_string(),
         ),
         "/advisor" => ParityCommandResult::NotHandled,
         "/team-onboarding" => ParityCommandResult::SystemMessage(render_team_onboarding()),
