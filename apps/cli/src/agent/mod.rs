@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result};
@@ -156,6 +157,13 @@ pub struct AgentSession {
     pub pending_managed_handoff: Option<String>,
     pub additional_context_dirs: Vec<PathBuf>,
     pub attached_context_files: Vec<PathBuf>,
+    /// Rules discovered for this workspace. Unconditional rules are included
+    /// in the startup prompt; glob-scoped rules activate as files enter the
+    /// live turn context.
+    pub(crate) workspace_rules: Vec<memory::Rule>,
+    /// Rule source paths already inserted into the conversation. This keeps a
+    /// rule from being duplicated on every mention or file-tool call.
+    pub(crate) active_rule_sources: HashSet<PathBuf>,
     pub debug_mode: bool,
     pub(crate) subagent_manager: Option<subagent::SubagentManager>,
     pub(crate) team_manager: Option<teams::TeamManager>,
@@ -254,6 +262,153 @@ pub struct AttachFilesReport {
     pub truncated: Vec<PathBuf>,
 }
 
+fn normalize_rule_path_candidate(raw: &str) -> Option<PathBuf> {
+    let trimmed = raw.trim_matches(|character: char| {
+        character.is_whitespace()
+            || matches!(
+                character,
+                '`' | '"' | '\'' | '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | ',' | ';'
+            )
+    });
+    if trimmed.is_empty() || trimmed.len() > 4_096 || trimmed.contains("://") {
+        return None;
+    }
+
+    // File references are commonly written as `path/to/file.rs:42` or
+    // `path/to/file.rs:42:7`. Remove numeric line/column suffixes without
+    // damaging Windows drive prefixes.
+    let mut candidate = trimmed.trim_end_matches(['.', ':']);
+    loop {
+        let Some((head, tail)) = candidate.rsplit_once(':') else {
+            break;
+        };
+        if tail.chars().all(|character| character.is_ascii_digit()) && !tail.is_empty() {
+            candidate = head;
+        } else {
+            break;
+        }
+    }
+    if candidate.is_empty() {
+        return None;
+    }
+
+    let path = Path::new(candidate);
+    let file_name = path.file_name()?.to_string_lossy();
+    let looks_like_path = candidate.contains('/')
+        || candidate.contains('\\')
+        || file_name.starts_with('.')
+        || file_name.contains('.');
+    looks_like_path.then(|| path.to_path_buf())
+}
+
+fn extract_rule_path_candidates(text: &str) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    for token in text.split_whitespace() {
+        if let Some(path) = normalize_rule_path_candidate(token) {
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+    }
+    paths
+}
+
+fn collect_rule_paths_from_value(value: &serde_json::Value, paths: &mut Vec<PathBuf>) {
+    match value {
+        serde_json::Value::String(text) => {
+            for path in extract_rule_path_candidates(text) {
+                if !paths.contains(&path) {
+                    paths.push(path);
+                }
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_rule_paths_from_value(value, paths);
+            }
+        }
+        serde_json::Value::Object(values) => {
+            for value in values.values() {
+                collect_rule_paths_from_value(value, paths);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_rule_paths_from_path_fields(value: &serde_json::Value, paths: &mut Vec<PathBuf>) {
+    match value {
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_rule_paths_from_path_fields(value, paths);
+            }
+        }
+        serde_json::Value::Object(values) => {
+            for (key, value) in values {
+                let normalized_key = key.to_ascii_lowercase();
+                if normalized_key.contains("path")
+                    || matches!(normalized_key.as_str(), "file" | "files")
+                {
+                    collect_rule_paths_from_value(value, paths);
+                } else {
+                    collect_rule_paths_from_path_fields(value, paths);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+pub(crate) fn rule_paths_from_tool_call(
+    tool_name: &str,
+    arguments: &serde_json::Value,
+) -> Vec<PathBuf> {
+    const FILE_CONTEXT_TOOLS: &[&str] = &[
+        "read_file",
+        "read_many_files",
+        "write_file",
+        "edit_file",
+        "multiedit",
+        "notebook_edit",
+        "apply_patch",
+        "lsp_definition",
+        "lsp_hover",
+        "lsp_diagnostics",
+        "lsp_completion",
+        "lsp_document_symbols",
+        "lsp_format",
+        "run_command",
+        "powershell",
+    ];
+    if !FILE_CONTEXT_TOOLS.contains(&tool_name) {
+        return Vec::new();
+    }
+
+    let mut paths = Vec::new();
+    if matches!(tool_name, "apply_patch" | "run_command" | "powershell") {
+        // Patch payloads and shell commands carry target paths inside text
+        // rather than dedicated path fields.
+        collect_rule_paths_from_value(arguments, &mut paths);
+    } else {
+        collect_rule_paths_from_path_fields(arguments, &mut paths);
+    }
+    paths
+}
+
+pub(crate) fn is_rule_sensitive_mutation_tool(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        "write_file"
+            | "edit_file"
+            | "multiedit"
+            | "notebook_edit"
+            | "apply_patch"
+            | "lsp_format"
+            | "run_command"
+            | "powershell"
+    )
+}
+
 impl AgentSession {
     /// Create a new agent session with the system prompt.
     ///
@@ -330,11 +485,12 @@ impl AgentSession {
             .ok()
             .map(|cwd| memory::load_rules(&cwd))
             .unwrap_or_default();
-        let rules_context = if rules.is_empty() {
-            String::new()
-        } else {
-            memory::rules_context_prompt(&rules, &[])
-        };
+        let rules_context = memory::always_on_rules_context(&rules);
+        let active_rule_sources = rules
+            .iter()
+            .filter(|rule| rule.globs.is_empty())
+            .map(|rule| rule.source.clone())
+            .collect();
 
         let combined_memory = if persistent_memory.is_empty() {
             memory_context
@@ -405,6 +561,8 @@ impl AgentSession {
             pending_managed_handoff: None,
             additional_context_dirs: Vec::new(),
             attached_context_files: Vec::new(),
+            workspace_rules: rules,
+            active_rule_sources,
             debug_mode: false,
             subagent_manager: None,
             team_manager: None,
@@ -579,6 +737,30 @@ impl AgentSession {
         })
     }
 
+    /// Activate any glob-scoped rules that match files entering the live turn
+    /// context. The returned fragment is empty when every applicable rule is
+    /// already active.
+    pub(crate) fn activate_rules_for_paths(&mut self, paths: &[PathBuf]) -> String {
+        let active_files: Vec<String> = paths
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+        let active_file_refs: Vec<&str> = active_files.iter().map(String::as_str).collect();
+        memory::activate_matching_rules(
+            &self.workspace_rules,
+            &active_file_refs,
+            &mut self.active_rule_sources,
+        )
+    }
+
+    fn activate_rules_from_user_input(&mut self, user_input: &str) {
+        let paths = extract_rule_path_candidates(user_input);
+        let context = self.activate_rules_for_paths(&paths);
+        if !context.is_empty() {
+            self.messages.push(Message::text("system", context));
+        }
+    }
+
     /// Attach file contents into session context without sending a user turn.
     pub fn attach_context_files<I, S>(&mut self, raw_paths: I) -> AttachFilesReport
     where
@@ -656,10 +838,16 @@ impl AgentSession {
         }
 
         if !segments.is_empty() {
-            let message = format!(
+            let activated_rules = self.activate_rules_for_paths(&report.added);
+            let attached_files = format!(
                 "<attached_files>\n{}\n</attached_files>",
-                segments.join("\n\n")
+                segments.join("\n\n"),
             );
+            let message = if activated_rules.is_empty() {
+                attached_files
+            } else {
+                format!("{activated_rules}\n\n{attached_files}")
+            };
             self.messages.push(Message::text("system", &message));
         }
 
@@ -1547,7 +1735,17 @@ mod tests {
             shell: "test".to_string(),
         };
         let mut session = AgentSession::new("test-model", &ctx, None);
-        let file = tempfile::NamedTempFile::new_in(".").expect("file under workspace");
+        session.workspace_rules = vec![memory::Rule {
+            globs: vec!["*.rs".to_string()],
+            body: "Apply the Rust file rule.".to_string(),
+            source: PathBuf::from("/rules/rust.md"),
+            kind: Some(memory::MemoryKind::Project),
+        }];
+        session.active_rule_sources.clear();
+        let file = tempfile::Builder::new()
+            .suffix(".rs")
+            .tempfile_in(".")
+            .expect("file under workspace");
         std::fs::write(file.path(), "attached body").unwrap();
 
         let report = session.attach_context_files([file.path().to_string_lossy().to_string()]);
@@ -1561,6 +1759,62 @@ mod tests {
             .unwrap()
             .text_content()
             .contains("attached body"));
+        assert!(session
+            .messages
+            .last()
+            .unwrap()
+            .text_content()
+            .contains("Apply the Rust file rule."));
+    }
+
+    #[test]
+    fn user_file_reference_activates_conditional_rule_once() {
+        let mut session = AgentSession::new("test-model", &test_context(), None);
+        session.workspace_rules = vec![memory::Rule {
+            globs: vec!["src/**/*.rs".to_string()],
+            body: "Use the project Rust convention.".to_string(),
+            source: PathBuf::from("/rules/project-rust.md"),
+            kind: Some(memory::MemoryKind::Project),
+        }];
+        session.active_rule_sources.clear();
+
+        let before = session.messages.len();
+        session.activate_rules_from_user_input("Please update src/core/main.rs:42.");
+        assert_eq!(session.messages.len(), before + 1);
+        assert!(session
+            .messages
+            .last()
+            .unwrap()
+            .text_content()
+            .contains("Use the project Rust convention."));
+
+        session.activate_rules_from_user_input("Re-check src/core/main.rs.");
+        assert_eq!(session.messages.len(), before + 1);
+    }
+
+    #[test]
+    fn file_tool_arguments_supply_rule_paths_without_scanning_unrelated_tools() {
+        let read_paths =
+            rule_paths_from_tool_call("read_file", &serde_json::json!({"path": "src/main.rs"}));
+        assert_eq!(read_paths, vec![PathBuf::from("src/main.rs")]);
+
+        let patch_paths = rule_paths_from_tool_call(
+            "apply_patch",
+            &serde_json::json!({
+                "patch": "*** Begin Patch\n*** Update File: src/lib.rs\n*** End Patch"
+            }),
+        );
+        assert!(patch_paths.contains(&PathBuf::from("src/lib.rs")));
+        assert!(is_rule_sensitive_mutation_tool("apply_patch"));
+
+        assert_eq!(
+            rule_paths_from_tool_call(
+                "run_command",
+                &serde_json::json!({"command": "cargo test src/main.rs"}),
+            ),
+            vec![PathBuf::from("src/main.rs")],
+        );
+        assert!(is_rule_sensitive_mutation_tool("run_command"));
     }
 
     #[test]

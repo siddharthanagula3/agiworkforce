@@ -2774,8 +2774,8 @@
   {
     "item": "rules-directory-conditional-load",
     "surface": "packages/extensibility",
-    "status": "broken",
-    "evidence": "The glob-matching machinery is genuinely implemented — apps/cli/src/memory.rs:461-506 parse_globs_field and :508-532 rules_context_prompt filter rules by matching `active_files` against each rule's `globs` frontmatter — but both real call sites hard-code an empty file list: apps/cli/src/agent/mod.rs:336 `memory::rules_context_prompt(&rules, &[])` and apps/cli/src/agent/prompt.rs:92 `memory::rules_context_prompt(&rules, &[])`. Since any glob-scoped rule requires `active_files.iter().any(...)` to match (memory.rs:518-529) and `active_files` is always `&[]`, every rule carrying a `globs:` field is unconditionally excluded from every system prompt the CLI ever builds; only globless (always-on) rules ever reach the model."
+    "status": "built",
+    "evidence": "Glob-scoped rules now activate on every live file-context boundary instead of receiving a hard-coded empty file list: apps/cli/src/agent/mod.rs:743-762 inserts newly matched rules exactly once for user path references, :840-851 activates rules before attached file contents, and apps/cli/src/agent/chat.rs:515-519 performs activation before the first model call. apps/cli/src/agent/mod.rs:304-410 extracts file, LSP, patch, and shell tool paths; chat.rs:1291-1315 activates against hook-rewritten effective arguments and preempts the first newly scoped mutation before execution so the continuation must re-evaluate and retry against the rule. apps/cli/src/memory.rs:509-643 matches canonical absolute paths against project-relative glob suffixes, keeps unconditional startup rules separate, and deduplicates activated sources. Unit tests cover absolute/project-relative matching, user references, attachments, tool argument extraction, one-time activation, hook-rewritten arguments, and fail-before-mutation behavior."
   },
   {
     "item": "memory-file-imports",
