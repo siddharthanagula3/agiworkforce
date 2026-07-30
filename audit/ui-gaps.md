@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 17054b188ddbc45f25d04eb60038d807b8c49542f90f2e286d06c90dc533440e -->
+<!-- ui-gaps-csv-sha256: 576b47f4d1777aaa93b781670d1173e055ab6e61ab087cd18954398192d43580 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 94 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 93 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  298 |
+| Open        |  297 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   38 |
+| Done        |   39 |
 | Not Planned |    5 |
 
 ## P0
@@ -763,24 +763,24 @@ Not planned while the product policy and architecture prohibit customer-content 
 
 - `chatgpt_reference/055-chatgpt-ios-settings-data-controls-model-training-location-services.png`
 
-### GAP-033 — No cloud account data export on mobile — only a device-local export
+### GAP-033 — Mobile exports complete account Cloud data before deletion
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > Data controls (export/delete)
 
 **Gap**
 
-Reference pairs 'Export data' with 'Delete account' in one group, so a user can retrieve their data before deleting it. agiworkforce mobile can export only what is stored on the device (chats, memory, settings, installed models) and offers account deletion that wipes cloud chats, projects, memory and artifacts within 24 hours — with no way to export those cloud-side records first.
+Mobile Account now places an authenticated Export Cloud Data action immediately above Delete Account. It retrieves a reviewed server-side portability document containing Cloud chats, projects and knowledge-file manifests, memories, artifacts and version history, plus existing account and billing records. The native share sheet lets the user save or send the JSON; the temporary device copy is deleted when sharing finishes. Local Mode data remains a separate on-device export, and the deletion confirmation points to the Cloud export first.
 
 **Evidence**
 
-apps/mobile/src/features/settings/data-controls/index.tsx ('Export Local Data', body 'Export runs on this device'); apps/mobile/src/features/settings/cloud-account/index.tsx handleDeleteAccount (DELETE /api/user/delete-account); web has features/settings/components/Settings/ExportData.tsx
+apps/web/app/api/user/export/route.ts now exports explicit tenant-scoped conversation, message, project, project-file, memory, artifact, and artifact-version DTOs while excluding internal token costs, storage URIs, sync cursors, and provider ledgers. Child queries scope ownership through their parent. apps/mobile/services/cloudDataExport.ts binds the request and every file/share step to the visible account epoch, remains behind the Local/Cloud egress guard, validates the response, shares JSON natively, and removes the temporary file. settings/cloud-account/index.tsx renders Export Cloud Data directly before Danger Zone, explains its contents and Local export boundary, requires an explicit Cloud-mode switch, and references export in deletion confirmation. gdpr.test.ts, cloud-data-export.test.ts, and cloud-account-owner-switch.test.tsx verify content inclusion, tenant scoping, cleanup, Local-mode gating, account-switch abort, placement flow, and deletion copy.
 
 **Suggested fix**
 
-Add a cloud 'Export data' action that requests a server-side archive and delivers it by email/download link, place it immediately above Delete Account, and reference it in the deletion confirmation copy ('Export your data first?').
+Completed. Keep every added Cloud content collection on an explicit user-facing DTO and tenant-owned query, preserve the account-epoch and egress guards on Mobile, and retain separate labels for Cloud account data versus on-device Local Mode data.
 
 **Reference screenshot(s)**
 

@@ -531,6 +531,152 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       expect(data.data).toBeDefined();
     });
 
+    it('includes user-owned Cloud content and scopes every child collection through its owner', async () => {
+      mockNeonQuery.mockImplementation((sql: unknown) => {
+        const statement = String(sql);
+        if (statement.includes('from web_conversations') && !statement.includes('inner join')) {
+          return Promise.resolve([
+            {
+              id: 'conversation_1',
+              title: 'Export me',
+              model: 'claude-sonnet',
+              project_id: 'project_1',
+              pinned: true,
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+              deleted_at: null,
+            },
+          ]);
+        }
+        if (statement.includes('from web_messages m')) {
+          return Promise.resolve([
+            {
+              id: 'message_1',
+              conversation_id: 'conversation_1',
+              role: 'user',
+              content: 'My portable chat text',
+              model: null,
+              provider: null,
+              created_at: mockUser.created_at,
+            },
+          ]);
+        }
+        if (statement.includes('from user_projects') && !statement.includes('inner join')) {
+          return Promise.resolve([
+            {
+              id: 'project_1',
+              name: 'Portable project',
+              description: null,
+              instructions: 'Use my preferred format',
+              color: null,
+              is_archived: false,
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+              deleted_at: null,
+            },
+          ]);
+        }
+        if (statement.includes('from project_knowledge_files f')) {
+          return Promise.resolve([
+            {
+              id: 'file_1',
+              project_id: 'project_1',
+              file_name: 'notes.txt',
+              mime_type: 'text/plain',
+              byte_count: 42,
+              checksum_sha256: null,
+              summary: 'User notes',
+              source_surface: 'web',
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+            },
+          ]);
+        }
+        if (statement.includes('from user_memories')) {
+          return Promise.resolve([
+            {
+              id: 'memory_1',
+              content: 'Prefers concise answers',
+              category: 'preference',
+              source: 'user',
+              is_deleted: false,
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+            },
+          ]);
+        }
+        if (statement.includes('from web_artifacts') && !statement.includes('inner join')) {
+          return Promise.resolve([
+            {
+              id: 'artifact_1',
+              conversation_id: 'conversation_1',
+              message_id: 'message_1',
+              title: 'Portable artifact',
+              artifact_type: 'document',
+              language: null,
+              content: 'Artifact body',
+              current_version: 1,
+              pinned: false,
+              tags: ['draft'],
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+              deleted_at: null,
+            },
+          ]);
+        }
+        if (statement.includes('from web_artifact_versions v')) {
+          return Promise.resolve([
+            {
+              artifact_id: 'artifact_1',
+              version: 1,
+              content: 'Artifact body',
+              change_description: null,
+              content_hash: null,
+              created_at: mockUser.created_at,
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const { GET } = await import('@/app/api/user/export/route');
+      const response = await GET(
+        new NextRequest('http://localhost/api/user/export', {
+          method: 'GET',
+          headers: { authorization: 'Bearer valid_token' },
+        }),
+      );
+      const body = await response.json();
+
+      expect(body.data.conversations[0].title).toBe('Export me');
+      expect(body.data.messages[0].content).toBe('My portable chat text');
+      expect(body.data.projects[0].name).toBe('Portable project');
+      expect(body.data.project_knowledge_files[0].file_name).toBe('notes.txt');
+      expect(body.data.memories[0].content).toBe('Prefers concise answers');
+      expect(body.data.artifacts[0].content).toBe('Artifact body');
+      expect(body.data.artifact_versions[0].artifact_id).toBe('artifact_1');
+
+      const statements = mockNeonQuery.mock.calls.map(([sql]) => String(sql));
+      expect(statements.find((sql) => sql.includes('from web_messages m'))).toMatch(
+        /inner join web_conversations c[\s\S]*where c\.user_id = \$1/,
+      );
+      expect(statements.find((sql) => sql.includes('from project_knowledge_files f'))).toMatch(
+        /inner join user_projects p[\s\S]*where p\.user_id = \$1/,
+      );
+      expect(statements.find((sql) => sql.includes('from web_artifact_versions v'))).toMatch(
+        /inner join web_artifacts a[\s\S]*where a\.user_id = \$1/,
+      );
+      expect(
+        mockNeonQuery.mock.calls
+          .filter(([sql]) =>
+            /web_conversations|web_messages|user_projects|project_knowledge_files|user_memories|web_artifacts|web_artifact_versions/.test(
+              String(sql),
+            ),
+          )
+          .every(([, values]) => JSON.stringify(values) === JSON.stringify([mockUser.id])),
+      ).toBe(true);
+    });
+
     it('includes the user-owned billing invoice collection without internal usage ledgers', async () => {
       const { GET } = await import('@/app/api/user/export/route');
       const response = await GET(
