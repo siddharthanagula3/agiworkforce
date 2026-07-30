@@ -51,6 +51,8 @@ jest.mock('lucide-react-native', () => {
     FolderOpen: icon,
     HelpCircle: icon,
     Info: icon,
+    MessageSquare: icon,
+    Pin: icon,
     Plus: icon,
     Search: icon,
     Settings: icon,
@@ -205,6 +207,7 @@ describe('DrawerContent', () => {
 
     expect(getByText('AGI')).toBeTruthy();
     expect(getAllByText('Projects').length).toBeGreaterThan(0);
+    expect(getByText('Chats')).toBeTruthy();
     expect(getByText('Artifacts')).toBeTruthy();
     expect(queryByText('AGI Agent')).toBeNull();
     expect(getByText('Recents')).toBeTruthy();
@@ -292,16 +295,13 @@ describe('DrawerContent', () => {
     expect(queryByText('Local recent 9')).toBeNull();
   });
 
-  it('clears drawer search through the visible clear button', () => {
-    const { getByLabelText, getByText, queryByText } = renderDrawer();
+  it('opens the full global-search and chat-history surface', () => {
+    const { getByLabelText } = renderDrawer();
 
-    fireEvent.changeText(getByLabelText('Search chats and projects'), 'Test');
-    expect(getByText('Results')).toBeTruthy();
+    fireEvent.press(getByLabelText('Search chats, projects, files, library, and artifacts'));
 
-    fireEvent.press(getByLabelText('Clear search'));
-
-    expect(getByText('Recents')).toBeTruthy();
-    expect(queryByText('Results')).toBeNull();
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/chats');
   });
 
   it('keeps Cloud recents separate from Local recents', () => {

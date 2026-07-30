@@ -239,6 +239,29 @@ describe('Artifacts gallery', () => {
     expect(getByText('Image: Enterprise launch')).toBeTruthy();
   });
 
+  it('opens the exact authorized artifact requested by global search', () => {
+    useArtifactStore.setState({
+      artifacts: [
+        {
+          id: 'search-artifact',
+          title: 'Search result artifact',
+          kind: 'document',
+          content: 'Exact artifact content',
+          ageLabel: 'just now',
+          sourceLabel: 'Local chat',
+          accentColor: '#21808d',
+          previewLines: ['Exact artifact content'],
+          provenance: { scope: 'local' },
+        },
+      ],
+    });
+
+    const screen = render(<ArtifactsGalleryScreen initialArtifactId="search-artifact" />);
+
+    expect(screen.getByTestId('artifact-preview-content')).toBeTruthy();
+    expect(screen.getByText('Exact artifact content')).toBeTruthy();
+  });
+
   it('closes an account-A Cloud preview before account B can see it', () => {
     useArtifactStore.setState({
       artifacts: [
