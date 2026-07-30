@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: fd2e0ff9c915c9a9a7bd75d45e8d154a2efad0b55f33c6fbacdd93418d832b79 -->
+<!-- ui-gaps-csv-sha256: 2071c890e0680ad645fed3bd88e249a1e36c5ae7f2014ccb35c2e1acadc32a6e -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 107 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 106 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  311 |
+| Open        |  310 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   30 |
+| Done        |   31 |
 | Not Planned |    0 |
 
 ## P0
@@ -602,24 +602,24 @@ Add a DiffSummaryCard component to the code-session transcript renderer: header 
 
 - `references-2/IMG_0622.PNG`
 
-### GAP-026 — Pairing intro never tells the user both devices must be the same account/mode
+### GAP-026 — Pairing intro states the real Desktop mode and short-lived-code requirements
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-copy
 - **Reference:** Codex · iOS · Remote setup intro
 
 **Gap**
 
-The reference spells out the precondition and prints the signed-in email inline: 'Sign into the Codex desktop app with your ChatGPT account (user@example.com)'. agiworkforce's steps are 'Open AGI Workforce on your desktop / Go to Settings and select "Mobile Companion" / Scan the QR code displayed on screen' — no account-match requirement, no email echo, and no mention of the Local vs Cloud mode boundary, which is the most likely reason a pairing attempt silently fails in this product.
+The reference requires both apps to share one account, but that is not agiworkforce's trust contract. Desktop must be signed in and in Managed Cloud to create a pairing session; the short-lived QR or manual code then authorizes the Mobile role without comparing the phone's Clerk identity. The intro now states that boundary, uses the mounted Settings > Connections destination, and explains that both apps need internet but not the same Wi-Fi.
 
 **Evidence**
 
-apps/mobile/src/features/companion/components/ConnectionStateViews.tsx lines 36-75; apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx DEMO_STEPS[0]
+ConnectionStateViews.tsx presents a Desktop setup required card above the CTA, names Managed Cloud, explains code-based rather than account-identity authorization, updates the three steps to Settings > Connections, and removes the inaccurate same-network troubleshooting claim. CompanionDemoWalkthrough.tsx repeats the same requirements. companion-pairing-requirements.test.tsx renders both surfaces and asserts the Managed Cloud, account-identity, current navigation, and cross-network copy.
 
 **Suggested fix**
 
-Add an account/mode line to DisconnectedView that renders the Clerk primary email (or 'Local mode — sign in to pair') and a short 'both devices must be signed into the same AGI account' explainer above the step list.
+Completed as a deliberate capability-honest divergence. Do not add a same-account promise unless the signaling handshake gains a server-enforced owner binding; keep the short-lived code and authenticated Desktop initiation as the real authorization boundary.
 
 **Reference screenshot(s)**
 

@@ -55,8 +55,8 @@ const DEMO_STEPS: DemoStep[] = [
     stepNumber: 1,
     title: 'Pair with Desktop',
     description:
-      'Open AGI Workforce on your desktop and go to Settings > Mobile Companion. A QR code will appear — tap "Scan QR Code" on this screen to pair.',
-    hint: 'Pairing is instant once both devices are on the same network.',
+      'Sign in on Desktop, switch to Managed Cloud, then open Settings > Connections. Generate a short-lived QR or pairing code and scan it from this screen.',
+    hint: 'The code authorizes this phone. Account identities are not compared, and the devices only need to be online — they do not need the same Wi-Fi.',
   },
   {
     id: 'monitor',

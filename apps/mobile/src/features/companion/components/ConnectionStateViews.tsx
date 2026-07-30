@@ -1,6 +1,6 @@
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { View, ActivityIndicator } from 'react-native';
-import { QrCode, Wifi, WifiOff, Clock } from 'lucide-react-native';
+import { QrCode, Wifi, WifiOff, Clock, ShieldCheck } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { colors } from '@/src/ui/theme';
@@ -51,6 +51,21 @@ export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
         remotely.
       </Text>
 
+      <View
+        accessibilityRole="text"
+        accessibilityLabel="Desktop setup requirement. Sign in on Desktop and switch to Managed Cloud before generating a code. The short-lived pairing code authorizes this phone; accounts are not compared."
+        className="w-full rounded-2xl border border-teal-500/20 bg-teal-500/10 px-4 py-3 mb-5"
+      >
+        <View className="flex-row items-center gap-2 mb-1.5">
+          <ShieldCheck size={15} color={colors.teal} />
+          <Text className="text-sm font-semibold text-white">Desktop setup required</Text>
+        </View>
+        <Text className="text-xs text-white/60 leading-5">
+          Sign in on Desktop and switch to Managed Cloud before generating a code. The short-lived
+          QR or pairing code authorizes this phone; the apps do not compare account identities.
+        </Text>
+      </View>
+
       <Button
         title="Scan QR Code"
         variant="primary"
@@ -66,9 +81,9 @@ export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
       </View>
 
       <View className="mt-5 gap-4 w-full">
-        <StepRow number={1} text="Open AGI Workforce on your desktop" />
-        <StepRow number={2} text='Go to Settings and select "Mobile Companion"' />
-        <StepRow number={3} text="Scan the QR code displayed on screen" />
+        <StepRow number={1} text="Open Desktop in Managed Cloud" />
+        <StepRow number={2} text='Go to Settings and select "Connections"' />
+        <StepRow number={3} text="Generate and scan the short-lived code" />
       </View>
     </Animated.View>
   );
@@ -99,7 +114,7 @@ export function ConnectingView() {
         Connecting to Desktop...
       </Text>
       <Text className="text-white/50 text-center text-sm mb-6">
-        Make sure AGI Workforce is open on your desktop and both devices are on the same network.
+        Keep both apps open and online. They can connect across different networks.
       </Text>
       <ActivityIndicator size="small" color={colors.teal} />
     </Animated.View>
