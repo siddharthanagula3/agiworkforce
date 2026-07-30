@@ -21,6 +21,7 @@ import {
 import { getTokenCounter } from '../data/tokenCounter';
 import { TierInfoSchema } from '../protocol/apiResponses';
 import { effectivePlanTier, type AccountAuthState } from '@agiworkforce/types';
+import { MeResponseSchema } from '@agiworkforce/cloud-contracts/me';
 import { Config } from '../platform/config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -797,6 +798,40 @@ export interface TierInfo {
   resetsAt?: string;
 }
 
+export interface AccountIdentity {
+  displayName: string;
+  email: string | null;
+  accountType: 'Personal account' | 'Organization account';
+  planName: string;
+  tier: string;
+}
+
+/** Validate and project the canonical `/api/me` response into editor-safe identity copy. */
+export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | undefined {
+  const parsed = MeResponseSchema.safeParse(raw);
+  if (!parsed.success) return undefined;
+
+  const tier = parsed.data.plan.tier.trim().toLowerCase();
+  const email = parsed.data.email?.trim() || null;
+  const displayName =
+    parsed.data.profile?.display_name?.trim() ||
+    parsed.data.name.trim() ||
+    email ||
+    'AGI Cloud account';
+  const planName =
+    parsed.data.plan.display_name.trim() ||
+    (tier ? `${tier.charAt(0).toUpperCase()}${tier.slice(1)}` : 'Unknown');
+
+  return {
+    displayName,
+    email,
+    accountType:
+      tier === 'team' || tier === 'enterprise' ? 'Organization account' : 'Personal account',
+    planName,
+    tier,
+  };
+}
+
 /** Validate and project the canonical `/api/usage` response into editor state. */
 export function parseTierInfoResponse(raw: unknown): TierInfo | undefined {
   const parsed = TierInfoSchema.safeParse(raw);
@@ -817,6 +852,62 @@ export function parseTierInfoResponse(raw: unknown): TierInfo | undefined {
     tierInfo.resetsAt = parsed.data.usage_reset_at;
   }
   return tierInfo;
+}
+
+/**
+ * Resolve the browser-approved AGI Cloud account behind this editor session.
+ * This intentionally uses only the device-account token: an API key may fund a
+ * utility request, but it is not proof of a signed-in account identity.
+ */
+export async function fetchAccountIdentity(
+  secrets: vscode.SecretStorage,
+): Promise<AccountIdentity | undefined> {
+  const accountToken = await getAccountToken(secrets);
+  if (accountToken === undefined || accountToken === '') return undefined;
+
+  const parsed = new URL('/api/me?surface=vscode', getCloudWebOrigin());
+  const isHttps = parsed.protocol === 'https:';
+  const lib = isHttps ? https : http;
+
+  return new Promise((resolve) => {
+    const options: https.RequestOptions = {
+      hostname: parsed.hostname,
+      port: parsed.port !== '' ? parseInt(parsed.port, 10) : isHttps ? 443 : 80,
+      path: parsed.pathname + parsed.search,
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accountToken}`,
+        'User-Agent': 'agi-workforce-vscode/0.1.0',
+        'X-Client': 'vscode-extension',
+        'X-AGI-Surface': 'vscode',
+      },
+    };
+
+    const req = lib.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => {
+        if ((res.statusCode ?? 0) >= 400) {
+          if (res.statusCode === 401) void clearAccountToken(secrets);
+          resolve(undefined);
+          return;
+        }
+        try {
+          resolve(parseAccountIdentityResponse(JSON.parse(Buffer.concat(chunks).toString('utf8'))));
+        } catch {
+          resolve(undefined);
+        }
+      });
+      res.on('error', () => resolve(undefined));
+    });
+
+    req.on('error', () => resolve(undefined));
+    req.setTimeout(5_000, () => {
+      req.destroy();
+      resolve(undefined);
+    });
+    req.end();
+  });
 }
 
 /**

@@ -1368,6 +1368,8 @@ export function getWebviewContent(
 
     // Initial collapsed state (injected by extension host)
     var meterCollapsed = ${meterCollapsed ? 'true' : 'false'};
+    var activeRuntimeSource = null;
+    var activeAccountIdentity = null;
 
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
@@ -1414,12 +1416,22 @@ export function getWebviewContent(
       var pill = document.getElementById('runtimePill');
       var label = document.getElementById('runtimePillLabel');
       if (!pill || !label) return;
+      activeRuntimeSource = source;
       // An unrecognised source falls back to the cloud label on purpose: never
       // claim "Local" for a boundary this webview cannot identify.
       var spec = RUNTIME_PILL_BY_SOURCE[source] || RUNTIME_PILL_BY_SOURCE['managed-plan'];
       label.textContent = spec.label;
       pill.setAttribute('data-boundary', spec.boundary);
-      pill.title = spec.title;
+      var title = spec.title;
+      if (activeAccountIdentity && source === 'managed-plan') {
+        title += ' · Account: ' + activeAccountIdentity.displayName;
+        if (activeAccountIdentity.email) title += ' (' + activeAccountIdentity.email + ')';
+        title += ' · ' + activeAccountIdentity.planName + ' plan';
+      } else if (activeAccountIdentity && source === 'user-api-key') {
+        title += ' · AGI Cloud sign-in: ' + activeAccountIdentity.displayName +
+          ' (not used for provider billing)';
+      }
+      pill.title = title;
       pill.style.display = 'inline-flex';
     }
 
@@ -2274,15 +2286,28 @@ export function getWebviewContent(
       else if (msg.type === 'accountStatus') {
         if (!accountBtn || !accountStatusDot) return;
         accountStatusDot.classList.remove('signed-in', 'expired');
+        activeAccountIdentity = msg.payload.identity || null;
         if (msg.payload.status === 'signed-in') {
           accountStatusDot.classList.add('signed-in');
-          accountBtn.title = 'AGI Cloud connected';
+          if (activeAccountIdentity) {
+            var accountTitle = 'AGI Cloud · ' + activeAccountIdentity.displayName;
+            if (activeAccountIdentity.email) {
+              accountTitle += ' (' + activeAccountIdentity.email + ')';
+            }
+            accountTitle += ' · ' + activeAccountIdentity.accountType +
+              ' · ' + activeAccountIdentity.planName + ' plan';
+            accountBtn.title = accountTitle;
+          } else {
+            accountBtn.title = 'AGI Cloud connected · identity unavailable';
+          }
         } else if (msg.payload.status === 'expired') {
           accountStatusDot.classList.add('expired');
           accountBtn.title = 'Reconnect to AGI Cloud';
         } else {
           accountBtn.title = 'Sign in to AGI Cloud';
         }
+        accountBtn.setAttribute('aria-label', accountBtn.title);
+        if (activeRuntimeSource) updateRuntimePill(activeRuntimeSource);
       }
 
       else if (msg.type === 'fileSearchResults') {

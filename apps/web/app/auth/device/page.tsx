@@ -1,11 +1,25 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
-import { Suspense, useState } from 'react';
+import { useClerk, useUser } from '@clerk/nextjs';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+
+interface DeviceAuthorizationDetails {
+  user_code: string;
+  client: {
+    name: string;
+    type: string;
+  };
+  scopes: Array<{
+    id: string;
+    label: string;
+    description: string;
+  }>;
+  expires_at: string;
+}
 
 function formatUserCode(value: string): string {
   const clean = value
@@ -26,12 +40,66 @@ function getErrorMessage(body: unknown): string {
   return 'Approval failed';
 }
 
+function parseDeviceAuthorizationDetails(body: unknown): DeviceAuthorizationDetails | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const candidate = body as Record<string, unknown>;
+  const client = candidate['client'];
+  const scopes = candidate['scopes'];
+  if (
+    typeof candidate['user_code'] !== 'string' ||
+    typeof candidate['expires_at'] !== 'string' ||
+    !client ||
+    typeof client !== 'object' ||
+    Array.isArray(client) ||
+    typeof (client as Record<string, unknown>)['name'] !== 'string' ||
+    typeof (client as Record<string, unknown>)['type'] !== 'string' ||
+    !Array.isArray(scopes)
+  ) {
+    return null;
+  }
+
+  const parsedScopes = scopes.flatMap((scope) => {
+    if (!scope || typeof scope !== 'object' || Array.isArray(scope)) return [];
+    const record = scope as Record<string, unknown>;
+    if (
+      typeof record['id'] !== 'string' ||
+      typeof record['label'] !== 'string' ||
+      typeof record['description'] !== 'string'
+    ) {
+      return [];
+    }
+    return [
+      {
+        id: record['id'],
+        label: record['label'],
+        description: record['description'],
+      },
+    ];
+  });
+  if (parsedScopes.length !== scopes.length || parsedScopes.length === 0) return null;
+
+  return {
+    user_code: candidate['user_code'],
+    client: {
+      name: (client as Record<string, string>)['name']!,
+      type: (client as Record<string, string>)['type']!,
+    },
+    scopes: parsedScopes,
+    expires_at: candidate['expires_at'],
+  };
+}
+
 function DeviceForm() {
   const searchParams = useSearchParams();
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
   const isDesktopSurface = searchParams.get('surface') === 'desktop';
   const [code, setCode] = useState(formatUserCode(searchParams.get('user_code') || ''));
+  const [details, setDetails] = useState<DeviceAuthorizationDetails | null>(null);
+  const [lookupState, setLookupState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [lookupError, setLookupError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [switchingAccount, setSwitchingAccount] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
   const redirectParams = new URLSearchParams();
   if (code) redirectParams.set('user_code', code);
@@ -41,6 +109,53 @@ function DeviceForm() {
   const signInHref = isDesktopSurface
     ? `/login?surface=desktop&redirectTo=${encodeURIComponent(redirectPath)}`
     : `/login?redirectTo=${encodeURIComponent(redirectPath)}`;
+  const accountEmail =
+    user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? null;
+  const accountName =
+    user?.fullName?.trim() ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() ||
+    user?.username?.trim() ||
+    null;
+  const hasCompleteCode = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !hasCompleteCode) {
+      setDetails(null);
+      setLookupError(null);
+      setLookupState('idle');
+      return;
+    }
+
+    const controller = new AbortController();
+    setDetails(null);
+    setLookupError(null);
+    setLookupState('loading');
+    void fetch(`/api/auth/device/code?user_code=${encodeURIComponent(code)}`, {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) throw new Error(getErrorMessage(body));
+        const parsed = parseDeviceAuthorizationDetails(body);
+        if (!parsed || parsed.user_code !== code) {
+          throw new Error('The device request could not be verified. Start sign-in again.');
+        }
+        if (!controller.signal.aborted) {
+          setDetails(parsed);
+          setLookupState('ready');
+        }
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setLookupError(error instanceof Error ? error.message : 'Device request lookup failed');
+        setLookupState('error');
+      });
+
+    return () => controller.abort();
+  }, [code, hasCompleteCode, isLoaded, isSignedIn]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +163,13 @@ function DeviceForm() {
     if (!isSignedIn) {
       setMessage({
         text: 'Sign in before approving this device request.',
+        type: 'error',
+      });
+      return;
+    }
+    if (lookupState !== 'ready' || !details || details.user_code !== code) {
+      setMessage({
+        text: 'Verify the requesting app and requested access before approving.',
         type: 'error',
       });
       return;
@@ -83,6 +205,15 @@ function DeviceForm() {
     }
   }
 
+  async function onSwitchAccount() {
+    setSwitchingAccount(true);
+    try {
+      await signOut({ redirectUrl: signInHref });
+    } finally {
+      setSwitchingAccount(false);
+    }
+  }
+
   return (
     <section className="agi-device-auth-card" aria-labelledby="device-auth-title">
       <p className="agi-section-eyebrow">Authorize a device</p>
@@ -90,16 +221,24 @@ function DeviceForm() {
         Connect a device.
       </h1>
       <p className="agi-device-auth-lede">
-        {isDesktopSurface
-          ? 'Confirm the code requested by AGI Desktop. '
-          : 'Confirm the code shown in AGI Desktop, VS Code, Chrome, or the AGI CLI. '}
-        <strong>
-          Only approve a request you started. This device will be able to use your AGI account.
-        </strong>
+        Confirm the code, signed-in account, and verified requesting app below.{' '}
+        <strong>Only approve a request you started.</strong>
       </p>
       {isLoaded && !isSignedIn ? (
         <div role="alert" className="agi-device-auth-alert agi-device-auth-alert--error">
           Sign in before approving this device request. <Link href={signInHref}>Sign in</Link>
+        </div>
+      ) : null}
+      {isLoaded && isSignedIn ? (
+        <div className="agi-device-auth-account" aria-label="Signed-in account">
+          <div>
+            <span>Approving as</span>
+            <strong>{accountName || accountEmail || 'Signed-in AGI account'}</strong>
+            {accountEmail && accountEmail !== accountName ? <small>{accountEmail}</small> : null}
+          </div>
+          <button type="button" onClick={() => void onSwitchAccount()} disabled={switchingAccount}>
+            {switchingAccount ? 'Switching…' : 'Use a different account'}
+          </button>
         </div>
       ) : null}
       <form onSubmit={onSubmit} className="agi-device-auth-form">
@@ -109,7 +248,10 @@ function DeviceForm() {
           name="user_code"
           type="text"
           value={code}
-          onChange={(e) => setCode(formatUserCode(e.target.value))}
+          onChange={(e) => {
+            setCode(formatUserCode(e.target.value));
+            setMessage(null);
+          }}
           required
           placeholder="ABCD-1234"
           autoComplete="off"
@@ -118,6 +260,31 @@ function DeviceForm() {
           maxLength={9}
           className="agi-device-auth-code"
         />
+        {lookupState === 'loading' ? (
+          <p role="status" className="agi-device-auth-lookup">
+            Verifying the requesting app…
+          </p>
+        ) : null}
+        {lookupState === 'error' && lookupError ? (
+          <p role="alert" className="agi-device-auth-lookup">
+            {lookupError}
+          </p>
+        ) : null}
+        {lookupState === 'ready' && details ? (
+          <section className="agi-device-auth-request" aria-labelledby="device-auth-request-title">
+            <span>Verified requesting app</span>
+            <h2 id="device-auth-request-title">{details.client.name}</h2>
+            <p>This approval grants:</p>
+            <ul>
+              {details.scopes.map((scope) => (
+                <li key={scope.id}>
+                  <strong>{scope.label}</strong>
+                  <small>{scope.description}</small>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {message && (
           <p role={message.type === 'error' ? 'alert' : 'status'} data-message-type={message.type}>
             {message.text}
@@ -125,7 +292,13 @@ function DeviceForm() {
         )}
         <button
           type="submit"
-          disabled={loading || !code || !isLoaded || (isLoaded && !isSignedIn)}
+          disabled={
+            loading ||
+            !hasCompleteCode ||
+            !isLoaded ||
+            (isLoaded && !isSignedIn) ||
+            lookupState !== 'ready'
+          }
           className="agi-cta-primary agi-device-auth-submit"
         >
           {!isLoaded
@@ -133,7 +306,9 @@ function DeviceForm() {
             : isSignedIn
               ? loading
                 ? 'Approving...'
-                : 'Approve device'
+                : lookupState === 'loading'
+                  ? 'Verifying request…'
+                  : 'Approve device'
               : 'Sign in required'}
         </button>
       </form>
@@ -149,6 +324,10 @@ function DeviceForm() {
       </div>
       <p className="agi-device-auth-cancel">
         {isDesktopSurface ? 'Close this window to cancel.' : <Link href="/">Cancel</Link>}
+      </p>
+      <p className="agi-device-auth-legal">
+        Review the <Link href="/terms">Terms of Service</Link> and{' '}
+        <Link href="/privacy">Privacy Policy</Link>.
       </p>
     </section>
   );

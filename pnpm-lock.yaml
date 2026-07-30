@@ -576,6 +576,9 @@ importers:
       '@agiworkforce/agent-core':
         specifier: workspace:*
         version: link:../../packages/ai/agent-core
+      '@agiworkforce/cloud-contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts/cloud-contracts
       '@agiworkforce/client-runtime':
         specifier: workspace:*
         version: link:../../packages/client/client-runtime

@@ -36,7 +36,7 @@ import { resolveTier } from '../../integrations/tierResolver';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
-import { getAccountAuthState } from '../../utils/api';
+import { fetchAccountIdentity, getAccountAuthState, type AccountIdentity } from '../../utils/api';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
 import {
   enforceAgentModeConsent,
@@ -155,7 +155,10 @@ export type ExtToWebviewMessage =
   | { type: 'rewindComplete' }
   | {
       type: 'accountStatus';
-      payload: { status: 'signed-in' | 'signed-out' | 'expired' };
+      payload: {
+        status: 'signed-in' | 'signed-out' | 'expired';
+        identity?: AccountIdentity;
+      };
     };
 
 export interface UsageMeterWebviewPayload {
@@ -696,7 +699,16 @@ export class ChatStateManager {
 
   public async pushAccountStatus(): Promise<void> {
     const state = await getAccountAuthState(this._secrets);
-    this._post({ type: 'accountStatus', payload: { status: state.status } });
+    if (state.status !== 'signed-in') {
+      this._post({ type: 'accountStatus', payload: { status: state.status } });
+      return;
+    }
+
+    const identity = await fetchAccountIdentity(this._secrets);
+    this._post({
+      type: 'accountStatus',
+      payload: identity ? { status: state.status, identity } : { status: state.status },
+    });
   }
 
   async pushUsageMeter(): Promise<void> {

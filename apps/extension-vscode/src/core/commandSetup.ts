@@ -34,8 +34,16 @@ import {
 } from '../integrations/tierResolver';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import { getActiveWorkspaceFolder } from '../platform/workspaceFolders';
-import { getApiKey, getAccountToken, setApiKey, clearApiKey, fetchTierInfo } from '../utils/api';
+import {
+  getApiKey,
+  getAccountToken,
+  setApiKey,
+  clearApiKey,
+  fetchTierInfo,
+  fetchAccountIdentity,
+} from '../utils/api';
 import { signInToAgiCloud, signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
+import { buildAccountIdentityItems } from '../features/account-auth/accountPresentation';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
 import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
@@ -1219,11 +1227,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   context.subscriptions.push(
     register('agi-workforce.showAccountUsage', async () => {
       const { getTokenCounter } = await import('../data/tokenCounter');
-      const { fetchTierInfo } = await import('../utils/api');
 
       const counter = getTokenCounter();
-      const accountToken = await getAccountToken(context.secrets);
-      const tierInfo = await fetchTierInfo(context.secrets);
+      const [accountToken, tierInfo, accountIdentity] = await Promise.all([
+        getAccountToken(context.secrets),
+        fetchTierInfo(context.secrets),
+        fetchAccountIdentity(context.secrets),
+      ]);
       const tier =
         tierInfo?.tier ?? context.globalState.get<string>('tierStatus.cachedTier') ?? 'local';
       const subscriptionNeedsAttention = Boolean(
@@ -1240,7 +1250,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'connectors'
         | 'teams';
       type AccountItem = vscode.QuickPickItem & { action?: AccountAction };
-      const items: AccountItem[] = [
+      const items: AccountItem[] = buildAccountIdentityItems(
+        accountToken !== undefined,
+        accountIdentity,
+      );
+      items.push(
         { label: 'Session usage', kind: vscode.QuickPickItemKind.Separator },
         {
           label: `$(request-changes) Requests this session`,
@@ -1262,7 +1276,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           label: `$(credit-card) Est. cost`,
           description: `$${counter.estimatedCostUsd.toFixed(4)}`,
         },
-      ];
+      );
 
       if (tierInfo?.usagePercentage !== undefined) {
         const pct = Math.round(tierInfo.usagePercentage);
@@ -1286,7 +1300,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (accountToken) {
         items.push({
           label: '$(verified-filled) AGI Cloud connected',
-          description: 'Browser-approved device session',
+          description: accountIdentity
+            ? `${accountIdentity.displayName} · ${accountIdentity.planName} plan`
+            : 'Browser-approved device session',
         });
         items.push({
           label: '$(sign-out) Sign out of AGI Cloud',
