@@ -184,11 +184,14 @@ import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
 import { getClerkAuthUser } from '@/lib/api-auth';
 
-function makeCreateRequest(name = 'round-trip key'): NextRequest {
+function makeCreateRequest(
+  name = 'round-trip key',
+  scopes = ['models:read', 'inference:write'],
+): NextRequest {
   return new NextRequest('http://localhost/api/settings/api-keys', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, scopes }),
   });
 }
 
@@ -227,16 +230,77 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     mockAuth.mockResolvedValueOnce({ userId: 'user-round-trip' });
     const createRes = await createApiKeyRoute(makeCreateRequest());
     expect(createRes.status).toBe(201);
-    const created = (await createRes.json()) as { api_key: { id: string }; full_key: string };
+    const created = (await createRes.json()) as {
+      api_key: { id: string; scopes: string[] };
+      full_key: string;
+    };
     expect(created.full_key).toMatch(/^sk_live_[0-9a-f]{16}_[0-9a-f]{48}$/);
+    expect(created.api_key.scopes).toEqual(['models:read', 'inference:write']);
 
     // Step 2: authenticate with that key via Bearer, no Clerk session this time.
     mockAuth.mockResolvedValueOnce({ userId: null });
-    const authResult = await getClerkAuthUser(makeBearerRequest(created.full_key));
+    const authResult = await getClerkAuthUser(makeBearerRequest(created.full_key), {
+      apiKeyScope: 'inference:write',
+    });
 
     expect(authResult).toEqual({ userId: 'user-round-trip' });
     // Proves the Argon2id verify branch ran, not a rejection short-circuit.
     expect(mockVerifyToken).not.toHaveBeenCalled();
+  });
+
+  it('enforces the selected scope and denies API keys on routes without an API-key contract', async () => {
+    makeFakeDb();
+
+    mockAuth.mockResolvedValueOnce({ userId: 'scoped-user' });
+    const createRes = await createApiKeyRoute(makeCreateRequest('models only', ['models:read']));
+    const created = (await createRes.json()) as { full_key: string };
+
+    await expect(
+      getClerkAuthUser(makeBearerRequest(created.full_key), {
+        apiKeyScope: 'models:read',
+      }),
+    ).resolves.toEqual({ userId: 'scoped-user' });
+
+    await expect(
+      getClerkAuthUser(makeBearerRequest(created.full_key), {
+        apiKeyScope: 'inference:write',
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    await expect(getClerkAuthUser(makeBearerRequest(created.full_key))).rejects.toMatchObject({
+      statusCode: 403,
+    });
+  });
+
+  it('keeps legacy empty-scope keys compatible only with declared public API scopes', async () => {
+    const fakeDb = makeFakeDb();
+    const { ApiKeyService } = await import('@/lib/services/api-key-service');
+    const { getNeonDb } = await import('@/lib/server/neon-db');
+    const { apiKey, rawKey } = await ApiKeyService.createApiKey(
+      getNeonDb(),
+      'legacy-user',
+      'legacy',
+      ['models:read', 'inference:write', 'usage:read'],
+    );
+    const storedRow = fakeDb.store.get(apiKey.id);
+    if (!storedRow) throw new Error('Expected the legacy fixture row to exist');
+    storedRow['scopes'] = [];
+
+    await expect(
+      getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'usage:read' }),
+    ).resolves.toEqual({ userId: 'legacy-user' });
+    await expect(getClerkAuthUser(makeBearerRequest(rawKey))).rejects.toMatchObject({
+      statusCode: 403,
+    });
+  });
+
+  it('rejects new key issuance without at least one scope', async () => {
+    makeFakeDb();
+    mockAuth.mockResolvedValueOnce({ userId: 'scope-required-user' });
+
+    const response = await createApiKeyRoute(makeCreateRequest('scope-less', []));
+
+    expect(response.status).toBe(400);
   });
 
   it('rejects a key after it is revoked through the real DELETE route', async () => {
@@ -254,9 +318,11 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     // The now-revoked key must no longer authenticate.
     mockAuth.mockResolvedValueOnce({ userId: null });
-    await expect(getClerkAuthUser(makeBearerRequest(created.full_key))).rejects.toMatchObject({
-      statusCode: 401,
-    });
+    await expect(
+      getClerkAuthUser(makeBearerRequest(created.full_key), {
+        apiKeyScope: 'inference:write',
+      }),
+    ).rejects.toMatchObject({ statusCode: 401 });
   });
 
   it('rejects a malformed sk_live_-shaped key without a matching DB row', async () => {
@@ -264,7 +330,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     mockAuth.mockResolvedValueOnce({ userId: null });
     await expect(
-      getClerkAuthUser(makeBearerRequest('sk_live_0000000000000000_not_a_real_secret_at_all')),
+      getClerkAuthUser(makeBearerRequest('sk_live_0000000000000000_not_a_real_secret_at_all'), {
+        apiKeyScope: 'inference:write',
+      }),
     ).rejects.toMatchObject({ statusCode: 401 });
 
     // Well-formed-looking but never issued — the key_prefix lookup found
@@ -276,9 +344,11 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     makeFakeDb();
 
     mockAuth.mockResolvedValueOnce({ userId: null });
-    await expect(getClerkAuthUser(makeBearerRequest('sk_live_tooshort'))).rejects.toMatchObject({
-      statusCode: 401,
-    });
+    await expect(
+      getClerkAuthUser(makeBearerRequest('sk_live_tooshort'), {
+        apiKeyScope: 'inference:write',
+      }),
+    ).rejects.toMatchObject({ statusCode: 401 });
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 
@@ -331,12 +401,16 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       // Issue a real key for user A directly via the service (setup only).
       const { ApiKeyService } = await import('@/lib/services/api-key-service');
       const { getNeonDb } = await import('@/lib/server/neon-db');
-      const { rawKey } = await ApiKeyService.createApiKey(getNeonDb(), 'user-a-bearer', 'k');
+      const { rawKey } = await ApiKeyService.createApiKey(getNeonDb(), 'user-a-bearer', 'k', [
+        'inference:write',
+      ]);
 
       // Cookie session belongs to a DIFFERENT user, B.
       mockAuth.mockResolvedValueOnce({ userId: 'user-b-cookie' });
 
-      const result = await getClerkAuthUser(makeBearerRequest(rawKey));
+      const result = await getClerkAuthUser(makeBearerRequest(rawKey), {
+        apiKeyScope: 'inference:write',
+      });
 
       expect(result).toEqual({ userId: 'user-a-bearer' });
       expect(mockAuth).not.toHaveBeenCalled();
@@ -346,11 +420,15 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       makeFakeDb();
       const { ApiKeyService } = await import('@/lib/services/api-key-service');
       const { getNeonDb } = await import('@/lib/server/neon-db');
-      const { rawKey } = await ApiKeyService.createApiKey(getNeonDb(), 'same-user', 'k');
+      const { rawKey } = await ApiKeyService.createApiKey(getNeonDb(), 'same-user', 'k', [
+        'inference:write',
+      ]);
 
       mockAuth.mockResolvedValueOnce({ userId: 'same-user' });
 
-      const result = await getClerkAuthUser(makeBearerRequest(rawKey));
+      const result = await getClerkAuthUser(makeBearerRequest(rawKey), {
+        apiKeyScope: 'inference:write',
+      });
 
       expect(result).toEqual({ userId: 'same-user' });
       expect(mockAuth).not.toHaveBeenCalled();

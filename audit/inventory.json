@@ -3338,8 +3338,8 @@
   {
     "item": "api-key-scoping",
     "surface": "packages/auth",
-    "status": "stub",
-    "evidence": "The DB schema and service layer support scopes — apps/web/lib/services/api-key-service.ts:101,106,109 accepts a `scopes: string[] = []` parameter and inserts it into `api_keys.scopes` — but apps/web/app/api/settings/api-keys/route.ts:16-17 (CreateKeySchema) only validates `name`, and its handleCreate (around lines 71-93) calls `ApiKeyService.createApiKey(db, userId, name)` with no scopes argument, so every key is created with an empty scopes array. Nothing in the codebase ever reads or enforces `.scopes` at authentication time (grep for '.scopes'/'scopes[' across apps/web/lib and apps/web/app/api returned nothing), and apps/web/features/settings/components/Settings/ApiKeys.tsx has no scope-selection UI field."
+    "status": "built",
+    "evidence": "apps/web/lib/api-key-scopes.ts defines the models:read, inference:write, and usage:read contract plus the bounded legacy-empty-scope policy. apps/web/lib/api-auth.ts default-denies API keys unless a route declares and the persisted key grants its required scope; the public models, completion/transcription, credits, and usage routes declare their scope while unrelated account routes remain denied. POST /api/settings/api-keys validates at least one unique known scope and persists it. The reachable Account settings surface mounts ApiKeysManager, whose picker defaults to model-read plus inference and renders each key's effective scopes. API auth, completion-gate, schema, service-wiring, and UI tests cover issuance, insufficient-scope denial, non-public-route denial, legacy compatibility, and selection."
   },
   {
     "item": "account-recovery",

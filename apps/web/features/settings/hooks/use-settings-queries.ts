@@ -24,6 +24,7 @@ import { logger } from '@shared/lib/logger';
 import { requireProviderDefaultModel, type BillingPlanTier } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
+import type { CreateApiKeyFormData } from '../schemas/settings-validation';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -373,16 +374,20 @@ export function useChangePassword(): UseMutationResult<void, Error, ChangePasswo
  *
  * @returns UseMutationResult for creating API key
  */
-export function useCreateAPIKey(): UseMutationResult<CreateAPIKeyResult, Error, string> {
+export function useCreateAPIKey(): UseMutationResult<
+  CreateAPIKeyResult,
+  Error,
+  CreateApiKeyFormData
+> {
   const queryClient: QueryClient = useQueryClient();
 
-  return useMutation<CreateAPIKeyResult, Error, string>({
-    mutationFn: async (name: string): Promise<CreateAPIKeyResult> => {
+  return useMutation<CreateAPIKeyResult, Error, CreateApiKeyFormData>({
+    mutationFn: async ({ name, scopes }: CreateApiKeyFormData): Promise<CreateAPIKeyResult> => {
       if (!name.trim()) {
         throw new Error('Please enter a name for the API key');
       }
 
-      const { data, error, fullKey } = await settingsService.createAPIKey(name);
+      const { data, error, fullKey } = await settingsService.createAPIKey(name, scopes);
       if (error || !data) {
         throw new Error(error || 'Failed to create API key');
       }

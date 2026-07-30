@@ -176,6 +176,9 @@ describe('Credits Balance API', () => {
 
         const response = await GET(request);
         expect(response.status).toBe(200);
+        expect(mockGetClerkAuthUser).toHaveBeenCalledWith(request, {
+          apiKeyScope: 'usage:read',
+        });
 
         const data = await response.json();
         expect(data.object).toBe('credit_balance');

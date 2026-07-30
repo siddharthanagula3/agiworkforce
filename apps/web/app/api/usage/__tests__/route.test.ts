@@ -56,6 +56,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 import { GET } from '../route';
+import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 
 function makeRequest() {
   return new Request('http://localhost:3000/api/usage', { method: 'GET' }) as never;
@@ -206,5 +207,18 @@ describe('GET /api/usage', () => {
     mockGetClerkAuthUser.mockRejectedValue(new Error('no session'));
     const res = await GET(makeRequest());
     expect(res.status).toBe(401);
+  });
+
+  it('preserves a scoped-key denial as 403 and declares the usage-read requirement', async () => {
+    mockGetClerkAuthUser.mockRejectedValue(
+      new ApiKeyScopeError('API key does not have the required scope'),
+    );
+
+    const res = await GET(makeRequest());
+
+    expect(res.status).toBe(403);
+    expect(mockGetClerkAuthUser).toHaveBeenCalledWith(expect.any(Request), {
+      apiKeyScope: 'usage:read',
+    });
   });
 });
