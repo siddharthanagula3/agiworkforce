@@ -827,23 +827,22 @@ If no (accept divergence): record an ADR explaining why AC-16 does not apply or 
 
 ---
 
-### ARCH-D11 — Production migrations applied by a hand-rolled TEMP script with no ledger
+### ARCH-D11 — Production migrations lack a ledger-backed runner
 
 **Maps to:** constitution Appendix A · A11 · governing rule AC-51 · raised in §29 · closing book: Database Spec
 **Related findings:** —
 **Status:** Open · **Resolution:** none (record-only) · **Evidence verified:** CONFIRMED. All evidence cited reproduces against the codebase as of 2026-06-25. The script exists at the cited path, reads from /tmp, executes migrations 0037–0042, and has no ledger-recording mechanism. No schema_migrations or equivalen…
 
-**Problem statement.** Production schema changes are applied via a temporary, hand-rolled script that reads the database connection from a file in /tmp and performs manual SQL execution without recording what was applied. With no migration ledger table, drift between committed migrations in the repo and the live schema is unverifiable and unaudititable.
+**Problem statement.** Production schema changes were applied via a temporary, hand-rolled script that read the database connection from a file in `/tmp` and performed manual SQL execution without recording what was applied. The unsafe script is now deleted, but with no migration ledger table or replacement runner, drift between committed migrations in the repo and the live schema remains unverifiable and unauditable.
 
-**Current implementation.** Production migrations are applied by `/Users/siddhartha/Desktop/agiworkforce/apps/web/scripts/_prod_migrate.mjs` (lines 1-82), which reads the prod Neon connection string from `/tmp/prod_conn.txt` (line 5), parses and executes a hardcoded chain of 6 migrations (0037–0042, lines 33–40), and logs success/failure to stdout with a verification probe (lines 62–81). No migration ledger table exists anywhere in the 42 migration files (`apps/web/db/neon/*.sql`). There is no standard migration runner, no applied-migrations tracking table, and no CI/deployment pipeline that orchestrates these migrations — the script is described as TEMP and deleted after manual use (line 1).
+**Current implementation.** The former `apps/web/scripts/_prod_migrate.mjs` parsed and executed a hardcoded six-migration chain (0037–0042) and logged a verification probe without recording an applied-migration ledger. It was deleted on 2026-07-30 as part of the process-environment credential contract and must not be restored. No standard migration runner, applied-migrations tracking table, or CI/deployment job currently replaces it.
 
 **Proposed architecture (target — not a build order).** A migration runner and durable ledger that enforce AC-51: migrations are sequentially numbered and immutable; a runner (integrated into the CI/deployment pipeline or available as a deterministic CLI) records every applied migration in a durable database table (schema_migrations or equivalent) with timestamp and idempotence token; migrations are tested and applied to a branch-first before production; the runner includes an RLS-activation probe gate (as per §29) to ensure RLS is enforced before production cut; all SQL and runner invocation flow through the vendor-neutral data-layer adapter; the applied-migrations ledger is auditable from the repository so committed-vs-live schema drift is verifiable.
 
 **Evidence.**
 
-- apps/web/scripts/\_prod_migrate.mjs:1 (header comment: 'TEMP: apply the cloud-sync migration chain to PRODUCTION. Deleted after use.')
-- apps/web/scripts/\_prod_migrate.mjs:5 (reads connection: readFileSync('/tmp/prod_conn.txt', 'utf8'))
-- apps/web/scripts/\_prod_migrate.mjs:33-40 (hardcoded migration chain: 0037–0042)
+- Git history for the deleted `apps/web/scripts/_prod_migrate.mjs` (former temporary runner and hardcoded 0037–0042 chain)
+- `scripts/env-doctor.mjs` (enforces the process-environment-only credential contract and rejects credential-bearing `/tmp` paths)
 - apps/web/db/neon/0038_cloud_sync_versioning.sql:1-78 (representative migration with no applied-migrations table created)
 - docs/00-foundation/architecture-constitution.md:459 (constitution §29 acknowledges: 'production was applied by a self-described temporary script with no ledger table')
 
@@ -885,9 +884,9 @@ If no (accept divergence): record an ADR explaining why AC-16 does not apply or 
 - Phase 1: Author the runner within packages/platform/data-layer — extend the adapter types to include a `runMigrations(opts: {order: 'up'|'rollback'|'verify', probes?: []})` interface; implement on NeonDatabaseAdapter using a shared migration-loader and ledger-query pattern.
 - Phase 2: Author the ledger schema — create a pre-0001 (or an early migration like 0000.5) that creates the schema_migrations table with (id, name, applied_at, idempotence_key, verification_payload) and records all existing migrations as already-applied (audit query against information_schema.tables/columns to build the baseline).
 - Phase 3: Integrate into CI — update .github/workflows/ci.yml or a new migration-apply job to use the runner on branch pushes (test) and main merges (production); gate production apply on successful RLS-activation probe.
-- Phase 4: Deprecate \_prod_migrate.mjs — mark it as read-only in the repo with a comment directing to the runner; delete it from production and all deployment docs once the runner is live.
+- Phase 4: Keep the former temporary runner deleted; deployment documentation must direct operators only to the ledger-backed runner.
 - Phase 5: Verify idempotence — audit migrations 0001–0042 to ensure all use IF NOT EXISTS, guarded updates (WHERE ... IS NULL), or CREATE OR REPLACE; flag any migration that would fail on re-run and create a 0-series corrective migration.
-- Rollback plan: If the runner encounters a ledger inconsistency at any point, revert to the temporary script as a safety net (documented in a runbook), verify the schema against the repo with a separate CI job, and re-bootstrap the ledger once discrepancies are resolved.
+- Rollback plan: If the runner encounters a ledger inconsistency, stop production apply, verify the live schema against the committed chain with a read-only probe, and repair/re-bootstrap the ledger through a reviewed corrective migration. Do not restore the deleted temporary runner.
 
 **Recommendation (for the owner — not a decision).** Adopt AC-51 and begin the migration work in Phase 1–2 immediately. The current state is a known gap acknowledged in the constitution. The runner and ledger are foundational to trust-boundary discipline (AC-32, AC-49, AC-50) and do not depend on AGI-SEC-0001 being complete — they can be authored in parallel with RLS enforcement work. Start with the ledger table design and baseline audit so that even the temporary script can be instrumented to record its actions going forward as a bridge toward the runner. This unblocks both compliance (schema drift is now verifiable) and safety (every production apply is recorded).
 

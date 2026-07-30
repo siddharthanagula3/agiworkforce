@@ -698,6 +698,10 @@
       },
       {
         "from": "agi-workforce",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "agi-workforce",
         "to": "@agiworkforce/design-tokens"
       },
       {

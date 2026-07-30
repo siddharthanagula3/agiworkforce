@@ -1,16 +1,5 @@
 const { chromium } = require('playwright');
 
-// Generate a secure random password
-const generatePassword = () => {
-  const length = 16;
-  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-  let password = '';
-  for (let i = 0; i < length; i++) {
-    password += charset.charAt(Math.floor(Math.random() * charset.length));
-  }
-  return password;
-};
-
 (async () => {
   console.log('========================================');
   console.log('Creating New AGI Workforce Account');
@@ -20,10 +9,10 @@ const generatePassword = () => {
   try {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
-    const password = generatePassword();
     const email = process.env.TEST_EMAIL;
-    if (!email) {
-      throw new Error('TEST_EMAIL environment variable is required');
+    const password = process.env.TEST_PASSWORD;
+    if (!email || !password) {
+      throw new Error('TEST_EMAIL and TEST_PASSWORD must be exported in the process environment');
     }
 
     console.log('1. Navigating to app...');
@@ -86,30 +75,8 @@ const generatePassword = () => {
       console.log('   ✗ Signup button not found');
     }
 
-    console.log('\n========================================');
-    console.log('ACCOUNT CREDENTIALS');
-    console.log('========================================');
-    console.log('Email:    ' + email);
-    console.log('Password: ' + password);
-    console.log('========================================\n');
     console.log('✓ Account creation script completed');
-    console.log('Next: User upgrades plan to Hobby in dashboard');
-    console.log('Then: Tests can be run with this account\n');
-
-    // Save credentials to file
-    const fs = require('fs');
-    const creds = `# AGI Workforce Test Account Credentials
-Email: ${email}
-Password: ${password}
-Created: ${new Date().toISOString()}
-Status: Awaiting Hobby plan upgrade
-
-IMPORTANT: Store this password securely.
-Use this account for testing all features.
-`;
-
-    fs.writeFileSync('/tmp/test-account-credentials.txt', creds);
-    console.log('✓ Credentials saved to /tmp/test-account-credentials.txt');
+    console.log('Credentials remain in the process environment and were not written to disk.\n');
 
     await browser.close();
   } catch (err) {

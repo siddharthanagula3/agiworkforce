@@ -62,6 +62,9 @@ Use `.env.example` as the complete renderer/build contract and copy
 `.env.local`, production signing credentials, provider API keys, MCP OAuth
 tokens, local file indexes, or user data.
 
+Validate exported values with
+`pnpm env:doctor -- --scope desktop --mode development` (or `production`).
+
 ## Security, Privacy, Data Boundaries
 
 Security/privacy review is required for local file access, filesystem writes, generated files, MCP/connectors, shell/process execution, computer use, sandbox policy, native messaging, update/signing, and Local/BYOK/Managed handoffs.

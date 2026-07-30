@@ -59,6 +59,9 @@ Use `apps/web/.env.example` as the complete deployment contract and copy
 commit `.env.local`, production secrets, Clerk secret keys, Neon database URLs,
 Stripe live keys, provider API keys, or webhook secrets.
 
+Validate exported production values without printing them:
+`pnpm env:doctor -- --scope web --mode production`.
+
 ## Security, Privacy, Data Boundaries
 
 Security/privacy review is required for auth, cookies, CSRF, CSP, iframe/artifact rendering, file uploads, generated files, provider routing, Neon database access, billing, rate limits, and any Local/BYOK/Managed privacy-mode flow.
