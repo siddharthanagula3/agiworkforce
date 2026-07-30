@@ -1,5 +1,5 @@
 /**
- * Window API — typed wrappers for window_* and tray_* Tauri commands.
+ * Window API — typed wrappers for window_* Tauri commands.
  */
 
 import { command } from '@agiworkforce/client-runtime';
@@ -76,10 +76,4 @@ export async function windowCloseFloating(): Promise<void> {
 
 export async function windowIsFloatingVisible(): Promise<boolean> {
   return command<boolean>('window_is_floating_visible');
-}
-
-// ---- Tray Commands ----
-
-export async function traySetUnreadBadge(count: number): Promise<void> {
-  return command<void>('tray_set_unread_badge', { count });
 }

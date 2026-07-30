@@ -608,8 +608,8 @@
   {
     "item": "dock-badge",
     "surface": "apps/desktop",
-    "status": "stub",
-    "evidence": "apps/desktop/src-tauri/src/sys/commands/tray.rs:3-7 — `tray_set_unread_badge` is explicitly commented '[tray] placeholder unread badge update request', logs a debug line, and returns Ok(()) without calling any OS dock-badge/overlay-icon API. Registered in invoke_handler at lib.rs:1306. A caller wrapper exists at packages/client/desktop-command-client/src/window.ts:83-85 (`traySetUnreadBadge`) but grep across apps/desktop/src finds zero call sites for it or for `tray_set_unread_badge`."
+    "status": "missing",
+    "evidence": "The uncalled `tray_set_unread_badge` Tauri command and `traySetUnreadBadge` client wrapper were removed from the native registry and shared Desktop command client. No mounted Desktop surface claimed or invoked dock/app-icon badging, so the product no longer exposes a no-op capability. A real cross-platform unread-badge implementation remains absent."
   },
   {
     "item": "keychain-credential-store",
