@@ -196,6 +196,12 @@ describe('getWebviewContent — structural smoke', () => {
     expect(scriptBody).toContain("vscode.postMessage({ type: 'openAccount' })");
     expect(scriptBody).toContain("msg.type === 'accountStatus'");
     expect(scriptBody).toContain("'Reconnect to AGI Cloud'");
+    expect(scriptBody).toContain('activeAccountIdentity.displayName');
+    expect(scriptBody).toContain('activeAccountIdentity.email');
+    expect(scriptBody).toContain('activeAccountIdentity.accountType');
+    expect(scriptBody).toContain('activeAccountIdentity.planName');
+    expect(scriptBody).toContain("accountBtn.setAttribute('aria-label', accountBtn.title)");
+    expect(scriptBody).toContain("' (not used for provider billing)'");
   });
 
   it('provides an inline first-run recovery path for an unavailable local runtime', () => {

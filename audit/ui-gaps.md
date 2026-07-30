@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: a8ea16c7fd6ead7dcae7b5ceeef0b9bc8d4bc31a4552bb6f2e7130045c649899 -->
+<!-- ui-gaps-csv-sha256: 150ec0b6181f82460208dcc3846cbc4c211da3ca70d17478cd9cfb5eeaf47d1f -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 124 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 122 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  328 |
+| Open        |  326 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   13 |
+| Done        |   15 |
 | Not Planned |    0 |
 
 ## P0
@@ -2557,24 +2557,24 @@ Add bulk-action rows to the Data Controls section: Archive all chats, Delete all
 
 - `chatgpt_reference/136-chatgpt-web-settings-data-controls-archive-delete-export-chats.png`
 
-### GAP-111 — Device-auth consent never shows which account or which client is being authorized
+### GAP-111 — Device-auth consent shows the signed-in account and authoritative requesting client
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Web
 - **Surface/type:** web · missing-copy
 - **Reference:** Codex · iOS · Device-authorization consent
 
 **Gap**
 
-The reference puts the account email in a chip ('Confirm this is the ChatGPT account you want to use with Codex Remote') and names the requesting client plus what it will be able to do. agiworkforce's /auth/device page checks isSignedIn but renders no identity at all and describes the requester generically as 'AGI Desktop, VS Code, Chrome, or the AGI CLI', so a user with multiple accounts cannot tell what they are approving.
+The approval page now identifies the signed-in account, supports switching accounts, and blocks approval until a protected server lookup verifies the pending code. It names the server-owned client surface, lists the account and Managed Cloud scopes, and links Terms and Privacy without trusting the URL surface hint.
 
 **Evidence**
 
-apps/web/app/auth/device/page.tsx lines 86-153 (no user email, no client/device metadata, no Terms/Privacy footer)
+apps/web/app/api/auth/device/code/route.ts adds a signed-in, rate-limited, no-store lookup that resolves client identity from the server catalog and returns explicit scopes. apps/web/app/auth/device/page.tsx runtime-validates that response, renders the account/client/scope consent UI, and keeps approval disabled until verification. route.test.ts and page.test.tsx cover lookup security, expiry, account switching, scope copy, legal links, and approval gating.
 
 **Suggested fix**
 
-Render the signed-in email in an account chip with a 'Use a different account' link, echo the client name/surface and requested scope returned by the device-code lookup, and add Terms of Service | Privacy Policy footer links.
+Completed. Preserve the signed-in lookup, fixed client catalog, runtime response validation, and approval gate if device scopes or client surfaces evolve.
 
 **Reference screenshot(s)**
 
@@ -2879,24 +2879,24 @@ Completed. Keep agent.mode and agent.effort writes centralized in the two consen
 
 - `chatgpt_reference/012-codex-vscode-ext-permission-confirm-modal-ultra-full-access-warning.png`
 
-### GAP-125 — Account menu never shows which identity or account type is signed in
+### GAP-125 — Account menu and trust-boundary tooltips identify the signed-in plan owner
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-ia
 - **Reference:** Codex · VS Code extension · Account dropdown
 
 **Gap**
 
-Reference's account menu leads with the signed-in email and the account type ('Personal account') before any action, so the user can tell whose plan and data boundary a turn will use. agiworkforce's account QuickPick shows session token counts, cloud usage percentage and a generic 'AGI Cloud connected' row, but no email, display name, organisation or plan owner — which conflicts with the repo's requirement that trust boundaries carry a visible provider/account label.
+The extension now resolves the browser-approved device account through the canonical /api/me contract. Account & Usage leads with informational name/email and personal-or-organization/plan rows before usage and actions; the header account tooltip carries the same identity. Managed Cloud names the active plan owner, while BYOK identifies the AGI sign-in with an explicit note that it does not pay provider billing.
 
 **Evidence**
 
-apps/extension-vscode/src/core/commandSetup.ts:1400-1404 ('$(verified-filled) AGI Cloud connected' / 'Browser-approved device session'). Searched apps/extension-vscode/src for 'email|displayName|accountName|profile' — no account identity is ever read or rendered (only getWorkspaceDisplayName matches).
+apps/extension-vscode/src/utils/api.ts validates /api/me?surface=vscode with @agiworkforce/cloud-contracts/me and projects the identity using only the device-account token. accountPresentation.ts builds the first two non-action rows; commandSetup.ts places them before session usage. ChatStateManager.ts sends identity to webviewContent.ts, which updates accessible account and Local/BYOK/Managed Cloud tooltips. api.test.ts, accountPresentation.test.ts, runtimePill.webview.test.ts, and webviewContent.webview.test.ts cover validation and presentation.
 
 **Suggested fix**
 
-Return identity (email, display name, account type/org, plan) from the device-auth token exchange in features/account-auth/deviceAuth.ts, show it as the first two non-selectable rows of the account QuickPick and as the tooltip on the header account button, and mirror it in the trust-boundary pill when the boundary is BYOK or Managed Cloud.
+Completed. Keep device-token identity separate from API-key/BYOK ownership, retain runtime validation, and never label the signed-in AGI account as the provider billing owner in BYOK mode.
 
 **Reference screenshot(s)**
 

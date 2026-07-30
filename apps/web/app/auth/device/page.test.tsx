@@ -9,6 +9,15 @@ import AuthDevicePage from './page';
 const authState = vi.hoisted(() => ({
   isLoaded: true,
   isSignedIn: true,
+  signOut: vi.fn(),
+  user: {
+    fullName: 'Ada Lovelace',
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    username: 'ada',
+    primaryEmailAddress: { emailAddress: 'ada@example.com' },
+    emailAddresses: [{ emailAddress: 'ada@example.com' }],
+  },
 }));
 
 const searchState = vi.hoisted(() => ({
@@ -17,7 +26,12 @@ const searchState = vi.hoisted(() => ({
 }));
 
 vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ isLoaded: authState.isLoaded, isSignedIn: authState.isSignedIn }),
+  useUser: () => ({
+    isLoaded: authState.isLoaded,
+    isSignedIn: authState.isSignedIn,
+    user: authState.isSignedIn ? authState.user : null,
+  }),
+  useClerk: () => ({ signOut: authState.signOut }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -60,17 +74,49 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 
 describe('/auth/device page', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     authState.isLoaded = true;
     authState.isSignedIn = true;
+    authState.signOut.mockReset();
+    authState.signOut.mockResolvedValue(undefined);
     searchState.userCode = 'ABCD-1234';
     searchState.surface = null;
-    vi.restoreAllMocks();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/auth/device/code?')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                user_code: 'ABCD-1234',
+                client: { name: 'AGI for VS Code', type: 'vscode' },
+                scopes: [
+                  {
+                    id: 'account:read',
+                    label: 'Account identity and plan',
+                    description:
+                      'Read the account name, email, plan, and usage shown in this client.',
+                  },
+                  {
+                    id: 'managed-cloud:use',
+                    label: 'AGI Managed Cloud',
+                    description:
+                      'Use account-backed AGI Cloud features on this device, subject to plan and workspace permissions.',
+                  },
+                ],
+                expires_at: '2099-08-01T00:00:00.000Z',
+              }),
+          } as Partial<Response>);
+        }
+        return Promise.reject(new Error(`Unexpected request: ${url}`));
+      }),
+    );
   });
 
   it('does not call protected approval APIs while signed out', () => {
     authState.isSignedIn = false;
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = vi.mocked(fetch);
 
     render(<AuthDevicePage />);
 
@@ -119,7 +165,37 @@ describe('/auth/device page', () => {
     render(<AuthDevicePage />);
 
     expect(screen.getByTestId('header')).toHaveAttribute('data-minimal', 'true');
-    expect(screen.getByText(/AGI Desktop, VS Code, Chrome, or the AGI CLI/)).toBeVisible();
+    expect(screen.getByText(/verified requesting app below/i)).toBeVisible();
+  });
+
+  it('shows the signed-in identity, verified client, requested scopes, and legal links', async () => {
+    render(<AuthDevicePage />);
+
+    expect(screen.getByLabelText('Signed-in account')).toHaveTextContent('Ada Lovelace');
+    expect(screen.getByLabelText('Signed-in account')).toHaveTextContent('ada@example.com');
+    expect(await screen.findByRole('heading', { name: 'AGI for VS Code' })).toBeVisible();
+    expect(screen.getByText('Account identity and plan')).toBeVisible();
+    expect(screen.getByText('AGI Managed Cloud')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute(
+      'href',
+      '/terms',
+    );
+    expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+  });
+
+  it('signs out before switching to a different account', async () => {
+    render(<AuthDevicePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use a different account' }));
+
+    await waitFor(() => {
+      expect(authState.signOut).toHaveBeenCalledWith({
+        redirectUrl: '/login?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-1234',
+      });
+    });
   });
 
   it('renders a dedicated in-app Desktop surface and preserves it through sign-in', () => {
@@ -142,18 +218,36 @@ describe('/auth/device page', () => {
   it('directs the user back to the requesting app after approval', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ token: 'csrf-token' }),
-        } as Partial<Response>)
-        .mockResolvedValueOnce({
-          ok: true,
-        } as Partial<Response>),
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/auth/device/code?')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                user_code: 'ABCD-1234',
+                client: { name: 'AGI for VS Code', type: 'vscode' },
+                scopes: [
+                  { id: 'account:read', label: 'Account identity', description: 'Read identity.' },
+                ],
+                expires_at: '2099-08-01T00:00:00.000Z',
+              }),
+          } as Partial<Response>);
+        }
+        if (url === '/api/csrf') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ token: 'csrf-token' }),
+          } as Partial<Response>);
+        }
+        if (url === '/api/auth/device/approve') {
+          return Promise.resolve({ ok: true } as Partial<Response>);
+        }
+        return Promise.reject(new Error(`Unexpected request: ${url}`));
+      }),
     );
 
     render(<AuthDevicePage />);
+    await screen.findByRole('heading', { name: 'AGI for VS Code' });
     fireEvent.click(screen.getByRole('button', { name: 'Approve device' }));
 
     await waitFor(() => {
@@ -167,6 +261,20 @@ describe('/auth/device page', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/auth/device/code?')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                user_code: 'ABCD-1234',
+                client: { name: 'AGI for VS Code', type: 'vscode' },
+                scopes: [
+                  { id: 'account:read', label: 'Account identity', description: 'Read identity.' },
+                ],
+                expires_at: '2099-08-01T00:00:00.000Z',
+              }),
+          } as Partial<Response>);
+        }
         if (url === '/api/csrf') {
           return Promise.resolve({
             ok: true,
@@ -182,6 +290,7 @@ describe('/auth/device page', () => {
     );
 
     render(<AuthDevicePage />);
+    await screen.findByRole('heading', { name: 'AGI for VS Code' });
     fireEvent.click(screen.getByRole('button', { name: 'Approve device' }));
 
     await waitFor(() => {
