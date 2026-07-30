@@ -26,6 +26,20 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: agiworkforce_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v6
         with:
@@ -61,6 +75,14 @@ jobs:
           echo "NEON_DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test" >> $GITHUB_ENV
           echo "CLERK_SECRET_KEY=test-clerk-secret-key" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_mock" >> $GITHUB_ENV
+
+      - name: Apply and verify canonical Postgres migrations
+        run: |
+          pnpm test:db-migrate
+          pnpm db:migrate -- apply --target ci
+          pnpm db:migrate -- apply --target ci
+          pnpm db:migrate -- verify
+          pnpm db:rls-probe -- --target ci
 
       - name: Dependency audit (JS) — critical (blocking)
         run: pnpm audit --audit-level=critical

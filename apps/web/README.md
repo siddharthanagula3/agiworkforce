@@ -51,6 +51,9 @@ Runtime API boundaries live under `app/api`, `api`, `lib`, and shared packages. 
 - `pnpm --filter @agiworkforce/web test`
 - `pnpm --filter @agiworkforce/web build`
 - `pnpm --filter @agiworkforce/web test:e2e`
+- `pnpm db:migrate -- status`
+- `pnpm db:migrate -- apply --target local|ci|branch|production`
+- `pnpm db:rls-probe -- --target local|ci|branch`
 
 ## Environment / Secrets
 
@@ -77,7 +80,9 @@ Local and BYOK payloads must not route through managed gateways unless the UI ex
 
 ## Release / Deployment Notes
 
-Web deploys through Next.js/Vercel-style hosting. Production releases must verify environment variables, Neon migrations, Stripe webhook config, and sandbox origin config.
+Web deploys through Next.js/Vercel-style hosting. Production releases must
+verify environment variables, run the root checksum-ledger migration gate,
+verify RLS on a branch, and review Stripe webhook and sandbox-origin config.
 
 ## Known Caveats
 

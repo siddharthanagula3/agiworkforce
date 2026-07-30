@@ -22,7 +22,7 @@ import { randomUUID } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
 import { requireManagedChatPlan } from '../middleware/planGate';
 import { AppError } from '../middleware/errorHandler';
-import { getSystemClient } from '../lib/neonClients';
+import { getUserScopedClient, type UserAuth } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -57,11 +57,8 @@ const updateConversationSchema = z
 // HELPER: Verify conversation ownership
 // =============================================================================
 
-async function verifyConversationOwnership(conversationId: string, userId: string): Promise<void> {
-  // conversations/messages are unowned shadow-schema names, distinct from
-  // canonical web_conversations/web_messages. Preserve explicit owner checks
-  // on a visibly privileged compatibility boundary.
-  const db = getSystemClient('shadow-schema-compatibility');
+async function verifyConversationOwnership(conversationId: string, user: UserAuth): Promise<void> {
+  const db = getUserScopedClient(user);
   const { data: conversation, error } = await db
     .from('conversations')
     .select('id, user_id')
@@ -74,7 +71,7 @@ async function verifyConversationOwnership(conversationId: string, userId: strin
   }
 
   // Mask ownership as 404 to prevent enumeration attacks
-  if (conversation.user_id !== userId) {
+  if (conversation.user_id !== user.userId) {
     throw new AppError('Conversation not found', 404);
   }
 }
@@ -95,7 +92,7 @@ router.get('/', createRateLimiter('cloud-chat-list'), async (req: Request, res: 
     throw new AppError('Unauthorized', 401);
   }
 
-  const db = getSystemClient('shadow-schema-compatibility');
+  const db = getUserScopedClient(user);
   const { data: conversations, error } = await db
     .from('conversations')
     .select('id, title, model, is_archived, created_at, updated_at')
@@ -129,7 +126,7 @@ router.post('/', createRateLimiter('cloud-chat-create'), async (req: Request, re
   const conversationId = randomUUID();
   const now = new Date().toISOString();
 
-  const db = getSystemClient('shadow-schema-compatibility');
+  const db = getUserScopedClient(user);
   const { data: conversation, error } = await db
     .from('conversations')
     .insert({
@@ -173,9 +170,9 @@ router.get('/:id', createRateLimiter('cloud-chat-get'), async (req: Request, res
     throw new AppError('Conversation ID is required', 400);
   }
 
-  await verifyConversationOwnership(conversationId, user.userId);
+  await verifyConversationOwnership(conversationId, user);
 
-  const db = getSystemClient('shadow-schema-compatibility');
+  const db = getUserScopedClient(user);
   // Fetch conversation metadata and messages in parallel.
   const [convResult, msgsResult] = await Promise.all([
     db
@@ -197,7 +194,7 @@ router.get('/:id', createRateLimiter('cloud-chat-get'), async (req: Request, res
   }
 
   if (msgsResult.error) {
-    // Non-fatal: return conversation with empty messages if table not ready.
+    // Non-fatal: metadata remains useful if message history is temporarily unavailable.
     logger.debug({ error: msgsResult.error, conversationId }, 'Failed to fetch messages');
   }
 
@@ -228,9 +225,9 @@ router.delete(
       throw new AppError('Conversation ID is required', 400);
     }
 
-    await verifyConversationOwnership(conversationId, user.userId);
+    await verifyConversationOwnership(conversationId, user);
 
-    const db = getSystemClient('shadow-schema-compatibility');
+    const db = getUserScopedClient(user);
     const { error } = await db
       .from('conversations')
       .update({ is_deleted: true, updated_at: new Date().toISOString() })
@@ -268,9 +265,9 @@ router.patch('/:id', createRateLimiter('cloud-chat-patch'), async (req: Request,
 
   const updates = updateConversationSchema.parse(req.body);
 
-  await verifyConversationOwnership(conversationId, user.userId);
+  await verifyConversationOwnership(conversationId, user);
 
-  const db = getSystemClient('shadow-schema-compatibility');
+  const db = getUserScopedClient(user);
   const { data: updated, error } = await db
     .from('conversations')
     .update({ ...updates, updated_at: new Date().toISOString() })

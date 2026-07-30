@@ -65,7 +65,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
    ┌──────┴──────┐     ┌─────────────────┐
    │  Neon       │     │  Rust Crates    │
    │  PostgreSQL │     │  protocol,      │
-   │  (52 migr.) │     │  sandbox-policy,│
+   │  ledgered   │     │  sandbox-policy,│
    │             │     │  command-registry│
    │             │     │  app-server,    │
    │             │     │  + 13 more      │
@@ -146,6 +146,23 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 - **Vitest** — unit testing
 - **ESLint 9** + **Prettier** — linting and formatting
 - **Husky** + **lint-staged** + **commitlint** — git hooks with conventional commits
+
+### Database migrations
+
+`apps/web/db/neon` is an immutable, contiguous migration chain tracked in
+`public.schema_migrations` with exact SHA-256 checksums. The runner reads the
+database URL from `AGI_DATABASE_URL`, `DATABASE_URL`, or `NEON_DATABASE_URL`
+and never reads credential files or prints the URL.
+
+- Inspect: `pnpm db:migrate -- status`
+- Apply: `pnpm db:migrate -- apply --target local|ci|branch|production`
+- Verify: `pnpm db:migrate -- verify`
+- Probe RLS on local/CI/throwaway branch:
+  `pnpm db:rls-probe -- --target local|ci|branch`
+
+Production apply also requires `--confirm-production`. Baseline is an explicit
+operator action with `--confirm-baseline`, a sequence, reason, and evidence;
+run it only after branch verification.
 
 ## AI and Agent Capabilities
 

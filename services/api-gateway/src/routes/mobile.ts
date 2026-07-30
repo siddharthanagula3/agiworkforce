@@ -21,7 +21,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getSystemClient, getUserScopedClient } from '../lib/neonClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 import { isValidUuid } from '../validations/ids';
@@ -371,9 +371,7 @@ router.get(
       throw new AppError('Unauthorized', 401);
     }
 
-    // agent_approval_requests has no canonical migration. Keep its existing
-    // user_id predicate on an explicitly privileged compatibility boundary.
-    const db = getSystemClient('shadow-schema-compatibility');
+    const db = getUserScopedClient(user);
     const { data: pendingRequests, error } = await db
       .from('agent_approval_requests')
       .select('id, tool_name, agent_id, created_at')

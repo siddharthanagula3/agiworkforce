@@ -5,8 +5,8 @@
  * run through getUserScopedClient(), which binds the verified bearer subject
  * to the non-BYPASSRLS app role. A malformed token, subject mismatch, missing
  * role, or failed scoped query must never retry with the privileged system
- * connection. Pre-auth, worker-control-plane, and unverified shadow-schema
- * operations use the separately named getSystemClient() boundary.
+ * connection. Pre-auth and health-check operations use the separately named
+ * getSystemClient() boundary.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -70,6 +70,17 @@ describe('P1-GW-RLS: canonical gateway tables have enforceable policies', () => 
     'organizations',
     'organization_members',
     'revoked_jwts',
+    'sso_connections',
+    'directory_sync_connections',
+    'organization_admin_policies',
+    'enterprise_audit_events',
+    'organization_usage_ledger',
+    'support_cases',
+    'conversations',
+    'messages',
+    'chat_messages',
+    'device_pairings',
+    'agent_approval_requests',
   ])('%s has ENABLE, FORCE, and a policy in canonical migration history', (table) => {
     const migrationDir = join(__dirname, '..', '..', '..', '..', 'apps', 'web', 'db', 'neon');
     const history = readdirSync(migrationDir)
@@ -152,9 +163,8 @@ vi.mock('@agiworkforce/data-layer', () => ({
   })),
 }));
 
-const { getSystemClient, getUserScopedClient, _resetCloudDbForTests } = await import(
-  '../../src/lib/neonClients'
-);
+const { getSystemClient, getUserScopedClient, _resetCloudDbForTests } =
+  await import('../../src/lib/neonClients');
 
 describe('P1-GW-RLS: privileged system purposes are table constrained', () => {
   afterEach(() => {
@@ -167,15 +177,8 @@ describe('P1-GW-RLS: privileged system purposes are table constrained', () => {
     const db = getSystemClient('gateway-health');
 
     await db.from('profiles').select('id', { count: 'exact', head: true });
-    expect(() => db.from('usage_events')).toThrow(/gateway-health.*usage_events|usage_events.*gateway-health/i);
-  });
-
-  it('allows only inventoried shadow tables on the compatibility client', () => {
-    const db = getSystemClient('shadow-schema-compatibility');
-
-    expect(() => db.from('agent_approval_requests')).not.toThrow();
-    expect(() => db.from('desktop_devices')).toThrow(
-      /shadow-schema-compatibility.*desktop_devices|desktop_devices.*shadow-schema-compatibility/i,
+    expect(() => db.from('usage_events')).toThrow(
+      /gateway-health.*usage_events|usage_events.*gateway-health/i,
     );
   });
 });
@@ -202,9 +205,9 @@ describe('P1-GW-RLS: getUserScopedClient is fail closed', () => {
   });
 
   it('throws before querying when the verified token cannot be bound', () => {
-    expect(() =>
-      getUserScopedClient({ userId: 'tenant-A', token: 'unbindable-token' }),
-    ).toThrow(/cannot bind|user-scoped database/i);
+    expect(() => getUserScopedClient({ userId: 'tenant-A', token: 'unbindable-token' })).toThrow(
+      /cannot bind|user-scoped database/i,
+    );
     expect(captured).toHaveLength(0);
   });
 

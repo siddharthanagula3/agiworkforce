@@ -44,10 +44,10 @@ function buildReadinessRows(managedComputeOpen: boolean) {
     },
     {
       area: 'Identity',
-      status: 'Org/Teams only — no SSO/SCIM schema',
+      status: 'Schema ready — runtime deferred',
       owner: 'Enterprise',
       evidence:
-        'apps/web/db/neon has teams/organizations tables (0007, 0015); no sso_connections or directory_sync_connections migration exists anywhere, so /api/admin/sso and /api/admin/directory-sync will fail against a real database',
+        'Migration 0076 owns SSO and directory-sync configuration with RLS; first-party SSO sign-in and SCIM provisioning remain a Phase 3 runtime decision',
     },
     {
       area: 'Audit logs',
@@ -189,8 +189,8 @@ export default function AdminConsolePage() {
             <KeyRound className="h-5 w-5 text-emerald-300" aria-hidden="true" />
             <h2 className="mt-4 text-base font-medium text-white">Identity</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Organizations and Teams have real canonical migrations. SSO and SCIM do not yet — the
-              admin API routes exist but query tables with no migration, and there is no login flow.
+              Organization, SSO, and directory-sync configuration now have canonical migrations and
+              RLS. First-party SSO sign-in and SCIM provisioning remain intentionally deferred.
             </p>
           </div>
           <div className="rounded-md border border-white/10 bg-white/[0.03] p-4">

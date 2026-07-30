@@ -301,10 +301,11 @@ export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     // Fetch the connection to determine which org it belongs to
     const existing = await db.query<
-      Pick<SSOConnectionRow, 'id' | 'organization_id' | 'domain' | 'provider'>
-    >('select id, organization_id, domain, provider from sso_connections where id = $1 limit 1', [
-      connectionId,
-    ]);
+      Pick<SSOConnectionRow, 'id' | 'organization_id' | 'domain' | 'provider_type'>
+    >(
+      'select id, organization_id, domain, provider_type from sso_connections where id = $1 limit 1',
+      [connectionId],
+    );
 
     if (existing.length === 0) {
       return NextResponse.json({ error: 'SSO connection not found' }, { status: 404 });

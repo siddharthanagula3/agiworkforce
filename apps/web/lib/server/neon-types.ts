@@ -344,13 +344,13 @@ export type EmailPreferenceRow = {
 export type SSOConnectionRow = {
   id: string;
   organization_id: string;
-  provider: string;
+  provider_type: 'saml' | 'oidc';
   domain: string;
+  display_name: string | null;
   metadata_url: string | null;
   metadata_xml: string | null;
-  entity_id: string | null;
-  sso_url: string | null;
-  certificate: string | null;
+  attribute_mapping: Record<string, string>;
+  created_by: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

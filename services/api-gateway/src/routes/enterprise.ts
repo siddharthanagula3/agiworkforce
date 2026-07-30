@@ -9,7 +9,7 @@ import {
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { createRateLimiter } from '../middleware/rateLimit';
-import { getSystemClient, getUserScopedClient, type CloudDbClient } from '../lib/neonClients';
+import { getUserScopedClient, type CloudDbClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 const router: Router = Router();
@@ -224,10 +224,9 @@ router.get(
   async (req: Request, res: Response) => {
     const user = requireUser(req);
     const { orgId } = uuidParamSchema.parse(req.params);
-    const membershipDb = getUserScopedClient(user);
-    const db = getSystemClient('shadow-schema-compatibility');
+    const db = getUserScopedClient(user);
 
-    await requireMembershipRole(membershipDb, orgId, user.userId, 'member');
+    await requireMembershipRole(db, orgId, user.userId, 'member');
 
     const { data, error } = await db
       .from('organization_admin_policies')
@@ -267,10 +266,9 @@ router.get(
     const user = requireUser(req);
     const { orgId } = uuidParamSchema.parse(req.params);
     const { limit } = auditQuerySchema.parse(req.query);
-    const membershipDb = getUserScopedClient(user);
-    const db = getSystemClient('shadow-schema-compatibility');
+    const db = getUserScopedClient(user);
 
-    await requireMembershipRole(membershipDb, orgId, user.userId, 'admin');
+    await requireMembershipRole(db, orgId, user.userId, 'admin');
 
     const { data, error } = await db
       .from('enterprise_audit_events')
@@ -327,10 +325,9 @@ router.post(
     const user = requireUser(req);
     const { orgId } = uuidParamSchema.parse(req.params);
     const body = supportCaseSchema.parse(req.body);
-    const membershipDb = getUserScopedClient(user);
-    const db = getSystemClient('shadow-schema-compatibility');
+    const db = getUserScopedClient(user);
 
-    await requireMembershipRole(membershipDb, orgId, user.userId, 'member');
+    await requireMembershipRole(db, orgId, user.userId, 'member');
 
     const { data, error } = await db
       .from('support_cases')
