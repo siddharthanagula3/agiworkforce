@@ -66,7 +66,11 @@ import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-det
 import { extractTrailingUnclosedBlock, isRenderableArtifact } from '@agiworkforce/artifacts';
 import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
 import { useArtifactsStore } from '../../stores/artifacts-store';
-import { useChatStore, type GeneratedFileMetadataEntry } from '@shared/stores/web-chat-store';
+import {
+  useChatStore,
+  type GeneratedFileMetadataEntry,
+  type MessageMetadata as StoreMessageMetadata,
+} from '@shared/stores/web-chat-store';
 import { useToolApprovalResolver, isApprovalTurnLive } from '@/lib/hooks/useChatStream';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../types/search-media';
@@ -83,6 +87,7 @@ import { dedupeResearchSources } from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
+import { CodeExecutionBlock } from './CodeExecutionBlock';
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -251,6 +256,10 @@ interface Message {
     tools?: ToolEntry[];
     /** Canonical Cloud activity spine; preferred over legacy `tools`. */
     agentActivity?: AgentActivityState;
+    /** True while provider-managed code execution is in progress. */
+    isExecutingCode?: StoreMessageMetadata['isExecutingCode'];
+    /** Persisted provider-managed stdout/stderr and inline plot output. */
+    codeExecutionResult?: StoreMessageMetadata['codeExecutionResult'];
     toolResult?: boolean;
     toolType?: string;
     imageUrl?: string;
@@ -1003,6 +1012,14 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
+          {!isUser &&
+            (message.metadata?.isExecutingCode || message.metadata?.codeExecutionResult) && (
+              <CodeExecutionBlock
+                isExecuting={message.metadata.isExecutingCode}
+                result={message.metadata.codeExecutionResult}
+              />
+            )}
+
           {/* Message Content · 15 px body matching desktop .message-text */}
           <div
             className={cn(
@@ -1017,6 +1034,8 @@ const MessageBubbleComponent = function MessageBubble({
             !cleanedContent.trim() &&
             !streamingBlock &&
             !canonicalActivity &&
+            !message.metadata?.isExecutingCode &&
+            !message.metadata?.codeExecutionResult &&
             message.metadata?.toolType !== 'image-generation' &&
             // Same reason as image: the media card below IS the progress
             // indicator. Observed live — the video shimmer rendered with a
@@ -1773,6 +1792,8 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.documentData === next?.documentData &&
     prev?.searchResults === next?.searchResults &&
     prev?.isSearching === next?.isSearching &&
+    prev?.isExecutingCode === next?.isExecutingCode &&
+    prev?.codeExecutionResult === next?.codeExecutionResult &&
     prev?.citations === next?.citations &&
     prev?.comparisonOptions === next?.comparisonOptions &&
     prev?.comparisonChoice === next?.comparisonChoice &&

@@ -278,8 +278,8 @@
   {
     "item": "code-interpreter-panel",
     "surface": "apps/web",
-    "status": "unwired",
-    "evidence": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx:1-111 is a complete stdout/stderr/plot-image execution result renderer, and apps/web/lib/e2b/{execution-tools,runtime,gate,session-store,generated-files}.ts implement real E2B sandboxed Python execution wired into the LLM tool loop (apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts). But `grep -rln CodeExecutionBlock apps/web` returns only its own definition file — it is imported nowhere. The `codeExecutionResult`/`isExecutingCode` fields threaded through message metadata (apps/web/features/chat/types/message-metadata.ts:37,75,193 and apps/web/features/chat/pages/WebChatPage.tsx:270-271) are consumed only by memo-equality comparisons in ChatMessageList.tsx:353,377-378 — MessageBubble.tsx never reads or renders them."
+    "status": "built",
+    "evidence": "The live Web transcript now renders CodeExecutionBlock from MessageBubble whenever provider-managed execution is running or a persisted result exists. It shows progress without a duplicate Thinking indicator, then stdout, stderr, exit status, and inline plots; both MessageBubble and ChatMessageList memo equality include the execution fields so streaming transitions render immediately. The existing stream parser and store remain authoritative for execution state and reload persistence. E2B execution continues to use the canonical tool timeline and generated-file/artifact path."
   },
   {
     "item": "file-upload",

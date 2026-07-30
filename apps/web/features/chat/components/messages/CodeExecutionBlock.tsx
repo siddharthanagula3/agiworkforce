@@ -16,12 +16,32 @@ interface CodeExecutionBlockProps {
   result?: CodeExecutionResult;
 }
 
+const SAFE_INLINE_IMAGE_MEDIA_TYPES = new Set([
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+const BASE64_IMAGE_DATA = /^[A-Za-z0-9+/]+={0,2}$/;
+
+function safeExecutionImageSrc(image: { mediaType: string; data: string }): string | null {
+  const mediaType = image.mediaType.trim().toLowerCase();
+  const data = image.data.replace(/\s+/g, '');
+  if (!SAFE_INLINE_IMAGE_MEDIA_TYPES.has(mediaType) || !BASE64_IMAGE_DATA.test(data)) return null;
+  return `data:${mediaType};base64,${data}`;
+}
+
 export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockProps) {
   const [expanded, setExpanded] = useState(true);
 
   if (!isExecuting && !result) return null;
 
-  const hasOutput = result && (result.stdout || result.stderr || (result.images?.length ?? 0) > 0);
+  const safeImages =
+    result?.images?.flatMap((image) => {
+      const src = safeExecutionImageSrc(image);
+      return src ? [{ src }] : [];
+    }) ?? [];
+  const hasOutput = result && (result.stdout || result.stderr || safeImages.length > 0);
   const success = result && result.returnCode === 0;
 
   return (
@@ -89,12 +109,12 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
             </div>
           )}
 
-          {result.images?.map((img, i) => (
+          {safeImages.map((image, i) => (
             <div key={i}>
               <p className="text-xs font-medium text-muted-foreground mb-1">Plot {i + 1}</p>
               {/* Base64 plot output · not a navigable URL, raw img is intentional here */}
               <img
-                src={`data:${img.mediaType};base64,${img.data}`}
+                src={image.src}
                 alt={`Code execution output ${i + 1}`}
                 className="max-w-full rounded border border-border/40"
               />
