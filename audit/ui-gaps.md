@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: b94082d268dd08fcf31c6f49e6614bfd7dc32b87c898e289653cbb3f28cf83e4 -->
+<!-- ui-gaps-csv-sha256: c83403a63182ceffe93667c0e847fdde9d3d80ced22ab68a78b5bd05a0063234 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 92 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 90 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  296 |
+| Open        |  294 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   40 |
-| Not Planned |    5 |
+| Not Planned |    7 |
 
 ## P0
 
@@ -556,24 +556,24 @@ Not planned for the current v1 device-local trust model. Keep the explicit bound
 
 - `chatgpt_reference/143-chatgpt-web-settings-parental-controls-add-family-member-link-accounts.png`
 
-### GAP-024 — apps/mobile has no plugins/skills marketplace screen
+### GAP-024 — Interactive Mobile plugin installation is declined until an account-bound marketplace lifecycle exists
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Plugins marketplace
 
 **Gap**
 
-Reference gives mobile a full catalog: search field, horizontally scrolling 'Installed' icon row, 'Featured >' and category ('Productivity >') sections, each row offering '+' to add or '…' to manage. agiworkforce ships /marketplace, /plugins and /skills on web and Plugins/Skills settings tabs on desktop, but mobile has nothing — the settings entries were explicitly deleted because the screens were never built.
+The reference has an installable mobile plugin marketplace, but agiworkforce does not currently have an installable marketplace on any account surface. Web /plugins explicitly calls itself a catalogue-shape preview and says hosted marketplace installation is not open; its persisted plugin store hard-disables install, uninstall, installed-list, and installed-state behavior. Mobile already exposes the supported authenticated Managed Cloud Skills catalog as read-only and deliberately excludes filesystem-backed mutation. Adding Installed, +, remove, or permission controls would fabricate state and imply an authorization lifecycle that the server does not own.
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx lines 489-492 ('MOB-6: Skills and Plugins settings entries removed — the screens were never built'); grep -i 'plugin' across apps/mobile src+app returns only that comment; find -ipath '_market_' in apps/mobile — no match; web has apps/web/app/plugins/page.tsx and apps/web/app/marketplace/page.tsx
+apps/web/app/plugins/page.tsx states that the page is a catalogue preview, that nothing installs yet, and that installation remains under development. apps/web/features/plugins/stores/plugin-store.ts sets PLUGIN_INSTALLS_ENABLED = false and makes every install-related action a no-op. apps/mobile/src/features/skills/service.ts documents the supported read-only /api/skills contract and excludes host/admin filesystem mutation; SkillsScreen.tsx provides the real Cloud catalog, search, source labels, refresh, and Local/Cloud boundary. No account-bound plugin install, uninstall, entitlement, version, or permission API exists for Mobile to call.
 
 **Suggested fix**
 
-Build /(app)/plugins backed by the same catalog API the web /plugins page uses: search, Installed row, Featured and per-category sections, add/remove per row, plus a gear entry into the plugin permission settings so the surface is manageable, not just browsable.
+Not planned for the current marketplace contract. Keep the supported Managed Cloud Skills catalog discoverable and do not add cosmetic plugin install state. Reconsider a Mobile plugin marketplace only after Web has a real account-bound catalog and install/uninstall API, entitlement and version lifecycle, connector/tool permission enforcement, revocation, audit history, and cross-client contract tests.
 
 **Reference screenshot(s)**
 
@@ -1085,24 +1085,24 @@ Completed. Keep Shared Links account-authenticated and keep device Calendar/Cont
 
 - `chatgpt_reference/025-other-ios-settings-legal-links-claude-app-version-popover.png`
 
-### GAP-047 — No Plugins/marketplace destination anywhere on mobile
+### GAP-047 — A Mobile Plugins drawer destination is declined while the marketplace remains preview-only
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Sidebar drawer
 
 **Gap**
 
-The reference's sidebar lists Plugins as a top-level destination alongside Library/Projects/Scheduled. agiworkforce mobile has no plugins surface at all: the drawer's primary items stop at Schedules, and the Plugins settings row was deliberately deleted as a dead end — while web (/plugins, /marketplace) and desktop (settings/tabs/Plugins, features/marketplace) both ship one.
+The reference links to a working plugin product, whereas agiworkforce's Web /plugins route is a public preview with installation deliberately disabled and no account-bound runtime behind it. A top-level Mobile drawer item would therefore lead to either duplicated marketing content or dead install controls. Mobile instead exposes Skills—the real authenticated Cloud catalog the product can currently enumerate—as a first-class Cloud-tagged drawer destination.
 
 **Evidence**
 
-apps/mobile/src/features/drawer/components/DrawerContent.tsx:57-88 (PRIMARY_ITEMS: projects, artifacts, library, tasks, schedules); apps/mobile/src/features/settings/index.tsx:491-494 (Skills and Plugins entries removed)
+apps/web/app/plugins/page.tsx identifies its catalog as a preview and says nothing installs yet. apps/web/features/plugins/stores/plugin-store.ts hard-disables installation and always reports no installed plugins. apps/mobile/src/features/drawer/components/DrawerContent.tsx exposes the supported Cloud Skills destination; apps/mobile/src/features/skills/SkillsScreen.tsx and service.ts back it with authenticated /api/skills data while preserving the Local no-egress boundary. There is no mounted account plugin-management API or permission lifecycle to justify another primary destination.
 
 **Suggested fix**
 
-Build a mobile Plugins screen over the existing plugin catalogue API (installed + featured lists, per-plugin detail with permissions) and add it to PRIMARY_ITEMS with the same cloud gating as Tasks/Schedules.
+Not planned until Plugins is an operable account product rather than a marketing preview. Keep Skills in the Mobile drawer as the honest catalog surface. Add a Plugins destination only when it can navigate to server-owned install state, details, permissions, uninstall/revocation, and error recovery instead of duplicating static Web marketing data.
 
 **Reference screenshot(s)**
 
