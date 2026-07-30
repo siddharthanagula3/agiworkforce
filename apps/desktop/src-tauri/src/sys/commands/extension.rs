@@ -397,7 +397,11 @@ async fn save_extension_screenshot(
 
 /// Get current extension status
 #[tauri::command]
-pub async fn extension_status(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
+pub async fn extension_status(
+    app_handle: tauri::AppHandle,
+    realtime_server: State<'_, crate::sys::commands::realtime::RealtimeServerHandle>,
+    realtime_state: State<'_, crate::sys::commands::realtime::RealtimeState>,
+) -> Result<serde_json::Value, String> {
     let (token_path, token_exists, token_valid, token_error) =
         match app_handle.path().app_data_dir() {
             Ok(app_data_dir) => {
@@ -463,6 +467,10 @@ pub async fn extension_status(app_handle: tauri::AppHandle) -> Result<serde_json
     } else {
         ("state_unavailable".to_string(), Option::<String>::None)
     };
+    let vscode_connected = realtime_server
+        .0
+        .has_authenticated_user("vscode-extension")
+        .await;
 
     let mut recommendations: Vec<String> = Vec::new();
     if !token_exists {
@@ -496,8 +504,13 @@ pub async fn extension_status(app_handle: tauri::AppHandle) -> Result<serde_json
         );
     }
 
-    let transport_ready = token_valid && connection_state == "connected";
-    let status = if transport_ready { "ok" } else { "degraded" };
+    let native_transport_ready = token_valid && connection_state == "connected";
+    let vscode_transport_ready = token_valid && vscode_connected;
+    let status = if native_transport_ready || vscode_transport_ready {
+        "ok"
+    } else {
+        "degraded"
+    };
 
     Ok(json!({
         "status": status,
@@ -506,7 +519,7 @@ pub async fn extension_status(app_handle: tauri::AppHandle) -> Result<serde_json
         "extension_support": true,
         "transport": {
             "native_messaging": true,
-            "websocket_port": 8787
+            "websocket_port": realtime_state.websocket_port
         },
         "diagnostics": {
             "realtime_token": {
@@ -518,7 +531,11 @@ pub async fn extension_status(app_handle: tauri::AppHandle) -> Result<serde_json
             "native_connection": {
                 "state": connection_state,
                 "extension_id": extension_id,
-                "ready": transport_ready,
+                "ready": native_transport_ready,
+            },
+            "vscode_connection": {
+                "state": if vscode_connected { "connected" } else { "disconnected" },
+                "ready": vscode_transport_ready,
             },
             "recommendations": recommendations,
         },

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Code2, Globe, Loader2, RefreshCw, ShieldOff } from 'lucide-react';
-import { browserExtension, type ExtensionStatusDiagnostics } from '@agiworkforce/desktop-command-client';
+import {
+  browserExtension,
+  type ExtensionStatusDiagnostics,
+} from '@agiworkforce/desktop-command-client';
 import { cn } from '@/lib/utils';
 import { isTauri } from '@/lib/tauri-mock';
 import { useIsMounted } from '@/hooks/useIsMounted';
@@ -58,14 +61,17 @@ function deriveChromeRow(payload: ExtensionStatusDiagnostics | null): BridgeRow 
 }
 
 function deriveVsCodeRow(payload: ExtensionStatusDiagnostics | null): BridgeRow {
+  const vscode = payload?.diagnostics?.vscode_connection;
   const tokenValid = payload?.diagnostics?.realtime_token?.valid ?? false;
   const port = payload?.transport?.websocket_port;
-  const overallOk = payload?.status === 'ok';
+  const rawState = String(vscode?.state ?? 'unknown');
 
   let state: BridgeState;
   if (!tokenValid) state = 'error';
-  else if (overallOk && typeof port === 'number') state = 'connected';
-  else if (typeof port === 'number') state = 'connecting';
+  else if (vscode?.ready === true && rawState === 'connected') state = 'connected';
+  else if (rawState === 'connecting') state = 'connecting';
+  else if (rawState === 'disconnected') state = 'disconnected';
+  else if (rawState.startsWith('error:')) state = 'error';
   else state = 'unknown';
 
   const detail =
@@ -101,10 +107,9 @@ interface BridgeStatusCardProps {
  * `@agiworkforce/desktop-command-client`'s `browserExtension.extensionStatus()`. PLAN.md section 6:
  * "Add Chrome and VS Code bridge status to connector hub."
  *
- * Both bridges share the same `.ipc_token` and the same desktop transport
- * layer, so a token error degrades both rows; per-client connection tracking
- * is currently only emitted for Chrome's native messaging — VS Code's row
- * surfaces the websocket bridge port rather than an active-client count.
+ * Both bridges share the same `.ipc_token`. Chrome reports its native-host
+ * state; VS Code reports an authenticated realtime client, so a listening
+ * WebSocket port alone is never shown as connected.
  */
 export function BridgeStatusCard({ fetcher, isTauriHost = isTauri }: BridgeStatusCardProps = {}) {
   const [payload, setPayload] = useState<ExtensionStatusDiagnostics | null>(null);

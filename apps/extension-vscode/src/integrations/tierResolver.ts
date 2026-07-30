@@ -3,9 +3,8 @@
  *
  * Priority chain:
  *   1. agi-workforce.tier setting (explicit override — useful for testing)
- *   2. desktopBridge tier capability, when explicitly supported
- *   3. Cached value from globalState (populated by fetchTierInfo on activation)
- *   4. 'byok' fallback (safe default — never over-gates)
+ *   2. Cached value from globalState (populated by fetchTierInfo on activation)
+ *   3. 'byok' fallback (safe default — never over-gates)
  *
  * This module is intentionally free of side-effects and VS Code window calls
  * so that it can be unit-tested in isolation.
@@ -13,7 +12,6 @@
 
 import * as vscode from 'vscode';
 import { type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
-import { getDesktopBridge } from '../features/desktop-bridge';
 import { fetchTierInfo, type TierInfo } from '../utils/api';
 
 // ─── Tier type ────────────────────────────────────────────────────────────────
@@ -123,31 +121,13 @@ export async function refreshAccountTierCache(
   return tier;
 }
 
-// ─── Bridge fetch ─────────────────────────────────────────────────────────────
-
-/**
- * Attempt to fetch tier from the desktop bridge.
- *
- * Wave 1: the VS Code bridge does not have a supported HTTP `/billing/tier`
- * route. Return undefined instead of probing a nonexistent endpoint; callers
- * fall back to the cached cloud tier or BYOK.
- */
-export async function fetchTierFromBridge(): Promise<Tier | undefined> {
-  const bridge = getDesktopBridge();
-  if (bridge === undefined || !bridge.isConnected) return undefined;
-  return undefined;
-}
-
 // ─── Main resolver ────────────────────────────────────────────────────────────
 
 /**
  * Synchronous tier resolution for callers that cannot await — currently the
  * webview HTML builders, which run inside `resolveWebviewView` / a constructor.
  *
- * Identical to {@link resolveTier} minus step 2 (the bridge fetch). That step is
- * a no-op today: {@link fetchTierFromBridge} returns `undefined` unconditionally
- * in Wave 1, so this returns the same value as the async resolver. If the bridge
- * fetch is ever implemented, callers that can await should prefer `resolveTier`.
+ * Identical to {@link resolveTier}; kept for webview builders that cannot await.
  */
 export function resolveTierSync(context: vscode.ExtensionContext): Tier {
   const settingRaw = vscode.workspace
@@ -166,13 +146,8 @@ export function resolveTierSync(context: vscode.ExtensionContext): Tier {
  * Resolve the current subscription tier.
  *
  * @param context - ExtensionContext used to read cached globalState tier.
- * @param preferBridge - When true (default), attempt a live bridge fetch first.
- *   Pass false in hot paths (e.g. per-keystroke) to skip the async bridge call.
  */
-export async function resolveTier(
-  context: vscode.ExtensionContext,
-  preferBridge = true,
-): Promise<Tier> {
+export async function resolveTier(context: vscode.ExtensionContext): Promise<Tier> {
   // 1. Explicit user override via setting — read globalValue only so an untrusted
   //    workspace cannot escalate tier by placing "agiWorkforce.tier": "max" in
   //    .vscode/settings.json. The workspace value is intentionally ignored here;
@@ -182,22 +157,16 @@ export async function resolveTier(
     .inspect<string>('tier')?.globalValue;
   const settingTier = coerceTier(settingRaw);
   if (settingTier !== undefined && settingTier !== 'byok') {
-    // If set to 'byok' (the default), fall through so the bridge can provide
-    // the real tier. Any other explicit value is treated as an override.
+    // If set to 'byok' (the default), fall through so a cached authenticated
+    // account tier can provide the real plan. Any other value is an override.
     return settingTier;
   }
 
-  // 2. Live bridge fetch (async, gated by connection status)
-  if (preferBridge) {
-    const bridgeTier = await fetchTierFromBridge();
-    if (bridgeTier !== undefined) return bridgeTier;
-  }
-
-  // 3. Cached tier from globalState (populated during activation by fetchTierInfo)
+  // 2. Cached tier from globalState (populated during activation by fetchTierInfo)
   const cachedRaw = context.globalState.get<string>('tierStatus.cachedTier');
   const cachedTier = coerceTier(cachedRaw);
   if (cachedTier !== undefined) return cachedTier;
 
-  // 4. Safe fallback
+  // 3. Safe fallback
   return 'byok';
 }

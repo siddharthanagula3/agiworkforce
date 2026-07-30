@@ -1445,21 +1445,6 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
-    case 'OPEN_IN_DESKTOP': {
-      // Forward to desktop via native bridge — lets the side panel hand off the
-      // current session to the desktop app (Claude/Comet parity feature). Report
-      // the not-connected case honestly instead of returning success:true when
-      // the desktop app isn't running (the message would otherwise vanish).
-      if (!state.isNativeConnected) {
-        return {
-          success: false,
-          error: 'AGI Desktop is not connected. Open the desktop app and pair it, then try again.',
-        } as ExtensionResponse;
-      }
-      void sendNativeMessage({ type: 'OPEN_IN_DESKTOP' });
-      return { success: true } as ExtensionResponse;
-    }
-
     case 'CAPTURE_SCREENSHOT': {
       // SECURITY (H-09 audit 2026-05-19): only capture the sender's own tab.
       // The previous implementation fell back to `chrome.tabs.query({active:

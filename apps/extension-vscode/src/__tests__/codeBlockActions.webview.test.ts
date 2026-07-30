@@ -142,5 +142,31 @@ describe('rendered Markdown code-block actions', () => {
         language: 'typescript',
       },
     });
+    expect(applyButton?.disabled).toBe(true);
+    expect(applyButton?.textContent).toBe('Opening…');
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'diffProposed',
+          payload: { sessionId: 'diff-1', filePath: 'src/app.ts' },
+        },
+      }),
+    );
+    expect(applyButton?.disabled).toBe(false);
+    expect(applyButton?.textContent).toBe('Review opened');
+
+    applyButton?.click();
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'diffProposalFailed',
+          payload: { message: 'Open a file before applying this suggestion.' },
+        },
+      }),
+    );
+    expect(applyButton?.disabled).toBe(false);
+    expect(applyButton?.textContent).toBe('Failed');
+    expect(applyButton?.title).toBe('Open a file before applying this suggestion.');
   });
 });

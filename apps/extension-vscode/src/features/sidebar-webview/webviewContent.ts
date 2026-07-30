@@ -1669,6 +1669,22 @@ export function getWebviewContent(
     // WeakSet prevents duplicate listeners without adding data attributes to
     // model-rendered content.
     var boundCodeActionButtons = new WeakSet();
+    var pendingApplyButton = null;
+
+    function settleApplyButton(label, title) {
+      var button = pendingApplyButton;
+      pendingApplyButton = null;
+      if (!button) return;
+      button.disabled = false;
+      button.textContent = label;
+      button.title = title || '';
+      setTimeout(function() {
+        if (button.textContent === label) {
+          button.textContent = 'Apply';
+          button.title = '';
+        }
+      }, 2000);
+    }
 
     function getCodeBlock(button) {
       var wrapper = button && button.closest ? button.closest('.code-block-wrapper') : null;
@@ -1699,6 +1715,12 @@ export function getWebviewContent(
           if (!codeEl) return;
           var text = codeEl.textContent || '';
           if (b.classList.contains('apply-btn')) {
+            if (pendingApplyButton && pendingApplyButton !== b) {
+              settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
+            }
+            pendingApplyButton = b;
+            b.disabled = true;
+            b.textContent = 'Opening…';
             vscode.postMessage({
               type: 'proposeDiff',
               payload: {
@@ -2316,6 +2338,17 @@ export function getWebviewContent(
 
       else if (msg.type === 'usageMeter') {
         renderUsageMeter(msg.payload);
+      }
+
+      else if (msg.type === 'diffProposed') {
+        settleApplyButton(
+          'Review opened',
+          'Review the proposed change in ' + (msg.payload.filePath || 'the active editor') + '.'
+        );
+      }
+
+      else if (msg.type === 'diffProposalFailed') {
+        settleApplyButton('Failed', msg.payload.message || 'Could not open the proposed diff.');
       }
 
       else if (msg.type === 'attachFilesAck') {

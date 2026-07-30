@@ -7,7 +7,7 @@
 
 import * as vscode from 'vscode';
 import { Config } from './platform/config';
-import { getDesktopBridge, activateDesktopBridge } from './features/desktop-bridge';
+import { activateDesktopBridge } from './features/desktop-bridge';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
@@ -48,14 +48,6 @@ export function activate(context: vscode.ExtensionContext): void {
       `AGI Workforce: Desktop bridge failed to initialize — ${errMsg}. ` +
         'Some features may be unavailable.',
     );
-  }
-
-  // ── 0e. MCP enabled → ensure bridge connects on startup ─────────────────────
-  if (Config.mcpEnabled()) {
-    const bridge = getDesktopBridge();
-    if (bridge !== undefined && bridge.status === 'disconnected') {
-      void bridge.connect();
-    }
   }
 
   // ── 1. Code intelligence + diff + inline completion providers ────────────────
@@ -152,18 +144,6 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.desktopBridge.port')
       ) {
         void validateAdvancedFeatureFlags(context);
-      }
-
-      if (e.affectsConfiguration('agiWorkforce.mcp.enabled')) {
-        const mcpEnabled = Config.mcpEnabled();
-        const bridge = getDesktopBridge();
-        if (bridge !== undefined) {
-          if (mcpEnabled && bridge.status === 'disconnected') {
-            void bridge.connect();
-          } else if (!mcpEnabled && bridge.status === 'connected') {
-            bridge.disconnect();
-          }
-        }
       }
     }),
   );

@@ -1079,7 +1079,32 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     // Extension status
     case 'extension_status':
-      return { status: 'inactive' } as T;
+      return {
+        status: 'degraded',
+        extension_support: true,
+        transport: {
+          native_messaging: true,
+          websocket_port: 8787,
+        },
+        diagnostics: {
+          recommendations: [],
+          realtime_token: {
+            path: '(mock app data)/.ipc_token',
+            exists: false,
+            valid: false,
+            error: 'Desktop runtime is not active in the browser mock.',
+          },
+          native_connection: {
+            state: 'disconnected',
+            extension_id: null,
+            ready: false,
+          },
+          vscode_connection: {
+            state: 'disconnected',
+            ready: false,
+          },
+        },
+      } as T;
 
     // ── Vision commands ─────────────────────────────────────────────
     case 'vision_send_message':

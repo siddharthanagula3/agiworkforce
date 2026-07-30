@@ -1199,7 +1199,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <div class="input-area">
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
-      <option value="auto" data-display-label="Auto">Auto</option><option value="gpt-5.6-sol" data-display-label="GPT-5.6 Sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra" data-display-label="GPT-5.6 Terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna" data-display-label="GPT-5.6 Luna">GPT-5.6 Luna</option><option value="gpt-5.4-mini" data-display-label="GPT-5.4 Mini">GPT-5.4 Mini</option><option value="claude-fable-5" data-display-label="Claude Fable 5">Claude Fable 5</option><option value="claude-opus-5" data-display-label="Claude Opus 5">Claude Opus 5</option><option value="claude-sonnet-5" data-display-label="Claude Sonnet 5">Claude Sonnet 5</option><option value="claude-haiku-4.5" data-display-label="Claude 4.5 Haiku">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview" data-display-label="Gemini 3.1 Pro">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite" data-display-label="Gemini 3.5 Flash-Lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash" data-display-label="DeepSeek V4 Flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro" data-display-label="DeepSeek V4 Pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash" data-display-label="Qwen 3.5 Flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash" data-display-label="Gemini 3.6 Flash">Gemini 3.6 Flash</option><option value="glm-5.2" data-display-label="GLM-5.2">GLM-5.2</option><option value="qwen-3.7-plus" data-display-label="Qwen 3.7 Plus">Qwen 3.7 Plus</option><option value="kimi-k3" data-display-label="Kimi K3">Kimi K3</option><option value="grok-4.5" data-display-label="Grok 4.5">Grok 4.5</option><option value="minimax-m3" data-display-label="MiniMax M3">MiniMax M3</option>
+      <option value="auto" data-display-label="Auto">Auto</option><option value="gpt-5.6-sol" data-display-label="GPT-5.6 Sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra" data-display-label="GPT-5.6 Terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna" data-display-label="GPT-5.6 Luna">GPT-5.6 Luna</option><option value="gpt-5.4-mini" data-display-label="GPT-5.4 Mini">GPT-5.4 Mini</option><option value="claude-fable-5" data-display-label="Claude Fable 5">Claude Fable 5</option><option value="claude-opus-5" data-display-label="Claude Opus 5">Claude Opus 5</option><option value="claude-sonnet-5" data-display-label="Claude Sonnet 5">Claude Sonnet 5</option><option value="gemini-3.1-pro-preview" data-display-label="Gemini 3.1 Pro">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite" data-display-label="Gemini 3.5 Flash-Lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash" data-display-label="DeepSeek V4 Flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro" data-display-label="DeepSeek V4 Pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash" data-display-label="Qwen 3.5 Flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash" data-display-label="Gemini 3.6 Flash">Gemini 3.6 Flash</option><option value="glm-5.2" data-display-label="GLM-5.2">GLM-5.2</option><option value="qwen-3.7-plus" data-display-label="Qwen 3.7 Plus">Qwen 3.7 Plus</option><option value="kimi-k3" data-display-label="Kimi K3">Kimi K3</option><option value="grok-4.5" data-display-label="Grok 4.5">Grok 4.5</option><option value="minimax-m3" data-display-label="MiniMax M3">MiniMax M3</option>
     </select>
 
     <!-- Plus-menu popover -->
@@ -1606,6 +1606,22 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     // WeakSet prevents duplicate listeners without adding data attributes to
     // model-rendered content.
     var boundCodeActionButtons = new WeakSet();
+    var pendingApplyButton = null;
+
+    function settleApplyButton(label, title) {
+      var button = pendingApplyButton;
+      pendingApplyButton = null;
+      if (!button) return;
+      button.disabled = false;
+      button.textContent = label;
+      button.title = title || '';
+      setTimeout(function() {
+        if (button.textContent === label) {
+          button.textContent = 'Apply';
+          button.title = '';
+        }
+      }, 2000);
+    }
 
     function getCodeBlock(button) {
       var wrapper = button && button.closest ? button.closest('.code-block-wrapper') : null;
@@ -1636,6 +1652,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           if (!codeEl) return;
           var text = codeEl.textContent || '';
           if (b.classList.contains('apply-btn')) {
+            if (pendingApplyButton && pendingApplyButton !== b) {
+              settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
+            }
+            pendingApplyButton = b;
+            b.disabled = true;
+            b.textContent = 'Opening…';
             vscode.postMessage({
               type: 'proposeDiff',
               payload: {
@@ -2253,6 +2275,17 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'usageMeter') {
         renderUsageMeter(msg.payload);
+      }
+
+      else if (msg.type === 'diffProposed') {
+        settleApplyButton(
+          'Review opened',
+          'Review the proposed change in ' + (msg.payload.filePath || 'the active editor') + '.'
+        );
+      }
+
+      else if (msg.type === 'diffProposalFailed') {
+        settleApplyButton('Failed', msg.payload.message || 'Could not open the proposed diff.');
       }
 
       else if (msg.type === 'attachFilesAck') {
@@ -3813,7 +3846,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <div class="input-area">
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
-      <option value="auto" data-display-label="Auto">Auto</option><option value="gpt-5.6-sol" data-display-label="GPT-5.6 Sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra" data-display-label="GPT-5.6 Terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna" data-display-label="GPT-5.6 Luna">GPT-5.6 Luna</option><option value="gpt-5.4-mini" data-display-label="GPT-5.4 Mini">GPT-5.4 Mini</option><option value="claude-fable-5" data-display-label="Claude Fable 5">Claude Fable 5</option><option value="claude-opus-5" data-display-label="Claude Opus 5">Claude Opus 5</option><option value="claude-sonnet-5" data-display-label="Claude Sonnet 5">Claude Sonnet 5</option><option value="claude-haiku-4.5" data-display-label="Claude 4.5 Haiku">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview" data-display-label="Gemini 3.1 Pro">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite" data-display-label="Gemini 3.5 Flash-Lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash" data-display-label="DeepSeek V4 Flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro" data-display-label="DeepSeek V4 Pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash" data-display-label="Qwen 3.5 Flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash" data-display-label="Gemini 3.6 Flash">Gemini 3.6 Flash</option><option value="glm-5.2" data-display-label="GLM-5.2">GLM-5.2</option><option value="qwen-3.7-plus" data-display-label="Qwen 3.7 Plus">Qwen 3.7 Plus</option><option value="kimi-k3" data-display-label="Kimi K3">Kimi K3</option><option value="grok-4.5" data-display-label="Grok 4.5">Grok 4.5</option><option value="minimax-m3" data-display-label="MiniMax M3">MiniMax M3</option>
+      <option value="auto" data-display-label="Auto">Auto</option><option value="gpt-5.6-sol" data-display-label="GPT-5.6 Sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra" data-display-label="GPT-5.6 Terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna" data-display-label="GPT-5.6 Luna">GPT-5.6 Luna</option><option value="gpt-5.4-mini" data-display-label="GPT-5.4 Mini">GPT-5.4 Mini</option><option value="claude-fable-5" data-display-label="Claude Fable 5">Claude Fable 5</option><option value="claude-opus-5" data-display-label="Claude Opus 5">Claude Opus 5</option><option value="claude-sonnet-5" data-display-label="Claude Sonnet 5">Claude Sonnet 5</option><option value="gemini-3.1-pro-preview" data-display-label="Gemini 3.1 Pro">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite" data-display-label="Gemini 3.5 Flash-Lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash" data-display-label="DeepSeek V4 Flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro" data-display-label="DeepSeek V4 Pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash" data-display-label="Qwen 3.5 Flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash" data-display-label="Gemini 3.6 Flash">Gemini 3.6 Flash</option><option value="glm-5.2" data-display-label="GLM-5.2">GLM-5.2</option><option value="qwen-3.7-plus" data-display-label="Qwen 3.7 Plus">Qwen 3.7 Plus</option><option value="kimi-k3" data-display-label="Kimi K3">Kimi K3</option><option value="grok-4.5" data-display-label="Grok 4.5">Grok 4.5</option><option value="minimax-m3" data-display-label="MiniMax M3">MiniMax M3</option>
     </select>
 
     <!-- Plus-menu popover -->
@@ -4220,6 +4253,22 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     // WeakSet prevents duplicate listeners without adding data attributes to
     // model-rendered content.
     var boundCodeActionButtons = new WeakSet();
+    var pendingApplyButton = null;
+
+    function settleApplyButton(label, title) {
+      var button = pendingApplyButton;
+      pendingApplyButton = null;
+      if (!button) return;
+      button.disabled = false;
+      button.textContent = label;
+      button.title = title || '';
+      setTimeout(function() {
+        if (button.textContent === label) {
+          button.textContent = 'Apply';
+          button.title = '';
+        }
+      }, 2000);
+    }
 
     function getCodeBlock(button) {
       var wrapper = button && button.closest ? button.closest('.code-block-wrapper') : null;
@@ -4250,6 +4299,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           if (!codeEl) return;
           var text = codeEl.textContent || '';
           if (b.classList.contains('apply-btn')) {
+            if (pendingApplyButton && pendingApplyButton !== b) {
+              settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
+            }
+            pendingApplyButton = b;
+            b.disabled = true;
+            b.textContent = 'Opening…';
             vscode.postMessage({
               type: 'proposeDiff',
               payload: {
@@ -4867,6 +4922,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'usageMeter') {
         renderUsageMeter(msg.payload);
+      }
+
+      else if (msg.type === 'diffProposed') {
+        settleApplyButton(
+          'Review opened',
+          'Review the proposed change in ' + (msg.payload.filePath || 'the active editor') + '.'
+        );
+      }
+
+      else if (msg.type === 'diffProposalFailed') {
+        settleApplyButton('Failed', msg.payload.message || 'Could not open the proposed diff.');
       }
 
       else if (msg.type === 'attachFilesAck') {
@@ -6427,7 +6493,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <div class="input-area">
     <!-- Hidden model select (keeps JS working; pill shows selected label) -->
     <select class="model-row" id="modelSelect" aria-label="Model" style="display:none">
-      <option value="auto" data-display-label="Auto">Auto</option><option value="gpt-5.6-sol" data-display-label="GPT-5.6 Sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra" data-display-label="GPT-5.6 Terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna" data-display-label="GPT-5.6 Luna">GPT-5.6 Luna</option><option value="gpt-5.4-mini" data-display-label="GPT-5.4 Mini">GPT-5.4 Mini</option><option value="claude-fable-5" data-display-label="Claude Fable 5">Claude Fable 5</option><option value="claude-opus-5" data-display-label="Claude Opus 5">Claude Opus 5</option><option value="claude-sonnet-5" data-display-label="Claude Sonnet 5">Claude Sonnet 5</option><option value="claude-haiku-4.5" data-display-label="Claude 4.5 Haiku">Claude 4.5 Haiku</option><option value="gemini-3.1-pro-preview" data-display-label="Gemini 3.1 Pro">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite" data-display-label="Gemini 3.5 Flash-Lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash" data-display-label="DeepSeek V4 Flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro" data-display-label="DeepSeek V4 Pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash" data-display-label="Qwen 3.5 Flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash" data-display-label="Gemini 3.6 Flash">Gemini 3.6 Flash</option><option value="glm-5.2" data-display-label="GLM-5.2">GLM-5.2</option><option value="qwen-3.7-plus" data-display-label="Qwen 3.7 Plus">Qwen 3.7 Plus</option><option value="kimi-k3" data-display-label="Kimi K3">Kimi K3</option><option value="grok-4.5" data-display-label="Grok 4.5">Grok 4.5</option><option value="minimax-m3" data-display-label="MiniMax M3">MiniMax M3</option>
+      <option value="auto" data-display-label="Auto">Auto</option><option value="gpt-5.6-sol" data-display-label="GPT-5.6 Sol">GPT-5.6 Sol</option><option value="gpt-5.6-terra" data-display-label="GPT-5.6 Terra">GPT-5.6 Terra</option><option value="gpt-5.6-luna" data-display-label="GPT-5.6 Luna">GPT-5.6 Luna</option><option value="gpt-5.4-mini" data-display-label="GPT-5.4 Mini">GPT-5.4 Mini</option><option value="claude-fable-5" data-display-label="Claude Fable 5">Claude Fable 5</option><option value="claude-opus-5" data-display-label="Claude Opus 5">Claude Opus 5</option><option value="claude-sonnet-5" data-display-label="Claude Sonnet 5">Claude Sonnet 5</option><option value="gemini-3.1-pro-preview" data-display-label="Gemini 3.1 Pro">Gemini 3.1 Pro</option><option value="gemini-3.5-flash-lite" data-display-label="Gemini 3.5 Flash-Lite">Gemini 3.5 Flash-Lite</option><option value="deepseek-v4-flash" data-display-label="DeepSeek V4 Flash">DeepSeek V4 Flash</option><option value="deepseek-v4-pro" data-display-label="DeepSeek V4 Pro">DeepSeek V4 Pro</option><option value="qwen-3.5-flash" data-display-label="Qwen 3.5 Flash">Qwen 3.5 Flash</option><option value="gemini-3.6-flash" data-display-label="Gemini 3.6 Flash">Gemini 3.6 Flash</option><option value="glm-5.2" data-display-label="GLM-5.2">GLM-5.2</option><option value="qwen-3.7-plus" data-display-label="Qwen 3.7 Plus">Qwen 3.7 Plus</option><option value="kimi-k3" data-display-label="Kimi K3">Kimi K3</option><option value="grok-4.5" data-display-label="Grok 4.5">Grok 4.5</option><option value="minimax-m3" data-display-label="MiniMax M3">MiniMax M3</option>
     </select>
 
     <!-- Plus-menu popover -->
@@ -6834,6 +6900,22 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     // WeakSet prevents duplicate listeners without adding data attributes to
     // model-rendered content.
     var boundCodeActionButtons = new WeakSet();
+    var pendingApplyButton = null;
+
+    function settleApplyButton(label, title) {
+      var button = pendingApplyButton;
+      pendingApplyButton = null;
+      if (!button) return;
+      button.disabled = false;
+      button.textContent = label;
+      button.title = title || '';
+      setTimeout(function() {
+        if (button.textContent === label) {
+          button.textContent = 'Apply';
+          button.title = '';
+        }
+      }, 2000);
+    }
 
     function getCodeBlock(button) {
       var wrapper = button && button.closest ? button.closest('.code-block-wrapper') : null;
@@ -6864,6 +6946,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           if (!codeEl) return;
           var text = codeEl.textContent || '';
           if (b.classList.contains('apply-btn')) {
+            if (pendingApplyButton && pendingApplyButton !== b) {
+              settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
+            }
+            pendingApplyButton = b;
+            b.disabled = true;
+            b.textContent = 'Opening…';
             vscode.postMessage({
               type: 'proposeDiff',
               payload: {
@@ -7481,6 +7569,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'usageMeter') {
         renderUsageMeter(msg.payload);
+      }
+
+      else if (msg.type === 'diffProposed') {
+        settleApplyButton(
+          'Review opened',
+          'Review the proposed change in ' + (msg.payload.filePath || 'the active editor') + '.'
+        );
+      }
+
+      else if (msg.type === 'diffProposalFailed') {
+        settleApplyButton('Failed', msg.payload.message || 'Could not open the proposed diff.');
       }
 
       else if (msg.type === 'attachFilesAck') {
