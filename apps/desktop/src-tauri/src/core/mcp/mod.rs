@@ -42,11 +42,7 @@ pub use manager::{ManagedServer, McpServerManager, ServerStatus};
 pub use oauth::{
     McpAuthMethod, McpOAuthConfig, McpOAuthManager, McpOAuthToken, OAuthClientMetadata,
 };
-pub use protocol::{
-    McpTask, McpTaskProgress, McpTaskStatus, McpToolDefinition, ServerCapabilitiesV2,
-    TaskCreateParams, TaskIdParams, TaskListParams, TaskListResult, ToolCallResult, ToolContent,
-    METHOD_TASKS_CANCEL, METHOD_TASKS_CREATE, METHOD_TASKS_GET, METHOD_TASKS_LIST,
-};
+pub use protocol::{McpToolDefinition, ServerCapabilitiesV2, ToolCallResult, ToolContent};
 pub use registry::McpToolRegistry;
 pub use session::{ElicitationRequest, ElicitationResponse, McpSession};
 pub use tool_executor::{McpToolExecutor, ToolExecutionResult, ToolStats};
