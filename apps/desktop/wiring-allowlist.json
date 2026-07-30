@@ -6,38 +6,6 @@
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {
-      "command": "ai_access_file",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "ai_add_constraint",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "ai_analyze_project",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "ai_generate_code",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "ai_generate_context_prompt",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "ai_generate_tests",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "ai_get_project_context",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "ai_refactor_code",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
       "command": "bg_llm_cancel",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
@@ -83,10 +51,6 @@
     },
     {
       "command": "cancel_background_task",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "check_for_updates",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {
@@ -170,10 +134,6 @@
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {
-      "command": "execute_code",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
       "command": "fetch_credit_balance",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
@@ -190,10 +150,6 @@
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {
-      "command": "get_current_version",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
       "command": "get_error_context",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
@@ -207,10 +163,6 @@
     },
     {
       "command": "get_recovery_suggestion",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "get_version_info",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {
@@ -243,14 +195,6 @@
     },
     {
       "command": "index_workspace_file",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "install_update",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "install_update_and_restart",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {

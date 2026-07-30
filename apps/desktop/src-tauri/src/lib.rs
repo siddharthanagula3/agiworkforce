@@ -10,7 +10,6 @@ use crate::data::db::migrations;
 use crate::data::settings::SettingsService;
 use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::{
-    ai_native::{CodeGeneratorState, ContextManagerState},
     auth::SessionState,
     gmail_oauth::GmailOAuthState,
     intent::IntentState,
@@ -878,9 +877,6 @@ pub fn run() {
             // Project context state for active folder selection
             app.manage(crate::sys::commands::project_context::ProjectContextState::new());
             tracing::info!("Project context state initialized");
-
-            app.manage(ContextManagerState::new());
-            app.manage(CodeGeneratorState(Arc::new(TokioMutex::new(()))));
 
             let workspace_dir = app_data_dir.join("github_repos");
             std::fs::create_dir_all(&workspace_dir).ok();
@@ -2389,17 +2385,6 @@ pub fn run() {
             crate::sys::commands::artifacts::artifact_apply_diff,
             crate::sys::commands::artifacts::artifact_list_persisted,
 
-            // Updater (only available when not building for App Store)
-            #[cfg(feature = "updater")]
-            crate::features::updater::check_for_updates,
-            #[cfg(feature = "updater")]
-            crate::features::updater::install_update,
-            #[cfg(feature = "updater")]
-            crate::features::updater::install_update_and_restart,
-            #[cfg(feature = "updater")]
-            crate::features::updater::get_current_version,
-            #[cfg(feature = "updater")]
-            crate::features::updater::get_version_info,
             // Swarm Commands (Phase 5 Wiring)
             crate::sys::commands::swarm::swarm_init,
             crate::sys::commands::swarm::swarm_execute_goal,
@@ -2482,14 +2467,6 @@ pub fn run() {
             crate::sys::commands::agi_stop,
             crate::sys::commands::agi_submit_goal_auto,
             crate::sys::commands::agi_submit_goal_swarm,
-            crate::sys::commands::ai_access_file,
-            crate::sys::commands::ai_add_constraint,
-            crate::sys::commands::ai_analyze_project,
-            crate::sys::commands::ai_generate_code,
-            crate::sys::commands::ai_generate_context_prompt,
-            crate::sys::commands::ai_generate_tests,
-            crate::sys::commands::ai_get_project_context,
-            crate::sys::commands::ai_refactor_code,
             crate::sys::commands::analytics_generate_monthly_report,
             crate::sys::commands::analytics_generate_weekly_report,
             crate::sys::commands::analytics_get_top_processes,

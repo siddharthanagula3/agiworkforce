@@ -1602,17 +1602,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'settings_v2_save_app_settings':
       return undefined as T;
 
-    // ── Misc newly registered commands ──────────────────────────────
-    case 'ai_analyze_project':
-    case 'ai_generate_code':
-    case 'ai_generate_tests':
-    case 'ai_refactor_code':
-    case 'ai_get_project_context':
-    case 'ai_generate_context_prompt':
-    case 'ai_access_file':
-    case 'ai_add_constraint':
-      return { result: '(mock)' } as T;
-
     case 'get_inline_completion':
       return null as T;
 
