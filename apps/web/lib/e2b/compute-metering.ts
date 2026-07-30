@@ -78,6 +78,7 @@ export interface SandboxComputeInterval {
   userId: string;
   sandboxId: string;
   conversationId?: string | undefined;
+  codeSessionId?: string | undefined;
   /** Epoch ms the interval opened (sandbox created or resumed). */
   startedAtMs: number;
   /** Epoch ms the interval closed (pause / kill / dispose / reclaim). */
@@ -112,6 +113,7 @@ export async function meterSandboxComputeInterval(
         type: 'e2b_sandbox_compute',
         sandbox_id: interval.sandboxId,
         ...(interval.conversationId ? { conversation_id: interval.conversationId } : {}),
+        ...(interval.codeSessionId ? { code_session_id: interval.codeSessionId } : {}),
         elapsed_ms: elapsedMs,
         microusd_per_second: rate,
         close_reason: interval.reason,

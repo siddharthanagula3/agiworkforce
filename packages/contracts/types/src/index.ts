@@ -96,6 +96,9 @@ export * from './subscription-entitlement';
 // Percentage-only public managed-usage status shared by cloud clients.
 export * from './managed-usage-balance';
 
+// Managed cloud-code sessions and terminal journal
+export * from './cloud-code';
+
 // Scheduler types (ScheduledTask, ScheduleConfig, CronExpression)
 export * from './scheduler';
 
