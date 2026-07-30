@@ -1,0 +1,854 @@
+{
+  "generatedFrom": "pnpm exec turbo run build --dry=json (typescript) + cargo metadata --no-deps (rust)",
+  "typescript": {
+    "nodes": [
+      "@agiworkforce/agent-core",
+      "@agiworkforce/api-gateway",
+      "@agiworkforce/apply-patch",
+      "@agiworkforce/artifacts",
+      "@agiworkforce/browser-tool",
+      "@agiworkforce/client-runtime",
+      "@agiworkforce/cloud-contracts",
+      "@agiworkforce/compliance",
+      "@agiworkforce/data-layer",
+      "@agiworkforce/design-tokens",
+      "@agiworkforce/desktop",
+      "@agiworkforce/desktop-command-client",
+      "@agiworkforce/extension",
+      "@agiworkforce/i18n",
+      "@agiworkforce/licensing",
+      "@agiworkforce/local-llm",
+      "@agiworkforce/mcp",
+      "@agiworkforce/mobile",
+      "@agiworkforce/model-registry",
+      "@agiworkforce/provider-protocol",
+      "@agiworkforce/provider-runtime",
+      "@agiworkforce/providers-anthropic",
+      "@agiworkforce/providers-deepseek",
+      "@agiworkforce/providers-factory",
+      "@agiworkforce/providers-google",
+      "@agiworkforce/providers-lmstudio",
+      "@agiworkforce/providers-minimax",
+      "@agiworkforce/providers-moonshot",
+      "@agiworkforce/providers-ollama",
+      "@agiworkforce/providers-openai",
+      "@agiworkforce/providers-openrouter",
+      "@agiworkforce/providers-perplexity",
+      "@agiworkforce/providers-qwen",
+      "@agiworkforce/providers-xai",
+      "@agiworkforce/providers-zhipu",
+      "@agiworkforce/routing",
+      "@agiworkforce/sandbox",
+      "@agiworkforce/search",
+      "@agiworkforce/signaling-server",
+      "@agiworkforce/skills",
+      "@agiworkforce/sync",
+      "@agiworkforce/trust-boundaries",
+      "@agiworkforce/types",
+      "@agiworkforce/ui",
+      "@agiworkforce/unified-chat",
+      "@agiworkforce/utils",
+      "@agiworkforce/web",
+      "agi-workforce"
+    ],
+    "edges": [
+      {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/apply-patch"
+      },
+      {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/data-layer"
+      },
+      {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/mcp"
+      },
+      {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/providers-factory"
+      },
+      {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/routing"
+      },
+      {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/skills"
+      },
+      {
+        "from": "@agiworkforce/api-gateway",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/artifacts",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/artifacts",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/browser-tool",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/client-runtime",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/cloud-contracts",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/compliance",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/data-layer",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/desktop-command-client",
+        "to": "@agiworkforce/client-runtime"
+      },
+      {
+        "from": "@agiworkforce/desktop-command-client",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/apply-patch"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/artifacts"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/client-runtime"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/design-tokens"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/desktop-command-client"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/i18n"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/mcp"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/model-registry"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/routing"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/skills"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/sync"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/trust-boundaries"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/ui"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/unified-chat"
+      },
+      {
+        "from": "@agiworkforce/desktop",
+        "to": "@agiworkforce/utils"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/browser-tool"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/client-runtime"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/design-tokens"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/routing"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/utils"
+      },
+      {
+        "from": "@agiworkforce/local-llm",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/agent-core"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/artifacts"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/client-runtime"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/compliance"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/design-tokens"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/i18n"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/local-llm"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/mcp"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/routing"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/search"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/skills"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/sync"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/trust-boundaries"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/utils"
+      },
+      {
+        "from": "@agiworkforce/provider-protocol",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/provider-runtime",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-anthropic",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-anthropic",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-anthropic",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-deepseek",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-deepseek",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-deepseek",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-deepseek",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-anthropic"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-deepseek"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-google"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-lmstudio"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-minimax"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-moonshot"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-ollama"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-openrouter"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-perplexity"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-qwen"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-xai"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-zhipu"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-google",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-google",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-google",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-lmstudio",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-lmstudio",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-lmstudio",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-lmstudio",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-minimax",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-minimax",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-minimax",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-minimax",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-moonshot",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-moonshot",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-moonshot",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-moonshot",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-ollama",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-ollama",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-ollama",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-openai",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-openai",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-openai",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-openrouter",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-openrouter",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-openrouter",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-openrouter",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-perplexity",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-perplexity",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-perplexity",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-perplexity",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-qwen",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-qwen",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-qwen",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-qwen",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-xai",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-xai",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-xai",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-xai",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-zhipu",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/providers-zhipu",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/providers-zhipu",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-zhipu",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/routing",
+        "to": "@agiworkforce/model-registry"
+      },
+      {
+        "from": "@agiworkforce/routing",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/search",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/sync",
+        "to": "@agiworkforce/artifacts"
+      },
+      {
+        "from": "@agiworkforce/sync",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/types",
+        "to": "@agiworkforce/model-registry"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/client-runtime"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/design-tokens"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/routing"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/search"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/ui"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/utils"
+      },
+      {
+        "from": "@agiworkforce/utils",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/apply-patch"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/artifacts"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/client-runtime"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/data-layer"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/design-tokens"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/i18n"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/mcp"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/provider-protocol"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/providers-anthropic"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/providers-factory"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/providers-google"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/routing"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/search"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/skills"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/sync"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/ui"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/unified-chat"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/utils"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/agent-core"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/client-runtime"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/design-tokens"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/provider-runtime"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/routing"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/utils"
+      }
+    ]
+  },
+  "rust": {
+    "nodes": [
+      "agiworkforce-agent-core",
+      "agiworkforce-app-server",
+      "agiworkforce-cli",
+      "agiworkforce-command-registry",
+      "agiworkforce-desktop",
+      "agiworkforce-execpolicy",
+      "agiworkforce-licensing",
+      "agiworkforce-llm",
+      "agiworkforce-mcp",
+      "agiworkforce-model-registry",
+      "agiworkforce-network-proxy",
+      "agiworkforce-protocol",
+      "agiworkforce-sandbox-policy",
+      "agiworkforce-utils-absolute-path",
+      "agiworkforce-utils-image"
+    ],
+    "edges": [
+      {
+        "from": "agiworkforce-agent-core",
+        "to": "agiworkforce-llm"
+      },
+      {
+        "from": "agiworkforce-app-server",
+        "to": "agiworkforce-protocol"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-agent-core"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-app-server"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-command-registry"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-execpolicy"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-llm"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-mcp"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-model-registry"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-protocol"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-sandbox-policy"
+      },
+      {
+        "from": "agiworkforce-cli",
+        "to": "agiworkforce-utils-image"
+      },
+      {
+        "from": "agiworkforce-desktop",
+        "to": "agiworkforce-agent-core"
+      },
+      {
+        "from": "agiworkforce-desktop",
+        "to": "agiworkforce-execpolicy"
+      },
+      {
+        "from": "agiworkforce-desktop",
+        "to": "agiworkforce-llm"
+      },
+      {
+        "from": "agiworkforce-desktop",
+        "to": "agiworkforce-mcp"
+      },
+      {
+        "from": "agiworkforce-desktop",
+        "to": "agiworkforce-model-registry"
+      },
+      {
+        "from": "agiworkforce-desktop",
+        "to": "agiworkforce-protocol"
+      },
+      {
+        "from": "agiworkforce-desktop",
+        "to": "agiworkforce-sandbox-policy"
+      },
+      {
+        "from": "agiworkforce-execpolicy",
+        "to": "agiworkforce-utils-absolute-path"
+      },
+      {
+        "from": "agiworkforce-mcp",
+        "to": "agiworkforce-protocol"
+      },
+      {
+        "from": "agiworkforce-network-proxy",
+        "to": "agiworkforce-utils-absolute-path"
+      },
+      {
+        "from": "agiworkforce-protocol",
+        "to": "agiworkforce-execpolicy"
+      },
+      {
+        "from": "agiworkforce-protocol",
+        "to": "agiworkforce-network-proxy"
+      },
+      {
+        "from": "agiworkforce-protocol",
+        "to": "agiworkforce-utils-absolute-path"
+      },
+      {
+        "from": "agiworkforce-protocol",
+        "to": "agiworkforce-utils-image"
+      }
+    ]
+  }
+}

@@ -83,7 +83,6 @@ export interface BargeInConfig {
   sensitivity?: number;
   cooldownMs?: number;
 }
-export type TtsInterruptReason = 'user_speech' | 'manual' | 'new_response';
 
 // ---- STT ----
 
@@ -137,13 +136,6 @@ export async function voiceTtsConfigure(config: TtsConfig): Promise<void> {
 export async function voiceTtsSpeakLocal(text: string): Promise<void> {
   return command<void>('voice_tts_speak_local', { text });
 }
-export async function voiceCancelTts(): Promise<void> {
-  return command<void>('voice_cancel_tts');
-}
-export async function voiceTtsInterruptPlayback(reason: TtsInterruptReason): Promise<void> {
-  return command<void>('voice_tts_interrupt_playback', { reason });
-}
-
 // ---- Wake Word ----
 
 export async function voiceWakeEnable(): Promise<void> {

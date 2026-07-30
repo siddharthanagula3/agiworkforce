@@ -53,19 +53,6 @@ export interface TeamBilling {
 export interface UsageMetrics {
   [key: string]: number;
 }
-export interface SubscriptionInfo {
-  id: string;
-  planId: string;
-  status: string;
-  currentPeriodEnd: string;
-}
-export interface PricingPlan {
-  id: string;
-  name: string;
-  price: number;
-  interval: string;
-  features: string[];
-}
 
 // ---- Team CRUD ----
 
@@ -240,26 +227,4 @@ export async function calculateTeamCost(teamId: string): Promise<number> {
 }
 export async function updateTeamUsage(teamId: string, metrics: UsageMetrics): Promise<void> {
   return command<void>('update_team_usage', { teamId, metrics });
-}
-
-// ---- Subscriptions ----
-
-export async function subscribeToPlan(
-  userId: string,
-  planId: string,
-  billingInterval?: string,
-): Promise<SubscriptionInfo> {
-  return command<SubscriptionInfo>('subscribe_to_plan', { userId, planId, billingInterval });
-}
-export async function upgradePlan(userId: string, newPlanId: string): Promise<SubscriptionInfo> {
-  return command<SubscriptionInfo>('upgrade_plan', { userId, newPlanId });
-}
-export async function cancelSubscription(userId: string, subscriptionId: string): Promise<void> {
-  return command<void>('cancel_subscription', { userId, subscriptionId });
-}
-export async function getPricingPlans(): Promise<PricingPlan[]> {
-  return command<PricingPlan[]>('get_pricing_plans');
-}
-export async function getCurrentPlan(userId: string): Promise<PricingPlan> {
-  return command<PricingPlan>('get_current_plan', { userId });
 }

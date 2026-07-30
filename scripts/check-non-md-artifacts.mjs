@@ -113,6 +113,7 @@ const allowedLiveNonMarkdownPrefixes = [
   'audit/demo-readiness/screenshots/',
   'reports/generated/',
 ];
+const allowedLiveNonMarkdownFiles = new Set(['audit/inventory.json']);
 
 for (const scanRoot of ['docs', 'audit', 'reports', 'tasks']) {
   for (const file of listFilesRecursive(scanRoot)) {
@@ -126,7 +127,10 @@ for (const scanRoot of ['docs', 'audit', 'reports', 'tasks']) {
       continue;
     }
 
-    if (!allowedLiveNonMarkdownPrefixes.some((prefix) => file.startsWith(prefix))) {
+    if (
+      !allowedLiveNonMarkdownFiles.has(file) &&
+      !allowedLiveNonMarkdownPrefixes.some((prefix) => file.startsWith(prefix))
+    ) {
       errors.push(`${file} is an unclassified live non-Markdown artifact`);
     }
   }

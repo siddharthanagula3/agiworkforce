@@ -42,6 +42,7 @@ requireIncludes(
   '.github/workflows/repo-operability.yml',
   'pnpm exec turbo run build lint test typecheck --dry=json',
 );
+requireIncludes('.github/workflows/repo-operability.yml', 'pnpm check:audit-inventory');
 requireIncludes(
   '.github/workflows/repo-operability.yml',
   'needs: [validate-version, build, sign-release-assets]',
