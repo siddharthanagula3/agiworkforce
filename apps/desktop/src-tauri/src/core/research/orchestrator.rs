@@ -7,8 +7,8 @@
 //! 4. Report generation with citations
 
 use super::agents::{
-    CalendarSearchAgent, DocumentSearchAgent, EmailSearchAgent, MemorySearchAgent, SearchAgent,
-    SearchAgentResult, SearchResult, WebSearchAgent,
+    DocumentSearchAgent, MemorySearchAgent, SearchAgent, SearchAgentResult, SearchResult,
+    WebSearchAgent,
 };
 use super::citation::{CitationFormat, CitationTracker};
 use super::report::{ReportSection, ResearchReport, ResearchReportGenerator};
@@ -147,17 +147,6 @@ impl ResearchOrchestrator {
             agents.insert(
                 AgentType::DocumentSearch,
                 Box::new(DocumentSearchAgent::new()),
-            );
-        }
-
-        if config.enable_email_search {
-            agents.insert(AgentType::EmailSearch, Box::new(EmailSearchAgent::new()));
-        }
-
-        if config.enable_calendar_search {
-            agents.insert(
-                AgentType::CalendarSearch,
-                Box::new(CalendarSearchAgent::new()),
             );
         }
 
@@ -434,7 +423,7 @@ Respond in JSON format:
     "strategies": [
         {{
             "description": "What this strategy searches for",
-            "agent_type": "web_search" | "document_search" | "email_search" | "calendar_search" | "memory_search",
+            "agent_type": "web_search" | "document_search" | "memory_search",
             "search_terms": ["term1", "term2"],
             "priority": 1-10,
             "expected_relevance": 0.0-1.0
@@ -515,8 +504,6 @@ Generate 3-5 diverse search strategies covering different angles of the query."#
                 let agent_type = match s["agent_type"].as_str().unwrap_or("web_search") {
                     "web_search" => AgentType::WebSearch,
                     "document_search" => AgentType::DocumentSearch,
-                    "email_search" => AgentType::EmailSearch,
-                    "calendar_search" => AgentType::CalendarSearch,
                     "memory_search" => AgentType::MemorySearch,
                     _ => AgentType::WebSearch,
                 };

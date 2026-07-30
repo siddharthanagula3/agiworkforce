@@ -95,8 +95,6 @@ impl From<ResearchModeInput> for ResearchMode {
 pub struct ResearchConfigOverrides {
     pub enable_web_search: Option<bool>,
     pub enable_document_search: Option<bool>,
-    pub enable_email_search: Option<bool>,
-    pub enable_calendar_search: Option<bool>,
     pub enable_memory_search: Option<bool>,
     pub min_confidence_threshold: Option<f32>,
     pub show_confidence_indicators: Option<bool>,
@@ -172,8 +170,6 @@ fn translate_research_error(error: &ResearchError) -> String {
                 match agent.as_str() {
                     "web_search" => "web search",
                     "document_search" => "document search",
-                    "email_search" => "email",
-                    "calendar_search" => "calendar",
                     "memory_search" => "memory",
                     _ => &agent,
                 }
@@ -234,12 +230,6 @@ pub async fn research_start(
             enable_document_search: overrides
                 .enable_document_search
                 .unwrap_or(base_config.enable_document_search),
-            enable_email_search: overrides
-                .enable_email_search
-                .unwrap_or(base_config.enable_email_search),
-            enable_calendar_search: overrides
-                .enable_calendar_search
-                .unwrap_or(base_config.enable_calendar_search),
             enable_memory_search: overrides
                 .enable_memory_search
                 .unwrap_or(base_config.enable_memory_search),
@@ -465,14 +455,6 @@ pub async fn research_check_availability(
             "document_search": {
                 "enabled": config.enable_document_search,
                 "status": if config.enable_document_search { "ready" } else { "disabled" }
-            },
-            "email_search": {
-                "enabled": config.enable_email_search,
-                "status": if config.enable_email_search { "requires_connection" } else { "disabled" }
-            },
-            "calendar_search": {
-                "enabled": config.enable_calendar_search,
-                "status": if config.enable_calendar_search { "requires_connection" } else { "disabled" }
             },
             "memory_search": {
                 "enabled": config.enable_memory_search,

@@ -159,10 +159,6 @@ fn parse_agent_type_from_subtask_id(id: &str) -> AgentType {
     // carry the real agent_type. Fall back to WebSearch if we cannot determine.
     if id.contains("document") {
         AgentType::DocumentSearch
-    } else if id.contains("email") {
-        AgentType::EmailSearch
-    } else if id.contains("calendar") {
-        AgentType::CalendarSearch
     } else if id.contains("memory") {
         AgentType::MemorySearch
     } else {
@@ -174,8 +170,6 @@ fn parse_agent_type_str(s: &str) -> AgentType {
     match s {
         "web_search" => AgentType::WebSearch,
         "document_search" => AgentType::DocumentSearch,
-        "email_search" => AgentType::EmailSearch,
-        "calendar_search" => AgentType::CalendarSearch,
         "memory_search" => AgentType::MemorySearch,
         _ => AgentType::WebSearch,
     }

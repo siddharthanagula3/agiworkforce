@@ -130,12 +130,6 @@ pub struct ResearchConfig {
     /// Whether to enable document search
     pub enable_document_search: bool,
 
-    /// Whether to enable email search
-    pub enable_email_search: bool,
-
-    /// Whether to enable calendar search
-    pub enable_calendar_search: bool,
-
     /// Whether to enable memory search
     pub enable_memory_search: bool,
 
@@ -164,8 +158,6 @@ impl Default for ResearchConfig {
             default_mode: ResearchMode::Standard,
             enable_web_search: true,
             enable_document_search: true,
-            enable_email_search: true,
-            enable_calendar_search: true,
             enable_memory_search: true,
             min_confidence_threshold: 0.3,
             max_concurrent_agents: 5,
@@ -266,8 +258,6 @@ pub struct SearchStrategy {
 pub enum AgentType {
     WebSearch,
     DocumentSearch,
-    EmailSearch,
-    CalendarSearch,
     MemorySearch,
 }
 
@@ -276,8 +266,6 @@ impl AgentType {
         match self {
             AgentType::WebSearch => "web_search",
             AgentType::DocumentSearch => "document_search",
-            AgentType::EmailSearch => "email_search",
-            AgentType::CalendarSearch => "calendar_search",
             AgentType::MemorySearch => "memory_search",
         }
     }

@@ -58,8 +58,6 @@ export interface ResearchConfig {
   default_mode: ResearchModeId;
   enable_web_search: boolean;
   enable_document_search: boolean;
-  enable_email_search: boolean;
-  enable_calendar_search: boolean;
   enable_memory_search: boolean;
   min_confidence_threshold: number;
   max_concurrent_agents: number;
@@ -87,8 +85,6 @@ export interface ResearchAvailability {
   sources: {
     web_search: { enabled: boolean; status: string };
     document_search: { enabled: boolean; status: string };
-    email_search: { enabled: boolean; status: string };
-    calendar_search: { enabled: boolean; status: string };
     memory_search: { enabled: boolean; status: string };
   };
   default_mode: ResearchModeId;
@@ -159,8 +155,6 @@ const DEFAULT_CONFIG: ResearchConfig = {
   default_mode: 'standard',
   enable_web_search: true,
   enable_document_search: true,
-  enable_email_search: true,
-  enable_calendar_search: true,
   enable_memory_search: true,
   min_confidence_threshold: 0.3,
   max_concurrent_agents: 5,
@@ -406,8 +400,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
               sources: {
                 web_search: { enabled: false, status: 'unavailable' },
                 document_search: { enabled: false, status: 'unavailable' },
-                email_search: { enabled: false, status: 'unavailable' },
-                calendar_search: { enabled: false, status: 'unavailable' },
                 memory_search: { enabled: false, status: 'unavailable' },
               },
               default_mode: 'standard',

@@ -136,8 +136,6 @@ fn try_parse_single_result(value: &serde_json::Value) -> Option<SearchAgentResul
     let agent_type = match agent_type_str {
         "web_search" => AgentType::WebSearch,
         "document_search" => AgentType::DocumentSearch,
-        "email_search" => AgentType::EmailSearch,
-        "calendar_search" => AgentType::CalendarSearch,
         "memory_search" => AgentType::MemorySearch,
         _ => AgentType::WebSearch,
     };

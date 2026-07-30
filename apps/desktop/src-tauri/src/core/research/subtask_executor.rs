@@ -43,8 +43,6 @@ pub async fn execute_research_subtask(subtask: &Subtask) -> Result<serde_json::V
     let agent_type = match agent_type_str {
         "web_search" => AgentType::WebSearch,
         "document_search" => AgentType::DocumentSearch,
-        "email_search" => AgentType::EmailSearch,
-        "calendar_search" => AgentType::CalendarSearch,
         "memory_search" => AgentType::MemorySearch,
         _ => AgentType::WebSearch,
     };
@@ -99,10 +97,7 @@ async fn execute_search_with_agent(
     agent_type: AgentType,
     strategy: &SearchStrategy,
 ) -> SearchAgentResult {
-    use super::agents::{
-        CalendarSearchAgent, DocumentSearchAgent, EmailSearchAgent, MemorySearchAgent, SearchAgent,
-        WebSearchAgent,
-    };
+    use super::agents::{DocumentSearchAgent, MemorySearchAgent, SearchAgent, WebSearchAgent};
 
     let max_results: usize = 10;
 
@@ -121,22 +116,6 @@ async fn execute_search_with_agent(
                 agent.search(strategy, None, max_results).await
             } else {
                 Ok(SearchAgentResult::empty(AgentType::DocumentSearch))
-            }
-        }
-        AgentType::EmailSearch => {
-            let agent = EmailSearchAgent::new();
-            if agent.is_available() {
-                agent.search(strategy, None, max_results).await
-            } else {
-                Ok(SearchAgentResult::empty(AgentType::EmailSearch))
-            }
-        }
-        AgentType::CalendarSearch => {
-            let agent = CalendarSearchAgent::new();
-            if agent.is_available() {
-                agent.search(strategy, None, max_results).await
-            } else {
-                Ok(SearchAgentResult::empty(AgentType::CalendarSearch))
             }
         }
         AgentType::MemorySearch => {

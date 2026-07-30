@@ -72,9 +72,14 @@ mod types_tests {
     fn test_agent_type_strings() {
         assert_eq!(AgentType::WebSearch.as_str(), "web_search");
         assert_eq!(AgentType::DocumentSearch.as_str(), "document_search");
-        assert_eq!(AgentType::EmailSearch.as_str(), "email_search");
-        assert_eq!(AgentType::CalendarSearch.as_str(), "calendar_search");
         assert_eq!(AgentType::MemorySearch.as_str(), "memory_search");
+    }
+
+    #[test]
+    fn test_research_config_excludes_unwired_private_sources() {
+        let serialized = serde_json::to_value(ResearchConfig::default()).unwrap();
+        assert!(serialized.get("enable_email_search").is_none());
+        assert!(serialized.get("enable_calendar_search").is_none());
     }
 
     #[test]
@@ -220,7 +225,7 @@ mod agents_tests {
 
     #[test]
     fn test_search_agent_result_failed() {
-        let result = SearchAgentResult::failed(AgentType::EmailSearch, "Connection failed");
+        let result = SearchAgentResult::failed(AgentType::DocumentSearch, "Connection failed");
         assert!(result.results.is_empty());
         assert!(!result.complete);
         assert_eq!(result.error, Some("Connection failed".to_string()));
@@ -268,24 +273,6 @@ mod agents_tests {
         let agent_with_path = DocumentSearchAgent::new().add_path(std::path::PathBuf::from("/tmp"));
         assert!(agent_with_path.is_available());
         assert_eq!(agent_with_path.name(), "Document Search");
-    }
-
-    #[test]
-    fn test_email_search_agent() {
-        let agent = EmailSearchAgent::new();
-        assert!(!agent.is_available()); // Not connected by default
-
-        let connected_agent = EmailSearchAgent::new().set_connected(true);
-        assert!(connected_agent.is_available());
-    }
-
-    #[test]
-    fn test_calendar_search_agent() {
-        let agent = CalendarSearchAgent::new();
-        assert!(!agent.is_available()); // Not connected by default
-
-        let connected_agent = CalendarSearchAgent::new().set_connected(true);
-        assert!(connected_agent.is_available());
     }
 
     #[test]
