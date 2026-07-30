@@ -1,111 +1,75 @@
-# =============================================================================
-# API Gateway Dockerfile
-# =============================================================================
-# Multi-stage build for minimal production image
-# Uses pnpm for consistency with the monorepo
+# syntax=docker/dockerfile:1.7
+
+# Build from the monorepo root:
+#   docker build --file services/api-gateway/Dockerfile .
 #
-# Build standalone:
-#   docker build -t api-gateway .
-#
-# Build from monorepo root (recommended for CI):
-#   docker build -f services/api-gateway/Dockerfile \
-#     --build-context service=services/api-gateway .
-# =============================================================================
-
-# =============================================================================
-# Stage 1: Dependencies
-# =============================================================================
-FROM node:24-alpine AS deps
+# The gateway consumes workspace packages, so a service-directory build
+# context cannot produce a correct or reproducible image.
+FROM node:24.13.0-alpine3.23 AS base
 
 RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
 
+FROM base AS pruner
+WORKDIR /workspace
+
+COPY . .
+RUN pnpm dlx turbo@2.10.5 prune @agiworkforce/api-gateway --docker --out-dir /out
+
+FROM base AS installer
 WORKDIR /app
 
-# Copy package manifest + lockfile for reproducible installs
-COPY package.json pnpm-lock.yaml* ./
+# Install from the pruned manifest and lockfile before copying source so source
+# edits do not invalidate the dependency layer.
+COPY --from=pruner /out/json/ ./
+COPY --from=pruner /out/pnpm-lock.yaml ./pnpm-lock.yaml
+RUN pnpm install --frozen-lockfile
 
-# Install all dependencies (including devDependencies for build)
-RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
+COPY --from=pruner /out/full/ ./
+# Turbo prune does not include this root config even though workspace package
+# tsconfigs extend it.
+COPY tsconfig.base.json ./tsconfig.base.json
 
-# =============================================================================
-# Stage 2: Build
-# =============================================================================
-FROM node:24-alpine AS builder
+RUN pnpm --filter @agiworkforce/api-gateway build
+# Bundle workspace TypeScript and production dependencies into a real Node
+# artifact. The workspace packages intentionally expose TypeScript source for
+# app bundlers; plain tsc output cannot be executed by Node on a clean host.
+RUN pnpm exec esbuild services/api-gateway/src/index.ts \
+  --bundle \
+  --platform=node \
+  --target=node24 \
+  --format=cjs \
+  --sourcemap \
+  --outfile=/bundle/index.js \
+  --external:bufferutil \
+  --external:utf-8-validate
 
-RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
+FROM node:24.13.0-alpine3.23 AS production
 
-WORKDIR /app
+ARG RELEASE_SHA=development
 
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json ./
-
-# Copy TypeScript configuration and source
-COPY tsconfig.json ./
-COPY src/ ./src/
-
-# Build TypeScript to JavaScript
-RUN pnpm run build
-
-# =============================================================================
-# Stage 3: Production Dependencies
-# =============================================================================
-FROM node:24-alpine AS prod-deps
-
-RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
-
-WORKDIR /app
-
-COPY package.json pnpm-lock.yaml* ./
-
-# Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile 2>/dev/null || pnpm install --prod && \
-    pnpm store prune
-
-# =============================================================================
-# Stage 4: Production Runtime
-# =============================================================================
-FROM node:24-alpine AS production
-
-# Security: Install dumb-init for proper signal handling
-# This ensures SIGTERM/SIGINT are properly forwarded to Node.js
-RUN apk add --no-cache dumb-init
-
-# Security: Create non-root user and group
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 gateway
+RUN apk add --no-cache dumb-init \
+  && addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 --ingroup nodejs gateway
 
 WORKDIR /app
 
-# Copy production dependencies
-COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=installer --chown=gateway:nodejs /bundle/index.js ./dist/index.js
+COPY --from=installer --chown=gateway:nodejs /bundle/index.js.map ./dist/index.js.map
+COPY --from=installer --chown=gateway:nodejs /app/services/api-gateway/package.json ./package.json
 
-# Copy built application
-COPY --from=builder /app/dist ./dist
-
-# Copy package.json for runtime metadata
-COPY package.json ./
-
-# Security: Set ownership to non-root user
-RUN chown -R gateway:nodejs /app
-
-# Switch to non-root user
-USER gateway
-
-# Environment variables with sensible defaults
 ENV NODE_ENV=production \
-    PORT=3000
+    HOST=0.0.0.0 \
+    PORT=3000 \
+    RELEASE_SHA=${RELEASE_SHA}
 
-# Expose the HTTP/WebSocket port
+LABEL org.opencontainers.image.source="https://github.com/agiworkforce/agiworkforce" \
+      org.opencontainers.image.revision="${RELEASE_SHA}"
+
+USER gateway
 EXPOSE 3000
 
-# Health check - verify HTTP endpoint (WebSocket shares the same port)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1:3000/health || exit 1
 
-# Use dumb-init for proper signal handling (SIGTERM, SIGINT)
-# This ensures graceful shutdown of HTTP and WebSocket connections
 ENTRYPOINT ["dumb-init", "--"]
-
-# Start the application
 CMD ["node", "dist/index.js"]

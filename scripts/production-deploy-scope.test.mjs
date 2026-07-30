@@ -42,6 +42,22 @@ test('service and native paths select only their owning expensive lanes', () => 
   });
 });
 
+test('gateway image and host contracts select only the gateway deploy lane', () => {
+  for (const file of [
+    '.dockerignore',
+    'infrastructure/api-gateway/fly.production.toml',
+    'scripts/verify-gateway-deployment.mjs',
+  ]) {
+    assert.deepEqual(classifyDeployScope([file]), {
+      web: false,
+      gateway: true,
+      signaling: false,
+      desktop: false,
+      native: false,
+    });
+  }
+});
+
 test('shared build inputs conservatively rebuild every deployable lane', () => {
   const scope = classifyDeployScope(['pnpm-lock.yaml']);
   assert.deepEqual(scope, {
@@ -107,4 +123,15 @@ test('Vercel Git integration cannot race the CI-owned main promotion', () => {
 
   const workflow = fs.readFileSync('.github/workflows/deploy-production.yml', 'utf8');
   assert.match(workflow, /vercel deploy --prebuilt --prod/);
+});
+
+test('gateway production reuses the immutable image verified in staging', () => {
+  const workflow = fs.readFileSync('.github/workflows/deploy-production.yml', 'utf8');
+  assert.match(workflow, /containerimage\.digest/);
+  assert.match(
+    workflow,
+    /IMAGE_REF: \$\{\{ needs\.deploy-gateway-staging\.outputs\.image_ref \}\}/,
+  );
+  assert.match(workflow, /pnpm db:migrate -- verify/);
+  assert.equal((workflow.match(/node scripts\/verify-gateway-deployment\.mjs/g) ?? []).length, 2);
 });

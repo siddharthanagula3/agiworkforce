@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { logger } from '../lib/logger';
+import { getRequestId } from './requestContext';
 
 /**
  * Custom error class for operational errors (expected errors)
@@ -18,6 +19,11 @@ export class AppError extends Error {
   }
 }
 
+function transportStatus(err: Error): number | undefined {
+  const status = (err as Error & { status?: unknown }).status;
+  return typeof status === 'number' && status >= 400 && status <= 599 ? status : undefined;
+}
+
 /**
  * Global error handler middleware.
  * Must be defined last to catch errors from all previous middleware and route handlers.
@@ -28,12 +34,15 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction,
 ) => {
+  const requestId = getRequestId(res);
+
   // Handle Zod validation errors with a 400 response
   if (err instanceof z.ZodError) {
     logger.warn(
       {
         path: req.path,
         method: req.method,
+        requestId,
         validationErrors: err.issues.map((i) => ({
           path: i.path.join('.'),
           message: i.message,
@@ -49,6 +58,7 @@ export const errorHandler = (
         field: i.path.join('.'),
         message: i.message,
       })),
+      ...(requestId ? { requestId } : {}),
     });
     return;
   }
@@ -60,20 +70,28 @@ export const errorHandler = (
       stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
       path: req.path,
       method: req.method,
+      requestId,
     },
     'Request error',
   );
 
   // Determine status code
-  const statusCode = err instanceof AppError ? err.statusCode : 500;
+  const statusCode = err instanceof AppError ? err.statusCode : (transportStatus(err) ?? 500);
 
   // Determine error message
   const message =
-    err instanceof AppError && err.isOperational ? err.message : 'Internal Server Error';
+    err instanceof AppError && err.isOperational
+      ? err.message
+      : statusCode === 413
+        ? 'Payload Too Large'
+        : statusCode >= 400 && statusCode < 500
+          ? 'Invalid Request'
+          : 'Internal Server Error';
 
   // Send error response
   res.status(statusCode).json({
     error: message,
+    ...(requestId ? { requestId } : {}),
     ...(process.env.NODE_ENV === 'development' && {
       stack: err.stack,
       details: err.message,
@@ -90,5 +108,6 @@ export const notFoundHandler = (req: Request, res: Response) => {
   res.status(404).json({
     error: 'Not Found',
     message: `Route ${req.method} ${safePath} not found`,
+    ...(getRequestId(res) ? { requestId: getRequestId(res) } : {}),
   });
 };

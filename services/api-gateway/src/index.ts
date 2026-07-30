@@ -1,200 +1,27 @@
 /**
- * @file API Gateway Entry Point
- * @security
- * - Helmet: Security headers (XSS protection, content-type sniffing, etc.)
- * - CORS: Configured allowed origins
- * - CSRF: Custom header (X-Requested-With) required on state-changing requests
- * - Rate limiting: Applied per-route (see individual route files)
- * - Content-Type validation: Enforces application/json
- * - Security header monitoring: Logs suspicious headers in production
+ * API gateway process entry point.
+ *
+ * Runtime construction lives in app.ts/server.ts so importing application code
+ * never binds a port or installs process handlers.
  */
-
-import express, { type Request, type Response } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import { WebSocketServer } from 'ws';
-import { createServer } from 'http';
-
-import { authRouter } from './routes/auth';
-import { desktopRouter } from './routes/desktop';
-import { syncRouter } from './routes/sync';
-import { creditsRouter } from './routes/credits';
-import { setupWebSocket } from './websocket';
-import { mobileRouter } from './routes/mobile';
-import { chatRouter } from './routes/chat';
-import { pairRouter } from './routes/pair';
-import { providerHealthRouter } from './services/providerHealth';
-import { modelCatalogRouter } from './routes/models';
-import { cloudChatRouter } from './routes/cloudChat';
-import { llmRouter } from './routes/llm';
-import { providerStreamRouter } from './routes/providerStream';
-import { usageRouter } from './routes/usage';
-import { enterpriseRouter } from './routes/enterprise';
-import { deviceAuthRouter } from './routes/deviceAuth';
-import { agentsRouter } from './routes/agents';
-import { mcpRouter } from './mcp/mcpRoutes';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler';
-import {
-  validateContentType,
-  validateSecurityHeaders,
-  validateCsrf,
-} from './middleware/requestValidation';
-import { createRateLimiter, warnIfMultiInstanceWithoutRedis } from './middleware/rateLimit';
-import { logger } from './lib/logger';
 import { validateStartupEnv } from './env';
-import { getSystemClient, disposeUserScopedClientPool } from './lib/neonClients';
+import { logger } from './lib/logger';
+import { warnIfMultiInstanceWithoutRedis } from './middleware/rateLimit';
+import { createGatewayRuntime, installSignalHandlers } from './server';
 
 try {
   validateStartupEnv();
 } catch (err) {
-  logger.fatal({}, (err as Error).message);
+  logger.fatal({ err }, (err as Error).message);
   process.exit(1);
 }
 
-// P1-23: surface the multi-instance rate-limit gap at startup so ops
-// notices before paid-tier launch. Non-fatal. See rateLimit.ts comment.
 warnIfMultiInstanceWithoutRedis();
 
-const app = express();
-const port = Number(process.env['PORT'] ?? '3000');
+const runtime = createGatewayRuntime();
+installSignalHandlers(runtime);
 
-// Configure application settings
-app.set('port', port);
-app.set('json spaces', 0); // Compact JSON output for APIs
-app.disable('x-powered-by'); // Remove X-Powered-By header for security
-
-// Trust proxy if behind a reverse proxy (e.g., Nginx, load balancer)
-if (process.env['TRUST_PROXY'] === 'true') {
-  app.set('trust proxy', 1);
-}
-
-const corsOrigins = (() => {
-  const configured = process.env['ALLOWED_ORIGINS'];
-  if (!configured) {
-    return [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'tauri://localhost',
-      'https://tauri.localhost',
-      'https://chat.agiworkforce.com',
-      'https://www.agiworkforce.com',
-      'https://agiworkforce.com',
-    ];
-  }
-  return configured
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-})();
-
-// Security middleware - helmet provides security headers
-app.use(helmet());
-app.use(
-  cors({
-    origin: corsOrigins,
-    credentials: true,
-  }),
-);
-
-// GW-4 (audit 2026-05-05): tighten default body-size limit to 128kb. General
-// JSON-API requests (auth, chat metadata, command payloads) sit well under
-// 16kb in practice; 128kb leaves slack without inviting DoS via large bodies.
-// Routes that legitimately need bigger payloads (file uploads, code patches,
-// model-config blobs) MUST opt-in with a per-route express.json({ limit }).
-app.use(express.json({ limit: '128kb' }));
-app.use(express.urlencoded({ extended: true, limit: '128kb' }));
-
-// SECURITY: Request validation middleware (Content-Type, security headers, CSRF)
-app.use(validateContentType);
-app.use(validateSecurityHeaders);
-app.use(validateCsrf);
-
-app.use('/api/auth', authRouter);
-app.use('/auth/device', deviceAuthRouter);
-app.use('/api/auth/device', deviceAuthRouter);
-app.use('/api/desktop', desktopRouter);
-app.use('/api/sync', syncRouter);
-app.use('/api/mobile', mobileRouter);
-app.use('/api/chat', chatRouter);
-app.use('/api/pair', pairRouter);
-app.use('/api/credits', creditsRouter);
-app.use('/api/providers', providerHealthRouter);
-app.use('/api/models', modelCatalogRouter);
-app.use('/api/cloud-chat', cloudChatRouter);
-app.use('/api/llm/v1', llmRouter);
-app.use('/api/v1/providers', providerStreamRouter);
-app.use('/api/v1/usage', usageRouter);
-app.use('/api/v1/enterprise', enterpriseRouter);
-app.use('/api/agents', agentsRouter);
-app.use('/api/mcp', mcpRouter);
-
-// SECURITY: Rate limited to 100/min for monitoring endpoints
-app.get('/health', createRateLimiter('health'), (_req: Request, res: Response) => {
-  res.json({
-    status: 'ok',
-    version: '1.1.5',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// SECURITY: Rate limited to 100/min for status checks
-app.get('/api/v1/status', createRateLimiter('status'), async (_req: Request, res: Response) => {
-  try {
-    // Check Neon connectivity with a simple query against `profiles`
-    // (the canonical user table — `users` belongs to `auth.*` schema and is
-    // not exposed via REST, so the previous `from('users')` always returned
-    // a 404 even when the database was healthy).
-    // Wave 1.5+ singleton sweep: liveness probe runs without user context;
-    // service-role is the right client for a system-health query.
-    const { error } = await getSystemClient('gateway-health')
-      .from('profiles')
-      .select('id', { count: 'exact', head: true });
-
-    res.json({
-      database: error ? 'error' : 'connected',
-      gateway: 'ok',
-    });
-  } catch (err) {
-    logger.error({ err }, 'Status check failed');
-    res.status(500).json({
-      database: 'error',
-      gateway: 'ok',
-    });
-  }
-});
-
-// 404 handler for undefined routes (must be before error handler)
-app.use(notFoundHandler);
-
-// Global error handler (must be last)
-app.use(errorHandler);
-
-const server = createServer(app);
-
-const MAX_WS_PAYLOAD = Number(process.env['WS_MAX_MESSAGE_SIZE'] ?? 65536);
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: MAX_WS_PAYLOAD });
-setupWebSocket(wss);
-
-server.listen(port, () => {
-  logger.info({ port }, 'API Gateway running');
-  logger.info({ port, path: '/ws' }, 'WebSocket server available');
-});
-
-process.on('SIGTERM', () => {
-  logger.info({}, 'SIGTERM received, closing server');
-  // Close all WebSocket connections gracefully before shutting down
-  wss.clients.forEach((client) => {
-    client.close(1001, 'Server shutting down');
-  });
-  wss.close();
-  server.close(() => {
-    logger.info({}, 'Server closed');
-    // Release the pooled RLS adapter's WebSocket connections (lib/neonClients.ts
-    // user-scoped database client) — separate connection strategy from the one-shot HTTP
-    // service client, so it needs an explicit teardown.
-    disposeUserScopedClientPool()
-      .catch((err) => logger.error({ err }, 'Failed to dispose RLS adapter pool'))
-      .finally(() => process.exit(0));
-  });
+runtime.start().catch((err) => {
+  logger.fatal({ err }, 'API Gateway failed to start');
+  process.exit(1);
 });

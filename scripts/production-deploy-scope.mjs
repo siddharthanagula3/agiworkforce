@@ -53,6 +53,10 @@ export function classifyDeployScope(files, { all = false } = {}) {
       file === '.github/workflows/ci.yml' ||
       file === 'scripts/production-deploy-scope.mjs' ||
       file === 'scripts/production-deploy-scope.test.mjs';
+    const gatewayDeployContract =
+      file === '.dockerignore' ||
+      file === 'scripts/verify-gateway-deployment.mjs' ||
+      isWithin(file, 'infrastructure/api-gateway');
 
     if (
       sharedBuildFile ||
@@ -69,6 +73,7 @@ export function classifyDeployScope(files, { all = false } = {}) {
       sharedBuildFile ||
       sharedPackage ||
       deployContract ||
+      gatewayDeployContract ||
       isWithin(file, 'services/api-gateway')
     ) {
       scope.gateway = true;

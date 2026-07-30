@@ -98,6 +98,31 @@ requireIncludes('.github/workflows/deploy-production.yml', 'vercel deploy --preb
 requireIncludes('.github/workflows/deploy-production.yml', 'vercel@58.4.0');
 requireIncludes('.github/workflows/deploy-production.yml', 'environment=production');
 requireIncludes('.github/workflows/deploy-production.yml', 'environment:');
+requireIncludes('.github/workflows/deploy-production.yml', 'deploy-gateway-staging:');
+requireIncludes('.github/workflows/deploy-production.yml', 'deploy-gateway-production:');
+requireIncludes(
+  '.github/workflows/deploy-production.yml',
+  'needs: [scope, deploy-gateway-staging]',
+);
+requireIncludes('.github/workflows/deploy-production.yml', 'services/api-gateway/Dockerfile');
+requireIncludes('.github/workflows/deploy-production.yml', '--platform linux/amd64');
+requireIncludes('.github/workflows/deploy-production.yml', 'containerimage.digest');
+requireIncludes('.github/workflows/deploy-production.yml', '--image "$IMAGE_REF"');
+requireIncludes('.github/workflows/deploy-production.yml', 'pnpm db:migrate -- verify');
+requireIncludes(
+  '.github/workflows/deploy-production.yml',
+  'node scripts/verify-gateway-deployment.mjs',
+);
+requireIncludes('infrastructure/api-gateway/fly.staging.toml', 'path = "/health"');
+requireIncludes('infrastructure/api-gateway/fly.staging.toml', 'path = "/ready"');
+requireIncludes('infrastructure/api-gateway/fly.production.toml', 'min_machines_running = 1');
+requireIncludes('services/api-gateway/Dockerfile', 'turbo@2.10.5 prune');
+requireIncludes('services/api-gateway/Dockerfile', '--bundle');
+requireNotIncludes('services/api-gateway/Dockerfile', '|| pnpm install');
+requireIncludes('.dockerignore', '**/.env.*');
+requireIncludes('.dockerignore', '**/node_modules');
+requireIncludes('.dockerignore', '**/.next');
+requireIncludes('.dockerignore', '**/target');
 requireIncludes(
   '.github/workflows/deploy-signaling-server.yml',
   "github.event.workflow_run.conclusion == 'success'",
