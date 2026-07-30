@@ -64,7 +64,6 @@ pub mod app_server;
 pub mod apply_patch;
 pub mod approval_audit;
 pub mod ecosystem;
-pub mod exec_policy;
 pub mod init;
 pub mod local_models;
 pub mod model_catalog;
@@ -100,10 +99,8 @@ pub mod tool_search;
 pub mod marketplace;
 #[allow(dead_code)] // PHASE2: SDK stdin-reader surface ships in Sprint B (headless mode hardening)
 pub mod sdk_io; // used by OneShotOutputMode::JsonEvents in lib.rs
-                // policy lives at platform::policy; re-exported here so existing PHASE2 references
-                // (and any future callers) using `crate::policy::*` continue to resolve unchanged.
-#[allow(dead_code)]
-// PHASE2: Gemini-style declarative TOML tool-rule eval not yet wired into agent
+// policy lives at platform::policy; re-exported here so callers using
+// `crate::policy::*` continue to resolve unchanged.
 pub use platform::policy;
 #[allow(dead_code)]
 // PHASE2: WS transport for a2a — wraps jsonrpc::handle_request over persistent WS connections
@@ -1876,13 +1873,14 @@ pub async fn run_main() -> Result<()> {
             }
             Command::Approvals { action } => handle_approvals_command(action),
             Command::Execpolicy => {
-                let policy = exec_policy::ExecPolicy::load()?;
-                if policy.rules.is_empty() {
+                let policy = features::exec::exec_policy::load_policy()?;
+                let prefixes = policy.get_allowed_prefixes();
+                if prefixes.is_empty() {
                     println!("No rules. Add .rules files to ~/.agiworkforce/rules/");
                 } else {
-                    println!("{} rule(s):", policy.rules.len());
-                    for r in &policy.rules {
-                        println!("  {:?} — {}", r.effect, r.source);
+                    println!("{} allowed command prefix(es):", prefixes.len());
+                    for prefix in prefixes {
+                        println!("  {}", prefix.join(" "));
                     }
                 }
                 Ok(())

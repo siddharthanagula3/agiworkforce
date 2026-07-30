@@ -86,6 +86,11 @@ pub struct ToolExecOptions {
     /// Tool policy must travel with each call. A process-global flag is unsafe
     /// because the CLI app-server can host concurrent Local and BYOK sessions.
     pub privacy_mode: crate::agent::PrivacyMode,
+    /// Workspace whose `.agiworkforce/policy.toml` governs this call.
+    ///
+    /// This is carried per invocation for the same reason as `privacy_mode`:
+    /// the app-server can host a workspace that is not the process cwd.
+    pub workspace_root: Option<std::path::PathBuf>,
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +231,7 @@ pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result
         approval_callback: None,
         // A sessionless invocation has no authority to leave the device.
         privacy_mode: crate::agent::PrivacyMode::Local,
+        workspace_root: std::env::current_dir().ok(),
     };
     execute_tool_with_opts(call, &opts).await
 }
@@ -248,8 +254,72 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         });
     }
 
-    let is_safe_tool = is_catalog_read_only_tool(canonical_name);
-    let require_confirm = opts.require_confirmation && !(opts.auto_approve_safe && is_safe_tool);
+    let mut require_confirm = opts.require_confirmation
+        && !(opts.auto_approve_safe && is_catalog_read_only_tool(canonical_name));
+    if let Some(workspace_root) = opts.workspace_root.as_deref() {
+        let policy = crate::platform::policy::PolicyEngine::load_workspace(workspace_root)?;
+        if policy.has_rules() {
+            let primary_argument = policy_primary_argument(canonical_name, &call.args);
+            let decision = effective_workspace_policy_decision(
+                policy.evaluate(canonical_name, &primary_argument),
+                workspace_policy_is_trusted(workspace_root),
+            );
+            match decision {
+                crate::platform::policy::PolicyDecision::Deny => {
+                    return Ok(ToolResult {
+                        tool_name: canonical_name.to_string(),
+                        success: false,
+                        output: format!(
+                            "Tool `{canonical_name}` is denied by {}/.agiworkforce/policy.toml and was not run.",
+                            workspace_root.display()
+                        ),
+                    });
+                }
+                crate::platform::policy::PolicyDecision::Allow => {
+                    require_confirm = false;
+                }
+                crate::platform::policy::PolicyDecision::Ask => {
+                    let request = ApprovalRequest::new(
+                        ApprovalRequestKind::WorkspacePolicy {
+                            tool_name: canonical_name.to_string(),
+                            primary_argument: primary_argument.clone(),
+                        },
+                        format!("Workspace policy requires approval for `{canonical_name}`"),
+                        vec![
+                            format!("workspace: {}", workspace_root.display()),
+                            format!("argument: {primary_argument}"),
+                        ],
+                    );
+                    let allowed = if let Some(decision) =
+                        request_approval(opts.approval_callback.as_ref(), request).await
+                    {
+                        approval_allows(decision)
+                    } else {
+                        Confirm::new()
+                            .with_prompt(format!(
+                                "Workspace policy requires approval for `{canonical_name}`. Allow it?"
+                            ))
+                            .default(false)
+                            .interact()
+                            .unwrap_or(false)
+                    };
+                    if !allowed {
+                        return Ok(ToolResult {
+                            tool_name: canonical_name.to_string(),
+                            success: false,
+                            output: format!(
+                                "Tool `{canonical_name}` was not approved under the workspace policy."
+                            ),
+                        });
+                    }
+                    // The workspace policy approval is the one authoritative prompt
+                    // for this invocation; do not immediately ask a second time in
+                    // the tool-specific executor.
+                    require_confirm = false;
+                }
+            }
+        }
+    }
 
     // C1: read-only tools resolve through the Tool-trait registry first. They are
     // side-effect-free, so they bypass the confirmation flow regardless.
@@ -328,6 +398,51 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     };
 
     result
+}
+
+fn policy_primary_argument(tool_name: &str, args: &HashMap<String, String>) -> String {
+    let preferred_keys: &[&str] = match tool_name {
+        "run_command" | "powershell" => &["command"],
+        "write_file" | "edit_file" | "notebook_edit" | "read_file" => &["path", "file_path"],
+        "web_fetch" => &["url"],
+        "web_search" | "search_files" | "grep_files" => &["query", "pattern"],
+        "advisor" | "ask_user" => &["question"],
+        _ => &["path", "command", "query", "url", "question", "name"],
+    };
+    preferred_keys
+        .iter()
+        .find_map(|key| args.get(*key))
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn workspace_policy_is_trusted(workspace_root: &std::path::Path) -> bool {
+    let project_root = crate::project_scope::resolve_project_scope(workspace_root);
+    let Ok(config_dir) = crate::config::CliConfig::config_dir() else {
+        return false;
+    };
+    let Ok(registry) = crate::project_registry::ProjectRegistry::load(&config_dir) else {
+        return false;
+    };
+    let project_key = project_root.to_string_lossy();
+    registry
+        .projects
+        .get(project_key.as_ref())
+        .is_some_and(|entry| entry.trust_level == "trusted")
+}
+
+fn effective_workspace_policy_decision(
+    decision: crate::platform::policy::PolicyDecision,
+    workspace_is_trusted: bool,
+) -> crate::platform::policy::PolicyDecision {
+    use crate::platform::policy::PolicyDecision;
+
+    match (decision, workspace_is_trusted) {
+        // A repository-controlled file must not be able to remove an approval
+        // boundary until the user has explicitly trusted that repository.
+        (PolicyDecision::Allow, false) => PolicyDecision::Ask,
+        (decision, _) => decision,
+    }
 }
 
 pub(crate) async fn request_approval(
@@ -895,6 +1010,7 @@ mod tests {
             quiet: true,
             approval_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: std::env::current_dir().ok(),
         };
 
         for name in ["web_search", "web_fetch"] {
@@ -914,6 +1030,151 @@ mod tests {
                 result.output
             );
         }
+    }
+
+    #[tokio::test]
+    async fn workspace_policy_toml_denies_tool_before_dispatch() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let policy_dir = workspace.path().join(".agiworkforce");
+        std::fs::create_dir_all(&policy_dir).expect("policy dir");
+        std::fs::write(
+            policy_dir.join("policy.toml"),
+            r#"
+[[rules]]
+tool = "run_command"
+pattern = "^printf policy-denied$"
+decision = "deny"
+priority = 500
+reason = "regression test"
+"#,
+        )
+        .expect("policy");
+
+        let call = ToolCall {
+            name: "run_command".to_string(),
+            args: HashMap::from([("command".to_string(), "printf policy-denied".to_string())]),
+        };
+        let opts = ToolExecOptions {
+            require_confirmation: false,
+            auto_approve_safe: true,
+            quiet: true,
+            approval_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: Some(workspace.path().to_path_buf()),
+        };
+
+        let result = execute_tool_with_opts(&call, &opts)
+            .await
+            .expect("policy result");
+        assert!(!result.success);
+        assert!(result.output.contains("denied by"));
+        assert!(result.output.contains(".agiworkforce/policy.toml"));
+    }
+
+    #[tokio::test]
+    async fn workspace_policy_ask_gates_even_a_read_only_tool() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let policy_dir = workspace.path().join(".agiworkforce");
+        std::fs::create_dir_all(&policy_dir).expect("policy dir");
+        std::fs::write(
+            policy_dir.join("policy.toml"),
+            r#"
+[[rules]]
+tool = "read_file"
+pattern = "secret.txt$"
+decision = "ask"
+"#,
+        )
+        .expect("policy");
+
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let seen_for_callback = seen.clone();
+        let callback: ApprovalCallback = std::sync::Arc::new(move |request| {
+            let seen_for_callback = seen_for_callback.clone();
+            Box::pin(async move {
+                *seen_for_callback.lock().expect("seen lock") = Some(request.kind);
+                ApprovalDecision::Deny
+            })
+        });
+        let call = ToolCall {
+            name: "read_file".to_string(),
+            args: HashMap::from([(
+                "path".to_string(),
+                workspace.path().join("secret.txt").display().to_string(),
+            )]),
+        };
+        let opts = ToolExecOptions {
+            require_confirmation: false,
+            auto_approve_safe: true,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: Some(workspace.path().to_path_buf()),
+        };
+
+        let result = execute_tool_with_opts(&call, &opts)
+            .await
+            .expect("policy result");
+        assert!(!result.success);
+        assert!(matches!(
+            seen.lock().expect("seen lock").as_ref(),
+            Some(ApprovalRequestKind::WorkspacePolicy { tool_name, .. })
+                if tool_name == "read_file"
+        ));
+    }
+
+    #[tokio::test]
+    async fn invalid_workspace_policy_fails_closed_before_tool_dispatch() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let policy_dir = workspace.path().join(".agiworkforce");
+        std::fs::create_dir_all(&policy_dir).expect("policy dir");
+        std::fs::write(
+            policy_dir.join("policy.toml"),
+            r#"
+[[rules]]
+tool = "run_command"
+pattern = "["
+decision = "deny"
+"#,
+        )
+        .expect("policy");
+
+        let call = ToolCall {
+            name: "run_command".to_string(),
+            args: HashMap::from([("command".to_string(), "printf unsafe".to_string())]),
+        };
+        let opts = ToolExecOptions {
+            require_confirmation: false,
+            auto_approve_safe: true,
+            quiet: true,
+            approval_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: Some(workspace.path().to_path_buf()),
+        };
+
+        let error = match execute_tool_with_opts(&call, &opts).await {
+            Ok(_) => panic!("invalid deny policy must fail closed"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("invalid regex"));
+    }
+
+    #[test]
+    fn untrusted_workspace_cannot_auto_approve_itself() {
+        use crate::platform::policy::PolicyDecision;
+
+        assert_eq!(
+            effective_workspace_policy_decision(PolicyDecision::Allow, false),
+            PolicyDecision::Ask
+        );
+        assert_eq!(
+            effective_workspace_policy_decision(PolicyDecision::Deny, false),
+            PolicyDecision::Deny
+        );
+        assert_eq!(
+            effective_workspace_policy_decision(PolicyDecision::Allow, true),
+            PolicyDecision::Allow
+        );
     }
 
     fn dispatched_tool_names_from_source() -> BTreeSet<String> {
@@ -1049,6 +1310,7 @@ mod tests {
             quiet: true,
             approval_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: std::env::current_dir().ok(),
         };
 
         let result = execute_batch(&call, &opts).await.unwrap();
