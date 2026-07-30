@@ -3266,8 +3266,8 @@
   {
     "item": "scim",
     "surface": "packages/auth",
-    "status": "stub",
-    "evidence": "apps/web/app/api/webhooks/directory-sync/route.ts:88-94,123-131 explicitly returns HTTP 501 with 'Directory sync provisioning not yet implemented' and a TODO comment stating 'SCIM/directory-sync provisioning is not implemented in v1'; the admin CRUD at apps/web/app/api/admin/directory-sync/route.ts:51-326 manages `directory_sync_connections` config rows, but per apps/web/features/admin/pages/AdminConsolePage.tsx:50 that table also has no migration."
+    "status": "partial",
+    "evidence": "Directory-sync configuration is real: apps/web/db/neon/0076_enterprise_control_plane_tables.sql:70-98 owns `directory_sync_connections` and :235-240 enforces organization-role RLS; apps/web/app/api/admin/directory-sync/route.ts:51-326 provides guarded configuration CRUD. The unconsumed `/api/webhooks/directory-sync` route that always returned HTTP 501 after signature verification was deleted, its sole `WORKOS_WEBHOOK_SECRET` consumer and stale environment-example key were removed, and no provisioning endpoint is now advertised. The remaining first-party provisioning runtime is explicitly disclosed at apps/web/features/admin/pages/AdminConsolePage.tsx:47-50,192-193 and ADR-deferred to Phase 3 by CAP-028 plus docs/adr/wire-or-cut.md. This is an honest configuration-only Partial, not a reachable Stub."
   },
   {
     "item": "mfa-totp",
@@ -3722,8 +3722,8 @@
   {
     "item": "group-and-domain-capture",
     "surface": "admin-and-billing",
-    "status": "stub",
-    "evidence": "apps/web/app/api/webhooks/directory-sync/route.ts:86-132 verifies real WorkOS HMAC-SHA256 webhook signatures (timing-safe, replay-window checked), but the handler's own comment block (lines 86-94) states 'TODO(enterprise): SCIM/directory-sync provisioning is not implemented in v1... waitlist-gated', and the POST handler unconditionally returns HTTP 501 'Directory sync provisioning not yet implemented' (line 127-130) after verifying the signature. Domain-based auto-join is also blocked at the org-settings layer: apps/web/app/api/settings/organization/route.ts:46 declares settings.allowedDomains in the Zod schema, but UNSUPPORTED_PATCH_FIELDS (line 54-59) includes 'settings' wholesale, so any PATCH containing allowedDomains is rejected with 'not available yet' (line 268-273)."
+    "status": "partial",
+    "evidence": "The misleading reachable Stub was removed: the unconsumed `/api/webhooks/directory-sync` route that always returned HTTP 501 and its unused secret contract no longer exist. Configuration remains bounded and fail-closed: migration 0076 owns directory connection rows with organization RLS, the guarded admin CRUD manages only those rows, and apps/web/app/api/settings/organization/route.ts:46-59,265-273 rejects `allowedDomains` instead of claiming unenforced auto-join. CAP-028 and docs/adr/wire-or-cut.md defer group/domain provisioning with the first-party SCIM runtime to Phase 3, while AdminConsolePage.tsx:47-50,192-193 discloses the boundary. The retained configuration is an ADR-accepted Partial; no capture or provisioning endpoint is advertised."
   },
   {
     "item": "sso-enforcement",
