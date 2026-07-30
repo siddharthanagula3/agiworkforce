@@ -5,6 +5,7 @@ import { SignalingClient } from '@agiworkforce/utils/signaling';
 import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
 import * as Crypto from 'expo-crypto';
+import Constants from 'expo-constants';
 import {
   deriveDispatchSecret,
   signMessage,
@@ -39,6 +40,7 @@ import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useDispatchTaskStore } from './dispatchTaskStore';
 import type { DispatchTaskLifecycleStatus, DispatchTaskStatusEvent } from '@agiworkforce/types';
+import { claimManualPairingToken, normalizePairingInput } from '@/services/manualPairing';
 
 export type ConnectionStatus =
   | 'disconnected'
@@ -171,13 +173,14 @@ let dataChannel: RTCDataChannelType | null = null;
  * Parse the pairing payload from a QR string.
  * Accepts raw codes, `agiw:XXXXXXXXXXXX`, or `agiw:XXXXXXXXXXXX:<64-hex-token>`.
  *
- * AUDIT-FIX: H-12 — server now mints 12-char codes (62^12 ≈ 71 bits IKM).
+ * AUDIT-FIX: H-12 — server now mints 12-character codes from a 36-symbol
+ * alphabet (36^12 ≈ 62 bits of entropy).
  * We strip out human-readable separators (spaces or '-') that the desktop
  * UI may print to display the code as 3 groups of 4. Matches against
- * `/^[A-Z0-9]{12}$/`; 8-char codes are accepted transitionally.
+ * `/^[A-Z0-9]{12}$/`; legacy short codes are rejected.
  */
 function parsePairingPayload(raw: string): { code: string; pairToken: string | null } {
-  const trimmed = raw.trim().replace(/[\s-]/g, '');
+  const trimmed = normalizePairingInput(raw);
   if (trimmed.startsWith('agiw:')) {
     const [code = '', token] = trimmed.slice(5).split(':');
     return {
@@ -761,26 +764,14 @@ export const useConnectionStore = create<ConnectionState>()(
 
         const attemptId = ++connectionAttemptId;
         const parsed = parsePairingPayload(rawCode);
-        const pairToken =
+        const suppliedPairToken =
           parsed.pairToken ??
           (parsed.code === currentState.pairingCode ? currentState.pairToken : null);
-
-        if (!pairToken) {
-          set({
-            status: 'error',
-            error:
-              'This pairing payload is missing its auth token. Generate a new QR code and scan it.',
-            pairingCode: parsed.code,
-            pairToken: null,
-            connectionQuality: 'disconnected',
-          });
-          return;
-        }
 
         set((state) => ({
           status: 'connecting',
           pairingCode: parsed.code,
-          pairToken,
+          pairToken: suppliedPairToken,
           error: null,
           desktopName: null,
           desktopMetadata: null,
@@ -807,7 +798,32 @@ export const useConnectionStore = create<ConnectionState>()(
         // dispatchSalt is never sent as ''. Version read from expo config
         // (same pattern as apps/mobile/app/(app)/about.tsx).
         void (async () => {
-          const { default: Constants } = await import('expo-constants');
+          let pairToken = suppliedPairToken;
+          let signalingWsUrl = WS_URL;
+          if (!pairToken) {
+            try {
+              const claim = await claimManualPairingToken(parsed.code);
+              if (!isCurrentConnectionAttempt(attemptId)) return;
+              pairToken = claim.pairToken;
+              signalingWsUrl = claim.wsUrl;
+              set({ pairToken, sessionExpiresAt: claim.expiresAt });
+            } catch (error) {
+              if (!isCurrentConnectionAttempt(attemptId)) return;
+              set({
+                status: 'error',
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : 'Manual pairing failed. Generate a new code and try again.',
+                pairingCode: parsed.code,
+                pairToken: null,
+                connectionQuality: 'disconnected',
+                reconnectStartedAt: null,
+              });
+              return;
+            }
+          }
+
           const appVersion = Constants.expoConfig?.version ?? '0.0.0';
 
           if (!isCurrentConnectionAttempt(attemptId)) return;
@@ -858,7 +874,7 @@ export const useConnectionStore = create<ConnectionState>()(
 
           // Create signaling client (auto-connects on construction)
           signalingClient = new SignalingClient({
-            wsUrl: WS_URL,
+            wsUrl: signalingWsUrl,
             code: parsed.code,
             role: 'mobile',
             pairToken,

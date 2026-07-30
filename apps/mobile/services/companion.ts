@@ -13,6 +13,7 @@ import type { ConnectionQuality } from '@/stores/connectionStore';
 import type { RiskLevel } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
+import { normalizePairingInput } from '@/services/manualPairing';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -31,30 +32,30 @@ const RECONNECT_COUNTDOWN_SECONDS = 15;
 // QR Code Helpers
 // ---------------------------------------------------------------------------
 
-/** Pattern for valid pairing QR payloads: `agiw:<code>` or `agiw:<code>:<64-hex-role-token>`. */
-const PAIRING_CODE_PATTERN = /^agiw:[A-Za-z0-9]{6,12}(?::[a-fA-F0-9]{64})?$/;
+/** Current QR payload: role token included so scanning never needs a claim exchange. */
+const PAIRING_CODE_PATTERN = /^agiw:[A-Za-z0-9]{12}:[a-fA-F0-9]{64}$/;
 
-/** Pattern for raw codes without prefix: 6-12 alphanumeric chars (case-insensitive input accepted) */
-const RAW_CODE_PATTERN = /^[A-Za-z0-9]{6,12}$/;
+/** Current Desktop display code, with separators removed by normalizePairingInput. */
+const RAW_CODE_PATTERN = /^(?:agiw:)?[A-Za-z0-9]{12}$/;
 
 /**
  * Validate a scanned QR string or manually entered code.
  * Returns true if the code is in a valid format.
  */
 export function isValidPairingCode(code: string): boolean {
-  const trimmed = code.trim();
-  return PAIRING_CODE_PATTERN.test(trimmed) || RAW_CODE_PATTERN.test(trimmed);
+  const normalized = normalizePairingInput(code);
+  return PAIRING_CODE_PATTERN.test(normalized) || RAW_CODE_PATTERN.test(normalized);
 }
 
 /**
  * Extract the raw code from a QR string (strip `agiw:` prefix and trim whitespace).
  */
 export function extractPairingCode(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('agiw:')) {
-    return trimmed.slice(5).split(':')[0] ?? '';
+  const normalized = normalizePairingInput(raw);
+  if (normalized.startsWith('agiw:')) {
+    return normalized.slice(5).split(':')[0] ?? '';
   }
-  return trimmed;
+  return normalized;
 }
 
 // ---------------------------------------------------------------------------
