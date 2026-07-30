@@ -59,12 +59,15 @@ function reconcileCurrentP0Premises(record) {
         'Add a Cowork settings destination in the shared settings IA, but expose only controls with real backing contracts. Start with Dispatch state once the existing HMAC session service has an enable/disable lifecycle; add storage location, trusted folders, cloud-run defaults, and global instructions only as their persistence and runtime consumers are implemented.',
     },
     'GAP-007': {
+      status: 'Done',
+      owner: 'Desktop',
+      title: 'Archived chats are recoverable from the mounted Desktop sidebar',
       detail:
-        'The reference exposes Archived chats as a recoverable destination. agiworkforce currently supports archiving from the Desktop sidebar and the chat store supports archive plus archived selection, while normal sidebar groups hide archived conversations. No mounted component consumes getArchivedConversations, so users still cannot list, open, restore, or permanently delete archived chats.',
+        'The reference exposes Archived chats as a recoverable destination. The mounted Desktop V3 sidebar now provides an Archived chats view with a visible count, time-grouped archived records, a return-to-active control, and an empty state. Archived chats can be opened, restored, or permanently deleted through the existing persistent chat-store actions.',
       evidence:
-        'apps/desktop/src/features/v3/Sidebar.tsx wires onArchive to archiveConversation. apps/desktop/src/stores/chat/chatStore.ts implements archiveConversation and getArchivedConversations. Current feature imports contain no getArchivedConversations consumer and no Archived chats destination.',
+        'apps/desktop/src/features/v3/Sidebar.tsx switches the live conversation list between active and archived records and passes restoreConversation into each archived row. ConversationRow.tsx replaces active-only actions with Restore and a two-step Delete permanently action for archived records. GAP-007-archived-chats.test.tsx verifies active/archived filtering, opening, restore dispatch, and confirmed permanent delete.',
       suggestedFix:
-        'Add an Archived chats destination that consumes getArchivedConversations and supports open, restore, and delete-permanently with an empty state. Reuse the existing sidebar archive action instead of adding a second archive control.',
+        'Completed. Keep archive, restore, and permanent deletion on the existing chat-store persistence boundary, and preserve the named GAP-007 interaction test when the sidebar information architecture changes.',
     },
     'GAP-008': {
       status: 'Done',

@@ -38,6 +38,11 @@
     "newSession": "New session",
     "searchKbd": "Search (⌘K)",
     "recents": "Recents",
+    "archived": "Archived chats",
+    "showArchived": "Show archived chats ({{count}})",
+    "showActive": "Back to active chats",
+    "noArchived": "No archived chats",
+    "noConversations": "No conversations yet",
     "pinned": "Pinned",
     "actions": {
       "more": "More options",
@@ -45,8 +50,11 @@
       "unpin": "Unpin",
       "rename": "Rename",
       "archive": "Archive",
+      "restore": "Restore",
       "delete": "Delete",
-      "confirmDelete": "Confirm delete"
+      "confirmDelete": "Confirm delete",
+      "deletePermanently": "Delete permanently",
+      "confirmDeletePermanently": "Confirm permanent delete"
     },
     "projects": {
       "newChat": "New chat in project",

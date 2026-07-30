@@ -17,6 +17,8 @@ import {
   PanelLeftOpen,
   ChevronDown,
   Settings,
+  Archive,
+  ArrowLeft,
 } from 'lucide-react';
 import { useChatStore, useSidecarStore, selectSidebarCollapsed } from '../../stores/chat';
 import type { ChatState, ConversationSummary } from '../../stores/chat';
@@ -56,19 +58,23 @@ function conversationUpdatedAtMs(conversation: ConversationSummary): number {
   return 0;
 }
 
-function groupConversations(convos: ConversationSummary[], t: TFunction): RecentsGroup[] {
+function groupConversations(
+  convos: ConversationSummary[],
+  t: TFunction,
+  archived: boolean,
+): RecentsGroup[] {
   const now = Date.now();
   const HOUR = 3_600_000;
   const DAY = 86_400_000;
 
   const sorted = [...convos]
-    .filter((c) => c.archived !== true)
+    .filter((c) => (archived ? c.archived === true : c.archived !== true))
     .sort((a, b) => conversationUpdatedAtMs(b) - conversationUpdatedAtMs(a));
 
   // Pinned conversations float to a dedicated top group (ChatGPT-style),
-  // independent of recency; the rest fall into time buckets capped at 30.
+  // independent of recency; the display layer applies the collapsed 30-row cap.
   const pinned = sorted.filter((c) => c.pinned);
-  const rest = sorted.filter((c) => !c.pinned).slice(0, 30);
+  const rest = sorted.filter((c) => !c.pinned);
 
   const timeGroups: RecentsGroup[] = [
     { label: t('sidebar.groups.lastHour'), items: [] },
@@ -207,6 +213,7 @@ export function Sidebar({
   const collapsed = useSidecarStore(selectSidebarCollapsed);
   const setCollapsed = useSidecarStore((s) => s.setSidebarCollapsed);
   const [showAll, setShowAll] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const conversations = useChatStore((s: ChatState) => s.conversations);
   const activeConversationId = useChatStore((s: ChatState) => s.activeConversationId);
@@ -214,6 +221,7 @@ export function Sidebar({
   const deleteConversation = useChatStore((s: ChatState) => s.deleteConversation);
   const togglePinnedConversation = useChatStore((s: ChatState) => s.togglePinnedConversation);
   const archiveConversation = useChatStore((s: ChatState) => s.archiveConversation);
+  const restoreConversation = useChatStore((s: ChatState) => s.restoreConversation);
   const projects = useProjectStore((s) => s.projects);
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const updateProject = useProjectStore((s) => s.updateProject);
@@ -229,10 +237,17 @@ export function Sidebar({
   const showAccountMenu = accountMenuOpen && isSignedIn;
   const privacyMode = useAppModeStore(selectPrivacyMode);
 
-  const groups = useMemo(() => groupConversations(conversations, t), [conversations, t]);
+  const archivedCount = useMemo(
+    () => conversations.filter((conversation) => conversation.archived === true).length,
+    [conversations],
+  );
+  const groups = useMemo(
+    () => groupConversations(conversations, t, showArchived),
+    [conversations, showArchived, t],
+  );
   const displayGroups = useMemo(() => {
     if (showAll) return groups;
-    // max 30 items enforced in groupConversations; just cap visible groups if not showAll
+    // Keep pinned rows visible, then cap the collapsed recency list at 30.
     let seen = 0;
     return groups
       .map((g) => {
@@ -609,15 +624,58 @@ export function Sidebar({
         >
           <div
             style={{
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: '0.05em',
-              color: 'var(--chat-text-muted)',
-              padding: '0 10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              padding: '0 6px 0 10px',
               marginBottom: 4,
             }}
           >
-            {t('sidebar.recents')}
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                color: 'var(--chat-text-muted)',
+              }}
+            >
+              {showArchived ? t('sidebar.archived') : t('sidebar.recents')}
+            </span>
+            <button
+              type="button"
+              aria-pressed={showArchived}
+              aria-label={
+                showArchived
+                  ? t('sidebar.showActive')
+                  : t('sidebar.showArchived', { count: archivedCount })
+              }
+              title={
+                showArchived
+                  ? t('sidebar.showActive')
+                  : t('sidebar.showArchived', { count: archivedCount })
+              }
+              onClick={() => {
+                setShowArchived((current) => !current);
+                setShowAll(false);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                minHeight: 24,
+                padding: '3px 6px',
+                border: 'none',
+                borderRadius: 5,
+                background: showArchived ? 'var(--chat-surface-hover)' : 'transparent',
+                color: showArchived ? 'var(--chat-text-primary)' : 'var(--chat-text-muted)',
+                cursor: 'pointer',
+                fontSize: 11,
+              }}
+            >
+              {showArchived ? <ArrowLeft size={13} /> : <Archive size={13} />}
+              {!showArchived && <span>{archivedCount}</span>}
+            </button>
           </div>
           {displayGroups.map((group) => (
             <div key={group.label}>
@@ -642,6 +700,7 @@ export function Sidebar({
                   onDelete={deleteConversation}
                   onTogglePin={togglePinnedConversation}
                   onArchive={archiveConversation}
+                  onRestore={restoreConversation}
                   projects={moveTargetProjects.map((project) => ({
                     id: project.id,
                     name: project.name,
@@ -651,6 +710,20 @@ export function Sidebar({
               ))}
             </div>
           ))}
+          {totalItems === 0 && (
+            <div
+              role="status"
+              style={{
+                padding: '28px 12px',
+                color: 'var(--chat-text-muted)',
+                fontSize: 12,
+                lineHeight: 1.5,
+                textAlign: 'center',
+              }}
+            >
+              {showArchived ? t('sidebar.noArchived') : t('sidebar.noConversations')}
+            </div>
+          )}
           {totalItems > 30 && !showAll && (
             <button
               onClick={() => setShowAll(true)}

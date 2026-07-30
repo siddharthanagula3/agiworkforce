@@ -7,6 +7,7 @@ import {
   PinOff,
   Pencil,
   Archive,
+  ArchiveRestore,
   FolderInput,
   FolderMinus,
   Trash2,
@@ -25,6 +26,7 @@ export interface ConversationRowProps {
   onDelete: (id: string) => void;
   onTogglePin: (id: string) => void;
   onArchive: (id: string) => void;
+  onRestore: (id: string) => void;
   projects: Array<{ id: string; name: string }>;
   onMoveToProject: (conversationId: string, projectId: string | null) => void;
 }
@@ -78,6 +80,7 @@ export function ConversationRow({
   onDelete,
   onTogglePin,
   onArchive,
+  onRestore,
   projects,
   onMoveToProject,
 }: ConversationRowProps) {
@@ -277,76 +280,91 @@ export function ConversationRow({
               gap: 1,
             }}
           >
-            <MenuItem
-              icon={conversation.pinned ? PinOff : Pin}
-              label={conversation.pinned ? t('sidebar.actions.unpin') : t('sidebar.actions.pin')}
-              onClick={() => {
-                onTogglePin(conversation.id);
-                setMenuOpen(false);
-              }}
-            />
-            <MenuItem
-              icon={Pencil}
-              label={t('sidebar.actions.rename')}
-              onClick={() => {
-                setMenuOpen(false);
-                setEditing(true);
-              }}
-            />
-            <MenuItem
-              icon={Archive}
-              label={t('sidebar.actions.archive')}
-              onClick={() => {
-                onArchive(conversation.id);
-                setMenuOpen(false);
-              }}
-            />
-            {projects.length > 0 && (
+            {conversation.archived ? (
+              <MenuItem
+                icon={ArchiveRestore}
+                label={t('sidebar.actions.restore')}
+                onClick={() => {
+                  onRestore(conversation.id);
+                  setMenuOpen(false);
+                }}
+              />
+            ) : (
               <>
-                <div
-                  role="separator"
-                  style={{ height: 1, background: 'var(--chat-border)', margin: '3px 4px' }}
-                />
-                <div
-                  style={{
-                    padding: '4px 9px 2px',
-                    color: 'var(--chat-text-muted)',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: '0.05em',
-                    textTransform: 'uppercase',
+                <MenuItem
+                  icon={conversation.pinned ? PinOff : Pin}
+                  label={
+                    conversation.pinned ? t('sidebar.actions.unpin') : t('sidebar.actions.pin')
+                  }
+                  onClick={() => {
+                    onTogglePin(conversation.id);
+                    setMenuOpen(false);
                   }}
-                >
-                  Move to project
-                </div>
-                <div style={{ maxHeight: 132, overflowY: 'auto' }}>
-                  {projects.map((project) => (
-                    <MenuItem
-                      key={project.id}
-                      icon={FolderInput}
-                      label={
-                        conversation.projectId === project.id
-                          ? `${project.name} · Current`
-                          : project.name
-                      }
-                      onClick={() => {
-                        if (conversation.projectId !== project.id) {
-                          onMoveToProject(conversation.id, project.id);
-                        }
-                        setMenuOpen(false);
-                      }}
+                />
+                <MenuItem
+                  icon={Pencil}
+                  label={t('sidebar.actions.rename')}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setEditing(true);
+                  }}
+                />
+                <MenuItem
+                  icon={Archive}
+                  label={t('sidebar.actions.archive')}
+                  onClick={() => {
+                    onArchive(conversation.id);
+                    setMenuOpen(false);
+                  }}
+                />
+                {projects.length > 0 && (
+                  <>
+                    <div
+                      role="separator"
+                      style={{ height: 1, background: 'var(--chat-border)', margin: '3px 4px' }}
                     />
-                  ))}
-                </div>
-                {conversation.projectId && (
-                  <MenuItem
-                    icon={FolderMinus}
-                    label="Remove from project"
-                    onClick={() => {
-                      onMoveToProject(conversation.id, null);
-                      setMenuOpen(false);
-                    }}
-                  />
+                    <div
+                      style={{
+                        padding: '4px 9px 2px',
+                        color: 'var(--chat-text-muted)',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        letterSpacing: '0.05em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Move to project
+                    </div>
+                    <div style={{ maxHeight: 132, overflowY: 'auto' }}>
+                      {projects.map((project) => (
+                        <MenuItem
+                          key={project.id}
+                          icon={FolderInput}
+                          label={
+                            conversation.projectId === project.id
+                              ? `${project.name} · Current`
+                              : project.name
+                          }
+                          onClick={() => {
+                            if (conversation.projectId !== project.id) {
+                              onMoveToProject(conversation.id, project.id);
+                            }
+                            setMenuOpen(false);
+                          }}
+                        />
+                      ))}
+                    </div>
+                    {conversation.projectId && (
+                      <MenuItem
+                        icon={FolderMinus}
+                        label="Remove from project"
+                        onClick={() => {
+                          onMoveToProject(conversation.id, null);
+                          setMenuOpen(false);
+                        }}
+                      />
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -354,7 +372,17 @@ export function ConversationRow({
               icon={Trash2}
               danger
               label={
-                confirmDelete ? t('sidebar.actions.confirmDelete') : t('sidebar.actions.delete')
+                confirmDelete
+                  ? t(
+                      conversation.archived
+                        ? 'sidebar.actions.confirmDeletePermanently'
+                        : 'sidebar.actions.confirmDelete',
+                    )
+                  : t(
+                      conversation.archived
+                        ? 'sidebar.actions.deletePermanently'
+                        : 'sidebar.actions.delete',
+                    )
               }
               onClick={() => {
                 if (confirmDelete) {

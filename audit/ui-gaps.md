@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 3947071be550342d8382dae0c66b745c81bd886424576158a4f98d4eea7e27cb -->
+<!-- ui-gaps-csv-sha256: 6bee485a85d4ecefdada4c1901eb27a6cd1eb7a7a3b7a6b38d8515a29b1799b2 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 9 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 8 P0, 126 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  339 |
+| Open        |  338 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |    2 |
+| Done        |    3 |
 | Not Planned |    0 |
 
 ## P0
@@ -163,24 +163,24 @@ Add a Cowork settings destination in the shared settings IA, but expose only con
 
 - `claude_reference/153-claude-desktop-settings-cowork-dispatch-files.png`
 
-### GAP-007 — Chats can be archived but there is no Archived chats screen — archiving is a data dead-end
+### GAP-007 — Archived chats are recoverable from the mounted Desktop sidebar
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** ChatGPT · macOS desktop · Settings > General — Archived chats nav
 
 **Gap**
 
-The reference exposes Archived chats as a recoverable destination. agiworkforce currently supports archiving from the Desktop sidebar and the chat store supports archive plus archived selection, while normal sidebar groups hide archived conversations. No mounted component consumes getArchivedConversations, so users still cannot list, open, restore, or permanently delete archived chats.
+The reference exposes Archived chats as a recoverable destination. The mounted Desktop V3 sidebar now provides an Archived chats view with a visible count, time-grouped archived records, a return-to-active control, and an empty state. Archived chats can be opened, restored, or permanently deleted through the existing persistent chat-store actions.
 
 **Evidence**
 
-apps/desktop/src/features/v3/Sidebar.tsx wires onArchive to archiveConversation. apps/desktop/src/stores/chat/chatStore.ts implements archiveConversation and getArchivedConversations. Current feature imports contain no getArchivedConversations consumer and no Archived chats destination.
+apps/desktop/src/features/v3/Sidebar.tsx switches the live conversation list between active and archived records and passes restoreConversation into each archived row. ConversationRow.tsx replaces active-only actions with Restore and a two-step Delete permanently action for archived records. GAP-007-archived-chats.test.tsx verifies active/archived filtering, opening, restore dispatch, and confirmed permanent delete.
 
 **Suggested fix**
 
-Add an Archived chats destination that consumes getArchivedConversations and supports open, restore, and delete-permanently with an empty state. Reuse the existing sidebar archive action instead of adding a second archive control.
+Completed. Keep archive, restore, and permanent deletion on the existing chat-store persistence boundary, and preserve the named GAP-007 interaction test when the sidebar information architecture changes.
 
 **Reference screenshot(s)**
 
