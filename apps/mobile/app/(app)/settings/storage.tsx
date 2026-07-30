@@ -27,6 +27,7 @@ import {
   resetLocalInMemoryState,
 } from '@/src/features/settings/data-controls/localDataSnapshot';
 import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
+import { StorageScopeNotice } from '@/src/features/settings/StorageScopeNotice';
 import type { InstalledModel } from '@/storage/types';
 
 const STORAGE_RETURN_PATHS = ['/(app)/settings/data-controls', '/(app)/settings/general'] as const;
@@ -250,12 +251,14 @@ export default function StorageManagerScreen() {
         contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Storage summary */}
+        <StorageScopeNotice />
+
+        {/* Device storage summary */}
         <Card>
           <View className="flex-row items-center gap-3 mb-3">
             <HardDrive size={18} color={c.teal} />
             <Text className="text-[15px] font-semibold" style={{ color: c.textPrimary }}>
-              Storage Usage
+              On This Device
             </Text>
           </View>
 
