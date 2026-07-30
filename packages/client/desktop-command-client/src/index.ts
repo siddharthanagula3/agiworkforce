@@ -15,10 +15,12 @@
 export type { ExtensionStatusDiagnostics } from './browserExtension';
 export type {
   AutomationPermissions,
+  DiscardedRecording,
   RecordedAction,
   RecordedActionType,
   Recording,
   RecordingSession,
+  RecordingStatus,
 } from './automation';
 
 // ---- Wave 1: Settings, Auth, LLM, Window ----

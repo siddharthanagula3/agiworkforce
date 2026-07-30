@@ -193,6 +193,9 @@ fn describe_recorded_action(index: usize, action: &RecordedAction) -> String {
         ActionType::Screenshot => "Capture a screenshot to verify the current state.".to_string(),
         ActionType::Drag => format!("Drag {value}."),
         ActionType::Scroll => format!("Scroll by `{value}`{position}."),
+        ActionType::Narration => {
+            format!("Use the locally transcribed narration `{encoded_value}` as context.")
+        }
     };
     format!("{}. {description}", index + 1)
 }

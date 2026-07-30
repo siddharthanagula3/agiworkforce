@@ -52,12 +52,15 @@ function reconcileCurrentPremises(record) {
         'Completed. Keep every new local path-bearing tool on this native authorization boundary, never trust renderer-supplied paths or tool names, revoke task-only grants when the active chat changes, and persist roots only after the explicit Remember option succeeds natively.',
     },
     'GAP-003': {
+      status: 'Done',
+      owner: 'Desktop',
+      title: 'Desktop keeps workflow capture controls visible in a detached recorder HUD',
       detail:
-        "The reference floats a small always-on-top pill over every application while capture runs: recording state, live step count, microphone control, Discard, and Done. agiworkforce still renders ActionRecorder only as the DesktopShellV3 'record-skill' panel. Generic always-on-top and overlay infrastructure exists, but no recorder-specific secondary window mounts controls or subscribes to the recorder event stream.",
+        'Desktop now opens a fixed, transparent, always-on-top recorder window as soon as native workflow capture starts. The compact HUD remains visible over other applications with authoritative elapsed time and step count, local narration state and input level, Discard, Done, and a temporary global stop shortcut. The main recorder panel remains the review and skill-creation surface, including recovery when the panel remounts after capture.',
       evidence:
-        "apps/desktop/src/features/automation/ActionRecorder.tsx owns the live controls and automation:action_recorded listener; apps/desktop/src/features/v3/DesktopShellV3.tsx mounts it only for activePanel === 'record-skill'. apps/desktop/src-tauri/src/ui/overlay/window.rs proves an overlay window primitive exists, but searches find no RecorderHud or recorder overlay integration.",
+        'apps/desktop/src/services/recorderHudWindow.ts creates and positions the recorder-hud WebviewWindow with decorations disabled, transparency, always-on-top, fixed bounds, taskbar exclusion, and CommandOrControl+Shift+. registration. RecorderHud.tsx consumes native status/action/lifecycle events and exposes live count, timer, a default-off local Whisper narration control with a 24-bar meter, true Discard, and Done. recorder.rs owns status, discard, completed-recording recovery, and timestamped narration actions; ActionRecorder.tsx synchronizes those native lifecycle events into the main review flow. recorder-hud.json grants only event listening and self-close permissions. RecorderHud.test.tsx, useRecorderNarration.test.ts, recorderHudWindow.test.ts, ActionRecorder.test.tsx, and recorder.rs tests cover the UI, audio, window, shortcut, recovery, and native lifecycle contracts.',
       suggestedFix:
-        'Create a recorder-specific secondary Tauri window using the existing overlay/window primitives. Mount a RecorderHud subscribed to the same event stream, expose step count/mic/Discard/Done, keep the main panel as review, and add a global stop shortcut.',
+        'Completed. Keep native recorder state authoritative, fail capture closed if the HUD or temporary stop shortcut cannot open, and retain the minimal recorder-hud capability. The narrower persisted narration-track and nearest-step attachment lifecycle remains tracked separately in GAP-060.',
     },
     'GAP-004': {
       status: 'Done',

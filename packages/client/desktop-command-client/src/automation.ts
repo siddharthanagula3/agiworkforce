@@ -80,6 +80,15 @@ export interface RecordingSession {
   startTime: number;
   isRecording: boolean;
 }
+export interface RecordingStatus extends RecordingSession {
+  actionCount: number;
+  durationMs: number;
+}
+export interface DiscardedRecording {
+  sessionId: string;
+  actionCount: number;
+  durationMs: number;
+}
 export type RecordedActionType =
   | 'click'
   | 'right_click'
@@ -89,7 +98,8 @@ export type RecordedActionType =
   | 'wait'
   | 'screenshot'
   | 'drag'
-  | 'scroll';
+  | 'scroll'
+  | 'narration';
 export interface RecordedAction {
   id: string;
   actionType: RecordedActionType;
@@ -365,6 +375,18 @@ export async function automationRecordStop(): Promise<Recording> {
   const recording = await command<RecordingCommandPayload>('automation_record_stop');
   return recordingFromCommandPayload(recording);
 }
+export async function automationRecordDiscard(): Promise<DiscardedRecording> {
+  const discarded = await command<{
+    session_id: string;
+    action_count: number;
+    duration_ms: number;
+  }>('automation_record_discard');
+  return {
+    sessionId: discarded.session_id,
+    actionCount: discarded.action_count,
+    durationMs: discarded.duration_ms,
+  };
+}
 export async function automationRecordActionClick(
   x: number,
   y: number,
@@ -385,6 +407,9 @@ export async function automationRecordActionScreenshot(): Promise<void> {
 export async function automationRecordActionWait(durationMs: number): Promise<void> {
   return command<void>('automation_record_action_wait', { durationMs });
 }
+export async function automationRecordActionNarration(text: string): Promise<void> {
+  return command<void>('automation_record_action_narration', { text });
+}
 export async function automationRecordIsRecording(): Promise<boolean> {
   return command<boolean>('automation_record_is_recording');
 }
@@ -401,6 +426,31 @@ export async function automationRecordGetSession(): Promise<RecordingSession | n
         isRecording: session.is_recording,
       }
     : null;
+}
+export async function automationRecordGetStatus(): Promise<RecordingStatus | null> {
+  const status = await command<{
+    session_id: string;
+    start_time: number;
+    is_recording: boolean;
+    action_count: number;
+    duration_ms: number;
+  } | null>('automation_record_get_status');
+  return status
+    ? {
+        sessionId: status.session_id,
+        startTime: status.start_time,
+        isRecording: status.is_recording,
+        actionCount: status.action_count,
+        durationMs: status.duration_ms,
+      }
+    : null;
+}
+export async function automationRecordGetLast(): Promise<Recording | null> {
+  const recording = await command<RecordingCommandPayload | null>('automation_record_get_last');
+  return recording ? recordingFromCommandPayload(recording) : null;
+}
+export async function automationRecordClearLast(): Promise<void> {
+  return command<void>('automation_record_clear_last');
 }
 export async function automationInspectElementAtPoint(
   x: number,
