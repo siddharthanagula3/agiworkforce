@@ -3161,10 +3161,6 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage("Focus mode: hide chrome and maximize composer width. Currently controlled via --no-status-bar flag at startup.".into())
         }
 
-        "/background" | "/bg" => {
-            SlashResult::SystemMessage("Moving the current turn to the background isn't available yet — it keeps running in the foreground. Use /tasks to view active background tasks.".into())
-        }
-
         "/advisor" => {
             if arg.is_empty() {
                 SlashResult::SystemMessage(
@@ -5157,8 +5153,6 @@ mod tests {
             "title",
             "diff-review",
             "focus",
-            "background",
-            "bg",
             "advisor",
             "team-onboarding",
             "onboarding",
