@@ -24,6 +24,41 @@ const NATIVE_AGENT_EXECUTION_COMMANDS = new Set([
   'agi_submit_goal_auto',
   'agi_submit_goal_swarm',
 ]);
+const MOCK_INSTALLED_MCP_BUNDLES = new Set<string>();
+
+function mockMcpBundles() {
+  return [
+    {
+      id: 'mcp-mock-search',
+      name: 'Mock Search',
+      version: '1.0.0',
+      description: 'Search a deterministic local fixture in Desktop UI development mode.',
+      author: 'AGI Workforce',
+      category: 'search',
+      npmPackage: '@agiworkforce/mock-mcp-search',
+      tools: [
+        {
+          name: 'mock_search',
+          description: 'Returns deterministic local search fixtures.',
+          parameters: [],
+        },
+      ],
+      configTemplate: {
+        command: 'npx',
+        args: ['-y', '@agiworkforce/mock-mcp-search'],
+        env: {},
+        enabled: false,
+      },
+      requiredCredentials: [],
+      verified: true,
+      featured: true,
+      tags: ['search', 'fixture'],
+      installed: MOCK_INSTALLED_MCP_BUNDLES.has('mcp-mock-search'),
+      installedVersion: MOCK_INSTALLED_MCP_BUNDLES.has('mcp-mock-search') ? '1.0.0' : undefined,
+      updateAvailable: false,
+    },
+  ];
+}
 
 export function shouldRejectNativeExecutionFallback(
   command: string,
@@ -524,6 +559,47 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return 'Credential stored' as T;
     case 'mcp_delete_credential':
       return 'Credential deleted' as T;
+
+    // MCP bundle registry. These deterministic fixtures make the explicitly
+    // enabled Desktop UI development mode useful without running npm or
+    // mutating the host's real MCP configuration.
+    case 'mcpb_fetch_registry':
+      return mockMcpBundles() as T;
+    case 'mcpb_search_bundles': {
+      const query = String(args?.['query'] ?? '')
+        .trim()
+        .toLowerCase();
+      return mockMcpBundles().filter(
+        (bundle) =>
+          !query ||
+          bundle.name.toLowerCase().includes(query) ||
+          bundle.description.toLowerCase().includes(query) ||
+          bundle.tags.some((tag) => tag.includes(query)),
+      ) as T;
+    }
+    case 'mcpb_get_bundle_details': {
+      const bundleId = String(args?.['bundleId'] ?? '');
+      return (mockMcpBundles().find((bundle) => bundle.id === bundleId) ?? null) as T;
+    }
+    case 'mcpb_get_categories':
+      return ['search'] as T;
+    case 'mcpb_get_featured':
+      return mockMcpBundles().filter((bundle) => bundle.featured) as T;
+    case 'mcpb_get_installed_bundles':
+      return mockMcpBundles().filter((bundle) => bundle.installed) as T;
+    case 'mcpb_install_bundle':
+    case 'mcpb_update_bundle': {
+      const bundleId = String(args?.['bundleId'] ?? '');
+      if (bundleId) MOCK_INSTALLED_MCP_BUNDLES.add(bundleId);
+      return `Bundle '${bundleId}' installed in UI development mode` as T;
+    }
+    case 'mcpb_uninstall_bundle': {
+      const bundleId = String(args?.['bundleId'] ?? '');
+      MOCK_INSTALLED_MCP_BUNDLES.delete(bundleId);
+      return `Bundle '${bundleId}' removed in UI development mode` as T;
+    }
+    case 'mcpb_check_updates':
+      return [] as T;
 
     // Core MCP management commands
     case 'mcp_initialize':
