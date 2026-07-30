@@ -35,6 +35,10 @@ import { z } from 'zod';
  * - Device authorizations
  * - Organization memberships
  * - Beta invite redemptions
+ * - Cloud conversations and messages
+ * - Cloud projects and knowledge-file manifests
+ * - Cloud memories
+ * - Cloud artifacts and version history
  *
  * Authentication: Required (Bearer token or session cookie)
  * Rate Limit: 5 requests per hour
@@ -189,6 +193,87 @@ const syncDataExportSchema = z.object({
   device_id: z.string(),
   sync_type: z.string(),
   data: z.unknown().nullable(),
+  created_at: timestampSchema,
+});
+
+const conversationExportSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  model: z.string().nullable(),
+  project_id: z.string().nullable(),
+  pinned: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+  deleted_at: nullableTimestampSchema,
+});
+
+const messageExportSchema = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  role: z.string(),
+  content: z.string(),
+  model: z.string().nullable(),
+  provider: z.string().nullable(),
+  created_at: timestampSchema,
+});
+
+const projectExportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  instructions: z.string().nullable(),
+  color: z.string().nullable(),
+  is_archived: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+  deleted_at: nullableTimestampSchema,
+});
+
+const projectKnowledgeFileExportSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  file_name: z.string(),
+  mime_type: z.string().nullable(),
+  byte_count: z.number().int().nonnegative(),
+  checksum_sha256: z.string().nullable(),
+  summary: z.string().nullable(),
+  source_surface: z.string().nullable(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const memoryExportSchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  category: z.string().nullable(),
+  source: z.string().nullable(),
+  is_deleted: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const artifactExportSchema = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  message_id: z.string().nullable(),
+  title: z.string().nullable(),
+  artifact_type: z.string(),
+  language: z.string().nullable(),
+  content: z.string(),
+  current_version: z.number().int().positive(),
+  pinned: z.boolean(),
+  tags: z.array(z.string()),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+  deleted_at: nullableTimestampSchema,
+});
+
+const artifactVersionExportSchema = z.object({
+  artifact_id: z.string(),
+  version: z.number().int().positive(),
+  content: z.string(),
+  change_description: z.string().nullable(),
+  content_hash: z.string().nullable(),
   created_at: timestampSchema,
 });
 
@@ -404,6 +489,108 @@ async function collectUserData(
     userId: user.id,
   });
   if (syncRows.length > 0) exportData['sync_data'] = syncRows;
+
+  // Export user-authored Cloud content from explicit tenant-scoped selects.
+  // Child rows are scoped through their parent instead of trusting caller-
+  // supplied IDs. Internal token/cost fields, storage URIs, and sync cursors
+  // are intentionally excluded from this user-facing portability document.
+  const conversations = await queryExportRows({
+    db,
+    sql: `select id, title, model, project_id, pinned, created_at, updated_at, deleted_at
+          from web_conversations
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: conversationExportSchema,
+    section: 'conversations',
+    userId: user.id,
+  });
+  exportData['conversations'] = conversations;
+
+  const messages = await queryExportRows({
+    db,
+    sql: `select m.id, m.conversation_id, m.role, m.content, m.model, m.provider, m.created_at
+          from web_messages m
+          inner join web_conversations c on c.id = m.conversation_id
+          where c.user_id = $1
+          order by m.created_at asc`,
+    values: [user.id],
+    schema: messageExportSchema,
+    section: 'messages',
+    userId: user.id,
+  });
+  exportData['messages'] = messages;
+
+  const projects = await queryExportRows({
+    db,
+    sql: `select id, name, description, instructions, color, is_archived,
+                 created_at, updated_at, deleted_at
+          from user_projects
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: projectExportSchema,
+    section: 'projects',
+    userId: user.id,
+  });
+  exportData['projects'] = projects;
+
+  const projectKnowledgeFiles = await queryExportRows({
+    db,
+    sql: `select f.id, f.project_id, f.file_name, f.mime_type, f.byte_count,
+                 f.checksum_sha256, f.summary, f.source_surface, f.created_at, f.updated_at
+          from project_knowledge_files f
+          inner join user_projects p on p.id = f.project_id
+          where p.user_id = $1
+          order by f.created_at asc`,
+    values: [user.id],
+    schema: projectKnowledgeFileExportSchema,
+    section: 'project_knowledge_files',
+    userId: user.id,
+  });
+  exportData['project_knowledge_files'] = projectKnowledgeFiles;
+
+  const memories = await queryExportRows({
+    db,
+    sql: `select id, content, category, source, is_deleted, created_at, updated_at
+          from user_memories
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: memoryExportSchema,
+    section: 'memories',
+    userId: user.id,
+  });
+  exportData['memories'] = memories;
+
+  const artifacts = await queryExportRows({
+    db,
+    sql: `select id, conversation_id, message_id, title, artifact_type, language, content,
+                 current_version, pinned, tags, created_at, updated_at, deleted_at
+          from web_artifacts
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: artifactExportSchema,
+    section: 'artifacts',
+    userId: user.id,
+  });
+  exportData['artifacts'] = artifacts;
+
+  const artifactVersions = await queryExportRows({
+    db,
+    sql: `select v.artifact_id, v.version, v.content, v.change_description,
+                 v.content_hash, v.created_at
+          from web_artifact_versions v
+          inner join web_artifacts a on a.id = v.artifact_id
+          where a.user_id = $1
+          order by v.artifact_id asc, v.version asc`,
+    values: [user.id],
+    schema: artifactVersionExportSchema,
+    section: 'artifact_versions',
+    userId: user.id,
+  });
+  exportData['artifact_versions'] = artifactVersions;
 
   try {
     exportData['billing_invoices'] = await listUserBillingInvoices(user.id);

@@ -34,6 +34,21 @@ jest.mock('../services/api', () => ({
   },
 }));
 
+const mockExportCloudUserData = jest.fn();
+jest.mock('../services/cloudDataExport', () => ({
+  exportCloudUserData: (...args: unknown[]) => mockExportCloudUserData(...args),
+}));
+
+let mockAppMode: 'local' | 'cloud' = 'cloud';
+const mockSetAppMode = jest.fn((mode: 'local' | 'cloud') => {
+  mockAppMode = mode;
+});
+jest.mock('../src/features/chat/store/appModeStore', () => ({
+  useChatAppModeStore: (
+    selector: (state: { appMode: 'local' | 'cloud'; setAppMode: typeof mockSetAppMode }) => unknown,
+  ) => selector({ appMode: mockAppMode, setAppMode: mockSetAppMode }),
+}));
+
 const mockOpenExternalUrl = jest.fn();
 jest.mock('../lib/safeOpenURL', () => ({
   openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
@@ -92,6 +107,7 @@ jest.mock('lucide-react-native', () => {
   return {
     Copy: Icon,
     Check: Icon,
+    Download: Icon,
     LogOut: Icon,
     Mail: Icon,
     Smartphone: Icon,
@@ -130,6 +146,47 @@ describe('Cloud Account destructive action ownership', () => {
       imageUrl: null,
     };
     mockSignOut.mockResolvedValue(undefined);
+    mockExportCloudUserData.mockResolvedValue(undefined);
+    mockAppMode = 'cloud';
+  });
+
+  it('exports the visible Cloud account before the destructive action', async () => {
+    render(<CloudAccountScreen />);
+
+    fireEvent.press(screen.getByLabelText('Export Cloud Data'));
+
+    await waitFor(() =>
+      expect(mockExportCloudUserData).toHaveBeenCalledWith({
+        ownerId: 'account-a',
+        epoch: 1,
+      }),
+    );
+  });
+
+  it('requires an explicit mode switch before contacting AGI Cloud', () => {
+    mockAppMode = 'local';
+    render(<CloudAccountScreen />);
+
+    fireEvent.press(screen.getByLabelText('Export Cloud Data'));
+
+    expect(mockExportCloudUserData).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Switch to AGI Cloud',
+      expect.stringContaining('does not upload your Local Mode chats or files'),
+      expect.any(Array),
+    );
+  });
+
+  it('prompts users to export Cloud data before account deletion', () => {
+    render(<CloudAccountScreen />);
+
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Delete Account',
+      expect.stringContaining('Export your Cloud data above first'),
+      expect.any(Array),
+    );
   });
 
   it('does not execute account A’s retained delete confirmation as account B', () => {

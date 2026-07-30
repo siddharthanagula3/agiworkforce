@@ -7,7 +7,16 @@
 
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Alert, Clipboard, Image, View } from 'react-native';
-import { Copy, Check, LogOut, Mail, Smartphone, Trash2, UserRound } from 'lucide-react-native';
+import {
+  Copy,
+  Check,
+  Download,
+  LogOut,
+  Mail,
+  Smartphone,
+  Trash2,
+  UserRound,
+} from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -19,16 +28,21 @@ import {
 } from '@/src/features/settings/common';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
+import { exportCloudUserData } from '@/services/cloudDataExport';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
+  isStaleCloudAccountOperation,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();
   const signOut = useAuthStore((s) => s.signOut);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   // useAuthStore().user is always null in v1 — Clerk is the real signed-in
   // user source (see app/(app)/profile/index.tsx for the same pattern).
   const { user: clerkUser } = useUser();
@@ -40,6 +54,7 @@ export default function CloudAccountScreen() {
 
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useLayoutEffect(() => {
@@ -47,6 +62,7 @@ export default function CloudAccountScreen() {
     // switch. Clear transient account-A UI before account B paints.
     setCopied(false);
     setLoggingOut(false);
+    setExporting(false);
     setDeleting(false);
   }, [userId]);
 
@@ -121,6 +137,56 @@ export default function CloudAccountScreen() {
     ]);
   }, [captureVisibleAccount, signOut]);
 
+  const handleExportCloudData = useCallback(() => {
+    const account = captureVisibleAccount();
+    if (!account) return;
+
+    if (appMode !== 'cloud') {
+      Alert.alert(
+        'Switch to AGI Cloud',
+        'Cloud export needs a managed-cloud connection. Switching modes does not upload your Local Mode chats or files.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Switch to Cloud',
+            onPress: () => {
+              if (!isCloudAccountEpochCurrent(account)) {
+                Alert.alert(
+                  'Account changed',
+                  'This mode-change confirmation is no longer valid. Open it again for the current account.',
+                );
+                return;
+              }
+              setAppMode('cloud');
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    setExporting(true);
+    exportCloudUserData(account)
+      .catch((error: unknown) => {
+        if (isStaleCloudAccountOperation(error) || !isCloudAccountEpochCurrent(account)) {
+          Alert.alert(
+            'Account changed',
+            'The export was stopped because the active AGI Cloud account changed.',
+          );
+          return;
+        }
+        Alert.alert(
+          'Export failed',
+          error instanceof Error
+            ? error.message
+            : 'AGI could not create your Cloud data export. Check your connection and try again.',
+        );
+      })
+      .finally(() => {
+        if (isCloudAccountEpochCurrent(account)) setExporting(false);
+      });
+  }, [appMode, captureVisibleAccount, setAppMode]);
+
   const handleDeleteAccount = useCallback(() => {
     const account = captureVisibleAccount();
     if (!account) return;
@@ -128,7 +194,7 @@ export default function CloudAccountScreen() {
       'Delete Account',
       'This permanently deletes your AGI Cloud account and all cloud data (chats, projects, ' +
         'memory, artifacts) within 24 hours. This cannot be undone, and you will be signed out ' +
-        'on this device.\n\n' +
+        'on this device. Export your Cloud data above first if you want to keep a copy.\n\n' +
         'On-device Local Mode data stays on this device — remove it separately from ' +
         'Settings → Data Controls if you want a full wipe.',
       [
@@ -281,6 +347,21 @@ export default function CloudAccountScreen() {
           label={loggingOut ? 'Signing out…' : 'Log Out'}
           icon={LogOut}
           onPress={loggingOut ? undefined : handleSignOut}
+          isLast
+        />
+      </SettingsGroup>
+
+      <SettingsInfo
+        title="Your AGI Cloud data"
+        body="Download chats, projects, file manifests, memories, artifacts, account details, and billing records as JSON. Local Mode data is exported separately in Data Controls."
+        icon={Download}
+      />
+      <SettingsGroup>
+        <SettingsRow
+          label={exporting ? 'Exporting…' : 'Export Cloud Data'}
+          icon={Download}
+          value={appMode === 'cloud' ? 'JSON' : 'Cloud mode required'}
+          onPress={exporting || deleting ? undefined : handleExportCloudData}
           isLast
         />
       </SettingsGroup>
