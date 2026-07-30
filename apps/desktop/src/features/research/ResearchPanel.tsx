@@ -18,8 +18,6 @@ import {
   BookOpen,
   Globe,
   FileText,
-  Mail,
-  Calendar,
   Brain,
   CheckCircle2,
   Download,
@@ -148,8 +146,6 @@ const RESEARCH_MODES: ResearchMode[] = [
 const AGENT_ICONS: Record<string, typeof Globe> = {
   web_search: Globe,
   document_search: FileText,
-  email_search: Mail,
-  calendar_search: Calendar,
   memory_search: Brain,
 };
 

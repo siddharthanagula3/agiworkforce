@@ -380,8 +380,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         default_mode: 'standard',
         enable_web_search: true,
         enable_document_search: true,
-        enable_email_search: true,
-        enable_calendar_search: true,
         enable_memory_search: true,
         min_confidence_threshold: 0.3,
         max_concurrent_agents: 5,
@@ -396,8 +394,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         sources: {
           web_search: { enabled: false, status: 'unavailable' },
           document_search: { enabled: false, status: 'unavailable' },
-          email_search: { enabled: false, status: 'unavailable' },
-          calendar_search: { enabled: false, status: 'unavailable' },
           memory_search: { enabled: false, status: 'unavailable' },
         },
         default_mode: 'standard',
