@@ -2349,27 +2349,6 @@
       "rule": "rgba"
     },
     {
-      "file": "apps/mobile/src/features/code-sessions/components/CodeSessionMoreMenu.tsx",
-      "line": 41,
-      "literal": "rgba(",
-      "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
-    },
-    {
-      "file": "apps/mobile/src/features/code-sessions/components/EnvironmentOptionsSheet.tsx",
-      "line": 44,
-      "literal": "rgba(",
-      "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
-    },
-    {
-      "file": "apps/mobile/src/features/code-sessions/components/ModeSelectSheet.tsx",
-      "line": 38,
-      "literal": "rgba(",
-      "rule": "rgba",
-      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
-    },
-    {
       "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
       "line": 298,
       "literal": "rgba(",

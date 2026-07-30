@@ -262,10 +262,6 @@
       },
       {
         "from": "@agiworkforce/mobile",
-        "to": "@agiworkforce/mcp"
-      },
-      {
-        "from": "@agiworkforce/mobile",
         "to": "@agiworkforce/provider-runtime"
       },
       {
@@ -275,10 +271,6 @@
       {
         "from": "@agiworkforce/mobile",
         "to": "@agiworkforce/search"
-      },
-      {
-        "from": "@agiworkforce/mobile",
-        "to": "@agiworkforce/skills"
       },
       {
         "from": "@agiworkforce/mobile",

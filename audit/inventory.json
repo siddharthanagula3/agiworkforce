@@ -1071,7 +1071,7 @@
     "item": "navigation-stack",
     "surface": "apps/mobile",
     "status": "built",
-    "evidence": "apps/mobile/app/(app)/_layout.tsx wraps the app in an expo-router Drawer where nested routes (chat/[id], agents/[id], companion, code/[id], etc.) are pushed on top per its own comment (line 26: 'chat/[id] -- Full chat conversation (pushes on top)'); router.push/back/canGoBack is used throughout, e.g. apps/mobile/app/(app)/companion/index.tsx:157-159 handleBack, apps/mobile/src/features/code-sessions/index.tsx:242-245 goBack."
+    "evidence": "apps/mobile/app/(app)/_layout.tsx wraps the authenticated app in an expo-router Drawer and registers only route files that exist. Nested chat/[id], projects/[id], agents/[id], companion, settings, and other live routes use router.push/back/canGoBack throughout; the nonexistent Skills route and the removed Dispatch/Code shells are no longer registered."
   },
   {
     "item": "bottom-sheet",
@@ -1124,14 +1124,14 @@
   {
     "item": "mid-task-steer",
     "surface": "apps/mobile",
-    "status": "broken",
-    "evidence": "apps/mobile/app/(app)/dispatch/index.tsx lets the user send a message to the desktop at any time via apps/mobile/stores/dispatchStore.ts:83-127 sendTask(), which transmits a 'dispatch_task' control message over sendControl/queueControl. A whole-repo grep for 'dispatch_task' (excluding node_modules/target/dist) shows it appears ONLY in apps/mobile/stores/{connectionStore,dispatchStore}.ts and apps/mobile/__tests__/* — apps/desktop has no handler for this action anywhere (same dead 'mobile-companion:control' CustomEvent sink as above)."
+    "status": "missing",
+    "evidence": "Resolved by capability removal on 2026-07-30: the unconsumed Dispatch route, store, dispatch_task sender, response handlers, and status/realtime polling facades were deleted. Agents no longer redirect into Dispatch. Mobile therefore makes no mid-task-steer claim until a real authenticated Desktop runtime handler exists."
   },
   {
     "item": "code-session-remote-control",
     "surface": "apps/mobile",
-    "status": "stub",
-    "evidence": "apps/mobile/src/features/code-sessions/data.ts:3 hardcodes `export const CODE_SESSIONS: CodeSession[] = []` with no other writer anywhere in the repo, so apps/mobile/src/features/code-sessions/index.tsx always renders the empty state; the feedback TextInput (index.tsx:391-398) and send button (index.tsx:423-431, accessibilityLabel 'Connect environment before sending feedback') have no onChangeText/onPress handlers wired to any backend. apps/mobile/src/features/code-sessions/components/EnvironmentOptionsSheet.tsx:32-39 explicitly tells the user 'Code sessions do not run on mobile yet.'"
+    "status": "missing",
+    "evidence": "Resolved by capability removal on 2026-07-30: the hardcoded-empty Code Sessions data source, list/detail/archive screens, route wrappers, and inert environment controls were deleted. Mobile's Capabilities page now points users to the live Cloud-chat code-execution path and Artifacts output without claiming remote session control."
   },
   {
     "item": "push-notification-apns",

@@ -34,8 +34,6 @@ interface RTCIceCandidateInit {
 import { WS_URL } from '@/lib/constants';
 import { useAgentStore } from './agentStore';
 import type { Agent } from './agentStore';
-import { useDispatchStore } from './dispatchStore';
-import type { DispatchMessage, TaskStatus, TaskResult } from './dispatchStore';
 import { notifyCompanionMessage } from '@/services/companionNotifications';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -209,7 +207,6 @@ function isObject(v: unknown): v is Record<string, unknown> {
 }
 
 const RELAY_ACTION_ALIASES: Record<string, string> = {
-  dispatch_task: 'dispatch_request',
   request_agents_refresh: 'sync_request',
   ping: 'heartbeat',
   pong: 'heartbeat_ack',
@@ -288,12 +285,6 @@ function normalizeIncomingControlPayload(payload: unknown): Record<string, unkno
     ...data,
     action,
   };
-}
-
-const VALID_TASK_STATUSES = new Set(['pending', 'working', 'completed', 'failed']);
-
-function isTaskStatus(v: unknown): v is TaskStatus {
-  return isString(v) && VALID_TASK_STATUSES.has(v);
 }
 
 const VALID_RISK_LEVELS = new Set<RiskLevel>(['low', 'medium', 'high']);
@@ -503,49 +494,6 @@ function handleControlMessageInner(payload: unknown): void {
     case 'agent_paused':
     case 'heartbeat_lost': {
       notifyCompanionMessage({ ...normalizedPayload, action });
-      break;
-    }
-    case 'dispatch_response': {
-      const messageId = isString(normalizedPayload['messageId'])
-        ? normalizedPayload['messageId']
-        : `desktop-${Date.now()}`;
-      const text = isString(normalizedPayload['text']) ? normalizedPayload['text'] : '';
-      const taskStatus = isTaskStatus(normalizedPayload['taskStatus'])
-        ? normalizedPayload['taskStatus']
-        : undefined;
-      const statusDetail = isString(normalizedPayload['statusDetail'])
-        ? normalizedPayload['statusDetail']
-        : undefined;
-      const taskResult = isObject(normalizedPayload['taskResult'])
-        ? (normalizedPayload['taskResult'] as TaskResult)
-        : undefined;
-      const dispatchMsg: DispatchMessage = {
-        id: messageId,
-        role: 'desktop',
-        text,
-        timestamp: new Date().toISOString(),
-        taskStatus,
-        statusDetail,
-        taskResult,
-      };
-      useDispatchStore.getState().addMessage(dispatchMsg);
-      break;
-    }
-    case 'dispatch_status_update': {
-      const messageId = isString(normalizedPayload['messageId'])
-        ? normalizedPayload['messageId']
-        : undefined;
-      if (messageId) {
-        const patch: Partial<Omit<DispatchMessage, 'id'>> = {};
-        if (isTaskStatus(normalizedPayload['taskStatus']))
-          patch.taskStatus = normalizedPayload['taskStatus'];
-        if (isString(normalizedPayload['statusDetail']))
-          patch.statusDetail = normalizedPayload['statusDetail'];
-        if (isString(normalizedPayload['text'])) patch.text = normalizedPayload['text'];
-        if (isObject(normalizedPayload['taskResult']))
-          patch.taskResult = normalizedPayload['taskResult'] as TaskResult;
-        useDispatchStore.getState().updateMessage(messageId, patch);
-      }
       break;
     }
     default:
