@@ -1,0 +1,141 @@
+#!/usr/bin/env node
+import process from 'node:process';
+import { pathToFileURL } from 'node:url';
+
+const SHARED_BUILD_FILES = new Set([
+  '.npmrc',
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'tsconfig.base.json',
+  'turbo.json',
+]);
+
+function normalizePath(file) {
+  return file
+    .trim()
+    .replaceAll('\\', '/')
+    .replace(/^\.\/+/, '');
+}
+
+function isWithin(file, directory) {
+  return file === directory || file.startsWith(`${directory}/`);
+}
+
+export function classifyDeployScope(files, { all = false } = {}) {
+  if (all) {
+    return {
+      web: true,
+      gateway: true,
+      signaling: true,
+      desktop: true,
+      native: true,
+    };
+  }
+
+  const scope = {
+    web: false,
+    gateway: false,
+    signaling: false,
+    desktop: false,
+    native: false,
+  };
+
+  for (const rawFile of files) {
+    const file = normalizePath(rawFile);
+    if (!file) continue;
+
+    const sharedBuildFile = SHARED_BUILD_FILES.has(file);
+    const sharedPackage = isWithin(file, 'packages');
+    const deployContract =
+      file === '.github/workflows/deploy-production.yml' ||
+      file === '.github/workflows/deploy-signaling-server.yml' ||
+      file === '.github/workflows/ci.yml' ||
+      file === 'scripts/production-deploy-scope.mjs' ||
+      file === 'scripts/production-deploy-scope.test.mjs';
+
+    if (
+      sharedBuildFile ||
+      sharedPackage ||
+      deployContract ||
+      isWithin(file, 'apps/web') ||
+      file === 'vercel.json' ||
+      file === '.vercelignore'
+    ) {
+      scope.web = true;
+    }
+
+    if (
+      sharedBuildFile ||
+      sharedPackage ||
+      deployContract ||
+      isWithin(file, 'services/api-gateway')
+    ) {
+      scope.gateway = true;
+    }
+
+    if (sharedBuildFile || deployContract || isWithin(file, 'services/signaling-server')) {
+      scope.signaling = true;
+    }
+
+    if (sharedBuildFile || sharedPackage || deployContract || isWithin(file, 'apps/desktop')) {
+      scope.desktop = true;
+    }
+
+    if (
+      sharedBuildFile ||
+      deployContract ||
+      file === 'Cargo.lock' ||
+      file === 'Cargo.toml' ||
+      file === 'deny.toml' ||
+      file.startsWith('rust-toolchain') ||
+      isWithin(file, 'apps/cli') ||
+      isWithin(file, 'apps/desktop/src-tauri') ||
+      isWithin(file, 'crates')
+    ) {
+      scope.native = true;
+    }
+  }
+
+  return scope;
+}
+
+export function formatGithubOutputs(scope) {
+  return Object.entries(scope)
+    .map(([name, enabled]) => `${name}=${enabled ? 'true' : 'false'}`)
+    .join('\n');
+}
+
+export function isEligibleProductionRun(run, repository) {
+  return (
+    run?.conclusion === 'success' &&
+    run?.event === 'push' &&
+    run?.head_branch === 'main' &&
+    run?.head_repository?.full_name === repository
+  );
+}
+
+async function main() {
+  const all = process.argv.includes('--all');
+  const input = all
+    ? ''
+    : await new Promise((resolve, reject) => {
+        let body = '';
+        process.stdin.setEncoding('utf8');
+        process.stdin.on('data', (chunk) => {
+          body += chunk;
+        });
+        process.stdin.on('end', () => resolve(body));
+        process.stdin.on('error', reject);
+      });
+
+  const scope = classifyDeployScope(input.split(/\r?\n/), { all });
+  console.log(formatGithubOutputs(scope));
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
