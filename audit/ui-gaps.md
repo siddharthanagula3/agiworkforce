@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: e2372fe10d547a5e7345afad7a1dce323e6cc26ec620374dc4ea7c711af8b8e4 -->
+<!-- ui-gaps-csv-sha256: 5af144c750d4c2138bd605c1c126b182c3d21646eaf0543e018532a2c6495b9b -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 67 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 59 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  271 |
+| Open        |  263 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   48 |
-| Not Planned |   22 |
+| Not Planned |   30 |
 
 ## P0
 
@@ -2810,47 +2810,47 @@ Completed for the current voice runtime. Add persona, Model, Intelligence, Langu
 
 - `chatgpt_reference/131-chatgpt-web-settings-voice-spruce-voice-model-picker.png`
 
-### GAP-122 — Extension composer '+' menu missing file upload, Goal, Plan mode, and Plugins
+### GAP-122 — Chrome keeps the attach menu image-only until file and agent-mode contracts exist
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension · missing-control
 - **Reference:** ChatGPT · Chrome extension · Composer '+' attach menu
 
 **Gap**
 
-ChatGPT's side-panel '+' menu has: 'Files and folders' upload, a 'Goal' item ('Set a goal to keep pursuing'), a 'Plan mode' toggle ('Turn plan mode on'), and a Plugins section (Documents, PDF, Spreadsheets, Presentations, Template Creator, Sites) each with a one-line capability description. AGIW's attachWrapper/attachMenu in side_panel.ts only has two items: 'Take a screenshot' and 'Add an image' — no general file/folder attachment, no persistent-goal concept, no plan mode, no plugin/tool catalog surfaced from the composer.
+Chrome exposes only the two attachment actions its Managed Chat contract can execute: a current-tab screenshot and user-selected images. The transport runtime-validates base64 PNG, JPEG, WebP, or GIF data URLs and has no generic-file asset upload, folder authorization, durable goal, plan-mode flag, or extension plugin registry. Adding the reference entries would either discard selected bytes, persist an objective no runner pursues, or imply Web catalogue capabilities run inside the browser extension.
 
 **Evidence**
 
-apps/extension/src/side_panel.ts lines ~7421-7490 (attachMenu with screenshotItem, fileItem only); grep for 'Files and folders', 'Goal', 'Plan mode', 'Plugins' in side_panel.ts returned no matches.
+apps/extension/src/side_panel.ts builds Take a screenshot and Add an image and applies the eight-image attachment cap. managedChatHandler.ts and freeTrialClient.ts validate and serialize image-only attachments. chat-state.ts supplies image-specific fallback prompt copy. Repository searches find no Chrome generic-asset, folder-grant, background-goal, plan-mode, or plugin-runtime contract; the extension README keeps Chrome conversations browser-local and browser actions explicitly scoped.
 
 **Suggested fix**
 
-Extend the attach menu with a generic file/folder picker (not just images), add a 'Goal' entry that opens a small input to set/persist a background objective in the conversation, add a 'Plan mode' toggle wired to an existing planning/agent-loop flag if one exists, and surface the plugin/tool catalog (already present for web, cf. features/plugins/data/plugins) as a scrollable list inside this menu.
+Not planned on the current Chrome contract. Add generic files only with typed upload, MIME/size, ownership, retention/deletion, preview, and provider-admission support; add goals or plan mode only with a persisted runner and visible lifecycle; add plugins only after an extension-owned capability registry and permission review exist. Keep the menu limited to executable actions meanwhile.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/152-chatgpt-web-extension-attach-menu-files-goal-plugins.png`
 
-### GAP-123 — No granular per-category browser permissions or CDP risk toggle for the extension
+### GAP-123 — Chrome uses approved sites and per-action approval instead of inert category or full-CDP controls
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Computer use > Google Chrome
 
 **Gap**
 
-Codex exposes four independent permission categories for the Chrome computer-use integration (Approval, History, Downloads, Uploads), each with an 'Always allow'/'Always ask' dropdown, plus a 'Site permissions' override list (Add button, per-site rows) and a 'Developer mode: Enable full CDP access' toggle explicitly labeled 'Elevated risk' with explanatory copy about inspecting/controlling sensitive browser internals. AGIW's extension already implements a real CDP-based agent loop (features/computer-use/cdpDriver.ts, agentLoop.ts) but exposes only a flat per-origin allowlist (single allow/deny, no category breakdown) in options.ts, and no UI ever discloses that CDP access is happening or lets the user gate it.
+Chrome computer use has a different enforcement model from the reference: the user must approve an exact origin, Ask before acting defaults on, every pending action receives a nonce-bound allow or deny decision with a fail-closed timeout, and the debugger attaches for one bounded action before detaching. History, download, and upload tools are not present, and no unrestricted developer-mode CDP surface exists, so category dropdowns or a full-CDP toggle would save policy that no runtime consumes. Options now explicitly discloses the CDP boundary instead of hiding it.
 
 **Evidence**
 
-grep for 'Always allow', 'Always ask', 'Site permissions', 'CDP', 'DevTools Protocol' in apps/extension/src/options.ts and side_panel.ts — only a flat SITE_ALLOWLIST_KEY allow/deny list found (options.ts ~lines 16-624); cdpDriver.ts confirms CDP is used with no matching settings surface.
+options.ts lists owner-managed approved origins and explains Chrome DevTools Protocol, explicit run initiation, default approval, per-action attach/detach, and the absence of unrestricted CDP developer mode. computerUsePanel.ts persists Ask before acting with a default-on UI. background.ts revalidates origin at run time, treats an unset approval preference as ask, validates approval responses from extension pages, and denies on timeout. cdpDriver.ts allowlists navigation and wraps each bounded call in attach/finally-detach. computer-use-default-ask.test.ts and computer-use-options-boundary.test.ts pin these boundaries.
 
 **Suggested fix**
 
-Add a settings section that (a) splits the single allow flag into category-scoped controls (page navigation approval, history, downloads, uploads) each defaulting to 'Always ask', (b) lists per-site overrides with add/remove, and (c) adds an explicit 'Enable full CDP access' toggle with an elevated-risk warning banner, defaulting off, gating cdpDriver.ts's most invasive calls.
+Not planned as reference-shaped category or developer-mode controls while those capabilities do not exist. If Chrome gains history, download, upload, or broader CDP tools, first define typed action categories, category-specific default-ask enforcement, per-origin overrides, migration, audit disclosure, optional permission policy, and adversarial bypass tests; do not add storage-only switches.
 
 **Reference screenshot(s)**
 
@@ -2948,24 +2948,24 @@ Completed. Keep Local, BYOK, and Managed Cloud ownership distinct; retain explic
 
 - `chatgpt_reference/007-codex-vscode-ext-onboarding-intro-autonomy-mistakes-chatgpt-account-step4.png`
 
-### GAP-128 — No background/cloud task list in the VS Code extension
+### GAP-128 — VS Code keeps developer sessions local and hands hosted background tasks to Web
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Cloud task handoff list
 
 **Gap**
 
-Reference shows a task card listing delegated runs with title, repo/owner, date, running spinner vs completed checkmark, and a per-task diffstat (+2 -20), plus the concept of sending work to run in the background. agiworkforce's extension can only fire a single fire-and-forget desktop-agent task from a QuickPick input box and never renders run state, history or results; the task list exists only on web.
+VS Code developer sessions are workspace-scoped local app-server threads, while hosted background runs are account-owned Web task records. The extension has no typed Cloud-run client, redacted repository handoff, durable workspace or branch snapshot, diffstat contract, or authorization for moving IDE context into Managed Cloud. A task list or Run in background action would silently cross the locked developer-session trust boundary or display Web records without enough repository provenance.
 
 **Evidence**
 
-apps/extension-vscode/src/core/commandSetup.ts:604-626 ('run-task' input box) is the only task affordance; searched 'task|cloud|handoff|delegate|background' across apps/extension-vscode/src — no list/status UI. Web counterpart: apps/web/features/tasks/components/TasksPage.tsx, apps/web/app/tasks/page.tsx.
+The extension README states that IDE sessions stay local, workspace, and task scoped and do not sync consumer chat history. media/walkthrough/02-tasks.md and the mounted sidebar onboarding state say Foreground here, background on Web, explain that local prompts are never relabeled as cloud runs, and provide Open Web Tasks. package.json contributes the same walkthrough command, while commandSetup.ts opens https://agiworkforce.com/tasks?from=vscode-extension explicitly. localRuntimeClient.ts exposes local threads and turns only; it has no Managed Cloud run contract.
 
 **Suggested fix**
 
-Add a 'Tasks' collapsible section to the sidebar webview (and a matching TreeView) listing runs from the same source as apps/web/features/tasks with status icon, workspace/branch, relative time and +/- diffstat; add a 'Run in background' action on the composer that creates a task from the current prompt and streams its status back.
+Not planned until an explicit handoff contract provides a redacted payload preview, secret scan, repository/worktree identity, branch and commit provenance, owner-scoped Cloud run creation/list/follow/cancel, diffstat derivation, retention, consent, and proof that local IDE history is not silently uploaded. Preserve the explicit Web Tasks handoff meanwhile.
 
 **Reference screenshot(s)**
 
@@ -3017,24 +3017,24 @@ Completed. Preserve the honest unavailable-here copy for hosted background tasks
 
 - `chatgpt_reference/004-codex-vscode-ext-onboarding-intro-ask-codex-anything-step1.png`
 
-### GAP-131 — VS Code Configuration lacks runtime-backed approval and sandbox policy controls
+### GAP-131 — VS Code declines sandbox controls that the local runtime cannot read or enforce
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension-vscode · missing-control
 - **Reference:** Codex · VS Code extension · Settings — Configuration (approval policy and sandbox)
 
 **Gap**
 
-The branded Configuration section now exposes user-scoped extension and bridge settings, and General exposes the consent-aware agent-mode control. It still has no allowed-directory editor, command allow/deny policy, or sandbox scope backed by the local runtime, so the durable enforcement rules remain undiscoverable and uneditable from VS Code.
+The branded Configuration section manages extension-owned runtime paths and opens the CLI-owned host configuration file, but the app-server protocol does not expose a typed approval policy, allowed-directory list, command allow or deny policy, or sandbox scope for read/write mutation. Mirroring Desktop controls into VS Code would create a second policy source and imply enforcement the active workspace runtime cannot confirm.
 
 **Evidence**
 
-apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders Configuration and the agent-mode control, while platform/config.ts covers extension-owned settings only. Searched apps/extension-vscode/src for runtime-backed sandbox, allowed-directory, and command-policy configuration; no extension integration exists. Desktop counterparts remain AllowedDirectoriesSettings.tsx and AgentExecutionSettings.tsx.
+settingsWebviewContent.ts names the local runtime as the tool-execution owner, exposes the resolved ~/.agiworkforce/config.toml path, and provides Open config.toml plus Restart local runtime. settingsProtocol.ts and platform/config.ts contain extension-owned settings only. localRuntimeClient.ts validates initialize capabilities, threads, turns, approvals, tools, MCP status, worktrees, and models but no sandbox-policy read or mutation methods.
 
 **Suggested fix**
 
-Extend the branded Configuration section only after the local app-server exposes a typed read/write policy contract: show allowed workspace directories, command allow/deny rules, and sandbox scope with copy naming the enforcing boundary. Do not mirror values that the runtime will ignore.
+Not planned until the CLI app-server publishes a versioned read/write policy contract with effective source, allowed roots, sandbox mode, command rules, restart semantics, validation, workspace-trust enforcement, and conflict handling. Keep the authoritative config-file handoff instead of adding ignored VS Code switches.
 
 **Reference screenshot(s)**
 
@@ -3063,70 +3063,70 @@ Completed. Keep the path relative to the active extension host, preserve non-tru
 
 - `chatgpt_reference/015-codex-vscode-ext-settings-configuration-config-toml-reasoning-efforts.png`
 
-### GAP-133 — Hooks has an honest empty state but cannot enumerate or manage runtime hooks
+### GAP-133 — VS Code keeps Hooks capability-honest until the runtime exposes inventory and mutation
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Settings — Hooks (empty state)
 
 **Gap**
 
-The branded VS Code Settings editor now includes a Hooks section and accurately states that hooks are local-runtime configuration rather than extension-owned cloud state. It cannot yet read configured hooks, show event/command/source/trust, refresh them, or disable an individual hook, so users still cannot audit code that may run on their machine.
+The installed extension contributes no hook settings, and the local app-server emits no hook inventory, event, command, source, trust, refresh, or enablement contract. Rendering example hooks or local storage toggles would be especially unsafe because hooks execute code outside the Webview and the active runtime would not honor the state.
 
 **Evidence**
 
-apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders the Hooks section, no-extension-hooks empty state, and documentation handoff. No protocol, localRuntimeClient capability, or command currently returns hook inventory to the extension.
+settingsWebviewContent.ts mounts Hooks, labels automation hooks as local-runtime configuration, states No extension hooks to configure, and sends users to the CLI documentation. settingsProtocol.ts has no hook messages or settings. localRuntimeClient.ts has no hook capability, inventory response, or mutation method. The existing state is therefore an accurate capability boundary, not an unimplemented extension-owned list.
 
 **Suggested fix**
 
-Add a typed app-server hook-inventory capability, then render event, command, source (config vs plugin), trust status, refresh, and per-hook disable in the existing Hooks section. Preserve the current empty state when the runtime reports no hooks.
+Not planned until a versioned app-server capability returns hook identity, event, exact command or executable provenance, config versus plugin source, trust and enabled state, refresh, and authoritative enable/disable mutation with workspace-trust, path, concurrency, and rollback tests. Keep the honest empty state when absent.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/020-codex-vscode-ext-settings-hooks-empty-state-no-hooks-found.png`
 
-### GAP-134 — MCP Settings lacks a runtime server list, per-server toggle, config, and Add server
+### GAP-134 — VS Code declines per-server MCP controls without a runtime inventory contract
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Settings — MCP servers
 
 **Gap**
 
-The branded MCP servers section now makes the trust boundary explicit and retains the extension-owned cloud-utility master toggle. The local CLI remains runtime-owned, but the extension still cannot list its servers, show connected/failed state, disable one server, open its config, or add a server.
+The mounted MCP setting controls only extension cloud-editor utilities. Local MCP discovery and execution belong to the workspace app-server, which currently emits coarse loading, ready, or unavailable notifications but no server identities, commands, arguments, transport, provenance, health, logs, effective enablement, or mutation methods. Per-server rows would therefore be fabricated or non-authoritative.
 
 **Evidence**
 
-apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders the MCP section, mcp.enabled master control, local-runtime ownership copy, and connector/docs handoffs. platform/config.ts exposes only mcp.enabled; localRuntimeClient and the settings protocol expose no per-server inventory or mutation contract.
+settingsWebviewContent.ts explicitly says the mcp.enabled toggle does not configure MCP in the local app-server and labels Local MCP as runtime-owned, with Cloud connector and documentation handoffs. platform/config.ts exposes only the cloud-utility boolean. localRuntimeClient.ts validates only mcp/loading, mcp/ready, and mcp/unavailable status notifications and no server list or config methods.
 
 **Suggested fix**
 
-Add a typed local-runtime MCP status/config capability, then populate the existing section with connected/failed rows, per-server enable controls, configure actions, and an Add server flow. Keep the current global boolean scoped to cloud editor utilities.
+Not planned until the app-server publishes a typed per-server inventory and mutation contract covering canonical identity, source, command/arguments or remote endpoint, redacted secrets, status/error, enable/disable, config editing, add/remove, reload, logs, workspace scope, and concurrency. Keep the existing boundary and do not reinterpret the cloud-utility master toggle.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/018-codex-vscode-ext-settings-mcp-servers-server-toggle-list.png`
 
-### GAP-135 — No provenance separation between user-configured and plugin-contributed MCP servers
+### GAP-135 — MCP provenance groups are declined until user and plugin servers have authoritative identities
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension-vscode · missing-ia
 - **Reference:** Codex · VS Code extension · Settings — MCP servers, 'From plugins' section
 
 **Gap**
 
-Reference groups servers into user-configured 'Servers' (toggleable, configurable) and read-only 'From plugins' entries, so it is obvious which tools a plugin installed on the user's behalf. agiworkforce advertises that plugin-declared resources are 'tracked with their trust status' but no surface renders provenance: the extension has no server list at all, and the desktop plugin view lists installed plugins without showing which MCP servers or hooks they contribute.
+Provenance grouping requires a resolved runtime inventory that can distinguish a user-configured server from a plugin-contributed server and name the owning plugin plus trust state. Neither the app-server protocol nor the Desktop plugin resolver publishes that mapping to VS Code. Inventing source labels from display names or separate catalogues would misattribute executable code and could make a plugin-owned server appear user-controlled.
 
 **Evidence**
 
-Claim: apps/web/app/features/plugins/page.tsx:63-65 ('Hooks declared by plugins are tracked with their trust status') and :34 (plugins bundle MCP server wiring). Implementation: searched apps/extension-vscode/src and apps/desktop/src/features/settings for a plugin-to-MCP mapping or trust-status field — none found; apps/desktop/src/features/settings/SkillsPluginsSettings.tsx lists plugins/commands/skills/agents only.
+localRuntimeClient.ts exposes coarse MCP lifecycle status only. settingsWebviewContent.ts renders no server rows and truthfully separates local runtime MCP from Managed Cloud connectors. Repository searches find no typed plugin-to-MCP or plugin-to-hook mapping consumable by the extension; the existing settings protocol cannot carry one.
 
 **Suggested fix**
 
-Model provenance in the resolved-plugin data (source: user-config | plugin:<id>) and render two groups in the MCP list — user servers with toggles, plugin-contributed servers read-only with the owning plugin name and its trust status — then reuse the same grouping for plugin-declared hooks.
+Not planned until the runtime assigns stable server IDs and returns source kind, owning plugin ID/name/version, trust decision, config origin, effective enablement, and mutation authority. Then render user servers with authoritative controls and plugin-contributed servers as read-only or plugin-governed rows; reuse the same provenance model for hooks.
 
 **Reference screenshot(s)**
 
@@ -3155,24 +3155,24 @@ Completed. Keep custom instructions private to VS Code Memento storage, preserve
 
 - `chatgpt_reference/016-codex-vscode-ext-settings-personalization-personality-memory-instructions.png`
 
-### GAP-137 — VS Code Plugins section cannot list or control installed plugins and skills
+### GAP-137 — VS Code keeps Plugins as an availability boundary until a local registry exists
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Settings — Plugins list
 
 **Gap**
 
-The branded Settings editor now has a Plugins destination, an honest no-registry state, and explicit Web/docs handoffs. It still lacks a runtime-backed installed plugin or skill list, counts, provenance, enablement controls, and composer integration, so developers cannot inspect which local capabilities are active from the IDE.
+VS Code has no installed plugin or skill registry and the local app-server does not return commands, skills, agents, plugin versions, provenance, trust, or effective enablement. The Web catalogue and Desktop resolver are separate products with different authority; copying either into the IDE would imply that listed capabilities execute in the current workspace when they may not.
 
 **Evidence**
 
-apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders the Plugins section and capability-honest empty state. No extension protocol or localRuntimeClient capability returns installed plugins, commands, skills, or agents; the desktop resolver and web catalogue remain separate implementations.
+settingsWebviewContent.ts mounts a Plugins destination, renders shared cross-surface capability availability, states No VS Code plugin registry is installed, explains that local tools come from CLI and MCP configuration, and provides explicit Cloud directory and documentation handoffs. settingsProtocol.ts and localRuntimeClient.ts contain no installed-capability inventory or control contract.
 
 **Suggested fix**
 
-Expose a typed installed-capability inventory from the local runtime, then populate the existing Plugins section with counts, provenance, availability, per-item controls where enforcement exists, and a catalogue handoff. Keep the no-registry state when that capability is absent.
+Not planned until a local runtime registry publishes stable capability and plugin IDs, versions, source/provenance, trust, workspace availability, commands/skills/agents, effective enablement, permission review, authoritative controls, and lifecycle errors. Preserve the visible no-registry state instead of presenting Web or Desktop metadata as IDE installation state.
 
 **Reference screenshot(s)**
 
