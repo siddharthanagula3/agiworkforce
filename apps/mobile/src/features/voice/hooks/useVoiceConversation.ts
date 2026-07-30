@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 
@@ -293,6 +294,22 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
   useEffect(() => {
     if (options.pttMode) autoListenRef.current = false;
   }, [options.pttMode]);
+
+  // The current native recognizer is a foreground-only interaction. Stop mic
+  // capture and speech immediately when the app becomes inactive/backgrounded;
+  // returning to AGI never resumes listening without another user gesture.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' || !optionsRef.current.enabled) return;
+      autoListenRef.current = false;
+      pttHeldRef.current = false;
+      setPhase('idle');
+      setAudioLevel(0);
+      setTranscriptPreview('Voice paused when AGI left the foreground.');
+      void endConversation();
+    });
+    return () => subscription.remove();
+  }, [endConversation]);
 
   useEffect(() => {
     if (options.enabled) {

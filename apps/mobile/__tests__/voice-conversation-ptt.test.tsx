@@ -5,6 +5,7 @@
  * recognizer auto-final processing without a tap, and the double-processing guard.
  */
 import React from 'react';
+import { AppState } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('../lib/mmkv', () => ({
@@ -241,5 +242,37 @@ describe('Voice conversation PTT + hands-free', () => {
         expect.stringContaining('"voicePushToTalk":true'),
       ),
     );
+  });
+
+  it('stops microphone capture when the app backgrounds and never auto-resumes', async () => {
+    let appStateListener: ((state: string) => void) | undefined;
+    const removeListener = jest.fn();
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      appStateListener = listener as (state: string) => void;
+      return { remove: removeListener };
+    });
+
+    const onSendMessage = jest.fn().mockResolvedValue(null);
+    const { getByTestId, getByText, unmount } = renderScreen(onSendMessage);
+
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-conversation-orb'));
+    });
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      appStateListener?.('background');
+    });
+
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.abort).toHaveBeenCalledTimes(1));
+    expect(getByText('Voice paused when AGI left the foreground.')).toBeTruthy();
+
+    await act(async () => {
+      appStateListener?.('active');
+    });
+    expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(removeListener).toHaveBeenCalledTimes(1);
   });
 });
