@@ -2600,8 +2600,8 @@
   {
     "item": "dynamic-workflow-planner",
     "surface": "packages/core-agent",
-    "status": "unwired",
-    "evidence": "apps/desktop/src-tauri/src/core/swarm/task_decomposer.rs:499-684 (`TaskDecomposer::decompose`/`analyze_and_decompose`) is a real LLM-driven planner: prompts the model to emit a dependency graph of subtasks (parallel vs sequential, critical-path optimization at task_decomposer.rs:810), cached and validated for cycles (DependencyGraph::validate, line 342). Exposed via Tauri command `swarm_execute_goal` (apps/desktop/src-tauri/src/sys/commands/swarm.rs:94-127), registered in the invoke handler (lib.rs)."
+    "status": "built",
+    "evidence": "The active Desktop Local navigation now mounts AgentTaskPanel, whose creator submits auto, sequential, parallel, and swarm goals through agentTaskStore and whose monitor renders task/swarm progress. The swarm path reaches agi_submit_goal_swarm -> AgiCore::submit_goal_swarm -> SwarmOrchestrator::execute_swarm_task -> TaskDecomposer::decompose, producing the validated dependency graph and critical-path execution plan. Cloud Tasks remains the separate durable account-owned run surface."
   },
   {
     "item": "workflow-size-guideline",

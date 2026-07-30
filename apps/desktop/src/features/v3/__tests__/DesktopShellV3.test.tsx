@@ -79,6 +79,7 @@ vi.mock('react-i18next', () => ({
         'sidebar.modes.chat': 'Chat',
         'sidebar.nav.projects': 'Projects',
         'sidebar.nav.artifacts': 'Artifacts',
+        'sidebar.nav.tasks': 'Tasks',
         'sidebar.nav.scheduled': 'Scheduled',
         'sidebar.nav.customize': 'Customize',
         'sidebar.nav.liveArtifacts': 'Live artifacts',
@@ -126,6 +127,14 @@ vi.mock('@/features/terminal/TerminalWorkspace', async () => {
   return {
     TerminalWorkspace: () =>
       React.createElement('div', { 'data-testid': 'terminal-workspace' }, 'Terminal workspace'),
+  };
+});
+
+vi.mock('@/features/agi/AgentTaskPanel', async () => {
+  const React = await vi.importActual<typeof import('react')>('react');
+  return {
+    AgentTaskPanel: () =>
+      React.createElement('div', { 'data-testid': 'agent-task-panel' }, 'Local agent tasks'),
   };
 });
 
@@ -742,6 +751,16 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(
       (props?.['conversationActions'] as { onShare?: (id: string) => Promise<void> })?.onShare,
     ).toBeUndefined();
+  });
+
+  it('opens device-owned agent tasks from Local navigation', async () => {
+    useAppModeStore.setState({ mode: 'local' });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }));
+    expect(await screen.findByTestId('agent-task-panel')).toBeInTheDocument();
+    expect(screen.getByText('Local agent tasks')).toBeInTheDocument();
   });
 
   it('keeps Customize reachable through the Desktop settings owner', () => {

@@ -131,6 +131,7 @@ function navItemsForMode(
   // stay as flat nav entries.
   return [
     { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
+    { id: 'tasks', label: t('sidebar.nav.tasks'), icon: ListChecks },
     { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
     { id: 'customize', label: t('sidebar.nav.customize'), icon: Settings },
   ];
@@ -166,6 +167,7 @@ function railItems(
     items.push({ id: 'scheduled', icon: CalendarClock, title: t('sidebar.nav.scheduled') });
   } else {
     items.push({ id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') });
+    items.push({ id: 'tasks', icon: ListChecks, title: t('sidebar.nav.tasks') });
   }
   items.push({ id: 'customize', icon: Settings, title: t('sidebar.nav.customize') });
   return items;
