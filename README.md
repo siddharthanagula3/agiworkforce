@@ -353,12 +353,16 @@ pnpm check:model-catalog      # Model catalog integrity
 
 ## Deployment
 
-- **Web** — Deployed to Vercel from the `main` branch. Configuration in `vercel.json` builds the Next.js app with output at `apps/web/.next`.
+- **Web** — A successful `CI` run for an exact `main` commit triggers `.github/workflows/deploy-production.yml`, which builds and deploys a prebuilt Vercel artifact. Vercel's direct `main` Git deployment is disabled to prevent an unverified race.
 - **Desktop** — `release-desktop.yml` currently ships Linux `.AppImage`/`.deb` bundles only; the macOS and Windows build jobs are disabled (`if: false`) pending code-signing and toolchain setup (see [architecture-manifest.md](docs/00-foundation/architecture-manifest.md) §11).
 - **CLI** — Distributed via GitHub Releases, Homebrew (`siddharthanagula3/tap/agiworkforce`), and `cargo install`. Release workflow: `release-cli.yml`.
 - **Mobile** — Built with EAS (Expo Application Services). Release scripts for iOS App Store and Google Play in `apps/mobile/scripts/release/`.
 - **API Gateway** — Dockerized (`services/api-gateway/Dockerfile`). Deployable to any container host.
-- **Signaling Server** — Dockerized with Fly.io and Railway deployment configs.
+- **Signaling Server** — Dockerized with Fly.io and Railway deployment configs; production jobs require successful CI for the exact selected commit.
+
+The production gate, protected variables, path filters, and private-repository
+runner budget are documented in
+[`docs/current/ci-deployment-policy.md`](docs/current/ci-deployment-policy.md).
 
 ## Current Status
 

@@ -10,10 +10,19 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'crates/**'
+      - '.github/workflows/test-l1-l2.yml'
+
+concurrency:
+  group: tests-l1-l2-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-l1-l2:
-    runs-on: macos-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_TEST }}
@@ -21,30 +30,18 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
+        uses: actions/checkout@v6
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
         with:
           version: 9.15.3
 
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+          node-version: '24'
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

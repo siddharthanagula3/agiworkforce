@@ -7,7 +7,7 @@
   "framework": "nextjs",
   "git": {
     "deploymentEnabled": {
-      "main": true
+      "main": false
     }
   },
   "rewrites": [

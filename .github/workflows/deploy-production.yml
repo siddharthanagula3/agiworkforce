@@ -1,0 +1,126 @@
+name: Deploy Production Web
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+
+concurrency:
+  group: production-web
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  scope:
+    name: Select production surfaces
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      web: ${{ steps.scope.outputs.web }}
+    steps:
+      - name: Checkout the CI-verified commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+
+      - name: Select affected production surfaces
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            git diff --name-only HEAD^ HEAD | node scripts/production-deploy-scope.mjs >> "$GITHUB_OUTPUT"
+          else
+            node scripts/production-deploy-scope.mjs --all >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-web:
+    name: Deploy verified web artifact
+    needs: scope
+    if: needs.scope.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: production-web
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout the CI-verified commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Require the protected Vercel deployment contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is required in the production-web environment"
+              exit 1
+            fi
+          done
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@58.4.0
+
+      - name: Pull production project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build the production artifact
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy the prebuilt artifact
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_url="$(
+            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
+          )"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "Deployed $deployment_url"
+
+      - name: Verify production health
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: >-
+          curl --fail --silent --show-error
+          --retry 5 --retry-all-errors --retry-delay 5
+          --max-time 20 "$DEPLOYMENT_URL/api/health" > /dev/null
+
+      - name: Record deployment summary
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOYMENT_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          {
+            echo "## Production web deployment"
+            echo
+            echo "- Commit: \`$DEPLOYMENT_SHA\`"
+            echo "- Artifact: prebuilt and CI verified"
+            echo "- URL: $DEPLOYMENT_URL"
+          } >> "$GITHUB_STEP_SUMMARY"

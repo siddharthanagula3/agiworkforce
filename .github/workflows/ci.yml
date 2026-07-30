@@ -26,6 +26,9 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    outputs:
+      desktop_changed: ${{ steps.scope.outputs.desktop }}
+      native_changed: ${{ steps.scope.outputs.native }}
     services:
       postgres:
         image: postgres:16-alpine
@@ -48,11 +51,29 @@ jobs:
           # affected selection to a full or incorrect graph.
           fetch-depth: 0
 
+      - name: Select expensive CI lanes
+        id: scope
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_REF: ${{ github.base_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --name-only "origin/$BASE_REF"...HEAD \
+              | node scripts/production-deploy-scope.mjs >> "$GITHUB_OUTPUT"
+          elif [ -n "${BEFORE_SHA:-}" ] && ! [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            git diff --name-only "$BEFORE_SHA" HEAD \
+              | node scripts/production-deploy-scope.mjs >> "$GITHUB_OUTPUT"
+          else
+            node scripts/production-deploy-scope.mjs --all >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Conflict-marker gate
         run: python3 scripts/check-no-conflict-markers.py
 
       - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
+        if: steps.scope.outputs.native == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential curl wget file pkg-config libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev libleptonica-dev libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libwebp-dev tesseract-ocr libtesseract-dev libasound2-dev xvfb libclang-dev
@@ -71,10 +92,12 @@ jobs:
 
       - name: Setup test environment
         run: |
-          echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test" >> $GITHUB_ENV
-          echo "NEON_DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test" >> $GITHUB_ENV
-          echo "CLERK_SECRET_KEY=test-clerk-secret-key" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_mock" >> $GITHUB_ENV
+          {
+            echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
+            echo "NEON_DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
+            echo "CLERK_SECRET_KEY=test-clerk-secret-key"
+            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_mock"
+          } >> "$GITHUB_ENV"
 
       - name: Apply and verify canonical Postgres migrations
         run: |
@@ -193,12 +216,14 @@ jobs:
           pnpm --filter agi-workforce package
 
       - name: Setup Rust toolchain
+        if: steps.scope.outputs.native == 'true'
         uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
         with:
           toolchain: '1.94.0'
           components: clippy, rustfmt
 
       - name: Cache Rust dependencies
+        if: steps.scope.outputs.native == 'true'
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           workspaces: 'apps/desktop/src-tauri -> target'
@@ -206,22 +231,27 @@ jobs:
           cache-directories: ~/.cargo/bin
 
       - name: Ensure clippy is available
+        if: steps.scope.outputs.native == 'true'
         run: rustup component add clippy --toolchain 1.94.0
 
       # H41: Verify exact Rust toolchain version before running clippy/tests
       - name: Verify Rust toolchain
+        if: steps.scope.outputs.native == 'true'
         run: rustup show active-toolchain && rustc --version && cargo --version
 
       - name: Verify generated protocol bindings are current
+        if: steps.scope.outputs.native == 'true'
         # Generates into an isolated staging directory and compares against the
         # checked-in TypeScript bindings. A failed exporter must never erase the
         # last known-good bindings used by downstream packages.
         run: pnpm check:protocol-types
 
       - name: Build native messaging host sidecar
+        if: steps.scope.outputs.native == 'true'
         run: pnpm exec turbo run build:native-host --filter=@agiworkforce/desktop -- --profile debug
 
       - name: Dependency policy (Rust) — bans/sources/licenses (blocking)
+        if: steps.scope.outputs.native == 'true'
         # deny.toml is the policy source of truth; bans, sources, and licenses
         # are green on the workspace and must stay green.
         run: cargo install cargo-deny --version 0.20.2 --locked --quiet && cargo deny check bans sources licenses
@@ -229,6 +259,7 @@ jobs:
           CARGO_HOME: ~/.cargo
 
       - name: Dependency advisories (Rust) — non-blocking until baseline triaged
+        if: steps.scope.outputs.native == 'true'
         # 40 RUSTSEC advisories are baselined as RUST-DEPENDENCY-ADVISORIES-01
         # (catalog in docs/security/rust-dependency-advisories-2026-07-16.md).
         # Advisories report but do not gate merges until that triage lands;
@@ -239,6 +270,7 @@ jobs:
           CARGO_HOME: ~/.cargo
 
       - name: Test (apps/desktop + apps/cli, default features)
+        if: steps.scope.outputs.native == 'true'
         # Scope the test step to the binaries we actually ship — matches
         # the Clippy step's scope (323ab2e5). The 100+ ported codex-rs
         # crates under crates/* have their own pre-existing test
@@ -271,6 +303,7 @@ jobs:
         run: xvfb-run --auto-servernum cargo test -p agiworkforce-desktop -p agiworkforce-cli --lib
 
       - name: Free Rust test artifacts before clippy
+        if: steps.scope.outputs.native == 'true'
         # The native-host build plus full Rust lib tests can leave enough
         # transient target artifacts to exhaust GitHub's ephemeral runner disk
         # before clippy writes final rmeta files. Tests have already passed at
@@ -281,6 +314,7 @@ jobs:
           df -h .
 
       - name: Clippy (apps/desktop + apps/cli, default features)
+        if: steps.scope.outputs.native == 'true'
         # Scope clippy to the binaries we actually ship. The 100+ ported
         # codex-rs crates under crates/* legitimately use unsafe (PTY,
         # exec policy, etc.) and would fail `-D unsafe-code` even though
@@ -303,6 +337,7 @@ jobs:
     name: Desktop E2E (deterministic mocks)
     runs-on: ubuntu-24.04
     needs: check
+    if: needs.check.outputs.desktop_changed == 'true'
     timeout-minutes: 30
     env:
       # Keep deterministic-mock E2E independent of repository secrets.
@@ -386,13 +421,14 @@ jobs:
         if: always()
         run: |
           if [ -f apps/desktop/app.pid ]; then
-            kill $(cat apps/desktop/app.pid) 2>/dev/null || true
+            kill "$(cat apps/desktop/app.pid)" 2>/dev/null || true
           fi
 
   clippy-all-features:
     name: Clippy (all features)
     runs-on: ubuntu-24.04
     needs: check
+    if: needs.check.outputs.native_changed == 'true'
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v6
@@ -453,6 +489,7 @@ jobs:
     name: macOS Rust smoke (cargo check + clippy)
     runs-on: macos-latest
     needs: check
+    if: needs.check.outputs.native_changed == 'true'
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
@@ -493,6 +530,7 @@ jobs:
     name: Windows Rust smoke (cargo check + tests, --skip linux-only)
     runs-on: windows-latest
     needs: check
+    if: needs.check.outputs.native_changed == 'true'
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
