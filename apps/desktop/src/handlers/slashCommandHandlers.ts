@@ -44,5 +44,4 @@ export {
   executeRedoCommand,
   executeThinkCommand,
   executeEnhanceCommand,
-  executePlanCommand,
 } from './commands/chat-control';

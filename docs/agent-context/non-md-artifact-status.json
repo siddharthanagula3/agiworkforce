@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-06-05",
+  "lastUpdated": "2026-07-29",
   "rule": "Non-Markdown artifacts outside docs/archive must be operational contracts, active verification outputs, or explicitly marked rebuild-required. Historical evidence belongs under docs/archive.",
   "keepActive": [
     {
@@ -8,6 +8,12 @@
       "status": "machine-contract",
       "owner": "Platform lead",
       "reason": "Agent and repo-operability contracts consumed by guard scripts and coding agents."
+    },
+    {
+      "path": "audit/inventory.json",
+      "status": "machine-contract",
+      "owner": "Platform and product integration",
+      "reason": "The identity-pinned 654-item product integration ledger is validated by CI and governed by docs/decisions/2026-07-29-live-integration-inventory.md."
     },
     {
       "path": ".agents/skills/**",

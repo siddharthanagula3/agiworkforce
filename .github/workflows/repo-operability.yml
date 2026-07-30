@@ -137,5 +137,8 @@ jobs:
       - name: Validate monorepo task graph
         run: pnpm exec turbo run build lint test typecheck --dry=json
 
+      - name: Validate integration inventory
+        run: pnpm check:audit-inventory
+
       - name: LLM and repo operability checks
         run: pnpm check:llm-operability
