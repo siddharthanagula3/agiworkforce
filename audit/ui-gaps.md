@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 0d00bfa8f1b2bc720571a5a0c25375c49af494569411e31e067d9662434c1b5d -->
+<!-- ui-gaps-csv-sha256: c5895eeee93612222f8c1f412b65f5e8ffb01701175a3495c0d3ba6d6414a10b -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 89 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 88 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  293 |
+| Open        |  292 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   41 |
+| Done        |   42 |
 | Not Planned |    7 |
 
 ## P0
@@ -809,24 +809,24 @@ Completed for the shared language runtime and selector. Continue migrating Mobil
 
 - `chatgpt_reference/066-chatgpt-ios-settings-general-app-language-toggles.png`
 
-### GAP-035 — Notification categories are on/off only — no per-category channel choice or detail screen
+### GAP-035 — Notification categories drill into the real Push channel while Email is explicitly unavailable
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > Notifications
 
 **Gap**
 
-The reference lists each category as a drill-in row whose value summarises the enabled channels ('Push', 'Email', 'Push and Email'), so a user can keep e.g. Usage on email but off push. agiworkforce offers a single boolean switch per category and has no email channel anywhere in the product.
+Notification Preferences now presents each category as a drill-in row with a Push or Off summary instead of hiding channel semantics behind a bare switch. The dynamic category screen controls the existing persisted Push preference consumed by foreground, background, and companion notification gates. Email is visible as Unavailable with an explanation that no account sender exists, and no fake email boolean is stored. Invalid or array-valued route categories fail to a teaching not-found state instead of mutating an arbitrary store key.
 
 **Evidence**
 
-apps/mobile/src/features/settings/notifications/index.tsx:394-421 (Switch per category); apps/web/features/settings/sections/NotificationsSection.tsx (email/push groups were removed because no send path exists)
+apps/mobile/src/features/settings/notifications/index.tsx renders category summaries and routes to /(app)/settings/notifications/[category]. NotificationCategoryDetailScreen.tsx owns the live Push switch, the non-interactive Email unavailable state, and explicit no-hidden-preference copy. categories.ts is the bounded shared category allowlist used by both screens. The dynamic Expo route is registered in the authenticated drawer. notification-category-settings.test.tsx verifies summaries, exact navigation, live store mutation, absence of an email preference, and invalid-category rejection; notificationPrefs.test.ts and notification-auth-gate.test.ts continue to verify the stored preference gates notification delivery.
 
 **Suggested fix**
 
-Model each category as {push, email} and render SettingsRows whose value is the channel summary, pushing a per-category detail screen with two switches; ship the email sender before exposing the email channel, or label it 'Coming soon' rather than a no-op toggle.
+Completed for channels the product can actually deliver. Keep Email non-interactive until an account-bound sender, consent and unsubscribe policy, bounce handling, and category-specific delivery consumers exist; then extend the shared channel model and migration without changing the current Push enforcement contract.
 
 **Reference screenshot(s)**
 
