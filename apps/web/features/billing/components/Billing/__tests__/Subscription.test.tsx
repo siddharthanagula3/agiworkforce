@@ -40,7 +40,7 @@ function makeBilling(plan: BillingInfo['plan']): BillingInfo {
     price: plan === 'free' ? 0 : null,
     currency: plan === 'free' ? 'USD' : null,
     features: ['Feature A', 'Feature B'],
-    usage: { totalTokens: 0, totalLimit: 0, totalCost: 0, llmUsage: [] },
+    usage: { usedPercent: 0 },
     invoices: [],
   };
 }

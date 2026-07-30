@@ -23,7 +23,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { BillingInfo, safePercentage } from './types';
+import { BillingInfo } from './types';
 
 interface UsageProps {
   billing: BillingInfo | null;
@@ -61,10 +61,7 @@ export const Usage: React.FC<UsageProps> = ({
   formatCurrency,
   formatDate,
 }) => {
-  const usagePercent = safePercentage(
-    billing?.usage?.totalTokens ?? 0,
-    billing?.usage?.totalLimit || 1,
-  );
+  const usagePercent = Math.min(100, Math.max(0, billing?.usage.usedPercent ?? 0));
 
   return (
     <>
@@ -96,22 +93,12 @@ export const Usage: React.FC<UsageProps> = ({
                     : 'on your next billing date'}
                 </span>
               </div>
-              {(billing?.usage?.totalTokens ?? 0) > 0 &&
-                (billing?.usage?.totalLimit ?? 0) > 0 &&
-                (billing?.usage?.totalTokens ?? 0) >= (billing?.usage?.totalLimit ?? 0) * 0.8 && (
-                  <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-500">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span>
-                      Approaching limit -{' '}
-                      {(
-                        (((billing?.usage?.totalLimit || 1) - (billing?.usage?.totalTokens ?? 0)) /
-                          (billing?.usage?.totalLimit || 1)) *
-                        100
-                      ).toFixed(0)}
-                      % remaining
-                    </span>
-                  </div>
-                )}
+              {usagePercent >= 80 && (
+                <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-500">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Approaching limit - {(100 - usagePercent).toFixed(0)}% remaining</span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
