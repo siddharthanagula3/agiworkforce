@@ -8,10 +8,10 @@
  *   - Shows "How can I help you?" subtitle only when no display name
  *   - Does not render duplicate prompt chips
  *   - Does NOT show suggestion-style cards or multi-step wizard content
- *   - Keeps desktop pairing banner hidden while the companion feature is gated
+ *   - Shows and dismisses the Desktop pairing banner while companion is available
  */
 
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — must be before component import
@@ -252,14 +252,12 @@ describe('ChatEmptyState', () => {
       expect(getByText('Ask anything')).toBeTruthy();
     });
 
-    it('keeps pairing banner hidden while companion is disabled', () => {
+    it('shows the pairing banner while Desktop companion is available', () => {
       mockStorageGetString.mockReturnValue(undefined);
 
-      const { queryByText } = render(
-        <ChatEmptyState showPairingBanner onPairDesktop={jest.fn()} />,
-      );
-      expect(queryByText('Pair your desktop?')).toBeNull();
-      expect(queryByText('Scan QR to connect')).toBeNull();
+      const { getByText } = render(<ChatEmptyState showPairingBanner onPairDesktop={jest.fn()} />);
+      expect(getByText('Pair your desktop?')).toBeTruthy();
+      expect(getByText('Scan QR to connect')).toBeTruthy();
     });
 
     it('does NOT show pairing banner when previously dismissed', () => {
@@ -271,16 +269,16 @@ describe('ChatEmptyState', () => {
       expect(queryByText('Pair your desktop?')).toBeNull();
     });
 
-    it('does not expose a desktop-pairing action while companion is disabled', () => {
+    it('invokes the Desktop-pairing action from the banner', () => {
       mockStorageGetString.mockReturnValue(undefined);
       const onPairDesktop = jest.fn();
 
-      const { queryByLabelText } = render(
+      const { getByLabelText } = render(
         <ChatEmptyState showPairingBanner onPairDesktop={onPairDesktop} />,
       );
 
-      expect(queryByLabelText('Pair your desktop')).toBeNull();
-      expect(onPairDesktop).not.toHaveBeenCalled();
+      fireEvent.press(getByLabelText('Pair your desktop'));
+      expect(onPairDesktop).toHaveBeenCalledTimes(1);
     });
   });
 });

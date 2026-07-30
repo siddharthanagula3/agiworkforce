@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AgentDashboard } from '@/src/features/companion/components/AgentDashboard';
+import { DispatchTaskComposer } from '@/src/features/companion/components/DispatchTaskComposer';
 import { colors } from '@/src/ui/theme';
 
 interface DesktopInfoCardProps {
@@ -58,6 +59,8 @@ export function DesktopInfoCard({
           )}
         </Card>
       </View>
+
+      <DispatchTaskComposer />
 
       <View className="flex-1">
         <AgentDashboard />

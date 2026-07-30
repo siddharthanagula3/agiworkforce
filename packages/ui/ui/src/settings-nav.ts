@@ -21,6 +21,7 @@ import {
   Activity,
   Users,
   MonitorSmartphone,
+  Laptop,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -46,6 +47,7 @@ export type SettingsNavKey =
   | 'capabilities'
   | 'agents'
   | 'connections'
+  | 'cowork'
   | 'connectors'
   | 'agi-code'
   | 'agi-in-chrome'
@@ -140,6 +142,12 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
     icon: MonitorSmartphone,
     keywords: ['mobile', 'phone', 'device', 'pairing', 'remote control', 'screen sharing'],
   },
+  {
+    key: 'cowork',
+    label: 'Cowork',
+    icon: Laptop,
+    keywords: ['dispatch', 'remote task', 'mobile task', 'phone task'],
+  },
   { key: 'connectors', label: 'Connectors', icon: Plug, keywords: ['mcp', 'integration'] },
   {
     key: 'agi-code',
@@ -208,7 +216,16 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   },
   {
     label: 'Tools',
-    keys: ['connections', 'connectors', 'agi-code', 'agi-in-chrome', 'plugins', 'agents', 'memory'],
+    keys: [
+      'connections',
+      'cowork',
+      'connectors',
+      'agi-code',
+      'agi-in-chrome',
+      'plugins',
+      'agents',
+      'memory',
+    ],
   },
   { label: 'Desktop app', keys: ['notifications', 'voice', 'extensions'] },
   { label: 'Advanced', keys: ['developer'] },
