@@ -114,6 +114,137 @@ describe('MessageBubble', () => {
       expect(screen.getByText('I can help')).toBeInTheDocument();
     });
 
+    it('renders provider-managed code execution progress without a duplicate thinking state', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+            metadata: { isExecutingCode: true },
+          })}
+        />,
+      );
+
+      expect(screen.getByText('Code Execution')).toBeInTheDocument();
+      expect(screen.getByText('Running Python…')).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).not.toBeInTheDocument();
+    });
+
+    it('renders persisted stdout, stderr, exit status, and plot output', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: {
+              codeExecutionResult: {
+                stdout: '42',
+                stderr: 'warning',
+                returnCode: 2,
+                images: [{ mediaType: 'image/png', data: 'cG5n' }],
+              },
+            },
+          })}
+        />,
+      );
+
+      expect(screen.getByText('42')).toBeInTheDocument();
+      expect(screen.getByText('warning')).toBeInTheDocument();
+      expect(screen.getByText('Exit code: 2')).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Code execution output 1' })).toHaveAttribute(
+        'src',
+        'data:image/png;base64,cG5n',
+      );
+    });
+
+    it('does not render execution images with unsafe media types', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: {
+              codeExecutionResult: {
+                stdout: '',
+                stderr: '',
+                returnCode: 0,
+                images: [{ mediaType: 'image/svg+xml', data: 'PHN2Zz48L3N2Zz4=' }],
+              },
+            },
+          })}
+        />,
+      );
+
+      expect(
+        screen.queryByRole('img', { name: 'Code execution output 1' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('collapses and expands execution output from its header control', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: {
+              codeExecutionResult: {
+                stdout: 'collapsible output',
+                stderr: '',
+                returnCode: 0,
+              },
+            },
+          })}
+        />,
+      );
+
+      const toggle = screen.getByRole('button', { name: /Code Execution/i });
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('collapsible output')).toBeInTheDocument();
+
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText('collapsible output')).not.toBeInTheDocument();
+
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('collapsible output')).toBeInTheDocument();
+    });
+
+    it('re-renders when execution progress becomes a result', () => {
+      const { rerender } = render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: { isExecutingCode: true },
+          })}
+        />,
+      );
+
+      expect(screen.getByText('Running Python…')).toBeInTheDocument();
+
+      rerender(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: '',
+            metadata: {
+              isExecutingCode: false,
+              codeExecutionResult: {
+                stdout: 'finished',
+                stderr: '',
+                returnCode: 0,
+              },
+            },
+          })}
+        />,
+      );
+
+      expect(screen.queryByText('Running Python…')).not.toBeInTheDocument();
+      expect(screen.getByText('finished')).toBeInTheDocument();
+    });
+
     it('renders compact citation markers directly with assistant prose', () => {
       render(
         <MessageBubble
