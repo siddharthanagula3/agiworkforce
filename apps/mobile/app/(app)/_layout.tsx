@@ -19,6 +19,7 @@ export { default as ErrorBoundary } from './error';
  *     (tabs)/       -- Chat, Projects, Settings screens (retained for route compat)
  *     artifacts/    -- mobile artifact gallery
  *     library/      -- aggregated generated images + artifacts view
+ *     skills/       -- read-only Managed Cloud Skills catalog
  *     connectors/   -- Service integrations
  *     chat/[id]     -- Full chat conversation (pushes on top)
  *     agents/[id]   -- Agent detail view
@@ -64,6 +65,7 @@ export default function AppLayout() {
       <Drawer.Screen name="artifacts/index" options={HIDDEN} />
       <Drawer.Screen name="library/index" options={HIDDEN} />
       <Drawer.Screen name="connectors/index" options={HIDDEN} />
+      <Drawer.Screen name="skills/index" options={HIDDEN} />
 
       {/* Chat detail */}
       <Drawer.Screen name="chat/[id]" options={HIDDEN} />

@@ -44,6 +44,7 @@ jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
   return {
     BookImage: icon,
+    BookOpen: icon,
     Boxes: icon,
     CalendarClock: icon,
     Cloud: icon,
@@ -215,6 +216,7 @@ describe('DrawerContent', () => {
   it('shows cloud-only drawer items (Tasks, Schedules, Projects) while in Cloud mode', () => {
     const local = renderDrawer();
     expect(local.queryByText('Schedules')).toBeNull();
+    expect(local.queryByText('Skills')).toBeNull();
     local.unmount();
 
     useChatAppModeStore.setState({ appMode: 'cloud' });
@@ -223,6 +225,7 @@ describe('DrawerContent', () => {
     // Cloud mode shows the durable Tasks + Schedules rows and (synced) Projects.
     expect(cloud.getByLabelText('Tasks. Cloud')).toBeTruthy();
     expect(cloud.getByLabelText('Schedules. Cloud')).toBeTruthy();
+    expect(cloud.getByLabelText('Skills. Cloud')).toBeTruthy();
     // Projects nav row is visible in cloud mode (task: unblock cloud projects).
     expect(cloud.getByLabelText('Projects')).toBeTruthy();
     // The local project "Launch demo" should NOT appear in cloud mode
@@ -248,6 +251,16 @@ describe('DrawerContent', () => {
 
     expect(mockCloseDrawer).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/agents');
+  });
+
+  it('opens the Managed Cloud Skills catalog from the drawer', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByLabelText } = renderDrawer();
+
+    fireEvent.press(getByLabelText('Skills. Cloud'));
+
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/skills');
   });
 
   it('renders projects and recents', () => {

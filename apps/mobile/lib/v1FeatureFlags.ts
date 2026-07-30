@@ -116,6 +116,16 @@ export const FEATURES = {
    *  entries without a real backend stay visibly unavailable. */
   connectors: true,
 
+  /**
+   * Read-only Managed Cloud Skills catalog.
+   *
+   * The authenticated `/api/skills` contract returns metadata for the Skills
+   * installed on the deployment. Mobile can browse and search that real
+   * catalog, but it does not pretend to install or mutate host filesystem
+   * Skills. The route remains Cloud-mode and Clerk-sign-in gated.
+   */
+  skills: true,
+
   /** Web search via server-side API.
    *  Enabled by default for eligible Cloud turns; it is not a redundant composer
    *  menu option. The server capability handshake and selected model still fail

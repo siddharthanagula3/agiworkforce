@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import {
   BookImage,
+  BookOpen,
   Boxes,
   CalendarClock,
-  Cloud,
   FolderOpen,
   HelpCircle,
   Pin,
@@ -38,6 +38,7 @@ type RoutePath =
   | '/(app)/(tabs)/chat'
   | '/(app)/artifacts'
   | '/(app)/library'
+  | '/(app)/skills'
   | '/(app)/schedules'
   | '/(app)/agents'
   | '/(app)/(tabs)/settings'
@@ -47,7 +48,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'projects' | 'artifacts' | 'library' | 'tasks' | 'schedules';
+  key: 'projects' | 'artifacts' | 'library' | 'skills' | 'tasks' | 'schedules';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -72,6 +73,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     label: 'Library',
     icon: BookImage,
     route: '/(app)/library',
+  },
+  {
+    key: 'skills',
+    label: 'Skills',
+    icon: BookOpen,
+    route: '/(app)/skills',
+    cloud: true,
   },
   {
     key: 'tasks',
@@ -377,6 +385,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         // mode keeps only on-device surfaces and hides every cloud-only item.
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
         if (item.key === 'tasks' && !FEATURES.cloudTasks) return false;
+        if (item.key === 'skills' && !FEATURES.skills) return false;
         if (appMode === 'cloud') return true;
         return !item.cloud;
       }),
@@ -389,6 +398,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'projects') return p.includes('/projects');
       if (key === 'artifacts') return p.includes('/artifacts');
       if (key === 'library') return p.includes('/library');
+      if (key === 'skills') return p.includes('/skills');
       if (key === 'schedules') return p.includes('/schedules');
       if (key === 'tasks') return p.includes('/agents');
       return false;
@@ -438,7 +448,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               <NavRow
                 key={item.key}
                 label={item.label}
-                icon={item.cloud ? Cloud : item.icon}
+                icon={item.icon}
                 active={activeKey(item.key)}
                 tag={item.cloud ? 'Cloud' : undefined}
                 onPress={() => {

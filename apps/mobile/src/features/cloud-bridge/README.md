@@ -9,7 +9,8 @@ Canonical reference: `apps/desktop/src/features/cloud-bridge/README.md`
 
 Historically, cloud-only mobile features opened this modal. Managed Cloud chat has
 since become public alpha and sends signed-out users directly to Clerk sign-in.
-After the unshipped Code Sessions and Skills shells were removed on 2026-07-30,
+After the unshipped Code Sessions shell was removed and Skills was rebuilt on a
+supported authenticated catalog contract on 2026-07-30,
 `InviteCodeModal` has no production UI consumer. It remains only as explicitly
 tracked cleanup debt in `MOB-CLOUD-INVITE-RESIDUAL-01`; do not reconnect it as a
 Cloud-chat access gate.
