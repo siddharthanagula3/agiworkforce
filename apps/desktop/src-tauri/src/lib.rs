@@ -24,13 +24,12 @@ use crate::sys::commands::{
     tool_confirmation::ToolConfirmationState,
     undo::UndoState,
     ApiState, AppDatabase, BrowserStateWrapper, CalendarState, CloudState, CodeEditingState,
-    ComputerUseState, DatabaseState, DocumentState, EmbeddingService, FileWatcherState,
-    GitHubState, LLMState, LSPState, McpOAuthState, McpState, McpbState, MemoryState,
-    NativeMessagingStateWrapper, NotificationState, ProductivityState, SchedulerState,
-    SettingsServiceState, SettingsState, ShortcutsState, TaskManagerState, TemplateManagerState,
-    VoiceState, WorkflowEngineState, WorkspaceIndexState,
+    ComputerUseState, DatabaseState, DocumentState, EmbeddingService, FileWatcherState, LLMState,
+    LSPState, McpOAuthState, McpState, McpbState, MemoryState, NativeMessagingStateWrapper,
+    NotificationState, ProductivityState, SchedulerState, SettingsServiceState, SettingsState,
+    ShortcutsState, TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState,
+    WorkspaceIndexState,
 };
-use crate::sys::diagnostics::DiagnosticsState;
 use crate::sys::security::{AuthManager, SecretManager};
 use crate::sys::telemetry;
 use anyhow::Context;
@@ -814,10 +813,6 @@ pub fn run() {
             app.manage(crate::sys::commands::canvas::CanvasStateManager::default());
             tracing::info!("Canvas state manager initialized");
 
-            // Diagnostics state for /doctor command
-            app.manage(DiagnosticsState::new());
-            tracing::info!("Diagnostics state initialized");
-
             // Tool Confirmation state for safety tier confirmation dialogs
             app.manage(ToolConfirmationState::new_with_db(db_conn_arc.clone()));
             tracing::info!("Tool confirmation state initialized");
@@ -877,10 +872,6 @@ pub fn run() {
             // Project context state for active folder selection
             app.manage(crate::sys::commands::project_context::ProjectContextState::new());
             tracing::info!("Project context state initialized");
-
-            let workspace_dir = app_data_dir.join("github_repos");
-            std::fs::create_dir_all(&workspace_dir).ok();
-            app.manage(Arc::new(TokioMutex::new(GitHubState::new(workspace_dir))));
 
             app.manage(Arc::new(TokioMutex::new(ComputerUseState::new())));
 
@@ -942,9 +933,6 @@ pub fn run() {
             let codebase_cache = crate::data::cache::CodebaseCache::new(Arc::new(Mutex::new(cache_conn)))
                     .context("Failed to initialize codebase cache")?;
             app.manage(crate::sys::commands::cache::CodebaseCacheState(Arc::new(codebase_cache)));
-
-            // Background LLM queue state
-            app.manage(crate::sys::commands::background_llm::BackgroundLLMState::new(4));
 
             app.manage(BillingStateWrapper::new());
 
@@ -1562,13 +1550,6 @@ pub fn run() {
             crate::sys::commands::git_check_pr_readiness,
             crate::sys::commands::git_current_branch,
             crate::sys::commands::git_default_branch,
-            crate::sys::commands::github_clone_repo,
-            crate::sys::commands::github_get_repo_context,
-            crate::sys::commands::github_search_files,
-            crate::sys::commands::github_read_file,
-            crate::sys::commands::github_get_file_tree,
-            crate::sys::commands::github_list_repos,
-
             crate::sys::commands::media_generate_image,
             crate::sys::commands::media_generate_video,
             crate::sys::commands::media_get_history,
@@ -1779,11 +1760,6 @@ pub fn run() {
             crate::sys::commands::workspace_get_dependencies,
             crate::sys::commands::workspace_get_file_symbols,
             crate::sys::commands::workspace_get_stats,
-
-            // Debugging / error analysis
-            crate::sys::commands::debug_parse_error,
-            crate::sys::commands::debug_suggest_fixes,
-            crate::sys::commands::debug_analyze_stack_trace,
 
             // Project instruction files (CLAUDE.md / AGENTS.md auto-load)
 
@@ -2295,14 +2271,6 @@ pub fn run() {
             crate::sys::commands::background_agents::background_agent_push,
             crate::sys::commands::background_agents::background_agent_list,
             crate::sys::commands::background_agents::background_agent_resume,
-            crate::sys::commands::background_llm::bg_llm_submit,
-            crate::sys::commands::background_llm::bg_llm_get_status,
-            crate::sys::commands::background_llm::bg_llm_cancel,
-            crate::sys::commands::background_llm::bg_llm_get_statistics,
-            crate::sys::commands::background_llm::bg_llm_process_queue,
-            crate::sys::commands::background_llm::bg_llm_cleanup,
-            crate::sys::commands::background_llm::bg_llm_verify_webhook,
-
             crate::sys::commands::governance::get_audit_events,
             crate::sys::commands::governance::verify_audit_event,
             crate::sys::commands::governance::verify_audit_integrity,
@@ -2827,16 +2795,6 @@ pub fn run() {
             crate::sys::commands::dotfile_read_instructions,
             crate::sys::commands::dotfile_write_instructions,
             crate::sys::commands::dotfile_read_memories,
-
-            // ============================================================
-            // Doctor / Diagnostics commands
-            // ============================================================
-            crate::sys::diagnostics::commands::doctor_run_checks,
-            crate::sys::diagnostics::commands::doctor_run_check,
-            crate::sys::diagnostics::commands::doctor_list_checks,
-            crate::sys::diagnostics::commands::doctor_get_report,
-            crate::sys::diagnostics::commands::doctor_is_running,
-            crate::sys::diagnostics::commands::doctor_format_report,
 
             // ============================================================
             // Ecosystem detection (import MCP configs from other tools)

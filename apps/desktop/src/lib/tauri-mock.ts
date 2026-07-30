@@ -1064,27 +1064,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         symbolKinds: {},
       } as T;
 
-    // Debugging / error analysis
-    case 'debug_parse_error':
-      return {
-        errorType: 'Unknown',
-        message: (args?.['errorText'] as string | undefined) ?? '',
-        filePath: null,
-        line: null,
-        column: null,
-        stackTrace: [],
-        severity: 'Medium',
-      } as T;
-    case 'debug_suggest_fixes':
-      return [] as T;
-    case 'debug_analyze_stack_trace':
-      return {
-        rootCauseFrame: 0,
-        explanation: '(mock analysis)',
-        errorPath: '',
-        recommendations: [],
-      } as T;
-
     // Formatter detection
     case 'format_detect':
       return {
