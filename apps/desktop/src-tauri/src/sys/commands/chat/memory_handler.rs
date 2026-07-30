@@ -50,7 +50,14 @@ pub struct ChatMemoryHandler {
 impl ChatMemoryHandler {
     /// Create a new chat memory handler
     pub fn new(memory_manager: Option<std::sync::Arc<MemoryManager>>) -> Result<Self> {
-        let config = MemoryInjectionConfig::default();
+        Self::with_config(memory_manager, MemoryInjectionConfig::default())
+    }
+
+    /// Create a handler using the process policy selected by Settings.
+    pub fn with_config(
+        memory_manager: Option<std::sync::Arc<MemoryManager>>,
+        config: MemoryInjectionConfig,
+    ) -> Result<Self> {
         let injector = MemoryInjector::new(config)?;
 
         Ok(Self {

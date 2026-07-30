@@ -73,9 +73,12 @@ import {
 } from '@/lib/services/project-context-service';
 import {
   applyManagedMemoryContext,
+  DISABLED_MANAGED_MEMORY_POLICY,
   formatManagedMemorySystemPrompt,
   loadManagedMemoryContext,
+  loadManagedMemoryPolicy,
   type ManagedMemoryContextDb,
+  type ManagedMemoryPolicy,
 } from '@/lib/services/managed-memory-context-service';
 import {
   createSkillToolDefinition,
@@ -738,9 +741,31 @@ export function prepareManagedAutoMemoryFacts(params: {
   message: string;
   isTemporary: boolean;
   surface: CloudChatSurface;
+  policy: ManagedMemoryPolicy;
 }): string[] {
-  if (params.isTemporary || params.surface !== 'web') return [];
+  if (!params.policy.enabled || params.isTemporary || params.surface === 'api') return [];
   return extractCandidateMemoryFacts(params.message).slice(0, 5);
+}
+
+/**
+ * Conservative generation-scope boundary. A turn that requests or is offered
+ * any tool/search/work runtime is treated as tool-assisted; when the user has
+ * not opted in, over-blocking generation is safer than persisting a fact from
+ * an assisted turn whose terminal callback cannot reconstruct every tool call.
+ */
+export function isManagedMemoryToolAssistedTurn(
+  request: ChatCompletionRequest,
+  resolvedTools: readonly unknown[] | undefined,
+): boolean {
+  return Boolean(
+    request.web_search ||
+    request.web_fetch ||
+    request.research ||
+    request.code_execution ||
+    request.office_creation ||
+    request.work_mode === 'agiwork' ||
+    (resolvedTools?.length ?? 0) > 0,
+  );
 }
 
 // Exported so it can be unit-tested without importing the full processRequest stack.
@@ -1324,6 +1349,7 @@ export async function processRequest(
   // client. Temporary Chats deliberately opt out. Loading is best-effort so a
   // memory-store outage cannot take down an otherwise valid chat turn, while
   // owner mismatch always fails closed by skipping enrichment.
+  let managedMemoryPolicy = DISABLED_MANAGED_MEMORY_POLICY;
   if (!conversationIsTemporary) {
     try {
       userScopedDb ??= await getUserScopedDb(request);
@@ -1333,12 +1359,17 @@ export async function processRequest(
           'Managed memory owner mismatch; continuing without account memory',
         );
       } else {
-        await enrichManagedMemoryContext({
-          db: userScopedDb.db,
+        managedMemoryPolicy = await loadManagedMemoryPolicy(userScopedDb.db, {
           userId,
-          chatRequest,
-          isTemporary: false,
         });
+        if (managedMemoryPolicy.enabled) {
+          await enrichManagedMemoryContext({
+            db: userScopedDb.db,
+            userId,
+            chatRequest,
+            isTemporary: false,
+          });
+        }
       }
     } catch (error) {
       logger.error(
@@ -1488,10 +1519,11 @@ export async function processRequest(
   }
   const lastUserMsg = lastUserIndex >= 0 ? chatRequest.messages[lastUserIndex] : undefined;
   const lastUserText = lastUserMsg ? extractTextContent(lastUserMsg.content) : '';
-  const autoMemoryFacts = prepareManagedAutoMemoryFacts({
+  let autoMemoryFacts = prepareManagedAutoMemoryFacts({
     message: lastUserText,
     isTemporary: conversationIsTemporary,
     surface: resolveCloudChatSurface(request),
+    policy: managedMemoryPolicy,
   });
 
   // The classifier contract expects PRIOR turns only; including the outgoing
@@ -2299,6 +2331,13 @@ export async function processRequest(
     } else if (resolvedModelCaps?.codeExecution ?? true) {
       resolvedTools = [...(resolvedTools ?? []), ...resolveCodeExecutionTools(providerLower)];
     }
+  }
+
+  if (
+    !managedMemoryPolicy.allowToolAssistedGeneration &&
+    isManagedMemoryToolAssistedTurn(chatRequest, resolvedTools)
+  ) {
+    autoMemoryFacts = [];
   }
 
   // AUDIT-FIX SYS-1/SYS-2/SYS-3/SYS-5: prepend the base capability preamble.

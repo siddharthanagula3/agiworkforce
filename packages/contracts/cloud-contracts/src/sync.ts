@@ -371,6 +371,7 @@ export const CloudSafeSettingsSchema = z.object({
   notifications: CloudSafeSettingsNamespaceSchema.optional(),
   language: CloudSafeSettingsNamespaceSchema.optional(),
   accessibility: CloudSafeSettingsNamespaceSchema.optional(),
+  capabilities: CloudSafeSettingsNamespaceSchema.optional(),
   chat: CloudSafeSettingsNamespaceSchema.optional(),
   editor: CloudSafeSettingsNamespaceSchema.optional(),
 });

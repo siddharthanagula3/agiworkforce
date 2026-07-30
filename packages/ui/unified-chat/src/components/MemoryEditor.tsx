@@ -37,6 +37,8 @@ export interface MemoryEditorProps {
 export type MemoryEditorSyncStatus = 'unavailable' | 'idle' | 'syncing' | 'synced' | 'error';
 
 export interface MemoryEditorDataAdapter {
+  /** Determines truthful local-vs-account copy; adapters are not inherently cloud-backed. */
+  scope?: 'local' | 'cloud';
   facts: MemoryFact[];
   syncStatus: MemoryEditorSyncStatus;
   hydrateFromServer: () => Promise<void>;
@@ -67,6 +69,7 @@ export function MemoryEditor({
   const clear = adapter?.clear ?? localClear;
   const syncStatus = adapter?.syncStatus ?? localSyncStatus;
   const hydrateFromServer = adapter?.hydrateFromServer ?? localHydrateFromServer;
+  const isAccountScoped = adapter?.scope === 'cloud';
 
   const [draft, setDraft] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -74,9 +77,9 @@ export function MemoryEditor({
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
 
-  // Pull the account-scoped copy on mount so facts saved from another
-  // device show up here too. No-op where sync isn't available (Desktop
-  // Tauri webview, Mobile) — see memoryStore.ts's `canSyncToServer` guard.
+  // Hydrate the selected adapter on mount. Account adapters pull cross-device
+  // facts; native adapters load their device database; the shared fallback is
+  // a no-op where sync is unavailable.
   useEffect(() => {
     void hydrateFromServer().catch(() => undefined);
   }, [hydrateFromServer]);
@@ -155,7 +158,7 @@ export function MemoryEditor({
             <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{description}</p>
           ) : null}
           <p className="text-xs text-[var(--chat-text-muted)]">
-            {syncStatusLabel(syncStatus, Boolean(adapter))}
+            {syncStatusLabel(syncStatus, isAccountScoped)}
           </p>
         </div>
       ) : null}
@@ -204,7 +207,7 @@ export function MemoryEditor({
             className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-[var(--chat-text-muted)]"
             style={{ borderColor: 'var(--chat-border)' }}
           >
-            {adapter
+            {isAccountScoped
               ? 'No cloud memory facts yet. Add one above and it will be available to your Managed Cloud conversations.'
               : 'No local memory facts yet. Add one above and it will be available to conversations on this device.'}
           </p>

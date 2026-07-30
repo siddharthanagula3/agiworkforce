@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: b328029445b4fdca7073b78fd0ccea62c9deab835ce4aab1d4bed72cce9b9dd6 -->
+<!-- ui-gaps-csv-sha256: 91b77998ebbe20a5c215af2f8b6fed45852fae004caf82c5f154187a17a909f8 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 7 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 6 P0, 126 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  337 |
+| Open        |  336 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |    4 |
+| Done        |    5 |
 | Not Planned |    0 |
 
 ## P0
@@ -209,24 +209,24 @@ Completed. Keep every future path to unsandboxed terminal execution behind this 
 
 - `chatgpt_reference/091-chatgpt-macos-settings-general-permissions-full-access-defaults.png`
 
-### GAP-009 — Desktop has no master memory on/off toggle or memory-generation scope controls
+### GAP-009 — Desktop memory controls enforce one Local and Managed Cloud privacy policy
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Personalization — Memory
 
 **Gap**
 
-The reference exposes a master memory switch, memory-generation scope, and reset. The mounted Desktop Settings tab renders only the shared MemoryEditor for fact management. A separate legacy features/memory/MemoryPanel contains localStorage-backed enable/pause/auto-inject controls but has no consumer and does not establish a shared generation/retrieval policy, so mounting it would create another settings façade rather than close the privacy-control gap.
+The mounted Desktop Memory tab now exposes the reference control set: an authoritative master switch, a separately gated tool-assisted-generation opt-in, and confirmed destructive reset. The same policy drives Local native memory and Managed Cloud account memory; turning it off blocks automatic retrieval and generation while leaving manual review, edit, and deletion available.
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/Memory.tsx mounts MemoryEditor only. apps/desktop/src/features/memory/MemoryPanel.tsx contains isEnabled/isPaused controls, but current imports find no consumer outside its own file. No single Desktop capability store gates both memory generation and retrieval across Local and Managed Cloud.
+apps/desktop/src/features/settings/tabs/Memory.tsx mounts the master, tool-assisted scope, reset, native SQLite adapter, and Managed Cloud adapter. settingsStore.ts persists one fail-closed policy and managedCloudSettingsSync.ts synchronizes the account-safe capability namespace. Native chat streaming/non-streaming, memory tools, direct project-memory loading, project auto-save, and scheduled summarization enforce the policy; the Web managed-memory request path enforces the same account setting. The two orphan localStorage-only memory panels are removed. GAP-009-memory-controls.test.tsx, settingsStore.test.ts, managedCloudSettingsSync.test.ts, request-processor.memory.test.ts, and the named Rust memory-policy tests cover the mounted controls and enforcement seams.
 
 **Suggested fix**
 
-Define one mode-aware memory policy contract that gates generation and retrieval, wire it into the actual memory pipelines, then expose master enable, tool-assisted-generation scope, and destructive reset controls in the mounted Memory settings tab. Remove the orphan localStorage-only panel instead of mounting non-authoritative toggles.
+Completed. Keep automatic retrieval and every generation entry point behind the fail-closed master policy, require explicit opt-in for tool-assisted generation, preserve manual deletion while disabled, and extend the named GAP-009 tests whenever a new memory pipeline is added.
 
 **Reference screenshot(s)**
 

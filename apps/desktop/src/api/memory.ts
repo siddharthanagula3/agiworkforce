@@ -851,18 +851,21 @@ export async function saveDecision(message: string): Promise<SaveDecisionRespons
 }
 
 /**
- * Configure memory injection behavior (chat_configure_memory_injection).
+ * Configure the native memory master, selection limits, and tool-assisted scope
+ * (chat_configure_memory_injection).
  */
 export async function configureMemoryInjection(
   enabled: boolean,
   maxMemories: number,
   minImportance: number,
+  allowToolAssistedGeneration: boolean,
 ): Promise<void> {
   try {
     return await invoke<void>('chat_configure_memory_injection', {
       enabled,
       maxMemories,
       minImportance,
+      allowToolAssistedGeneration,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

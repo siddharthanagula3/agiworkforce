@@ -21,7 +21,7 @@ import { resetMemoryCapabilityCache } from '../memory-capability';
 function stubFetch(opts?: { memory?: boolean }): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (url: unknown) => {
     if (typeof url === 'string' && url.includes('/api/settings/preferences')) {
-      return { ok: true, json: async () => ({ settings: { memory: opts?.memory ?? true } }) };
+      return { ok: true, json: async () => ({ settings: { memory: opts?.memory ?? false } }) };
     }
     return { ok: false, json: async () => ({}) };
   });
@@ -90,6 +90,21 @@ describe('WebChatRuntime memory injection', () => {
     }>;
     expect(messages.every((m) => m.role !== 'system')).toBe(true);
     expect(messages).toEqual([{ role: 'user', content: 'hello' }]);
+  });
+
+  it('fails closed when the capability preference cannot be loaded', async () => {
+    useMemoryStore.getState().add('Never leak this fact');
+    const fetchMock = vi.fn(async (url: unknown) => {
+      if (typeof url === 'string' && url.includes('/api/settings/preferences')) {
+        return { ok: false, json: async () => ({}) };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    await new WebChatRuntime().sendMessage('conv-1', 'hello', { messageHistory: [] });
+
+    expect(completionsBody(fetchMock)['messages']).toEqual([{ role: 'user', content: 'hello' }]);
   });
 
   it('advertises Research and sends the exact research field to the managed API', async () => {

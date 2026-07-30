@@ -13,13 +13,16 @@ import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
 type CapabilitiesSettings = {
   memory: boolean;
   generateFromHistory: boolean;
+  allowToolAssistedGeneration: boolean;
 };
 
 const NAMESPACE = 'capabilities';
 
 const DEFAULT_SETTINGS: CapabilitiesSettings = {
-  memory: true,
+  // Privacy-safe default: memory does not read or generate until the user opts in.
+  memory: false,
   generateFromHistory: true,
+  allowToolAssistedGeneration: false,
 };
 
 export function CapabilitiesSection() {
@@ -138,8 +141,18 @@ export function CapabilitiesSection() {
           'Use conversation history to generate better responses',
           <Switch
             checked={settings.generateFromHistory}
-            disabled={loadError !== null}
+            disabled={loadError !== null || !settings.memory}
             onCheckedChange={(value) => setBoolean('generateFromHistory', value)}
+          />,
+        )}
+
+        {row(
+          'Allow memory generation from tool-assisted chats',
+          'Create memories from chats that use tools, connectors, code, or web search',
+          <Switch
+            checked={settings.allowToolAssistedGeneration}
+            disabled={loadError !== null || !settings.memory}
+            onCheckedChange={(value) => setBoolean('allowToolAssistedGeneration', value)}
           />,
         )}
 

@@ -6,10 +6,12 @@ import type {
   SettingsSyncPushResponse,
 } from '@agiworkforce/cloud-contracts';
 import {
+  applyDesktopCloudSafeSettings,
   createManagedCloudSettingsSyncCoordinator,
   projectDesktopCloudSafeSettings,
   type ManagedCloudSettingsSyncPorts,
 } from '../managedCloudSettingsSync';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 function createHarness(privacyMode: 'local' | 'byok' | 'managed' = 'local') {
   let mode = privacyMode;
@@ -214,12 +216,41 @@ describe('Desktop Managed Cloud settings synchronization', () => {
       appearance: { theme: 'dark' },
       personalization: { fullName: 'Sid', occupation: 'Engineer', warmth: 80 },
       language: { locale: 'en' },
+      capabilities: {
+        memory: false,
+        allowToolAssistedGeneration: false,
+      },
       chat: { compactMode: false },
       editor: { promptCompletionEnabled: true },
     });
     expect(JSON.stringify(projected)).not.toMatch(
       /chatStorageMode|autoApprove|autoSave|agentMode|bio|apiKey|provider/i,
     );
+  });
+
+  it('applies the account memory master and tool-assisted scope to Desktop settings', async () => {
+    useSettingsStore.setState((state) => ({
+      chatPreferences: {
+        ...state.chatPreferences,
+        memoryEnabled: false,
+        autoSaveMemories: false,
+        allowToolAssistedMemoryGeneration: false,
+      },
+    }));
+
+    applyDesktopCloudSafeSettings({
+      capabilities: {
+        memory: true,
+        allowToolAssistedGeneration: true,
+      },
+    });
+    await vi.runAllTimersAsync();
+
+    expect(useSettingsStore.getState().chatPreferences).toMatchObject({
+      memoryEnabled: true,
+      autoSaveMemories: true,
+      allowToolAssistedMemoryGeneration: true,
+    });
   });
 
   it('pulls the server winner after a base-version conflict and reports failures observably', async () => {

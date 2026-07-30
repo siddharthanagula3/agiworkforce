@@ -66,7 +66,9 @@ impl MemoryState {
     pub fn new(db_path: &str) -> Result<Self> {
         let manager = MemoryManager::new(db_path)?;
         let default_config = MemoryInjectionConfig {
-            enabled: true,
+            // Privacy-critical policy is restored explicitly from persisted
+            // settings by the frontend and checked again per chat turn.
+            enabled: false,
             max_memories: 10,
             min_importance: 5,
             priority_categories: vec![

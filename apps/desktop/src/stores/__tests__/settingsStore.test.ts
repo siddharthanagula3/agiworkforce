@@ -62,6 +62,9 @@ describe('settingsStore', () => {
         autoApproveTools: false,
         agentMode: 'build',
         chatStorageMode: 'local',
+        memoryEnabled: false,
+        autoSaveMemories: false,
+        allowToolAssistedMemoryGeneration: false,
       },
       executionPreferences: {
         maxTimeoutMinutes: 1440,
@@ -292,6 +295,42 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().loading).toBe(false);
   });
 
+  it('persists the memory master as the authoritative auto-save policy', async () => {
+    await useSettingsStore.getState().setMemoryEnabled(true);
+
+    expect(useSettingsStore.getState().chatPreferences).toMatchObject({
+      memoryEnabled: true,
+      autoSaveMemories: true,
+    });
+    expect(invokeMock).toHaveBeenCalledWith(
+      'settings_save',
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          chatPreferences: expect.objectContaining({
+            memoryEnabled: true,
+            autoSaveMemories: true,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('rolls back the memory policy when persistence fails', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'settings_save') throw new Error('save failed');
+      return undefined;
+    });
+
+    await expect(useSettingsStore.getState().setMemoryEnabled(true)).rejects.toThrow('save failed');
+    expect(useSettingsStore.getState().chatPreferences).toMatchObject({
+      memoryEnabled: false,
+      autoSaveMemories: false,
+    });
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it('should handle save errors', async () => {
     // Suppress expected console.error from the store's error handler
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -420,6 +459,9 @@ type MigrateState = {
     alwaysUseAgentMode?: boolean;
     compactMode?: boolean;
     autoApproveTools?: boolean;
+    autoSaveMemories?: boolean;
+    memoryEnabled?: boolean;
+    allowToolAssistedMemoryGeneration?: boolean;
   };
   executionPreferences?: {
     maxTimeoutMinutes?: number;
@@ -589,6 +631,12 @@ function migrateSettings(persistedState: unknown, version: number): MigrateState
     };
   }
 
+  if (version < 27 && state.chatPreferences) {
+    state.chatPreferences.memoryEnabled = state.chatPreferences.autoSaveMemories === true;
+    state.chatPreferences.autoSaveMemories = state.chatPreferences.memoryEnabled;
+    state.chatPreferences.allowToolAssistedMemoryGeneration = false;
+  }
+
   return state;
 }
 
@@ -708,6 +756,33 @@ describe('settingsStore migrate() boundaries (H16)', () => {
       expect(result.globalHotkeyPreferences?.enabled).toBe(true);
       expect(Array.isArray(result.customModels)).toBe(true);
       expect(result.features).toBeDefined();
+      expect(result.chatPreferences?.memoryEnabled).toBe(false);
+      expect(result.chatPreferences?.allowToolAssistedMemoryGeneration).toBe(false);
+    });
+  });
+
+  describe('v26 → v27: one fail-closed memory policy', () => {
+    it('preserves an explicit legacy auto-save opt-in as the master switch', () => {
+      const result = migrateSettings(
+        { chatPreferences: { autoSaveMemories: true, allowToolAssistedMemoryGeneration: true } },
+        26,
+      );
+
+      expect(result.chatPreferences).toMatchObject({
+        memoryEnabled: true,
+        autoSaveMemories: true,
+        allowToolAssistedMemoryGeneration: false,
+      });
+    });
+
+    it('defaults missing legacy memory state to disabled', () => {
+      const result = migrateSettings({ chatPreferences: {} }, 26);
+
+      expect(result.chatPreferences).toMatchObject({
+        memoryEnabled: false,
+        autoSaveMemories: false,
+        allowToolAssistedMemoryGeneration: false,
+      });
     });
   });
 });
