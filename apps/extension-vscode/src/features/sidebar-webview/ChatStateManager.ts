@@ -38,6 +38,7 @@ import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import { getAccountAuthState } from '../../utils/api';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
+import { enforceAgentModeConsent, setAgentModeWithConsent } from '../permissions/agentModeConsent';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -222,7 +223,7 @@ export class ChatStateManager {
   }
 
   get mode(): AgentMode | undefined {
-    return this._mode;
+    return this._mode === undefined ? undefined : enforceAgentModeConsent(this._mode);
   }
 
   get effort(): DeveloperReasoningEffort | undefined {
@@ -246,7 +247,10 @@ export class ChatStateManager {
         this._post({ type: 'model', payload: { model } });
         this._postProviderBadge(model);
 
-        this._post({ type: 'modeChanged', payload: { mode: this._mode ?? Config.agentMode() } });
+        this._post({
+          type: 'modeChanged',
+          payload: { mode: enforceAgentModeConsent(this._mode ?? Config.agentMode()) },
+        });
         this._post({
           type: 'effortChanged',
           payload: {
@@ -382,11 +386,13 @@ export class ChatStateManager {
 
       case 'setMode': {
         const mode = (msg as { type: 'setMode'; payload: { mode: AgentMode } }).payload.mode;
-        this._mode = mode;
-        await vscode.workspace
-          .getConfiguration('agiWorkforce')
-          .update('agent.mode', mode, vscode.ConfigurationTarget.Global);
-        this._post({ type: 'modeChanged', payload: { mode } });
+        if (await setAgentModeWithConsent(this._context, mode)) {
+          this._mode = enforceAgentModeConsent(mode);
+        }
+        this._post({
+          type: 'modeChanged',
+          payload: { mode: enforceAgentModeConsent(this._mode ?? Config.agentMode()) },
+        });
         break;
       }
 
@@ -921,7 +927,7 @@ export class ChatStateManager {
             ...(memoryInput === undefined ? [] : [memoryInput]),
             ...attachmentInputs,
           ],
-          agentMode: this._mode ?? Config.agentMode(),
+          agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
           reasoningEffort: this._effort ?? Config.agentEffort(),
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
           ...(isAutoRoutingModel(requestedModel)

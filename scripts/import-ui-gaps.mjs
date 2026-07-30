@@ -83,6 +83,16 @@ function reconcileCurrentP0Premises(record) {
       suggestedFix:
         'Define one mode-aware memory policy contract that gates generation and retrieval, wire it into the actual memory pipelines, then expose master enable, tool-assisted-generation scope, and destructive reset controls in the mounted Memory settings tab. Remove the orphan localStorage-only panel instead of mounting non-authoritative toggles.',
     },
+    'GAP-011': {
+      status: 'Done',
+      owner: 'VS Code',
+      detail:
+        'The reference gates full-access escalation behind a modal that names filesystem, terminal, network/tool, sensitive-data, and prompt-injection risks and requires an explicit confirmation. agiworkforce now applies the same boundary to every supported VS Code mode mutation path, including command pickers, Shift+Tab cycling, sidebar messages, raw Settings edits, and activation-time reconciliation.',
+      evidence:
+        'apps/extension-vscode/src/features/permissions/agentModeConsent.ts is the sole agent.mode write boundary. It persists versioned consent only while bypass remains active, fails unconfirmed bypass closed to Auto, reverts raw settings edits before prompting, and provides explicit Cancel/Confirm actions with scope and risk copy. Config.agentMode and ChatStateManager enforce the consent state at read/dispatch time. agentModeConsent.test.ts covers cancellation, confirmation, raw-setting reconciliation, and consent revocation.',
+      suggestedFix:
+        'Completed. Keep all future agent-mode mutation paths on setAgentModeWithConsent, retain the raw-setting reconciliation listener, and increment the consent version whenever the granted scope or risk contract changes.',
+    },
   };
 
   return currentOverrides[record.id] ? { ...record, ...currentOverrides[record.id] } : record;

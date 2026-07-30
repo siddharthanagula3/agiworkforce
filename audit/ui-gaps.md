@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 12918c1a412091cbdcabbd2a55c3f18dea3367a4d99784afbbeb2751111ec45b -->
+<!-- ui-gaps-csv-sha256: e2b5c7207af9264710f1e80fad9fdca8308c7cc0aafd3cd6035055e23846a16b -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 11 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 10 P0, 126 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  341 |
+| Open        |  340 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |    0 |
+| Done        |    1 |
 | Not Planned |    0 |
 
 ## P0
@@ -257,22 +257,22 @@ Add a second top-level 'Code' tab to the web chat shell alongside Home, with its
 
 ### GAP-011 — 'Bypass permissions' mode is enabled with no consent modal or risk copy
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-state
 - **Reference:** Codex · VS Code extension · 'Turn on Full Access?' consent modal
 
 **Gap**
 
-Reference gates the equivalent escalation behind a modal that names the exact scopes granted (files and folders anywhere on the computer; terminal commands, software installs, system settings; internet access and enabled plugins), states the risk in plain language ('loss or exposure of sensitive data and prompt injection'), says it can be turned off, links Learn more, and requires a danger-styled Confirm with Cancel as the default. In agiworkforce, picking 'Bypass permissions' from the agent-mode QuickPick immediately writes agent.mode='bypass' to global config and shows only an informational toast — the user never sees what was granted or how to revoke it.
+The reference gates full-access escalation behind a modal that names filesystem, terminal, network/tool, sensitive-data, and prompt-injection risks and requires an explicit confirmation. agiworkforce now applies the same boundary to every supported VS Code mode mutation path, including command pickers, Shift+Tab cycling, sidebar messages, raw Settings edits, and activation-time reconciliation.
 
 **Evidence**
 
-apps/extension-vscode/src/core/commandSetup.ts:995-1013 — the 'bypass' QuickPick item carries description 'Skip all approval prompts (dangerous)' and the handler goes straight to configuration.update(...) + showInformationMessage. Searched apps/extension-vscode/src for 'full access|yolo|auto-approve|permission' — the only modal in the codebase is the per-command terminal confirm at providers/terminalProvider.ts:355.
+apps/extension-vscode/src/features/permissions/agentModeConsent.ts is the sole agent.mode write boundary. It persists versioned consent only while bypass remains active, fails unconfirmed bypass closed to Auto, reverts raw settings edits before prompting, and provides explicit Cancel/Confirm actions with scope and risk copy. Config.agentMode and ChatStateManager enforce the consent state at read/dispatch time. agentModeConsent.test.ts covers cancellation, confirmation, raw-setting reconciliation, and consent revocation.
 
 **Suggested fix**
 
-Before persisting agent.mode='bypass' (and before the equivalent setMode message from the webview at ChatStateManager.ts:384), show a modal listing the three granted scopes with icons and one-line descriptions, a prompt-injection risk sentence, a Learn more link to the permissions doc, Cancel as the default button and a destructive 'Turn on full access' confirm; persist an audit entry and show a warning-styled mode chip while bypass is active.
+Completed. Keep all future agent-mode mutation paths on setAgentModeWithConsent, retain the raw-setting reconciliation listener, and increment the consent version whenever the granted scope or risk contract changes.
 
 **Reference screenshot(s)**
 
