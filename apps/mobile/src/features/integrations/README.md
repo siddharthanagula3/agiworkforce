@@ -2,12 +2,11 @@
 
 Status: Current
 Owner role: Mobile lead
-Last updated: 2026-05-21
-Purpose: Mobile device integration status, platform integration state, and integration platform presentation.
+Last updated: 2026-07-29
+Purpose: Mobile device permission requests and integration status.
 
 ## Rules
 
 - Import integration UI through `@/src/features/integrations`.
-- Import integration state from `@/src/features/integrations/store`.
-- Device permission and platform calls belong in `src/features/integrations/services/`.
-- Messaging-specific setup UI belongs in `src/features/messaging`.
+- Device permission calls belong in `src/features/integrations/services/`.
+- Do not advertise hosted messaging providers without a live provider integration and message ledger.
