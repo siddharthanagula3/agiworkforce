@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 32a205677858307e9312de2186e2aa9a311e8fc5cc367f27c188bae9372ed9ae -->
+<!-- ui-gaps-csv-sha256: f0d2d3def4dcda418c17e432b1c353aa1154d9057fd0dd7daf609e59d48adb63 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 84 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 83 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  288 |
+| Open        |  287 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   42 |
-| Not Planned |   11 |
+| Not Planned |   12 |
 
 ## P0
 
@@ -924,24 +924,24 @@ Completed with runtime-derived policy honesty. Keep complete tool discovery out 
 
 - `chatgpt_reference/051-chatgpt-ios-settings-plugins-permissions-list-added-allow-low-risk.png`
 
-### GAP-040 — Mobile pairs only one desktop — no connections list, per-device toggle, Disconnect All
+### GAP-040 — Reusable multi-Desktop pairing is declined while companion authority is single-session and ephemeral
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** Codex · iOS · Settings > Remote control
 
 **Gap**
 
-Reference lists every paired machine under Connections with a per-connection enable toggle, live 'Connected' status, an 'Add connection' row and a 'Disconnect All' header action. agiworkforce's companion screen is built around a single live desktop session (one DesktopInfoCard with one Disconnect), so a user with a laptop and a workstation must re-pair every time they switch machines.
+The reference stores multiple reusable remote-control authorizations. agiworkforce's companion protocol deliberately authorizes one Desktop and one Mobile role inside a short-lived pairing session. Pairing code and role token are not persisted; HMAC state, nonce cache, signaling client, WebRTC peer/data channel, heartbeat, pending controls, agent list, and dispatch tasks are single-session process state. Connecting another code first disconnects and clears the current authority. Persisting a cosmetic device list would not make those machines reconnectable, while persisting bearer authority would weaken the existing trust model. The connected UI now states One active Desktop per pairing session and explains that session keys are not saved as reusable device access.
 
 **Evidence**
 
-apps/mobile/src/features/companion/components/DesktopInfoCard.tsx (single onDisconnect); apps/mobile/app/(app)/companion/index.tsx (single connection state machine); grep -i 'add connection|disconnect all|devices' across apps/mobile/src/features/companion — no match
+apps/mobile/stores/connectionStore.ts owns singleton signalingClient, peerConnection/dataChannel, and HMAC session state; connect disconnects an active peer before pairing another, disconnect clears keys/queues/agents/tasks, and partialize explicitly refuses to persist pairingCode, pairToken, status, or metadata authority. services/signaling-server enforces one Desktop and one Mobile role per pairing. SingleDesktopSessionNotice.tsx is mounted by DesktopInfoCard.tsx and exposes the ephemeral single-session boundary. single-desktop-session-notice.test.tsx, companion-components.test.tsx, and dispatch-defense.test.ts verify the visible contract and signed session behavior.
 
 **Suggested fix**
 
-Persist paired desktops (id, name, platform, lastConnectedAt, enabled) and render them as a Connections group with per-row toggle + status dot, an 'Add connection' row launching the QR scanner, and a 'Disconnect All' header action.
+Not planned on the current ephemeral protocol. Add multi-Desktop management only after a versioned device-authorization service supports independently revocable device identities, hardware-backed or encrypted refresh credentials, per-device HMAC/WebRTC contexts, multiplexed heartbeat and control queues, explicit active-target selection, remote revocation and Disconnect All, expiry/rotation, and adversarial cross-device routing tests.
 
 **Reference screenshot(s)**
 

@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { AgentDashboard } from '@/src/features/companion/components/AgentDashboard';
 import { DispatchTaskComposer } from '@/src/features/companion/components/DispatchTaskComposer';
 import { colors } from '@/src/ui/theme';
+import { SingleDesktopSessionNotice } from './SingleDesktopSessionNotice';
 
 interface DesktopInfoCardProps {
   desktopName: string | null;
@@ -59,6 +60,8 @@ export function DesktopInfoCard({
           )}
         </Card>
       </View>
+
+      <SingleDesktopSessionNotice />
 
       <DispatchTaskComposer />
 

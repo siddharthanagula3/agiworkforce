@@ -68,6 +68,12 @@ jest.mock('@/src/ui/theme', () => ({
     textSecondary: '#9ca3af',
     textMuted: '#6b7280',
   },
+  useThemeColors: () => ({
+    textPrimary: '#ffffff',
+    textSecondary: '#9ca3af',
+    neutralSurface: '#1f2937',
+    border: '#374151',
+  }),
 }));
 
 import {
