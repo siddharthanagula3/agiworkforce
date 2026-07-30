@@ -489,6 +489,13 @@ export default function ChatTabScreen() {
     }
   }, []);
 
+  const handleAttachFromLibrary = useCallback(
+    (attachment: import('@/src/features/chat/components/AttachmentPreview').Attachment) => {
+      chatInputAttachRef.current?.addAttachments([attachment]);
+    },
+    [],
+  );
+
   const handleOpenVoiceMode = useCallback(() => {
     // The intro carries the recording disclosure, so it has to land BEFORE the
     // conversation screen opens a live microphone — not alongside it.
@@ -707,6 +714,7 @@ export default function ChatTabScreen() {
         onOpenStyleSelector={handleOpenStyleSelector}
         onOpenModelPicker={handleSheetModelPicker}
         onOpenProjectPicker={handleSheetProjectPicker}
+        onAttachFromLibrary={handleAttachFromLibrary}
       />
 
       <StyleSelector openSignal={styleSelectorOpenSignal} />

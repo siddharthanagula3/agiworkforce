@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+
+const mockPush = jest.fn();
 
 const mockConversation = {
   id: 'conversation-1',
@@ -22,7 +24,19 @@ const mockImageMessage = {
   imageGenPersisted: true,
   imageGenStatus: 'completed' as const,
   imageGenPrompt: 'Launch poster',
+  attachments: [
+    {
+      url: 'file:///documents/launch-plan.pdf',
+      mimeType: 'application/pdf',
+      fileName: 'launch-plan.pdf',
+      fileSize: 2048,
+    },
+  ],
 };
+
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ openDrawer: jest.fn() }),
@@ -118,11 +132,34 @@ jest.mock('../src/features/chat/components/ImageFullScreen', () => {
 import { LibraryScreen } from '../src/features/library';
 
 describe('Library global-search deep link', () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+  });
+
   it('opens the exact authorized generated image', async () => {
     const screen = render(<LibraryScreen initialImageId="image-message-1" />);
 
     await waitFor(() => {
       expect(screen.getByLabelText('/api/files/11111111-1111-4111-8111-111111111111')).toBeTruthy();
+    });
+  });
+
+  it('filters documents locally and opens the exact source chat', () => {
+    const screen = render(<LibraryScreen />);
+
+    expect(screen.getByText('Documents')).toBeTruthy();
+    expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+
+    fireEvent.press(screen.getByText('Documents'));
+    fireEvent.changeText(screen.getByLabelText('Search library'), 'missing');
+    expect(screen.queryByText('launch-plan.pdf')).toBeNull();
+    expect(screen.getByText(/Nothing in documents matches/)).toBeTruthy();
+
+    fireEvent.changeText(screen.getByLabelText('Search library'), 'launch');
+    fireEvent.press(screen.getByLabelText('Open source chat for launch-plan.pdf'));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/chat/[id]',
+      params: { id: 'conversation-1' },
     });
   });
 });

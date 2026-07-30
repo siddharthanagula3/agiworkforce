@@ -701,6 +701,13 @@ export default function ChatScreen() {
     }
   }, []);
 
+  const handleAttachFromLibrary = useCallback(
+    (attachment: import('@/src/features/chat/components/AttachmentPreview').Attachment) => {
+      chatInputAttachRef.current?.addAttachments([attachment]);
+    },
+    [],
+  );
+
   const [refreshing, setRefreshing] = useState(false);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
@@ -1283,6 +1290,7 @@ export default function ChatScreen() {
           onOpenStyleSelector={handleOpenStyleSelector}
           onOpenModelPicker={handleSheetModelPicker}
           onOpenProjectPicker={handleSheetProjectPicker}
+          onAttachFromLibrary={handleAttachFromLibrary}
         />
 
         <StyleSelector openSignal={styleSelectorOpenSignal} />

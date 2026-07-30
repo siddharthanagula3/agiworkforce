@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, View, useWindowDimensions } from 'react-native';
+import { FlatList, Pressable, TextInput, View, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { BookImage, ImageIcon, Menu, Sparkles } from 'lucide-react-native';
+import { BookImage, FileText, ImageIcon, Menu, Search, Sparkles, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
@@ -27,22 +28,29 @@ import {
   isAccountScopedUiStateOwned,
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
+import {
+  collectSearchableMobileFiles,
+  type SearchableMobileFile,
+} from '@/src/features/search/mobileGlobalSearch';
 
 const NUM_COLUMNS = 2;
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
 
-type LibraryFilter = 'all' | 'images' | 'artifacts';
+type LibraryFilter = 'all' | 'images' | 'documents' | 'artifacts';
 
 type LibraryItem =
   | { kind: 'image'; id: string; image: LibraryImage }
+  | { kind: 'document'; id: string; document: SearchableMobileFile }
   | { kind: 'artifact'; id: string; artifact: MobileArtifact };
 
 export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const c = useThemeColors();
   const navigation = useNavigation();
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const [filter, setFilter] = useState<LibraryFilter>('all');
+  const [query, setQuery] = useState('');
   const [previewImage, setPreviewImage] = useState<LibraryImage | null>(null);
   const previewImageScopeRef = useRef<AccountScopedUiState | null>(null);
   const openedInitialImageRef = useRef<string | null>(null);
@@ -67,41 +75,86 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     setPreviewImage(null);
   }, [clerkUserId, cloudMessages, previewImage]);
 
-  const generatedImages = useMemo(() => {
+  const activeTranscript = useMemo(() => {
     if (appMode === 'cloud') {
-      return collectGeneratedImages(cloudConversations, cloudMessages);
+      return { conversations: cloudConversations, messages: cloudMessages };
     }
-    const localOnly = localConversations.filter(
+    const conversations = localConversations.filter(
       (conversation) => executionModeForConversation(conversation) === 'local',
     );
-    return collectGeneratedImages(localOnly, localMessages);
+    return { conversations, messages: localMessages };
   }, [appMode, localConversations, localMessages, cloudConversations, cloudMessages]);
 
-  // Artifacts are not currently mode-split on mobile (see useArtifactStore) —
-  // Library mirrors the same set the Artifacts gallery screen shows today.
+  const generatedImages = useMemo(
+    () => collectGeneratedImages(activeTranscript.conversations, activeTranscript.messages),
+    [activeTranscript],
+  );
+
+  const documents = useMemo(
+    () =>
+      collectSearchableMobileFiles(
+        activeTranscript.conversations,
+        activeTranscript.messages,
+      ).filter((file) => !file.mimeType.startsWith('image/')),
+    [activeTranscript],
+  );
+
   const artifacts = useMemo(
     () =>
       mergeMobileArtifactsForGallery(storedArtifacts, cloudArtifacts, c, cloudArtifactsOwnerId)
+        .filter((artifact) => artifact.provenance?.scope === appMode)
         // Generated images already render as first-class image cards above.
         .filter((artifact) => artifact.kind !== 'image')
         .map((a) => ({
           ...a,
           accentColor: accentColorForKind(a.kind, c),
         })),
-    [cloudArtifacts, cloudArtifactsOwnerId, storedArtifacts, c],
+    [appMode, cloudArtifacts, cloudArtifactsOwnerId, storedArtifacts, c],
   );
 
   const items = useMemo<LibraryItem[]>(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const includesQuery = (...values: Array<string | undefined>) =>
+      !normalizedQuery ||
+      values.some((value) => value?.toLocaleLowerCase().includes(normalizedQuery));
     const imageItems: LibraryItem[] =
-      filter === 'artifacts'
+      filter === 'artifacts' || filter === 'documents'
         ? []
-        : generatedImages.map((image) => ({ kind: 'image' as const, id: image.id, image }));
+        : generatedImages
+            .filter((image) => includesQuery(image.prompt, image.sourceLabel))
+            .map((image) => ({ kind: 'image' as const, id: image.id, image }));
+    const documentItems: LibraryItem[] =
+      filter === 'images' || filter === 'artifacts'
+        ? []
+        : documents
+            .filter((document) =>
+              includesQuery(document.fileName, document.mimeType, document.conversationTitle),
+            )
+            .map((document) => ({
+              kind: 'document' as const,
+              id: document.id,
+              document,
+            }));
     const artifactItems: LibraryItem[] =
-      filter === 'images'
+      filter === 'images' || filter === 'documents'
         ? []
-        : artifacts.map((artifact) => ({ kind: 'artifact' as const, id: artifact.id, artifact }));
-    return [...imageItems, ...artifactItems];
-  }, [filter, generatedImages, artifacts]);
+        : artifacts
+            .filter((artifact) =>
+              includesQuery(
+                artifact.title,
+                artifact.content,
+                artifact.kind,
+                artifact.language,
+                artifact.sourceLabel,
+              ),
+            )
+            .map((artifact) => ({
+              kind: 'artifact' as const,
+              id: artifact.id,
+              artifact,
+            }));
+    return [...imageItems, ...documentItems, ...artifactItems];
+  }, [filter, generatedImages, documents, artifacts, query]);
 
   const openDrawer = useCallback(() => {
     openNearestDrawer(navigation);
@@ -148,9 +201,24 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           />
         );
       }
+      if (item.kind === 'document') {
+        return (
+          <LibraryDocumentCard
+            document={item.document}
+            width={cardWidth}
+            style={style}
+            onPress={() =>
+              router.push({
+                pathname: '/(app)/chat/[id]',
+                params: { id: item.document.conversationId },
+              })
+            }
+          />
+        );
+      }
       return <LibraryArtifactCard artifact={item.artifact} width={cardWidth} style={style} />;
     },
-    [cardWidth, handleOpenImage],
+    [cardWidth, handleOpenImage, router],
   );
 
   return (
@@ -186,10 +254,54 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           onPress={() => setFilter('images')}
         />
         <FilterChip
+          label="Documents"
+          active={filter === 'documents'}
+          onPress={() => setFilter('documents')}
+        />
+        <FilterChip
           label="Artifacts"
           active={filter === 'artifacts'}
           onPress={() => setFilter('artifacts')}
         />
+      </View>
+
+      <View
+        style={{
+          minHeight: 44,
+          marginHorizontal: 16,
+          marginBottom: 12,
+          borderRadius: 22,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 9,
+          paddingHorizontal: 13,
+          backgroundColor: c.surfaceElevated,
+          borderWidth: 1,
+          borderColor: c.border,
+        }}
+      >
+        <Search size={17} color={c.textMuted} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search library"
+          placeholderTextColor={c.textMuted}
+          accessibilityLabel="Search library"
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          style={{ flex: 1, minHeight: 42, color: c.textPrimary, fontSize: 14 }}
+        />
+        {query ? (
+          <Pressable
+            onPress={() => setQuery('')}
+            accessibilityRole="button"
+            accessibilityLabel="Clear library search"
+            hitSlop={8}
+          >
+            <X size={17} color={c.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
 
       <FlatList
@@ -197,6 +309,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         numColumns={NUM_COLUMNS}
+        contentInsetAdjustmentBehavior="automatic"
         testID="library-grid"
         contentContainerStyle={{
           paddingHorizontal: HORIZONTAL_PADDING,
@@ -205,7 +318,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           alignSelf: 'center',
           width: Math.min(width, 920),
         }}
-        ListEmptyComponent={<LibraryEmptyState filter={filter} />}
+        ListEmptyComponent={<LibraryEmptyState filter={filter} query={query} />}
         showsVerticalScrollIndicator={false}
       />
 
@@ -249,14 +362,17 @@ function FilterChip({
   );
 }
 
-function LibraryEmptyState({ filter }: { filter: LibraryFilter }) {
+function LibraryEmptyState({ filter, query }: { filter: LibraryFilter; query: string }) {
   const c = useThemeColors();
-  const copy =
-    filter === 'images'
+  const copy = query.trim()
+    ? `Nothing in ${filter === 'all' ? 'your Library' : filter} matches “${query.trim()}”`
+    : filter === 'images'
       ? 'Images you generate in conversations will appear here'
-      : filter === 'artifacts'
-        ? 'Artifacts you create in conversations will appear here'
-        : 'Generated images and artifacts from your conversations will appear here';
+      : filter === 'documents'
+        ? 'Files you attach in conversations will appear here for reuse'
+        : filter === 'artifacts'
+          ? 'Artifacts you create in conversations will appear here'
+          : 'Generated images, uploaded files, and artifacts from your conversations will appear here';
   return (
     <View testID="library-empty-state" className="flex-1 items-center justify-center py-20 px-8">
       <View
@@ -272,6 +388,85 @@ function LibraryEmptyState({ filter }: { filter: LibraryFilter }) {
         {copy}
       </Text>
     </View>
+  );
+}
+
+function formatDocumentSize(size: number | undefined): string {
+  if (size == null) return 'Stored attachment';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function LibraryDocumentCard({
+  document,
+  width,
+  style,
+  onPress,
+}: {
+  document: SearchableMobileFile;
+  width: number;
+  style?: object;
+  onPress: () => void;
+}) {
+  const c = useThemeColors();
+  const previewHeight = Math.max(120, Math.round(width * 0.72));
+
+  return (
+    <Pressable
+      testID={`library-document-card-${document.id}`}
+      onPress={onPress}
+      style={[{ width, marginBottom: 20 }, style]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open source chat for ${document.fileName}`}
+    >
+      <View
+        style={{
+          height: previewHeight,
+          borderRadius: 16,
+          borderCurve: 'continuous',
+          backgroundColor: c.surfaceElevated,
+          borderWidth: 1,
+          borderColor: c.border,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          padding: 16,
+        }}
+      >
+        <View
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: 15,
+            borderCurve: 'continuous',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: c.accentSurface,
+            borderWidth: 1,
+            borderColor: c.accentBorder,
+          }}
+        >
+          <FileText size={23} color={c.textPrimary} />
+        </View>
+        <Badge label="Document" color="gray" />
+        <Text
+          numberOfLines={2}
+          style={{ color: c.textPrimary, fontSize: 13, lineHeight: 18, textAlign: 'center' }}
+        >
+          {document.fileName}
+        </Text>
+      </View>
+      <Text
+        numberOfLines={1}
+        style={{ color: c.textPrimary, fontSize: 14, fontWeight: '600', marginTop: 9 }}
+      >
+        {document.fileName}
+      </Text>
+      <Text numberOfLines={1} style={{ color: c.textMuted, fontSize: 12, marginTop: 3 }}>
+        {formatDocumentSize(document.fileSize)} · {document.conversationTitle}
+      </Text>
+    </Pressable>
   );
 }
 

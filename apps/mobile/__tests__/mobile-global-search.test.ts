@@ -67,6 +67,7 @@ describe('Mobile global search projection', () => {
           fileName: 'launch-plan.pdf',
           mimeType: 'application/pdf',
           conversationTitle: 'Launch checklist',
+          uri: 'file:///documents/launch-plan.pdf',
         },
       ],
       libraryImages,
@@ -124,6 +125,8 @@ describe('Mobile global search projection', () => {
                 url: 'file:///documents/launch-plan.pdf',
                 mimeType: 'application/pdf',
                 fileName: 'launch-plan.pdf',
+                fileSize: 2048,
+                assetId: 'asset-launch-plan',
               },
             ],
           },
@@ -136,7 +139,42 @@ describe('Mobile global search projection', () => {
         fileName: 'launch-plan.pdf',
         mimeType: 'application/pdf',
         conversationTitle: 'Launch checklist',
+        uri: 'file:///documents/launch-plan.pdf',
+        fileSize: 2048,
+        assetId: 'asset-launch-plan',
       },
     ]);
+  });
+
+  it('deduplicates the same owner-scoped Cloud asset across transcript turns', () => {
+    const attachment = {
+      url: '/api/files/11111111-1111-4111-8111-111111111111',
+      mimeType: 'application/pdf',
+      fileName: 'launch-plan.pdf',
+      assetId: '11111111-1111-4111-8111-111111111111',
+    };
+
+    expect(
+      collectSearchableMobileFiles([conversations[0]!], {
+        'chat-title': [
+          {
+            id: 'message-1',
+            conversationId: 'chat-title',
+            role: 'user',
+            content: 'First use',
+            createdAt: '2026-07-30T10:00:00.000Z',
+            attachments: [attachment],
+          },
+          {
+            id: 'message-2',
+            conversationId: 'chat-title',
+            role: 'user',
+            content: 'Reused',
+            createdAt: '2026-07-30T10:01:00.000Z',
+            attachments: [attachment],
+          },
+        ],
+      }),
+    ).toHaveLength(1);
   });
 });
