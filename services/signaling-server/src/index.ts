@@ -167,10 +167,11 @@ function constantTimeCompare(a: string, b: string): boolean {
 // SECURITY (C2, redteam-services 2026-05-04): per-pair authentication tokens
 // =============================================================================
 //
-// Knowledge of the pairing code alone is insufficient to register as a
-// peer. The signaling-server issues a short-lived HMAC token for each role at
-// pairing-creation time; the legitimate clients receive these tokens through
-// the gateway's authenticated channel and present them on `register`.
+// WebSocket registration always requires a short-lived, role-bound HMAC token.
+// QR clients receive it inside the QR payload. Manual Mobile pairing may
+// exchange the displayed 12-character, five-minute bearer code at the
+// rate-limited `/pairings/:code/claim` endpoint. The token remains mandatory on
+// the WebSocket wire and cannot be forged or reused for the Desktop role.
 //
 // HMAC payload: `${code}|${role}|${expiresAt}` keyed by SIGNALING_INTERNAL_SECRET.
 // (We bind to expiresAt so tokens for an old expired pairing cannot be replayed
@@ -415,6 +416,12 @@ const pairingRequestSchema = z.object({
   metadata: metadataSchema,
 });
 
+const manualPairingClaimSchema = z
+  .object({
+    role: z.literal('mobile'),
+  })
+  .strict();
+
 // SECURITY: Enhanced pairing code validation with pattern check
 const pairingCodeSchema = z
   .string()
@@ -430,10 +437,10 @@ const registerMessageSchema = z.object({
   metadata: metadataSchema,
   // SECURITY (C2, redteam-services 2026-05-04): per-pair authentication token.
   // The signaling-server returns this as part of POST /pairings; the legitimate
-  // peer presents it on register. An attacker who learns only the pairing code
-  // (e.g., shoulder-surfing the QR display) cannot forge it without the server
-  // secret. The token is an HMAC over (code, role, expiresAt, nonce) so it also
-  // binds the connection to the role the requester intended.
+  // peer presents it on register. QR clients receive the Mobile token directly;
+  // manual clients may exchange the displayed bearer code through the tightly
+  // rate-limited claim route. The token is an HMAC over (code, role, expiresAt),
+  // binding registration to the intended role and session lifetime.
   //
   // OPTIONAL during the rollout window: when SIGNALING_REQUIRE_PAIR_TOKEN=0 the
   // server still accepts un-tokenized registers (legacy clients). Default in
@@ -766,6 +773,45 @@ app.get('/pairings/:code', pairingLookupLimiter, async (req, res) => {
       desktop: Boolean(activeSession?.participants.desktop),
       mobile: Boolean(activeSession?.participants.mobile),
     },
+  });
+});
+
+/**
+ * Exchange the high-entropy, five-minute code displayed by Desktop for the
+ * mobile role token required by WebSocket registration.
+ *
+ * QR pairing does not call this endpoint because its payload already carries
+ * the role token. Manual pairing deliberately treats the 12-character code as
+ * a short-lived bearer secret. A strict 10/min/IP limiter, uniform invalid/
+ * expired response, TLS, approximately 62 bits of code entropy, and the
+ * existing one-role-per-session WebSocket gate keep this from becoming a
+ * practical enumeration path.
+ */
+app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
+  const generic404 = { error: 'pairing_not_found' };
+  const parsedBody = manualPairingClaimSchema.safeParse(req.body ?? {});
+  const codeValidation = pairingCodeSchema.safeParse(req.params['code']);
+  if (!parsedBody.success || !codeValidation.success) {
+    return res.status(404).json(generic404);
+  }
+
+  const code = codeValidation.data;
+  const { data: sessionData } = await getSessionByCode(code);
+  if (!sessionData || sessionData.expires_at <= Date.now()) {
+    return res.status(404).json(generic404);
+  }
+
+  const activeSession = activeSessions.get(code);
+  if (activeSession?.participants.mobile) {
+    return res.status(409).json({ error: 'pairing_role_in_use' });
+  }
+
+  return res.json({
+    code,
+    role: parsedBody.data.role,
+    pairToken: issuePairToken(code, parsedBody.data.role, sessionData.expires_at),
+    expiresAt: sessionData.expires_at,
+    wsUrl: publicWsUrl,
   });
 });
 

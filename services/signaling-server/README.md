@@ -20,6 +20,12 @@ Criticality: medium
 
 This service exposes HTTP/WebSocket behavior from `src/`. It is not imported by apps or packages.
 
+- `POST /pairings` — internal-secret-authenticated pairing creation.
+- `GET /pairings/:code` — uniform, rate-limited live-session status.
+- `POST /pairings/:code/claim` — rate-limited exchange of the 12-character manual Mobile code for its short-lived, role-bound WebSocket token.
+- `DELETE /pairings/:code` — internal-secret-authenticated cancellation.
+- `GET /ws` — token-authenticated Desktop/Mobile signaling and bounded relay.
+
 Shared message schemas belong in `packages/contracts/types`; reusable queue/runtime behavior belongs in `packages/client/client-runtime`.
 
 ## What Belongs Here
@@ -59,7 +65,7 @@ production URLs with credentials, pairing secrets, or relay credentials.
 
 Security/privacy review is required for pairing codes, auth tokens, WebSocket admission, CORS, rate limits, logging, message retention, and any relay of local/private content.
 
-Signaling should carry only the minimum metadata needed to establish or coordinate a session.
+Signaling should carry only the minimum metadata needed to establish or coordinate a session. Manual codes are five-minute bearer secrets: never log them with role tokens, keep the claim endpoint uniformly fail-closed for invalid/expired input, and preserve its strict rate limit.
 
 ## Tests Required For Changes
 

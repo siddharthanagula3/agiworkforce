@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: dc02a7f682e20de2bec6ee12b2f2402c228b1fff13ffc13dc6b075f429781559 -->
+<!-- ui-gaps-csv-sha256: fd2e0ff9c915c9a9a7bd75d45e8d154a2efad0b55f33c6fbacdd93418d832b79 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 108 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 107 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  312 |
+| Open        |  311 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   29 |
+| Done        |   30 |
 | Not Planned |    0 |
 
 ## P0
@@ -510,24 +510,24 @@ Completed. Keep Library search local over the authorized projection; introduce i
 
 - `chatgpt_reference/045-chatgpt-ios-library-grid-thumbnails-uploaded-screenshots-gallery.png`
 
-### GAP-022 — Manual pairing needs full agiw:CODE:TOKEN payload but desktop only shows a 12-char code
+### GAP-022 — Manual companion pairing accepts the exact code shown by Desktop
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-interaction
 - **Reference:** Codex · iOS · Pair manually dialog
 
 **Gap**
 
-The reference manual path accepts the short human-readable pairing code printed on the computer. In agiworkforce the mobile manual-entry field is placeholdered 'agiw:CODE:TOKEN', maxLength 96, and rejects anything else with 'Invalid pairing format. Scan the QR code or paste the full pairing payload.' — but the desktop card renders only the 12-character code (grouped 4-4-4). A user whose camera is unavailable therefore has no way to complete pairing.
+Mobile manual entry now teaches and displays the exact grouped 12-character format rendered beneath the Desktop QR code. Spaces and hyphens are normalized, legacy short inputs fail before connection, and current QR payloads remain accepted as the direct-token path. A manual code is exchanged over TLS at the rate-limited signaling service for the short-lived Mobile role token, after which the existing token-authenticated WebSocket registration and HMAC session setup continue unchanged. Invalid, expired, malformed-response, and already-connected cases surface explicit errors.
 
 **Evidence**
 
-apps/mobile/src/features/companion/components/QRScanner.tsx lines 66-78 and 142-170; apps/desktop/src/features/mobile-companion/QRPairingCard.tsx lines 101-116
+apps/mobile/src/features/companion/components/QRScanner.tsx uses the ABCD EFGH IJKL placeholder and Settings → Connections guidance. services/manualPairing.ts normalizes display separators, validates the current 12-character contract, derives the HTTPS signaling origin, performs the token claim without Clerk credentials or user content, and validates the bounded response. connectionStore.ts claims only when a QR token is absent and passes the returned role token into SignalingClient. services/signaling-server/src/index.ts exposes the strict 10/min/IP Mobile-only claim route with uniform invalid/expired responses and a duplicate-role guard. qr-scanner-manual.test.tsx, manual-pairing.test.ts, manual-pairing-connect.test.ts, dispatch-defense.test.ts, and signaling-server pairings.test.ts cover UI, normalization, exchange, WebSocket handoff, failures, and server contract.
 
 **Suggested fix**
 
-Accept the bare 12-char code (space/dash tolerant) in isValidPairingCode and have the mobile client exchange it for the session token via the signaling service; keep the full payload accepted as a superset. Update the placeholder to the code format actually shown on desktop.
+Completed. Keep manual codes five-minute high-entropy bearer secrets, never log codes with role tokens, preserve the strict claim rate limit and Mobile-only role schema, and keep QR as the preferred no-exchange path.
 
 **Reference screenshot(s)**
 

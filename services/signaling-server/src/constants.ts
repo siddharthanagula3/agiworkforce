@@ -52,7 +52,7 @@ export const MAX_ACTION_NAME_SIZE = 50;
 // Pairing Configuration
 // =============================================================================
 
-// AUDIT-FIX: H-12 — bump from 8 to 12 chars (62^12 ≈ 71 bits of entropy).
+// AUDIT-FIX: H-12 — bump from 8 to 12 chars (36^12 ≈ 62 bits of entropy).
 // Mitigates offline brute-force of the HKDF IKM if the pairing transcript
 // leaks. Follow-up: replace with a PAKE (e.g. OPAQUE / SRP) to remove the
 // shared-password class entirely.

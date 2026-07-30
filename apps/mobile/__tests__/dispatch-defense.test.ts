@@ -547,11 +547,11 @@ afterEach(() => {
 // ===========================================================================
 
 describe('QR Pairing — isValidPairingCode', () => {
-  it('accepts a valid agiw: prefixed code with 6 alphanumeric chars', () => {
-    expect(isValidPairingCode('agiw:ABC123')).toBe(true);
+  it('rejects a prefixed code without the QR role token', () => {
+    expect(isValidPairingCode('agiw:ABC123')).toBe(false);
   });
 
-  it('accepts a valid agiw: prefixed code with 12 alphanumeric chars', () => {
+  it('accepts a prefixed 12-character manual code', () => {
     expect(isValidPairingCode('agiw:ABCDEF123456')).toBe(true);
   });
 
@@ -560,12 +560,12 @@ describe('QR Pairing — isValidPairingCode', () => {
     expect(isValidPairingCode(`agiw:ABCDEF123456:${token}`)).toBe(true);
   });
 
-  it('accepts a raw 8-character alphanumeric code without prefix', () => {
-    expect(isValidPairingCode('ABC12345')).toBe(true);
+  it('rejects legacy raw codes shorter than the current Desktop code', () => {
+    expect(isValidPairingCode('ABC12345')).toBe(false);
   });
 
-  it('accepts the minimum 6-character raw code', () => {
-    expect(isValidPairingCode('abc123')).toBe(true);
+  it('rejects a six-character raw code', () => {
+    expect(isValidPairingCode('abc123')).toBe(false);
   });
 
   it('accepts the maximum 12-character raw code', () => {
@@ -573,8 +573,8 @@ describe('QR Pairing — isValidPairingCode', () => {
   });
 
   it('trims leading and trailing whitespace before validating', () => {
-    expect(isValidPairingCode('  agiw:ABC123  ')).toBe(true);
-    expect(isValidPairingCode('  ABC123  ')).toBe(true);
+    expect(isValidPairingCode('  agiw:ABCDEF123456  ')).toBe(true);
+    expect(isValidPairingCode('  ABCDEF123456  ')).toBe(true);
   });
 
   it('rejects a 5-character code (too short)', () => {
@@ -585,13 +585,13 @@ describe('QR Pairing — isValidPairingCode', () => {
     expect(isValidPairingCode('ABCDEF1234567')).toBe(false);
   });
 
-  it('rejects codes with hyphens', () => {
-    expect(isValidPairingCode('ABC-123')).toBe(false);
+  it('accepts human-readable spaces and hyphens in a manual code', () => {
+    expect(isValidPairingCode('ABCD EFGH IJKL')).toBe(true);
+    expect(isValidPairingCode('ABCD-EFGH-IJKL')).toBe(true);
   });
 
   it('rejects codes with special characters', () => {
     expect(isValidPairingCode('ABC@123')).toBe(false);
-    expect(isValidPairingCode('ABC 123')).toBe(false);
   });
 
   it('rejects an empty string', () => {
@@ -639,6 +639,11 @@ describe('QR Pairing — extractPairingCode', () => {
 
   it('trims whitespace from raw codes', () => {
     expect(extractPairingCode('  ABC123  ')).toBe('ABC123');
+  });
+
+  it('removes Desktop display separators from a manual code', () => {
+    expect(extractPairingCode('ABCD EFGH IJKL')).toBe('ABCDEFGHIJKL');
+    expect(extractPairingCode('ABCD-EFGH-IJKL')).toBe('ABCDEFGHIJKL');
   });
 
   it('handles empty string without throwing', () => {
@@ -1775,17 +1780,17 @@ describe('QR Pairing — edge cases and boundary conditions', () => {
   });
 
   it('isValidPairingCode allows mixed-case alphanumeric', () => {
-    expect(isValidPairingCode('aGiW1234')).toBe(true);
+    expect(isValidPairingCode('aGiW1234EfGh')).toBe(true);
   });
 
   it('isValidPairingCode is case-sensitive for the prefix', () => {
     // 'AGIW:' uppercase prefix does NOT match
-    expect(isValidPairingCode('AGIW:ABC123')).toBe(false);
+    expect(isValidPairingCode('AGIW:ABCDEF123456')).toBe(false);
   });
 
   it('isValidPairingCode rejects numeric-only codes within valid length range', () => {
     // Pure digits are alphanumeric — should be valid
-    expect(isValidPairingCode('123456')).toBe(true);
+    expect(isValidPairingCode('123456789012')).toBe(true);
   });
 
   it('isValidPairingCode rejects codes with tab characters', () => {
@@ -1797,9 +1802,8 @@ describe('QR Pairing — edge cases and boundary conditions', () => {
     expect(isValidPairingCode('null')).toBe(false);
   });
 
-  it('isValidPairingCode accepts the string "undefined" (9 alphanumeric chars)', () => {
-    // 'undefined' is 9 characters, all alphanumeric — valid raw code
-    expect(isValidPairingCode('undefined')).toBe(true);
+  it('isValidPairingCode rejects the string "undefined"', () => {
+    expect(isValidPairingCode('undefined')).toBe(false);
   });
 
   it('extractPairingCode with only whitespace returns empty string', () => {
