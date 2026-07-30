@@ -274,7 +274,26 @@ pub async fn auto_save_decision(
     decision: String,
     rationale: String,
     state: State<'_, ProjectMemoryState>,
+    settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
 ) -> Result<i64, String> {
+    let enabled = {
+        let settings = settings_state.settings.lock().await;
+        settings
+            .chat_preferences
+            .as_ref()
+            .map(|preferences| {
+                preferences.memory_enabled
+                    && preferences.auto_save_memories
+                    && preferences.allow_tool_assisted_memory_generation
+            })
+            .unwrap_or(false)
+    };
+    if !enabled {
+        return Err(
+            "Automatic project memory is disabled by the user's memory policy.".to_string(),
+        );
+    }
+
     let manager = state.manager.read().await;
 
     // Auto-saved decisions are marked with high importance and "accepted" status

@@ -23,6 +23,7 @@ import {
   type Theme,
 } from '../stores/settingsStore';
 import { cloudAccountAuth } from './cloudAccountAuth';
+import { configureMemoryInjection } from '../api/memory';
 import { ErrorSeverity, errorTracking } from './errorTracking';
 
 const DEVICE_BACKUP_KEY = 'agi-desktop-managed-settings-device-backup-v1';
@@ -462,6 +463,10 @@ export function projectDesktopCloudSafeSettings(
       warmth: state.personalization.warmth * 20,
     },
     language: { locale: state.windowPreferences.language },
+    capabilities: {
+      memory: state.chatPreferences.memoryEnabled === true,
+      allowToolAssistedGeneration: state.chatPreferences.allowToolAssistedMemoryGeneration === true,
+    },
     chat: { compactMode: state.chatPreferences.compactMode },
     editor: { promptCompletionEnabled: state.chatPreferences.promptCompletionEnabled },
   };
@@ -482,7 +487,7 @@ const DESKTOP_LANGUAGES = new Set<Language>([
   'hi',
 ]);
 
-function applyDesktopCloudSafeSettings(settings: CloudSafeSettings): void {
+export function applyDesktopCloudSafeSettings(settings: CloudSafeSettings): void {
   const store = useSettingsStore.getState();
   const theme = settings.appearance?.['theme'];
   if (theme === 'light' || theme === 'dark' || theme === 'system') store.setTheme(theme);
@@ -510,6 +515,44 @@ function applyDesktopCloudSafeSettings(settings: CloudSafeSettings): void {
   const promptCompletionEnabled = settings.editor?.['promptCompletionEnabled'];
   if (typeof promptCompletionEnabled === 'boolean') {
     store.setPromptCompletionEnabled(promptCompletionEnabled);
+  }
+
+  const memoryEnabled = settings.capabilities?.['memory'];
+  const allowToolAssistedGeneration = settings.capabilities?.['allowToolAssistedGeneration'];
+  if (typeof memoryEnabled === 'boolean' || typeof allowToolAssistedGeneration === 'boolean') {
+    useSettingsStore.setState((state) => ({
+      chatPreferences: {
+        ...state.chatPreferences,
+        ...(typeof memoryEnabled === 'boolean'
+          ? { memoryEnabled, autoSaveMemories: memoryEnabled }
+          : {}),
+        ...(typeof allowToolAssistedGeneration === 'boolean'
+          ? {
+              allowToolAssistedMemoryGeneration: allowToolAssistedGeneration,
+            }
+          : {}),
+      },
+    }));
+    const appliedPreferences = useSettingsStore.getState().chatPreferences;
+    if (typeof memoryEnabled === 'boolean' || typeof allowToolAssistedGeneration === 'boolean') {
+      void configureMemoryInjection(
+        appliedPreferences.memoryEnabled === true,
+        10,
+        5,
+        appliedPreferences.allowToolAssistedMemoryGeneration === true,
+      ).catch((error) => {
+        console.error('Failed to apply synced native memory policy:', error);
+      });
+    }
+    // The Zustand snapshot is already updated synchronously for coordinator
+    // rebasing. Persist the pulled account policy to native settings as well,
+    // so restart/offline behavior cannot fall back to an older local policy.
+    void useSettingsStore
+      .getState()
+      .saveSettings()
+      .catch((error) => {
+        console.error('Failed to persist synced native memory policy:', error);
+      });
   }
 }
 

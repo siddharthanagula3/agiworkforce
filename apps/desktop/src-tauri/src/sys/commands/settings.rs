@@ -61,6 +61,13 @@ pub struct ChatPreferences {
     pub auto_approve_tools: bool,
     #[serde(default = "default_auto_inject_skills")]
     pub auto_inject_skills: bool,
+    /// Master policy for both automatic memory retrieval and generation.
+    /// Missing values from older settings files fail closed.
+    #[serde(default)]
+    pub memory_enabled: bool,
+    /// Whether automatic generation may run on tool/web-assisted turns.
+    #[serde(default)]
+    pub allow_tool_assisted_memory_generation: bool,
     #[serde(default)]
     pub auto_save_memories: bool,
     /// Where chat history is persisted.
@@ -79,6 +86,8 @@ impl Default for ChatPreferences {
             compact_mode: default_compact_mode(),
             auto_approve_tools: false,
             auto_inject_skills: default_auto_inject_skills(),
+            memory_enabled: false,
+            allow_tool_assisted_memory_generation: false,
             auto_save_memories: false,
             // IMPORTANT: must match default_chat_storage_mode(); cloud sync is
             // off by default unless the user explicitly enables a cloud path.
@@ -399,6 +408,8 @@ impl SettingsState {
                     compact_mode: true,
                     auto_approve_tools: false,
                     auto_inject_skills: true,
+                    memory_enabled: false,
+                    allow_tool_assisted_memory_generation: false,
                     auto_save_memories: false,
                     chat_storage_mode: default_chat_storage_mode(),
                 }),

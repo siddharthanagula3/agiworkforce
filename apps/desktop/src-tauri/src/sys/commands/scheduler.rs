@@ -1731,6 +1731,26 @@ async fn dispatch_job_action(
         SchedulerActionType::MemorySummarization => {
             use tauri::Manager;
 
+            let settings_state = app_handle
+                .try_state::<crate::sys::commands::settings::SettingsState>()
+                .ok_or_else(|| {
+                    "SettingsState not available. Memory summarization skipped.".to_string()
+                })?;
+            let memory_generation_enabled = {
+                let settings = settings_state.settings.lock().await;
+                settings
+                    .chat_preferences
+                    .as_ref()
+                    .map(|preferences| preferences.memory_enabled && preferences.auto_save_memories)
+                    .unwrap_or(false)
+            };
+            if !memory_generation_enabled {
+                tracing::info!(
+                    "[Scheduler] Memory summarization skipped because memory generation is disabled"
+                );
+                return Ok(());
+            }
+
             let max_conversations = action_data
                 .get("max_conversations")
                 .and_then(|v| v.as_u64())

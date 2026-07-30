@@ -20,6 +20,16 @@ export interface ManagedMemoryContextItem {
   pinned: boolean;
 }
 
+export interface ManagedMemoryPolicy {
+  enabled: boolean;
+  allowToolAssistedGeneration: boolean;
+}
+
+export const DISABLED_MANAGED_MEMORY_POLICY: ManagedMemoryPolicy = {
+  enabled: false,
+  allowToolAssistedGeneration: false,
+};
+
 const MAX_MEMORIES = 30;
 const MAX_MEMORY_CHARS = 1_000;
 const MAX_TOTAL_MEMORY_CHARS = 8_000;
@@ -27,6 +37,32 @@ const MAX_AUTO_MEMORIES_PER_TURN = 5;
 
 function truncate(value: string, maxChars: number): string {
   return value.length > maxChars ? `${value.slice(0, Math.max(0, maxChars - 1))}…` : value;
+}
+
+/**
+ * Read the same account-scoped `capabilities` namespace written by Web and
+ * synchronized to Desktop Managed Cloud. Missing, malformed, or absent values
+ * are disabled so a settings outage can never disclose memory to a prompt.
+ */
+export async function loadManagedMemoryPolicy(
+  db: ManagedMemoryContextDb,
+  params: { userId: string },
+): Promise<ManagedMemoryPolicy> {
+  const [row] = await db.query<{ capabilities: unknown }>(
+    `select coalesce(settings -> 'capabilities', '{}'::jsonb) as capabilities
+       from user_settings
+      where user_id = $1
+      limit 1`,
+    [params.userId],
+  );
+  const capabilities =
+    row?.capabilities && typeof row.capabilities === 'object' && !Array.isArray(row.capabilities)
+      ? (row.capabilities as Record<string, unknown>)
+      : {};
+  return {
+    enabled: capabilities['memory'] === true,
+    allowToolAssistedGeneration: capabilities['allowToolAssistedGeneration'] === true,
+  };
 }
 
 /** Load bounded, active account memories through an owner-scoped DB handle. */

@@ -61,13 +61,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 export function isReflectMemoryEnabled(settings: unknown): boolean {
   const root = asRecord(settings);
   const capabilities = asRecord(root?.['capabilities']);
-  if (!capabilities) return true;
+  if (!capabilities) return false;
   const memory = capabilities['memory'];
   const generateFromHistory = capabilities['generateFromHistory'];
-  return (
-    (memory === undefined || memory === true) &&
-    (generateFromHistory === undefined || generateFromHistory === true)
-  );
+  return memory === true && (generateFromHistory === undefined || generateFromHistory === true);
 }
 
 export function getManagedReflectPeriod(range: ManagedCloudReflectRange, now: Date) {

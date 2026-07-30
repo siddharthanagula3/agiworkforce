@@ -11,6 +11,14 @@ export interface ChatPreferences {
   compactMode: boolean;
   autoApproveTools: boolean;
   autoInjectSkills?: boolean;
+  /**
+   * Authoritative master switch for automatic memory retrieval and generation.
+   * Optional only for persisted pre-v27 settings; callers must treat missing as off.
+   */
+  memoryEnabled?: boolean;
+  /** Allow automatic memory generation for turns that use tools or web search. */
+  allowToolAssistedMemoryGeneration?: boolean;
+  /** Legacy mirror retained for the native settings contract. */
   autoSaveMemories?: boolean;
   agentMode: AgentMode;
   chatStorageMode: 'local' | 'cloud';
@@ -41,6 +49,9 @@ export const defaultChatPreferences: ChatPreferences = {
   compactMode: true,
   autoApproveTools: false,
   autoInjectSkills: true,
+  memoryEnabled: false,
+  allowToolAssistedMemoryGeneration: false,
+  autoSaveMemories: false,
   agentMode: 'build' as AgentMode,
   chatStorageMode: 'local',
   autoTTS: true,

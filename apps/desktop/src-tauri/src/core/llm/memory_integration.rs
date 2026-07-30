@@ -108,6 +108,21 @@ impl MemoryInjector {
         manager: &MemoryManager,
         project_path: Option<&str>,
     ) -> Result<MemoryInjectionResult> {
+        if !self.config.enabled {
+            return Ok(MemoryInjectionResult {
+                memories_loaded: 0,
+                context: String::new(),
+                has_relevant_memories: false,
+                summary: MemorySummary {
+                    decisions: 0,
+                    preferences: 0,
+                    facts: 0,
+                    context_entries: 0,
+                    total_importance_weight: 0,
+                },
+            });
+        }
+
         let mut memories = Vec::new();
 
         // Load high-importance memories
@@ -388,5 +403,24 @@ mod tests {
         assert!(formatted.contains("code_style"));
         assert!(formatted.contains("### Skill"));
         assert!(formatted.contains("cargo_workflows"));
+    }
+
+    #[test]
+    fn disabled_policy_returns_zero_memories_without_retrieval() {
+        // Deliberately leave this in-memory manager without a user_memory table:
+        // any attempted retrieval would fail, so success proves the disabled
+        // branch returns before touching persisted memory.
+        let manager = MemoryManager::new(":memory:").unwrap();
+        let injector = MemoryInjector::new(MemoryInjectionConfig {
+            enabled: false,
+            ..MemoryInjectionConfig::default()
+        })
+        .unwrap();
+
+        let result = injector.load_project_memories(&manager, None).unwrap();
+
+        assert_eq!(result.memories_loaded, 0);
+        assert!(!result.has_relevant_memories);
+        assert!(result.context.is_empty());
     }
 }

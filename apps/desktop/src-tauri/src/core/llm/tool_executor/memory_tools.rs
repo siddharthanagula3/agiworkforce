@@ -1,5 +1,47 @@
 use super::*;
 
+fn memory_tool_allowed(
+    memory_enabled: bool,
+    allow_tool_assisted_generation: bool,
+    generates_memory: bool,
+) -> bool {
+    memory_enabled && (!generates_memory || allow_tool_assisted_generation)
+}
+
+async fn read_memory_tool_policy(app: &tauri::AppHandle) -> (bool, bool) {
+    use tauri::Manager;
+
+    let Some(settings_state) = app.try_state::<crate::sys::commands::settings::SettingsState>()
+    else {
+        return (false, false);
+    };
+    let settings = settings_state.settings.lock().await;
+    settings
+        .chat_preferences
+        .as_ref()
+        .map(|preferences| {
+            (
+                preferences.memory_enabled,
+                preferences.allow_tool_assisted_memory_generation,
+            )
+        })
+        .unwrap_or((false, false))
+}
+
+fn memory_policy_denied_result(tool_id: &str, generates_memory: bool) -> ToolResult {
+    let message = if generates_memory {
+        "Memory generation from tool-assisted chats is disabled in Settings."
+    } else {
+        "Memory is disabled in Settings."
+    };
+    ToolResult {
+        success: false,
+        data: json!({ "error": message, "success": false }),
+        error: Some(message.to_string()),
+        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+    }
+}
+
 impl ToolExecutor {
     pub(super) async fn execute_memory_remember_tool(
         &self,
@@ -9,6 +51,11 @@ impl ToolExecutor {
         if let Some(ref app) = self.app_handle {
             use crate::core::agi::memory_manager::MemoryCategory;
             use tauri::Manager;
+
+            let (enabled, allow_tool_generation) = read_memory_tool_policy(app).await;
+            if !memory_tool_allowed(enabled, allow_tool_generation, true) {
+                return Ok(memory_policy_denied_result(tool_id, true));
+            }
 
             let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
 
@@ -95,6 +142,11 @@ impl ToolExecutor {
             use crate::core::agi::memory_manager::MemoryCategory;
             use tauri::Manager;
 
+            let (enabled, allow_tool_generation) = read_memory_tool_policy(app).await;
+            if !memory_tool_allowed(enabled, allow_tool_generation, false) {
+                return Ok(memory_policy_denied_result(tool_id, false));
+            }
+
             let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
 
             // Support both "key" format and "category"/"topic" format
@@ -169,6 +221,11 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
             use tauri::Manager;
+
+            let (enabled, allow_tool_generation) = read_memory_tool_policy(app).await;
+            if !memory_tool_allowed(enabled, allow_tool_generation, false) {
+                return Ok(memory_policy_denied_result(tool_id, false));
+            }
 
             let memory_state = app.state::<crate::sys::commands::memory::MemoryState>();
 
@@ -322,5 +379,19 @@ impl ToolExecutor {
                 metadata: HashMap::new(),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod memory_policy_tests {
+    use super::memory_tool_allowed;
+
+    #[test]
+    fn memory_tools_cannot_bypass_master_or_generation_scope() {
+        assert!(!memory_tool_allowed(false, true, false));
+        assert!(!memory_tool_allowed(false, true, true));
+        assert!(memory_tool_allowed(true, false, false));
+        assert!(!memory_tool_allowed(true, false, true));
+        assert!(memory_tool_allowed(true, true, true));
     }
 }
