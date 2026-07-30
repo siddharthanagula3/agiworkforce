@@ -2,7 +2,7 @@
  * Permissions Store
  *
  * Persists last-observed OS permission status and user-intent level for each
- * of the 6 top-priority mobile permissions. Backed by encrypted MMKV (v1
+ * of the native-backed mobile permissions. Backed by encrypted MMKV (v1
  * LOCAL ONLY — no cloud sync).
  *
  * Permission state MUST NOT be written to cloud storage. If a cloud path is
@@ -38,6 +38,8 @@ function makeDefaults(): AllPermissionsMap {
     photos: { ...DEFAULT_STATE },
     notifications: { ...DEFAULT_STATE },
     contacts: { ...DEFAULT_STATE },
+    calendar: { ...DEFAULT_STATE },
+    reminders: { ...DEFAULT_STATE },
   };
 }
 

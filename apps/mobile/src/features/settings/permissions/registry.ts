@@ -25,6 +25,8 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import * as Contacts from 'expo-contacts';
+import * as Calendar from 'expo-calendar';
+import { Platform } from 'react-native';
 import { Camera } from 'expo-camera';
 import {
   Mic,
@@ -33,6 +35,8 @@ import {
   Image,
   Bell,
   Users,
+  CalendarDays,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react-native';
 import type { MobilePermissionKind, MobilePermissionLevel, OsPermissionStatus } from './types';
@@ -126,6 +130,28 @@ async function requestContacts(): Promise<OsPermissionStatus> {
   return toOsStatus(result.status, result.canAskAgain);
 }
 
+async function getCalendarStatus(): Promise<OsPermissionStatus> {
+  const result = await Calendar.getCalendarPermissionsAsync();
+  return toOsStatus(result.status, result.canAskAgain);
+}
+
+async function requestCalendar(): Promise<OsPermissionStatus> {
+  const result = await Calendar.requestCalendarPermissionsAsync();
+  return toOsStatus(result.status, result.canAskAgain);
+}
+
+async function getRemindersStatus(): Promise<OsPermissionStatus> {
+  if (Platform.OS !== 'ios') return 'denied';
+  const result = await Calendar.getRemindersPermissionsAsync();
+  return toOsStatus(result.status, result.canAskAgain);
+}
+
+async function requestReminders(): Promise<OsPermissionStatus> {
+  if (Platform.OS !== 'ios') return 'denied';
+  const result = await Calendar.requestRemindersPermissionsAsync();
+  return toOsStatus(result.status, result.canAskAgain);
+}
+
 // ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
@@ -189,6 +215,24 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
       getStatus: getContactsStatus,
       requestPermission: requestContacts,
     },
+    calendar: {
+      kind: 'calendar',
+      label: 'Calendar',
+      description: 'Optional. Used only after you enable device calendar context.',
+      icon: CalendarDays,
+      applicableLevels: ['denied', 'allow_always'],
+      getStatus: getCalendarStatus,
+      requestPermission: requestCalendar,
+    },
+    reminders: {
+      kind: 'reminders',
+      label: 'Reminders',
+      description: 'Optional on iOS. This release does not read reminders automatically.',
+      icon: ListChecks,
+      applicableLevels: ['denied', 'allow_always'],
+      getStatus: getRemindersStatus,
+      requestPermission: requestReminders,
+    },
   });
 
 /** Ordered list for display on the permissions index screen. */
@@ -198,6 +242,8 @@ export const PERMISSION_KINDS: MobilePermissionKind[] = [
   'photos',
   'notifications',
   'contacts',
+  'calendar',
+  ...(Platform.OS === 'ios' ? (['reminders'] as const) : []),
 ];
 
 /**
