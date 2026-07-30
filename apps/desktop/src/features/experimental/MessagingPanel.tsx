@@ -81,27 +81,23 @@ function StatusBadge({ connected }: { connected: boolean }) {
 function ConnectSlackForm({ onSuccess }: { onSuccess: () => void }) {
   const [form, setForm] = useState({
     botToken: '',
-    appToken: '',
-    signingSecret: '',
     workspaceName: '',
   });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!form.botToken || !form.appToken || !form.signingSecret) {
-      toast.error('Bot token, app token, and signing secret are required.');
+    if (!form.botToken) {
+      toast.error('Bot token is required.');
       return;
     }
     setLoading(true);
     try {
       await invoke('connect_slack', {
         request: {
-          userId: 'local',
-          botToken: form.botToken,
-          appToken: form.appToken,
-          signingSecret: form.signingSecret,
-          workspaceName: form.workspaceName || null,
-          workspaceId: null,
+          user_id: 'local',
+          bot_token: form.botToken,
+          workspace_name: form.workspaceName || null,
+          workspace_id: null,
         },
       });
       toast.success('Slack connected.');
@@ -123,24 +119,6 @@ function ConnectSlackForm({ onSuccess }: { onSuccess: () => void }) {
             placeholder="xoxb-..."
             value={form.botToken}
             onChange={(e) => setForm((f) => ({ ...f, botToken: e.target.value }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">App Token</label>
-          <Input
-            type="password"
-            placeholder="xapp-..."
-            value={form.appToken}
-            onChange={(e) => setForm((f) => ({ ...f, appToken: e.target.value }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">Signing Secret</label>
-          <Input
-            type="password"
-            placeholder="Signing secret"
-            value={form.signingSecret}
-            onChange={(e) => setForm((f) => ({ ...f, signingSecret: e.target.value }))}
           />
         </div>
         <div className="flex flex-col gap-1">
