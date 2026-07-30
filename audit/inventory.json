@@ -2846,8 +2846,8 @@
   {
     "item": "mcp-tasks-extension",
     "surface": "packages/tools/mcp",
-    "status": "unwired",
-    "evidence": "apps/desktop/src-tauri/src/core/mcp/protocol.rs:270-276 defines METHOD_TASKS_CREATE/GET/CANCEL/LIST; apps/desktop/src-tauri/src/core/mcp/session.rs:390-483 implements McpSession::create_task/get_task/cancel_task/list_tasks, driving real JSON-RPC calls over the transport. But apps/desktop/src-tauri/src/core/mcp/client.rs:26-207 (the McpClient facade every caller uses) exposes no task methods, no sys/commands/*.rs Tauri command calls McpSession::create_task/get_task/cancel_task/list_tasks (grep confirmed), and no frontend code references MCP task ids."
+    "status": "missing",
+    "evidence": "The unreachable Tasks-extension wire methods, types, constants, private capability field, and serialization tests were removed from the Desktop MCP session/protocol. The public McpClient facade, Tauri command layer, renderer, and transport capability handling never exposed or consumed them, so no shipped request could call tasks/create|get|cancel|list or observe a task ID. Standard synchronous MCP tool/resource/prompt behavior and the existing elicitation path remain."
   },
   {
     "item": "tool-discovery",
