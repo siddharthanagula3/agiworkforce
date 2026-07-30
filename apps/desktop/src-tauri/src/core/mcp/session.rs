@@ -1,9 +1,7 @@
 use super::protocol::{
-    ClientCapabilities, Implementation, InitializeParams, InitializeResult, McpTask,
-    McpToolDefinition, ResourceDefinition, ResourceReadParams, ResourceReadResult,
-    ResourcesListParams, ResourcesListResult, TaskCreateParams, TaskIdParams, TaskListParams,
-    TaskListResult, ToolCallParams, ToolCallResult, ToolsListResult, METHOD_TASKS_CANCEL,
-    METHOD_TASKS_CREATE, METHOD_TASKS_GET, METHOD_TASKS_LIST,
+    ClientCapabilities, Implementation, InitializeParams, InitializeResult, McpToolDefinition,
+    ResourceDefinition, ResourceReadParams, ResourceReadResult, ResourcesListParams,
+    ResourcesListResult, ToolCallParams, ToolCallResult, ToolsListResult,
 };
 use super::transport::{McpTransport, Transport};
 use crate::core::mcp::{McpError, McpResult, McpServerConfig};
@@ -378,116 +376,6 @@ impl McpSession {
             Transport::Stdio(_) => "stdio",
             Transport::HttpSse(_) => "http-sse",
         }
-    }
-
-    // ── Tasks primitive (spec 2025-11-25) ────────────────────────────────────
-
-    /// Submit a tool for asynchronous execution, returning a task handle.
-    ///
-    /// Use this for long-running operations where you want to poll for progress
-    /// instead of blocking on the result. The server must advertise `tasks`
-    /// in its capabilities for this method to succeed.
-    pub async fn create_task(&self, params: TaskCreateParams) -> McpResult<McpTask> {
-        tracing::debug!(
-            "[MCP Session] Creating task for tool '{}' on server '{}'",
-            params.tool_name,
-            self.name
-        );
-
-        let response = self
-            .transport
-            .send_request(
-                METHOD_TASKS_CREATE.to_string(),
-                Some(serde_json::to_value(params)?),
-            )
-            .await?;
-
-        let task: McpTask = serde_json::from_value(response.result)?;
-        tracing::info!(
-            "[MCP Session] Task '{}' created on server '{}', status={:?}",
-            task.id,
-            self.name,
-            task.status
-        );
-        Ok(task)
-    }
-
-    /// Poll the current state of a task by its ID.
-    pub async fn get_task(&self, task_id: &str) -> McpResult<McpTask> {
-        tracing::debug!(
-            "[MCP Session] Getting task '{}' from server '{}'",
-            task_id,
-            self.name
-        );
-
-        let params = TaskIdParams {
-            task_id: task_id.to_string(),
-        };
-
-        let response = self
-            .transport
-            .send_request(
-                METHOD_TASKS_GET.to_string(),
-                Some(serde_json::to_value(params)?),
-            )
-            .await?;
-
-        let task: McpTask = serde_json::from_value(response.result)?;
-        Ok(task)
-    }
-
-    /// Request that the server cancel a running task.
-    ///
-    /// The server may ignore this if cancellation is not supported for the
-    /// specific task type. Always check the returned task status to confirm.
-    pub async fn cancel_task(&self, task_id: &str) -> McpResult<McpTask> {
-        tracing::debug!(
-            "[MCP Session] Cancelling task '{}' on server '{}'",
-            task_id,
-            self.name
-        );
-
-        let params = TaskIdParams {
-            task_id: task_id.to_string(),
-        };
-
-        let response = self
-            .transport
-            .send_request(
-                METHOD_TASKS_CANCEL.to_string(),
-                Some(serde_json::to_value(params)?),
-            )
-            .await?;
-
-        let task: McpTask = serde_json::from_value(response.result)?;
-        tracing::info!(
-            "[MCP Session] Task '{}' cancelled on server '{}', final status={:?}",
-            task_id,
-            self.name,
-            task.status
-        );
-        Ok(task)
-    }
-
-    /// List tasks on the server, optionally filtered by status.
-    pub async fn list_tasks(&self, params: TaskListParams) -> McpResult<TaskListResult> {
-        tracing::debug!("[MCP Session] Listing tasks for server '{}'", self.name);
-
-        let response = self
-            .transport
-            .send_request(
-                METHOD_TASKS_LIST.to_string(),
-                Some(serde_json::to_value(params)?),
-            )
-            .await?;
-
-        let result: TaskListResult = serde_json::from_value(response.result)?;
-        tracing::debug!(
-            "[MCP Session] Found {} task(s) on server '{}'",
-            result.tasks.len(),
-            self.name
-        );
-        Ok(result)
     }
 
     // ── Elicitation (spec 2025-11-25) ─────────────────────────────────────────
