@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: e1ce14066bfccf7c060933b646fa0ebcf65629f8b1acbc04fc6dca5fb4f5a994 -->
+<!-- ui-gaps-csv-sha256: ed90f5dc066a2fd9f718c1c1a95e3fa3d910558dd1f14b1e054a61794398ae59 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 103 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 102 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  307 |
+| Open        |  306 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   34 |
-| Not Planned |    0 |
+| Not Planned |    1 |
 
 ## P0
 
@@ -441,24 +441,24 @@ Completed. Keep Local search on device, keep Cloud message search behind the exi
 
 - `chatgpt_reference/078-chatgpt-ios-search-overlay-empty-prompt-state.png`
 
-### GAP-019 — Action-approval mode is buried in Settings, not reachable inline from the dispatch/code-session composer
+### GAP-019 — Inline Mobile approval-policy picker is declined because Mobile is not the policy authority
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** Codex · iOS · Inline approval-mode picker reachable from the composer (Ask for approval / Approve for me / Full access)
 
 **Gap**
 
-Codex surfaces its 3-tier approval-mode picker as a bottom sheet directly from a hand-icon button in the message composer, so users can change approval behavior per-session without leaving the conversation. agiworkforce has an equivalent 3-option model (Ask every time / Low-risk actions / Approve all actions) but it only exists as a standalone screen under Settings > Action approvals; neither the Dispatch composer nor the Code Session composer expose an inline control to view or change it.
+The reference controls a session runtime owned by the same Mobile product, but agiworkforce's current surfaces do not share that authority model. The unshipped Mobile Code Sessions shell cited by the audit was removed. Paired Dispatch creates work on Desktop, where the persisted native approval, filesystem, sandbox, and tool-confirmation policies remain authoritative; a Mobile override is absent from the signed dispatch contract. The mounted composer already states that Desktop privacy and approval rules still apply. Adding an inline three-tier picker would therefore be a cosmetic control that could falsely imply Mobile can weaken Desktop safeguards.
 
 **Evidence**
 
-apps/mobile/app/(app)/settings/auto-approve.tsx (full 3-option screen, global only); apps/mobile/app/(app)/dispatch/index.tsx DispatchInput (no approval-mode affordance in composer, lines 225-304); apps/mobile/src/features/code-sessions/index.tsx composer row (lines 400-433) has Code2 mode button and Plus/Send only, no approval icon
+apps/mobile/lib/v1FeatureFlags.ts keeps the legacy Mobile Agents surface disabled while Dispatch uses its separate authenticated contract. apps/mobile/src/features/cloud-bridge/README.md records removal of the unshipped Code Sessions shell. DispatchTaskComposer.tsx tells the user that Desktop privacy and approval rules still apply, and services/companion.ts plus packages/contracts/types/src/cross-device.ts carry no approval-policy override. Desktop coworkDispatch.ts submits the task under Desktop-owned runtime settings and native approval enforcement. The Action approvals route itself falls back to a read-only Ask state while FEATURES.agents is false, covered by auto-approve-settings.test.tsx.
 
 **Suggested fix**
 
-Add a small shield/hand icon button to the Dispatch and Code Session composer bars that opens the existing 3-option approval sheet, defaulting to the current global setting but allowing a per-session override, mirroring Codex's inline hand-icon affordance.
+Not planned for the current trust contract. Keep the inline Desktop-authority disclosure and per-action approval responses on Mobile. Reconsider a scoped picker only after the signed cross-device protocol, Desktop executor, persistence, revocation, and adversarial tests all support a task-bound override without weakening the native policy floor.
 
 **Reference screenshot(s)**
 
