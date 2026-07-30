@@ -39,7 +39,6 @@ interface CapabilitySection {
 
 function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
   const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
-  const codeSessionsEnabled = FEATURES.companion || FEATURES.cloudChat;
 
   return [
     {
@@ -97,13 +96,12 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
         {
           key: 'code',
           icon: FileCode,
-          tone: 'desktop',
+          tone: 'cloud',
           label: 'AGI Code',
-          description: codeSessionsEnabled
-            ? 'Review mobile code sessions and Desktop handoff.'
-            : 'AGI Code runs from Desktop or Cloud access.',
-          value: codeSessionsEnabled ? 'Desktop' : 'Off',
-          href: codeSessionsEnabled ? '/(app)/code' : undefined,
+          description: FEATURES.codeExecution
+            ? 'Run code from Cloud chat; generated files appear in Artifacts.'
+            : 'Code execution is not available in this mobile release.',
+          value: FEATURES.codeExecution ? cloudValue : 'Off',
         },
         {
           key: 'approvals',

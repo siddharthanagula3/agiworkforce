@@ -68,9 +68,10 @@ helpers, import parsers, context budgeting, compaction, RAG chunking, and RAG
 indexing now live under `apps/mobile/src/features/memory`, with structure
 checks guarding the old memory service/store paths.
 
-The Mobile skills ownership slice is complete: catalog access and installed
-skill state now live under `apps/mobile/src/features/skills`, with structure
-checks guarding the old skills service/store paths.
+The former Mobile skills ownership slice was retired on 2026-07-30 after the
+wiring audit found no route file or UI consumer. Its isolated catalog
+service/store and stale Drawer registration were removed rather than preserved
+as an unshipped feature claim.
 
 The Desktop small-domain wave has moved quick query, voice, simple mode,
 subscription, pricing, planning, reminders, messaging, mobile companion, teams,

@@ -694,9 +694,6 @@ importers:
       '@agiworkforce/local-llm':
         specifier: workspace:*
         version: link:../../packages/platform/local-llm
-      '@agiworkforce/mcp':
-        specifier: workspace:*
-        version: link:../../packages/tools/mcp
       '@agiworkforce/provider-runtime':
         specifier: workspace:*
         version: link:../../packages/ai/provider-runtime
@@ -706,9 +703,6 @@ importers:
       '@agiworkforce/search':
         specifier: workspace:*
         version: link:../../packages/ai/search
-      '@agiworkforce/skills':
-        specifier: workspace:*
-        version: link:../../packages/tools/skills
       '@agiworkforce/sync':
         specifier: workspace:*
         version: link:../../packages/client/sync

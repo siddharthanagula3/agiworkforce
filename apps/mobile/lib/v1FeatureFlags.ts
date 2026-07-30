@@ -17,11 +17,9 @@
  *   // In a service function:
  *   if (!FEATURES.billing) throw new Error('[v1] billing is not available in v1');
  *
- *   // In a store action:
- *   if (!FEATURES.dispatch) return;
- *
- * To enable a feature for v1.1: flip its flag to `true` here. No other code
- * changes required — all guards are derived from this single source of truth.
+ * Readiness flags are release gates, not promises that a retired or unshipped
+ * surface can be restored by changing a boolean. A feature must still have a
+ * verified route, backend contract, and end-to-end test before it is enabled.
  */
 export const FEATURES = {
   /**
@@ -96,7 +94,11 @@ export const FEATURES = {
   /** Legacy Desktop-companion agent monitor and control screens. */
   agents: false,
 
-  /** Desktop Dispatch / WebRTC companion channel. */
+  /**
+   * Legacy Desktop Dispatch / WebRTC companion kill switch. Mobile no longer
+   * exposes Dispatch UI or sends Dispatch tasks; keep this false while the
+   * separately gated companion transport remains in the tree.
+   */
   dispatch: false,
 
   /** Cloud scheduled task execution. The shared API contract, idempotent run

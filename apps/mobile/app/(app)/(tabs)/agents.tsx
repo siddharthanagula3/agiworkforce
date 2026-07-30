@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,20 +15,14 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 /**
- * Agents tab -- redirects to Dispatch when no agents are active.
- * When agents are running, shows the full agent grid with monitoring.
+ * Agents tab. The unimplemented Dispatch fallback was removed; disabled
+ * releases render the honest unavailable state below.
  */
 export default function AgentsTabScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const agents = useAgentStore((s) => s.agents);
 
-  // Redirect to Dispatch when no agents are active
-  useEffect(() => {
-    if (agents.length === 0) {
-      router.replace('/(app)/dispatch' as Parameters<typeof router.replace>[0]);
-    }
-  }, [agents.length, router]);
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
   const numColumns = isTablet ? 3 : 2;

@@ -4,11 +4,6 @@ import { Share } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { ArtifactsGalleryScreen } from '@/src/features/artifacts';
 import { useArtifactStore } from '@/src/features/artifacts/store';
-import {
-  ArchivedCodeSessionsScreen,
-  CodeSessionDetailScreen,
-  CodeSessionsScreen,
-} from '@/src/features/code-sessions';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   __resetCloudAccountSessionForTests,
@@ -300,46 +295,5 @@ describe('Artifacts gallery', () => {
     });
 
     expect(screen.getByTestId('artifact-preview-content')).toBeTruthy();
-  });
-});
-
-describe('Code Sessions screens', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
-  });
-
-  it('renders the empty state when there are no code sessions', () => {
-    const { getByText, getByTestId } = render(<CodeSessionsScreen />);
-
-    expect(getByText('Code')).toBeTruthy();
-    expect(getByTestId('code-sessions-empty-state')).toBeTruthy();
-    expect(getByText('No code sessions yet')).toBeTruthy();
-  });
-
-  it('renders archived screen with empty state', () => {
-    const { getByTestId } = render(<ArchivedCodeSessionsScreen />);
-
-    expect(getByTestId('code-sessions-empty-state')).toBeTruthy();
-  });
-
-  it('opens the remote environment options from the new-session button', () => {
-    const { getByTestId, getByText } = render(<CodeSessionsScreen />);
-
-    fireEvent.press(getByTestId('code-new-session'));
-
-    expect(getByTestId('code-environment-sheet')).toBeTruthy();
-    expect(getByText('Use AGI Desktop')).toBeTruthy();
-    // Was 'AGI Cloud waitlist'. Managed cloud reached public alpha on
-    // 2026-06-27 and the invite gate was removed, so this option no longer
-    // offers a waitlist — it states where code sessions actually run.
-    expect(getByText('Hosted code environments')).toBeTruthy();
-  });
-
-  it('renders session-unavailable state for an unknown session id', () => {
-    const { getByTestId, getByText } = render(<CodeSessionDetailScreen />);
-
-    expect(getByTestId('code-session-not-found')).toBeTruthy();
-    expect(getByText('Session unavailable')).toBeTruthy();
   });
 });

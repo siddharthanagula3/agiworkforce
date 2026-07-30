@@ -53,10 +53,6 @@ describe('Wave 1 control relay fixes', () => {
   });
 
   it('normalizes legacy mobile actions to the signaling relay allowlist', () => {
-    expect(buildRelayControlMessage('dispatch_task', { text: 'Run it' }).relay).toMatchObject({
-      action: 'dispatch_request',
-      data: { action: 'dispatch_request', text: 'Run it' },
-    });
     expect(buildRelayControlMessage('ping', { timestamp: 123 }).relay).toMatchObject({
       action: 'heartbeat',
       data: { action: 'heartbeat', timestamp: 123 },

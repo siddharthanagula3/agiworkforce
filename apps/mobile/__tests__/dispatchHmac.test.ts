@@ -247,7 +247,7 @@ describe('HMAC rejection', () => {
   it('returns hmac_mismatch for a tampered payload', async () => {
     const senderState = await makeState();
     const receiverState = await makeState();
-    const env = await signMessage(senderState, 'dispatch_response', { text: 'hello' });
+    const env = await signMessage(senderState, 'heartbeat_ack', { text: 'hello' });
     const tampered = { ...env, payload: { text: 'INJECTED' } };
     const result = await verifyMessage(receiverState, tampered);
     expect(result.ok).toBe(false);
