@@ -125,6 +125,8 @@ describe('Settings page', () => {
     expect(getByText('Safety & Security')).toBeTruthy();
     expect(getByText('Data Controls')).toBeTruthy();
     expect(getByText('Parental Controls')).toBeTruthy();
+    expect(getByText('Shared Links')).toBeTruthy();
+    expect(getByText('Device Integrations')).toBeTruthy();
     expect(queryByText(/byok/i)).toBeNull();
   });
 
@@ -243,8 +245,20 @@ describe('Settings page', () => {
     const { getByLabelText } = render(<SettingsTabScreen />);
 
     fireEvent.press(getByLabelText('Cloud Data Controls. Sign in'));
+    fireEvent.press(getByLabelText('Shared Links. Sign in'));
 
     expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
+  });
+
+  it('opens the existing Shared Links and Device Integrations screens from Settings', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    fireEvent.press(getByLabelText('Shared Links. Cloud'));
+    fireEvent.press(getByLabelText('Device Integrations'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/shared-links');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/integrations');
   });
 
   it('routes every signed-out subscription surface to sign-in instead of account data', () => {

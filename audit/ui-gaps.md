@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 2071c890e0680ad645fed3bd88e249a1e36c5ae7f2014ccb35c2e1acadc32a6e -->
+<!-- ui-gaps-csv-sha256: 735bff96d4e4bddb333517cbcc6976df819ad0b43bc7334bbe73fa345bdf2bd8 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 106 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 105 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  310 |
+| Open        |  309 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   31 |
+| Done        |   32 |
 | Not Planned |    0 |
 
 ## P0
@@ -1062,24 +1062,24 @@ Add a 'Background conversations' SettingsSwitchRow to the Voice screen backed by
 
 - `chatgpt_reference/064-chatgpt-ios-settings-voice-spruce-model-intelligence-language.png`
 
-### GAP-046 — Shared links and Integrations settings screens are built but unreachable from any nav
+### GAP-046 — Shared Links and Device Integrations are reachable from Settings
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** Claude · iOS · Settings root — Account group
 
 **Gap**
 
-The reference lists 'Shared links' as an Account-group row. agiworkforce ships apps/mobile/app/(app)/settings/shared-links.tsx (275 lines, a real screen listing published read-only conversations) and settings/integrations.tsx (493 lines), but neither is linked from the settings index, the drawer, or any other screen — shared-links has zero inbound references and integrations only appears as a hidden Drawer.Screen registration.
+The two production screens now have first-class inbound navigation. Shared Links appears in Account with the same Clerk sign-in gate as other account-backed Cloud data. Device Integrations appears in Device because its Calendar and Contacts permissions are local OS capabilities, not a Managed Cloud connector surface. The Shared Links back action now returns through the actual navigation stack instead of always jumping to Data Controls.
 
 **Evidence**
 
-apps/mobile/app/(app)/settings/shared-links.tsx; apps/mobile/src/features/settings/index.tsx (sections array has no shared-links or integrations row); apps/mobile/app/(app)/\_layout.tsx:102 registers settings/integrations as HIDDEN; grep 'settings/shared-links' and 'settings/integrations' across apps/mobile returns no navigation call sites
+apps/mobile/src/features/settings/index.tsx routes the Account > Shared Links row through openCloudRoute('/(app)/settings/shared-links') and the feature-gated Device > Device Integrations row directly to '/(app)/settings/integrations'. apps/mobile/app/(app)/settings/shared-links.tsx uses stack back with a Settings-root fallback. settings-page.test.tsx verifies rendered rows, signed-out gating, and both real destinations; shared-links-honesty.test.tsx, integration-feature-honesty.test.ts, and the Settings snapshot cover the existing screens and resulting IA.
 
 **Suggested fix**
 
-Add a 'Shared links' row to the Account section and an 'Integrations' row to the Cloud section of apps/mobile/src/features/settings/index.tsx, or delete the screens per the repo's 'implement or remove dead-ends' rule.
+Completed. Keep Shared Links account-authenticated and keep device Calendar/Contacts permissions in the Device group; do not relabel local OS permissions as Cloud integrations.
 
 **Reference screenshot(s)**
 

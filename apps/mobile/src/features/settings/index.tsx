@@ -8,6 +8,7 @@ import {
   Baby,
   Bell,
   Brain,
+  CalendarDays,
   ChevronRight,
   CircleHelp,
   CreditCard,
@@ -20,6 +21,7 @@ import {
   Palette,
   RotateCcw,
   Shield,
+  Share2,
   SlidersHorizontal,
   Sparkles,
   SunMoon,
@@ -322,6 +324,14 @@ export default function SettingsTabScreen() {
             value: accountValue ?? getBillingPlanPricing(billingTier).label,
             onPress: openCloudRoute('/(app)/settings/cloud-billing'),
           },
+          {
+            key: 'account-shared-links',
+            label: 'Shared Links',
+            icon: Share2,
+            tag: cloudAccessTag,
+            tone: 'cloud',
+            onPress: openCloudRoute('/(app)/settings/shared-links'),
+          },
           ...(FEATURES.iap
             ? [
                 {
@@ -375,6 +385,16 @@ export default function SettingsTabScreen() {
             icon: Bell,
             onPress: push('/(app)/settings/notifications'),
           },
+          ...(FEATURES.connectors
+            ? [
+                {
+                  key: 'device-integrations',
+                  label: 'Device Integrations',
+                  icon: CalendarDays,
+                  onPress: push('/(app)/settings/integrations'),
+                },
+              ]
+            : []),
           {
             key: 'voice',
             label: 'Voice',
