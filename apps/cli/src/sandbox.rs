@@ -236,9 +236,7 @@ fn writable_roots(manager: &SandboxManager) -> Result<Vec<PathBuf>> {
     let configured = match &manager.policy {
         SandboxPolicy::ReadOnly => return Ok(Vec::new()),
         SandboxPolicy::WorkspaceWrite { writable_roots } => writable_roots,
-        SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox => {
-            return Ok(Vec::new());
-        }
+        SandboxPolicy::DangerFullAccess => return Ok(Vec::new()),
     };
 
     let mut roots = Vec::with_capacity(configured.len() + 1);
@@ -289,7 +287,7 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
                 write_rules.push_str(&format!("(allow file-write* (subpath \"{root}\"))\n"));
             }
         }
-        SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox => {}
+        SandboxPolicy::DangerFullAccess => {}
     }
 
     Ok(format!(
@@ -392,10 +390,7 @@ pub async fn execute_sandboxed(
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
-    if matches!(
-        manager.policy,
-        SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox
-    ) {
+    if matches!(manager.policy, SandboxPolicy::DangerFullAccess) {
         return cmd
             .output()
             .await

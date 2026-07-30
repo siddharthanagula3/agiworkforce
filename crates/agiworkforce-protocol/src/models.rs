@@ -402,15 +402,12 @@ pub enum SandboxEnforcement {
     Managed,
     /// No outer filesystem sandbox should be applied.
     Disabled,
-    /// Filesystem isolation is enforced by an external caller.
-    External,
 }
 
 impl SandboxEnforcement {
     pub fn from_legacy_sandbox_policy(sandbox_policy: &SandboxPolicy) -> Self {
         match sandbox_policy {
             SandboxPolicy::DangerFullAccess => Self::Disabled,
-            SandboxPolicy::ExternalSandbox { .. } => Self::External,
             SandboxPolicy::ReadOnly { .. } | SandboxPolicy::WorkspaceWrite { .. } => Self::Managed,
         }
     }
@@ -444,9 +441,6 @@ impl ManagedFileSystemPermissions {
                     .and_then(NonZeroUsize::new),
             },
             FileSystemSandboxKind::Unrestricted => Self::Unrestricted,
-            FileSystemSandboxKind::ExternalSandbox => unreachable!(
-                "external filesystem policies are represented by PermissionProfile::External"
-            ),
         }
     }
 
@@ -479,10 +473,6 @@ pub enum PermissionProfile {
     },
     /// Do not apply an outer sandbox.
     Disabled,
-    /// Filesystem isolation is enforced by an external caller.
-    #[serde(rename_all = "snake_case")]
-    #[ts(rename_all = "snake_case")]
-    External { network: NetworkSandboxPolicy },
 }
 
 impl Default for PermissionProfile {
@@ -554,14 +544,8 @@ impl PermissionProfile {
         file_system_sandbox_policy: &FileSystemSandboxPolicy,
         network_sandbox_policy: NetworkSandboxPolicy,
     ) -> Self {
-        let enforcement = match file_system_sandbox_policy.kind {
-            FileSystemSandboxKind::Restricted | FileSystemSandboxKind::Unrestricted => {
-                SandboxEnforcement::Managed
-            }
-            FileSystemSandboxKind::ExternalSandbox => SandboxEnforcement::External,
-        };
         Self::from_runtime_permissions_with_enforcement(
-            enforcement,
+            SandboxEnforcement::Managed,
             file_system_sandbox_policy,
             network_sandbox_policy,
         )
@@ -573,9 +557,6 @@ impl PermissionProfile {
         network_sandbox_policy: NetworkSandboxPolicy,
     ) -> Self {
         match file_system_sandbox_policy.kind {
-            FileSystemSandboxKind::ExternalSandbox => Self::External {
-                network: network_sandbox_policy,
-            },
             FileSystemSandboxKind::Unrestricted if enforcement == SandboxEnforcement::Disabled => {
                 Self::Disabled
             }
@@ -610,7 +591,6 @@ impl PermissionProfile {
         match self {
             Self::Managed { .. } => SandboxEnforcement::Managed,
             Self::Disabled => SandboxEnforcement::Disabled,
-            Self::External { .. } => SandboxEnforcement::External,
         }
     }
 
@@ -618,13 +598,12 @@ impl PermissionProfile {
         match self {
             Self::Managed { file_system, .. } => file_system.to_sandbox_policy(),
             Self::Disabled => FileSystemSandboxPolicy::unrestricted(),
-            Self::External { .. } => FileSystemSandboxPolicy::external_sandbox(),
         }
     }
 
     pub fn network_sandbox_policy(&self) -> NetworkSandboxPolicy {
         match self {
-            Self::Managed { network, .. } | Self::External { network } => *network,
+            Self::Managed { network, .. } => *network,
             Self::Disabled => NetworkSandboxPolicy::Enabled,
         }
     }
@@ -638,13 +617,6 @@ impl PermissionProfile {
                 .to_sandbox_policy()
                 .to_legacy_sandbox_policy(*network, cwd),
             Self::Disabled => Ok(SandboxPolicy::DangerFullAccess),
-            Self::External { network } => Ok(SandboxPolicy::ExternalSandbox {
-                network_access: if network.is_enabled() {
-                    crate::protocol::NetworkAccess::Enabled
-                } else {
-                    crate::protocol::NetworkAccess::Restricted
-                },
-            }),
         }
     }
 
@@ -665,10 +637,6 @@ enum TaggedPermissionProfile {
         network: NetworkSandboxPolicy,
     },
     Disabled,
-    #[serde(rename_all = "snake_case")]
-    External {
-        network: NetworkSandboxPolicy,
-    },
 }
 
 impl From<TaggedPermissionProfile> for PermissionProfile {
@@ -682,7 +650,6 @@ impl From<TaggedPermissionProfile> for PermissionProfile {
                 network,
             },
             TaggedPermissionProfile::Disabled => Self::Disabled,
-            TaggedPermissionProfile::External { network } => Self::External { network },
         }
     }
 }
@@ -747,14 +714,12 @@ impl From<&FileSystemSandboxPolicy> for FileSystemPermissions {
     fn from(value: &FileSystemSandboxPolicy) -> Self {
         let entries = match value.kind {
             FileSystemSandboxKind::Restricted => value.entries.clone(),
-            FileSystemSandboxKind::Unrestricted | FileSystemSandboxKind::ExternalSandbox => {
-                vec![FileSystemSandboxEntry {
-                    path: FileSystemPath::Special {
-                        value: FileSystemSpecialPath::Root,
-                    },
-                    access: FileSystemAccessMode::Write,
-                }]
-            }
+            FileSystemSandboxKind::Unrestricted => vec![FileSystemSandboxEntry {
+                path: FileSystemPath::Special {
+                    value: FileSystemSpecialPath::Root,
+                },
+                access: FileSystemAccessMode::Write,
+            }],
         };
         Self {
             entries,
@@ -1964,6 +1929,16 @@ mod tests {
     }
 
     #[test]
+    fn permission_profile_rejects_removed_external_enforcement_claim() {
+        let removed_profile = serde_json::json!({
+            "type": "external",
+            "network": "restricted",
+        });
+
+        assert!(serde_json::from_value::<PermissionProfile>(removed_profile).is_err());
+    }
+
+    #[test]
     fn permission_profile_presets_match_legacy_defaults() {
         assert_eq!(
             PermissionProfile::read_only(),
@@ -2010,32 +1985,10 @@ mod tests {
     }
 
     #[test]
-    fn permission_profile_from_runtime_permissions_preserves_external_sandbox() {
+    fn permission_profile_preserves_split_permissions_without_claiming_external_enforcement(
+    ) -> Result<()> {
+        let cwd = tempdir()?;
         let permission_profile = PermissionProfile::from_runtime_permissions(
-            &FileSystemSandboxPolicy::external_sandbox(),
-            NetworkSandboxPolicy::Restricted,
-        );
-
-        assert_eq!(
-            permission_profile,
-            PermissionProfile::External {
-                network: NetworkSandboxPolicy::Restricted,
-            }
-        );
-        assert_eq!(
-            PermissionProfile::from_runtime_permissions_with_enforcement(
-                SandboxEnforcement::Managed,
-                &FileSystemSandboxPolicy::external_sandbox(),
-                NetworkSandboxPolicy::Restricted,
-            ),
-            permission_profile,
-        );
-    }
-
-    #[test]
-    fn permission_profile_from_runtime_permissions_preserves_unrestricted_managed_network() {
-        let permission_profile = PermissionProfile::from_runtime_permissions_with_enforcement(
-            SandboxEnforcement::External,
             &FileSystemSandboxPolicy::unrestricted(),
             NetworkSandboxPolicy::Restricted,
         );
@@ -2045,8 +1998,7 @@ mod tests {
             PermissionProfile::Managed {
                 file_system: ManagedFileSystemPermissions::Unrestricted,
                 network: NetworkSandboxPolicy::Restricted,
-            },
-            "the legacy ExternalSandbox projection must not hide a split unrestricted filesystem policy"
+            }
         );
         assert_eq!(
             permission_profile.to_runtime_permissions(),
@@ -2055,32 +2007,14 @@ mod tests {
                 NetworkSandboxPolicy::Restricted,
             )
         );
-    }
-
-    #[test]
-    fn permission_profile_round_trip_preserves_external_sandbox() -> Result<()> {
-        let cwd = tempdir()?;
-        let sandbox_policy = SandboxPolicy::ExternalSandbox {
-            network_access: crate::protocol::NetworkAccess::Restricted,
-        };
-        let permission_profile = PermissionProfile::from_legacy_sandbox_policy(&sandbox_policy);
-
-        assert_eq!(
-            permission_profile,
-            PermissionProfile::External {
-                network: NetworkSandboxPolicy::Restricted,
-            }
-        );
-        assert_eq!(
-            permission_profile.to_legacy_sandbox_policy(cwd.path())?,
-            sandbox_policy
-        );
-        assert_eq!(
-            permission_profile.to_runtime_permissions(),
-            (
-                FileSystemSandboxPolicy::external_sandbox(),
-                NetworkSandboxPolicy::Restricted
-            )
+        let error = permission_profile
+            .to_legacy_sandbox_policy(cwd.path())
+            .expect_err("legacy projection must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("cannot represent unrestricted filesystem access"),
+            "{error}"
         );
         Ok(())
     }

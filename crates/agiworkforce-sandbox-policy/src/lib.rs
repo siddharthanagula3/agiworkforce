@@ -7,7 +7,6 @@ pub enum SandboxPolicy {
     DangerFullAccess,
     ReadOnly,
     WorkspaceWrite { writable_roots: Vec<PathBuf> },
-    ExternalSandbox,
 }
 
 impl SandboxPolicy {
@@ -17,7 +16,6 @@ impl SandboxPolicy {
             "workspace" | "workspace-write" => Self::WorkspaceWrite {
                 writable_roots: Vec::new(),
             },
-            "external" | "external-sandbox" => Self::ExternalSandbox,
             "danger" | "full-access" | "danger-full-access" => Self::DangerFullAccess,
             other => {
                 eprintln!(
@@ -37,7 +35,6 @@ impl SandboxPolicy {
             Self::DangerFullAccess => "danger-full-access",
             Self::ReadOnly => "read-only",
             Self::WorkspaceWrite { .. } => "workspace-write",
-            Self::ExternalSandbox => "external-sandbox",
         }
     }
 
@@ -87,13 +84,13 @@ mod tests {
             SandboxPolicy::from_mode_str("workspace-write"),
             SandboxPolicy::WorkspaceWrite { .. }
         ));
-        assert_eq!(
-            SandboxPolicy::from_mode_str("external-sandbox"),
-            SandboxPolicy::ExternalSandbox
-        );
         // Unknown modes now safely default to WorkspaceWrite instead of DangerFullAccess
         assert!(matches!(
             SandboxPolicy::from_mode_str("unknown"),
+            SandboxPolicy::WorkspaceWrite { .. }
+        ));
+        assert!(matches!(
+            SandboxPolicy::from_mode_str("external-sandbox"),
             SandboxPolicy::WorkspaceWrite { .. }
         ));
         // DangerFullAccess must be requested explicitly
