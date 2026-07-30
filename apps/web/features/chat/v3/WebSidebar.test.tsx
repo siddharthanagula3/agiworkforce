@@ -74,4 +74,16 @@ describe('WebSidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Schedules' }));
     expect(onNavigateView).toHaveBeenCalledWith('schedules');
   });
+
+  it('surfaces Code as a top-level mode and names its primary action honestly', () => {
+    const onModeChange = vi.fn();
+    render(<WebSidebar mode="chat" onModeChange={onModeChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Code' }));
+    expect(onModeChange).toHaveBeenCalledWith('code');
+
+    const { unmount } = render(<WebSidebar mode="code" onModeChange={onModeChange} />);
+    expect(screen.getByRole('button', { name: 'New Code session' })).toBeInTheDocument();
+    unmount();
+  });
 });

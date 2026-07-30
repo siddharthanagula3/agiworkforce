@@ -33,7 +33,13 @@ import 'server-only';
 import { getPlanMaxSandboxes, getPlanSandboxTtlMs } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { SubscriptionService } from '@/lib/services/subscription-service';
-import type { E2BExecutor, ExecutionResult, SandboxFileEntry } from './types';
+import {
+  MAX_EXECUTION_OUTPUT_BYTES,
+  type CommandExecutionResult,
+  type E2BExecutor,
+  type ExecutionResult,
+  type SandboxFileEntry,
+} from './types';
 import { e2bExecutionEnabled } from './gate';
 import { meterSandboxComputeInterval } from './compute-metering';
 import {
@@ -57,6 +63,18 @@ const E2B_SANDBOX_TIMEOUT_MS = 60_000;
  * is only the backstop for an abandoned/crashed request.
  */
 const E2B_CONVERSATION_TIMEOUT_MS = 10 * 60_000;
+const E2B_COMMAND_TIMEOUT_MS = 60_000;
+const ALL_OUTBOUND_TRAFFIC = '0.0.0.0/0';
+const TRUSTED_CODE_HOSTS = [
+  'github.com',
+  'api.github.com',
+  'raw.githubusercontent.com',
+  'objects.githubusercontent.com',
+  'registry.npmjs.org',
+  'npmjs.com',
+  'pypi.org',
+  'files.pythonhosted.org',
+] as const;
 
 /**
  * GOV-4: the per-user sandbox allowance and conversation lifetime are plan
@@ -153,6 +171,88 @@ const fail = (err: unknown): ExecutionResult => ({
   error: err instanceof Error ? err.message : String(err),
 });
 
+function scopeAttribution(scope: E2BSessionScope): {
+  conversationId?: string;
+  codeSessionId?: string;
+} {
+  return {
+    ...(scope.conversationId ? { conversationId: scope.conversationId } : {}),
+    ...(scope.resource?.kind === 'code_session' ? { codeSessionId: scope.resource.id } : {}),
+  };
+}
+
+function scopeLog(scope: E2BSessionScope | undefined): Record<string, string | undefined> {
+  return {
+    conversationId: scope?.conversationId,
+    resourceKind: scope?.resource?.kind,
+    resourceId: scope?.resource?.id,
+  };
+}
+
+function createNetworkOptions(scope: E2BSessionScope | undefined): {
+  allowInternetAccess?: boolean;
+  network?: { allowOut?: string[]; denyOut?: string[] };
+} {
+  if (scope?.resource?.kind !== 'code_session') return {};
+  if (scope.networkAccess === 'full') return { allowInternetAccess: true };
+  if (scope.networkAccess === 'trusted') {
+    return {
+      network: {
+        allowOut: [...TRUSTED_CODE_HOSTS],
+        denyOut: [ALL_OUTBOUND_TRAFFIC],
+      },
+    };
+  }
+  return { allowInternetAccess: false };
+}
+
+function updateNetworkOptions(scope: E2BSessionScope): {
+  allowInternetAccess?: boolean;
+  allowOut?: string[];
+  denyOut?: string[];
+} {
+  if (scope.networkAccess === 'full') return { allowInternetAccess: true };
+  if (scope.networkAccess === 'trusted') {
+    return {
+      allowOut: [...TRUSTED_CODE_HOSTS],
+      denyOut: [ALL_OUTBOUND_TRAFFIC],
+    };
+  }
+  return { allowInternetAccess: false };
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  if (Buffer.byteLength(value, 'utf8') <= maxBytes) return value;
+  const bytes = Buffer.from(value, 'utf8').subarray(0, maxBytes);
+  return `${bytes.toString('utf8')}\n[output truncated]`;
+}
+
+function commandResult(
+  stdoutValue: unknown,
+  stderrValue: unknown,
+  exitCodeValue: unknown,
+  errorValue?: unknown,
+): CommandExecutionResult {
+  const perStreamLimit = Math.floor(MAX_EXECUTION_OUTPUT_BYTES / 2);
+  const stdout = truncateUtf8(typeof stdoutValue === 'string' ? stdoutValue : '', perStreamLimit);
+  const stderr = truncateUtf8(typeof stderrValue === 'string' ? stderrValue : '', perStreamLimit);
+  const exitCode = Number.isInteger(exitCodeValue) ? Number(exitCodeValue) : 1;
+  const error =
+    typeof errorValue === 'string' && errorValue.trim()
+      ? errorValue
+      : exitCode === 0
+        ? undefined
+        : `Command exited with status ${exitCode}`;
+  return {
+    ok: exitCode === 0,
+    output: [stdout, stderr].filter(Boolean).join('\n') || '(no output)',
+    stdout,
+    stderr,
+    exitCode,
+    ...(error ? { error } : {}),
+  };
+}
+
 /**
  * Pause the conversation's sandbox (stops billing, preserves state) so the next
  * request in the same conversation can resume it via `Sandbox.connect()`. Best-effort:
@@ -167,7 +267,7 @@ export async function pauseE2BSession(scope: E2BSessionScope): Promise<void> {
   try {
     await Sandbox.pause(session.sandboxId);
   } catch (err) {
-    logger.warn({ err, conversationId: scope.conversationId }, '[e2b] pause failed');
+    logger.warn({ err, ...scopeLog(scope) }, '[e2b] pause failed');
   }
   // GOV-5: the billable interval ends here — close it into the usage ledger.
   await closeBillableInterval(scope, session, 'pause');
@@ -189,7 +289,7 @@ async function closeBillableInterval(
   await meterSandboxComputeInterval({
     userId: scope.userId,
     sandboxId: session.sandboxId,
-    conversationId: scope.conversationId,
+    ...scopeAttribution(scope),
     startedAtMs,
     endedAtMs: Date.now(),
     reason,
@@ -223,7 +323,7 @@ export async function killE2BSession(scope: E2BSessionScope): Promise<void> {
     const Sandbox = await importSandbox();
     if (Sandbox) await Sandbox.kill(session.sandboxId);
   } catch (err) {
-    logger.warn({ err, conversationId: scope.conversationId }, '[e2b] kill failed');
+    logger.warn({ err, ...scopeLog(scope) }, '[e2b] kill failed');
   } finally {
     await deleteE2BSession(scope);
   }
@@ -243,6 +343,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   if (!e2bExecutionEnabled()) return null;
 
   const conversationId = scope?.conversationId;
+  const codeSessionId = scope?.resource?.kind === 'code_session' ? scope.resource.id : undefined;
 
   // Dynamic import so the SDK only loads when E2B is actually used, and a missing
   // package fails closed rather than breaking the build/route.
@@ -269,14 +370,14 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
     planTtlMs = limits.ttlMs;
     if (maxSandboxes !== null && maxSandboxes <= 0) {
       logger.warn(
-        { userId: scope.userId, planTier, conversationId },
+        { userId: scope.userId, planTier, ...scopeLog(scope) },
         '[e2b] plan does not include managed sandboxes; refusing (fail-closed)',
       );
       return null;
     }
     if (planTtlMs <= 0) {
       logger.warn(
-        { userId: scope.userId, planTier, conversationId },
+        { userId: scope.userId, planTier, ...scopeLog(scope) },
         '[e2b] plan grants no managed sandbox lifetime; refusing (fail-closed)',
       );
       return null;
@@ -285,7 +386,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
 
   // Conversation-scoped sandboxes use the PLAN lifetime; ephemeral bare-API
   // sandboxes keep the short per-call ceiling, which is not a plan dimension.
-  const sandboxTimeoutMs = conversationId
+  const sandboxTimeoutMs = scope
     ? planTtlMs || E2B_CONVERSATION_TIMEOUT_MS
     : E2B_SANDBOX_TIMEOUT_MS;
   // Conversation-scoped sandboxes auto-PAUSE (not kill) if `sandboxTimeoutMs` is ever
@@ -300,9 +401,15 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   // Purely additive: does not affect execution behavior.
   const metadata: Record<string, string> = {};
   if (conversationId) metadata['conversationId'] = conversationId;
+  if (codeSessionId) metadata['codeSessionId'] = codeSessionId;
   if (scope?.userId) metadata['userId'] = scope.userId;
-  const createOpts = conversationId
-    ? { timeoutMs: sandboxTimeoutMs, lifecycle: { onTimeout: 'pause' as const }, metadata }
+  const createOpts = scope
+    ? {
+        timeoutMs: sandboxTimeoutMs,
+        lifecycle: { onTimeout: 'pause' as const },
+        metadata,
+        ...createNetworkOptions(scope),
+      }
     : { timeoutMs: sandboxTimeoutMs, metadata };
 
   /**
@@ -336,7 +443,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         const live = await countUserSandboxes(SandboxCtor, scope.userId, limit);
         if (live >= limit) {
           logger.warn(
-            { userId: scope.userId, live, limit, planTier, conversationId },
+            { userId: scope.userId, live, limit, planTier, ...scopeLog(scope) },
             '[e2b] per-user sandbox quota reached; refusing new sandbox (fail-closed)',
           );
           return null;
@@ -353,7 +460,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
 
     if (!guarded.locked) {
       logger.warn(
-        { userId: scope.userId, conversationId },
+        { userId: scope.userId, ...scopeLog(scope) },
         '[e2b] could not serialise sandbox creation; refusing (fail-closed)',
       );
       return null;
@@ -381,7 +488,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       sandboxId = existingSession.sandboxId;
     } catch (err) {
       logger.warn(
-        { err, conversationId },
+        { err, ...scopeLog(scope) },
         '[e2b] resume failed (sandbox likely expired); creating a fresh sandbox',
       );
       for (const key of Object.keys(contexts)) delete contexts[key];
@@ -397,6 +504,26 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
     sandboxId = fresh.sandboxId;
   }
 
+  // Egress is part of the Code session trust boundary. Re-apply the requested
+  // policy on every attach; if the SDK cannot enforce it, pause and refuse the
+  // executor rather than run with stale, potentially wider access.
+  if (scope?.resource?.kind === 'code_session') {
+    try {
+      await sandbox.updateNetwork(updateNetworkOptions(scope));
+    } catch (err) {
+      logger.error(
+        { err, userId: scope.userId, codeSessionId, networkAccess: scope.networkAccess },
+        '[e2b] code-session network policy could not be enforced; refusing executor',
+      );
+      try {
+        await Sandbox.pause(sandboxId);
+      } catch {
+        // The plan timeout remains the billing and lifecycle backstop.
+      }
+      return null;
+    }
+  }
+
   /** Persist the (possibly updated) session mapping so the next call/turn can reuse it. */
   async function persistSession(): Promise<void> {
     if (!scope) return;
@@ -404,6 +531,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       sandboxId,
       contexts,
       ...(activeSinceMs !== undefined ? { activeSinceMs } : {}),
+      ...(scope.networkAccess ? { networkAccess: scope.networkAccess } : {}),
     };
     await saveE2BSession(scope, session);
   }
@@ -483,6 +611,32 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         return fail(err);
       }
     },
+    async runCommand({ command, cwd, timeoutMs }): Promise<CommandExecutionResult> {
+      try {
+        const result = await sandbox.commands.run(command, {
+          ...(cwd ? { cwd } : {}),
+          timeoutMs: Math.min(
+            E2B_COMMAND_TIMEOUT_MS,
+            Math.max(1_000, timeoutMs ?? E2B_COMMAND_TIMEOUT_MS),
+          ),
+        });
+        return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
+      } catch (err) {
+        const commandError = err as {
+          stdout?: unknown;
+          stderr?: unknown;
+          exitCode?: unknown;
+          error?: unknown;
+          message?: unknown;
+        };
+        return commandResult(
+          commandError.stdout,
+          commandError.stderr,
+          commandError.exitCode,
+          commandError.error ?? commandError.message,
+        );
+      }
+    },
     async listFiles(path): Promise<SandboxFileEntry[] | null> {
       try {
         const entries = await sandbox.files.list(path);
@@ -521,19 +675,19 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       try {
         await persistSession();
       } catch (err) {
-        logger.warn({ err, conversationId }, '[e2b] persistSession before pause failed');
+        logger.warn({ err, ...scopeLog(scope) }, '[e2b] persistSession before pause failed');
       }
       try {
         // Static pause on the captured live id (consistent with pauseE2BSession).
         await Sandbox.pause(sandboxId);
       } catch (err) {
-        logger.warn({ err, conversationId }, '[e2b] pause (live handle) failed');
+        logger.warn({ err, ...scopeLog(scope) }, '[e2b] pause (live handle) failed');
       }
       if (intervalStartedAtMs !== undefined) {
         await meterSandboxComputeInterval({
           userId: scope.userId,
           sandboxId,
-          conversationId,
+          ...scopeAttribution(scope),
           startedAtMs: intervalStartedAtMs,
           endedAtMs: Date.now(),
           reason: 'pause',

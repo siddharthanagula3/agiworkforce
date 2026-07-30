@@ -16,6 +16,7 @@ import 'server-only';
 
 import { Redis } from '@upstash/redis';
 import { logger } from '@/lib/logger';
+import type { CloudCodeNetworkAccess } from '@agiworkforce/types';
 
 // Prefer Vercel's managed KV-integration names, falling back to native UPSTASH_*
 // (matches lib/rate-limit.ts). `||` so an empty KV_* still falls through.
@@ -43,15 +44,24 @@ export interface E2BSession {
    * no interval is ever billed twice.
    */
   activeSinceMs?: number;
+  /** Egress policy applied to a managed Code sandbox. */
+  networkAccess?: CloudCodeNetworkAccess;
 }
 
 export interface E2BSessionScope {
   /** Trust-boundary namespace. Managed Web/Mobile/Desktop cloud uses this value. */
   tenantId: string;
-  /** Authenticated Clerk principal that owns the conversation. */
+  /** Authenticated Clerk principal that owns the resource. */
   userId: string;
   /** Owned web_conversations.id, validated before the sandbox path is reached. */
-  conversationId: string;
+  conversationId?: string;
+  /** Non-conversation managed resource. Currently used by the Web Code surface. */
+  resource?: {
+    kind: 'code_session';
+    id: string;
+  };
+  /** Requested managed Code egress policy. Ignored for chat conversations. */
+  networkAccess?: CloudCodeNetworkAccess;
   /**
    * GOV-4: the owner's billing plan, when the caller already knows it. Optional
    * so existing call sites keep compiling; `runtime.ts` resolves the tier from
@@ -69,6 +79,21 @@ export function managedCloudE2BSessionScope(
   return { tenantId: MANAGED_CLOUD_E2B_TENANT_ID, userId, conversationId };
 }
 
+export function managedCloudCodeSessionScope(
+  userId: string,
+  codeSessionId: string,
+  networkAccess: CloudCodeNetworkAccess,
+  planTier?: string,
+): E2BSessionScope {
+  return {
+    tenantId: MANAGED_CLOUD_E2B_TENANT_ID,
+    userId,
+    resource: { kind: 'code_session', id: codeSessionId },
+    networkAccess,
+    ...(planTier ? { planTier } : {}),
+  };
+}
+
 /** Key TTL: generous upper bound on how long a paused sandbox mapping stays resumable. */
 const SESSION_TTL_SECONDS = 24 * 60 * 60;
 
@@ -77,12 +102,31 @@ function encodeKeyPart(value: string): string {
 }
 
 function sessionKey(scope: E2BSessionScope): string {
+  if (scope.resource) {
+    return [
+      'e2b:session:v3',
+      encodeKeyPart(scope.tenantId),
+      encodeKeyPart(scope.userId),
+      encodeKeyPart(scope.resource.kind),
+      encodeKeyPart(scope.resource.id),
+    ].join(':');
+  }
   return [
     'e2b:session:v2',
     encodeKeyPart(scope.tenantId),
     encodeKeyPart(scope.userId),
-    encodeKeyPart(scope.conversationId),
+    encodeKeyPart(scope.conversationId ?? ''),
   ].join(':');
+}
+
+function scopeLog(scope: E2BSessionScope): Record<string, string | undefined> {
+  return {
+    tenantId: scope.tenantId,
+    userId: scope.userId,
+    conversationId: scope.conversationId,
+    resourceKind: scope.resource?.kind,
+    resourceId: scope.resource?.id,
+  };
 }
 
 export async function getE2BSession(scope: E2BSessionScope): Promise<E2BSession | null> {
@@ -92,7 +136,7 @@ export async function getE2BSession(scope: E2BSessionScope): Promise<E2BSession 
     return value ?? null;
   } catch (err) {
     logger.warn(
-      { err, tenantId: scope.tenantId, userId: scope.userId, conversationId: scope.conversationId },
+      { err, ...scopeLog(scope) },
       '[e2b] session-store get failed; treating as no session',
     );
     return null;
@@ -104,10 +148,7 @@ export async function saveE2BSession(scope: E2BSessionScope, session: E2BSession
   try {
     await redis.set(sessionKey(scope), session, { ex: SESSION_TTL_SECONDS });
   } catch (err) {
-    logger.warn(
-      { err, tenantId: scope.tenantId, userId: scope.userId, conversationId: scope.conversationId },
-      '[e2b] session-store save failed',
-    );
+    logger.warn({ err, ...scopeLog(scope) }, '[e2b] session-store save failed');
   }
 }
 
@@ -116,10 +157,7 @@ export async function deleteE2BSession(scope: E2BSessionScope): Promise<void> {
   try {
     await redis.del(sessionKey(scope));
   } catch (err) {
-    logger.warn(
-      { err, tenantId: scope.tenantId, userId: scope.userId, conversationId: scope.conversationId },
-      '[e2b] session-store delete failed',
-    );
+    logger.warn({ err, ...scopeLog(scope) }, '[e2b] session-store delete failed');
   }
 }
 

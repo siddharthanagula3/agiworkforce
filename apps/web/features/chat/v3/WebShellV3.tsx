@@ -14,7 +14,7 @@ import { WebSearchModalCmdK } from './WebSearchModalCmdK';
 
 // ─── mode type ───────────────────────────────────────────────────────────────
 
-export type V3Mode = 'chat' | 'work';
+export type V3Mode = 'chat' | 'work' | 'code';
 
 // ─── props ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +38,8 @@ const VIEW_ROUTES: Record<string, string> = {
   'voice-settings': '/settings/voice',
   account: '/settings/account',
   schedules: '/chat/schedules',
+  'code-desktop': '/download',
+  'code-vscode': '/vscode-extension',
 };
 
 export function resolveWebViewRoute(view: string): string | undefined {
@@ -111,6 +113,17 @@ export function WebShellV3({
     [onNavigateView, router],
   );
 
+  const handleModeChange = useCallback(
+    (nextMode: V3Mode) => {
+      if (nextMode === 'code') {
+        router.push('/chat/code');
+        return;
+      }
+      setMode(nextMode);
+    },
+    [router],
+  );
+
   const handleJumpConversation = useCallback(
     (id: string) => {
       hostBridge?.selectConversation?.(id);
@@ -126,7 +139,7 @@ export function WebShellV3({
     >
       <WebSidebar
         mode={mode}
-        onModeChange={setMode}
+        onModeChange={handleModeChange}
         onNewChat={handleNewChat}
         onOpenSearch={() => setSearchOpen(true)}
         onNavigateView={handleNavigateView}

@@ -61,6 +61,8 @@ import {
   FolderOpen,
   LibraryBig,
   CalendarClock,
+  MessageSquare,
+  TerminalSquare,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
@@ -2561,15 +2563,30 @@ export default function WebChatPage() {
     [handleNewChat, handleToggleSidebar],
   );
 
-  // Single-Chat-tab nav. The rail body already renders the chat list (Recents) and the
-  // project folders, so 'Chats' and 'Projects' route-nav items would be redundant
-  // competing destinations — removed. 'Artifacts' was already removed (it linked to the
+  // Top-level Chat / Code destinations stay visible in the production sidebar.
+  // The rail body still owns chat recents; this Chat item is the stable mode
+  // destination paired with Code, not a second recents list. 'Artifacts' was
+  // already removed (it linked to the
   // /gallery marketing page; artifacts open via the header ArtifactsToggleButton).
   // Skills, Plugins, and Connectors now live in ONE place — the Settings modal — so the
   // single 'Customize' entry opens that modal instead of navigating to /customize or a
   // separate Directory modal (both removed).
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () => [
+      {
+        id: 'chat-home',
+        label: 'Chat',
+        icon: MessageSquare,
+        onClick: () => router.push('/chat'),
+        isActive: true,
+      },
+      {
+        id: 'code',
+        label: 'Code',
+        icon: TerminalSquare,
+        onClick: () => router.push('/chat/code'),
+        isActive: false,
+      },
       // Persistent Projects entry (claude.ai parity). The Projects *section* in
       // the sidebar body only renders once the user has at least one project, so
       // a zero-project user previously had NO way to reach /projects. This nav
