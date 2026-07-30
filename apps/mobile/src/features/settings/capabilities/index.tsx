@@ -13,15 +13,19 @@ import {
   Mic,
   RefreshCw,
   ShieldCheck,
+  Telescope,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
+import { Switch } from '@/components/ui/switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useChatStore } from '@/stores/chatStore';
 
 type CapabilityTone = 'active' | 'local' | 'device' | 'cloud' | 'desktop' | 'review';
+type ToggleCapability = 'imageGen' | 'codeExecution' | 'research';
 
 interface CapabilityRowMeta {
   key: string;
@@ -31,6 +35,7 @@ interface CapabilityRowMeta {
   description: string;
   value: string;
   href?: string;
+  toggle?: ToggleCapability;
 }
 
 interface CapabilitySection {
@@ -100,9 +105,21 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
           tone: 'cloud',
           label: 'AGI Code',
           description: FEATURES.codeExecution
-            ? 'Run code from Cloud chat; generated files appear in Artifacts.'
+            ? 'Allow supported Cloud models to execute code in a secure sandbox.'
             : 'Code execution is not available in this mobile release.',
           value: FEATURES.codeExecution ? cloudValue : 'Off',
+          ...(FEATURES.codeExecution ? { toggle: 'codeExecution' as const } : {}),
+        },
+        {
+          key: 'research',
+          icon: Telescope,
+          tone: 'cloud',
+          label: 'Deep research',
+          description: FEATURES.research
+            ? 'Allow supported Cloud models to run multi-step research with citations.'
+            : 'Deep research is not available in this mobile release.',
+          value: FEATURES.research ? cloudValue : 'Off',
+          ...(FEATURES.research ? { toggle: 'research' as const } : {}),
         },
         {
           key: 'approvals',
@@ -123,8 +140,10 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
           icon: Globe,
           tone: 'cloud',
           label: 'Web search',
-          description: 'Search current web information in Cloud sessions.',
-          value: cloudValue,
+          description: FEATURES.webSearch
+            ? 'Uses current web information automatically when the Cloud model supports it.'
+            : 'Web search is not available in this mobile release.',
+          value: FEATURES.webSearch ? (cloudUnlocked ? 'Automatic' : 'Sign in') : 'Off',
         },
         {
           key: 'continuity',
@@ -140,8 +159,11 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
           icon: Cloud,
           tone: 'cloud',
           label: 'Image generation',
-          description: 'Create images in AGI Cloud when enabled.',
-          value: cloudValue,
+          description: FEATURES.imageGen
+            ? 'Allow eligible Cloud chats to create generated images.'
+            : 'Image generation is not available in this mobile release.',
+          value: FEATURES.imageGen ? cloudValue : 'Off',
+          ...(FEATURES.imageGen ? { toggle: 'imageGen' as const } : {}),
         },
         {
           key: 'desktop-control',
@@ -159,6 +181,8 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
 export default function CapabilitiesScreen() {
   const router = useRouter();
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const chatFeatures = useChatStore((s) => s.features);
+  const setFeature = useChatStore((s) => s.setFeature);
   const sections = makeSections(cloudUnlocked);
 
   const navigate = useCallback(
@@ -172,7 +196,7 @@ export default function CapabilitiesScreen() {
     <SettingsScreenShell title="Capabilities">
       <SettingsInfo
         title="What AGI can use"
-        body="Local and Cloud stay separate. This page shows what is active on this device and where each control lives."
+        body="Local and Cloud stay separate. Cloud preferences still require a supported model, plan, and deployment capability at send time."
         icon={ShieldCheck}
       />
 
@@ -186,6 +210,13 @@ export default function CapabilitiesScreen() {
                 row={row}
                 isLast={index === section.rows.length - 1}
                 onPress={row.href ? () => navigate(row.href as string) : undefined}
+                toggleValue={row.toggle ? chatFeatures[row.toggle] : undefined}
+                onToggle={
+                  row.toggle
+                    ? (enabled) => setFeature(row.toggle as ToggleCapability, enabled)
+                    : undefined
+                }
+                toggleDisabled={Boolean(row.toggle) && !cloudUnlocked}
               />
             ))}
           </SettingsGroup>
@@ -264,10 +295,16 @@ function CapabilityRow({
   row,
   isLast,
   onPress,
+  toggleValue,
+  onToggle,
+  toggleDisabled,
 }: {
   row: CapabilityRowMeta;
   isLast: boolean;
   onPress?: () => void;
+  toggleValue?: boolean;
+  onToggle?: (enabled: boolean) => void;
+  toggleDisabled?: boolean;
 }) {
   const colors = useThemeColors();
   const Icon = row.icon;
@@ -317,26 +354,39 @@ function CapabilityRow({
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <View
-          style={{
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: tone.border,
-            backgroundColor: tone.background,
-            paddingHorizontal: 9,
-            paddingVertical: 4,
-          }}
-        >
-          <Text numberOfLines={1} style={{ color: tone.text, fontSize: 11, fontWeight: '700' }}>
-            {row.value}
-          </Text>
-        </View>
+        {onToggle && toggleValue !== undefined ? (
+          <Switch
+            value={toggleValue}
+            onValueChange={onToggle}
+            disabled={toggleDisabled}
+            accessibilityLabel={`${row.label}. ${row.description}`}
+            accessibilityHint={
+              toggleDisabled ? 'Sign in to change this Managed Cloud preference.' : undefined
+            }
+          />
+        ) : (
+          <View
+            style={{
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: tone.border,
+              backgroundColor: tone.background,
+              paddingHorizontal: 9,
+              paddingVertical: 4,
+            }}
+          >
+            <Text numberOfLines={1} style={{ color: tone.text, fontSize: 11, fontWeight: '700' }}>
+              {row.value}
+            </Text>
+          </View>
+        )}
         {onPress ? <ChevronRight size={17} color={colors.textMuted} /> : null}
       </View>
     </View>
   );
 
   if (!onPress) {
+    if (onToggle && toggleValue !== undefined) return content;
     return (
       <View accessible accessibilityRole="text" accessibilityLabel={accessibilityLabelFor(row)}>
         {content}
