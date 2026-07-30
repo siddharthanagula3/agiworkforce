@@ -94,30 +94,6 @@
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },
     {
-      "command": "cloud_create_conversation",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "cloud_create_message",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "cloud_delete_conversation",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "cloud_get_conversations",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "cloud_get_messages",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
-      "command": "cloud_update_conversation_title",
-      "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
-    },
-    {
       "command": "continuous_job_runner_start",
       "reason": "Temporary Ticket 1C baseline: no statically discoverable production caller; wire or cut during Desktop IPC reconciliation."
     },

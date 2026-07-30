@@ -41,3 +41,10 @@ CI now fails on every new frontend-to-native mismatch, every unregistered
 Tauri command, and every new orphan registration. Ticket 1C has a finite,
 machine-enforced baseline to reconcile without weakening checks for subsequent
 changes.
+
+## Ticket 1C Progress
+
+- 2026-07-30: cut the six fail-closed native `cloud_*` CRUD registrations and
+  the two unconsumed transfer commands that could only call those placeholders.
+  The managed-cloud Web API client remains the sole Desktop cloud-persistence
+  boundary. The temporary orphan allowance count decreased from 97 to 91.
