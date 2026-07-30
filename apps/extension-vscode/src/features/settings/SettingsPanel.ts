@@ -11,6 +11,15 @@ import {
   type SettingsSection,
 } from './settingsProtocol';
 import { getSettingsWebviewContent } from './settingsWebviewContent';
+import { agentConfigPath } from '../config/agentConfig';
+import {
+  buildInstructionContextSnapshot,
+  formatCustomInstructionPrelude,
+  getStoredCustomInstructions,
+  saveCustomInstructions,
+  type CustomInstructionScope,
+} from '../instructions';
+import { getContextPanelProvider } from '../trees/contextPanelProvider';
 
 const EXTERNAL_DESTINATIONS: Partial<Record<SettingsCommand, string>> = {
   manageUsage: 'https://agiworkforce.com/settings/usage?from=vscode-extension',
@@ -18,6 +27,9 @@ const EXTERNAL_DESTINATIONS: Partial<Record<SettingsCommand, string>> = {
   manageConnectors: 'https://agiworkforce.com/connectors?from=vscode-extension',
   manageTeam: 'https://agiworkforce.com/teams?from=vscode-extension',
   openDocs: 'https://agiworkforce.com/docs?from=vscode-extension',
+  openConfigDocs: 'https://agiworkforce.com/docs?topic=configuration&from=vscode-extension',
+  openInstructionDocs:
+    'https://agiworkforce.com/docs?topic=custom-instructions&from=vscode-extension',
 };
 
 export class SettingsPanel {
@@ -57,9 +69,16 @@ export class SettingsPanel {
     private readonly context: vscode.ExtensionContext,
     initialSection: SettingsSection,
   ) {
+    const storedInstructions = getStoredCustomInstructions(this.context);
     const initialState: SettingsPanelState = {
       ...Config.settingsSnapshot(),
       accountConnected: null,
+      agentConfigPath: agentConfigPath(),
+      instructionContext: {
+        ...storedInstructions,
+        turnPrelude: formatCustomInstructionPrelude(storedInstructions),
+        projectSources: [],
+      },
     };
     this.panel.webview.html = getSettingsWebviewContent(
       this.panel.webview,
@@ -86,6 +105,11 @@ export class SettingsPanel {
           return;
         }
 
+        if (message.type === 'settings.instructions.update') {
+          await this.updateInstructions(message.scope, message.value);
+          return;
+        }
+
         await this.runCommand(message.command);
       }),
       vscode.workspace.onDidChangeConfiguration((event) => {
@@ -101,6 +125,8 @@ export class SettingsPanel {
     return {
       ...Config.settingsSnapshot(),
       accountConnected: accountToken !== undefined,
+      agentConfigPath: agentConfigPath(),
+      instructionContext: await buildInstructionContextSnapshot(this.context),
     };
   }
 
@@ -148,6 +174,24 @@ export class SettingsPanel {
     }
   }
 
+  private async updateInstructions(scope: CustomInstructionScope, value: string): Promise<void> {
+    try {
+      await saveCustomInstructions(this.context, scope, value);
+      await getContextPanelProvider()?.refreshInstructionContext();
+      await this.post({ type: 'settings.instructions.saved', scope });
+      await this.refresh();
+    } catch (error) {
+      await this.refresh();
+      await this.post({
+        type: 'settings.error',
+        message:
+          error instanceof Error
+            ? `Could not save custom instructions: ${error.message}`
+            : 'Could not save custom instructions.',
+      });
+    }
+  }
+
   private async runCommand(command: SettingsCommand): Promise<void> {
     try {
       const destination = EXTERNAL_DESTINATIONS[command];
@@ -174,6 +218,12 @@ export class SettingsPanel {
         case 'signOut':
           await vscode.commands.executeCommand('agi-workforce.signOut');
           await this.refresh();
+          break;
+        case 'openAgentConfig':
+          await vscode.commands.executeCommand('agi-workforce.openAgentConfig');
+          break;
+        case 'restartLocalRuntime':
+          await vscode.commands.executeCommand('agi-workforce.restartLocalRuntime');
           break;
       }
     } catch (error) {

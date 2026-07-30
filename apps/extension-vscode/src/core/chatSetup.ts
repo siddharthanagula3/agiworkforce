@@ -25,11 +25,7 @@ export function setupChat(
 ): ChatState {
   const conversationTreeProvider = new ConversationTreeProvider(localRuntimes);
 
-  const chatParticipant = registerChatParticipant(
-    context,
-    conversationTreeProvider,
-    localRuntimes,
-  );
+  const chatParticipant = registerChatParticipant(context, conversationTreeProvider, localRuntimes);
   context.subscriptions.push(chatParticipant);
 
   const sidebarProvider = new SidebarProvider(
@@ -50,7 +46,7 @@ export function setupChat(
     conversationTreeProvider,
   );
 
-  const contextPanelProvider = new ContextPanelProvider();
+  const contextPanelProvider = new ContextPanelProvider(context);
   setContextPanelInstance(contextPanelProvider);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('agi-workforce.contextPanel', contextPanelProvider),

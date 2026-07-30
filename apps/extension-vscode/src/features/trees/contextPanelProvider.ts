@@ -8,7 +8,9 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { describeRejection, safeResolveWorkspacePath } from '../../utils/pathSafety';
+import { buildInstructionContextSnapshot, type InstructionContextSnapshot } from '../instructions';
 
+const GROUP_INSTRUCTIONS = 'instructions';
 const GROUP_PINNED = 'pinned';
 const GROUP_AUTO = 'auto';
 
@@ -80,13 +82,20 @@ export class ContextItem extends vscode.TreeItem {
 
 class ContextGroupItem extends vscode.TreeItem {
   constructor(
-    public readonly groupId: typeof GROUP_PINNED | typeof GROUP_AUTO,
+    public readonly groupId: typeof GROUP_INSTRUCTIONS | typeof GROUP_PINNED | typeof GROUP_AUTO,
     count: number,
   ) {
-    const label = groupId === GROUP_PINNED ? `Pinned Files (${count})` : `Auto-detected (${count})`;
+    const label =
+      groupId === GROUP_INSTRUCTIONS
+        ? `Instructions (${count})`
+        : groupId === GROUP_PINNED
+          ? `Pinned Files (${count})`
+          : `Auto-detected (${count})`;
     super(label, vscode.TreeItemCollapsibleState.Expanded);
     this.contextValue = `group-${groupId}`;
-    this.iconPath = new vscode.ThemeIcon(groupId === GROUP_PINNED ? 'pin' : 'search');
+    this.iconPath = new vscode.ThemeIcon(
+      groupId === GROUP_INSTRUCTIONS ? 'book' : groupId === GROUP_PINNED ? 'pin' : 'search',
+    );
     this.accessibilityInformation = {
       label,
       role: 'treeitem',
@@ -94,7 +103,28 @@ class ContextGroupItem extends vscode.TreeItem {
   }
 }
 
-type ContextTreeNode = ContextGroupItem | ContextItem;
+class InstructionContextItem extends vscode.TreeItem {
+  constructor(
+    label: string,
+    description: string,
+    tooltip: string,
+    command: vscode.Command,
+    icon: string,
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.description = description;
+    this.tooltip = tooltip;
+    this.command = command;
+    this.contextValue = 'instructionContext';
+    this.iconPath = new vscode.ThemeIcon(icon);
+    this.accessibilityInformation = {
+      label: `${label} — ${description}`,
+      role: 'treeitem',
+    };
+  }
+}
+
+type ContextTreeNode = ContextGroupItem | ContextItem | InstructionContextItem;
 
 export class ContextPanelProvider
   implements vscode.TreeDataProvider<ContextTreeNode>, vscode.Disposable
@@ -106,9 +136,12 @@ export class ContextPanelProvider
 
   private readonly _pinnedFiles: Set<string> = new Set();
   private _autoFiles: Map<string, { languageId: string; isActive: boolean }> = new Map();
+  private _instructionContext: InstructionContextSnapshot | undefined;
+  private _disposed = false;
 
-  constructor() {
+  constructor(private readonly _extensionContext?: vscode.ExtensionContext) {
     this._refreshAutoFiles();
+    void this.refreshInstructionContext();
   }
 
   addFile(uri: vscode.Uri): void {
@@ -139,6 +172,18 @@ export class ContextPanelProvider
   refreshAutoContext(): void {
     this._refreshAutoFiles();
     this._onDidChangeTreeData.fire();
+    void this.refreshInstructionContext();
+  }
+
+  async refreshInstructionContext(): Promise<void> {
+    if (this._extensionContext === undefined || this._disposed) return;
+    try {
+      this._instructionContext = await buildInstructionContextSnapshot(this._extensionContext);
+      if (!this._disposed) this._onDidChangeTreeData.fire();
+    } catch {
+      this._instructionContext = undefined;
+      if (!this._disposed) this._onDidChangeTreeData.fire();
+    }
   }
 
   getTreeItem(element: ContextTreeNode): vscode.TreeItem {
@@ -147,7 +192,11 @@ export class ContextPanelProvider
 
   getChildren(element?: ContextTreeNode): ContextTreeNode[] {
     if (element === undefined) {
+      const instructionCount =
+        (this._instructionContext?.effectiveScope === 'none' ? 0 : 1) +
+        (this._instructionContext?.projectSources.length ?? 0);
       const groups: ContextGroupItem[] = [
+        new ContextGroupItem(GROUP_INSTRUCTIONS, instructionCount),
         new ContextGroupItem(GROUP_PINNED, this._pinnedFiles.size),
       ];
       if (this._autoFiles.size > 0)
@@ -155,13 +204,86 @@ export class ContextPanelProvider
       return groups;
     }
     if (element instanceof ContextGroupItem) {
+      if (element.groupId === GROUP_INSTRUCTIONS) return this._buildInstructionItems();
       return element.groupId === GROUP_PINNED ? this._buildPinnedItems() : this._buildAutoItems();
     }
     return [];
   }
 
   dispose(): void {
+    this._disposed = true;
     this._onDidChangeTreeData.dispose();
+  }
+
+  private _buildInstructionItems(): InstructionContextItem[] {
+    const snapshot = this._instructionContext;
+    if (snapshot === undefined) {
+      return [
+        new InstructionContextItem(
+          'Custom instructions',
+          'Configure',
+          'Open Personalization to add host-wide or workspace-specific custom instructions.',
+          {
+            command: 'agi-workforce.openSettings',
+            title: 'Open Personalization',
+            arguments: ['personalization'],
+          },
+          'settings-gear',
+        ),
+      ];
+    }
+
+    const items: InstructionContextItem[] = [];
+    if (snapshot.effectiveScope !== 'none') {
+      const scopeLabel =
+        snapshot.effectiveScope === 'workspace' ? 'Workspace override' : 'Host default';
+      items.push(
+        new InstructionContextItem(
+          'Custom instructions',
+          `${scopeLabel} · ${snapshot.effective.length} chars`,
+          snapshot.turnPrelude,
+          {
+            command: 'agi-workforce.openSettings',
+            title: 'Edit Custom Instructions',
+            arguments: ['personalization'],
+          },
+          'person',
+        ),
+      );
+    }
+
+    for (const source of snapshot.projectSources) {
+      items.push(
+        new InstructionContextItem(
+          source.fileName,
+          source.truncated ? 'Runtime source · preview truncated' : 'Runtime source',
+          source.content,
+          {
+            command: 'vscode.open',
+            title: 'Open Project Instructions',
+            arguments: [vscode.Uri.file(source.path)],
+          },
+          'repo',
+        ),
+      );
+    }
+
+    if (items.length === 0) {
+      items.push(
+        new InstructionContextItem(
+          'No active instructions',
+          'Configure',
+          'No custom or project instruction source is active for this workspace.',
+          {
+            command: 'agi-workforce.openSettings',
+            title: 'Open Personalization',
+            arguments: ['personalization'],
+          },
+          'circle-slash',
+        ),
+      );
+    }
+    return items;
   }
 
   private _buildPinnedItems(): ContextItem[] {
