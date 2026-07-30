@@ -10,7 +10,7 @@
  *
  * This guard fails any chat/composer/slash SURFACE file that hardcodes a
  * slash-command list (>= 4 distinct `/command` literals) without importing the
- * canonical slash-command-registry (BUILT_IN_SLASH_COMMANDS /
+ * canonical @agiworkforce/unified-chat registry (BUILT_IN_SLASH_COMMANDS /
  * filterSlashCommandsByCapability). Known not-yet-migrated surfaces are
  * allowlisted as tracked debt so the guard passes today AND blocks NEW
  * divergence. Scope is path-limited to composer/menu/slash surfaces to avoid
@@ -58,16 +58,8 @@ const MIN_DISTINCT = 4;
 // Each MUST have a tracking note. The guard blocks any NEW unlisted surface.
 const ALLOWLIST = new Map([
   [
-    'apps/desktop/src/hooks/useSlashCommandAutocomplete.ts',
-    'desktop v3 slash autocomplete — promote COMMAND_SUGGESTIONS into the shared registry (capability-architecture review Strong-Improvement)',
-  ],
-  [
-    'apps/desktop/src/features/chat/SlashCommandMenu.tsx',
-    'legacy desktop SlashCommandMenu (pre-v3) — pending registry adoption / removal',
-  ],
-  [
     'apps/mobile/src/features/chat/components/ChatInput.tsx',
-    'mobile slash set (/image,/voice,/compare,/export) — BLOCKED on the registry being web-scoped (apps/web/features/chat/commands). Move the registry to a shared package so mobile/desktop can consume it (capability-architecture review Strong-Improvement).',
+    'mobile slash set (/image,/voice,/compare,/export) — adopt the now-shared @agiworkforce/unified-chat registry and package menu in the mobile composer.',
   ],
 ]);
 
@@ -101,7 +93,7 @@ for (const file of walk(root)) {
   if (ALLOWLIST.has(rel)) continue; // tracked debt
   errors.push(
     `${rel}: hardcodes ${distinct.size} slash-command literals without importing the canonical ` +
-      `slash-command-registry (BUILT_IN_SLASH_COMMANDS + filterSlashCommandsByCapability). ` +
+      `@agiworkforce/unified-chat registry (BUILT_IN_SLASH_COMMANDS + filterSlashCommandsByCapability). ` +
       `Consume the registry + capability filter instead of a private allowlist.`,
   );
 }

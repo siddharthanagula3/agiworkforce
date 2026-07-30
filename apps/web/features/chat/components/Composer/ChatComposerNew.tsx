@@ -25,7 +25,6 @@ import { cn } from '@shared/lib/utils';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
-import { BUILT_IN_SLASH_COMMANDS } from '@features/chat/commands/slash-command-registry';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
@@ -61,7 +60,7 @@ import {
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-search-support';
-import { SendPreview, useCapability } from '@agiworkforce/unified-chat';
+import { BUILT_IN_SLASH_COMMANDS, SendPreview, useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';

@@ -1083,7 +1083,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
 
     // ── Vision commands ─────────────────────────────────────────────
     case 'vision_send_message':
-    case 'vision_analyze_screenshot':
     case 'vision_extract_text':
       return {
         content: '(mock vision response)',

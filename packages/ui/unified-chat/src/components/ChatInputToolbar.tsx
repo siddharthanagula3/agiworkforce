@@ -14,7 +14,6 @@
  * Task #18 wiring: Plan-mode toggle button reads/writes usePlanModeStore.
  */
 
-import { useCallback } from 'react';
 import { Brain, EyeOff, Hand, Zap, BookOpen } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { usePlanModeStore, selectPlanMode } from '../stores/planModeStore';
@@ -82,6 +81,43 @@ export interface ChatInputToolbarProps {
   className?: string;
 }
 
+export interface PlanModeToggleProps {
+  /** Controlled state. Omit to use the package plan proposal store. */
+  active?: boolean;
+  /** Controlled toggle. Omit to toggle the package plan proposal store. */
+  onToggle?: () => void;
+  className?: string;
+}
+
+/**
+ * Shared plan-mode toolbar control. Shipping composers use the controlled form
+ * so the visual state is the exact `AgentMode` forwarded to the runtime.
+ */
+export function PlanModeToggle({ active, onToggle, className }: PlanModeToggleProps) {
+  const storedPlanMode = usePlanModeStore(selectPlanMode);
+  const toggleStoredPlanMode = usePlanModeStore((state) => state.togglePlanMode);
+  const planMode = active ?? storedPlanMode;
+
+  return (
+    <ToolbarButton
+      variant={planMode ? 'default' : 'ghost'}
+      size="sm"
+      onClick={onToggle ?? toggleStoredPlanMode}
+      className={cn(planMode && 'bg-indigo-600 hover:bg-indigo-700 text-white', className)}
+      aria-label={planMode ? 'Disable plan mode' : 'Enable plan mode'}
+      aria-pressed={planMode}
+      title={
+        planMode
+          ? 'Plan mode active: agent will propose a plan before executing. Click to disable.'
+          : 'Enable plan mode: agent proposes a plan and waits for approval before executing'
+      }
+    >
+      <BookOpen className="h-3.5 w-3.5" />
+      {planMode && <span className="text-xs font-medium">Plan</span>}
+    </ToolbarButton>
+  );
+}
+
 export function ChatInputToolbar({
   thinkingEnabled = false,
   thinkingBudget,
@@ -94,14 +130,6 @@ export function ChatInputToolbar({
   speedSelector,
   className,
 }: ChatInputToolbarProps) {
-  // Task #18: Plan-mode toggle reads/writes usePlanModeStore
-  const planMode = usePlanModeStore(selectPlanMode);
-  const togglePlanMode = usePlanModeStore((s) => s.togglePlanMode);
-
-  const handlePlanModeToggle = useCallback(() => {
-    togglePlanMode();
-  }, [togglePlanMode]);
-
   return (
     <div
       className={cn(
@@ -188,23 +216,7 @@ export function ChatInputToolbar({
           </ToolbarButton>
         )}
 
-        {/* Task #18: Plan-mode toggle (always present — wired to usePlanModeStore) */}
-        <ToolbarButton
-          variant={planMode ? 'default' : 'ghost'}
-          size="sm"
-          onClick={handlePlanModeToggle}
-          className={cn(planMode && 'bg-indigo-600 hover:bg-indigo-700 text-white')}
-          aria-label={planMode ? 'Disable plan mode' : 'Enable plan mode'}
-          aria-pressed={planMode}
-          title={
-            planMode
-              ? 'Plan mode active: agent will propose a plan before executing. Click to disable.'
-              : 'Enable plan mode: agent proposes a plan and waits for approval before executing'
-          }
-        >
-          <BookOpen className="h-3.5 w-3.5" />
-          {planMode && <span className="text-xs font-medium">Plan</span>}
-        </ToolbarButton>
+        <PlanModeToggle />
       </div>
     </div>
   );

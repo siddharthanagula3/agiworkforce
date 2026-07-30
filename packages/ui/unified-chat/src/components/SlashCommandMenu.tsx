@@ -5,17 +5,20 @@
  * Consumes the slash command registry from the package lib.
  */
 
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 import type { SlashCommand } from '../lib/slashCommands';
 
 // Re-export CommandSuggestion shape so hosts that built on the UAC type can use this.
 export interface CommandSuggestion {
+  /** Stable command identifier without the leading slash. */
+  id?: string;
   command: string;
   description: string;
   example?: string;
-  icon?: string;
+  icon?: ReactNode;
+  isSkill?: boolean;
   /** The underlying SlashCommand registry entry, if available. */
   slashCommand?: SlashCommand;
 }
@@ -56,11 +59,17 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
             {suggestions.map((suggestion, index) => (
               <button
                 type="button"
-                key={suggestion.command}
-                onClick={() => onSelect(suggestion)}
+                key={suggestion.id ?? suggestion.command}
+                onMouseDown={(event) => {
+                  // Keep focus in the composer so selecting a command does not
+                  // collapse the input or lose its current argument.
+                  event.preventDefault();
+                  onSelect(suggestion);
+                }}
                 onMouseEnter={() => onHover(index)}
                 role="option"
                 aria-selected={index === selectedIndex}
+                data-active={index === selectedIndex || undefined}
                 className={cn(
                   'w-full text-left px-4 py-3 transition-colors border-b border-[hsl(var(--border))]/50 last:border-b-0',
                   index === selectedIndex ? 'bg-primary/10' : 'hover:bg-[hsl(var(--accent))]',
@@ -68,7 +77,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
               >
                 <div className="flex items-center gap-3">
                   {suggestion.icon && (
-                    <span className="text-lg" aria-hidden="true">
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                       {suggestion.icon}
                     </span>
                   )}
@@ -87,6 +96,11 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                       </div>
                     )}
                   </div>
+                  {suggestion.isSkill && (
+                    <span className="ml-auto shrink-0 rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-400">
+                      skill
+                    </span>
+                  )}
                 </div>
               </button>
             ))}

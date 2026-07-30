@@ -50,6 +50,8 @@ Strategic:
 
 Tactical (engineering decisions): `2026-05-09-bridge-over-rewrite-store-migration.md`, `depth-counter-circularity.md`, `dispatch-supabase-rpc-injection.md`, `dispatch-two-layer-dedup.md`, `onchange-fires-before-listeners.md`, `per-endpoint-auth-ladder.md`, `per-surface-queue-factory.md`, `sticky-retry-context.md`, `stream-watchdog-promise-race.md`, `try-with-rust-context.md`, `worksecret-codec-in-types.md`, `zoom-unsupported-until-tabs-permission.md`.
 
+Current integration decisions: `2026-07-30-web-message-surface-adapters.md` records why Web keeps message/thinking orchestration adapters while delegating host-neutral tool-card rendering to `@agiworkforce/unified-chat`.
+
 > Note: records referencing **Supabase** (`dispatch-supabase-rpc-injection.md`, and #13/#17 above) describe a retired data layer. They are retained as history; the canonical data layer is Neon (`AGI-DATA-0001`). Verify against `packages/platform/data-layer` before reuse.
 
 ## 3. Stale / superseded decisions to reconcile

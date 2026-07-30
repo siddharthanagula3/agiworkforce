@@ -3,7 +3,7 @@ import { isCapabilityEnabled } from '@agiworkforce/types';
 import {
   BUILT_IN_SLASH_COMMANDS,
   filterSlashCommandsByCapability,
-} from '../slash-command-registry';
+} from '@agiworkforce/unified-chat';
 
 const idsFor = (platform: 'web' | 'desktop' | 'mobile') =>
   filterSlashCommandsByCapability(BUILT_IN_SLASH_COMMANDS, (cap) =>

@@ -1,42 +1,50 @@
 'use client';
 
-import React, { useState, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
+/**
+ * Web adapter for the package-owned slash command menu.
+ *
+ * The package owns the built-in catalog, filtering rules, menu markup, and
+ * interaction surface. Web contributes only its user-defined commands and
+ * server-loaded skills, then translates framework-neutral icon names to
+ * Lucide elements.
+ */
+
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
-  Globe,
   Brain,
-  Image,
-  FileText,
+  CircleHelp,
   Code,
-  Terminal,
   Database,
-  MonitorPlay,
-  Undo2,
+  FileText,
+  Globe,
+  History,
+  Image,
+  ListChecks,
   Minimize2,
+  MonitorPlay,
   Sparkles,
+  Terminal,
+  Undo2,
 } from 'lucide-react';
-import { cn } from '@shared/lib/utils';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { isCapabilityEnabled } from '@agiworkforce/types';
-import { usePlatform } from '@agiworkforce/unified-chat';
 import {
   BUILT_IN_SLASH_COMMANDS,
+  SlashCommandMenu as SharedSlashCommandMenu,
   filterSlashCommandsByCapability,
+  usePlatform,
+  type CommandSuggestion,
   type SlashCommandIconName,
-} from '../../commands/slash-command-registry';
+} from '@agiworkforce/unified-chat';
 
-interface SlashCommand {
-  id: string;
-  label: string;
-  description: string;
-  icon: React.ElementType;
-  isCustom?: boolean;
-  /** True for skill-sourced commands fetched from /api/skills. */
-  isSkill?: boolean;
-}
-
-// Resolve the registry's framework-agnostic icon names to Lucide components.
-// Built-in commands themselves come from the canonical registry (single source
-// of truth), NOT a hardcoded subset — see COMMANDS below.
 const SLASH_ICONS: Record<SlashCommandIconName, React.ElementType> = {
   Globe,
   Brain,
@@ -49,6 +57,9 @@ const SLASH_ICONS: Record<SlashCommandIconName, React.ElementType> = {
   Undo2,
   Minimize2,
   Sparkles,
+  History,
+  ListChecks,
+  CircleHelp,
 };
 
 interface SkillMeta {
@@ -65,111 +76,103 @@ interface SlashCommandMenuProps {
   query: string;
   onSelect: (command: string) => void;
   onClose: () => void;
-  /** Shared catalog metadata already loaded by the composer. */
   skills: readonly SkillMeta[];
-  /**
-   * Called when the user selects a skill command. Receives the exact catalog
-   * name; the server resolves the body only if the model calls skill.load.
-   */
   onSkillSelect?: (skillName: string) => void;
 }
 
 export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandMenuProps>(
   function SlashCommandMenu({ query, onSelect, onClose, onSkillSelect, skills }, ref) {
-    const customCommands = useSettingsStore((s) => s.customCommands);
-    const skillCommands = useMemo(
-      () =>
-        skills
-          .map(
-            (skill): SlashCommand => ({
-              id: `skill:${skill.name}`,
-              label: `/${skill.name}`,
-              description: skill.description,
-              icon: Sparkles,
-              isSkill: true,
-            }),
-          )
-          .sort((a, b) => a.label.localeCompare(b.label)),
-      [skills],
-    );
-
+    const customCommands = useSettingsStore((state) => state.customCommands);
     const platform = usePlatform();
-
-    const COMMANDS = useMemo<SlashCommand[]>(
-      () => [
-        // Built-ins come from the canonical slash-command registry, filtered by
-        // PLATFORM capability — so /terminal, /browser, /database never render on
-        // web/mobile. Single source of truth; no hardcoded subset to drift.
-        ...filterSlashCommandsByCapability(BUILT_IN_SLASH_COMMANDS, (capability) =>
-          isCapabilityEnabled(platform, capability),
-        ).map(
-          (c): SlashCommand => ({
-            id: c.id,
-            label: c.label,
-            description: c.description,
-            icon: SLASH_ICONS[c.iconName],
-          }),
-        ),
-        ...customCommands.map((c) => ({
-          id: c.id,
-          label: `/${c.name}`,
-          description: c.description || c.template.slice(0, 60),
-          icon: Terminal,
-          isCustom: true as const,
-        })),
-        ...skillCommands,
-      ],
-      [platform, customCommands, skillCommands],
-    );
-
-    const filtered = COMMANDS.filter(
-      (cmd) =>
-        query === '' ||
-        cmd.id.replace(/^skill:/, '').startsWith(query.toLowerCase()) ||
-        cmd.label.slice(1).startsWith(query.toLowerCase()),
-    );
-
     const [activeIndex, setActiveIndex] = useState(0);
+    const previousQueryRef = useRef(query);
 
-    // Reset active index when query changes
-    const prevQueryRef = React.useRef(query);
-    React.useEffect(() => {
-      if (prevQueryRef.current !== query) {
-        prevQueryRef.current = query;
-        if (activeIndex !== 0) setActiveIndex(0);
-      }
-    }, [query, activeIndex]);
+    const suggestions = useMemo<CommandSuggestion[]>(() => {
+      const builtIns = filterSlashCommandsByCapability(BUILT_IN_SLASH_COMMANDS, (capability) =>
+        isCapabilityEnabled(platform, capability),
+      ).map((command): CommandSuggestion => {
+        const Icon = SLASH_ICONS[command.iconName];
+        return {
+          id: command.id,
+          command: command.label,
+          description: command.description,
+          example: command.example,
+          icon: <Icon className="h-4 w-4 text-muted-foreground" />,
+        };
+      });
+
+      const custom = customCommands.map(
+        (command): CommandSuggestion => ({
+          id: command.id,
+          command: `/${command.name}`,
+          description: command.description || command.template.slice(0, 60),
+          icon: <Terminal className="h-4 w-4 text-muted-foreground" />,
+        }),
+      );
+
+      const skillSuggestions = skills
+        .map(
+          (skill): CommandSuggestion => ({
+            id: `skill:${skill.name}`,
+            command: `/${skill.name}`,
+            description: skill.description,
+            icon: <Sparkles className="h-4 w-4 text-amber-400" />,
+            isSkill: true,
+          }),
+        )
+        .sort((left, right) => left.command.localeCompare(right.command));
+
+      const normalizedQuery = query.toLowerCase();
+      return [...builtIns, ...custom, ...skillSuggestions].filter((suggestion) => {
+        const id = suggestion.id?.replace(/^skill:/, '') ?? suggestion.command.slice(1);
+        return (
+          normalizedQuery === '' ||
+          id.toLowerCase().startsWith(normalizedQuery) ||
+          suggestion.command.slice(1).toLowerCase().startsWith(normalizedQuery)
+        );
+      });
+    }, [customCommands, platform, query, skills]);
+
+    useEffect(() => {
+      if (previousQueryRef.current === query) return;
+      previousQueryRef.current = query;
+      setActiveIndex(0);
+    }, [query]);
+
+    useEffect(() => {
+      if (activeIndex < suggestions.length) return;
+      setActiveIndex(Math.max(0, suggestions.length - 1));
+    }, [activeIndex, suggestions.length]);
 
     const handleSelect = useCallback(
-      (id: string) => {
+      (suggestion: CommandSuggestion) => {
+        const id = suggestion.id ?? suggestion.command.slice(1);
         if (id.startsWith('skill:')) {
-          const skillName = id.slice('skill:'.length);
-          onSkillSelect?.(skillName);
+          onSkillSelect?.(id.slice('skill:'.length));
         } else {
           onSelect(id);
         }
         onClose();
       },
-      [onSelect, onSkillSelect, onClose],
+      [onClose, onSelect, onSkillSelect],
     );
 
     useImperativeHandle(
       ref,
       () => ({
         handleKey(key: string): boolean {
-          if (filtered.length === 0) return false;
-
+          if (suggestions.length === 0) return false;
           if (key === 'ArrowUp') {
-            setActiveIndex((prev) => (prev - 1 + filtered.length) % filtered.length);
+            setActiveIndex((index) => (index - 1 + suggestions.length) % suggestions.length);
             return true;
           }
           if (key === 'ArrowDown') {
-            setActiveIndex((prev) => (prev + 1) % filtered.length);
+            setActiveIndex((index) => (index + 1) % suggestions.length);
             return true;
           }
           if (key === 'Enter' || key === 'Tab') {
-            const cmd = filtered[activeIndex];
-            if (cmd) handleSelect(cmd.id);
+            const suggestion = suggestions[activeIndex];
+            if (suggestion) handleSelect(suggestion);
             return true;
           }
           if (key === 'Escape') {
@@ -179,69 +182,17 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           return false;
         },
       }),
-      [filtered, activeIndex, handleSelect, onClose],
+      [activeIndex, handleSelect, onClose, suggestions],
     );
 
-    if (filtered.length === 0) return null;
-
     return (
-      <div className="absolute bottom-full left-0 right-0 z-50 mb-2 overflow-hidden rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl">
-        <div className="p-1">
-          {filtered.map((cmd, index) => {
-            const Icon = cmd.icon;
-            const isActive = index === activeIndex;
-            const isSkill = cmd.isSkill === true;
-            return (
-              <button
-                key={cmd.id}
-                onMouseDown={(e) => {
-                  e.preventDefault(); // prevent textarea blur
-                  handleSelect(cmd.id);
-                }}
-                onMouseEnter={() => setActiveIndex(index)}
-                className={cn(
-                  'flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
-                  isActive ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
-                )}
-                data-active={isActive || undefined}
-                aria-current={isActive || undefined}
-              >
-                <Icon
-                  className={cn(
-                    'h-4 w-4 shrink-0',
-                    isActive
-                      ? 'text-primary'
-                      : isSkill
-                        ? 'text-amber-400'
-                        : 'text-muted-foreground',
-                  )}
-                />
-                <span className="font-medium text-sm">{cmd.label}</span>
-                <span
-                  className={cn('text-sm', isActive ? 'text-primary/70' : 'text-muted-foreground')}
-                >
-                  {cmd.description}
-                </span>
-                {isSkill && !isActive && (
-                  <span className="ml-auto shrink-0 rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-400">
-                    skill
-                  </span>
-                )}
-                {isActive && (
-                  <span className="ml-auto shrink-0 text-[10px] text-primary/50 font-medium">
-                    Enter
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <div className="border-t border-border/40 px-3 py-1.5">
-          <span className="text-[10px] text-muted-foreground/60">
-            up/down navigate · Enter select · Esc dismiss
-          </span>
-        </div>
-      </div>
+      <SharedSlashCommandMenu
+        show
+        suggestions={suggestions}
+        selectedIndex={activeIndex}
+        onSelect={handleSelect}
+        onHover={setActiveIndex}
+      />
     );
   },
 );

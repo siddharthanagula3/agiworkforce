@@ -90,6 +90,51 @@ describe('ChatInput draft ownership', () => {
     expect(screen.queryByRole('button', { name: 'Voice input' })).toBeNull();
   });
 
+  it('opens the package slash menu and executes /plan without sending literal text', () => {
+    const onSend = vi.fn();
+    const togglePlanMode = vi.fn();
+    render(
+      <ChatInput
+        onSend={onSend}
+        onStop={vi.fn()}
+        onModelSelectorClick={vi.fn()}
+        hasMessages={false}
+        conversationId="conv-1"
+        slashCommandHost={{ togglePlanMode, openRewindTimeline: vi.fn() }}
+      />,
+    );
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '/' } });
+
+    expect(screen.getByRole('listbox', { name: 'Slash command suggestions' })).toBeTruthy();
+    expect(screen.getByText('/plan')).toBeTruthy();
+    expect(screen.getByText('/rewind')).toBeTruthy();
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    expect(togglePlanMode).toHaveBeenCalledTimes(1);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(useChatStore.getState().draftContent).toBe('');
+  });
+
+  it('exposes the shared plan toolbar control against the host-owned agent mode', () => {
+    const togglePlanMode = vi.fn();
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        onStop={vi.fn()}
+        onModelSelectorClick={vi.fn()}
+        hasMessages={false}
+        conversationId="conv-1"
+        slashCommandHost={{ togglePlanMode }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enable plan mode' }));
+    expect(togglePlanMode).toHaveBeenCalledTimes(1);
+  });
+
   it('presents Cloud voice processing as busy and cannot start a second recording', () => {
     const onToggle = vi.fn();
 
