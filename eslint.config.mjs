@@ -808,7 +808,6 @@ export default [
       'apps/web/app/api/github/webhook/route.ts',
       'apps/web/app/api/mission/route.ts',
       'apps/web/app/api/stripe-webhook/route.ts',
-      'apps/web/app/api/webhooks/directory-sync/route.ts',
       'apps/web/components/CommandPalette/CommandPalette.tsx',
       'apps/web/core/ai/llm/providers/anthropic-claude.ts',
       'apps/web/core/ai/llm/providers/google-gemini.ts',
