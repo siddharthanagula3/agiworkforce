@@ -48,3 +48,10 @@ changes.
   the two unconsumed transfer commands that could only call those placeholders.
   The managed-cloud Web API client remains the sole Desktop cloud-persistence
   boundary. The temporary orphan allowance count decreased from 97 to 91.
+- 2026-07-30: taught the frontend scanner to recognize imported invoke aliases
+  such as `docInvoke`. The live `execute_code` caller in `editingStore.ts` is
+  now enforced automatically, reducing the reviewed allowance count to 90.
+- 2026-07-30: cut eight legacy native `ai_*` commands and five custom updater
+  commands. Mounted AI workflows remain on the agent/workspace/tool paths;
+  updates and version reads remain on the signed Tauri plugin APIs. The reviewed
+  allowance count decreased from 90 to 77.

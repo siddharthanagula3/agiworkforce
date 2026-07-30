@@ -2,7 +2,6 @@ pub mod agent;
 pub mod agent_context;
 pub mod agi;
 pub mod agi_checkpoint;
-pub mod ai_native;
 pub mod analytics;
 pub mod api;
 pub mod artifacts;
@@ -130,7 +129,6 @@ pub use agent_context::{
 };
 pub use agi::*;
 pub use agi_checkpoint::*;
-pub use ai_native::*;
 pub use analytics::*;
 pub use api::*;
 pub use artifacts::*;

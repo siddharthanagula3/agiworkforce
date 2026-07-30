@@ -12,7 +12,5 @@ pub mod tasks;
 pub mod teams;
 pub mod terminal;
 pub mod tests;
-#[cfg(feature = "updater")]
-pub mod updater;
 pub mod webhooks;
 pub mod workflows;
