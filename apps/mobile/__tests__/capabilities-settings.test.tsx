@@ -35,6 +35,7 @@ jest.mock('lucide-react-native', () => {
     Layout: Icon,
     LockKeyhole: Icon,
     Mic: Icon,
+    RefreshCw: Icon,
     ShieldCheck: Icon,
   };
 });
@@ -87,6 +88,11 @@ describe('Capabilities settings screen', () => {
         'AGI Code. Run code from Cloud chat; generated files appear in Artifacts. Sign in',
       ),
     ).toBeTruthy();
+    expect(
+      getByLabelText(
+        'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop. Beta',
+      ),
+    ).toBeTruthy();
     expect(queryAllByRole('switch')).toHaveLength(0);
     expect(queryByText(/Claude/i)).toBeNull();
     expect(queryByText(/ChatGPT/i)).toBeNull();
@@ -101,6 +107,13 @@ describe('Capabilities settings screen', () => {
     );
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory');
+
+    fireEvent.press(
+      getByLabelText(
+        'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop. Beta',
+      ),
+    );
+    expect(mockPush).toHaveBeenCalledWith('/(app)/continuity');
   });
 
   it('shows Cloud instead of Sign in after cloud access is unlocked', () => {
