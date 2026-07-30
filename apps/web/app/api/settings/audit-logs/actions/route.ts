@@ -46,7 +46,6 @@ async function handleGetActions(request: NextRequest) {
       'settings_change',
       'api_call',
       'chat_session',
-      'employee_hire',
       'payment',
       'api_key_created',
       'api_key_revoked',

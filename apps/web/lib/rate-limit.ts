@@ -113,11 +113,6 @@ export const rateLimitConfigs = {
     window: '1 m', // 120 deductions per minute per user (high-frequency post-LLM calls)
     failClosed: false, // Allow deduction even if Redis fails - billing not blocked by rate limiter
   },
-  'sync-subscription': {
-    limit: 10,
-    window: '1 m', // 10 requests per minute (increased for payment success polling)
-    failClosed: false,
-  },
   portal: {
     limit: 10,
     window: '1 m', // 10 portal requests per minute

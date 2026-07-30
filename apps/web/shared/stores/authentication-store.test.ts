@@ -8,7 +8,6 @@ import { useAuthStore } from './authentication-store';
 import type { AuthUser } from '@shared/services/authentication-manager';
 
 const logoutStoreMocks = vi.hoisted(() => ({
-  workforceReset: vi.fn(),
   missionReset: vi.fn(),
   stopMissionCleanupInterval: vi.fn(),
   notificationClearAll: vi.fn(),
@@ -39,13 +38,6 @@ vi.mock('@shared/lib/logger', () => ({
 }));
 
 // Mock other stores that are cleaned up on logout
-vi.mock('./workforce-store', () => ({
-  useWorkforceStore: Object.assign(vi.fn(), {
-    getState: vi.fn(() => ({ reset: logoutStoreMocks.workforceReset })),
-  }),
-  cleanupWorkforceSubscription: vi.fn(),
-}));
-
 vi.mock('./mission-control-store', () => ({
   useMissionStore: Object.assign(vi.fn(), {
     getState: vi.fn(() => ({ reset: logoutStoreMocks.missionReset })),
@@ -315,13 +307,12 @@ describe('Authentication Store', () => {
     });
 
     it('should cleanup other stores on logout', async () => {
-      const { cleanupWorkforceSubscription } = await import('./workforce-store');
-
       vi.mocked(mockAuthService.logout).mockResolvedValue({ error: null });
 
       await useAuthStore.getState().logout();
 
-      expect(cleanupWorkforceSubscription).toHaveBeenCalled();
+      expect(logoutStoreMocks.missionReset).toHaveBeenCalled();
+      expect(logoutStoreMocks.stopMissionCleanupInterval).toHaveBeenCalled();
     });
 
     it('cleans up the other stores even if one store fails during logout', async () => {
@@ -334,7 +325,6 @@ describe('Authentication Store', () => {
       // now an independent Promise.allSettled task, so a failure in one
       // (notification-store here) must not block the others.
       const { useNotificationStore } = await import('./notification-store');
-      const { cleanupWorkforceSubscription } = await import('./workforce-store');
       const { logger } = await import('@shared/lib/logger');
 
       vi.mocked(useNotificationStore.getState).mockImplementationOnce(() => {
@@ -344,7 +334,6 @@ describe('Authentication Store', () => {
 
       await useAuthStore.getState().logout();
 
-      expect(cleanupWorkforceSubscription).toHaveBeenCalled();
       expect(logoutStoreMocks.missionReset).toHaveBeenCalled();
       expect(logoutStoreMocks.stopMissionCleanupInterval).toHaveBeenCalled();
       expect(logger.error).toHaveBeenCalledWith(

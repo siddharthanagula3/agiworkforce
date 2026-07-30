@@ -19,17 +19,6 @@ export {
   type CoworkFolderActions,
 } from './cowork-folder-store';
 
-// Workforce Store - AI workforce and job management
-export {
-  useWorkforceStore,
-  type HiredEmployee,
-  type HireEmployeeParams,
-  type WorkforceState,
-  setupWorkforceSubscription,
-  cleanupWorkforceSubscription,
-  isWorkforceSubscriptionActive,
-} from './workforce-store';
-
 // Notification Store - App notifications and toasts
 export {
   useNotificationStore,

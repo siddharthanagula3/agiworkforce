@@ -7,5 +7,5 @@ export { EditableMessage } from './EditableMessage';
 export { TypingIndicator } from './TypingIndicator';
 export { AudioVisualizer } from './AudioVisualizer';
 export { AudioPlayer } from './AudioPlayer';
-export { InlineCitation, CitationFooter } from './InlineCitation';
-export type { Citation } from './InlineCitation';
+export { InlineSourceTags } from './InlineSourceTags';
+export type { Citation } from './InlineSourceTags';

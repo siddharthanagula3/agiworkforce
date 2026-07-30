@@ -230,32 +230,6 @@ export const queryKeys = {
       ['search', 'suggestions', userId, query] as const,
   },
 
-  // Employees / Marketplace
-  employees: {
-    all: () => ['employees'] as const,
-    list: (filters?: unknown) => ['employees', 'list', filters] as const,
-    detail: (id: string) => ['employees', 'detail', id] as const,
-    reviews: (id: string) => ['employees', 'reviews', id] as const,
-    categories: () => ['employees', 'categories'] as const,
-    owned: () => ['employees', 'owned'] as const,
-    favorites: () => ['employees', 'favorites'] as const,
-    marketplace: (filters?: { category?: string; search?: string; sortBy?: string }) =>
-      ['employees', 'marketplace', filters] as const,
-    purchased: (userId: string) => ['employees', 'purchased', userId] as const,
-  },
-
-  // Workforce
-  workforce: {
-    all: () => ['workforce'] as const,
-    jobs: () => ['workforce', 'jobs'] as const,
-    job: (id: string) => ['workforce', 'job', id] as const,
-    workers: () => ['workforce', 'workers'] as const,
-    worker: (id: string) => ['workforce', 'worker', id] as const,
-    templates: () => ['workforce', 'templates'] as const,
-    stats: () => ['workforce', 'stats'] as const,
-    hired: (userId: string) => ['workforce', 'hired', userId] as const,
-  },
-
   // Billing
   billing: {
     all: () => ['billing'] as const,

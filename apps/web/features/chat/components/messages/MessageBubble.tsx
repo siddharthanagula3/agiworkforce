@@ -73,6 +73,7 @@ import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { ComparisonResponse } from './ComparisonResponse';
+import { InlineSourceTags, type Citation } from './InlineSourceTags';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
@@ -800,6 +801,16 @@ const MessageBubbleComponent = function MessageBubble({
     // URL are dropped here rather than rendered as dead links.
     return { searchSources: dedupeResearchSources(collected), searchQuery: query };
   }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
+  const inlineCitations = useMemo<Citation[]>(
+    () =>
+      searchSources.map((source, index) => ({
+        index: source.citationIndex ?? index + 1,
+        url: source.url,
+        title: source.title,
+        snippet: source.snippet,
+      })),
+    [searchSources],
+  );
 
   // Mirror this message's web-search sources into the right-hand Sources panel
   // (research-panel store) so the "Sources" view showcases them, not just the
@@ -1020,6 +1031,9 @@ const MessageBubbleComponent = function MessageBubble({
               <MarkdownContent content={cleanedContent} isStreaming={message.isStreaming} />
             )}
           </div>
+          {!isUser && inlineCitations.length > 0 && (
+            <InlineSourceTags citations={inlineCitations} />
+          )}
 
           {/* Compact chip while an artifact block streams into the panel — the raw
               fence is stripped from the body above; this is its in-transcript stand-in. */}
