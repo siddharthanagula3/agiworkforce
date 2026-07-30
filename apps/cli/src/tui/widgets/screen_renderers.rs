@@ -577,30 +577,6 @@ pub fn render_plugin(tab: PluginTab, installed: &[PluginSummary], errors: &[Stri
 }
 
 // ---------------------------------------------------------------------------
-// /tasks — background task list (capture 626)
-// ---------------------------------------------------------------------------
-
-pub fn render_tasks(running: &[String]) -> String {
-    let body = if running.is_empty() {
-        vec!["  No tasks currently running".to_string()]
-    } else {
-        let mut b = vec![
-            format!("  {} task(s) running", running.len()),
-            String::new(),
-        ];
-        for t in running {
-            b.push(format!("    • {}", t));
-        }
-        b
-    };
-    frame(
-        "Background tasks".to_string(),
-        &body,
-        "↑/↓ to select · Enter to view · ←/Esc to close",
-    )
-}
-
-// ---------------------------------------------------------------------------
 // /chrome — extension status (capture 600)
 // ---------------------------------------------------------------------------
 
@@ -1172,25 +1148,6 @@ mod tests {
     }
 
     #[test]
-    fn tasks_empty_state_matches_capture_626() {
-        let s = render_tasks(&[]);
-        assert!(s.contains("Background tasks"));
-        assert!(s.contains("No tasks currently running"));
-        assert!(s.contains("↑/↓ to select · Enter to view · ←/Esc to close"));
-    }
-
-    #[test]
-    fn tasks_with_running_lists_each() {
-        let s = render_tasks(&[
-            "subagent: explore".to_string(),
-            "batch: 3 tools".to_string(),
-        ]);
-        assert!(s.contains("2 task(s) running"));
-        assert!(s.contains("• subagent: explore"));
-        assert!(s.contains("• batch: 3 tools"));
-    }
-
-    #[test]
     fn chrome_shows_status_extension_and_actions() {
         let s = render_chrome();
         assert!(s.contains("AGI in Chrome (Beta)"));
@@ -1226,7 +1183,6 @@ mod tests {
         assert!(render_skills(&[]).contains(&divider));
         assert!(render_permissions(PermissionsTab::Allow, &[], &[], &[], &[]).contains(&divider));
         assert!(render_plugin(PluginTab::Discover, &[], &[]).contains(&divider));
-        assert!(render_tasks(&[]).contains(&divider));
         assert!(render_chrome().contains(&divider));
         assert!(render_ide(&[]).contains(&divider));
         // M11 additions:

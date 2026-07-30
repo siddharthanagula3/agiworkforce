@@ -1851,7 +1851,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
 
     match key.code {
-        // A handful of slash commands (/mcp, /plugin, /usage, /tasks, …)
+        // A handful of slash commands (/mcp, /plugin, /usage, …)
         // render a boxed "dialog" — complete with its own "Esc to
         // cancel"/"Esc to close"/"Esc to back" footer — as a plain system
         // chat message rather than a real overlay (see
@@ -3036,13 +3036,6 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 model: app.session.model.clone(),
             };
             SlashResult::SystemMessage(render_usage(&usage))
-        }
-
-        // M7+M18: /tasks — live background-tasks overlay from session registry.
-        "/tasks" => {
-            use crate::tui::widgets::screen_renderers::render_tasks;
-            let summaries = crate::tools::session_task_summaries();
-            SlashResult::SystemMessage(render_tasks(&summaries))
         }
 
         // ── New interactive overlays ──
@@ -5146,7 +5139,6 @@ mod tests {
             "effort",
             "e",
             "usage",
-            "tasks",
             "memories",
             "skills-toggle",
             "statusline",

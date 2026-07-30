@@ -5,8 +5,8 @@
 use super::list_selection_view::ListSelectionView;
 use super::model_picker::{self, ModelPickerState};
 use super::screen_renderers::{
-    render_keybindings, render_mcp_list, render_sandbox, render_skills, render_tasks, render_usage,
-    SandboxMode, UsageSummary,
+    render_keybindings, render_mcp_list, render_sandbox, render_skills, render_usage, SandboxMode,
+    UsageSummary,
 };
 use crate::model_catalog::Model;
 use ratatui::backend::TestBackend;
@@ -113,12 +113,6 @@ fn list_selection_view_snapshot() {
     let rendered =
         <ListSelectionView<String> as super::interactive::InteractiveView>::render(&view);
     insta::assert_snapshot!("list_selection_view_baseline", rendered);
-}
-
-#[test]
-fn render_tasks_empty_baseline() {
-    let rendered = render_tasks(&[]);
-    insta::assert_snapshot!("render_tasks_empty_baseline", rendered);
 }
 
 #[test]

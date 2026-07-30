@@ -7,7 +7,7 @@
 //! lib.rs re-exports this module at `crate::tools` so all 42 call-sites
 //! across 4 files resolve unchanged. The 4 external public paths are all
 //! defined in tools/mod.rs: ToolResult, ToolExecOptions,
-//! execute_tool_with_opts, session_task_summaries.
+//! execute_tool_with_opts.
 
 pub mod exec_policy;
 pub mod tools;

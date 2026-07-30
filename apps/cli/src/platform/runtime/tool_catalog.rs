@@ -100,12 +100,6 @@ pub fn canonical_tool_name(tool_name: &str) -> &str {
         "TodoWrite" => "todo_write",
         "AskUser" | "AskUserQuestion" => "ask_user",
         "ReadManyFiles" => "read_many_files",
-        "TaskCreate" => "task_create",
-        "TaskGet" => "task_get",
-        "TaskList" => "task_list",
-        "TaskUpdate" => "task_update",
-        "TaskStop" => "task_stop",
-        "TaskOutput" => "task_output",
         "TeamCreate" => "team_create",
         "TeamDelete" => "team_delete",
         "CronCreate" => "cron_create",
@@ -141,12 +135,6 @@ pub fn tool_aliases(tool_name: &str) -> &'static [&'static str] {
         "todo_write" => &["TodoWrite"],
         "ask_user" => &["AskUser", "AskUserQuestion"],
         "read_many_files" => &["ReadManyFiles"],
-        "task_create" => &["TaskCreate"],
-        "task_get" => &["TaskGet"],
-        "task_list" => &["TaskList"],
-        "task_update" => &["TaskUpdate"],
-        "task_stop" => &["TaskStop"],
-        "task_output" => &["TaskOutput"],
         "team_create" => &["TeamCreate"],
         "team_delete" => &["TeamDelete"],
         "cron_create" => &["CronCreate"],
@@ -212,9 +200,6 @@ fn tool_owner(name: &str) -> &'static str {
         "web_search" | "web_fetch" | "tool_search" => "cli-research",
         "skill" => "cli-skills",
         "task" => "cli-subagents",
-        "task_create" | "task_get" | "task_list" | "task_update" | "task_stop" | "task_output" => {
-            "cli-task-registry"
-        }
         "team_create" | "team_delete" => "cli-team-registry",
         "cron_create" | "cron_delete" | "cron_list" => "cli-scheduler",
         "enter_worktree" | "exit_worktree" | "list_worktrees" => "cli-worktree",
@@ -507,102 +492,6 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             "Read multiple files at once. Returns concatenated contents with file boundaries.",
             serde_json::json!({"type":"object","properties":{"paths":{"type":"array","description":"Array of absolute file paths to read","items":{"type":"string"}}},"required":["paths"]}),
         ).read_only().with_size_cap(200_000).deferred(),
-        // -----------------------------------------------------------------------
-        // M18: Task lifecycle tools — backed by the session TaskRegistry.
-        // -----------------------------------------------------------------------
-        def(
-            "task_create",
-            "Create a new background task entry in the task registry. \
-             Records kind, optional command string, and allocates a file-backed output sink. \
-             Returns the new task ID.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "kind": {
-                        "type": "string",
-                        "enum": ["local_shell", "local_agent", "remote_agent", "in_process_teammate", "local_workflow", "monitor_mcp", "dream"],
-                        "description": "The kind of task being created."
-                    },
-                    "command": {
-                        "type": "string",
-                        "description": "Optional command string or description for this task."
-                    }
-                },
-                "required": ["kind"]
-            }),
-        ).with_size_cap(2_000).deferred(),
-        def(
-            "task_get",
-            "Retrieve full details of a task by its UUID, including status, kind, output path, \
-             start/end timestamps, exit code, and any error message.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string", "description": "Task UUID returned by task_create."}
-                },
-                "required": ["id"]
-            }),
-        ).read_only().with_size_cap(5_000).deferred(),
-        def(
-            "task_list",
-            "List all tasks in the session registry with their current status and kind.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "status": {
-                        "type": "string",
-                        "enum": ["pending", "running", "completed", "failed", "stopped"],
-                        "description": "Filter by status (optional; omit to list all)."
-                    }
-                },
-                "required": []
-            }),
-        ).read_only().with_size_cap(20_000).deferred(),
-        def(
-            "task_update",
-            "Transition a task to a new status. Valid transitions: Pending→Running, \
-             Running→Completed, Running→Failed, Running→Stopped, Pending→Failed, Pending→Stopped. \
-             Optionally records an exit code and error message.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string", "description": "Task UUID."},
-                    "status": {
-                        "type": "string",
-                        "enum": ["running", "completed", "failed", "stopped"],
-                        "description": "Target status."
-                    },
-                    "exit_code": {"type": "integer", "description": "Process exit code (optional)."},
-                    "error": {"type": "string", "description": "Error message if status is failed (optional)."}
-                },
-                "required": ["id", "status"]
-            }),
-        ).with_size_cap(2_000).deferred(),
-        def(
-            "task_stop",
-            "Mark a task as Stopped. The actual process kill (if any) must be performed \
-             separately; this only updates registry state.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string", "description": "Task UUID to stop."}
-                },
-                "required": ["id"]
-            }),
-        ).with_size_cap(2_000).deferred(),
-        def(
-            "task_output",
-            "Read the file-backed output of a task (tail up to max_bytes). \
-             Useful for inspecting stdout/stderr of a running or completed background task.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string", "description": "Task UUID."},
-                    "max_bytes": {"type": "integer", "description": "Maximum bytes to return from the tail (default 8192)."}
-                },
-                "required": ["id"]
-            }),
-        ).read_only().with_size_cap(50_000).deferred(),
         // -----------------------------------------------------------------------
         // M18: Team management tools — create/delete named agent teams.
         // -----------------------------------------------------------------------
@@ -983,6 +872,25 @@ mod tests {
     }
 
     #[test]
+    fn placeholder_task_lifecycle_is_not_advertised() {
+        let definitions = all_builtin_tool_definitions();
+        for name in [
+            "task_create",
+            "task_get",
+            "task_list",
+            "task_update",
+            "task_stop",
+            "task_output",
+        ] {
+            assert!(
+                definitions.iter().all(|definition| definition.name != name),
+                "{name} must stay absent until a real execution lifecycle exists"
+            );
+            assert!(tool_aliases(name).is_empty());
+        }
+    }
+
+    #[test]
     fn built_in_plan_mode_keeps_only_read_only_tools_and_appends_team_and_mcp() {
         let mcp_tool_definitions = vec![test_tool_definition("mcp_alpha")];
 
@@ -1004,9 +912,6 @@ mod tests {
                 "glob",
                 "todo_read",
                 "read_many_files",
-                "task_get",
-                "task_list",
-                "task_output",
                 "cron_list",
                 "advisor",
                 "list_worktrees",
@@ -1236,7 +1141,7 @@ mod tests {
         // Sorted alphabetically to make the assertion stable.
         // Phase E: glob, read_many_files, todo_read are deferred but also
         // read-only (they never mutate state).
-        // M18: task_get, task_list, task_output, cron_list are also deferred + read-only.
+        // M18: cron_list is also deferred + read-only.
         // M24: advisor is deferred + read-only.
         // M35/M36: list_worktrees, lsp_definition, lsp_hover, lsp_diagnostics are read-only.
         // M36 follow-up: lsp_completion, lsp_document_symbols, lsp_format are read-only.
@@ -1261,9 +1166,6 @@ mod tests {
                 "read_many_files",
                 "search_files",
                 "skill",
-                "task_get",
-                "task_list",
-                "task_output",
                 "todo_read",
                 "tool_search",
                 "web_fetch",
