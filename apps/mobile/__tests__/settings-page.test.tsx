@@ -128,10 +128,9 @@ describe('Settings page', () => {
     expect(queryByText(/byok/i)).toBeNull();
   });
 
-  it('has no dead-end settings entries — unbuilt Skills/Plugins removed (MOB-6)', () => {
-    // MOB-6: Skills and Plugins were stub entries whose screens were never built
-    // (they only opened a cloud gate — a dead-end). They are removed until a real
-    // mobile management surface exists, so the settings nav has no dead-ends.
+  it('does not duplicate the Skills catalog or expose an unbuilt Plugins setting', () => {
+    // Skills is a supported top-level drawer destination. Plugins remains
+    // unshipped, so neither belongs here as a dead-end settings row.
     const { queryByText } = render(<SettingsTabScreen />);
     expect(queryByText('Skills')).toBeNull();
     expect(queryByText('Plugins')).toBeNull();
@@ -199,7 +198,7 @@ describe('Settings page', () => {
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
     expect(getByText('Billing')).toBeTruthy();
     expect(getByText('Connectors')).toBeTruthy();
-    // (Skills/Plugins rows removed in MOB-6 — they were unbuilt dead-ends.)
+    // Skills is top-level; Plugins remains unshipped.
     expect(getAllByText('Sign in').length).toBeGreaterThan(0);
     expect(queryByText('Log Out')).toBeNull();
   });

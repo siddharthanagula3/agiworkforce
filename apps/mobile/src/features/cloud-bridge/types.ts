@@ -31,7 +31,7 @@ export interface InviteCodeModalProps {
   /**
    * Header copy override. Managed Cloud itself is public alpha (open by
    * sign-in, no invite/waitlist) — this modal now only gates individual
-   * unshipped features (Connectors, Shared Links, Skills, paid Billing,
+   * unshipped features (Shared Links, paid Billing,
    * hosted code environments). Callers should describe the specific
    * feature; the default text does not claim "AGI Cloud" broadly is
    * invite-only.

@@ -30,13 +30,15 @@ function normalizeMachineLocalPaths(value) {
 function reconcileCurrentPremises(record) {
   const currentOverrides = {
     'GAP-001': {
-      title: 'Mobile has no supported Skills screen or workflow',
+      status: 'Done',
+      owner: 'Mobile',
+      title: 'Mobile exposes a supported Managed Cloud Skills catalog',
       detail:
-        "The reference gives Skills a first-class screen: sidebar entry, surface selector, search, and an empty state that explains the next step. agiworkforce mobile currently has no Skills route, navigation entry, supported mobile Skills client, list, search, or empty state. The source audit's claim that a shipped mobile skills service/store was waiting to be mounted is stale: those disconnected artifacts were removed because they had no supported runtime contract.",
+        'The reference gives Skills a first-class screen with navigation, search, source context, and a useful empty state. agiworkforce Mobile now exposes the authenticated deployment catalog as an explicitly read-only Managed Cloud surface. It never presents host installation controls that Mobile cannot support and never calls the Cloud catalog from Local Mode.',
       evidence:
-        'No Skills route exists under apps/mobile/app or apps/mobile/src/features. Current searches for useSkillsStore, listSkills, and a mobile skills service return no supported implementation; Web and Desktop Skills surfaces do not establish a Mobile API or product contract.',
+        'apps/mobile/src/features/skills/service.ts validates the authenticated /api/skills metadata contract. SkillsScreen.tsx enforces Clerk sign-in and Cloud mode before fetching, renders search, source badges, loading/error/refresh states, and a teaching empty state. app/(app)/skills/index.tsx and the authenticated drawer layout register the route; DrawerContent.tsx exposes the Cloud-tagged destination. skills-service.test.ts, skills-page.test.tsx, drawer-content.test.tsx, and drawer-route-contract.test.ts cover the contract, Local no-egress gate, navigation, search, empty/error states, and route ownership.',
       suggestedFix:
-        'Treat Mobile Skills as a new cross-surface capability, not an orphan-mount task: approve the product/API contract first, then add a supported client, route, drawer entry, searchable installed/catalogue views, and a useful empty state. Do not restore the removed disconnected service/store.',
+        'Completed for the supported read-only Managed Cloud catalog. Keep Mobile installation and mutation controls absent until a separate owner-scoped backend lifecycle exists; retain the explicit Local/Cloud boundary and runtime response validation when the catalog contract evolves.',
     },
     'GAP-002': {
       detail:

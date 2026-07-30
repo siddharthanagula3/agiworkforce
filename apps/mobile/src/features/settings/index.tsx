@@ -486,10 +486,9 @@ export default function SettingsTabScreen() {
             tone: 'cloud',
             onPress: openCloudRoute('/(app)/settings/cloud-connectors'),
           },
-          // MOB-6: Skills and Plugins settings entries removed — the screens were
-          // never built and only opened a cloud gate (a dead-end). Per "implement
-          // or remove dead-ends", they are removed until a real mobile Skills /
-          // Plugins management surface exists.
+          // Plugins remains unshipped on Mobile, so no dead-end settings row is
+          // rendered. Skills now has a supported top-level Cloud catalog in the
+          // drawer and is intentionally not duplicated as a settings control.
           ...(clerkUser
             ? [
                 {
