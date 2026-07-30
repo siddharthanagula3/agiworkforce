@@ -10,10 +10,12 @@ const libPath = 'apps/desktop/src-tauri/src/lib.rs';
 const rustRoot = 'apps/desktop/src-tauri/src';
 const allowlistPath = 'apps/desktop/wiring-allowlist.json';
 const hitlPath = 'apps/desktop/.hitl-required-tools.yaml';
+export const INVOKE_CALL_PATTERN =
+  /\b(?:invoke[A-Za-z0-9_$]*|[A-Za-z_$][A-Za-z0-9_$]*Invoke)(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]/g;
 const frontendRoots = [
   {
     path: 'apps/desktop/src',
-    patterns: [/\binvoke[A-Za-z]*(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]/g],
+    patterns: [INVOKE_CALL_PATTERN],
   },
   {
     path: 'packages/client/desktop-command-client/src',
@@ -21,7 +23,7 @@ const frontendRoots = [
   },
   {
     path: 'packages/ui/unified-chat/src',
-    patterns: [/\binvoke[A-Za-z]*(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]/g],
+    patterns: [INVOKE_CALL_PATTERN],
   },
 ];
 

@@ -6,6 +6,7 @@ import {
   analyzeWiring,
   extractHitlRequirements,
   extractRegisteredCommands,
+  INVOKE_CALL_PATTERN,
 } from './check-wiring.mjs';
 
 test('extracts only commands inside the real generate_handler block', () => {
@@ -25,15 +26,21 @@ test('extracts only commands inside the real generate_handler block', () => {
   assert.deepEqual(extractRegisteredCommands(source), ['registered_command', 'second_command']);
 });
 
-test('recognizes multiline generic frontend calls', () => {
+test('recognizes multiline generic frontend calls and imported invoke aliases', () => {
   const source = `
     command<{
       available: boolean;
       reason?: string;
     }>('check_capability');
+
+    docInvoke<{
+      stdout: string;
+      stderr: string;
+    }>('execute_code');
   `;
-  const pattern = /\bcommand(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]/g;
-  assert.equal([...source.matchAll(pattern)][0][1], 'check_capability');
+  const commandPattern = /\bcommand(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]/g;
+  assert.equal([...source.matchAll(commandPattern)][0][1], 'check_capability');
+  assert.equal([...source.matchAll(INVOKE_CALL_PATTERN)][0][1], 'execute_code');
 });
 
 test('fails an unregistered frontend call and an unallowlisted orphan', () => {
