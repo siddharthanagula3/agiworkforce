@@ -1634,6 +1634,12 @@ impl TurnHost for TurnHostAdapter<'_> {
                 .as_ref()
                 .map(|sink| sink.0.clone()),
             privacy_mode: self.session.privacy_mode,
+            workspace_root: self
+                .session
+                .managed_session
+                .as_ref()
+                .and_then(|session| session.workspace_root.clone())
+                .or_else(|| std::env::current_dir().ok()),
         };
         let legacy = super::executor::ToolCall {
             name: prepared.name.clone(),
@@ -1786,6 +1792,12 @@ impl TurnHost for TurnHostAdapter<'_> {
                     .as_ref()
                     .map(|sink| sink.0.clone()),
                 privacy_mode: self.session.privacy_mode,
+                workspace_root: self
+                    .session
+                    .managed_session
+                    .as_ref()
+                    .and_then(|session| session.workspace_root.clone())
+                    .or_else(|| std::env::current_dir().ok()),
             };
             match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
                 Ok(r) => r,

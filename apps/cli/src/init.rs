@@ -129,35 +129,27 @@ fn write_default_rules(home: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let contents = r#"# Default execution rules for AGI CLI
-# Format: <effect> <matcher> <value>
-#   effect:  allow | deny
-#   matcher: prefix | program | regex | heuristic
-#   value:   the string/pattern to match
-#
-# Examples:
-#   allow prefix git status    — auto-approve "git status" and anything starting with it
-#   deny program rm            — block any command whose program is "rm"
-#   allow regex ^cargo (check|clippy|test)  — allow cargo check/clippy/test
+    let contents = r#"# Default execution rules for AGI CLI.
+# Canonical format: prefix_rule(pattern=[...], decision="allow|prompt|forbidden")
 
-allow prefix git status
-allow prefix git diff
-allow prefix git log
-allow prefix git branch
-allow prefix cargo check
-allow prefix cargo clippy
-allow prefix cargo test
-allow prefix pnpm typecheck
-allow prefix pnpm lint
-allow prefix pnpm test
-allow prefix npm test
-allow program ls
-allow program cat
-allow program head
-allow program tail
-allow program wc
-allow program find
-allow program grep
+prefix_rule(pattern=["git", "status"], decision="allow")
+prefix_rule(pattern=["git", "diff"], decision="allow")
+prefix_rule(pattern=["git", "log"], decision="allow")
+prefix_rule(pattern=["git", "branch"], decision="allow")
+prefix_rule(pattern=["cargo", "check"], decision="allow")
+prefix_rule(pattern=["cargo", "clippy"], decision="allow")
+prefix_rule(pattern=["cargo", "test"], decision="allow")
+prefix_rule(pattern=["pnpm", "typecheck"], decision="allow")
+prefix_rule(pattern=["pnpm", "lint"], decision="allow")
+prefix_rule(pattern=["pnpm", "test"], decision="allow")
+prefix_rule(pattern=["npm", "test"], decision="allow")
+prefix_rule(pattern=["ls"], decision="allow")
+prefix_rule(pattern=["cat"], decision="allow")
+prefix_rule(pattern=["head"], decision="allow")
+prefix_rule(pattern=["tail"], decision="allow")
+prefix_rule(pattern=["wc"], decision="allow")
+prefix_rule(pattern=["find"], decision="allow")
+prefix_rule(pattern=["grep"], decision="allow")
 "#;
 
     fs::write(&path, contents)?;

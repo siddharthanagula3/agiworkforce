@@ -51,6 +51,10 @@ pub enum ApprovalRequestKind {
     TrustDirectory {
         path: PathBuf,
     },
+    WorkspacePolicy {
+        tool_name: String,
+        primary_argument: String,
+    },
 }
 
 /// A single approval prompt waiting for the user.

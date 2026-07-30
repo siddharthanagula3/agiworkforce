@@ -16,7 +16,7 @@ use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
 
 pub(super) async fn execute_run_command(
     args: &HashMap<String, String>,
-    require_confirmation: bool,
+    mut require_confirmation: bool,
     approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let command = match args.get("command") {
@@ -38,17 +38,23 @@ pub(super) async fn execute_run_command(
     // catastrophic, irrecoverable commands. `Allow`/`Prompt` fall through to the
     // existing confirmation flow below.
     {
-        use crate::features::exec::exec_policy::{default_policy, evaluate};
+        use crate::features::exec::exec_policy::{evaluate_policy, load_policy};
         use agiworkforce_execpolicy::Decision;
-        if matches!(evaluate(&default_policy(), command), Decision::Forbidden) {
-            return Ok(ToolResult {
-                tool_name: "run_command".to_string(),
-                success: false,
-                output: format!(
-                    "Command '{}' is blocked by the execution policy (forbidden) and was not run.",
-                    command
-                ),
-            });
+        let evaluation = evaluate_policy(&load_policy()?, command);
+        match evaluation.decision {
+            Decision::Forbidden => {
+                return Ok(ToolResult {
+                    tool_name: "run_command".to_string(),
+                    success: false,
+                    output: format!(
+                        "Command '{}' is blocked by the execution policy (forbidden) and was not run.",
+                        command
+                    ),
+                });
+            }
+            Decision::Prompt if evaluation.is_match() => require_confirmation = true,
+            Decision::Allow if evaluation.is_match() => require_confirmation = false,
+            Decision::Prompt | Decision::Allow => {}
         }
     }
 
@@ -106,8 +112,18 @@ pub(super) async fn execute_run_command(
                                 perms.allow_session_for_process(command);
                             }
                             ApprovalDecision::AlwaysAllow => {
-                                perms.allow_always(command);
-                                let _ = perms.save();
+                                if let Err(error) =
+                                    crate::features::exec::exec_policy::persist_allow_command(command)
+                                        .await
+                                {
+                                    return Ok(ToolResult {
+                                        tool_name: "run_command".to_string(),
+                                        success: false,
+                                        output: format!(
+                                            "Command was approved but its Always Allow rule could not be saved ({error}); the command was not run. Choose Allow Once to proceed without persistence."
+                                        ),
+                                    });
+                                }
                             }
                             _ => {}
                         }

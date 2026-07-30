@@ -680,6 +680,11 @@ async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
         quiet: session.quiet,
         approval_callback: None,
         privacy_mode: session.privacy_mode,
+        workspace_root: session
+            .managed_session
+            .as_ref()
+            .and_then(|managed| managed.workspace_root.clone())
+            .or_else(|| std::env::current_dir().ok()),
     };
 
     match crate::tools::execute_tool_with_opts(&call, &opts).await {
@@ -728,6 +733,7 @@ async fn run_advisor_question(
         quiet: false,
         approval_callback: None,
         privacy_mode,
+        workspace_root: std::env::current_dir().ok(),
     };
     let result = crate::tools::execute_tool_with_opts(&call, &opts).await?;
     if result.success {

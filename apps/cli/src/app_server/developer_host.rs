@@ -2497,6 +2497,10 @@ mod tests {
                 quiet: true,
                 approval_callback: None,
                 privacy_mode: agent.privacy_mode,
+                workspace_root: agent
+                    .managed_session
+                    .as_ref()
+                    .and_then(|session| session.workspace_root.clone()),
             },
         )
         .await
@@ -2538,6 +2542,10 @@ mod tests {
                 quiet: true,
                 approval_callback: None,
                 privacy_mode: local_agent.privacy_mode,
+                workspace_root: local_agent
+                    .managed_session
+                    .as_ref()
+                    .and_then(|session| session.workspace_root.clone()),
             },
         )
         .await
