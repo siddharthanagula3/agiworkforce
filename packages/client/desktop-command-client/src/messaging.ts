@@ -7,8 +7,10 @@ import { command } from '@agiworkforce/client-runtime';
 // ---- Types ----
 
 export interface ConnectSlackRequest {
-  token: string;
-  teamId?: string;
+  user_id: string;
+  bot_token: string;
+  workspace_id?: string;
+  workspace_name?: string;
 }
 export interface ConnectWhatsAppRequest {
   phoneNumber: string;

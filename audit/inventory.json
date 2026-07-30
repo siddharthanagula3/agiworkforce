@@ -2018,8 +2018,8 @@
   {
     "item": "signing-secret-verification",
     "surface": "apps/slack-app",
-    "status": "stub",
-    "evidence": "signing_secret is captured in UI (apps/desktop/src/features/messaging/MessagingIntegrations.tsx:60,97), passed into SlackConfig (apps/desktop/src-tauri/src/features/messaging/slack.rs:10-14), and encrypted at rest via encrypt_messaging_credentials (apps/desktop/src-tauri/src/sys/commands/messaging.rs:118-141). No HMAC-SHA256 verification of an inbound 'X-Slack-Signature' header exists anywhere in the repo — grepped whole repo for 'x-slack-signature'/'X-Slack-Signature' and Hmac usage in any slack-related file; zero hits."
+    "status": "missing",
+    "evidence": "The product has no inbound Slack HTTP events route, so the unused signing-secret field was removed from both Desktop connection forms, the Tauri request/config contract, and encrypted credential storage. The retained Slack path is outbound bot-token messaging plus the separate MCP OAuth connector; no UI or API claims inbound request-signature verification."
   },
   {
     "item": "events-api",
@@ -2030,8 +2030,8 @@
   {
     "item": "socket-mode",
     "surface": "apps/slack-app",
-    "status": "unwired",
-    "evidence": "apps/desktop/src-tauri/src/features/messaging/slack.rs:197-256 implements SlackClient::listen_events() — calls apps.connections.open, opens a websocket via tokio-tungstenite, spawns a reader task that acks envelope_ids. Whole-repo grep for 'listen_events' shows only this definition — no Tauri command, background task spawn, or any other call site invokes it."
+    "status": "missing",
+    "evidence": "The uncalled `SlackClient::listen_events` WebSocket helper and its event-stream types were removed together with app-token capture/storage. The retained outbound Slack client contains no Socket Mode connection path, and the real MCP connector requires only its OAuth-derived bot token."
   },
   {
     "item": "app-mention-handler",
@@ -2054,8 +2054,8 @@
   {
     "item": "block-kit-blocks",
     "surface": "apps/slack-app",
-    "status": "unwired",
-    "evidence": "SlackBlock/SlackText/SlackElement/SlackOption structs and SlackClient::send_interactive_message (apps/desktop/src-tauri/src/features/messaging/slack.rs:69-105, 466-500, 560-602) fully model Block Kit payloads. Grepped whole repo for 'send_interactive_message' — the only call sites are the definition itself; SlackBlock::section/SlackElement::button (lines 560-602) are exercised only by the file's own #[cfg(test)] module (lines 604-621)."
+    "status": "missing",
+    "evidence": "The uncalled Block Kit payload structs, constructors, and `send_interactive_message` helper were removed from the legacy native Slack client. Retained outbound messaging sends plain text through `chat.postMessage`; no product surface advertises Block Kit composition."
   },
   {
     "item": "interactive-components",
@@ -2090,20 +2090,20 @@
   {
     "item": "slash-command-handler",
     "surface": "apps/slack-app",
-    "status": "unwired",
-    "evidence": "SlackClient::handle_slash_command (apps/desktop/src-tauri/src/features/messaging/slack.rs:136-151) matches command.command == \"/agi\" and replies via send_message. Whole-repo grep for 'handle_slash_command' in the messaging context shows only this definition — no HTTP endpoint constructs a SlackCommand from an inbound POST, and nothing else calls this method (the only other 'handle_slash_command' hits in the repo are the unrelated CLI REPL slash-command dispatcher, apps/cli/src/repl/slash_commands.rs:41)."
+    "status": "missing",
+    "evidence": "The uncalled native `/agi` handler and `SlackCommand` payload type were removed. There is no inbound Slack command HTTP route, app manifest, or signing boundary; unrelated CLI slash-command dispatch remains."
   },
   {
     "item": "response-url-delayed-response",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "SlackCommand.response_url field is declared at apps/desktop/src-tauri/src/features/messaging/slack.rs:509 but grepped whole repo for other uses of 'response_url' — zero read/write sites; handle_slash_command (lines 136-151) replies via chat.postMessage to channel_id, never posts to response_url."
+    "evidence": "The unused Slack command payload and handler were removed; repository search finds no Slack `response_url` consumer or inbound slash-command route."
   },
   {
     "item": "streaming-via-chat-update",
     "surface": "apps/slack-app",
-    "status": "unwired",
-    "evidence": "SlackClient::update_message (chat.update wrapper) at apps/desktop/src-tauri/src/features/messaging/slack.rs:293-326. Whole-repo grep for '.update_message(' shows only this definition — no call sites."
+    "status": "missing",
+    "evidence": "The uncalled native `chat.update` helper was removed. Retained outbound messaging performs one complete `chat.postMessage` request and no product surface claims streaming Slack replies."
   },
   {
     "item": "link-unfurling",
@@ -2115,13 +2115,13 @@
     "item": "emoji-reaction-trigger",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'reaction_added' — zero hits. SlackClient::add_reaction (apps/desktop/src-tauri/src/features/messaging/slack.rs:258-291) is a reactions.add wrapper for the bot to POST a reaction, the opposite direction of a trigger, and it too is unwired (grep for '.add_reaction(' shows only its own definition)."
+    "evidence": "Repository search finds no `reaction_added` event handler or inbound Slack event route. The uncalled outbound `reactions.add` helper was also removed from the legacy native client."
   },
   {
     "item": "file-share-event",
     "surface": "apps/slack-app",
     "status": "missing",
-    "evidence": "Grepped whole repo for 'file_shared' — zero hits. SlackClient::upload_file (apps/desktop/src-tauri/src/features/messaging/slack.rs:153-195) is an outbound files.upload wrapper only, and grep for its call sites shows none outside the definition."
+    "evidence": "Repository search finds no `file_shared` event handler or inbound Slack event route. The uncalled outbound file-upload helper and payload types were also removed from the legacy native client."
   },
   {
     "item": "channel-membership-event",
@@ -2156,8 +2156,8 @@
   {
     "item": "channel-history-ingestion",
     "surface": "apps/slack-app",
-    "status": "unwired",
-    "evidence": "SlackClient::get_conversation_history (apps/desktop/src-tauri/src/features/messaging/slack.rs:107-134) and MessagingRouter::get_message_history (apps/desktop/src-tauri/src/features/messaging/types.rs:244-281) implement fetching + normalizing live Slack channel history via conversations.history. Grepped whole repo for 'get_message_history' — the only occurrence besides the definition is nothing (zero external call sites). The one reachable Tauri command named similarly, get_messaging_history (apps/desktop/src-tauri/src/sys/commands/messaging.rs:437-484), instead reads only the local messaging_history SQLite table, which is populated exclusively with outbound messages the app itself sent (messaging.rs:409-425, direction='outbound')."
+    "status": "missing",
+    "evidence": "The uncalled Slack `conversations.history` helper and `MessagingRouter::get_message_history` normalization branch were removed. The separately named `get_messaging_history` Tauri command still reads only the local outbound-message table; no live Slack history ingestion is advertised."
   },
   {
     "item": "multiplayer-shared-session",

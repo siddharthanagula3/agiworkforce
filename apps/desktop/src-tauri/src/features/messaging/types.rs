@@ -248,37 +248,11 @@ impl MessagingRouter {
         limit: usize,
     ) -> MessagingResult<Vec<UnifiedMessage>> {
         match platform {
-            MessagingPlatform::Slack => {
-                let client = self.slack.as_ref().ok_or_else(|| MessagingError {
-                    code: "NOT_CONFIGURED".to_string(),
-                    message: "Slack client not configured".to_string(),
-                    platform: MessagingPlatform::Slack,
-                })?;
-
-                let messages = client
-                    .get_conversation_history(channel_id, limit)
-                    .await
-                    .map_err(|e| MessagingError {
-                        code: "FETCH_FAILED".to_string(),
-                        message: e.to_string(),
-                        platform: MessagingPlatform::Slack,
-                    })?;
-
-                Ok(messages
-                    .into_iter()
-                    .map(|msg| UnifiedMessage {
-                        id: msg.ts.clone(),
-                        platform: MessagingPlatform::Slack,
-                        channel_id: msg.channel.clone(),
-                        sender_id: msg.user.clone().unwrap_or_default(),
-                        sender_name: None,
-                        text: msg.text,
-                        timestamp: msg.ts.parse::<f64>().unwrap_or(0.0) as i64,
-                        attachments: vec![],
-                        metadata: HashMap::new(),
-                    })
-                    .collect())
-            }
+            MessagingPlatform::Slack => Err(MessagingError {
+                code: "NOT_SUPPORTED".to_string(),
+                message: "Live Slack history is not supported".to_string(),
+                platform: MessagingPlatform::Slack,
+            }),
             MessagingPlatform::WhatsApp => Err(MessagingError {
                 code: "NOT_SUPPORTED".to_string(),
                 message: "WhatsApp Business API doesn't support message history".to_string(),
@@ -334,5 +308,23 @@ impl MessagingRouter {
 impl Default for MessagingRouter {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn slack_history_is_explicitly_unsupported() {
+        let mut router = MessagingRouter::new();
+
+        let error = router
+            .get_message_history(MessagingPlatform::Slack, "C123", 25)
+            .await
+            .expect_err("Slack history should remain outside the outbound connector boundary");
+
+        assert_eq!(error.code, "NOT_SUPPORTED");
+        assert_eq!(error.platform, MessagingPlatform::Slack);
     }
 }
