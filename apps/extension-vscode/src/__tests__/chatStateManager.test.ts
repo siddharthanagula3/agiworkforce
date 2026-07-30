@@ -16,6 +16,7 @@ import {
   type ContextPanelProvider,
 } from '../features/trees/contextPanelProvider';
 import { MEMORY_STORE_KEY } from '../memory/memoryStore';
+import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 
 function makeHarness(
   options: {
@@ -105,6 +106,43 @@ describe('ChatStateManager local turn lifecycle', () => {
       type: 'error',
       payload: { message: 'Trust this workspace before starting a local developer session.' },
     });
+  });
+
+  it('persists onboarding completion in global extension state', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({ type: 'completeOnboarding' });
+
+    expect(harness.context.globalState.get<boolean>(ONBOARDING_SEEN_KEY)).toBe(true);
+  });
+
+  it('replays onboarding without mutating chat state', () => {
+    const harness = makeHarness();
+
+    harness.manager.showOnboarding();
+
+    expect(harness.posted).toContainEqual({ type: 'showOnboarding' });
+    expect(harness.runtime.startThread).not.toHaveBeenCalled();
+  });
+
+  it('opens permission, privacy, and background-task handoffs on their canonical Web routes', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({ type: 'openPermissionDocs' });
+    await harness.manager.handleMessage({ type: 'openPrivacySettings' });
+    await harness.manager.handleMessage({ type: 'openWebTasks' });
+
+    expect(vscode.env.openExternal).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        toString: expect.any(Function),
+      }),
+    );
+    expect(vi.mocked(vscode.env.openExternal).mock.calls.map(([uri]) => uri.path)).toEqual([
+      'https://agiworkforce.com/docs?topic=permissions&from=vscode-extension',
+      'https://agiworkforce.com/settings/privacy?from=vscode-extension',
+      'https://agiworkforce.com/tasks?from=vscode-extension',
+    ]);
   });
 
   it('does not mislabel unresolved Auto routing as AGI Cloud', async () => {

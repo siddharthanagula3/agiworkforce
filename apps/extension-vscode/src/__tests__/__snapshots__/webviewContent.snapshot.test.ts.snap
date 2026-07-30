@@ -250,6 +250,225 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       cursor: pointer;
     }
 
+    /* ── First-run onboarding ── */
+    .onboarding {
+      position: fixed;
+      inset: 44px 0 0;
+      z-index: 50;
+      min-height: 0;
+      padding: clamp(14px, 4vw, 24px);
+      overflow: auto;
+      background:
+        radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--accent-teal) 12%, transparent), transparent 42%),
+        var(--bg-base);
+    }
+    .onboarding-shell {
+      display: flex;
+      flex-direction: column;
+      width: min(100%, 560px);
+      min-height: 100%;
+      margin: 0 auto;
+    }
+    .onboarding-topline {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: clamp(18px, 5vh, 34px);
+    }
+    .onboarding-progress {
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .onboarding-dots {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .onboarding-dot {
+      width: 18px;
+      height: 3px;
+      border: 0;
+      border-radius: 99px;
+      background: var(--border);
+    }
+    .onboarding-dot.active {
+      background: var(--accent-teal);
+    }
+    .onboarding-step {
+      flex: 1;
+      animation: onboarding-enter 180ms var(--transition);
+    }
+    .onboarding-step[hidden] {
+      display: none;
+    }
+    @keyframes onboarding-enter {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .onboarding-icon {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 18px;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--accent-teal) 42%, var(--border));
+      border-radius: 13px;
+      background: var(--bg-elevated);
+      color: var(--accent-teal);
+      font-size: 20px;
+    }
+    .onboarding-eyebrow {
+      margin-bottom: 7px;
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .onboarding h2 {
+      max-width: 430px;
+      color: var(--text-primary);
+      font-size: clamp(22px, 7vw, 34px);
+      font-weight: 650;
+      letter-spacing: -0.035em;
+      line-height: 1.05;
+    }
+    .onboarding-lede {
+      max-width: 490px;
+      margin-top: 13px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .onboarding-card {
+      display: grid;
+      gap: 9px;
+      margin-top: 20px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg-elevated);
+    }
+    .onboarding-card strong {
+      color: var(--text-primary);
+      font-size: 12px;
+    }
+    .onboarding-card span,
+    .onboarding-card p {
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .onboarding-disclosures {
+      display: grid;
+      gap: 9px;
+      margin-top: 18px;
+      list-style: none;
+    }
+    .onboarding-disclosures li {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 9px;
+      align-items: start;
+      padding: 11px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-elevated);
+    }
+    .onboarding-disclosures .codicon {
+      padding-top: 1px;
+      color: var(--accent-teal);
+      font-size: 15px;
+    }
+    .onboarding-disclosures strong,
+    .onboarding-disclosures span {
+      display: block;
+    }
+    .onboarding-disclosures strong {
+      margin-bottom: 2px;
+      color: var(--text-primary);
+      font-size: 11px;
+    }
+    .onboarding-disclosures span {
+      color: var(--text-secondary);
+      font-size: 10.5px;
+      line-height: 1.45;
+    }
+    .onboarding-inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 14px;
+    }
+    .onboarding-link,
+    .onboarding-button {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .onboarding-link {
+      padding: 6px 9px;
+      background: transparent;
+      color: var(--text-primary);
+    }
+    .onboarding-link:hover,
+    .onboarding-button--secondary:hover {
+      background: var(--bg-overlay);
+    }
+    .onboarding-actions {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: clamp(22px, 6vh, 40px);
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .onboarding-button {
+      min-height: 32px;
+      padding: 7px 12px;
+    }
+    .onboarding-button--secondary {
+      background: transparent;
+      color: var(--text-primary);
+    }
+    .onboarding-button--primary {
+      border-color: var(--accent-teal);
+      background: var(--accent-teal);
+      color: var(--vscode-button-foreground, #fff);
+    }
+    .onboarding-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.42;
+    }
+    .onboarding-skip {
+      justify-self: center;
+      padding: 5px 8px;
+      border: 0;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 10.5px;
+    }
+    .onboarding-boundary {
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-left: 2px solid var(--accent-teal);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      font-size: 10.5px;
+      line-height: 1.45;
+    }
+
     button:focus-visible,
     [role="menuitem"]:focus-visible {
       outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
@@ -1155,6 +1374,112 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     </div>
   </div>
 
+  <section
+    class="onboarding"
+    id="onboarding"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="onboardingTitle"
+    style="display:none"
+  >
+    <div class="onboarding-shell">
+      <div class="onboarding-topline">
+        <span class="onboarding-progress" id="onboardingProgress">Step 1 of 4</span>
+        <div class="onboarding-dots" aria-hidden="true">
+          <span class="onboarding-dot active"></span>
+          <span class="onboarding-dot"></span>
+          <span class="onboarding-dot"></span>
+          <span class="onboarding-dot"></span>
+        </div>
+      </div>
+
+      <article class="onboarding-step" data-onboarding-step="0">
+        <div class="onboarding-icon"><span class="codicon codicon-repo" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">Developer session</p>
+        <h2 id="onboardingTitle" tabindex="-1">Build with AGI in this repository.</h2>
+        <p class="onboarding-lede">
+          Ask about code, attach workspace files, edit through reviewable diffs, run approved commands,
+          and test the open project.
+        </p>
+        <div class="onboarding-card">
+          <strong>Workspace-scoped by default</strong>
+          <span>The sidebar, editor chat, and @agi use the local AGI runtime for this workspace. They do not silently merge into consumer Web, Mobile, or Desktop chat history.</span>
+        </div>
+      </article>
+
+      <article class="onboarding-step" data-onboarding-step="1" hidden>
+        <div class="onboarding-icon"><span class="codicon codicon-server-process" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">Task handoff</p>
+        <h2 tabindex="-1">Foreground here. Background work on Web.</h2>
+        <p class="onboarding-lede">
+          VS Code developer sessions run while the editor is open. Hosted background task creation,
+          status, history, and results remain on the Web Tasks surface.
+        </p>
+        <div class="onboarding-card">
+          <strong>No pretend cloud handoff</strong>
+          <span>Opening Web Tasks is explicit. A local prompt is never relabeled as a background run.</span>
+          <button type="button" class="onboarding-link" id="onboardingTasks">Open Web Tasks</button>
+        </div>
+      </article>
+
+      <article class="onboarding-step" data-onboarding-step="2" hidden>
+        <div class="onboarding-icon"><span class="codicon codicon-diff" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">TODO to review</p>
+        <h2 tabindex="-1">Describe the intent. Inspect the change.</h2>
+        <p class="onboarding-lede">
+          Attach the relevant files or share diagnostics, then ask AGI to implement the TODO.
+          Proposed code opens in VS Code's native diff view before you accept it.
+        </p>
+        <div class="onboarding-card">
+          <strong>A useful first prompt</strong>
+          <p>“Implement the TODO in the active file, explain the tradeoffs, and add focused tests. Do not change unrelated files.”</p>
+        </div>
+      </article>
+
+      <article class="onboarding-step" data-onboarding-step="3" hidden>
+        <div class="onboarding-icon"><span class="codicon codicon-shield" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">Autonomy and trust</p>
+        <h2 tabindex="-1">You choose authority. You verify the result.</h2>
+        <ul class="onboarding-disclosures">
+          <li>
+            <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
+            <div>
+              <strong>Choose the autonomy level</strong>
+              <span>Ask, Auto, Plan, or Bypass controls how much authority a session receives. Higher-risk combinations require explicit consent.</span>
+            </div>
+          </li>
+          <li>
+            <span class="codicon codicon-warning" aria-hidden="true"></span>
+            <div>
+              <strong>AGI can make mistakes</strong>
+              <span>Review generated code and every command before accepting or running it.</span>
+            </div>
+          </li>
+          <li>
+            <span class="codicon codicon-lock" aria-hidden="true"></span>
+            <div>
+              <strong>Verify the active trust boundary</strong>
+              <span>The header names Local, BYOK, or Managed Cloud. Managed Cloud also names the signed-in plan owner; BYOK provider billing stays separate.</span>
+            </div>
+          </li>
+        </ul>
+        <p class="onboarding-boundary" id="onboardingBoundary" role="status">
+          Resolving the active developer-session boundary…
+        </p>
+        <div class="onboarding-inline-actions">
+          <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
+          <button type="button" class="onboarding-link" id="onboardingPrivacySettings">Retention &amp; training settings</button>
+        </div>
+      </article>
+
+      <div class="onboarding-actions">
+        <button type="button" class="onboarding-button onboarding-button--secondary" id="onboardingBack" disabled>Back</button>
+        <button type="button" class="onboarding-skip" id="onboardingSkip">Skip intro</button>
+        <button type="button" class="onboarding-button onboarding-button--primary" id="onboardingNext">Next</button>
+      </div>
+    </div>
+  </section>
+
   <div class="runtime-status" id="runtimeStatus" role="status">
     <strong>Local runtime needs setup</strong>
     <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
@@ -1289,6 +1614,17 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     const runtimeStatusEl = document.getElementById('runtimeStatus');
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
+    const onboardingEl = document.getElementById('onboarding');
+    const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
+    const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
+    const onboardingProgress = document.getElementById('onboardingProgress');
+    const onboardingBoundary = document.getElementById('onboardingBoundary');
+    const onboardingBack = document.getElementById('onboardingBack');
+    const onboardingNext = document.getElementById('onboardingNext');
+    const onboardingSkip = document.getElementById('onboardingSkip');
+    const onboardingTasks = document.getElementById('onboardingTasks');
+    const onboardingPermissionDocs = document.getElementById('onboardingPermissionDocs');
+    const onboardingPrivacySettings = document.getElementById('onboardingPrivacySettings');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
     const usageMeterBanner = document.getElementById('usageMeterBanner');
@@ -1307,6 +1643,122 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     var meterCollapsed = false;
     var activeRuntimeSource = null;
     var activeAccountIdentity = null;
+    var onboardingStep = 0;
+
+    // ── First-run onboarding helpers ──────────────────────────────────────────
+    function renderOnboardingStep(shouldFocus) {
+      if (!onboardingEl || onboardingSteps.length === 0) return;
+      onboardingStep = Math.max(0, Math.min(onboardingSteps.length - 1, onboardingStep));
+      onboardingSteps.forEach(function(step, index) {
+        step.hidden = index !== onboardingStep;
+      });
+      onboardingDots.forEach(function(dot, index) {
+        dot.classList.toggle('active', index === onboardingStep);
+      });
+      if (onboardingProgress) {
+        onboardingProgress.textContent = 'Step ' + (onboardingStep + 1) + ' of ' + onboardingSteps.length;
+      }
+      if (onboardingBack) onboardingBack.disabled = onboardingStep === 0;
+      if (onboardingNext) {
+        onboardingNext.textContent =
+          onboardingStep === onboardingSteps.length - 1 ? 'Start using AGI' : 'Next';
+      }
+      var heading = onboardingSteps[onboardingStep].querySelector('h2');
+      if (heading) {
+        heading.id = 'onboardingStepTitle' + onboardingStep;
+        onboardingEl.setAttribute('aria-labelledby', heading.id);
+        if (shouldFocus) heading.focus();
+      }
+    }
+
+    function setOnboardingVisible(visible) {
+      if (!onboardingEl) return;
+      onboardingEl.style.display = visible ? 'flex' : 'none';
+      onboardingEl.setAttribute('aria-hidden', String(!visible));
+      [
+        messagesEl,
+        document.querySelector('.input-area'),
+        document.querySelector('.header-actions'),
+        runtimeStatusEl,
+        usageMeterBanner,
+        usageMeterCollapsed,
+      ].forEach(function(element) {
+        if (element) element.inert = visible;
+      });
+      if (visible) {
+        onboardingStep = 0;
+        renderOnboardingStep(true);
+      } else if (userInput) {
+        userInput.focus();
+      }
+    }
+
+    function completeOnboarding() {
+      setOnboardingVisible(false);
+      vscode.postMessage({ type: 'completeOnboarding' });
+    }
+
+    function updateOnboardingBoundary() {
+      if (!onboardingBoundary) return;
+      if (activeRuntimeSource === 'user-api-key') {
+        var byokText = 'Active boundary: BYOK · requests go directly to your provider.';
+        if (activeAccountIdentity) {
+          byokText += ' AGI Cloud sign-in: ' + activeAccountIdentity.displayName +
+            ' (not used for provider billing).';
+        }
+        onboardingBoundary.textContent = byokText;
+      } else if (activeRuntimeSource === 'managed-plan') {
+        var cloudText = 'Active boundary: Managed Cloud · prompts are sent to AGI infrastructure.';
+        if (activeAccountIdentity) {
+          cloudText += ' Plan owner: ' + activeAccountIdentity.displayName;
+          if (activeAccountIdentity.email) cloudText += ' (' + activeAccountIdentity.email + ')';
+          cloudText += ' · ' + activeAccountIdentity.planName + ' plan.';
+        }
+        onboardingBoundary.textContent = cloudText;
+      } else {
+        onboardingBoundary.textContent =
+          'Active developer-session boundary: Local · workspace-scoped runtime; no AGI Cloud account is required.';
+      }
+    }
+
+    if (onboardingBack) {
+      onboardingBack.addEventListener('click', function() {
+        if (onboardingStep === 0) return;
+        onboardingStep -= 1;
+        renderOnboardingStep(true);
+      });
+    }
+    if (onboardingNext) {
+      onboardingNext.addEventListener('click', function() {
+        if (onboardingStep === onboardingSteps.length - 1) {
+          completeOnboarding();
+          return;
+        }
+        onboardingStep += 1;
+        renderOnboardingStep(true);
+      });
+    }
+    if (onboardingSkip) onboardingSkip.addEventListener('click', completeOnboarding);
+    if (onboardingTasks) {
+      onboardingTasks.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openWebTasks' });
+      });
+    }
+    if (onboardingPermissionDocs) {
+      onboardingPermissionDocs.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openPermissionDocs' });
+      });
+    }
+    if (onboardingPrivacySettings) {
+      onboardingPrivacySettings.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openPrivacySettings' });
+      });
+    }
+    if (onboardingEl) {
+      onboardingEl.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') completeOnboarding();
+      });
+    }
 
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
@@ -1370,6 +1822,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
       pill.title = title;
       pill.style.display = 'inline-flex';
+      updateOnboardingBoundary();
     }
 
     function renderUsageMeter(payload) {
@@ -2245,6 +2698,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         }
         accountBtn.setAttribute('aria-label', accountBtn.title);
         if (activeRuntimeSource) updateRuntimePill(activeRuntimeSource);
+        else updateOnboardingBoundary();
+      }
+
+      else if (msg.type === 'showOnboarding') {
+        setOnboardingVisible(true);
       }
 
       else if (msg.type === 'fileSearchResults') {
@@ -2664,6 +3122,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         hideEmptyState();
       });
     });
+
+    if (onboardingEl && onboardingEl.style.display !== 'none') {
+      setOnboardingVisible(true);
+    } else if (onboardingEl) {
+      setOnboardingVisible(false);
+    }
+    updateOnboardingBoundary();
 
     // ── Signal ready ──────────────────────────────────────────────────────────
     vscode.postMessage({ type: 'ready' });
@@ -2922,6 +3387,225 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       cursor: pointer;
     }
 
+    /* ── First-run onboarding ── */
+    .onboarding {
+      position: fixed;
+      inset: 44px 0 0;
+      z-index: 50;
+      min-height: 0;
+      padding: clamp(14px, 4vw, 24px);
+      overflow: auto;
+      background:
+        radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--accent-teal) 12%, transparent), transparent 42%),
+        var(--bg-base);
+    }
+    .onboarding-shell {
+      display: flex;
+      flex-direction: column;
+      width: min(100%, 560px);
+      min-height: 100%;
+      margin: 0 auto;
+    }
+    .onboarding-topline {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: clamp(18px, 5vh, 34px);
+    }
+    .onboarding-progress {
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .onboarding-dots {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .onboarding-dot {
+      width: 18px;
+      height: 3px;
+      border: 0;
+      border-radius: 99px;
+      background: var(--border);
+    }
+    .onboarding-dot.active {
+      background: var(--accent-teal);
+    }
+    .onboarding-step {
+      flex: 1;
+      animation: onboarding-enter 180ms var(--transition);
+    }
+    .onboarding-step[hidden] {
+      display: none;
+    }
+    @keyframes onboarding-enter {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .onboarding-icon {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 18px;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--accent-teal) 42%, var(--border));
+      border-radius: 13px;
+      background: var(--bg-elevated);
+      color: var(--accent-teal);
+      font-size: 20px;
+    }
+    .onboarding-eyebrow {
+      margin-bottom: 7px;
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .onboarding h2 {
+      max-width: 430px;
+      color: var(--text-primary);
+      font-size: clamp(22px, 7vw, 34px);
+      font-weight: 650;
+      letter-spacing: -0.035em;
+      line-height: 1.05;
+    }
+    .onboarding-lede {
+      max-width: 490px;
+      margin-top: 13px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .onboarding-card {
+      display: grid;
+      gap: 9px;
+      margin-top: 20px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg-elevated);
+    }
+    .onboarding-card strong {
+      color: var(--text-primary);
+      font-size: 12px;
+    }
+    .onboarding-card span,
+    .onboarding-card p {
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .onboarding-disclosures {
+      display: grid;
+      gap: 9px;
+      margin-top: 18px;
+      list-style: none;
+    }
+    .onboarding-disclosures li {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 9px;
+      align-items: start;
+      padding: 11px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-elevated);
+    }
+    .onboarding-disclosures .codicon {
+      padding-top: 1px;
+      color: var(--accent-teal);
+      font-size: 15px;
+    }
+    .onboarding-disclosures strong,
+    .onboarding-disclosures span {
+      display: block;
+    }
+    .onboarding-disclosures strong {
+      margin-bottom: 2px;
+      color: var(--text-primary);
+      font-size: 11px;
+    }
+    .onboarding-disclosures span {
+      color: var(--text-secondary);
+      font-size: 10.5px;
+      line-height: 1.45;
+    }
+    .onboarding-inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 14px;
+    }
+    .onboarding-link,
+    .onboarding-button {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .onboarding-link {
+      padding: 6px 9px;
+      background: transparent;
+      color: var(--text-primary);
+    }
+    .onboarding-link:hover,
+    .onboarding-button--secondary:hover {
+      background: var(--bg-overlay);
+    }
+    .onboarding-actions {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: clamp(22px, 6vh, 40px);
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .onboarding-button {
+      min-height: 32px;
+      padding: 7px 12px;
+    }
+    .onboarding-button--secondary {
+      background: transparent;
+      color: var(--text-primary);
+    }
+    .onboarding-button--primary {
+      border-color: var(--accent-teal);
+      background: var(--accent-teal);
+      color: var(--vscode-button-foreground, #fff);
+    }
+    .onboarding-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.42;
+    }
+    .onboarding-skip {
+      justify-self: center;
+      padding: 5px 8px;
+      border: 0;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 10.5px;
+    }
+    .onboarding-boundary {
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-left: 2px solid var(--accent-teal);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      font-size: 10.5px;
+      line-height: 1.45;
+    }
+
     button:focus-visible,
     [role="menuitem"]:focus-visible {
       outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
@@ -3827,6 +4511,112 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     </div>
   </div>
 
+  <section
+    class="onboarding"
+    id="onboarding"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="onboardingTitle"
+    style="display:none"
+  >
+    <div class="onboarding-shell">
+      <div class="onboarding-topline">
+        <span class="onboarding-progress" id="onboardingProgress">Step 1 of 4</span>
+        <div class="onboarding-dots" aria-hidden="true">
+          <span class="onboarding-dot active"></span>
+          <span class="onboarding-dot"></span>
+          <span class="onboarding-dot"></span>
+          <span class="onboarding-dot"></span>
+        </div>
+      </div>
+
+      <article class="onboarding-step" data-onboarding-step="0">
+        <div class="onboarding-icon"><span class="codicon codicon-repo" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">Developer session</p>
+        <h2 id="onboardingTitle" tabindex="-1">Build with AGI in this repository.</h2>
+        <p class="onboarding-lede">
+          Ask about code, attach workspace files, edit through reviewable diffs, run approved commands,
+          and test the open project.
+        </p>
+        <div class="onboarding-card">
+          <strong>Workspace-scoped by default</strong>
+          <span>The sidebar, editor chat, and @agi use the local AGI runtime for this workspace. They do not silently merge into consumer Web, Mobile, or Desktop chat history.</span>
+        </div>
+      </article>
+
+      <article class="onboarding-step" data-onboarding-step="1" hidden>
+        <div class="onboarding-icon"><span class="codicon codicon-server-process" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">Task handoff</p>
+        <h2 tabindex="-1">Foreground here. Background work on Web.</h2>
+        <p class="onboarding-lede">
+          VS Code developer sessions run while the editor is open. Hosted background task creation,
+          status, history, and results remain on the Web Tasks surface.
+        </p>
+        <div class="onboarding-card">
+          <strong>No pretend cloud handoff</strong>
+          <span>Opening Web Tasks is explicit. A local prompt is never relabeled as a background run.</span>
+          <button type="button" class="onboarding-link" id="onboardingTasks">Open Web Tasks</button>
+        </div>
+      </article>
+
+      <article class="onboarding-step" data-onboarding-step="2" hidden>
+        <div class="onboarding-icon"><span class="codicon codicon-diff" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">TODO to review</p>
+        <h2 tabindex="-1">Describe the intent. Inspect the change.</h2>
+        <p class="onboarding-lede">
+          Attach the relevant files or share diagnostics, then ask AGI to implement the TODO.
+          Proposed code opens in VS Code's native diff view before you accept it.
+        </p>
+        <div class="onboarding-card">
+          <strong>A useful first prompt</strong>
+          <p>“Implement the TODO in the active file, explain the tradeoffs, and add focused tests. Do not change unrelated files.”</p>
+        </div>
+      </article>
+
+      <article class="onboarding-step" data-onboarding-step="3" hidden>
+        <div class="onboarding-icon"><span class="codicon codicon-shield" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">Autonomy and trust</p>
+        <h2 tabindex="-1">You choose authority. You verify the result.</h2>
+        <ul class="onboarding-disclosures">
+          <li>
+            <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
+            <div>
+              <strong>Choose the autonomy level</strong>
+              <span>Ask, Auto, Plan, or Bypass controls how much authority a session receives. Higher-risk combinations require explicit consent.</span>
+            </div>
+          </li>
+          <li>
+            <span class="codicon codicon-warning" aria-hidden="true"></span>
+            <div>
+              <strong>AGI can make mistakes</strong>
+              <span>Review generated code and every command before accepting or running it.</span>
+            </div>
+          </li>
+          <li>
+            <span class="codicon codicon-lock" aria-hidden="true"></span>
+            <div>
+              <strong>Verify the active trust boundary</strong>
+              <span>The header names Local, BYOK, or Managed Cloud. Managed Cloud also names the signed-in plan owner; BYOK provider billing stays separate.</span>
+            </div>
+          </li>
+        </ul>
+        <p class="onboarding-boundary" id="onboardingBoundary" role="status">
+          Resolving the active developer-session boundary…
+        </p>
+        <div class="onboarding-inline-actions">
+          <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
+          <button type="button" class="onboarding-link" id="onboardingPrivacySettings">Retention &amp; training settings</button>
+        </div>
+      </article>
+
+      <div class="onboarding-actions">
+        <button type="button" class="onboarding-button onboarding-button--secondary" id="onboardingBack" disabled>Back</button>
+        <button type="button" class="onboarding-skip" id="onboardingSkip">Skip intro</button>
+        <button type="button" class="onboarding-button onboarding-button--primary" id="onboardingNext">Next</button>
+      </div>
+    </div>
+  </section>
+
   <div class="runtime-status" id="runtimeStatus" role="status">
     <strong>Local runtime needs setup</strong>
     <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
@@ -3961,6 +4751,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     const runtimeStatusEl = document.getElementById('runtimeStatus');
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
+    const onboardingEl = document.getElementById('onboarding');
+    const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
+    const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
+    const onboardingProgress = document.getElementById('onboardingProgress');
+    const onboardingBoundary = document.getElementById('onboardingBoundary');
+    const onboardingBack = document.getElementById('onboardingBack');
+    const onboardingNext = document.getElementById('onboardingNext');
+    const onboardingSkip = document.getElementById('onboardingSkip');
+    const onboardingTasks = document.getElementById('onboardingTasks');
+    const onboardingPermissionDocs = document.getElementById('onboardingPermissionDocs');
+    const onboardingPrivacySettings = document.getElementById('onboardingPrivacySettings');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
     const usageMeterBanner = document.getElementById('usageMeterBanner');
@@ -3979,6 +4780,122 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     var meterCollapsed = false;
     var activeRuntimeSource = null;
     var activeAccountIdentity = null;
+    var onboardingStep = 0;
+
+    // ── First-run onboarding helpers ──────────────────────────────────────────
+    function renderOnboardingStep(shouldFocus) {
+      if (!onboardingEl || onboardingSteps.length === 0) return;
+      onboardingStep = Math.max(0, Math.min(onboardingSteps.length - 1, onboardingStep));
+      onboardingSteps.forEach(function(step, index) {
+        step.hidden = index !== onboardingStep;
+      });
+      onboardingDots.forEach(function(dot, index) {
+        dot.classList.toggle('active', index === onboardingStep);
+      });
+      if (onboardingProgress) {
+        onboardingProgress.textContent = 'Step ' + (onboardingStep + 1) + ' of ' + onboardingSteps.length;
+      }
+      if (onboardingBack) onboardingBack.disabled = onboardingStep === 0;
+      if (onboardingNext) {
+        onboardingNext.textContent =
+          onboardingStep === onboardingSteps.length - 1 ? 'Start using AGI' : 'Next';
+      }
+      var heading = onboardingSteps[onboardingStep].querySelector('h2');
+      if (heading) {
+        heading.id = 'onboardingStepTitle' + onboardingStep;
+        onboardingEl.setAttribute('aria-labelledby', heading.id);
+        if (shouldFocus) heading.focus();
+      }
+    }
+
+    function setOnboardingVisible(visible) {
+      if (!onboardingEl) return;
+      onboardingEl.style.display = visible ? 'flex' : 'none';
+      onboardingEl.setAttribute('aria-hidden', String(!visible));
+      [
+        messagesEl,
+        document.querySelector('.input-area'),
+        document.querySelector('.header-actions'),
+        runtimeStatusEl,
+        usageMeterBanner,
+        usageMeterCollapsed,
+      ].forEach(function(element) {
+        if (element) element.inert = visible;
+      });
+      if (visible) {
+        onboardingStep = 0;
+        renderOnboardingStep(true);
+      } else if (userInput) {
+        userInput.focus();
+      }
+    }
+
+    function completeOnboarding() {
+      setOnboardingVisible(false);
+      vscode.postMessage({ type: 'completeOnboarding' });
+    }
+
+    function updateOnboardingBoundary() {
+      if (!onboardingBoundary) return;
+      if (activeRuntimeSource === 'user-api-key') {
+        var byokText = 'Active boundary: BYOK · requests go directly to your provider.';
+        if (activeAccountIdentity) {
+          byokText += ' AGI Cloud sign-in: ' + activeAccountIdentity.displayName +
+            ' (not used for provider billing).';
+        }
+        onboardingBoundary.textContent = byokText;
+      } else if (activeRuntimeSource === 'managed-plan') {
+        var cloudText = 'Active boundary: Managed Cloud · prompts are sent to AGI infrastructure.';
+        if (activeAccountIdentity) {
+          cloudText += ' Plan owner: ' + activeAccountIdentity.displayName;
+          if (activeAccountIdentity.email) cloudText += ' (' + activeAccountIdentity.email + ')';
+          cloudText += ' · ' + activeAccountIdentity.planName + ' plan.';
+        }
+        onboardingBoundary.textContent = cloudText;
+      } else {
+        onboardingBoundary.textContent =
+          'Active developer-session boundary: Local · workspace-scoped runtime; no AGI Cloud account is required.';
+      }
+    }
+
+    if (onboardingBack) {
+      onboardingBack.addEventListener('click', function() {
+        if (onboardingStep === 0) return;
+        onboardingStep -= 1;
+        renderOnboardingStep(true);
+      });
+    }
+    if (onboardingNext) {
+      onboardingNext.addEventListener('click', function() {
+        if (onboardingStep === onboardingSteps.length - 1) {
+          completeOnboarding();
+          return;
+        }
+        onboardingStep += 1;
+        renderOnboardingStep(true);
+      });
+    }
+    if (onboardingSkip) onboardingSkip.addEventListener('click', completeOnboarding);
+    if (onboardingTasks) {
+      onboardingTasks.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openWebTasks' });
+      });
+    }
+    if (onboardingPermissionDocs) {
+      onboardingPermissionDocs.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openPermissionDocs' });
+      });
+    }
+    if (onboardingPrivacySettings) {
+      onboardingPrivacySettings.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openPrivacySettings' });
+      });
+    }
+    if (onboardingEl) {
+      onboardingEl.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') completeOnboarding();
+      });
+    }
 
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
@@ -4042,6 +4959,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
       pill.title = title;
       pill.style.display = 'inline-flex';
+      updateOnboardingBoundary();
     }
 
     function renderUsageMeter(payload) {
@@ -4917,6 +5835,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         }
         accountBtn.setAttribute('aria-label', accountBtn.title);
         if (activeRuntimeSource) updateRuntimePill(activeRuntimeSource);
+        else updateOnboardingBoundary();
+      }
+
+      else if (msg.type === 'showOnboarding') {
+        setOnboardingVisible(true);
       }
 
       else if (msg.type === 'fileSearchResults') {
@@ -5336,6 +6259,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         hideEmptyState();
       });
     });
+
+    if (onboardingEl && onboardingEl.style.display !== 'none') {
+      setOnboardingVisible(true);
+    } else if (onboardingEl) {
+      setOnboardingVisible(false);
+    }
+    updateOnboardingBoundary();
 
     // ── Signal ready ──────────────────────────────────────────────────────────
     vscode.postMessage({ type: 'ready' });
@@ -5594,6 +6524,225 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       cursor: pointer;
     }
 
+    /* ── First-run onboarding ── */
+    .onboarding {
+      position: fixed;
+      inset: 44px 0 0;
+      z-index: 50;
+      min-height: 0;
+      padding: clamp(14px, 4vw, 24px);
+      overflow: auto;
+      background:
+        radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--accent-teal) 12%, transparent), transparent 42%),
+        var(--bg-base);
+    }
+    .onboarding-shell {
+      display: flex;
+      flex-direction: column;
+      width: min(100%, 560px);
+      min-height: 100%;
+      margin: 0 auto;
+    }
+    .onboarding-topline {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: clamp(18px, 5vh, 34px);
+    }
+    .onboarding-progress {
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .onboarding-dots {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .onboarding-dot {
+      width: 18px;
+      height: 3px;
+      border: 0;
+      border-radius: 99px;
+      background: var(--border);
+    }
+    .onboarding-dot.active {
+      background: var(--accent-teal);
+    }
+    .onboarding-step {
+      flex: 1;
+      animation: onboarding-enter 180ms var(--transition);
+    }
+    .onboarding-step[hidden] {
+      display: none;
+    }
+    @keyframes onboarding-enter {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .onboarding-icon {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 18px;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--accent-teal) 42%, var(--border));
+      border-radius: 13px;
+      background: var(--bg-elevated);
+      color: var(--accent-teal);
+      font-size: 20px;
+    }
+    .onboarding-eyebrow {
+      margin-bottom: 7px;
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .onboarding h2 {
+      max-width: 430px;
+      color: var(--text-primary);
+      font-size: clamp(22px, 7vw, 34px);
+      font-weight: 650;
+      letter-spacing: -0.035em;
+      line-height: 1.05;
+    }
+    .onboarding-lede {
+      max-width: 490px;
+      margin-top: 13px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .onboarding-card {
+      display: grid;
+      gap: 9px;
+      margin-top: 20px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg-elevated);
+    }
+    .onboarding-card strong {
+      color: var(--text-primary);
+      font-size: 12px;
+    }
+    .onboarding-card span,
+    .onboarding-card p {
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .onboarding-disclosures {
+      display: grid;
+      gap: 9px;
+      margin-top: 18px;
+      list-style: none;
+    }
+    .onboarding-disclosures li {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr);
+      gap: 9px;
+      align-items: start;
+      padding: 11px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg-elevated);
+    }
+    .onboarding-disclosures .codicon {
+      padding-top: 1px;
+      color: var(--accent-teal);
+      font-size: 15px;
+    }
+    .onboarding-disclosures strong,
+    .onboarding-disclosures span {
+      display: block;
+    }
+    .onboarding-disclosures strong {
+      margin-bottom: 2px;
+      color: var(--text-primary);
+      font-size: 11px;
+    }
+    .onboarding-disclosures span {
+      color: var(--text-secondary);
+      font-size: 10.5px;
+      line-height: 1.45;
+    }
+    .onboarding-inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 14px;
+    }
+    .onboarding-link,
+    .onboarding-button {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .onboarding-link {
+      padding: 6px 9px;
+      background: transparent;
+      color: var(--text-primary);
+    }
+    .onboarding-link:hover,
+    .onboarding-button--secondary:hover {
+      background: var(--bg-overlay);
+    }
+    .onboarding-actions {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: clamp(22px, 6vh, 40px);
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .onboarding-button {
+      min-height: 32px;
+      padding: 7px 12px;
+    }
+    .onboarding-button--secondary {
+      background: transparent;
+      color: var(--text-primary);
+    }
+    .onboarding-button--primary {
+      border-color: var(--accent-teal);
+      background: var(--accent-teal);
+      color: var(--vscode-button-foreground, #fff);
+    }
+    .onboarding-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.42;
+    }
+    .onboarding-skip {
+      justify-self: center;
+      padding: 5px 8px;
+      border: 0;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font: inherit;
+      font-size: 10.5px;
+    }
+    .onboarding-boundary {
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-left: 2px solid var(--accent-teal);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      font-size: 10.5px;
+      line-height: 1.45;
+    }
+
     button:focus-visible,
     [role="menuitem"]:focus-visible {
       outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
@@ -6499,6 +7648,112 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     </div>
   </div>
 
+  <section
+    class="onboarding"
+    id="onboarding"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="onboardingTitle"
+    style="display:none"
+  >
+    <div class="onboarding-shell">
+      <div class="onboarding-topline">
+        <span class="onboarding-progress" id="onboardingProgress">Step 1 of 4</span>
+        <div class="onboarding-dots" aria-hidden="true">
+          <span class="onboarding-dot active"></span>
+          <span class="onboarding-dot"></span>
+          <span class="onboarding-dot"></span>
+          <span class="onboarding-dot"></span>
+        </div>
+      </div>
+
+      <article class="onboarding-step" data-onboarding-step="0">
+        <div class="onboarding-icon"><span class="codicon codicon-repo" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">Developer session</p>
+        <h2 id="onboardingTitle" tabindex="-1">Build with AGI in this repository.</h2>
+        <p class="onboarding-lede">
+          Ask about code, attach workspace files, edit through reviewable diffs, run approved commands,
+          and test the open project.
+        </p>
+        <div class="onboarding-card">
+          <strong>Workspace-scoped by default</strong>
+          <span>The sidebar, editor chat, and @agi use the local AGI runtime for this workspace. They do not silently merge into consumer Web, Mobile, or Desktop chat history.</span>
+        </div>
+      </article>
+
+      <article class="onboarding-step" data-onboarding-step="1" hidden>
+        <div class="onboarding-icon"><span class="codicon codicon-server-process" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">Task handoff</p>
+        <h2 tabindex="-1">Foreground here. Background work on Web.</h2>
+        <p class="onboarding-lede">
+          VS Code developer sessions run while the editor is open. Hosted background task creation,
+          status, history, and results remain on the Web Tasks surface.
+        </p>
+        <div class="onboarding-card">
+          <strong>No pretend cloud handoff</strong>
+          <span>Opening Web Tasks is explicit. A local prompt is never relabeled as a background run.</span>
+          <button type="button" class="onboarding-link" id="onboardingTasks">Open Web Tasks</button>
+        </div>
+      </article>
+
+      <article class="onboarding-step" data-onboarding-step="2" hidden>
+        <div class="onboarding-icon"><span class="codicon codicon-diff" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">TODO to review</p>
+        <h2 tabindex="-1">Describe the intent. Inspect the change.</h2>
+        <p class="onboarding-lede">
+          Attach the relevant files or share diagnostics, then ask AGI to implement the TODO.
+          Proposed code opens in VS Code's native diff view before you accept it.
+        </p>
+        <div class="onboarding-card">
+          <strong>A useful first prompt</strong>
+          <p>“Implement the TODO in the active file, explain the tradeoffs, and add focused tests. Do not change unrelated files.”</p>
+        </div>
+      </article>
+
+      <article class="onboarding-step" data-onboarding-step="3" hidden>
+        <div class="onboarding-icon"><span class="codicon codicon-shield" aria-hidden="true"></span></div>
+        <p class="onboarding-eyebrow">Autonomy and trust</p>
+        <h2 tabindex="-1">You choose authority. You verify the result.</h2>
+        <ul class="onboarding-disclosures">
+          <li>
+            <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
+            <div>
+              <strong>Choose the autonomy level</strong>
+              <span>Ask, Auto, Plan, or Bypass controls how much authority a session receives. Higher-risk combinations require explicit consent.</span>
+            </div>
+          </li>
+          <li>
+            <span class="codicon codicon-warning" aria-hidden="true"></span>
+            <div>
+              <strong>AGI can make mistakes</strong>
+              <span>Review generated code and every command before accepting or running it.</span>
+            </div>
+          </li>
+          <li>
+            <span class="codicon codicon-lock" aria-hidden="true"></span>
+            <div>
+              <strong>Verify the active trust boundary</strong>
+              <span>The header names Local, BYOK, or Managed Cloud. Managed Cloud also names the signed-in plan owner; BYOK provider billing stays separate.</span>
+            </div>
+          </li>
+        </ul>
+        <p class="onboarding-boundary" id="onboardingBoundary" role="status">
+          Resolving the active developer-session boundary…
+        </p>
+        <div class="onboarding-inline-actions">
+          <button type="button" class="onboarding-link" id="onboardingPermissionDocs">Permission docs</button>
+          <button type="button" class="onboarding-link" id="onboardingPrivacySettings">Retention &amp; training settings</button>
+        </div>
+      </article>
+
+      <div class="onboarding-actions">
+        <button type="button" class="onboarding-button onboarding-button--secondary" id="onboardingBack" disabled>Back</button>
+        <button type="button" class="onboarding-skip" id="onboardingSkip">Skip intro</button>
+        <button type="button" class="onboarding-button onboarding-button--primary" id="onboardingNext">Next</button>
+      </div>
+    </div>
+  </section>
+
   <div class="runtime-status" id="runtimeStatus" role="status">
     <strong>Local runtime needs setup</strong>
     <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
@@ -6633,6 +7888,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     const runtimeStatusEl = document.getElementById('runtimeStatus');
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
+    const onboardingEl = document.getElementById('onboarding');
+    const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
+    const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
+    const onboardingProgress = document.getElementById('onboardingProgress');
+    const onboardingBoundary = document.getElementById('onboardingBoundary');
+    const onboardingBack = document.getElementById('onboardingBack');
+    const onboardingNext = document.getElementById('onboardingNext');
+    const onboardingSkip = document.getElementById('onboardingSkip');
+    const onboardingTasks = document.getElementById('onboardingTasks');
+    const onboardingPermissionDocs = document.getElementById('onboardingPermissionDocs');
+    const onboardingPrivacySettings = document.getElementById('onboardingPrivacySettings');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
     const usageMeterBanner = document.getElementById('usageMeterBanner');
@@ -6651,6 +7917,122 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     var meterCollapsed = true;
     var activeRuntimeSource = null;
     var activeAccountIdentity = null;
+    var onboardingStep = 0;
+
+    // ── First-run onboarding helpers ──────────────────────────────────────────
+    function renderOnboardingStep(shouldFocus) {
+      if (!onboardingEl || onboardingSteps.length === 0) return;
+      onboardingStep = Math.max(0, Math.min(onboardingSteps.length - 1, onboardingStep));
+      onboardingSteps.forEach(function(step, index) {
+        step.hidden = index !== onboardingStep;
+      });
+      onboardingDots.forEach(function(dot, index) {
+        dot.classList.toggle('active', index === onboardingStep);
+      });
+      if (onboardingProgress) {
+        onboardingProgress.textContent = 'Step ' + (onboardingStep + 1) + ' of ' + onboardingSteps.length;
+      }
+      if (onboardingBack) onboardingBack.disabled = onboardingStep === 0;
+      if (onboardingNext) {
+        onboardingNext.textContent =
+          onboardingStep === onboardingSteps.length - 1 ? 'Start using AGI' : 'Next';
+      }
+      var heading = onboardingSteps[onboardingStep].querySelector('h2');
+      if (heading) {
+        heading.id = 'onboardingStepTitle' + onboardingStep;
+        onboardingEl.setAttribute('aria-labelledby', heading.id);
+        if (shouldFocus) heading.focus();
+      }
+    }
+
+    function setOnboardingVisible(visible) {
+      if (!onboardingEl) return;
+      onboardingEl.style.display = visible ? 'flex' : 'none';
+      onboardingEl.setAttribute('aria-hidden', String(!visible));
+      [
+        messagesEl,
+        document.querySelector('.input-area'),
+        document.querySelector('.header-actions'),
+        runtimeStatusEl,
+        usageMeterBanner,
+        usageMeterCollapsed,
+      ].forEach(function(element) {
+        if (element) element.inert = visible;
+      });
+      if (visible) {
+        onboardingStep = 0;
+        renderOnboardingStep(true);
+      } else if (userInput) {
+        userInput.focus();
+      }
+    }
+
+    function completeOnboarding() {
+      setOnboardingVisible(false);
+      vscode.postMessage({ type: 'completeOnboarding' });
+    }
+
+    function updateOnboardingBoundary() {
+      if (!onboardingBoundary) return;
+      if (activeRuntimeSource === 'user-api-key') {
+        var byokText = 'Active boundary: BYOK · requests go directly to your provider.';
+        if (activeAccountIdentity) {
+          byokText += ' AGI Cloud sign-in: ' + activeAccountIdentity.displayName +
+            ' (not used for provider billing).';
+        }
+        onboardingBoundary.textContent = byokText;
+      } else if (activeRuntimeSource === 'managed-plan') {
+        var cloudText = 'Active boundary: Managed Cloud · prompts are sent to AGI infrastructure.';
+        if (activeAccountIdentity) {
+          cloudText += ' Plan owner: ' + activeAccountIdentity.displayName;
+          if (activeAccountIdentity.email) cloudText += ' (' + activeAccountIdentity.email + ')';
+          cloudText += ' · ' + activeAccountIdentity.planName + ' plan.';
+        }
+        onboardingBoundary.textContent = cloudText;
+      } else {
+        onboardingBoundary.textContent =
+          'Active developer-session boundary: Local · workspace-scoped runtime; no AGI Cloud account is required.';
+      }
+    }
+
+    if (onboardingBack) {
+      onboardingBack.addEventListener('click', function() {
+        if (onboardingStep === 0) return;
+        onboardingStep -= 1;
+        renderOnboardingStep(true);
+      });
+    }
+    if (onboardingNext) {
+      onboardingNext.addEventListener('click', function() {
+        if (onboardingStep === onboardingSteps.length - 1) {
+          completeOnboarding();
+          return;
+        }
+        onboardingStep += 1;
+        renderOnboardingStep(true);
+      });
+    }
+    if (onboardingSkip) onboardingSkip.addEventListener('click', completeOnboarding);
+    if (onboardingTasks) {
+      onboardingTasks.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openWebTasks' });
+      });
+    }
+    if (onboardingPermissionDocs) {
+      onboardingPermissionDocs.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openPermissionDocs' });
+      });
+    }
+    if (onboardingPrivacySettings) {
+      onboardingPrivacySettings.addEventListener('click', function() {
+        vscode.postMessage({ type: 'openPrivacySettings' });
+      });
+    }
+    if (onboardingEl) {
+      onboardingEl.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') completeOnboarding();
+      });
+    }
 
     // ── Provider badge helper ─────────────────────────────────────────────────
     function updateProviderBadge(providerLabel, brandColor) {
@@ -6714,6 +8096,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
       pill.title = title;
       pill.style.display = 'inline-flex';
+      updateOnboardingBoundary();
     }
 
     function renderUsageMeter(payload) {
@@ -7589,6 +8972,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         }
         accountBtn.setAttribute('aria-label', accountBtn.title);
         if (activeRuntimeSource) updateRuntimePill(activeRuntimeSource);
+        else updateOnboardingBoundary();
+      }
+
+      else if (msg.type === 'showOnboarding') {
+        setOnboardingVisible(true);
       }
 
       else if (msg.type === 'fileSearchResults') {
@@ -8008,6 +9396,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         hideEmptyState();
       });
     });
+
+    if (onboardingEl && onboardingEl.style.display !== 'none') {
+      setOnboardingVisible(true);
+    } else if (onboardingEl) {
+      setOnboardingVisible(false);
+    }
+    updateOnboardingBoundary();
 
     // ── Signal ready ──────────────────────────────────────────────────────────
     vscode.postMessage({ type: 'ready' });

@@ -43,7 +43,11 @@ import {
   fetchAccountIdentity,
 } from '../utils/api';
 import { signInToAgiCloud, signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
-import { buildAccountIdentityItems } from '../features/account-auth/accountPresentation';
+import {
+  buildAccountIdentityItems,
+  buildTrustReviewItems,
+} from '../features/account-auth/accountPresentation';
+import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
 import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
@@ -1248,12 +1252,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'manage-usage'
         | 'manage-billing'
         | 'connectors'
-        | 'teams';
+        | 'teams'
+        | 'permission-docs'
+        | 'privacy-settings';
       type AccountItem = vscode.QuickPickItem & { action?: AccountAction };
       const items: AccountItem[] = buildAccountIdentityItems(
         accountToken !== undefined,
         accountIdentity,
       );
+      items.push(...buildTrustReviewItems(Config.agentMode(), accountIdentity));
       items.push(
         { label: 'Session usage', kind: vscode.QuickPickItemKind.Separator },
         {
@@ -1384,10 +1391,32 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             ? 'https://agiworkforce.com/settings/team?from=vscode-extension'
             : 'https://agiworkforce.com/teams?from=vscode-extension';
         await vscode.env.openExternal(vscode.Uri.parse(teamsPath));
+      } else if (pick?.action === 'permission-docs') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/docs?topic=permissions&from=vscode-extension'),
+        );
+      } else if (pick?.action === 'privacy-settings') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/settings/privacy?from=vscode-extension'),
+        );
       } else if (pick?.action === 'reset-counter') {
         counter.reset();
         vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');
       }
+    }),
+  );
+
+  context.subscriptions.push(
+    register('agi-workforce.showOnboarding', async () => {
+      await context.globalState.update(ONBOARDING_SEEN_KEY, false);
+      await vscode.commands.executeCommand('workbench.view.extension.agi-workforce-sidebar');
+      sidebarProvider.reveal();
+      sidebarProvider.showOnboarding();
+    }),
+    register('agi-workforce.openWebTasks', async () => {
+      await vscode.env.openExternal(
+        vscode.Uri.parse('https://agiworkforce.com/tasks?from=vscode-extension'),
+      );
     }),
   );
 

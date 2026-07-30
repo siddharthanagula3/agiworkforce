@@ -50,6 +50,10 @@ const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 const openHistory = z.object({ type: z.literal('openHistory') });
 const newChat = z.object({ type: z.literal('newChat') });
 const openAccount = z.object({ type: z.literal('openAccount') });
+const completeOnboarding = z.object({ type: z.literal('completeOnboarding') });
+const openPermissionDocs = z.object({ type: z.literal('openPermissionDocs') });
+const openPrivacySettings = z.object({ type: z.literal('openPrivacySettings') });
+const openWebTasks = z.object({ type: z.literal('openWebTasks') });
 
 /**
  * `attachFiles` carries dropped or pasted file payloads from the webview
@@ -153,6 +157,10 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openHistory,
   newChat,
   openAccount,
+  completeOnboarding,
+  openPermissionDocs,
+  openPrivacySettings,
+  openWebTasks,
   attachFiles,
   removePendingAttachment,
 ]);
