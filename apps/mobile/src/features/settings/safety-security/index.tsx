@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert } from 'react-native';
-import { EyeOff, Fingerprint, Shield, Smartphone } from 'lucide-react-native';
+import { EyeOff, Fingerprint, Shield, Smartphone, UserRound } from 'lucide-react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useBiometricFlag } from '@/lib/biometricFlagStore';
 import { isMinorMode } from '@/src/features/auth/services/ageGate';
@@ -86,6 +86,11 @@ export default function SafetySecurityScreen() {
           isLast
         />
       </SettingsGroup>
+      <SettingsInfo
+        title="Trusted contact · Not configured"
+        body="AGI does not monitor chats to automatically notify another person. No trusted contact is enrolled, and no contact receives conversation content or safety alerts."
+        icon={UserRound}
+      />
       <SettingsInfo
         title="Device boundary"
         body="Local chats stay on this device unless you choose AGI Cloud."

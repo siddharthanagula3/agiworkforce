@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 54c78f03101818cc79e0ed9b046f7bf2313af28aaf21b6ee837efce5a3bfe8ba -->
+<!-- ui-gaps-csv-sha256: 4261c52ad2c6a2934d9674929008e0e13c873626b79d4d0282e62b1899dfe35a -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 86 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 85 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  290 |
+| Open        |  289 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   42 |
-| Not Planned |    9 |
+| Not Planned |   10 |
 
 ## P0
 
@@ -1016,24 +1016,24 @@ Not planned until the backend owns a storage entitlement and canonical inventory
 
 - `chatgpt_reference/054-chatgpt-ios-settings-storage-documents-images-usage.png`
 
-### GAP-044 — No trusted contact / crisis-support surface on any surface
+### GAP-044 — Trusted-contact enrolment and automatic escalation are declined without a verified consent and safety service
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Settings > Trusted contact
 
 **Gap**
 
-Reference ships a Trusted contact screen: why a trusted contact helps, an explicit statement that a serious safety concern may automatically notify that contact, the 18+ requirement, Learn more, and a 'Get started' CTA into enrolment. agiworkforce has no equivalent — no trusted contact, no crisis resources, no self-harm escalation copy — anywhere in mobile, web or desktop.
+The reference describes a safety intervention product that may monitor for serious concern and notify an enrolled person. agiworkforce has no contact-verification service, mutual opt-in, age attestation, revocation, safety-classification policy, escalation review, notification dispatcher, jurisdiction-aware resource directory, or audit trail. A Get started flow or automatic-alert promise would therefore collect sensitive contact data without an authorized consumer and could create dangerous expectations. Mobile Safety & Security now states the actual boundary: no trusted contact is configured, AGI does not monitor chats to notify another person, and no one receives conversation content or safety alerts.
 
 **Evidence**
 
-grep -i 'trusted contact|crisis|emergency contact|helpline|self-harm' across apps/mobile/src, apps/mobile/app, apps/web/app, apps/web/features and apps/desktop/src — zero matches
+apps/mobile/src/features/settings/safety-security/index.tsx exposes Trusted contact · Not configured and the explicit non-monitoring/non-notification boundary beside the real content and device safeguards. Repository searches across Mobile, Web, Desktop, gateway routes, schemas, migrations, and notification senders find no trusted-contact entity, contact-consent lifecycle, crisis classifier, or escalation dispatcher. safety-security.test.tsx verifies the boundary is visible and retains coverage of strict content filtering and authenticated device lock.
 
 **Suggested fix**
 
-Add /(app)/settings/trusted-contact with the consent-first explainer, a Get started enrolment flow (contact identity, 18+ attestation, contact's own opt-in), and a visible crisis-resources fallback; gate any automatic notification behind explicit, revocable consent and record the consent event.
+Not planned until a dedicated, reviewed safety service exists. Do not add enrolment or automatic-contact copy without mutual verified consent, 18+ policy, revocation and deletion, minimization and encryption, classifier limitations and human-review policy, jurisdiction-aware resources, abuse prevention, delivery/audit guarantees, legal and clinical safety review, and end-to-end tests proving conversation content is never disclosed outside the approved scope.
 
 **Reference screenshot(s)**
 
