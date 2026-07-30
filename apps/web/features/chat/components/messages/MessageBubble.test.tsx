@@ -114,6 +114,31 @@ describe('MessageBubble', () => {
       expect(screen.getByText('I can help')).toBeInTheDocument();
     });
 
+    it('renders compact citation markers directly with assistant prose', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'A sourced answer.',
+            metadata: {
+              citations: [
+                {
+                  title: 'Primary source',
+                  url: 'https://example.com/research',
+                  cited_text: 'Supporting detail',
+                },
+              ],
+            },
+          })}
+        />,
+      );
+
+      const citation = screen.getByRole('link', { name: 'Source 1: Primary source' });
+      expect(citation).toHaveAttribute('href', 'https://example.com/research');
+      expect(citation).toHaveAttribute('target', '_blank');
+      expect(citation).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+
     it('uses the image provider progress card without a duplicate Thinking indicator', () => {
       render(
         <MessageBubble

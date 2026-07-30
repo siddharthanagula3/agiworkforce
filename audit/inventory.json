@@ -38,8 +38,8 @@
   {
     "item": "layout-persistence",
     "surface": "apps/web",
-    "status": "unwired",
-    "evidence": "A persisted zustand store exists (apps/web/shared/stores/layout-store.ts:127-249, useUIStore with persist/localStorage and sidebarCollapsed) but grep shows it is consumed only by its own file, its own test, and the barrel re-export (apps/web/shared/stores/index.ts) — never imported by WebChatPage or WebSidebar. The actual chat shell's sidebar-collapse state is a plain useState(false) (apps/web/features/chat/pages/WebChatPage.tsx:407, toggled at :1852-1855) with no persistence, so it resets on every reload/navigation."
+    "status": "built",
+    "evidence": "The live Web chat shell now reads and updates the persisted Zustand layout state: apps/web/features/chat/pages/WebChatPage.tsx:408-409 selects sidebarCollapsed/setSidebarCollapsed from useUIStore, and :1854-1857 toggles that value. apps/web/shared/stores/layout-store.ts persists sidebarCollapsed under the agi-ui-store localStorage key, so the user's manual sidebar choice survives reloads while the separate narrow-viewport override remains transient."
   },
   {
     "item": "multi-tab-sync",
@@ -116,8 +116,8 @@
   {
     "item": "citation-marker",
     "surface": "apps/web",
-    "status": "partial",
-    "evidence": "A dedicated inline citation-marker component tree exists (apps/web/features/chat/components/messages/InlineCitation.tsx - InlineCitation/InlineSourceTags/CitationFooter) but grep across apps/web shows it is exported from the barrel (messages/index.ts:10) and never rendered anywhere (no <InlineCitation/<CitationFooter/<InlineSourceTags JSX usage found) - dead code. What IS reachable is a numbered SOURCE LIST (not inline superscripts in the prose): ToolTimeline.tsx:220-260 (favicon + citationIndex per source inside the web-search tool box) and ResearchPanel.tsx:63,260 (Sources panel), both fed from MessageBubble.tsx:750-802 searchSources derivation."
+    "status": "built",
+    "evidence": "The live assistant renderer derives de-duplicated, stable citation numbers from searchResults/citations at apps/web/features/chat/components/messages/MessageBubble.tsx:748-813 and renders InlineSourceTags directly beneath the response prose at :1034-1036. apps/web/features/chat/components/messages/InlineSourceTags.tsx provides accessible external-link chips with source number/title/snippet, while ToolTimeline and ResearchPanel retain their richer source-list views. The unused InlineCitation hover wrapper and deprecated CitationFooter were deleted."
   },
   {
     "item": "source-panel",
@@ -3734,8 +3734,8 @@
   {
     "item": "audit-log-viewer",
     "surface": "admin-and-billing",
-    "status": "broken",
-    "evidence": "Two independent, incomplete implementations. (1) apps/web/app/api/settings/audit-logs/route.ts:34-131 is a real, working endpoint against `public.security_audit_logs` (table exists: apps/web/db/neon/0014_security.sql, immutability hardened in 0043_audit_log_immutability.sql), and apps/web/features/settings/hooks/use-settings-queries.ts:1088 (useAuditLogs) calls it correctly — but grepping the whole apps/web/features and apps/web/app trees for 'useAuditLogs'/'AuditLog' outside tests/hooks/index.ts finds zero component call sites, so it is never rendered. (2) services/api-gateway/src/routes/enterprise.ts:263-303 GET /organizations/:orgId/audit-events is mounted at services/api-gateway/src/index.ts:127 ('/api/v1/enterprise') and queries `enterprise_audit_events`, but no migration anywhere in the repo creates that table (grep across all .sql files for 'enterprise_audit_events' finds only the route file and its test), and nothing in apps/web/desktop/mobile calls '/api/v1/enterprise' (zero hits repo-wide outside services/api-gateway itself)."
+    "status": "built",
+    "evidence": "The canonical current-user audit viewer is reachable in Settings > Security: apps/web/features/settings/sections/SecuritySection.tsx:126 mounts AuditLogPanel, whose apps/web/features/settings/components/AuditLogPanel.tsx:37-173 calls useAuditLogs/useAuditLogActions and renders filtering, pagination, refresh, loading, empty, and retryable error states. Those hooks call the authenticated /api/settings/audit-logs routes backed by the migrated public.security_audit_logs table. The separate organization-wide enterprise control-plane route remains tracked under managed-enterprise-settings until its Phase 2 schema work; it is not the implementation used by this viewer."
   },
   {
     "item": "retention-policy",

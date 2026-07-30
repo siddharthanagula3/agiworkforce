@@ -129,21 +129,6 @@ export {
 } from './store-types';
 
 // ============================================================================
-// EMPLOYEE TYPES (Extended definitions)
-// ============================================================================
-
-export {
-  type Employee,
-  type PurchasedEmployee,
-  type EmployeeSession,
-  type EmployeeMessage,
-  type EmployeePerformance as ExtendedEmployeePerformance,
-  type EmployeeCategory,
-  type EmployeeProvider,
-  type SubscriptionStatus,
-} from './employee';
-
-// ============================================================================
 // MULTI-AGENT CHAT TYPES
 // ============================================================================
 

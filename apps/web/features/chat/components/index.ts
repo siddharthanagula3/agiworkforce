@@ -6,9 +6,6 @@ export * from './messages';
 // Dialogs
 export * from './dialogs';
 
-// Agents
-export * from './agents';
-
 // Artifacts
 export * from './artifacts';
 

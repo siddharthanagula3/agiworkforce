@@ -31,6 +31,7 @@ import { useThinkingStore } from '@shared/stores/thinking-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
+import { useUIStore } from '@shared/stores/layout-store';
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
@@ -404,7 +405,8 @@ export default function WebChatPage() {
   const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
   const openSearchParam = searchParams?.get('search') ?? null;
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
+  const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   // Auto-collapse the sidebar below the mobile breakpoint so the composer
   // never gets squeezed into a few px of width on a phone-sized viewport.
   // Tracked separately from the user's manual collapse toggle so widening
@@ -1850,8 +1852,8 @@ export default function WebChatPage() {
   }, [router, setActiveConversation, setActiveProject]);
 
   const handleToggleSidebar = useCallback(
-    () => setSidebarCollapsed((c) => !c),
-    [setSidebarCollapsed],
+    () => setSidebarCollapsed(!sidebarCollapsed),
+    [setSidebarCollapsed, sidebarCollapsed],
   );
 
   const handleOpenSearch = useCallback(() => {

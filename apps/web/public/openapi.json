@@ -347,36 +347,6 @@
           }
         }
       }
-    },
-    "/sync-subscription": {
-      "post": {
-        "summary": "Sync subscription from Stripe",
-        "description": "Manually sync subscription information from Stripe (self-healing)",
-        "tags": ["Billing"],
-        "responses": {
-          "200": {
-            "description": "Subscription synced successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "subscription": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          }
-        }
-      }
     }
   }
 }

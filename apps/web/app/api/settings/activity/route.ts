@@ -23,7 +23,6 @@ const EVENT_TYPE_MAP: Record<string, string> = {
   settings_change: 'settings_change',
   api_call: 'api_call',
   chat_session: 'chat_session',
-  employee_hire: 'employee_hire',
   payment: 'payment',
 };
 
