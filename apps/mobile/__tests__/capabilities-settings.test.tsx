@@ -37,6 +37,7 @@ jest.mock('lucide-react-native', () => {
     Mic: Icon,
     RefreshCw: Icon,
     ShieldCheck: Icon,
+    Telescope: Icon,
   };
 });
 
@@ -54,6 +55,7 @@ jest.mock('@/lib/mmkv', () => ({
 
 import CapabilitiesScreen from '../src/features/settings/capabilities';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useChatStore } from '../stores/chatStore';
 
 describe('Capabilities settings screen', () => {
   beforeEach(() => {
@@ -69,9 +71,17 @@ describe('Capabilities settings screen', () => {
       inviteCode: undefined,
       cloudUnlockedAt: undefined,
     });
+    useChatStore.setState((state) => ({
+      features: {
+        ...state.features,
+        imageGen: true,
+        codeExecution: false,
+        research: false,
+      },
+    }));
   });
 
-  it('renders AGI-owned status rows instead of unwired switches', () => {
+  it('renders real Cloud preference switches and keeps automatic capabilities as status rows', () => {
     const { getByText, getByLabelText, queryAllByRole, queryByText } = render(
       <CapabilitiesScreen />,
     );
@@ -81,19 +91,30 @@ describe('Capabilities settings screen', () => {
     expect(getByText('On this device')).toBeTruthy();
     expect(getByLabelText('Local Mode. Private chat runs on this device. Active')).toBeTruthy();
     expect(
-      getByLabelText('Web search. Search current web information in Cloud sessions. Sign in'),
+      getByLabelText(
+        'Web search. Uses current web information automatically when the Cloud model supports it. Sign in',
+      ),
+    ).toBeTruthy();
+    expect(
+      getByLabelText('AGI Code. Allow supported Cloud models to execute code in a secure sandbox.'),
     ).toBeTruthy();
     expect(
       getByLabelText(
-        'AGI Code. Run code from Cloud chat; generated files appear in Artifacts. Sign in',
+        'Deep research. Allow supported Cloud models to run multi-step research with citations.',
       ),
+    ).toBeTruthy();
+    expect(
+      getByLabelText('Image generation. Allow eligible Cloud chats to create generated images.'),
     ).toBeTruthy();
     expect(
       getByLabelText(
         'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop. Beta',
       ),
     ).toBeTruthy();
-    expect(queryAllByRole('switch')).toHaveLength(0);
+    expect(queryAllByRole('switch')).toHaveLength(3);
+    expect(
+      getByLabelText('AGI Code. Allow supported Cloud models to execute code in a secure sandbox.'),
+    ).toBeDisabled();
     expect(queryByText(/Claude/i)).toBeNull();
     expect(queryByText(/ChatGPT/i)).toBeNull();
     expect(queryByText(/future/i)).toBeNull();
@@ -122,7 +143,34 @@ describe('Capabilities settings screen', () => {
     const { getByLabelText } = render(<CapabilitiesScreen />);
 
     expect(
-      getByLabelText('Web search. Search current web information in Cloud sessions. Cloud'),
+      getByLabelText(
+        'Web search. Uses current web information automatically when the Cloud model supports it. Automatic',
+      ),
     ).toBeTruthy();
+  });
+
+  it('updates the persisted send-path preferences inline after Cloud unlock', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+
+    const { getByLabelText } = render(<CapabilitiesScreen />);
+    const codeSwitch = getByLabelText(
+      'AGI Code. Allow supported Cloud models to execute code in a secure sandbox.',
+    );
+    const researchSwitch = getByLabelText(
+      'Deep research. Allow supported Cloud models to run multi-step research with citations.',
+    );
+    const imageSwitch = getByLabelText(
+      'Image generation. Allow eligible Cloud chats to create generated images.',
+    );
+
+    fireEvent(codeSwitch, 'valueChange', true);
+    fireEvent(researchSwitch, 'valueChange', true);
+    fireEvent(imageSwitch, 'valueChange', false);
+
+    expect(useChatStore.getState().features).toMatchObject({
+      codeExecution: true,
+      research: true,
+      imageGen: false,
+    });
   });
 });

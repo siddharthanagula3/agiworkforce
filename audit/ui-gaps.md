@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 735bff96d4e4bddb333517cbcc6976df819ad0b43bc7334bbe73fa345bdf2bd8 -->
+<!-- ui-gaps-csv-sha256: 01c3dcfff317bba67d646f40b3ce295b1e50851026d4636588c91e91bea1930b -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 105 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 104 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  309 |
+| Open        |  308 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   32 |
+| Done        |   33 |
 | Not Planned |    0 |
 
 ## P0
@@ -694,24 +694,24 @@ Extend the schedule create payload with an attachments array, reuse AddToChatShe
 
 - `chatgpt_reference/049-chatgpt-ios-scheduled-tasks-attachment-picker-camera-photos-files-plugins.png`
 
-### GAP-030 — Mobile Capabilities screen is nav-only; no inline capability toggles
+### GAP-030 — Mobile Capabilities exposes authoritative inline Cloud preferences
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** Claude · iOS · Settings > Capabilities
 
 **Gap**
 
-Claude's iOS Capabilities screen lets users flip Artifacts, Code execution/file creation, Web search, and 'Switch models when a message is flagged' directly with inline switches and explainer copy. agiworkforce's Capabilities screen (apps/mobile/src/features/settings/capabilities/index.tsx) only shows read-only status badges (Local/Cloud/Available/Ask) that navigate to other screens — there is no in-place on/off control for these capabilities.
+Capabilities now exposes inline switches only for the three persisted preferences already consumed by the Cloud send path: Image generation, AGI Code, and Deep research. Signed-out switches are disabled with a sign-in hint. Per-send model metadata, plan entitlements, and deployment handshakes remain authoritative, so enabling a preference never advertises an unavailable tool. Web search remains an Automatic status because it intentionally has no user toggle, while Artifacts, Memory, Voice, permissions, continuity, approvals, and Desktop control remain honest status/navigation rows.
 
 **Evidence**
 
-apps/mobile/src/features/settings/capabilities/index.tsx (CapabilityRow renders a badge + chevron, not a Switch)
+apps/mobile/src/features/settings/capabilities/index.tsx binds Switch rows directly to useChatStore.features.imageGen/codeExecution/research and setFeature, disables them before Cloud unlock, and explains the send-time capability clamp. chatExecutionStore.ts and ChatInput.tsx consume those same feature values while rechecking model, entitlement, and deployment support. capabilities-settings.test.tsx verifies the three accessible switches, signed-out disabled state, automatic Web search status, persisted mutations, and existing navigation; add-to-chat.test.tsx covers the second control surface over the same store.
 
 **Suggested fix**
 
-Add inline Switch controls (mirroring components/ui/switch.tsx already used elsewhere) for capabilities that have a real corresponding backend flag, keeping navigation rows only for capabilities that require a sub-screen.
+Completed. Add future inline switches only when a persisted value is consumed by the production runtime; keep automatic or always-available capabilities as status rows instead of cosmetic toggles.
 
 **Reference screenshot(s)**
 
