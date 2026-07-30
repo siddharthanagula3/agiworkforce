@@ -3,6 +3,7 @@
 /** @type {import('expo/config').ExpoConfig} */
 const appEnv = process.env.APP_ENV || process.env.EXPO_PUBLIC_APP_ENV || 'development';
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
+const easProjectId = '38f0941c-88a7-468a-9750-fcd8b357ff4c';
 
 if (
   (appEnv === 'production' || appEnv === 'preview') &&
@@ -34,9 +35,7 @@ const iosEntitlements = shouldUseProductionEntitlements
     }
   : {};
 
-const associatedDomains = shouldUseProductionEntitlements
-  ? ['applinks:agiworkforce.com', 'applinks:www.agiworkforce.com']
-  : [];
+const associatedDomains = shouldUseProductionEntitlements ? ['applinks:agiworkforce.com'] : [];
 
 const conditionalPlugins = [
   ...(shouldUseProductionEntitlements
@@ -72,7 +71,7 @@ const config = {
     supportsTablet: true,
     bundleIdentifier: 'com.agiworkforce.app',
     buildNumber: '2',
-    // AUDIT-FIX: H-11 — declare apex + www so iOS verifies the AASA file on
+    // AUDIT-FIX: H-11 — declare the canonical apex host so iOS verifies the AASA file on
     // /.well-known/ before any Universal-Link tap is routed to the app.
     associatedDomains,
     infoPlist: {
@@ -185,10 +184,7 @@ const config = {
         action: 'VIEW',
         autoVerify: true,
         category: ['DEFAULT', 'BROWSABLE'],
-        data: [
-          { scheme: 'https', host: 'agiworkforce.com' },
-          { scheme: 'https', host: 'www.agiworkforce.com' },
-        ],
+        data: [{ scheme: 'https', host: 'agiworkforce.com' }],
       },
     ],
   },
@@ -301,7 +297,13 @@ const config = {
     // iOS remains wired through Detox's native build integration.
     ...(envIsTruthy('EXPO_ENABLE_DETOX') ? ['./native/android/withAGIDetox.cjs'] : []),
   ],
+  // Fingerprint includes native modules and config-plugin output, so an OTA
+  // update can never cross onto an incompatible native binary.
+  runtimeVersion: {
+    policy: 'fingerprint',
+  },
   updates: {
+    url: `https://u.expo.dev/${easProjectId}`,
     fallbackToCacheTimeout: 0,
   },
   experiments: {
@@ -309,7 +311,7 @@ const config = {
   },
   extra: {
     eas: {
-      projectId: '38f0941c-88a7-468a-9750-fcd8b357ff4c',
+      projectId: easProjectId,
     },
   },
 };

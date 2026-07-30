@@ -50,6 +50,7 @@ import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloudSyncEngine';
 import { getAuthToken } from '@/services/authSession';
+import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
 
 // Expo Router only wires up a route's error boundary when the route file
 // itself has a named `ErrorBoundary` export — a separate ./error.tsx file is
@@ -571,8 +572,8 @@ export default function RootLayout() {
   // satisfy the test. Universal links over `https://` were not gated at
   // all. We now require either:
   //   1. scheme = `agiworkforce` AND hostname = exactly `pair`, OR
-  //   2. scheme = `https` AND hostname = `agiworkforce.com` (universal
-  //      link path), with the pair route as the leading segment.
+  //   2. scheme = `https` AND hostname is one of the two verified AGI
+  //      domains, with the pair route as the leading segment.
   useEffect(() => {
     if (!url || !session || !isInitialized) return;
 
@@ -584,7 +585,10 @@ export default function RootLayout() {
 
     const isCustomSchemePair = scheme === 'agiworkforce' && hostname === 'pair';
     const isUniversalLinkPair =
-      scheme === 'https' && hostname === 'agiworkforce.com' && segments[0] === 'pair';
+      scheme === 'https' &&
+      isAgiWorkforceUniversalLinkHost(hostname) &&
+      segments[0] === 'pair' &&
+      segments.length <= 2;
 
     if (!isCustomSchemePair && !isUniversalLinkPair) return;
     if (!FEATURES.companion || !FEATURES.dispatch) return;
@@ -732,9 +736,10 @@ export default function RootLayout() {
 
     const isResetPassword =
       scheme === 'https' &&
-      hostname === 'agiworkforce.com' &&
+      isAgiWorkforceUniversalLinkHost(hostname) &&
       segments[0] === 'auth' &&
-      segments[1] === 'reset-password';
+      segments[1] === 'reset-password' &&
+      segments.length === 2;
     if (!isResetPassword) return;
     router.replace({ pathname: '/(auth)/reset-password' as const });
   }, [url, isInitialized, router]);

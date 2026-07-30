@@ -1286,8 +1286,8 @@
   {
     "item": "universal-link",
     "surface": "apps/mobile",
-    "status": "broken",
-    "evidence": "Client-side handling exists: apps/mobile/app/_layout.tsx:612-625 parses https://agiworkforce.com/pair links (isUniversalLinkPair). apps/mobile/app.config.js:37-39,75-77 declares associatedDomains=['applinks:agiworkforce.com', 'applinks:www.agiworkforce.com'], and app.config.js:180-192 declares an Android autoVerify=true VIEW intent filter for the same domain. However, both platforms require the domain to serve a verification file over HTTPS (iOS apple-app-site-association at /.well-known/, Android assetlinks.json at /.well-known/) before the OS will hand off taps to the app. A repo-wide grep (apps/web, infrastructure/, whole tree) for 'apple-app-site-association' and 'assetlinks' found zero routes or static files serving either — apps/web/app/.well-known only contains an unrelated 'workflow' endpoint. Without these, iOS will never route agiworkforce.com taps into the app (falls through to Safari) and Android auto-verification fails, so the feature is wired end-to-end in the client but would fail at the OS-verification step in production."
+    "status": "partial",
+    "evidence": "The end-to-end implementation now exists: apps/web/app/.well-known/apple-app-site-association/route.ts serves the Apple team/bundle identifier and only the supported /pair, /pair/*, and /auth/reset-password paths; apps/web/app/.well-known/assetlinks.json/route.ts serves the Android package association; apps/mobile/src/integrations/universalLinks.ts and app/_layout.tsx strictly accept only the canonical agiworkforce.com host plus supported path shapes; and apps/web/app/.well-known/mobile-app-association.test.ts plus apps/mobile/__tests__/reset-password-deep-link.test.ts cover the contract. The redirect-only www host is deliberately not advertised because association fetches must succeed directly. The remaining production dependency is operator-owned: ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS must be set to the real Google Play App Signing SHA-256 certificate in the web deployment. The Android route fails closed with HTTP 503 while it is absent/invalid, and apps/mobile/scripts/release/EAS_SIGNING_RUNBOOK.md documents retrieval and device verification. iOS association is code-complete; Android cannot be called production-verified until that real fingerprint is deployed."
   },
   {
     "item": "deferred-deeplink",
@@ -1340,8 +1340,8 @@
   {
     "item": "over-the-air-update",
     "surface": "apps/mobile",
-    "status": "broken",
-    "evidence": "expo-updates is a declared dependency (apps/mobile/package.json:95) and plugin (apps/mobile/app.config.js:254), and the generated Android manifest shows expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH=ALWAYS (apps/mobile/android/app/src/main/AndroidManifest.xml:33-34). However apps/mobile/app.config.js's 'updates' block (lines 304-306) only sets fallbackToCacheTimeout — it declares no 'updates.url' and no top-level 'runtimeVersion' policy. The generated iOS Info.plist and Android manifest were checked and contain no EXUpdatesURL/EXPO_UPDATE_URL meta-data at all, and eas.json (channels: development/preview/beta/production) never configures an update URL either."
+    "status": "built",
+    "evidence": "apps/mobile/app.config.js configures expo-updates against the canonical EAS project at https://u.expo.dev/38f0941c-88a7-468a-9750-fcd8b357ff4c and uses runtimeVersion.policy='fingerprint', preventing OTA delivery across incompatible native binaries. apps/mobile/eas.json assigns development, preview, beta, and production channels (preview-simulator inherits preview). apps/mobile/scripts/release/preflight.sh now fails releases when the EAS project/update URL/runtime policy/channel contract drifts, apps/mobile/__tests__/app-config-backup.test.ts pins it, and apps/mobile/scripts/release/EAS_SIGNING_RUNBOOK.md documents runtime resolution and channel-specific smoke verification."
   },
   {
     "item": "app-attest",

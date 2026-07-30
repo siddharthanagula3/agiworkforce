@@ -58,6 +58,8 @@ jest.mock('../lib/mmkv', () => ({
 // Import AFTER mocks.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { useAuthStore } = require('../src/features/auth/store');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { isAgiWorkforceUniversalLinkHost } = require('../src/integrations/universalLinks');
 
 describe('authStore.resetPassword — redirect URL contract', () => {
   it('is disabled while Clerk mobile auth is not enabled in v1', async () => {
@@ -79,9 +81,9 @@ describe('reset-password deep-link URL predicate (replicated from _layout.tsx)',
       return false;
     }
     if (parsed.protocol !== 'https:') return false;
-    if (parsed.hostname.toLowerCase() !== 'agiworkforce.com') return false;
+    if (!isAgiWorkforceUniversalLinkHost(parsed.hostname)) return false;
     const segments = parsed.pathname.split('/').filter(Boolean);
-    return segments[0] === 'auth' && segments[1] === 'reset-password';
+    return segments[0] === 'auth' && segments[1] === 'reset-password' && segments.length === 2;
   }
 
   it.each([
@@ -97,6 +99,7 @@ describe('reset-password deep-link URL predicate (replicated from _layout.tsx)',
     // The exact pre-fix custom-scheme attack vector
     ['rejects custom scheme', 'agiworkforce://reset-password#access_token=x&type=recovery'],
     ['rejects http (must be https)', 'http://agiworkforce.com/auth/reset-password'],
+    ['rejects redirect-only www host', 'https://www.agiworkforce.com/auth/reset-password'],
     ['rejects different hostname', 'https://attacker.com/auth/reset-password'],
     [
       'rejects subdomain takeover',
@@ -104,6 +107,7 @@ describe('reset-password deep-link URL predicate (replicated from _layout.tsx)',
     ],
     ['rejects pair URL (different deep-link)', 'https://agiworkforce.com/pair/ABCDEFGH'],
     ['rejects unrelated path', 'https://agiworkforce.com/auth/login'],
+    ['rejects extra path segments', 'https://agiworkforce.com/auth/reset-password/attacker'],
     ['rejects malformed URL', 'not a url'],
     ['rejects empty', ''],
     ['rejects javascript:', 'javascript:alert(1)//https://agiworkforce.com/auth/reset-password'],
@@ -124,8 +128,9 @@ describe('drift sentinel — _layout.tsx still enforces the predicate', () => {
     // assertion fails — alerting the next maintainer to update both
     // sites in lockstep.
     expect(src).toContain("scheme === 'https'");
-    expect(src).toContain("hostname === 'agiworkforce.com'");
+    expect(src.match(/isAgiWorkforceUniversalLinkHost\(hostname\)/gu)).toHaveLength(2);
     expect(src).toContain("segments[0] === 'auth'");
     expect(src).toContain("segments[1] === 'reset-password'");
+    expect(src).toContain('segments.length === 2');
   });
 });
