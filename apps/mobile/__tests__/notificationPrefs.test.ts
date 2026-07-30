@@ -6,6 +6,7 @@
  * handler) now call this gate, so this test pins the contract those paths depend on.
  */
 import {
+  getCategoryForType,
   shouldNotifyWithPreferences,
   type NotificationPrefsState,
 } from '@/stores/notificationPrefsStore';
@@ -19,6 +20,13 @@ const NOON = 12 * 60;
 const LATE_NIGHT = 23 * 60;
 
 describe('shouldNotifyWithPreferences', () => {
+  it('keeps every supported work-update event on the persisted work lane', () => {
+    expect(getCategoryForType('task_completed')).toBe('task_updates');
+    expect(getCategoryForType('agent_paused')).toBe('task_updates');
+    expect(getCategoryForType('schedule_triggered')).toBe('task_updates');
+    expect(getCategoryForType('chat_message')).toBe('task_updates');
+  });
+
   it('suppresses a notification whose category toggle is off', () => {
     const prefs = { ...base, categoryEnabled: { ...base.categoryEnabled, approvals: false } };
     expect(shouldNotifyWithPreferences('agent_approval_needed', prefs, NOON)).toBe(false);

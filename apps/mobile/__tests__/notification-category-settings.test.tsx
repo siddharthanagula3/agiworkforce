@@ -78,6 +78,7 @@ describe('notification category settings', () => {
     const screen = render(<NotificationPreferencesScreen />);
 
     expect(screen.getByLabelText('Approvals. Push')).toBeTruthy();
+    expect(screen.getByLabelText('Work Updates. Push')).toBeTruthy();
     expect(screen.getByLabelText('Status Updates. Off')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Approvals. Push'));
 

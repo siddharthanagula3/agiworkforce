@@ -15,7 +15,12 @@ import { isMinuteWithinQuietHours } from '@agiworkforce/types';
 // Types
 // ---------------------------------------------------------------------------
 
-/** Which logical categories map to which notification types */
+/**
+ * Which logical categories map to notification types that have an actual
+ * Mobile/companion delivery contract. `task_updates` is the persisted key for
+ * the user-facing Work Updates group and is retained for backwards-compatible
+ * hydration.
+ */
 export type NotificationCategory = 'approvals' | 'task_updates' | 'errors' | 'status';
 
 export interface QuietHours {
