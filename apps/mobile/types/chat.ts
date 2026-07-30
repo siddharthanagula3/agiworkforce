@@ -25,6 +25,8 @@ export interface MessageAttachment {
   mimeType: string;
   /** Original file name */
   fileName: string;
+  /** Server-confirmed or picker-reported size when known. */
+  fileSize?: number;
   /**
    * Owner-scoped media asset id returned by the chat-attachment completion
    * route. Present only for attachments that were uploaded to managed cloud;

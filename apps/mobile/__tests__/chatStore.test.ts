@@ -44,6 +44,7 @@ jest.mock('../services/api', () => {
       post: jest.fn(),
       put: jest.fn(),
       delete: jest.fn(),
+      uploadFile: jest.fn(),
     },
     ApiPaywallError: MockApiPaywallError,
   };
@@ -137,6 +138,7 @@ const mockCancelMobileCloudAgentRun = cancelMobileCloudAgentRun as jest.MockedFu
   typeof cancelMobileCloudAgentRun
 >;
 const mockApiDelete = api.delete as jest.MockedFunction<typeof api.delete>;
+const mockApiUploadFile = api.uploadFile as jest.MockedFunction<typeof api.uploadFile>;
 const mockRemoteDisabledReason = getRemoteChatDisabledReason as jest.MockedFunction<
   typeof getRemoteChatDisabledReason
 >;
@@ -1227,6 +1229,59 @@ describe('chatStore — streaming state', () => {
       const assistantMsg = [...msgs].reverse().find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('Cloud answer');
       expect(assistantMsg?.metadata?.localMode).toBeUndefined();
+    });
+
+    it('reuses an owner-scoped Library asset without uploading its bytes again', async () => {
+      seedCloudConversation();
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      mockRemoteDisabledReason.mockReturnValue(null);
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            callbacks.onDelta({ content: 'Reviewed' });
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Review this again', CLOUD_MODEL, [
+          {
+            id: 'library-message-1:0',
+            uri: '/api/files/11111111-1111-4111-8111-111111111111',
+            mimeType: 'application/pdf',
+            fileName: 'launch-plan.pdf',
+            fileSize: 2048,
+            assetId: '11111111-1111-4111-8111-111111111111',
+          },
+        ]);
+      });
+
+      expect(mockApiUploadFile).not.toHaveBeenCalled();
+      expect(capturedBody?.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: expect.arrayContaining([
+              {
+                type: 'file',
+                file: { asset_id: '11111111-1111-4111-8111-111111111111' },
+              },
+            ]),
+          }),
+        ]),
+      );
+      expect(
+        getState().messages[CONV_ID]?.find((message) => message.role === 'user')?.attachments,
+      ).toEqual([
+        expect.objectContaining({
+          assetId: '11111111-1111-4111-8111-111111111111',
+          fileName: 'launch-plan.pdf',
+          fileSize: 2048,
+        }),
+      ]);
     });
 
     it('resolves a Cloud Auto profile to a concrete admitted model and preserves provenance', async () => {

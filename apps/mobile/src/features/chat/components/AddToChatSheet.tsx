@@ -1,5 +1,5 @@
-import { useCallback, forwardRef } from 'react';
-import { View, Pressable } from 'react-native';
+import { useCallback, forwardRef, useMemo } from 'react';
+import { View, Pressable, ScrollView } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import {
@@ -22,6 +22,7 @@ import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
+import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
@@ -31,6 +32,9 @@ import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
+import { collectSearchableMobileFiles } from '@/src/features/search/mobileGlobalSearch';
+import type { Attachment } from './AttachmentPreview';
 
 interface AddToChatSheetProps {
   onCamera: () => void;
@@ -40,6 +44,7 @@ interface AddToChatSheetProps {
   onOpenStyleSelector: () => void;
   onOpenModelPicker: () => void;
   onOpenProjectPicker: () => void;
+  onAttachFromLibrary: (attachment: Attachment) => void;
 }
 
 const SNAP_POINTS = ['75%'];
@@ -63,6 +68,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onOpenStyleSelector,
     onOpenModelPicker,
     onOpenProjectPicker,
+    onAttachFromLibrary,
   },
   ref,
 ) {
@@ -71,6 +77,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const chatStyle = useChatStore((s) => s.chatStyle);
+  const localConversations = useChatStore((s) => s.conversations);
+  const localMessages = useChatStore((s) => s.messages);
+  const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
+  const cloudMessages = useChatCloudMessageStore((s) => s.messages);
   const features = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
   const workMode = useChatStore((s) => s.workMode);
@@ -129,6 +139,18 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         (p) => p.id === activeProjectId,
       ) ?? null)
     : null;
+  const libraryDocuments = useMemo(() => {
+    const conversations =
+      appMode === 'cloud'
+        ? cloudConversations
+        : localConversations.filter(
+            (conversation) => executionModeForConversation(conversation) === 'local',
+          );
+    const messages = appMode === 'cloud' ? cloudMessages : localMessages;
+    return collectSearchableMobileFiles(conversations, messages).filter(
+      (file) => !file.mimeType.startsWith('image/'),
+    );
+  }, [appMode, cloudConversations, cloudMessages, localConversations, localMessages]);
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
@@ -159,6 +181,22 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     closeSheet();
     onFile();
   }, [haptic, closeSheet, onFile]);
+
+  const handleAttachFromLibrary = useCallback(
+    (document: (typeof libraryDocuments)[number]) => {
+      haptic();
+      closeSheet();
+      onAttachFromLibrary({
+        id: `library-${document.id}`,
+        uri: document.uri,
+        mimeType: document.mimeType,
+        fileName: document.fileName,
+        ...(document.fileSize != null ? { fileSize: document.fileSize } : {}),
+        ...(document.assetId ? { assetId: document.assetId } : {}),
+      });
+    },
+    [closeSheet, haptic, onAttachFromLibrary],
+  );
 
   const handleOpenStyleSelector = useCallback(() => {
     haptic();
@@ -314,6 +352,77 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             />
           ) : null}
         </View>
+
+        {libraryDocuments.length > 0 ? (
+          <View style={{ paddingBottom: 20 }}>
+            <Text
+              style={{
+                paddingHorizontal: 20,
+                paddingBottom: 9,
+                fontSize: 11,
+                fontWeight: '600',
+                color: themeColors.textMuted,
+                textTransform: 'uppercase',
+              }}
+            >
+              Attach from Library
+            </Text>
+            <ScrollView
+              horizontal
+              contentInsetAdjustmentBehavior="automatic"
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
+            >
+              {libraryDocuments.map((document) => (
+                <Pressable
+                  key={document.id}
+                  onPress={() => handleAttachFromLibrary(document)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Attach ${document.fileName} from Library`}
+                  style={{
+                    width: 176,
+                    minHeight: 70,
+                    padding: 12,
+                    borderRadius: 14,
+                    backgroundColor: cardBg,
+                    borderWidth: 1,
+                    borderColor: dividerColor,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 11,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: themeColors.accentSurface,
+                    }}
+                  >
+                    <FileText size={18} color={themeColors.teal} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      numberOfLines={2}
+                      style={{ color: themeColors.textPrimary, fontSize: 13, fontWeight: '600' }}
+                    >
+                      {document.fileName}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: themeColors.textMuted, fontSize: 11, marginTop: 3 }}
+                    >
+                      {document.conversationTitle}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
 
         {/* Divider */}
         <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />

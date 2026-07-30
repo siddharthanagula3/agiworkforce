@@ -28,6 +28,11 @@ export interface Attachment {
   /** File size in bytes */
   fileSize?: number;
   /**
+   * Existing owner-scoped Managed Cloud asset. Library re-attachment can reuse
+   * this id without downloading and uploading the same bytes again.
+   */
+  assetId?: string;
+  /**
    * Present for "Pasted text" attachments — a very large block dropped into
    * the composer, held here instead of the input. Folded back into the
    * outgoing message at send time; tapping the card expands it back inline.

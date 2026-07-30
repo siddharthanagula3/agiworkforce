@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 35235e8051e0187aa0b245b3edc9ab4ee20746a5671fdf50c80f01dd8f41145f -->
+<!-- ui-gaps-csv-sha256: dc02a7f682e20de2bec6ee12b2f2402c228b1fff13ffc13dc6b075f429781559 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 110 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 108 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  314 |
+| Open        |  312 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   27 |
+| Done        |   29 |
 | Not Planned |    0 |
 
 ## P0
@@ -464,47 +464,47 @@ Add a small shield/hand icon button to the Dispatch and Code Session composer ba
 
 - `references-2/IMG_0627.PNG`
 
-### GAP-020 — Library has no Documents axis — uploaded chat files are never re-findable
+### GAP-020 — Mobile Library exposes mode-scoped Documents and attachment reuse
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Library
 
 **Gap**
 
-Reference Library segments All / Images / Documents and indexes every file the user ever attached to a chat, so it can be re-used without re-uploading. agiworkforce's Library filter type is `'all' | 'images' | 'artifacts'` and its sources are generated images plus artifacts only; a PDF or screenshot attached in a chat never appears anywhere afterwards.
+Mobile Library now segments All / Images / Documents / Artifacts. Documents are projected from attachment metadata already persisted with the authorized Local transcript or current-account Managed Cloud transcript, including file name, MIME type, size, source conversation, URI, and owner-scoped asset id when present. The projection copies no file bytes and creates no cross-account index. Document cards open their exact source chat, and Add to Chat exposes Attach from Library. Reusing a Managed Cloud document forwards its existing asset id without downloading or uploading the bytes again; the completion route revalidates asset ownership server-side.
 
 **Evidence**
 
-apps/mobile/src/features/library/index.tsx (LibraryFilter, collectGeneratedImages, mergeMobileArtifactsForGallery); grep 'Documents' across apps/mobile — no match; grep 'uploadedFile|fileLibrary' — only ChatInput/ragChunker hits
+apps/mobile/src/features/library/index.tsx implements the Documents filter, metadata cards, mode-scoped transcript projection, and source-chat routing. mobileGlobalSearch.ts provides the shared attachment projection and owner-scoped asset deduplication. AddToChatSheet.tsx exposes Attach from Library; both chat routes wire it into the composer. chatExecutionStore.ts preserves attachment size and asset id and uploads only newly selected device files. library-search-deep-link.test.tsx, add-to-chat.test.tsx, mobile-global-search.test.ts, and chatStore.test.ts cover discovery, mode isolation, re-attachment, deduplication, exact deep links, and no-reupload Cloud reuse.
 
 **Suggested fix**
 
-Add a `documents` filter backed by a per-account attachment index (persist chat attachment metadata: id, name, mime, size, sourceConversationId, remote/local URI). Render file-type cards with FileTypeIcon, tap to preview/re-attach, and expose 'Attach from Library' in AddToChatSheet so a stored file can be reused without re-upload.
+Completed. Keep attachment discovery derived from the physically separated transcript stores, retain server-side ownership validation for every reused Cloud asset id, and add direct document preview only when a bounded MIME-safe viewer is available.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/044-chatgpt-ios-library-upload-promo-upload-once-use-anytime.png`
 
-### GAP-021 — Library has no search — grid is unusable past a few dozen items
+### GAP-021 — Mobile Library has local search across images documents and artifacts
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Library grid
 
 **Gap**
 
-Reference pins a floating 'Search library' pill above the tab bar so a populated grid stays navigable. agiworkforce renders an unbounded FlatList with no query input, so once a user has generated many images/artifacts the only way to find one is scrolling.
+Library now pins a Search library pill above the grid. It filters the already-authorized in-memory projection across generated-image prompt/source, document name/MIME/source conversation, and artifact title/content/kind/language/source. Results and the query-aware empty state update locally with no API request.
 
 **Evidence**
 
-grep 'Search library|searchQuery' in apps/mobile/src/features/library/ — no match; grep -i 'search library' across apps/mobile src+app — no match
+apps/mobile/src/features/library/index.tsx owns the Search library TextInput, clear action, local filtering, and query-aware empty state over the mode-scoped items projection. library-search-deep-link.test.tsx verifies document filtering, no-match feedback, restored matches, and exact source-chat navigation. The same predicate covers image prompt/source and artifact title/content/kind/language/source.
 
 **Suggested fix**
 
-Add a floating search pill (same placement as the reference) filtering on prompt text, artifact title, file name and kind; debounce locally over the already-materialised `items` array so no API work is needed.
+Completed. Keep Library search local over the authorized projection; introduce indexing or deferred filtering only after measured list sizes justify it, without broadening Local/Cloud data access.
 
 **Reference screenshot(s)**
 

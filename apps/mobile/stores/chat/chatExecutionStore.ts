@@ -347,6 +347,8 @@ function createLocalAttachmentReferences(
     url: attachment.uri,
     mimeType: attachment.mimeType,
     fileName: attachment.fileName,
+    ...(attachment.fileSize != null ? { fileSize: attachment.fileSize } : {}),
+    ...(attachment.assetId ? { assetId: attachment.assetId } : {}),
   }));
 }
 
@@ -975,72 +977,92 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (shouldUseLocalRuntime && attachments && attachments.length > 0) {
       uploadedAttachments = createLocalAttachmentReferences(attachments);
     } else if (attachments && attachments.length > 0) {
-      // LOCAL-DATA-TO-CLOUD FIX: local files must not be uploaded to the cloud
-      // API without explicit user consent. Show a confirmation before upload.
-      const fileNames = attachments.map((a) => a.fileName).join(', ');
-      const userConsented = await new Promise<boolean>((resolve) => {
-        Alert.alert(
-          'Send files to AGI Cloud?',
-          `"${fileNames}" will be uploaded to AGI Cloud to process your message. Files leave this device.`,
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Upload & Send', style: 'default', onPress: () => resolve(true) },
-          ],
-          { cancelable: true, onDismiss: () => resolve(false) },
-        );
-      });
-      if (!isTurnAccountCurrent()) return false;
+      const reusableCloudAttachments = attachments
+        .filter((attachment) => Boolean(attachment.assetId))
+        .map((attachment) => ({
+          assetId: attachment.assetId!,
+          url: attachment.uri,
+          mimeType: attachment.mimeType,
+          fileName: attachment.fileName,
+          ...(attachment.fileSize != null ? { fileSize: attachment.fileSize } : {}),
+        }));
+      const attachmentsNeedingUpload = attachments.filter((attachment) => !attachment.assetId);
+      uploadedAttachments =
+        reusableCloudAttachments.length > 0 ? reusableCloudAttachments : undefined;
 
-      if (!userConsented) {
-        // User declined — send message without attachments (or abort).
-        // We abort the whole send to avoid silently dropping files the user
-        // thought were attached; they can choose to re-send without files.
-        set({
-          error: 'File upload cancelled. Re-send without files or tap Upload & Send to confirm.',
-          paywallError: null,
-          ...streamingFlags(),
+      if (attachmentsNeedingUpload.length > 0) {
+        // LOCAL-DATA-TO-CLOUD FIX: local files must not be uploaded to the cloud
+        // API without explicit user consent. Existing owner-scoped Cloud assets
+        // do not leave the account boundary again and bypass this upload path.
+        const fileNames = attachmentsNeedingUpload.map((a) => a.fileName).join(', ');
+        const userConsented = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Send files to AGI Cloud?',
+            `"${fileNames}" will be uploaded to AGI Cloud to process your message. Files leave this device.`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Upload & Send', style: 'default', onPress: () => resolve(true) },
+            ],
+            { cancelable: true, onDismiss: () => resolve(false) },
+          );
         });
-        return false;
-      }
-
-      try {
-        const uploadResults = await Promise.all(
-          attachments.map((a) =>
-            uploadWithRetry({ uri: a.uri, name: a.fileName, type: a.mimeType }, a.fileName),
-          ),
-        );
         if (!isTurnAccountCurrent()) return false;
-        const successful = uploadResults
-          .map((result, i) => ({ result, attachment: attachments[i]! }))
-          .filter((x) => x.result !== null);
 
-        if (successful.length > 0) {
-          // STB-4: keep the server-confirmed asset id, mime type, and name —
-          // the completion route is authoritative for all three.
-          uploadedAttachments = successful.map(({ result }) => ({
-            assetId: result!.id,
-            url: result!.url,
-            mimeType: result!.mimeType,
-            fileName: result!.name,
-          }));
-        }
-      } catch (err) {
-        // AUTH-ERROR-FIX: 401 / session-expired errors must be surfaced to user, not silently swallowed.
-        // uploadWithRetry intentionally throws on auth errors so we can distinguish them from
-        // transient network errors (which return null after retries). User must be notified that
-        // attachments failed to upload due to auth, not connection issues.
-        const error = err instanceof Error ? err : new Error(String(err));
-        if (error.message.includes('session expired') || error.message.includes('401')) {
+        if (!userConsented) {
+          // User declined — send message without attachments (or abort).
+          // We abort the whole send to avoid silently dropping files the user
+          // thought were attached; they can choose to re-send without files.
           set({
-            error: 'Session expired. Please sign in again to upload files.',
+            error: 'File upload cancelled. Re-send without files or tap Upload & Send to confirm.',
             paywallError: null,
             ...streamingFlags(),
           });
           return false;
         }
-        // For other errors, continue without attachments (transient network errors already
-        // showed an Alert via uploadWithRetry). This allows the message to be sent even if
-        // some files couldn't upload.
+
+        try {
+          const uploadResults = await Promise.all(
+            attachmentsNeedingUpload.map((a) =>
+              uploadWithRetry({ uri: a.uri, name: a.fileName, type: a.mimeType }, a.fileName),
+            ),
+          );
+          if (!isTurnAccountCurrent()) return false;
+          const successful = uploadResults
+            .map((result, i) => ({ result, attachment: attachmentsNeedingUpload[i]! }))
+            .filter((x) => x.result !== null);
+
+          if (successful.length > 0) {
+            // STB-4: keep the server-confirmed asset id, mime type, and name —
+            // the completion route is authoritative for all three.
+            uploadedAttachments = [
+              ...reusableCloudAttachments,
+              ...successful.map(({ result }) => ({
+                assetId: result!.id,
+                url: result!.url,
+                mimeType: result!.mimeType,
+                fileName: result!.name,
+                fileSize: result!.byteCount,
+              })),
+            ];
+          }
+        } catch (err) {
+          // AUTH-ERROR-FIX: 401 / session-expired errors must be surfaced to user, not silently swallowed.
+          // uploadWithRetry intentionally throws on auth errors so we can distinguish them from
+          // transient network errors (which return null after retries). User must be notified that
+          // attachments failed to upload due to auth, not connection issues.
+          const error = err instanceof Error ? err : new Error(String(err));
+          if (error.message.includes('session expired') || error.message.includes('401')) {
+            set({
+              error: 'Session expired. Please sign in again to upload files.',
+              paywallError: null,
+              ...streamingFlags(),
+            });
+            return false;
+          }
+          // For other errors, continue without newly selected attachments
+          // (transient network errors already showed an Alert via
+          // uploadWithRetry). Previously owned Cloud assets remain attached.
+        }
       }
     }
 

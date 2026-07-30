@@ -132,6 +132,7 @@ jest.mock('../src/features/chat/components/StyleSelector', () => {
 
 import { AddToChatSheet } from '../src/features/chat/components/AddToChatSheet';
 import { useChatStore } from '../stores/chatStore';
+import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useModelStore } from '../src/features/model-picker/store';
@@ -146,6 +147,8 @@ const SEARCH_CAPABLE_MODEL_ID = 'claude-sonnet-5';
 
 function resetStores() {
   useChatStore.setState({
+    conversations: [],
+    messages: {},
     chatMode: 'chat',
     chatStyle: 'normal',
     toolAccess: 'auto',
@@ -158,6 +161,7 @@ function resetStores() {
       research: false,
     },
   });
+  useChatCloudMessageStore.setState({ conversations: [], messages: {} });
   useProjectStore.setState({
     projects: [],
     activeProjectId: null,
@@ -178,6 +182,9 @@ const defaultProps = {
   onFile: jest.fn(),
   onOpenCloudAccess: jest.fn(),
   onOpenStyleSelector: jest.fn(),
+  onOpenModelPicker: jest.fn(),
+  onOpenProjectPicker: jest.fn(),
+  onAttachFromLibrary: jest.fn(),
 };
 
 function renderSheet(overrides = {}) {
@@ -212,6 +219,94 @@ describe('AddToChatSheet', () => {
       expect(getByText('Photos')).toBeTruthy();
       expect(queryByText('File')).toBeNull();
       expect(queryByText('Skills')).toBeNull();
+    });
+
+    it('reattaches a document from the active Local Library projection', () => {
+      const onAttachFromLibrary = jest.fn();
+      useChatStore.setState({
+        conversations: [
+          {
+            id: 'local-chat',
+            title: 'Launch planning',
+            createdAt: '2026-07-30T10:00:00.000Z',
+            updatedAt: '2026-07-30T10:05:00.000Z',
+            messageCount: 1,
+            pinned: false,
+            executionMode: 'local',
+          },
+        ],
+        messages: {
+          'local-chat': [
+            {
+              id: 'message-1',
+              conversationId: 'local-chat',
+              role: 'user',
+              content: 'Review this',
+              createdAt: '2026-07-30T10:01:00.000Z',
+              attachments: [
+                {
+                  url: 'file:///documents/launch-plan.pdf',
+                  mimeType: 'application/pdf',
+                  fileName: 'launch-plan.pdf',
+                  fileSize: 2048,
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      const { getByLabelText, getByText } = renderSheet({ onAttachFromLibrary });
+
+      expect(getByText('Attach from Library')).toBeTruthy();
+      fireEvent.press(getByLabelText('Attach launch-plan.pdf from Library'));
+      expect(onAttachFromLibrary).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uri: 'file:///documents/launch-plan.pdf',
+          mimeType: 'application/pdf',
+          fileName: 'launch-plan.pdf',
+          fileSize: 2048,
+        }),
+      );
+    });
+
+    it('does not leak Cloud Library documents into Local mode', () => {
+      useChatCloudMessageStore.setState({
+        conversations: [
+          {
+            id: 'cloud-chat',
+            title: 'Private Cloud chat',
+            createdAt: '2026-07-30T10:00:00.000Z',
+            updatedAt: '2026-07-30T10:05:00.000Z',
+            messageCount: 1,
+            pinned: false,
+            executionMode: 'cloud',
+          },
+        ],
+        messages: {
+          'cloud-chat': [
+            {
+              id: 'message-cloud',
+              conversationId: 'cloud-chat',
+              role: 'user',
+              content: 'Cloud only',
+              createdAt: '2026-07-30T10:01:00.000Z',
+              attachments: [
+                {
+                  url: '/api/files/cloud-only',
+                  mimeType: 'application/pdf',
+                  fileName: 'cloud-only.pdf',
+                  assetId: 'cloud-only',
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('cloud-only.pdf')).toBeNull();
     });
   });
 
