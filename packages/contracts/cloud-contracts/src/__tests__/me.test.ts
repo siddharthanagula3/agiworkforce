@@ -54,6 +54,23 @@ describe('MeResponseSchema', () => {
     ).toBe(false);
   });
 
+  it('accepts only known subscription management sources', () => {
+    for (const subscription_source of ['none', 'stripe', 'apple', 'google', 'manual'] as const) {
+      expect(
+        MeResponseSchema.safeParse({
+          ...golden,
+          plan: { ...golden.plan, subscription_source },
+        }).success,
+      ).toBe(true);
+    }
+    expect(
+      MeResponseSchema.safeParse({
+        ...golden,
+        plan: { ...golden.plan, subscription_source: 'current-device' },
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects a payload missing plan.tier', () => {
     const { tier: _tier, ...planWithoutTier } = golden.plan;
     const mutated = { ...golden, plan: planWithoutTier };

@@ -9,7 +9,8 @@
     "tier": "pro",
     "display_name": "Pro",
     "status": "active",
-    "current_period_end": 1754390400
+    "current_period_end": 1754390400,
+    "subscription_source": "stripe"
   },
   "feature_flags": {
     "beta_features": true,

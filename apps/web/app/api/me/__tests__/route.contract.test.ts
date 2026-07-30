@@ -86,6 +86,7 @@ describe('GET /api/me — shared cloud contract', () => {
       plan_tier: 'pro',
       status: 'active',
       current_period_end: '2026-08-05T00:00:00.000Z',
+      stripe_subscription_id: 'sub_contract_1',
     });
     const res = await GET(makeGetRequest());
     expect(res.status).toBe(200);
@@ -98,6 +99,7 @@ describe('GET /api/me — shared cloud contract', () => {
     if (parsed.success) {
       expect(parsed.data.plan.tier).toBe('pro');
       expect(parsed.data.plan.current_period_end).toBeTypeOf('number');
+      expect(parsed.data.plan.subscription_source).toBe('stripe');
       expect(parsed.data.feature_flags.advanced_model_access).toBe(true);
       expect(parsed.data.feature_flags.generic_web_search).toBe(true);
       // First real consumer of the capability-handshake contract: the live
@@ -125,6 +127,7 @@ describe('GET /api/me — shared cloud contract', () => {
         display_name: 'Free',
         status: 'none',
         current_period_end: null,
+        subscription_source: 'none',
       });
       expect(parsed.data.routing_preferences).toEqual({});
       // Tier-layer honesty at the full integration level (real route, real
@@ -139,6 +142,24 @@ describe('GET /api/me — shared cloud contract', () => {
       // into denying universal capabilities.
       expect(parsed.data.capability_handshake?.granted).toContain('canChat');
     }
+  });
+
+  it.each([
+    ['apple', { apple_original_transaction_id: 'original-apple-1' }],
+    ['google', { google_purchase_token: 'google-token-1' }],
+    ['manual', {}],
+  ] as const)('reports %s as the subscription management source', async (source, ownership) => {
+    mockGetSubscription.mockResolvedValue({
+      plan_tier: 'pro',
+      status: 'active',
+      current_period_end: '2026-08-05T00:00:00.000Z',
+      ...ownership,
+    });
+
+    const res = await GET(makeGetRequest('surface=mobile'));
+    const parsed = MeResponseSchema.parse(await res.json());
+
+    expect(parsed.plan.subscription_source).toBe(source);
   });
 
   it('fails closed when subscription entitlement cannot be verified', async () => {

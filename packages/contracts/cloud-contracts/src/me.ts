@@ -22,6 +22,8 @@
 import { z } from 'zod';
 import { EffectiveCapabilityDocumentSchema } from './capability-handshake';
 
+export const MeSubscriptionSourceSchema = z.enum(['none', 'stripe', 'apple', 'google', 'manual']);
+
 export const MePlanSchema = z.object({
   /** Subscription tier — 'free' | 'basic' | 'pro' | 'max' | 'enterprise' (wire value; normalize client-side). */
   tier: z.string(),
@@ -29,6 +31,12 @@ export const MePlanSchema = z.object({
   status: z.string(),
   /** Unix seconds, or null when there is no active subscription period. */
   current_period_end: z.number().nullable(),
+  /**
+   * Billing owner for cross-platform management and duplicate-purchase
+   * prevention. Optional only for rollout compatibility with older servers;
+   * the current `/api/me` route always emits it.
+   */
+  subscription_source: MeSubscriptionSourceSchema.optional(),
 });
 
 export const MeFeatureFlagsSchema = z
@@ -107,6 +115,7 @@ export const MeResponseSchema = z.object({
 });
 
 export type MePlan = z.infer<typeof MePlanSchema>;
+export type MeSubscriptionSource = z.infer<typeof MeSubscriptionSourceSchema>;
 export type MeProfile = z.infer<typeof MeProfileSchema>;
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 

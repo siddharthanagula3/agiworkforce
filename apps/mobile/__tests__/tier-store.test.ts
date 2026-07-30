@@ -93,10 +93,12 @@ function mePayload(
     status = 'active',
     granted = ['canChat', 'canUseCloudExecution', 'canUseConnectors'],
     codeExecution = true,
+    subscriptionSource = 'stripe',
   }: {
     status?: string;
     granted?: string[];
     codeExecution?: boolean;
+    subscriptionSource?: 'none' | 'stripe' | 'apple' | 'google' | 'manual';
   } = {},
 ) {
   return {
@@ -106,7 +108,13 @@ function mePayload(
     avatar_url: null,
     created_at: null,
     updated_at: 1751712000,
-    plan: { tier, display_name: tier, status, current_period_end: null },
+    plan: {
+      tier,
+      display_name: tier,
+      status,
+      current_period_end: null,
+      subscription_source: subscriptionSource,
+    },
     feature_flags: {
       beta_features: true,
       advanced_model_access: true,
@@ -135,6 +143,8 @@ function resetStore() {
   useTierStore.setState({
     tier: 'free',
     billingTier: 'free',
+    billingStatus: 'none',
+    billingSource: 'unknown',
     isRefreshing: false,
     lastRefreshedAt: null,
     currentConversationProvider: null,
@@ -249,6 +259,16 @@ describe('refreshTier — success cases', () => {
 
     expect(getState().tier).toBe('free');
     expect((getState() as unknown as { billingTier: string }).billingTier).toBe('pro');
+  });
+
+  it('hydrates the server-authoritative subscription management source', async () => {
+    mockApiGet.mockResolvedValueOnce(
+      mePayload('pro', { status: 'active', subscriptionSource: 'apple' }),
+    );
+
+    await getState().refreshTier();
+
+    expect(getState().billingSource).toBe('apple');
   });
 
   it('persists the server-authoritative capability handshake', async () => {
@@ -382,6 +402,8 @@ describe('clearAccountEntitlements', () => {
     useTierStore.setState({
       tier: 'enterprise',
       billingTier: 'enterprise',
+      billingStatus: 'active',
+      billingSource: 'stripe',
       lastRefreshedAt: '2026-07-26T00:00:00.000Z',
       grantedCapabilities: ['canUseDeepResearch', 'canUseConnectors'],
       capabilityHandshakeVersion: 'version-user-a',
@@ -399,6 +421,8 @@ describe('clearAccountEntitlements', () => {
     const state = getState() as unknown as {
       tier: string;
       billingTier: string;
+      billingStatus: string;
+      billingSource: string;
       lastRefreshedAt: string | null;
       grantedCapabilities: string[];
       capabilityHandshakeVersion: string | null;
@@ -409,6 +433,8 @@ describe('clearAccountEntitlements', () => {
     expect(state).toMatchObject({
       tier: 'free',
       billingTier: 'free',
+      billingStatus: 'none',
+      billingSource: 'unknown',
       lastRefreshedAt: null,
       grantedCapabilities: [],
       capabilityHandshakeVersion: null,
