@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 569eb4acf9eaf85739352077e668356734b6600ccb3c58e52caff6ccff68b0e0 -->
+<!-- ui-gaps-csv-sha256: a8ea16c7fd6ead7dcae7b5ceeef0b9bc8d4bc31a4552bb6f2e7130045c649899 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 124 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  330 |
+| Open        |  328 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   11 |
+| Done        |   13 |
 | Not Planned |    0 |
 
 ## P0
@@ -2856,24 +2856,24 @@ Add a settings section that (a) splits the single allow flag into category-scope
 
 - `chatgpt_reference/155-codex-macos-settings-computer-use-chrome-permissions-cdp.png`
 
-### GAP-124 — No warning when max reasoning effort is combined with unrestricted permissions
+### GAP-124 — Max reasoning plus Bypass Permissions requires compound-risk consent
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-state
 - **Reference:** Codex · VS Code extension · 'Use Ultra with Full access?' compound-risk modal
 
 **Gap**
 
-Reference detects the compounded setting (highest reasoning tier + full access) and interrupts with a modal explaining that the agent can now run commands, use the internet and edit files anywhere without asking while burning the most expensive reasoning budget, offering 'Use Full access' (danger) versus 'Continue' (safe, default). agiworkforce writes agent.mode and agent.effort through independent handlers with no cross-check, so 'bypass' + 'max' can be reached silently.
+The extension now treats Bypass Permissions plus Max reasoning as a distinct elevated state. Entering the pair from either direction opens a cancelable modal that names command, network-tool, granted-file, plan-limit, mistake, and prompt-injection impact. Cancel preserves the prior mode and effort; confirmation is remembered only while the exact elevated pair remains active, so leaving and re-entering requires fresh acknowledgement.
 
 **Evidence**
 
-apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:384-406 (setMode and setEffort each update configuration and post a changed event, no validation between them); core/commandSetup.ts:934-972 and :975-1013 (independent QuickPicks).
+apps/extension-vscode/src/features/permissions/agentModeConsent.ts owns both the base bypass consent and the Max-plus-Bypass compound-risk boundary. setAgentModeWithConsent and setAgentEffortWithConsent validate the resulting pair before either configuration write; raw settings edits fail closed to Auto or High and use the same modal before restoration. platform/config.ts, commandSetup.ts, ChatStateManager.ts, SettingsPanel.ts, and extension.ts route branded Settings, both QuickPick surfaces, sidebar messages, activation, and configuration-change reconciliation through that boundary. agentModeConsent.test.ts covers cancellation, scope/risk copy, active-pair acknowledgement, raw-edit reconciliation, and fresh consent after leaving the pair; GAP-012-settings-panel.test.ts verifies the branded editor cannot bypass it.
 
 **Suggested fix**
 
-Add a shared guard invoked from both setMode and setEffort: when the resulting pair is (mode 'bypass', effort 'max'), show a modal naming both the permission scope and the cost implication, defaulting to the restricted option, and record the acknowledgement so it is not shown on every subsequent change.
+Completed. Keep agent.mode and agent.effort writes centralized in the two consent-aware setters, version the acknowledgement when risk copy or scope changes, and preserve the raw-settings fail-closed reconciliation.
 
 **Reference screenshot(s)**
 
@@ -2971,24 +2971,24 @@ Add a 'Tasks' collapsible section to the sidebar webview (and a matching TreeVie
 
 - `chatgpt_reference/005-codex-vscode-ext-onboarding-intro-cloud-handoff-tasks-step2.png`
 
-### GAP-129 — VS Code extension has no in-editor Settings tab; falls back to raw native settings
+### GAP-129 — VS Code opens the branded AGI Settings editor instead of raw settings
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Codex Settings editor tab — Plugins
 
 **Gap**
 
-Codex opens a branded Settings editor tab with a section rail (General, Configuration, Personalization, Usage & billing, MCP servers, Hooks, Plugins, Account with external-link glyph) and a Plugins list of icon + name + one-line description + enable checkmark. agiworkforce's 'openSettings' message simply runs workbench.action.openSettings scoped to 'agiWorkforce', so users get an unbranded key/value list with no plugin, MCP or hook management.
+The extension now opens a branded in-editor Settings tab with the reference section rail: General, Configuration, Personalization, Usage & billing, MCP servers, Hooks, Plugins, and Account. Normal entry points no longer fall back to the raw key/value page; raw VS Code settings remain available only through an explicit escape-hatch button. Plugin, hook, and per-server MCP runtime depth remains separately tracked by GAP-133 through GAP-138.
 
 **Evidence**
 
-apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:262-264; only webview surfaces are apps/extension-vscode/src/providers/chatEditorPanel.ts and src/features/model-picker/modelMetrics.ts — no settings panel exists
+apps/extension-vscode/src/features/settings/SettingsPanel.ts owns the singleton editor and settingsWebviewContent.ts renders the complete information architecture. commandSetup.ts registers agi-workforce.openSettings and contributes a sidebar title action; ChatStateManager.ts, desktopBridge.ts, and the account menu route to it. GAP-012-settings-panel.test.ts, GAP-012-settings-webview.webview.test.ts, commandParity.test.ts, and the real Extension Host smoke suite verify hosting, navigation, entry-point registration, and the explicit raw-settings escape hatch.
 
 **Suggested fix**
 
-Add a settings webview panel (viewType agi-workforce.settings) reusing the existing nonce/CSP helper in webviewContent.ts, with sections mirroring the desktop SETTINGS_NAV and a Plugins list whose rows toggle enablement through a typed webview message.
+Completed. Keep normal settings entry points on agi-workforce.openSettings and track missing runtime-backed hook, plugin, and MCP management in their dedicated rows rather than reopening this duplicate screen-level finding.
 
 **Reference screenshot(s)**
 
@@ -3017,7 +3017,7 @@ Add a paged intro rendered in the same webview before the chat log (4 steps: wha
 
 - `chatgpt_reference/004-codex-vscode-ext-onboarding-intro-ask-codex-anything-step1.png`
 
-### GAP-131 — No approval-policy or sandbox configuration surface in the extension
+### GAP-131 — VS Code Configuration lacks runtime-backed approval and sandbox policy controls
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3026,15 +3026,15 @@ Add a paged intro rendered in the same webview before the chat log (4 steps: wha
 
 **Gap**
 
-Reference frames the whole Configuration page as 'Configure approval policy and sandbox settings' with a Learn more link, i.e. the durable rules for what the agent may touch. agiworkforce's extension has only the transient four-way agent-mode QuickPick — no allowed-directories, no command allow/deny list, no sandbox scope — even though the desktop app ships allowed-directories and agent-execution settings and the CLI is advertised as sandboxed.
+The branded Configuration section now exposes user-scoped extension and bridge settings, and General exposes the consent-aware agent-mode control. It still has no allowed-directory editor, command allow/deny policy, or sandbox scope backed by the local runtime, so the durable enforcement rules remain undiscoverable and uneditable from VS Code.
 
 **Evidence**
 
-Searched apps/extension-vscode/src for 'sandbox' — zero matches; agent scope is only agent.mode in src/platform/config.ts:60-72. Desktop counterparts: apps/desktop/src/features/settings/AllowedDirectoriesSettings.tsx and AgentExecutionSettings.tsx; web marketing claims sandboxed execution at apps/web/app/cli/page.tsx:12.
+apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders Configuration and the agent-mode control, while platform/config.ts covers extension-owned settings only. Searched apps/extension-vscode/src for runtime-backed sandbox, allowed-directory, and command-policy configuration; no extension integration exists. Desktop counterparts remain AllowedDirectoriesSettings.tsx and AgentExecutionSettings.tsx.
 
 **Suggested fix**
 
-Add a Configuration section to the extension settings panel exposing allowed workspace directories, a command allow/deny list and the sandbox scope, reading and writing the same config the local runtime enforces, with copy that names which boundary enforces each rule.
+Extend the branded Configuration section only after the local app-server exposes a typed read/write policy contract: show allowed workspace directories, command allow/deny rules, and sandbox scope with copy naming the enforcing boundary. Do not mirror values that the runtime will ignore.
 
 **Reference screenshot(s)**
 
@@ -3063,7 +3063,7 @@ Add an 'Open config.toml' command and settings card to the extension that resolv
 
 - `chatgpt_reference/015-codex-vscode-ext-settings-configuration-config-toml-reasoning-efforts.png`
 
-### GAP-133 — Lifecycle hooks are advertised but have no management UI on any surface
+### GAP-133 — Hooks has an honest empty state but cannot enumerate or manage runtime hooks
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3072,21 +3072,21 @@ Add an 'Open config.toml' command and settings card to the extension that resolv
 
 **Gap**
 
-Reference has a Hooks page — 'Manage lifecycle hooks from config and enabled plugins', a refresh control, a Learn more link and a 'No hooks found / Configured hooks will appear here' empty state. agiworkforce's public pages state that lifecycle hooks fire across the session and that plugins bundle hooks, yet no client surface lists, enables, disables or even shows the existence of a hook, so users cannot audit code that runs on their machine.
+The branded VS Code Settings editor now includes a Hooks section and accurately states that hooks are local-runtime configuration rather than extension-owned cloud state. It cannot yet read configured hooks, show event/command/source/trust, refresh them, or disable an individual hook, so users still cannot audit code that may run on their machine.
 
 **Evidence**
 
-Claims: apps/web/app/cli/page.tsx:52-53 ('Lifecycle hooks fire across the session') and apps/web/app/features/plugins/page.tsx:63-65. Searched apps/extension-vscode/src, apps/desktop/src/features/settings and apps/web/features for hooks UI ('lifecycle hook', 'PreToolUse', 'hooks settings', 'agentHooks') — no matches; all 'hook' hits are React hooks or DOMPurify hooks.
+apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders the Hooks section, no-extension-hooks empty state, and documentation handoff. No protocol, localRuntimeClient capability, or command currently returns hook inventory to the extension.
 
 **Suggested fix**
 
-Add a Hooks section (extension settings panel first, then desktop Settings) that reads hooks from config and enabled plugins, shows event, command, source (config vs plugin) and trust status, supports refresh and per-hook disable, and ships the empty state copy for the common no-hooks case.
+Add a typed app-server hook-inventory capability, then render event, command, source (config vs plugin), trust status, refresh, and per-hook disable in the existing Hooks section. Preserve the current empty state when the runtime reports no hooks.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/020-codex-vscode-ext-settings-hooks-empty-state-no-hooks-found.png`
 
-### GAP-134 — MCP is a single global boolean — no server list, per-server toggle, config or Add server
+### GAP-134 — MCP Settings lacks a runtime server list, per-server toggle, config, and Add server
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3095,15 +3095,15 @@ Add a Hooks section (extension settings panel first, then desktop Settings) that
 
 **Gap**
 
-Reference lists every MCP server by name with a gear (configure) and an individual enable toggle, plus an 'Add server' button and counts across Plugins/Apps/MCPs/Skills. agiworkforce's extension exposes only agiWorkforce.mcp.enabled: a user cannot see which servers loaded, disable a single misbehaving server, edit its config, or add one — and when loading fails the only feedback is an inline 'MCP unavailable' note in the transcript.
+The branded MCP servers section now makes the trust boundary explicit and retains the extension-owned cloud-utility master toggle. The local CLI remains runtime-owned, but the extension still cannot list its servers, show connected/failed state, disable one server, open its config, or add a server.
 
 **Evidence**
 
-apps/extension-vscode/src/platform/config.ts:37 and :116 (mcpEnabled boolean), src/extension.ts:157-165 (boolean toggles the bridge), features/sidebar-webview/ChatStateManager.ts:962-968 ('MCP unavailable' transcript note). Desktop counterparts exist: apps/desktop/src/features/settings/MCPServerSettings.tsx and MCPToolsSettings.tsx.
+apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders the MCP section, mcp.enabled master control, local-runtime ownership copy, and connector/docs handoffs. platform/config.ts exposes only mcp.enabled; localRuntimeClient and the settings protocol expose no per-server inventory or mutation contract.
 
 **Suggested fix**
 
-Add an MCP servers section to the extension settings panel backed by the same runtime that emits mcp_status: list each server with connected/failed state, a per-server enable toggle, a gear that opens its config entry, and an 'Add server' flow; keep the global boolean as a master switch.
+Add a typed local-runtime MCP status/config capability, then populate the existing section with connected/failed rows, per-server enable controls, configure actions, and an Add server flow. Keep the current global boolean scoped to cloud editor utilities.
 
 **Reference screenshot(s)**
 
@@ -3155,7 +3155,7 @@ Add a custom-instructions editor to the extension settings panel stored in globa
 
 - `chatgpt_reference/016-codex-vscode-ext-settings-personalization-personality-memory-instructions.png`
 
-### GAP-137 — VS Code extension has no plugins or skills surface at all
+### GAP-137 — VS Code Plugins section cannot list or control installed plugins and skills
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -3164,15 +3164,15 @@ Add a custom-instructions editor to the extension settings panel stored in globa
 
 **Gap**
 
-Reference gives plugins their own settings page with count tabs (Plugins 22 / Apps 7 / MCPs 9 / Skills 45) and a row per plugin: brand icon, name, one-line description and an enable toggle. agiworkforce's extension has no plugin or skill listing, no toggle, and no link to the plugin catalogue that exists on web and desktop, so a developer working in the IDE cannot tell which capabilities are active.
+The branded Settings editor now has a Plugins destination, an honest no-registry state, and explicit Web/docs handoffs. It still lacks a runtime-backed installed plugin or skill list, counts, provenance, enablement controls, and composer integration, so developers cannot inspect which local capabilities are active from the IDE.
 
 **Evidence**
 
-Searched apps/extension-vscode/src for 'plugin|skill|marketplace' — only an icon mapping at features/sidebar-webview/webviewContent.ts:2457 and a runtime event category at integrations/localRuntimeClient.ts:147. Counterparts: apps/desktop/src/features/settings/SkillsPluginsSettings.tsx, apps/web/features/plugins/data/plugins.ts, apps/web/app/plugins/page.tsx.
+apps/extension-vscode/src/features/settings/settingsWebviewContent.ts renders the Plugins section and capability-honest empty state. No extension protocol or localRuntimeClient capability returns installed plugins, commands, skills, or agents; the desktop resolver and web catalogue remain separate implementations.
 
 **Suggested fix**
 
-Add a Plugins section to the extension settings panel that reuses the desktop resolver (installed plugins, commands, skills, agents) with counts, per-item enable toggles and a 'Browse catalogue' link to the web marketplace, and surface the same list in the composer + menu.
+Expose a typed installed-capability inventory from the local runtime, then populate the existing Plugins section with counts, provenance, availability, per-item controls where enforcement exists, and a catalogue handoff. Keep the no-registry state when that capability is absent.
 
 **Reference screenshot(s)**
 

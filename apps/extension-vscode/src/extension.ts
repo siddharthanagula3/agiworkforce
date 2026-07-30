@@ -23,7 +23,7 @@ import { refreshAccountTierCache } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
 import {
   initializeAgentModeConsent,
-  reconcileAgentModeConsent,
+  reconcileAgentControlConsent,
 } from './features/permissions/agentModeConsent';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   updateStatusBar();
-  void reconcileAgentModeConsent(context)
+  void reconcileAgentControlConsent(context)
     .then(updateStatusBar)
     .catch((error: unknown) => {
       recordFailure('agent-mode-consent', error);
@@ -116,8 +116,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('agiWorkforce.agent.mode')) {
-        void reconcileAgentModeConsent(context)
+      if (
+        e.affectsConfiguration('agiWorkforce.agent.mode') ||
+        e.affectsConfiguration('agiWorkforce.agent.effort')
+      ) {
+        void reconcileAgentControlConsent(context)
           .then(updateStatusBar)
           .catch((error: unknown) => {
             recordFailure('agent-mode-consent', error);

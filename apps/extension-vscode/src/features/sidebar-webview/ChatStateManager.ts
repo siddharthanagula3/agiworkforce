@@ -38,7 +38,11 @@ import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import { getAccountAuthState } from '../../utils/api';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
-import { enforceAgentModeConsent, setAgentModeWithConsent } from '../permissions/agentModeConsent';
+import {
+  enforceAgentModeConsent,
+  setAgentEffortWithConsent,
+  setAgentModeWithConsent,
+} from '../permissions/agentModeConsent';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -399,16 +403,18 @@ export class ChatStateManager {
       case 'setEffort': {
         const effort = (msg as { type: 'setEffort'; payload: { effort: DeveloperReasoningEffort } })
           .payload.effort;
-        this._effort = effort;
-        await vscode.workspace
-          .getConfiguration('agiWorkforce')
-          .update('agent.effort', effort, vscode.ConfigurationTarget.Global);
+        if (await setAgentEffortWithConsent(this._context, effort)) {
+          this._effort = effort;
+        }
         const model = normalizeConfiguredModelId(
           vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
         );
         this._post({
           type: 'effortChanged',
-          payload: { effort, supportsEffort: this.modelSupportsEffort(model) },
+          payload: {
+            effort: this._effort ?? Config.agentEffort(),
+            supportsEffort: this.modelSupportsEffort(model),
+          },
         });
         break;
       }
