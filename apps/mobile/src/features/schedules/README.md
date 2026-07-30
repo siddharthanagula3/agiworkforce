@@ -18,3 +18,5 @@ Purpose: Mobile schedule creation, schedule list presentation, run history, sche
 - Do not add code back under `apps/mobile/components/schedules`, `apps/mobile/services/schedules.ts`, or `apps/mobile/stores/scheduleStore.ts`.
 - Schedule components may import shared UI from `@/components/ui` until the Mobile UI migration is complete.
 - Schedule I/O stays in `service.ts`; route screens should go through `useScheduleStore`.
+- Scheduled runs currently persist and execute saved prompt text only. Do not expose attachment
+  controls until the Managed Cloud schedule contract owns durable, revocable asset references.

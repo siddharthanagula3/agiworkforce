@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: bf7193bab7bfb911507a13ad62fae104f9a82d14045df544fed89b6b33b554d8 -->
+<!-- ui-gaps-csv-sha256: ab45aad024233db402ce01d20c3ae2c8de8e63acede574d64e067f6cbbb0410d -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 82 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 81 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  286 |
+| Open        |  285 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   42 |
-| Not Planned |   13 |
+| Not Planned |   14 |
 
 ## P0
 
@@ -671,24 +671,24 @@ Completed. Keep route payloads limited to stable allowlisted IDs, keep every sug
 
 - `chatgpt_reference/048-chatgpt-ios-scheduled-tasks-suggestions-daily-brief-email-monitor.png`
 
-### GAP-029 — Scheduled tasks cannot carry attachments (Camera / Photos / Files)
+### GAP-029 — Scheduled tasks explicitly disclose prompt-only context
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Scheduled tasks attachment picker
 
 **Gap**
 
-Reference's scheduled-task composer '+' opens Camera / Photos / Files / Plugins, so a recurring task can operate on a supplied document or image. agiworkforce's ScheduleForm collects only Schedule Name, Prompt, Model, Recurrence and Timezone; a task like 'every Monday, re-check this contract' is impossible to express.
+The reference lets a recurring task carry Camera, Photos, Files, or plugin context. AGI Workforce scheduled execution currently persists and sends saved prompt text only. The create/edit form now labels that boundary beside the prompt and states that chat attachments are not saved or reused, preventing users from assuming ephemeral chat files become durable schedule inputs.
 
 **Evidence**
 
-apps/mobile/src/features/schedules/components/ScheduleForm.tsx (fields at lines 188-275); grep -i 'attach|plugin|connector' across apps/mobile/src/features/schedules — no match; the picker exists only at apps/mobile/src/features/chat/components/AddToChatSheet.tsx (onCamera/onPhotos/onFile)
+ScheduleForm.tsx renders the accessible Prompt-only context disclosure and submits no attachment field; schedule-form.test.tsx pins the copy and payload boundary. apps/mobile/src/features/schedules/store.ts and service.ts define prompt/timing/model inputs only. packages/contracts/cloud-contracts/src/schedules.ts validates an exact mutation without attachments. apps/web/lib/services/schedule-service.ts persists no asset reference, and scheduled-agent-executor.ts sends only task.prompt as the user message.
 
 **Suggested fix**
 
-Extend the schedule create payload with an attachments array, reuse AddToChatSheet's camera/photos/file handlers in the schedule composer, and show attached files as chips in ScheduleCard so the user can see what a task operates on.
+Not planned until Managed Cloud schedules own tenant-scoped durable asset IDs, upload completion and malware/type validation, retention and deletion semantics, permission revalidation on every run, missing/revoked asset behavior, quota accounting, safe result provenance, and contract tests across Mobile, API, persistence, and execution. Do not reuse the chat picker while its local selections have no durable schedule lifecycle.
 
 **Reference screenshot(s)**
 
