@@ -18,14 +18,19 @@ export default function ParentalControlsScreen() {
         title={minorMode ? 'Minor-safe mode is active' : 'Adult profile'}
         body={
           minorMode
-            ? 'AGI filters clearly unsafe adult-only requests on this device.'
-            : 'This device is not currently in minor-safe mode. Age review can be repeated from the age gate.'
+            ? 'AGI filters clearly unsafe adult-only requests before Local or Cloud processing on this device.'
+            : 'Minor-safe filtering is not required by the age setting currently stored on this device.'
         }
         icon={Baby}
       />
+      <SettingsInfo
+        title="Device age settings only"
+        body="This release does not link parent and teen accounts or provide remote usage, quiet-hour, model, or content controls. Reviewing age changes only this device."
+        icon={Shield}
+      />
       <SettingsGroup>
         <SettingsRow
-          label="Review Age Settings"
+          label="Review Device Age Settings"
           icon={Shield}
           isLast
           onPress={() =>
