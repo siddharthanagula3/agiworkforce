@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 86c3d9f6b53d1c89328be579da6b46d615b6a5c6e8ee3e8d1ce90dac4cc1d79a -->
+<!-- ui-gaps-csv-sha256: b13f0acc990934f783c2dd4664b28f2042d0630436853536b224fcefd05d6e32 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 0 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 0 P1, 158 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  204 |
+| Open        |  201 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   65 |
+| Done        |   68 |
 | Not Planned |   72 |
 
 ## P0
@@ -4491,24 +4491,24 @@ Promote workMode to a header dropdown showing the active surface name (Chat / Wo
 
 - `chatgpt_reference/076-chatgpt-ios-work-mode-task-list-github-suggested-tasks.png`
 
-### GAP-195 — Empty-state headline never names the active workspace
+### GAP-195 — Empty chat names the active workspace and reopens its picker
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-copy
 - **Reference:** Codex · macOS desktop · Chat empty state headline
 
 **Gap**
 
-The reference asks 'What should we build in <repo>?' with the repo name underlined and clickable, tying the blank canvas to a concrete scope. agiworkforce shows a generic 'Good morning, <name>' with a workforce subline; nothing in the empty state tells the user which folder or project the next message will operate on.
+When a local folder is scoped, Desktop asks 'What should we build in <folder>?' and renders the folder name as an accessible button that reopens the authoritative folder picker. With no folder scope, the existing personalized greeting remains instead of inventing context.
 
 **Evidence**
 
-apps/desktop/src/features/chat/BrandedGreeting.tsx:20-51 (greeting templates); apps/desktop/src/features/v3/EmptyChat.tsx
+DesktopShellV3 passes the mode-aware currentFolderLabel and handleSelectFolder seam into EmptyChat. BrandedGreeting renders the scoped question and Change workspace action only for a real label. GAP-195-205-255-empty-chat.test.tsx verifies the exact accessible heading and picker callback. Rendered shell evidence is retained at apps/desktop/docs/qa/screenshots/GAP-195-205-255-empty-chat.png.
 
 **Suggested fix**
 
-When a folder/project is scoped, replace the subline with 'What should we build in <folder>?' where the folder name opens the folder picker; fall back to the greeting subline when no scope is set.
+Completed. Keep the headline sourced from the same folder-selection contract used by execution and attachments; hide it when no scope is known rather than inferring a repository.
 
 **Reference screenshot(s)**
 
@@ -4721,24 +4721,24 @@ Surface the existing budget/usage store (used in UsageDashboard.tsx) as a compac
 
 - `claude_reference/137-claude-desktop-home-launcher-cowork-mode-recents-list.png`
 
-### GAP-205 — No quick-start category chips (Code / Write / Learn / Life stuff / surprise-me) on empty home screen
+### GAP-205 — Capability-aware quick-start chips seed the empty composer
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Home launcher — quick-action category chips
 
 **Gap**
 
-Claude's empty Chat-mode home screen shows a row of category chips below the composer (Code, Write, Learn, Life stuff, Claude's choice) that seed a starter prompt for that category. agiworkforce's BrandedGreeting/EmptyChat screens have no such chips.
+The mounted shared composer renders Code, Write, Research, and only the media/computer categories supported by the active runtime. Selecting a chip activates its mode and seeds an editable category-appropriate prompt; unsupported Video, Image, or Computer actions are not advertised.
 
 **Evidence**
 
-apps/desktop/src/features/chat/BrandedGreeting.tsx (full file reviewed — greeting only, no chip row); apps/desktop/src/features/v3/EmptyChat.tsx (renders only BrandedGreeting)
+ChatInterface owns QuickChips independently from the host empty-state slot and derives availability from the active runtime plus the Desktop entitlement override. Its handleChipClick writes the matching prompt to the conversation-scoped draft. GAP-195-205-255-empty-chat.test.tsx exercises Code through the mounted ChatInterface; QuickChips.capabilities.test.tsx covers capability filtering. apps/desktop/docs/qa/screenshots/GAP-195-205-255-empty-chat.png records the mounted chip row at desktop size.
 
 **Suggested fix**
 
-Add a row of suggestion category chips below the composer in EmptyChat.tsx that populate the input with a category-appropriate starter prompt on click.
+Completed. Keep these chips runtime-capability-aware and editable; add categories only when their mode reaches an execution path rather than copying a reference label that would be prompt-only.
 
 **Reference screenshot(s)**
 
@@ -5871,24 +5871,24 @@ Add screen_recording to the AutomationPermissions preflight, block Start recordi
 
 - `references-2/claude-desktop-cowork-record-skill-09-black-capture-failure-response.png`
 
-### GAP-255 — Desktop empty chat has no starter action list, unlike web's greeting chips
+### GAP-255 — Desktop empty chat exposes capability-shaped starter actions
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-copy
 - **Reference:** ChatGPT · macOS desktop · Work mode empty state — quick actions
 
 **Gap**
 
-The reference offers three capability-shaped starters under the composer — 'Create a file or build a site', 'Research and plan next steps', 'Automate routine and recurring work' — each an entry point to a different product mode. agiworkforce's desktop EmptyChat renders BrandedGreeting alone (headline + subline), while web's WebEmptyChat wires GreetingBanner suggestion chips into the draft. The same product shows a first-run affordance on web and a blank screen on desktop.
+The blank canvas now presents three concise paths: create a file or site, research and plan, or automate recurring work. The first two prefill the conversation-scoped composer for review; the automation action opens the real Local or Managed Cloud schedule owner through the shell's mode-aware navigation seam.
 
 **Evidence**
 
-apps/desktop/src/features/v3/EmptyChat.tsx (renders only <BrandedGreeting/>); apps/desktop/src/features/chat/BrandedGreeting.tsx (greeting templates, no chips); apps/web/features/chat/v3/WebEmptyChat.tsx + features/chat/components/GreetingBanner/GreetingBanner.tsx:20-26 (SuggestionChip CHIPS that prefill the composer)
+EmptyChat writes starter prompts through unified-chat's setDraftContent and receives onOpenScheduled from DesktopShellV3, which routes work-scheduled to AgiWorkScheduled or DesktopCloudSchedules according to the current privacy mode. GAP-195-205-255-empty-chat.test.tsx covers both prompt paths and the schedule handoff. Rendered Browser QA is retained at apps/desktop/docs/qa/screenshots/GAP-195-205-255-empty-chat.png.
 
 **Suggested fix**
 
-Lift GreetingBanner's chip list into a shared constant and render it in desktop EmptyChat wired to the draft store, tailoring the entries to the desktop's capabilities (artifacts, deep research, scheduled tasks) so each chip routes to a real surface.
+Completed. Keep starters attached to executable Desktop owners, preserve the user's opportunity to edit prompt starters, and route non-chat actions instead of pretending a prompt changed product mode.
 
 **Reference screenshot(s)**
 
