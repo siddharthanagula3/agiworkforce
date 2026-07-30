@@ -160,9 +160,6 @@ impl ToolExecutor {
             "conversation_branches",
             "autonomous_sessions",
             "autonomous_task_logs",
-            "employee_tasks",
-            "ai_employees",
-            "user_employees",
         ];
         // Extract FROM and JOIN table references and validate each against the allowlist.
         {
@@ -419,7 +416,6 @@ impl ToolExecutor {
             "scheduled_jobs",
             "job_executions",
             "automation_history",
-            "employee_tasks",
         ];
         {
             let tokens: Vec<&str> = query_upper.split_whitespace().collect();
@@ -506,9 +502,6 @@ impl ToolExecutor {
                 "conversation_branches",
                 "autonomous_sessions",
                 "autonomous_task_logs",
-                "employee_tasks",
-                "ai_employees",
-                "user_employees",
             ];
             let mut i = 0;
             while i < tokens.len() {

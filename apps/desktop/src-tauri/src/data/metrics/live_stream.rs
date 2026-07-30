@@ -7,7 +7,6 @@ use crate::integrations::realtime::{RealtimeEvent, RealtimeServer};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum UpdateType {
     AutomationCompleted,
-    NewEmployeeHired,
     MilestoneReached,
 }
 

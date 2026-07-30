@@ -1,6 +1,6 @@
 use crate::core::sync_utils::MutexExt;
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -16,8 +16,8 @@ pub enum DemoError {
     Database(#[from] rusqlite::Error),
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-    #[error("Unknown employee: {0}")]
-    UnknownEmployee(String),
+    #[error("Unknown demo: {0}")]
+    UnknownDemo(String),
     #[error("Demo execution failed: {0}")]
     ExecutionFailed(String),
 }
@@ -47,7 +47,7 @@ impl InstantDemo {
             "expense_categorizer" => self.run_expense_categorizer_demo().await?,
             "file_organizer" => self.run_file_organizer_demo().await?,
             "lead_qualifier" => self.run_lead_qualifier_demo().await?,
-            _ => return Err(DemoError::UnknownEmployee(demo_id.to_string())),
+            _ => return Err(DemoError::UnknownDemo(demo_id.to_string())),
         };
 
         let completion_time = start_time.elapsed().as_secs();
@@ -310,8 +310,8 @@ impl InstantDemo {
         let run_id = Uuid::new_v4().to_string();
 
         conn.execute(
-            "INSERT INTO demo_runs (id, user_id, employee_id, ran_at, results, led_to_hire)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0)",
+            "INSERT INTO demo_runs (id, user_id, demo_id, ran_at, results)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 run_id,
                 user_id.unwrap_or("demo_user"),
@@ -332,43 +332,41 @@ impl InstantDemo {
             ))
         })?;
 
-        let (total_runs, hire_conversion): (i64, i64) = if let Some(d_id) = demo_id {
-            (
-                conn.query_row(
-                    "SELECT COUNT(*) FROM demo_runs WHERE employee_id = ?1",
-                    [d_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0),
-                conn.query_row(
-                    "SELECT COUNT(*) FROM demo_runs WHERE employee_id = ?1 AND led_to_hire = 1",
-                    [d_id],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0),
-            )
+        let (total_runs, unique_users) = if let Some(d_id) = demo_id {
+            conn.query_row(
+                "SELECT COUNT(*), COUNT(DISTINCT user_id)
+                 FROM demo_runs WHERE demo_id = ?1",
+                [d_id],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )?
         } else {
-            (
-                conn.query_row("SELECT COUNT(*) FROM demo_runs", [], |row| row.get(0))
-                    .unwrap_or(0),
-                conn.query_row(
-                    "SELECT COUNT(*) FROM demo_runs WHERE led_to_hire = 1",
-                    [],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0),
+            conn.query_row(
+                "SELECT COUNT(*), COUNT(DISTINCT user_id) FROM demo_runs",
+                [],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )?
+        };
+
+        let most_popular_demo = if let Some(d_id) = demo_id {
+            d_id.to_string()
+        } else {
+            conn.query_row(
+                "SELECT demo_id
+                 FROM demo_runs
+                 GROUP BY demo_id
+                 ORDER BY COUNT(*) DESC, demo_id ASC
+                 LIMIT 1",
+                [],
+                |row| row.get(0),
             )
+            .optional()?
+            .unwrap_or_default()
         };
 
         Ok(DemoStatistics {
             total_demo_runs: total_runs as u32,
-            unique_users: 0,
-            hire_conversion_rate: if total_runs > 0 {
-                (hire_conversion as f64 / total_runs as f64) * 100.0
-            } else {
-                0.0
-            },
-            most_popular_demo: "inbox_manager".to_string(),
+            unique_users: unique_users as u32,
+            most_popular_demo,
         })
     }
 }
@@ -377,7 +375,6 @@ impl InstantDemo {
 pub struct DemoStatistics {
     pub total_demo_runs: u32,
     pub unique_users: u32,
-    pub hire_conversion_rate: f64,
     pub most_popular_demo: String,
 }
 

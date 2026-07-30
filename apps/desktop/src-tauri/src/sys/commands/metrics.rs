@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::data::metrics::{
-    AutomationRun, BenchmarkComparison, Comparison, EmployeePerformance, MetricsComparison,
+    AutomationPerformance, AutomationRun, BenchmarkComparison, Comparison, MetricsComparison,
     MetricsSnapshot, PeriodComparison, RealtimeMetricsCollector, RealtimeStats,
 };
 use crate::sys::commands::auth::{get_session_user_id, SessionState};
@@ -14,7 +14,6 @@ pub struct MetricsComparisonState(pub std::sync::Arc<MetricsComparison>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordAutomationRequest {
-    pub employee_id: Option<String>,
     pub automation_name: String,
     pub estimated_manual_time_ms: u64,
     pub actual_execution_time_ms: u64,
@@ -41,7 +40,6 @@ pub async fn record_automation_metrics(
     let user_id = get_session_user_id(&session)?;
     let mut run = AutomationRun::new(
         user_id,
-        request.employee_id,
         request.automation_name,
         request.estimated_manual_time_ms,
         request.actual_execution_time_ms,
@@ -200,18 +198,16 @@ pub struct DayStats {
     pub avg_quality_score: f64,
     #[serde(rename = "changeFromYesterday")]
     pub change_from_yesterday: f64,
-    #[serde(rename = "topEmployee")]
-    pub top_employee: String,
-    #[serde(rename = "topEmployeeTimeSaved")]
-    pub top_employee_time_saved: f64,
+    #[serde(rename = "topAutomation")]
+    pub top_automation: String,
+    #[serde(rename = "topAutomationTimeSaved")]
+    pub top_automation_time_saved: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TopEmployeeData {
-    #[serde(rename = "employeeId")]
-    pub employee_id: String,
-    #[serde(rename = "employeeName")]
-    pub employee_name: String,
+pub struct TopAutomationData {
+    #[serde(rename = "automationName")]
+    pub automation_name: String,
     #[serde(rename = "timeSavedHours")]
     pub time_saved_hours: f64,
     #[serde(rename = "costSavedUsd")]
@@ -245,8 +241,8 @@ pub struct WeekStats {
     pub avg_quality_score: f64,
     #[serde(rename = "changeFromLastWeek")]
     pub change_from_last_week: f64,
-    #[serde(rename = "topEmployees")]
-    pub top_employees: Vec<TopEmployeeData>,
+    #[serde(rename = "topAutomations")]
+    pub top_automations: Vec<TopAutomationData>,
     #[serde(rename = "dailyBreakdown")]
     pub daily_breakdown: Vec<DailyBreakdown>,
 }
@@ -277,8 +273,8 @@ pub struct MonthStats {
     pub avg_quality_score: f64,
     #[serde(rename = "changeFromLastMonth")]
     pub change_from_last_month: f64,
-    #[serde(rename = "topEmployees")]
-    pub top_employees: Vec<TopEmployeeData>,
+    #[serde(rename = "topAutomations")]
+    pub top_automations: Vec<TopAutomationData>,
     #[serde(rename = "weeklyBreakdown")]
     pub weekly_breakdown: Vec<WeeklyBreakdown>,
 }
@@ -306,8 +302,8 @@ pub struct AllTimeStats {
     pub avg_quality_score: f64,
     #[serde(rename = "milestonesAchieved")]
     pub milestones_achieved: u64,
-    #[serde(rename = "topEmployees")]
-    pub top_employees: Vec<TopEmployeeData>,
+    #[serde(rename = "topAutomations")]
+    pub top_automations: Vec<TopAutomationData>,
     #[serde(rename = "monthlyTrend")]
     pub monthly_trend: Vec<MonthlyTrend>,
 }
@@ -388,23 +384,20 @@ pub struct ActivityItem {
     pub time_saved_minutes: Option<f64>,
     #[serde(rename = "costSavedUsd")]
     pub cost_saved_usd: Option<f64>,
-    #[serde(rename = "employeeName")]
-    pub employee_name: Option<String>,
     #[serde(rename = "automationName")]
     pub automation_name: Option<String>,
     pub status: Option<String>,
 }
 
-fn map_employees(employees: &[EmployeePerformance]) -> Vec<TopEmployeeData> {
-    employees
+fn map_automations(automations: &[AutomationPerformance]) -> Vec<TopAutomationData> {
+    automations
         .iter()
-        .map(|e| TopEmployeeData {
-            employee_id: e.employee_id.clone(),
-            employee_name: e.employee_name.clone(),
-            time_saved_hours: e.total_time_saved_hours,
-            cost_saved_usd: e.total_cost_saved_usd,
-            automations_run: e.automations_run,
-            success_rate: e.success_rate,
+        .map(|automation| TopAutomationData {
+            automation_name: automation.automation_name.clone(),
+            time_saved_hours: automation.total_time_saved_hours,
+            cost_saved_usd: automation.total_cost_saved_usd,
+            automations_run: automation.automations_run,
+            success_rate: automation.success_rate,
         })
         .collect()
 }
@@ -440,19 +433,19 @@ pub async fn get_today_stats(
         0.0
     };
 
-    let top_emp = stats.today.top_employees.first();
+    let top_automation = stats.today.top_automations.first();
     Ok(DayStats {
         total_time_saved_hours: stats.today.total_time_saved_hours,
         total_cost_saved_usd: stats.today.total_cost_saved_usd,
         automations_run: stats.today.total_automations_run,
         avg_quality_score: stats.today.avg_time_saved_per_run,
         change_from_yesterday,
-        top_employee: if top_emp.is_some() {
-            "redacted".to_string()
-        } else {
-            String::new()
-        },
-        top_employee_time_saved: top_emp.map(|e| e.total_time_saved_hours).unwrap_or(0.0),
+        top_automation: top_automation
+            .map(|automation| automation.automation_name.clone())
+            .unwrap_or_default(),
+        top_automation_time_saved: top_automation
+            .map(|automation| automation.total_time_saved_hours)
+            .unwrap_or(0.0),
     })
 }
 
@@ -505,7 +498,7 @@ pub async fn get_week_stats(
         automations_run: stats.this_week.total_automations_run,
         avg_quality_score: stats.this_week.avg_time_saved_per_run,
         change_from_last_week,
-        top_employees: map_employees(&stats.this_week.top_employees),
+        top_automations: map_automations(&stats.this_week.top_automations),
         daily_breakdown,
     })
 }
@@ -566,7 +559,7 @@ pub async fn get_month_stats(
         automations_run: stats.this_month.total_automations_run,
         avg_quality_score: stats.this_month.avg_time_saved_per_run,
         change_from_last_month,
-        top_employees: map_employees(&stats.this_month.top_employees),
+        top_automations: map_automations(&stats.this_month.top_automations),
         weekly_breakdown,
     })
 }
@@ -620,7 +613,7 @@ pub async fn get_all_time_stats(
         automations_run: stats.all_time.total_automations_run,
         avg_quality_score: stats.all_time.avg_time_saved_per_run,
         milestones_achieved,
-        top_employees: map_employees(&stats.all_time.top_employees),
+        top_automations: map_automations(&stats.all_time.top_automations),
         monthly_trend,
     })
 }
@@ -723,8 +716,8 @@ pub struct ExportOptions {
     pub include_detailed_log: bool,
     #[serde(rename = "includeComparison")]
     pub include_comparison: bool,
-    #[serde(rename = "includeEmployeeBreakdown")]
-    pub include_employee_breakdown: bool,
+    #[serde(rename = "includeAutomationBreakdown")]
+    pub include_automation_breakdown: bool,
     #[serde(rename = "startDate")]
     pub start_date: Option<String>,
     #[serde(rename = "endDate")]

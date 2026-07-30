@@ -295,7 +295,6 @@ const ALLOWED_GENERIC_COMMANDS = new Set([
   'load_custom_instructions',
   'log_tool_execution',
   'log_workflow_execution',
-  'mark_setup_completed',
   'open_file_location',
   'pause_agent',
   'pause_workflow',

@@ -1,14 +1,14 @@
 /**
  * Onboarding API — Tauri command wrappers for onboarding.rs
  *
- * Covers all 21 commands:
+ * Covers all 20 commands:
  *   get_onboarding_status, complete_onboarding_step, skip_onboarding_step,
  *   reset_onboarding, export_user_data, check_connectivity,
  *   get_session_info, update_session_activity,
  *   get_user_preference, set_user_preference,
  *   start_first_run_experience, has_completed_first_run, run_instant_demo,
  *   update_first_run_step, select_demo, record_demo_results,
- *   mark_setup_completed, complete_first_run, get_first_run_session,
+ *   complete_first_run, get_first_run_session,
  *   get_first_run_statistics, skip_first_run
  */
 
@@ -54,7 +54,7 @@ export interface UserPreference {
 
 export type FirstRunStep =
   | 'welcome'
-  | 'choose_employee'
+  | 'choose_demo'
   | 'running_demo'
   | 'viewing_results'
   | 'quick_setup'
@@ -89,8 +89,6 @@ export interface FirstRunStatistics {
   total_sessions: number;
   completed_sessions: number;
   completion_rate: number;
-  hired_count: number;
-  hire_rate: number;
   average_time_to_value_seconds: number;
 }
 
@@ -244,11 +242,11 @@ export async function hasCompletedFirstRun(userId: string): Promise<boolean> {
   }
 }
 
-/** Run an instant demo for a specific employee. */
-export async function runInstantDemo(employeeId: string, userId?: string): Promise<DemoResult> {
+/** Run a selected first-run demo. */
+export async function runInstantDemo(demoId: string, userId?: string): Promise<DemoResult> {
   try {
     return await invoke<DemoResult>('run_instant_demo', {
-      employeeId,
+      demoId,
       userId: userId ?? null,
     });
   } catch (error) {
@@ -280,15 +278,6 @@ export async function recordDemoResults(sessionId: string, results: DemoResult):
     await invoke('record_demo_results', { sessionId, results });
   } catch (error) {
     throw new Error(`Failed to record demo results: ${error}`);
-  }
-}
-
-/** Mark the quick-setup phase as completed. */
-export async function markSetupCompleted(sessionId: string): Promise<void> {
-  try {
-    await invoke('mark_setup_completed', { sessionId });
-  } catch (error) {
-    throw new Error(`Failed to mark setup completed: ${error}`);
   }
 }
 
@@ -361,7 +350,6 @@ export const OnboardingClient = {
     updateStep: updateFirstRunStep,
     selectDemo,
     recordResults: recordDemoResults,
-    markSetupDone: markSetupCompleted,
     complete: completeFirstRun,
     getSession: getFirstRunSession,
     getStatistics: getFirstRunStatistics,

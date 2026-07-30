@@ -39,7 +39,7 @@ export function ExportReportModal({ open, onClose }: ExportReportModalProps) {
     includeCharts: true,
     includeDetailedLog: false,
     includeComparison: true,
-    includeEmployeeBreakdown: true,
+    includeAutomationBreakdown: true,
   });
 
   const handleExport = async () => {
@@ -205,17 +205,17 @@ export function ExportReportModal({ open, onClose }: ExportReportModalProps) {
 
               <div className="flex items-center space-x-2">
                 <Checkbox
-                  id="includeEmployeeBreakdown"
-                  checked={options.includeEmployeeBreakdown}
+                  id="includeAutomationBreakdown"
+                  checked={options.includeAutomationBreakdown}
                   onCheckedChange={(checked) =>
-                    setOptions({ ...options, includeEmployeeBreakdown: checked as boolean })
+                    setOptions({ ...options, includeAutomationBreakdown: checked as boolean })
                   }
                 />
                 <label
-                  htmlFor="includeEmployeeBreakdown"
+                  htmlFor="includeAutomationBreakdown"
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  Employee Breakdown
+                  Automation Breakdown
                 </label>
               </div>
             </div>

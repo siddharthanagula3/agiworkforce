@@ -842,7 +842,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         changeFromYesterday: 0,
         changeFromLastWeek: 0,
         changeFromLastMonth: 0,
-        topEmployees: [],
+        topAutomations: [],
         dailyBreakdown: [],
         weeklyBreakdown: [],
         monthlyTrend: [],
@@ -1702,7 +1702,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'complete_onboarding_step':
     case 'skip_first_run':
     case 'skip_onboarding_step':
-    case 'mark_setup_completed':
     case 'reset_onboarding':
     case 'start_first_run_experience':
     case 'update_first_run_step':

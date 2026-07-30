@@ -14,7 +14,6 @@ import { invoke, isTauri } from '../lib/tauri-mock';
 
 /** Request to record an automation run */
 export interface RecordAutomationRequest {
-  employeeId?: string;
   automationName: string;
   estimatedManualTimeMs: number;
   actualExecutionTimeMs: number;
@@ -85,14 +84,13 @@ export interface DayStats {
   automationsRun: number;
   avgQualityScore: number;
   changeFromYesterday: number;
-  topEmployee: string;
-  topEmployeeTimeSaved: number;
+  topAutomation: string;
+  topAutomationTimeSaved: number;
 }
 
-/** Top performing employee data */
-export interface TopEmployeeData {
-  employeeId: string;
-  employeeName: string;
+/** Top performing automation data */
+export interface TopAutomationData {
+  automationName: string;
   timeSavedHours: number;
   costSavedUsd: number;
   automationsRun: number;
@@ -114,7 +112,7 @@ export interface WeekStats {
   automationsRun: number;
   avgQualityScore: number;
   changeFromLastWeek: number;
-  topEmployees: TopEmployeeData[];
+  topAutomations: TopAutomationData[];
   dailyBreakdown: DailyBreakdown[];
 }
 
@@ -134,7 +132,7 @@ export interface MonthStats {
   automationsRun: number;
   avgQualityScore: number;
   changeFromLastMonth: number;
-  topEmployees: TopEmployeeData[];
+  topAutomations: TopAutomationData[];
   weeklyBreakdown: WeeklyBreakdown[];
 }
 
@@ -153,7 +151,7 @@ export interface AllTimeStats {
   automationsRun: number;
   avgQualityScore: number;
   milestonesAchieved: number;
-  topEmployees: TopEmployeeData[];
+  topAutomations: TopAutomationData[];
   monthlyTrend: MonthlyTrend[];
 }
 
@@ -204,7 +202,6 @@ export interface ActivityItem {
   timestamp: number;
   timeSavedMinutes?: number;
   costSavedUsd?: number;
-  employeeName?: string;
   automationName?: string;
   status?: string;
 }
@@ -216,7 +213,7 @@ export interface ExportOptions {
   includeCharts: boolean;
   includeDetailedLog: boolean;
   includeComparison: boolean;
-  includeEmployeeBreakdown: boolean;
+  includeAutomationBreakdown: boolean;
   startDate?: string;
   endDate?: string;
 }

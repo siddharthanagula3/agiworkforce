@@ -9,12 +9,11 @@ interface PeriodStats {
   total_automations_run: number;
   avg_time_saved_per_run: number;
   success_rate: number;
-  top_employees: EmployeePerformance[];
+  top_automations: AutomationPerformance[];
 }
 
-interface EmployeePerformance {
-  employee_id: string;
-  employee_name: string;
+interface AutomationPerformance {
+  automation_name: string;
   total_time_saved_hours: number;
   total_cost_saved_usd: number;
   automations_run: number;
@@ -92,9 +91,9 @@ const RealtimeROIDashboardComponent: React.FC = () => {
   }, []);
 
   const currentStats = useMemo(() => getCurrentStats(), [getCurrentStats]);
-  const topEmployees = useMemo(
-    () => currentStats.top_employees.slice(0, 5),
-    [currentStats.top_employees],
+  const topAutomations = useMemo(
+    () => currentStats.top_automations.slice(0, 5),
+    [currentStats.top_automations],
   );
 
   if (loading) {
@@ -185,15 +184,15 @@ const RealtimeROIDashboardComponent: React.FC = () => {
 
       {}
       {}
-      {currentStats.top_employees.length > 0 && (
+      {currentStats.top_automations.length > 0 && (
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
             Top Performers
           </h2>
           <div className="space-y-3">
-            {topEmployees.map((employee, index) => (
+            {topAutomations.map((automation, index) => (
               <div
-                key={employee.employee_id}
+                key={automation.automation_name}
                 className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
               >
                 <div className="flex items-center gap-3">
@@ -202,19 +201,19 @@ const RealtimeROIDashboardComponent: React.FC = () => {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">
-                      {employee.employee_name}
+                      {automation.automation_name}
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {employee.automations_run} automations
+                      {automation.automations_run} runs
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-green-600">
-                    {formatCurrency(employee.total_cost_saved_usd)}
+                    {formatCurrency(automation.total_cost_saved_usd)}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {formatTime(employee.total_time_saved_hours)} saved
+                    {formatTime(automation.total_time_saved_hours)} saved
                   </p>
                 </div>
               </div>
@@ -279,5 +278,5 @@ const defaultStats: PeriodStats = {
   total_automations_run: 0,
   avg_time_saved_per_run: 0,
   success_rate: 0,
-  top_employees: [],
+  top_automations: [],
 };

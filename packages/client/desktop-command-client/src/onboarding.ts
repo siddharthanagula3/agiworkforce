@@ -76,8 +76,8 @@ export async function startFirstRunExperience(
 export async function hasCompletedFirstRun(userId: string): Promise<boolean> {
   return command<boolean>('has_completed_first_run', { userId });
 }
-export async function runInstantDemo(employeeId: string, userId?: string): Promise<DemoResult> {
-  return command<DemoResult>('run_instant_demo', { employeeId, userId });
+export async function runInstantDemo(demoId: string, userId?: string): Promise<DemoResult> {
+  return command<DemoResult>('run_instant_demo', { demoId, userId });
 }
 export async function updateFirstRunStep(sessionId: string, step: string): Promise<void> {
   return command<void>('update_first_run_step', { sessionId, step });
@@ -87,9 +87,6 @@ export async function selectDemo(sessionId: string, demoId: string): Promise<voi
 }
 export async function recordDemoResults(sessionId: string, results: DemoResult): Promise<void> {
   return command<void>('record_demo_results', { sessionId, results });
-}
-export async function markSetupCompleted(sessionId: string): Promise<void> {
-  return command<void>('mark_setup_completed', { sessionId });
 }
 export async function completeFirstRun(sessionId: string): Promise<void> {
   return command<void>('complete_first_run', { sessionId });

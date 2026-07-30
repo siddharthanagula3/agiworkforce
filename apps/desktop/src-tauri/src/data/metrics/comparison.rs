@@ -184,7 +184,7 @@ impl MetricsComparison {
             total_automations_run,
             avg_time_saved_per_run,
             success_rate: 1.0,
-            top_employees: Vec::new(),
+            top_automations: Vec::new(),
         })
     }
 }
