@@ -1,23 +1,14 @@
 /**
  * Teams API
  *
- * TypeScript wrappers for all 26 team-related Tauri commands.
- * Covers team CRUD, members, invitations, resources, activity,
- * billing, settings, and ownership transfer.
+ * TypeScript wrappers for team CRUD, members, invitations, resources,
+ * activity, settings, and ownership transfer.
  *
  * invoke() params: camelCase (TS) -> snake_case (Rust) automatic conversion.
  */
 
 import { invoke } from '../lib/tauri-mock';
-import type {
-  Team,
-  TeamMember,
-  TeamInvitation,
-  TeamResource,
-  TeamActivity,
-  TeamBilling,
-  UsageMetrics,
-} from '../types/teams';
+import type { Team, TeamMember, TeamInvitation, TeamResource, TeamActivity } from '../types/teams';
 
 // ============================================================================
 // Interfaces for settings update (mirrors Rust update_team_settings params)
@@ -248,88 +239,6 @@ export async function getUserTeamActivity(
     return await invoke<TeamActivity[]>('get_user_team_activity', { teamId, userId, limit });
   } catch (error) {
     throw new Error(`Failed to get user team activity: ${String(error)}`);
-  }
-}
-
-// ============================================================================
-// Billing
-// ============================================================================
-
-export async function getTeamBilling(teamId: string): Promise<TeamBilling | null> {
-  try {
-    return await invoke<TeamBilling | null>('get_team_billing', { teamId });
-  } catch (error) {
-    throw new Error(`Failed to get team billing: ${String(error)}`);
-  }
-}
-
-export async function initializeTeamBilling(
-  teamId: string,
-  plan: string,
-  cycle: string,
-  seatCount: number,
-): Promise<TeamBilling> {
-  try {
-    return await invoke<TeamBilling>('initialize_team_billing', {
-      teamId,
-      plan,
-      cycle,
-      seatCount,
-    });
-  } catch (error) {
-    throw new Error(`Failed to initialize team billing: ${String(error)}`);
-  }
-}
-
-export async function updateTeamPlan(
-  teamId: string,
-  plan: string,
-  updatedBy: string,
-): Promise<void> {
-  try {
-    await invoke('update_team_plan', { teamId, plan, updatedBy });
-  } catch (error) {
-    throw new Error(`Failed to update team plan: ${String(error)}`);
-  }
-}
-
-export async function addTeamSeats(
-  teamId: string,
-  count: number,
-  updatedBy: string,
-): Promise<void> {
-  try {
-    await invoke('add_team_seats', { teamId, count, updatedBy });
-  } catch (error) {
-    throw new Error(`Failed to add team seats: ${String(error)}`);
-  }
-}
-
-export async function removeTeamSeats(
-  teamId: string,
-  count: number,
-  updatedBy: string,
-): Promise<void> {
-  try {
-    await invoke('remove_team_seats', { teamId, count, updatedBy });
-  } catch (error) {
-    throw new Error(`Failed to remove team seats: ${String(error)}`);
-  }
-}
-
-export async function calculateTeamCost(teamId: string): Promise<number> {
-  try {
-    return await invoke<number>('calculate_team_cost', { teamId });
-  } catch (error) {
-    throw new Error(`Failed to calculate team cost: ${String(error)}`);
-  }
-}
-
-export async function updateTeamUsage(teamId: string, metrics: UsageMetrics): Promise<void> {
-  try {
-    await invoke('update_team_usage', { teamId, metrics });
-  } catch (error) {
-    throw new Error(`Failed to update team usage: ${String(error)}`);
   }
 }
 

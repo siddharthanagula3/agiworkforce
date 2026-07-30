@@ -7,9 +7,9 @@ import { TeamInvitation } from './TeamInvitation';
 import { TeamSettings } from './TeamSettings';
 import { TeamActivityLog } from './TeamActivityLog';
 import { Button } from '@/components/ui/Button';
-import { Users, UserPlus, Settings, Activity, CreditCard } from 'lucide-react';
+import { Users, UserPlus, Settings, Activity } from 'lucide-react';
 
-type TabView = 'members' | 'invitations' | 'settings' | 'activity' | 'billing';
+type TabView = 'members' | 'invitations' | 'settings' | 'activity';
 
 export const TeamDashboard: React.FC = () => {
   const {
@@ -18,7 +18,6 @@ export const TeamDashboard: React.FC = () => {
     members,
     invitations,
     activities,
-    billing,
     isLoading,
     isLoadingMembers,
     error,
@@ -26,7 +25,6 @@ export const TeamDashboard: React.FC = () => {
     getTeamMembers,
     getTeamInvitations,
     getTeamActivity,
-    getTeamBilling,
     clearError,
   } = useTeamStore(
     useShallow((s) => ({
@@ -35,7 +33,6 @@ export const TeamDashboard: React.FC = () => {
       members: s.members,
       invitations: s.invitations,
       activities: s.activities,
-      billing: s.billing,
       isLoading: s.isLoading,
       isLoadingMembers: s.isLoadingMembers,
       error: s.error,
@@ -43,7 +40,6 @@ export const TeamDashboard: React.FC = () => {
       getTeamMembers: s.getTeamMembers,
       getTeamInvitations: s.getTeamInvitations,
       getTeamActivity: s.getTeamActivity,
-      getTeamBilling: s.getTeamBilling,
       clearError: s.clearError,
     })),
   );
@@ -64,16 +60,14 @@ export const TeamDashboard: React.FC = () => {
       void getTeamMembers(currentTeam.id);
       void getTeamInvitations(currentTeam.id);
       void getTeamActivity(currentTeam.id, 50, 0);
-      void getTeamBilling(currentTeam.id);
     }
-  }, [currentTeam, getTeamMembers, getTeamInvitations, getTeamActivity, getTeamBilling]);
+  }, [currentTeam, getTeamMembers, getTeamInvitations, getTeamActivity]);
 
   const tabs = [
     { id: 'members' as TabView, label: 'Members', icon: Users },
     { id: 'invitations' as TabView, label: 'Invitations', icon: UserPlus },
     { id: 'settings' as TabView, label: 'Settings', icon: Settings },
     { id: 'activity' as TabView, label: 'Activity', icon: Activity },
-    { id: 'billing' as TabView, label: 'Billing', icon: CreditCard },
   ];
 
   if (isLoading) {
@@ -198,35 +192,6 @@ export const TeamDashboard: React.FC = () => {
             )}
             {activeTab === 'settings' && <TeamSettings currentTeam={currentTeam} />}
             {activeTab === 'activity' && <TeamActivityLog activities={activities} />}
-            {activeTab === 'billing' && billing && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                <h2 className="text-xl font-semibold mb-4">Billing Information</h2>
-                <div className="space-y-4">
-                  <div>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Plan:</span>
-                    <p className="font-medium capitalize">{billing.planTier}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Billing Cycle:</span>
-                    <p className="font-medium capitalize">{billing.billingCycle}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Seats:</span>
-                    <p className="font-medium">{billing.seatCount}</p>
-                  </div>
-                  {billing.nextBillingDate && (
-                    <div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
-                        Next Billing Date:
-                      </span>
-                      <p className="font-medium">
-                        {new Date(billing.nextBillingDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

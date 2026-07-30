@@ -71,7 +71,6 @@ const localizedPricingCatalogSchema = z.object({
     pro: localizedPlanPricesSchema,
     max: localizedPlanPricesSchema,
     max_15x: localizedPlanPricesSchema,
-    team: localizedPlanPricesSchema,
   }),
 });
 
@@ -211,15 +210,11 @@ export default function PricingPage() {
   const team = BILLING_PLAN_PRICING.team;
 
   const proSavingsPct = annualSavingsPct(pro);
-  const teamSavingsPct = annualSavingsPct(team);
 
   const localizedPlans = localizedPricing?.plans;
   const proPrice = annual
     ? formatLocalizedAmount(localizedPlans?.pro.yearly, pro.yearlyPriceUsd, 12)
     : formatLocalizedAmount(localizedPlans?.pro.monthly, pro.monthlyPriceUsd);
-  const teamPrice = annual
-    ? formatLocalizedAmount(localizedPlans?.team.yearly, team.yearlyPriceUsd, 12)
-    : formatLocalizedAmount(localizedPlans?.team.monthly, team.monthlyPriceUsd);
   const basicPrice = formatLocalizedAmount(localizedPlans?.basic.monthly, basic.monthlyPriceUsd);
   const maxPrice = formatLocalizedAmount(localizedPlans?.max.monthly, max.monthlyPriceUsd);
   const max15xPrice = formatLocalizedAmount(
@@ -425,10 +420,8 @@ export default function PricingPage() {
     {
       planId: 'team',
       label: team.label,
-      price: `${formatLocalizedAmount(localizedPlans?.team.monthly, team.monthlyPriceUsd)}/seat/mo`,
-      billingInterval: t('compareTeamInterval', {
-        yearly: formatLocalizedAmount(localizedPlans?.team.yearly, team.yearlyPriceUsd, 12),
-      }),
+      price: t('custom'),
+      billingInterval: t('compareTeamBilling'),
       usageCapacity: t('compareTeamUsage'),
       ...managedPlanCapabilities('team'),
       bestFor: t('compareTeamBestFor'),
@@ -556,70 +549,13 @@ export default function PricingPage() {
           </h2>
           <p className="agi-fl-section-lede">{t('teamLede')}</p>
 
-          <div
-            className="agi-tier-toggle"
-            role="group"
-            aria-label={t('billingCadenceLabel')}
-            style={{ marginTop: 32 }}
-          >
-            <button
-              type="button"
-              aria-pressed={!annual}
-              onClick={() => setAnnual(false)}
-              className={
-                annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-              }
-            >
-              {t('monthly')}
-            </button>
-            <button
-              type="button"
-              aria-pressed={annual}
-              onClick={() => setAnnual(true)}
-              className={
-                annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
-              }
-            >
-              {t('annual')}{' '}
-              <span className="agi-tier-toggle-save">
-                {t('annualSave', { pct: teamSavingsPct })}
-              </span>
-            </button>
-          </div>
-
-          {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
-            <p role="status" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
-              Loading checkout availability…
-            </p>
-          ) : null}
-          {user && !hasActivePaidPlan && pricingStatus === 'error' ? (
-            <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
-              Checkout availability could not be verified. Refresh this page to try again.
-            </p>
-          ) : null}
-          {unavailableCheckoutPlans.map((plan) => (
-            <p key={plan} role="status" className="agi-fl-section-lede" style={{ marginTop: 8 }}>
-              {BILLING_PLAN_PRICING[plan].label} checkout is not available in your region yet.
-            </p>
-          ))}
-
           <div className="agi-tier-grid agi-tier-grid--featured" style={{ marginTop: 24 }}>
             <Reveal as="article" className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('teamBadge')}</span>
               <h3 className="agi-tier-name">{team.label}</h3>
               <p className="agi-tier-price">
-                <span className="agi-tier-price-num">{teamPrice}</span>
-                <span className="agi-tier-price-sub">
-                  {t('perSeatPerMonth')}
-                  {annual && teamSavingsPct > 0 ? (
-                    <>
-                      {' · '}
-                      <span className="agi-tier-toggle-save">
-                        {t('annualSave', { pct: teamSavingsPct })}
-                      </span>
-                    </>
-                  ) : null}
-                </span>
+                <span className="agi-tier-price-num">{t('custom')}</span>
+                <span className="agi-tier-price-sub">{t('salesAssistedPricingSub')}</span>
               </p>
               <p className="agi-tier-body">{t('teamTierBody')}</p>
               <ul className="agi-tier-features">
@@ -689,6 +625,53 @@ export default function PricingPage() {
             {t('individualHeading')}
           </h2>
           <p className="agi-fl-section-lede">{t('individualLede')}</p>
+
+          <div
+            className="agi-tier-toggle"
+            role="group"
+            aria-label={t('billingCadenceLabel')}
+            style={{ marginTop: 32 }}
+          >
+            <button
+              type="button"
+              aria-pressed={!annual}
+              onClick={() => setAnnual(false)}
+              className={
+                annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+              }
+            >
+              {t('monthly')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={annual}
+              onClick={() => setAnnual(true)}
+              className={
+                annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
+              }
+            >
+              {t('annual')}{' '}
+              <span className="agi-tier-toggle-save">
+                {t('annualSave', { pct: proSavingsPct })}
+              </span>
+            </button>
+          </div>
+
+          {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
+            <p role="status" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
+              Loading checkout availability…
+            </p>
+          ) : null}
+          {user && !hasActivePaidPlan && pricingStatus === 'error' ? (
+            <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
+              Checkout availability could not be verified. Refresh this page to try again.
+            </p>
+          ) : null}
+          {unavailableCheckoutPlans.map((plan) => (
+            <p key={plan} role="status" className="agi-fl-section-lede" style={{ marginTop: 8 }}>
+              {BILLING_PLAN_PRICING[plan].label} checkout is not available in your region yet.
+            </p>
+          ))}
 
           <div className="agi-tier-grid agi-tier-grid--four" style={{ marginTop: 24 }}>
             <Reveal as="article" className="agi-tier">

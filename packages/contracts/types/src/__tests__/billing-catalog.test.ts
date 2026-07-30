@@ -36,8 +36,8 @@ describe('billing catalog', () => {
     expect(getPlanPriceCents('max')).toBe(10000);
     expect(getPlanPriceCents('max_15x')).toBe(20000);
     expect(getPlanPriceCents('basic')).toBe(700);
-    expect(getPlanPriceCents('team')).toBe(2500);
-    expect(getPlanPriceCents('team', 'yearly')).toBe(24000);
+    expect(getPlanPriceCents('team')).toBe(0);
+    expect(getPlanPriceCents('team', 'yearly')).toBe(0);
     for (const plan of Object.values(BILLING_PLAN_PRICING)) {
       expect(plan).not.toHaveProperty('monthlyUsageBudgetUsd');
       expect(plan).not.toHaveProperty('weeklyUsageBudgetUsd');

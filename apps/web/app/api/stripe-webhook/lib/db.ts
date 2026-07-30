@@ -743,7 +743,7 @@ export async function updateSubscriptionFromStripeSubscription(
         hasMetadata: !!subscription.metadata?.['plan_tier'],
         registeredPriceIds: Object.keys(getTierMapping()),
         envVarHint:
-          'Ensure the current Stripe Price env vars (STRIPE_PRICE_BASIC_MONTHLY_USD, STRIPE_PRICE_PRO_MONTHLY, STRIPE_PRICE_MAX_MONTHLY, STRIPE_PRICE_MAX_15X_MONTHLY, STRIPE_PRICE_TEAM_MONTHLY, and their yearly/regional variants) are set in Vercel environment variables',
+          'Ensure the current Stripe Price env vars (STRIPE_PRICE_BASIC_MONTHLY_USD, STRIPE_PRICE_PRO_MONTHLY, STRIPE_PRICE_MAX_MONTHLY, STRIPE_PRICE_MAX_15X_MONTHLY, and their yearly/regional variants) are set in Vercel environment variables',
       },
       'CRITICAL: Cannot determine valid plan_tier for subscription update - check if Stripe price IDs are registered in environment variables',
     );

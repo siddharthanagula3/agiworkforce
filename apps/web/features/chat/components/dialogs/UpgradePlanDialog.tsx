@@ -60,7 +60,7 @@ const PLAN_TAGLINES: Record<PlanCardId, string> = {
   pro: 'Higher capacity plus managed developer surfaces.',
   max: 'High capacity for intensive multi-step work.',
   max_15x: 'The highest-capacity individual plan, including video generation.',
-  team: 'Pro-level usage per seat with shared administration.',
+  team: 'Contracted managed capacity with shared administration.',
 };
 
 const PLAN_CARD_IDS: readonly PlanCardId[] = ['free', 'basic', 'pro', 'max', 'max_15x', 'team'];
@@ -129,9 +129,11 @@ interface PlanCardProps {
 function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) {
   const usesAnnual = annual && plan.annualAvailable;
   const displayPrice =
-    usesAnnual && plan.monthlyPrice > 0
-      ? annualPerMonth(plan.yearlyPrice)
-      : formatPrice(plan.monthlyPrice);
+    plan.id === 'team'
+      ? 'Custom'
+      : usesAnnual && plan.monthlyPrice > 0
+        ? annualPerMonth(plan.yearlyPrice)
+        : formatPrice(plan.monthlyPrice);
   const savingsPct = annualSavingsPct(plan.monthlyPrice, plan.yearlyPrice);
 
   return (
@@ -154,7 +156,7 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
         <h3 className="text-base font-semibold text-foreground">{plan.name}</h3>
         <div className="mt-1 flex items-baseline gap-1">
           <span className="text-2xl font-bold text-foreground">{displayPrice}</span>
-          {plan.monthlyPrice > 0 && (
+          {plan.id !== 'team' && plan.monthlyPrice > 0 && (
             <span className="text-xs text-muted-foreground">USD / month</span>
           )}
         </div>

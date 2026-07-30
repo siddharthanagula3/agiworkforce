@@ -30,6 +30,8 @@ pub enum ActivityType {
     TeamCreated,
     TeamDeleted,
 
+    // Decode-only compatibility for activity rows written by the removed
+    // local billing ledger. No production command emits these events now.
     BillingPlanChanged,
     BillingSeatsAdded,
     BillingSeatsRemoved,

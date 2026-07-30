@@ -168,10 +168,9 @@ describe('PRICING_CONFIG.plans', () => {
     expect(max).not.toHaveProperty('waitlist', true);
   });
 
-  it('team is a purchasable plan rather than a waitlist entry', async () => {
+  it('keeps sales-assisted Team out of the configured checkout catalog', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv();
-    const team = PRICING_CONFIG.plans.find((p) => p.id === 'team');
-    expect(team).not.toHaveProperty('waitlist', true);
+    expect(PRICING_CONFIG.plans.map((plan) => plan.id)).not.toContain('team');
   });
 
   it('plans are ordered pro, max', async () => {
@@ -211,15 +210,12 @@ describe('getConfiguredPriceId', () => {
       STRIPE_PRICE_PRO_YEARLY: 'price_pro_yearly',
       STRIPE_PRICE_MAX_MONTHLY: 'price_max_monthly',
       STRIPE_PRICE_MAX_15X_MONTHLY: 'price_max_15x_monthly',
-      STRIPE_PRICE_TEAM_MONTHLY: 'price_team_monthly',
-      STRIPE_PRICE_TEAM_YEARLY: 'price_team_yearly',
     });
 
     expect(getConfiguredPriceId('basic', 'monthly')).toBe('price_basic_usd');
     expect(getConfiguredPriceId('pro', 'yearly')).toBe('price_pro_yearly');
     expect(getConfiguredPriceId('max', 'monthly')).toBe('price_max_monthly');
     expect(getConfiguredPriceId('max_15x', 'monthly')).toBe('price_max_15x_monthly');
-    expect(getConfiguredPriceId('team', 'yearly')).toBe('price_team_yearly');
     expect(getConfiguredPriceId('max', 'yearly')).toBeUndefined();
   });
 });

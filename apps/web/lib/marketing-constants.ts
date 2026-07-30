@@ -138,9 +138,9 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
     {
       planId: 'team',
       label: BILLING_PLAN_PRICING.team.label,
-      price: `$${BILLING_PLAN_PRICING.team.monthlyPriceUsd}/seat/mo`,
-      billingInterval: `Monthly or annual ($${BILLING_PLAN_PRICING.team.yearlyPriceUsd}/seat/yr)`,
-      usageCapacity: 'Pro hosted capacity per seat with shared team controls',
+      price: 'Custom',
+      billingInterval: 'Sales-assisted contract',
+      usageCapacity: 'Contracted managed capacity with shared team controls',
       bestFor: 'Collaborative teams needing shared context',
       ctaLabel: 'Get started',
       ctaHref: '/pricing',

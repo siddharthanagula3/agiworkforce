@@ -43,17 +43,6 @@ export interface TeamActivity {
   details?: string;
   timestamp: string;
 }
-export interface TeamBilling {
-  teamId: string;
-  plan: string;
-  cycle: string;
-  seatCount: number;
-  costPerSeat: number;
-}
-export interface UsageMetrics {
-  [key: string]: number;
-}
-
 // ---- Team CRUD ----
 
 export async function createTeam(
@@ -186,45 +175,4 @@ export async function getUserTeamActivity(
   limit: number,
 ): Promise<TeamActivity[]> {
   return command<TeamActivity[]>('get_user_team_activity', { teamId, userId, limit });
-}
-
-// ---- Team Billing ----
-
-export async function getTeamBilling(teamId: string): Promise<TeamBilling | null> {
-  return command<TeamBilling | null>('get_team_billing', { teamId });
-}
-export async function initializeTeamBilling(
-  teamId: string,
-  plan: string,
-  cycle: string,
-  seatCount: number,
-): Promise<TeamBilling> {
-  return command<TeamBilling>('initialize_team_billing', { teamId, plan, cycle, seatCount });
-}
-export async function updateTeamPlan(
-  teamId: string,
-  plan: string,
-  updatedBy: string,
-): Promise<void> {
-  return command<void>('update_team_plan', { teamId, plan, updatedBy });
-}
-export async function addTeamSeats(
-  teamId: string,
-  count: number,
-  updatedBy: string,
-): Promise<void> {
-  return command<void>('add_team_seats', { teamId, count, updatedBy });
-}
-export async function removeTeamSeats(
-  teamId: string,
-  count: number,
-  updatedBy: string,
-): Promise<void> {
-  return command<void>('remove_team_seats', { teamId, count, updatedBy });
-}
-export async function calculateTeamCost(teamId: string): Promise<number> {
-  return command<number>('calculate_team_cost', { teamId });
-}
-export async function updateTeamUsage(teamId: string, metrics: UsageMetrics): Promise<void> {
-  return command<void>('update_team_usage', { teamId, metrics });
 }

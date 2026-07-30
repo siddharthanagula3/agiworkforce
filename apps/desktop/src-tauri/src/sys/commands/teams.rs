@@ -1,8 +1,7 @@
 use crate::features::teams::team_manager::TeamSettings;
 use crate::features::teams::{
-    ActivityType, BillingCycle, BillingPlan, ResourceType, Team, TeamActivity, TeamActivityManager,
-    TeamBilling, TeamBillingManager, TeamInvitation, TeamManager, TeamMember, TeamResource,
-    TeamResourceManager, TeamRole, TeamUpdates, UsageMetrics,
+    ActivityType, ResourceType, Team, TeamActivity, TeamActivityManager, TeamInvitation,
+    TeamManager, TeamMember, TeamResource, TeamResourceManager, TeamRole, TeamUpdates,
 };
 use crate::sys::commands::AppDatabase;
 use serde_json::json;
@@ -318,137 +317,6 @@ pub async fn get_user_team_activity(
 ) -> Result<Vec<TeamActivity>, String> {
     let manager = TeamActivityManager::new(db.conn.clone());
     manager.get_user_activity(&team_id, &user_id, limit)
-}
-
-#[tauri::command]
-pub async fn get_team_billing(
-    team_id: String,
-    db: State<'_, AppDatabase>,
-) -> Result<Option<TeamBilling>, String> {
-    let manager = TeamBillingManager::new(db.conn.clone());
-    manager.get_team_billing(&team_id)
-}
-
-#[tauri::command]
-pub async fn initialize_team_billing(
-    team_id: String,
-    plan: String,
-    cycle: String,
-    seat_count: usize,
-    db: State<'_, AppDatabase>,
-) -> Result<TeamBilling, String> {
-    let plan_tier =
-        BillingPlan::from_str(&plan).ok_or_else(|| format!("Invalid plan: {}", plan))?;
-
-    let billing_cycle = BillingCycle::from_str(&cycle)
-        .ok_or_else(|| format!("Invalid billing cycle: {}", cycle))?;
-
-    let manager = TeamBillingManager::new(db.conn.clone());
-    let billing =
-        manager.initialize_team_billing(&team_id, plan_tier, billing_cycle, seat_count)?;
-
-    let activity_manager = TeamActivityManager::new(db.conn.clone());
-    activity_manager.log_activity(
-        &team_id,
-        None,
-        ActivityType::BillingPlanChanged,
-        None,
-        None,
-        Some(json!({ "plan": plan, "cycle": cycle })),
-    )?;
-
-    Ok(billing)
-}
-
-#[tauri::command]
-pub async fn update_team_plan(
-    team_id: String,
-    plan: String,
-    updated_by: String,
-    db: State<'_, AppDatabase>,
-) -> Result<(), String> {
-    let plan_tier =
-        BillingPlan::from_str(&plan).ok_or_else(|| format!("Invalid plan: {}", plan))?;
-
-    let manager = TeamBillingManager::new(db.conn.clone());
-    manager.update_team_plan(&team_id, plan_tier)?;
-
-    let activity_manager = TeamActivityManager::new(db.conn.clone());
-    activity_manager.log_activity(
-        &team_id,
-        Some(updated_by),
-        ActivityType::BillingPlanChanged,
-        None,
-        None,
-        Some(json!({ "new_plan": plan })),
-    )?;
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn add_team_seats(
-    team_id: String,
-    count: usize,
-    updated_by: String,
-    db: State<'_, AppDatabase>,
-) -> Result<(), String> {
-    let manager = TeamBillingManager::new(db.conn.clone());
-    manager.add_seats(&team_id, count)?;
-
-    let activity_manager = TeamActivityManager::new(db.conn.clone());
-    activity_manager.log_activity(
-        &team_id,
-        Some(updated_by),
-        ActivityType::BillingSeatsAdded,
-        None,
-        None,
-        Some(json!({ "seats_added": count })),
-    )?;
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn remove_team_seats(
-    team_id: String,
-    count: usize,
-    updated_by: String,
-    db: State<'_, AppDatabase>,
-) -> Result<(), String> {
-    let manager = TeamBillingManager::new(db.conn.clone());
-    manager.remove_seats(&team_id, count)?;
-
-    let activity_manager = TeamActivityManager::new(db.conn.clone());
-    activity_manager.log_activity(
-        &team_id,
-        Some(updated_by),
-        ActivityType::BillingSeatsRemoved,
-        None,
-        None,
-        Some(json!({ "seats_removed": count })),
-    )?;
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn calculate_team_cost(
-    team_id: String,
-    db: State<'_, AppDatabase>,
-) -> Result<f64, String> {
-    let manager = TeamBillingManager::new(db.conn.clone());
-    manager.calculate_team_cost(&team_id)
-}
-
-#[tauri::command]
-pub async fn update_team_usage(
-    team_id: String,
-    metrics: UsageMetrics,
-    db: State<'_, AppDatabase>,
-) -> Result<(), String> {
-    let manager = TeamBillingManager::new(db.conn.clone());
-    manager.update_usage_metrics(&team_id, metrics)
 }
 
 #[tauri::command]

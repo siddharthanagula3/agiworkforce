@@ -84,8 +84,6 @@ export function validateRequiredEnvVars(): ValidationResult {
   // Optional tiers (waitlist or not yet launched)
   const optionalPriceVars = [
     'STRIPE_PRICE_MAX_MONTHLY',
-    'STRIPE_PRICE_TEAM_MONTHLY',
-    'STRIPE_PRICE_TEAM_YEARLY',
     'STRIPE_PRICE_ENTERPRISE_MONTHLY',
     'STRIPE_PRICE_ENTERPRISE_YEARLY',
   ];
