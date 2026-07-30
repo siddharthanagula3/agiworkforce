@@ -61,11 +61,10 @@ describe('public billing truth', () => {
       'STRIPE_PRICE_PRO_YEARLY',
       'STRIPE_PRICE_MAX_MONTHLY',
       'STRIPE_PRICE_MAX_15X_MONTHLY',
-      'STRIPE_PRICE_TEAM_MONTHLY',
-      'STRIPE_PRICE_TEAM_YEARLY',
     ];
 
     for (const variable of expected) expect(example).toContain(`${variable}=price_...`);
+    expect(example).not.toContain('STRIPE_PRICE_TEAM_');
     expect(example).not.toContain('STRIPE_PRICE_BASIC_YEARLY');
     expect(example).not.toContain('STRIPE_PRICE_MAX_YEARLY');
   });
@@ -74,11 +73,11 @@ describe('public billing truth', () => {
     for (const locale of ['en', 'es']) {
       const pricing = JSON.parse(read(`app/i18n/locales/${locale}/pricing.json`)) as {
         compareProInterval: string;
-        compareTeamInterval: string;
+        compareTeamBilling: string;
       };
 
       expect(pricing.compareProInterval).not.toContain('${{yearly}}');
-      expect(pricing.compareTeamInterval).not.toContain('${{yearly}}');
+      expect(pricing.compareTeamBilling).not.toMatch(/\{\{|\$|€/);
     }
   });
 
@@ -131,22 +130,21 @@ describe('public billing truth', () => {
     }
   });
 
-  it('presents Team as sales-assisted Pro-level usage per seat in both locales', () => {
+  it('presents Team as sales-assisted contracted capacity without a fictional seat price', () => {
     for (const locale of ['en', 'es']) {
       const pricing = JSON.parse(read(`app/i18n/locales/${locale}/pricing.json`)) as {
         teamTierBody: string;
         teamFeature1: string;
         teamFeature4: string;
         teamCta: string;
+        compareTeamBilling: string;
         compareTeamUsage: string;
       };
-      const salesAssisted = `${pricing.teamTierBody} ${pricing.teamFeature4} ${pricing.teamCta}`;
-      const perSeatUsage = `${pricing.teamTierBody} ${pricing.teamFeature1} ${pricing.compareTeamUsage}`;
+      const teamCopy = `${pricing.teamTierBody} ${pricing.teamFeature1} ${pricing.teamFeature4} ${pricing.teamCta} ${pricing.compareTeamBilling} ${pricing.compareTeamUsage}`;
 
-      expect(salesAssisted).toMatch(/sales-assisted|ventas/i);
-      expect(perSeatUsage).toMatch(/Pro/i);
-      expect(perSeatUsage).toMatch(/per seat|asiento/i);
-      expect(pricing.compareTeamUsage).not.toMatch(/shared capacity|capacidad compartida/i);
+      expect(teamCopy).toMatch(/sales-assisted|ventas/i);
+      expect(teamCopy).toMatch(/contracted|contratad/i);
+      expect(teamCopy).not.toMatch(/\$|€|per seat|por asiento/i);
     }
   });
 

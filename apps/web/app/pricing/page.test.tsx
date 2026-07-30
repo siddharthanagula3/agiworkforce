@@ -20,7 +20,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, unknown>) =>
-      (key === 'compareProInterval' || key === 'compareTeamInterval') && values?.['yearly']
+      key === 'compareProInterval' && values?.['yearly']
         ? `${key} ${String(values['yearly'])}`
         : key,
   }),
@@ -70,7 +70,8 @@ describe('PricingPage', () => {
     expect(screen.getAllByText('$7').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$100').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$200').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('$25').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('custom').length).toBeGreaterThan(0);
+    expect(screen.queryByText('$25')).toBeNull();
   });
 
   it('keeps Team visible but routes it to sales instead of personal checkout', async () => {
@@ -104,7 +105,7 @@ describe('PricingPage', () => {
       'Max 15x $200/mo monthlyOnly 15x Pro usage Unlimited Unlimited Yes Yes Yes Yes Yes CLI, Chrome & VS Code No Highest-capacity work and video generation',
     );
     expect(rows.getByRole('row', { name: /^Team / })).toHaveAccessibleName(
-      'Team $25/seat/mo compareTeamInterval $20 compareTeamUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code Sales-assisted pilot compareTeamBestFor',
+      'Team custom compareTeamBilling compareTeamUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code Sales-assisted pilot compareTeamBestFor',
     );
   });
 
@@ -300,7 +301,7 @@ describe('PricingPage', () => {
     expect(screen.getByRole('button', { name: 'basicCta' })).toBeDisabled();
   });
 
-  it('uses localized annual Pro and Team prices in the cards and comparison', async () => {
+  it('uses localized annual Pro pricing while keeping Team custom', async () => {
     vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -324,20 +325,6 @@ describe('PricingPage', () => {
           },
           max: {},
           max_15x: {},
-          team: {
-            monthly: {
-              amountMinor: 2_200,
-              currency: 'gbp',
-              localized: true,
-              checkoutReady: true,
-            },
-            yearly: {
-              amountMinor: 21_600,
-              currency: 'gbp',
-              localized: true,
-              checkoutReady: true,
-            },
-          },
         },
       }),
     } as Response);
@@ -346,9 +333,9 @@ describe('PricingPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /annual/i }));
 
     await waitFor(() => expect(screen.getAllByText('£15').length).toBeGreaterThan(0));
-    expect(screen.getAllByText('£18').length).toBeGreaterThan(0);
     expect(screen.getByRole('row', { name: /^Pro / })).toHaveTextContent('£15');
-    expect(screen.getByRole('row', { name: /^Team / })).toHaveTextContent('£18');
+    expect(screen.getByRole('row', { name: /^Team / })).toHaveTextContent('custom');
+    expect(screen.queryByText('£18')).toBeNull();
   });
 
   it('does not render the obsolete managed-cloud early-access waitlist', () => {

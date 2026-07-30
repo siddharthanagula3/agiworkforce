@@ -38,7 +38,6 @@ const PLAN_INTERVALS: Readonly<Record<ConfiguredCheckoutPlan, readonly BillingIn
   pro: ['monthly', 'yearly'],
   max: ['monthly'],
   max_15x: ['monthly'],
-  team: ['monthly', 'yearly'],
 };
 
 const PRICE_CACHE_TTL_MS = 10 * 60 * 1000;

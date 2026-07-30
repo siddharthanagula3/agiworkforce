@@ -90,6 +90,8 @@ export enum ActivityType {
   TeamCreated = 'team_created',
   TeamDeleted = 'team_deleted',
 
+  // Decode-only compatibility for activity rows written by the removed local
+  // billing ledger. No production command emits these events now.
   BillingPlanChanged = 'billing_plan_changed',
   BillingSeatsAdded = 'billing_seats_added',
   BillingSeatsRemoved = 'billing_seats_removed',
@@ -104,37 +106,6 @@ export interface TeamActivity {
   resourceId: string | null;
   metadata: Record<string, unknown> | null;
   timestamp: number;
-}
-
-export enum BillingPlan {
-  Team = 'team',
-  Enterprise = 'enterprise',
-}
-
-export enum BillingCycle {
-  Monthly = 'monthly',
-  Annual = 'annual',
-}
-
-export interface UsageMetrics {
-  workflowExecutions: number;
-  automationRuns: number;
-  apiCalls: number;
-  storageUsedGb: number;
-  computeHours: number;
-  llmTokensUsed: number;
-}
-
-export interface TeamBilling {
-  teamId: string;
-  planTier: BillingPlan;
-  billingCycle: BillingCycle;
-  seatCount: number;
-  stripeSubscriptionId: string | null;
-  usageMetrics: UsageMetrics;
-  nextBillingDate: number | null;
-  currentPeriodStart: number | null;
-  currentPeriodEnd: number | null;
 }
 
 export interface TeamUpdates {
@@ -244,56 +215,4 @@ export const canRemoveRole = (actorRole: TeamRole, targetRole: TeamRole): boolea
   if (actorRole === TeamRole.Admin)
     return targetRole === TeamRole.Editor || targetRole === TeamRole.Viewer;
   return false;
-};
-
-export const getPlanInfo = (plan: BillingPlan) => {
-  switch (plan) {
-    case BillingPlan.Team:
-      return {
-        name: 'Team',
-        pricePerSeat: 29,
-        includedSeats: 5,
-        maxSeats: 50,
-        features: [
-          'Up to 50 team members',
-          'Shared workflows and automations',
-          'Team activity logs',
-          'Basic support',
-          'API access',
-        ],
-      };
-
-    case BillingPlan.Enterprise:
-      return {
-        name: 'Enterprise',
-        pricePerSeat: 99,
-        includedSeats: 10,
-        maxSeats: null,
-        features: [
-          'Unlimited team members',
-          'Advanced security features',
-          'Priority support',
-          'Custom integrations',
-          'SSO and SAML',
-          'Advanced analytics',
-          'Dedicated account manager',
-        ],
-      };
-  }
-};
-
-export const getCycleDiscount = (cycle: BillingCycle): number => {
-  return cycle === BillingCycle.Annual ? 0.8 : 1.0;
-};
-
-export const calculateTeamCost = (
-  plan: BillingPlan,
-  cycle: BillingCycle,
-  seatCount: number,
-): number => {
-  const planInfo = getPlanInfo(plan);
-  const discount = getCycleDiscount(cycle);
-  const monthlyCost = planInfo.pricePerSeat * seatCount * discount;
-
-  return cycle === BillingCycle.Annual ? monthlyCost * 12 : monthlyCost;
 };

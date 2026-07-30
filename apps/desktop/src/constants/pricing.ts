@@ -237,7 +237,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'team',
     name: 'Team',
-    description: 'Pro-level capabilities with shared team administration.',
+    description: 'Contracted managed capacity with shared team administration.',
     monthlyPrice: getPlanPriceUsd('team', 'monthly'),
     yearlyPrice: getPlanPriceUsd('team', 'yearly'),
     stripePriceId: {
@@ -246,7 +246,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       yearly: null,
     },
     features: [
-      'Pro capabilities per seat',
+      'Managed capacity sized for your organization',
       'Team administration',
       'Shared Cloud workspace controls',
     ],

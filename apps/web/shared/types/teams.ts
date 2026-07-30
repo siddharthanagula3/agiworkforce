@@ -90,9 +90,6 @@ export enum ActivityType {
   SettingsChanged = 'settings_changed',
   TeamCreated = 'team_created',
   TeamDeleted = 'team_deleted',
-  BillingPlanChanged = 'billing_plan_changed',
-  BillingSeatsAdded = 'billing_seats_added',
-  BillingSeatsRemoved = 'billing_seats_removed',
 }
 
 export interface TeamActivity {
@@ -104,37 +101,6 @@ export interface TeamActivity {
   resourceId: string | null;
   metadata: Record<string, unknown> | null;
   timestamp: number;
-}
-
-export enum BillingPlan {
-  Team = 'team',
-  Enterprise = 'enterprise',
-}
-
-export enum BillingCycle {
-  Monthly = 'monthly',
-  Annual = 'annual',
-}
-
-export interface UsageMetrics {
-  workflowExecutions: number;
-  automationRuns: number;
-  apiCalls: number;
-  storageUsedGb: number;
-  computeHours: number;
-  llmTokensUsed: number;
-}
-
-export interface TeamBilling {
-  teamId: string;
-  planTier: BillingPlan;
-  billingCycle: BillingCycle;
-  seatCount: number;
-  stripeSubscriptionId: string | null;
-  usageMetrics: UsageMetrics;
-  nextBillingDate: number | null;
-  currentPeriodStart: number | null;
-  currentPeriodEnd: number | null;
 }
 
 export interface TeamUpdates {
