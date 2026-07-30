@@ -146,6 +146,24 @@ export function NotificationsSection() {
         </p>
       </div>
 
+      <section
+        aria-label="Notification channel availability"
+        style={{
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          padding: '16px 20px',
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
+          Browser replies only
+        </div>
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
+          Email, task, schedule, project, usage, tips, and marketing channels are not available. AGI
+          does not save controls for notification senders that are not running.
+        </p>
+      </section>
+
       {CHANNEL_GROUPS.map((group) => (
         <section
           key={group.heading}
