@@ -1313,6 +1313,276 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
               />
             </View>
           </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="Calendar permission. Currently not yet asked. Tap to manage."
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 72,
+                "paddingHorizontal": 10,
+                "paddingVertical": 10,
+              }
+            }
+          >
+            <View
+              style={
+                {
+                  "alignItems": "center",
+                  "alignSelf": "center",
+                  "backgroundColor": undefined,
+                  "borderRadius": 10,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "width": 32,
+                }
+              }
+            >
+              <View
+                color="#aaa"
+                size={19}
+                testID="icon-CalendarDays"
+              />
+            </View>
+            <View
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
+                  }
+                }
+              >
+                Calendar
+              </Text>
+              <Text
+                numberOfLines={2}
+                style={
+                  {
+                    "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
+                  }
+                }
+              >
+                Optional. Used only after you enable device calendar context.
+              </Text>
+            </View>
+            <View
+              style={
+                {
+                  "alignItems": "center",
+                  "flexDirection": "row",
+                  "flexShrink": 0,
+                  "gap": 6,
+                  "justifyContent": "flex-end",
+                  "minWidth": 50,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#777",
+                    "fontSize": 13,
+                    "fontWeight": "600",
+                  }
+                }
+              >
+                Ask
+              </Text>
+              <View
+                color="#777"
+                size={17}
+                style={
+                  {
+                    "flexShrink": 0,
+                  }
+                }
+                testID="icon-ChevronRight"
+              />
+            </View>
+          </View>
+          <View
+            testID="separator"
+          />
+        </View>
+        <View>
+          <View
+            accessibilityLabel="Reminders permission. Currently not yet asked. Tap to manage."
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "gap": 14,
+                "minHeight": 72,
+                "paddingHorizontal": 10,
+                "paddingVertical": 10,
+              }
+            }
+          >
+            <View
+              style={
+                {
+                  "alignItems": "center",
+                  "alignSelf": "center",
+                  "backgroundColor": undefined,
+                  "borderRadius": 10,
+                  "height": 32,
+                  "justifyContent": "center",
+                  "width": 32,
+                }
+              }
+            >
+              <View
+                color="#aaa"
+                size={19}
+                testID="icon-ListChecks"
+              />
+            </View>
+            <View
+              style={
+                {
+                  "flex": 1,
+                  "minWidth": 0,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#fff",
+                    "fontSize": 16,
+                    "fontWeight": "600",
+                  }
+                }
+              >
+                Reminders
+              </Text>
+              <Text
+                numberOfLines={2}
+                style={
+                  {
+                    "color": "#777",
+                    "fontSize": 13,
+                    "lineHeight": 18,
+                    "marginTop": 2,
+                  }
+                }
+              >
+                Optional on iOS. This release does not read reminders automatically.
+              </Text>
+            </View>
+            <View
+              style={
+                {
+                  "alignItems": "center",
+                  "flexDirection": "row",
+                  "flexShrink": 0,
+                  "gap": 6,
+                  "justifyContent": "flex-end",
+                  "minWidth": 50,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#777",
+                    "fontSize": 13,
+                    "fontWeight": "600",
+                  }
+                }
+              >
+                Ask
+              </Text>
+              <View
+                color="#777"
+                size={17}
+                style={
+                  {
+                    "flexShrink": 0,
+                  }
+                }
+                testID="icon-ChevronRight"
+              />
+            </View>
+          </View>
         </View>
       </View>
       <View

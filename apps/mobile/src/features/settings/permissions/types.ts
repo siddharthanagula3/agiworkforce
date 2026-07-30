@@ -19,7 +19,9 @@ export type MobilePermissionKind =
   | 'location'
   | 'photos'
   | 'notifications'
-  | 'contacts';
+  | 'contacts'
+  | 'calendar'
+  | 'reminders';
 
 /**
  * The canonical 4-state Apple/Android permission level enum.

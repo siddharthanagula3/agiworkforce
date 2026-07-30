@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 09ca1bffcacda40a5ebbf27f152c4576da02a755b9d803e435ebe8cb67bdd44c -->
+<!-- ui-gaps-csv-sha256: c92644e7498dbfc5c2a8d2972534d4dfc7a7c4706723428080e99915f8cb04ac -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 101 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 100 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  305 |
+| Open        |  304 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   35 |
+| Done        |   36 |
 | Not Planned |    1 |
 
 ## P0
@@ -878,24 +878,24 @@ Add a Family Members group with an 'Add family member' invite flow (email/link i
 
 - `chatgpt_reference/063-chatgpt-ios-settings-parental-controls-add-family-member.png`
 
-### GAP-038 — Permissions screen missing Calendar, Reminders, and Health access rows
+### GAP-038 — Permissions consolidates real Calendar and iOS Reminders access while leaving Health absent
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** Claude · iOS · Settings > Permissions
 
 **Gap**
 
-Claude iOS's unified Permissions screen lists Location, Calendar, Reminders, and Health with per-item OS-level status. agiworkforce's Permissions screen (apps/mobile/src/features/settings/permissions/registry.ts) only registers microphone, camera, location, photos, notifications, and contacts. Calendar access exists but lives in a separate Integrations screen (IA fragmentation); Reminders is not implemented at all; Health/fitness was explicitly removed per an in-code comment (STB-21).
+The unified Permissions screen now includes Calendar on iOS and Android plus the distinct Reminders permission on iOS, each with current OS status and the existing user-initiated detail/request flow. Reminders is hidden on Android because Expo Calendar documents no direct Android reminder analogue, and its copy states that this release does not read reminders automatically. Health remains deliberately absent: the retired Health row had no native data service or backend consumer, so displaying or requesting it would authorize an unsupported capability.
 
 **Evidence**
 
-apps/mobile/src/features/integrations/store.ts:120-121 ('healthToStatus() and the Health/Google Fit entry were removed... backend route never existed'); apps/mobile/src/features/settings/permissions/types.ts (MobilePermissionKind has no calendar/reminders/health); apps/mobile/src/features/integrations/services/deviceIntegrations.ts (uses expo-calendar but not surfaced in Permissions)
+permissions/types.ts and permissionsStore.ts include encrypted local state for calendar and reminders. permissions/registry.ts binds Calendar.getCalendarPermissionsAsync/requestCalendarPermissionsAsync and, on iOS only, getRemindersPermissionsAsync/requestRemindersPermissionsAsync; PERMISSION_KINDS keeps the platform-specific list honest. app.config.js delegates calendar/reminder native usage descriptions and Android permissions to the Expo Calendar SDK 55 config plugin. permissions-calendar-reminders.test.ts verifies distinct adapters and normalized status, while PermissionsScreen.snapshot.test.tsx locks both rows into the mounted iOS list. The existing integrations service continues to own actual calendar context. Expo Calendar's installed SDK source and current documentation identify Reminders APIs as iOS-only.
 
 **Suggested fix**
 
-Add Calendar and Reminders as first-class entries in PERMISSION_REGISTRY/MobilePermissionKind so they render in the same consolidated Permissions list as Location/Camera/etc, and reconsider re-adding a Health permission row once a backend route exists (rather than leaving it silently removed).
+Completed for native capabilities the product can truthfully expose. Keep Reminders iOS-only and user-initiated, do not imply reminder data is read automatically, and add Health only alongside a reviewed native adapter, declared data use, production consumer, revocation path, and tests.
 
 **Reference screenshot(s)**
 

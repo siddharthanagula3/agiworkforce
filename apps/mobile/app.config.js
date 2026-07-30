@@ -83,14 +83,6 @@ const config = {
         'AGI Workforce accesses your photo library to select images for AI analysis and conversations.',
       NSFaceIDUsageDescription:
         'AGI Workforce uses Face ID to securely unlock the app and protect your data.',
-      NSCalendarsUsageDescription:
-        'AGI Workforce accesses your calendar to help schedule tasks and set reminders through AI agents.',
-      NSCalendarsFullAccessUsageDescription:
-        'AGI Workforce accesses your calendar to read upcoming events only after you enable the Calendar connector.',
-      NSRemindersUsageDescription:
-        'AGI Workforce accesses reminders only after you enable the Calendar connector.',
-      NSRemindersFullAccessUsageDescription:
-        'AGI Workforce accesses reminders only after you enable the Calendar connector.',
       NSContactsUsageDescription:
         'AGI Workforce accesses your contacts to help compose messages and manage communications through AI.',
       NSSpeechRecognitionUsageDescription:
@@ -225,6 +217,15 @@ const config = {
       },
     ],
     'expo-localization',
+    [
+      'expo-calendar',
+      {
+        calendarPermission:
+          'Allow $(PRODUCT_NAME) to read calendar events only after you enable device calendar context.',
+        remindersPermission:
+          'Allow $(PRODUCT_NAME) to access reminders only when you explicitly enable reminder access.',
+      },
+    ],
     [
       'expo-camera',
       {
