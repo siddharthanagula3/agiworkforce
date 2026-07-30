@@ -43,6 +43,7 @@ import {
   setAgentEffortWithConsent,
   setAgentModeWithConsent,
 } from '../permissions/agentModeConsent';
+import { ONBOARDING_SEEN_KEY } from '../onboarding/onboardingState';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -70,6 +71,10 @@ export type WebviewToExtMessage =
   | { type: 'openHistory' }
   | { type: 'newChat' }
   | { type: 'openAccount' }
+  | { type: 'completeOnboarding' }
+  | { type: 'openPermissionDocs' }
+  | { type: 'openPrivacySettings' }
+  | { type: 'openWebTasks' }
   | {
       type: 'attachFiles';
       payload: {
@@ -159,7 +164,8 @@ export type ExtToWebviewMessage =
         status: 'signed-in' | 'signed-out' | 'expired';
         identity?: AccountIdentity;
       };
-    };
+    }
+  | { type: 'showOnboarding' };
 
 export interface UsageMeterWebviewPayload {
   source: UsageMeter['source'];
@@ -378,6 +384,32 @@ export class ChatStateManager {
 
       case 'openAccount': {
         await vscode.commands.executeCommand('agi-workforce.showAccountUsage');
+        break;
+      }
+
+      case 'completeOnboarding': {
+        await this._context.globalState.update(ONBOARDING_SEEN_KEY, true);
+        break;
+      }
+
+      case 'openPermissionDocs': {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/docs?topic=permissions&from=vscode-extension'),
+        );
+        break;
+      }
+
+      case 'openPrivacySettings': {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/settings/privacy?from=vscode-extension'),
+        );
+        break;
+      }
+
+      case 'openWebTasks': {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/tasks?from=vscode-extension'),
+        );
         break;
       }
 
@@ -709,6 +741,10 @@ export class ChatStateManager {
       type: 'accountStatus',
       payload: identity ? { status: state.status, identity } : { status: state.status },
     });
+  }
+
+  public showOnboarding(): void {
+    this._post({ type: 'showOnboarding' });
   }
 
   async pushUsageMeter(): Promise<void> {

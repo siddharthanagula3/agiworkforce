@@ -382,9 +382,72 @@
         "icon": "$(account)"
       },
       {
+        "command": "agi-workforce.showOnboarding",
+        "title": "AGI Workforce: Show Getting Started",
+        "icon": "$(getting-started)"
+      },
+      {
+        "command": "agi-workforce.openWebTasks",
+        "title": "AGI Workforce: Open Web Tasks",
+        "icon": "$(server-process)"
+      },
+      {
         "command": "agi-workforce.mentionFileFromProject",
         "title": "AGI Workforce: Mention File from Project",
         "icon": "$(mention)"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "agiWorkforce.gettingStarted",
+        "title": "Get started with AGI Workforce",
+        "description": "Understand workspace scope, task handoffs, review, autonomy, and trust boundaries before your first developer session.",
+        "steps": [
+          {
+            "id": "openDeveloperSession",
+            "title": "Work in this repository",
+            "description": "AGI developer sessions stay scoped to the open workspace and local runtime. [Open AGI Chat](command:agi-workforce.chat)",
+            "media": {
+              "markdown": "media/walkthrough/01-workspace.md"
+            },
+            "completionEvents": [
+              "onCommand:agi-workforce.chat"
+            ]
+          },
+          {
+            "id": "understandTaskHandoff",
+            "title": "Choose foreground or background work",
+            "description": "The IDE runs foreground developer sessions. Hosted background task history remains on Web. [Open Web Tasks](command:agi-workforce.openWebTasks)",
+            "media": {
+              "markdown": "media/walkthrough/02-tasks.md"
+            },
+            "completionEvents": [
+              "onCommand:agi-workforce.openWebTasks"
+            ]
+          },
+          {
+            "id": "reviewChanges",
+            "title": "Turn intent into a reviewed change",
+            "description": "Attach workspace files, ask AGI to implement a TODO, and inspect the native diff before accepting changes. [Open AGI Settings](command:agi-workforce.openSettings)",
+            "media": {
+              "markdown": "media/walkthrough/03-review.md"
+            },
+            "completionEvents": [
+              "onCommand:agi-workforce.openSettings"
+            ]
+          },
+          {
+            "id": "reviewTrustBoundary",
+            "title": "Set autonomy and verify the boundary",
+            "description": "Review generated code and commands. The header names Local, BYOK, or Managed Cloud, and Account & Usage identifies the relevant plan owner. [Review Account & Usage](command:agi-workforce.showAccountUsage)",
+            "media": {
+              "markdown": "media/walkthrough/04-trust.md"
+            },
+            "completionEvents": [
+              "onCommand:agi-workforce.showAccountUsage"
+            ]
+          }
+        ]
       }
     ],
     "chatParticipants": [
