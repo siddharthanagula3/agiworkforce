@@ -129,6 +129,31 @@ describe('settings webview', () => {
     );
   });
 
+  it('keeps surface-bound capabilities visible with honest VS Code availability', () => {
+    const doc = parse();
+    const rows = Array.from(
+      doc.querySelectorAll<HTMLElement>('[data-capability-id][data-capability-available]'),
+    );
+
+    expect(rows.map((row) => row.dataset.capabilityId)).toEqual([
+      'managed-plugins',
+      'browser-control',
+      'computer-use',
+    ]);
+    for (const row of rows) {
+      expect(row.dataset.capabilityAvailable).toBe('false');
+      expect(row.classList.contains('is-unavailable')).toBe(true);
+      expect(row.querySelector('.capability-availability-status')?.textContent).toBe(
+        'Unavailable in this context',
+      );
+      expect(row.title).toMatch(/^Available in .+\.$/u);
+    }
+
+    expect(rows[1]?.title).toBe('Available in Desktop app and Chrome extension.');
+    expect(rows[2]?.title).toBe('Available in Desktop app and Chrome extension.');
+    expect(doc.querySelector('[aria-label="Capability availability in VS Code"]')).not.toBeNull();
+  });
+
   it('navigates sections and emits a typed numeric settings update', () => {
     const postMessage = boot();
     const configurationButton = document.querySelector(

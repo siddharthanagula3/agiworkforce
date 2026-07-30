@@ -26,7 +26,7 @@
  * Cells the product spec leaves UNSPECIFIED are set to MATCH CURRENT SHIPPED
  * BEHAVIOR (not inferred) and tagged `SPEC-SILENT` for founder confirmation.
  */
-import type { SyncedAppSurface } from './suite-contracts';
+import type { SourceSurface, SyncedAppSurface } from './suite-contracts';
 
 export type PlatformCapability =
   // ── Universal (cloud) — every synced surface ────────────────────────────────
@@ -314,4 +314,124 @@ export function getCapabilitiesByDomain(domain: CapabilityDomain): PlatformCapab
 /** Whether a capability needs explicit user confirmation before an agent runs it. */
 export function capabilityRequiresConfirmation(capability: PlatformCapability): boolean {
   return CAPABILITY_METADATA[capability].permissions?.requiresConfirmation ?? false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cross-surface capability discovery.
+//
+// The boolean platform matrix above remains the runtime gate for synced apps.
+// This smaller registry serves a different purpose: product surfaces can keep
+// notable capabilities discoverable while truthfully showing that they run
+// somewhere else. Developer surfaces use the canonical SourceSurface names
+// (`chrome` and `vscode`) internally; user-facing labels spell those out as the
+// Chrome and VS Code extensions.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DiscoverableSurfaceCapability = 'managed-plugins' | 'browser-control' | 'computer-use';
+
+export interface SurfaceCapabilityAvailabilityDescriptor {
+  label: string;
+  description: string;
+  availability: Readonly<Record<SourceSurface, boolean>>;
+}
+
+export interface SurfaceCapabilityAvailabilityPresentation {
+  id: DiscoverableSurfaceCapability;
+  label: string;
+  description: string;
+  available: boolean;
+  statusLabel: 'Available' | 'Unavailable in this context';
+  availableSurfaceLabels: readonly string[];
+  tooltip: string;
+}
+
+const SOURCE_SURFACE_AVAILABILITY_LABELS: Readonly<Record<SourceSurface, string>> = Object.freeze({
+  web: 'Web',
+  desktop: 'Desktop app',
+  mobile: 'Mobile app',
+  cli: 'AGI CLI',
+  vscode: 'VS Code extension',
+  chrome: 'Chrome extension',
+});
+
+export const DISCOVERABLE_SURFACE_CAPABILITIES: Readonly<
+  Record<DiscoverableSurfaceCapability, SurfaceCapabilityAvailabilityDescriptor>
+> = Object.freeze({
+  'managed-plugins': {
+    label: 'Managed Cloud plugins',
+    description: 'Install account-scoped tools from the Cloud directory.',
+    availability: Object.freeze({
+      web: isCapabilityEnabled('web', 'canUsePlugins'),
+      desktop: isCapabilityEnabled('desktop', 'canUsePlugins'),
+      mobile: isCapabilityEnabled('mobile', 'canUsePlugins'),
+      cli: false,
+      vscode: false,
+      chrome: false,
+    }),
+  },
+  'browser-control': {
+    label: 'Browser control',
+    description: 'Inspect and operate live browser tabs with explicit permission.',
+    availability: Object.freeze({
+      web: false,
+      desktop: isCapabilityEnabled('desktop', 'canUseBrowserAutomation'),
+      mobile: false,
+      cli: false,
+      vscode: false,
+      chrome: true,
+    }),
+  },
+  'computer-use': {
+    label: 'Computer use',
+    description: 'Operate browser pages with screenshot-guided actions and confirmations.',
+    availability: Object.freeze({
+      web: false,
+      desktop: isCapabilityEnabled('desktop', 'canUseDesktopAutomation'),
+      mobile: false,
+      cli: false,
+      vscode: false,
+      chrome: true,
+    }),
+  },
+});
+
+export const ALL_DISCOVERABLE_SURFACE_CAPABILITIES = Object.freeze(
+  Object.keys(DISCOVERABLE_SURFACE_CAPABILITIES) as DiscoverableSurfaceCapability[],
+);
+
+function formatSurfaceList(labels: readonly string[]): string {
+  if (labels.length === 0) return 'No product surface';
+  if (labels.length === 1) return labels[0] ?? 'No product surface';
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+}
+
+/**
+ * Builds honest availability copy for capability lists and settings surfaces.
+ * Unsupported capabilities remain discoverable without rendering a fake
+ * enabled control or requiring each app to invent its own surface labels.
+ */
+export function getSurfaceCapabilityAvailability(
+  capability: DiscoverableSurfaceCapability,
+  surface: SourceSurface,
+): SurfaceCapabilityAvailabilityPresentation {
+  const descriptor = DISCOVERABLE_SURFACE_CAPABILITIES[capability];
+  const availableSurfaceLabels = (Object.keys(descriptor.availability) as SourceSurface[]).flatMap(
+    (candidate) =>
+      descriptor.availability[candidate] ? [SOURCE_SURFACE_AVAILABILITY_LABELS[candidate]] : [],
+  );
+  const available = descriptor.availability[surface];
+  const availabilitySummary = formatSurfaceList(availableSurfaceLabels);
+
+  return {
+    id: capability,
+    label: descriptor.label,
+    description: descriptor.description,
+    available,
+    statusLabel: available ? 'Available' : 'Unavailable in this context',
+    availableSurfaceLabels,
+    tooltip: available
+      ? `Available in ${SOURCE_SURFACE_AVAILABILITY_LABELS[surface]}.`
+      : `Available in ${availabilitySummary}.`,
+  };
 }
