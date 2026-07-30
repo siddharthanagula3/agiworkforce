@@ -68,4 +68,24 @@ describe('toolStore approval audit trail', () => {
     expect(state.actionLog[0]?.status).toBe('failed');
     expect(state.actionLog[0]?.error).toBe('User rejected dangerous delete');
   });
+
+  it('leaves native MCP timeout ownership with the fail-closed backend channel', () => {
+    const store = useToolStore.getState();
+
+    store.addApprovalRequest({
+      ...baseApproval,
+      timeoutSeconds: 120,
+    });
+
+    let state = useToolStore.getState();
+    expect(state.pendingApprovals[0]?.timeoutSeconds).toBe(120);
+    expect(state.approvalTimeoutTimers.has(baseApproval.id)).toBe(false);
+
+    store.handleApprovalTimeout(baseApproval.id);
+
+    state = useToolStore.getState();
+    expect(state.pendingApprovals).toHaveLength(1);
+    expect(state.pendingApprovals[0]?.status).toBe('pending');
+    expect(state.approvalTimeoutTimers.has(baseApproval.id)).toBe(false);
+  });
 });
