@@ -8,7 +8,17 @@
  *
  * Wired to settingsStore selectors/setters added in Wave 1.
  */
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/AlertDialog';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import {
@@ -35,6 +45,11 @@ interface AgentExecutionSettingsProps {
   onSettingsChange?: () => void;
 }
 
+type UnsafeSandboxChange =
+  | { kind: 'enabled'; value: false }
+  | { kind: 'backend'; value: 'none' }
+  | { kind: 'policy'; value: 'danger-full-access' };
+
 export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSettingsProps) {
   const approvalTimeoutSeconds = useSettingsStore(selectApprovalTimeoutSeconds);
   const approvalTimeoutPolicy = useSettingsStore(selectApprovalTimeoutPolicy);
@@ -53,6 +68,8 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
   const setTerminalSandboxAllowedDomains = useSettingsStore(
     (s) => s.setTerminalSandboxAllowedDomains,
   );
+  const [pendingUnsafeSandboxChange, setPendingUnsafeSandboxChange] =
+    useState<UnsafeSandboxChange | null>(null);
 
   const handleApprovalTimeoutChange = useCallback(
     (value: number[]) => {
@@ -86,27 +103,60 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
 
   const handleTerminalSandboxEnabledChange = useCallback(
     (enabled: boolean) => {
+      if (!enabled && terminalSandbox.enabled) {
+        setPendingUnsafeSandboxChange({ kind: 'enabled', value: false });
+        return;
+      }
       setTerminalSandboxEnabled(enabled);
       onSettingsChange?.();
     },
-    [onSettingsChange, setTerminalSandboxEnabled],
+    [onSettingsChange, setTerminalSandboxEnabled, terminalSandbox.enabled],
   );
 
   const handleTerminalSandboxBackendChange = useCallback(
     (value: string) => {
-      setTerminalSandboxBackend(value as TerminalSandboxBackend);
+      const backend = value as TerminalSandboxBackend;
+      if (backend === 'none' && terminalSandbox.backend !== 'none') {
+        setPendingUnsafeSandboxChange({ kind: 'backend', value: 'none' });
+        return;
+      }
+      setTerminalSandboxBackend(backend);
       onSettingsChange?.();
     },
-    [onSettingsChange, setTerminalSandboxBackend],
+    [onSettingsChange, setTerminalSandboxBackend, terminalSandbox.backend],
   );
 
   const handleTerminalSandboxPolicyChange = useCallback(
     (value: string) => {
-      setTerminalSandboxPolicy(value as TerminalSandboxPolicy);
+      const policy = value as TerminalSandboxPolicy;
+      if (policy === 'danger-full-access' && terminalSandbox.policy !== 'danger-full-access') {
+        setPendingUnsafeSandboxChange({ kind: 'policy', value: 'danger-full-access' });
+        return;
+      }
+      setTerminalSandboxPolicy(policy);
       onSettingsChange?.();
     },
-    [onSettingsChange, setTerminalSandboxPolicy],
+    [onSettingsChange, setTerminalSandboxPolicy, terminalSandbox.policy],
   );
+
+  const confirmUnsafeSandboxChange = useCallback(() => {
+    if (pendingUnsafeSandboxChange === null) return;
+    if (pendingUnsafeSandboxChange.kind === 'enabled') {
+      setTerminalSandboxEnabled(false);
+    } else if (pendingUnsafeSandboxChange.kind === 'backend') {
+      setTerminalSandboxBackend('none');
+    } else {
+      setTerminalSandboxPolicy('danger-full-access');
+    }
+    setPendingUnsafeSandboxChange(null);
+    onSettingsChange?.();
+  }, [
+    onSettingsChange,
+    pendingUnsafeSandboxChange,
+    setTerminalSandboxBackend,
+    setTerminalSandboxEnabled,
+    setTerminalSandboxPolicy,
+  ]);
 
   const handleTerminalSandboxExecutableChange = useCallback(
     (value: string) => {
@@ -140,7 +190,8 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
   };
 
   const SANDBOX_POLICY_DESCRIPTIONS: Record<TerminalSandboxPolicy, string> = {
-    'danger-full-access': 'No OS-level process sandbox. Commands run with the app’s normal access.',
+    'danger-full-access':
+      'No OS-level process sandbox. Separately approved commands run with the app’s normal filesystem and network access.',
     'read-only':
       'Workspace becomes read-only. Network stays blocked unless you explicitly allow domains.',
     'workspace-write':
@@ -363,6 +414,43 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
           </div>
         )}
       </div>
+
+      <AlertDialog
+        open={pendingUnsafeSandboxChange !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingUnsafeSandboxChange(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Run terminal commands without an OS sandbox?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the workspace filesystem and network-domain restrictions enforced by the
+              terminal sandbox.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              Separately approved commands will run with the app&apos;s normal OS account access.
+              They may read or modify files outside the workspace and contact network destinations
+              that are not in your allowlist.
+            </p>
+            <p>
+              This does not bypass agent approval prompts or expand OS permissions, but prompt
+              injection or a mistaken approval can cause data loss or expose sensitive data.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={confirmUnsafeSandboxChange}
+            >
+              Run Without Sandbox
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

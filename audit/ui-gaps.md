@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: e2b5c7207af9264710f1e80fad9fdca8308c7cc0aafd3cd6035055e23846a16b -->
+<!-- ui-gaps-csv-sha256: 3947071be550342d8382dae0c66b745c81bd886424576158a4f98d4eea7e27cb -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 10 P0, 126 P1, 161 P2, 43 P3.
+- Unresolved: 9 P0, 126 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  340 |
+| Open        |  339 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |    1 |
+| Done        |    2 |
 | Not Planned |    0 |
 
 ## P0
@@ -186,24 +186,24 @@ Add an Archived chats destination that consumes getArchivedConversations and sup
 
 - `chatgpt_reference/091-chatgpt-macos-settings-general-permissions-full-access-defaults.png`
 
-### GAP-008 — Full-access sandbox selection lacks a confirmation gate and complete risk disclosure
+### GAP-008 — Full-access sandbox selection requires confirmation and complete risk disclosure
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-copy
 - **Reference:** ChatGPT · macOS desktop · Settings > General — Permissions
 
 **Gap**
 
-The reference explains each permission tier and requires a deliberate confirmation before full access. agiworkforce now shows a short description for the selected terminal-sandbox policy, so the source audit's 'zero explanatory text' premise is stale. However, choosing Danger full access still persists immediately, and the description only says commands use the app's normal access; it does not clearly enumerate whole-disk writes, network reach, approval bypass implications, data-loss/leak risk, or provide a cancelable confirmation ceremony.
+The reference explains each permission tier and requires a deliberate confirmation before full access. agiworkforce now preserves the existing tier descriptions and gates every supported transition to unsandboxed terminal execution: turning the sandbox off, choosing the Disabled runtime backend, or selecting Danger full access. None of those settings persist until the user explicitly confirms.
 
 **Evidence**
 
-apps/desktop/src/features/settings/AgentExecutionSettings.tsx defines SANDBOX_POLICY_DESCRIPTIONS and renders the selected description, but handleTerminalSandboxPolicyChange immediately calls setTerminalSandboxPolicy. The danger-full-access SelectItem has no confirmation dialog, explicit scope list, risk acknowledgement, or Learn more path.
+apps/desktop/src/features/settings/AgentExecutionSettings.tsx intercepts all three unsandboxed transitions and presents a cancelable danger dialog before mutating settings. The dialog names loss of workspace and network-domain restrictions, access outside the workspace through the app's OS account, prompt-injection, data-loss, and sensitive-data exposure risks. It also states accurately that disabling the process sandbox does not bypass separate agent approvals or expand OS permissions. AgentExecutionSettings.test.tsx verifies delayed persistence, cancellation, and the equivalent Disabled-backend path.
 
 **Suggested fix**
 
-Intercept transitions to danger-full-access with a danger-styled confirmation dialog that names filesystem, command, network, approval, prompt-injection, data-loss, and data-exposure risks. Keep Cancel as the safe default and persist the policy only after explicit confirmation; retain the existing inline descriptions for all tiers.
+Completed. Keep every future path to unsandboxed terminal execution behind this shared confirmation boundary, and update the disclosure whenever the actual sandbox or approval contract changes.
 
 **Reference screenshot(s)**
 

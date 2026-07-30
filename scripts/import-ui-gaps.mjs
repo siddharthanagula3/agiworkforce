@@ -67,13 +67,15 @@ function reconcileCurrentP0Premises(record) {
         'Add an Archived chats destination that consumes getArchivedConversations and supports open, restore, and delete-permanently with an empty state. Reuse the existing sidebar archive action instead of adding a second archive control.',
     },
     'GAP-008': {
-      title: 'Full-access sandbox selection lacks a confirmation gate and complete risk disclosure',
+      status: 'Done',
+      owner: 'Desktop',
+      title: 'Full-access sandbox selection requires confirmation and complete risk disclosure',
       detail:
-        "The reference explains each permission tier and requires a deliberate confirmation before full access. agiworkforce now shows a short description for the selected terminal-sandbox policy, so the source audit's 'zero explanatory text' premise is stale. However, choosing Danger full access still persists immediately, and the description only says commands use the app's normal access; it does not clearly enumerate whole-disk writes, network reach, approval bypass implications, data-loss/leak risk, or provide a cancelable confirmation ceremony.",
+        'The reference explains each permission tier and requires a deliberate confirmation before full access. agiworkforce now preserves the existing tier descriptions and gates every supported transition to unsandboxed terminal execution: turning the sandbox off, choosing the Disabled runtime backend, or selecting Danger full access. None of those settings persist until the user explicitly confirms.',
       evidence:
-        'apps/desktop/src/features/settings/AgentExecutionSettings.tsx defines SANDBOX_POLICY_DESCRIPTIONS and renders the selected description, but handleTerminalSandboxPolicyChange immediately calls setTerminalSandboxPolicy. The danger-full-access SelectItem has no confirmation dialog, explicit scope list, risk acknowledgement, or Learn more path.',
+        "apps/desktop/src/features/settings/AgentExecutionSettings.tsx intercepts all three unsandboxed transitions and presents a cancelable danger dialog before mutating settings. The dialog names loss of workspace and network-domain restrictions, access outside the workspace through the app's OS account, prompt-injection, data-loss, and sensitive-data exposure risks. It also states accurately that disabling the process sandbox does not bypass separate agent approvals or expand OS permissions. AgentExecutionSettings.test.tsx verifies delayed persistence, cancellation, and the equivalent Disabled-backend path.",
       suggestedFix:
-        'Intercept transitions to danger-full-access with a danger-styled confirmation dialog that names filesystem, command, network, approval, prompt-injection, data-loss, and data-exposure risks. Keep Cancel as the safe default and persist the policy only after explicit confirmation; retain the existing inline descriptions for all tiers.',
+        'Completed. Keep every future path to unsandboxed terminal execution behind this shared confirmation boundary, and update the disclosure whenever the actual sandbox or approval contract changes.',
     },
     'GAP-009': {
       detail:
