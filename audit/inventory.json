@@ -1154,8 +1154,8 @@
   {
     "item": "notification-actions",
     "surface": "apps/mobile",
-    "status": "stub",
-    "evidence": "apps/mobile/services/backgroundFetch.ts:105 sets `categoryIdentifier: 'agent-approvals'` on a scheduled notification, implying interactive action buttons, but `Notifications.setNotificationCategoryAsync` (the API that registers actual action buttons for a category) is never called anywhere in product code — the only reference is a jest mock in apps/mobile/__tests__/notification-auth-gate.test.ts:52."
+    "status": "built",
+    "evidence": "apps/mobile/services/notificationCategories.ts registers the cross-platform `agent_approvals` category with `Notifications.setNotificationCategoryAsync` and an authenticated, foreground-opening Review action. apps/mobile/services/backgroundFetch.ts registers the category before enabling polling and schedules approval notifications with the same identifier. apps/mobile/services/notifications.ts accepts only the Expo default tap or the declared review action, preserves the sign-in gate, and routes review to the existing in-app companion approval surface; it never approves or denies work from the lock screen. Covered by background-fetch-wave1.test.ts and notification-auth-gate.test.ts."
   },
   {
     "item": "background-refresh",

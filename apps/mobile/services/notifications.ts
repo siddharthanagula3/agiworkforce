@@ -7,6 +7,7 @@ import { api } from './api';
 import { getDeviceId } from '@/lib/deviceId';
 import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
 import { notificationAllowed } from './notificationGate';
+import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from './notificationCategories';
 
 // LOW-MOB-3 fix (red-team 2026-05): the notification handler used to
 // `safeNavigate` to `/(app)/*` regardless of auth state — a notification
@@ -422,6 +423,14 @@ function safeNavigate(route: Parameters<typeof router.push>[0]): void {
 function handleNotificationResponse(response: Notifications.NotificationResponse): void {
   const data = response.notification.request.content.data as NotificationData | undefined;
   if (!data) return;
+
+  if (
+    response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER &&
+    response.actionIdentifier !== AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER
+  ) {
+    console.warn('[notifications] Ignored unknown notification action:', response.actionIdentifier);
+    return;
+  }
 
   // Store the notification in the in-app notification center
   notificationCenterStore.add(response.notification);
