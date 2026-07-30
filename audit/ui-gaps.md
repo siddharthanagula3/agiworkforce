@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 50d6bf6ac0a5447e2c329b02c0065cc61c2b938ef2fb3dae9fb9b179f6a022b5 -->
+<!-- ui-gaps-csv-sha256: e4806e08bfb1d31c3abaeb2b63f87ed7b848e7e37ae024a0b99d30469cc4fba3 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 96 P1, 161 P2, 43 P3.
+- Unresolved: 0 P0, 95 P1, 161 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  300 |
+| Open        |  299 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |   38 |
-| Not Planned |    3 |
+| Not Planned |    4 |
 
 ## P0
 
@@ -740,24 +740,24 @@ Add both toggles to apps/mobile/app/(app)/settings/memory.tsx (and desktop Memor
 
 - `claude_reference/128-claude-ios-settings-capabilities-memory-and-tool-access-radio.png`
 
-### GAP-032 — No model-training consent toggle despite policy copy promising explicit consent
+### GAP-032 — Model-training opt-in is declined because customer-content training is always off
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > Data controls
 
 **Gap**
 
-Reference leads Data controls with 'Improve model for everyone' plus explainer and Learn more, giving the user a first-class switch. agiworkforce's Cloud Privacy screen asserts 'Your AGI Cloud conversations are never used to train AI models without explicit consent' but ships no control that grants or revokes that consent — the promise has no UI behind it, so a user who wants to opt in (or verify they are opted out) has nowhere to look.
+The reference offers customer conversations to a model-improvement program, but that is not an agiworkforce capability or policy. AGI does not train AGI-owned models on customer prompts, responses, or files, and no training-data collection or server consumer exists. Mobile now exposes Model training is always off as a first-class policy state in Data Controls and Cloud Privacy, replacing the ambiguous claim that training might occur after a missing consent flow. A persisted switch would be a dead privacy control and would falsely imply that turning it on changes data handling.
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-privacy/index.tsx PRIVACY_ITEMS (static informational cards, no switches); apps/mobile/src/features/settings/data-controls/index.tsx (export, storage link, manual sync only)
+docs/00-foundation/platform-constitution.md defines AGI as not a foundation-model company. apps/web/app/privacy/page.tsx and app/mobile/legal/page.tsx state that AGI-owned models are not trained on customer conversation content. The Web PrivacySection source deliberately excludes improveModelTraining because no training-data pipeline exists and calls a saved-but-unconsumed preference a dead control. Mobile data-controls/index.tsx now shows the non-optional policy before export/sync controls; cloud-privacy/index.tsx reports AGI model training: Always off and removes the unsupported without-consent claim. model-training-policy.test.tsx verifies both screens expose the policy and no training switch.
 
 **Suggested fix**
 
-Add a persisted, server-backed 'Improve models for everyone' SettingsSwitchRow at the top of Data Controls with the training explainer and a Learn more link, defaulting to off, and show its state on the Cloud Privacy card instead of prose alone.
+Not planned while the product policy and architecture prohibit customer-content training. Keep the always-off state visible and do not add consent persistence without a separately approved training purpose, data contract, minimization and deletion rules, server enforcement, legal text, revocation path, and end-to-end proof that the preference gates every collection consumer.
 
 **Reference screenshot(s)**
 

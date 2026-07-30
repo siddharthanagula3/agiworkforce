@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
-import { ArrowUpFromLine, Cloud, Database, Download, Trash2 } from 'lucide-react-native';
+import {
+  ArrowUpFromLine,
+  Cloud,
+  Database,
+  Download,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { exportAllUserData } from '@/services/dsarExport';
 import { useThemeColors } from '@/src/ui/theme';
@@ -81,6 +88,11 @@ export default function DataControlsScreen() {
 
   return (
     <SettingsScreenShell title="Data Controls">
+      <SettingsInfo
+        title="Model training is always off"
+        body="AGI does not use customer prompts, responses, or files to train AGI-owned models. This is a product policy, not an optional setting."
+        icon={ShieldCheck}
+      />
       <SettingsInfo
         title="Local data"
         body="Export runs on this device and includes chats, memory, settings, and installed model details."
