@@ -30,6 +30,7 @@ pub enum ActionType {
     Screenshot,
     Drag,
     Scroll,
+    Narration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +50,22 @@ pub struct RecordingSession {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecordingStatus {
+    pub session_id: String,
+    pub start_time: u64,
+    pub is_recording: bool,
+    pub action_count: usize,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscardedRecording {
+    pub session_id: String,
+    pub action_count: usize,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Recording {
     pub id: String,
     pub name: String,
@@ -62,6 +79,7 @@ struct RecorderState {
     session: Option<RecordingSession>,
     start_instant: Option<Instant>,
     actions: VecDeque<RecordedAction>,
+    last_recording: Option<Recording>,
     app_handle: Option<AppHandle>,
 }
 
@@ -82,6 +100,7 @@ impl RecorderService {
                 session: None,
                 start_instant: None,
                 actions: VecDeque::new(),
+                last_recording: None,
                 app_handle: None,
             })),
         }
@@ -117,6 +136,7 @@ impl RecorderService {
         state.session = Some(session.clone());
         state.start_instant = Some(Instant::now());
         state.actions.clear();
+        state.last_recording = None;
 
         if let Some(ref app_handle) = state.app_handle {
             let _ = app_handle.emit("automation:recording_started", &session);
@@ -149,6 +169,7 @@ impl RecorderService {
             duration_ms,
             created_at: session.start_time,
         };
+        state.last_recording = Some(recording.clone());
 
         if let Some(ref app_handle) = state.app_handle {
             let _ = app_handle.emit("automation:recording_stopped", &recording);
@@ -161,6 +182,37 @@ impl RecorderService {
         );
 
         Ok(recording)
+    }
+
+    pub fn discard_recording(&self) -> Result<DiscardedRecording> {
+        let mut state = self.state.lock().map_err(|_| anyhow!("Lock poisoned"))?;
+        let session = state
+            .session
+            .take()
+            .ok_or_else(|| anyhow!("No recording in progress"))?;
+        let duration_ms = state
+            .start_instant
+            .take()
+            .map(|started| started.elapsed().as_millis() as u64)
+            .unwrap_or_default();
+        let discarded = DiscardedRecording {
+            session_id: session.session_id,
+            action_count: state.actions.len(),
+            duration_ms,
+        };
+
+        state.actions.clear();
+        state.last_recording = None;
+        if let Some(ref app_handle) = state.app_handle {
+            let _ = app_handle.emit("automation:recording_discarded", &discarded);
+        }
+
+        tracing::info!(
+            "Recording discarded: {} actions, duration={}ms",
+            discarded.action_count,
+            duration_ms
+        );
+        Ok(discarded)
     }
 
     pub fn record_click(&self, x: i32, y: i32, button: &str) -> Result<()> {
@@ -284,6 +336,25 @@ impl RecorderService {
         })
     }
 
+    pub fn record_narration(&self, text: &str) -> Result<()> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(anyhow!("Narration cannot be empty"));
+        }
+
+        self.record_action(RecordedAction {
+            id: Uuid::new_v4().to_string(),
+            action_type: ActionType::Narration,
+            timestamp_ms: self.get_elapsed_ms()?,
+            target: None,
+            value: Some(text.to_string()),
+            metadata: Some(serde_json::json!({
+                "source": "microphone",
+                "transcription": "local_whisper",
+            })),
+        })
+    }
+
     pub fn is_recording(&self) -> bool {
         self.state
             .lock()
@@ -294,6 +365,36 @@ impl RecorderService {
 
     pub fn get_session(&self) -> Option<RecordingSession> {
         self.state.lock().ok().and_then(|s| s.session.clone())
+    }
+
+    pub fn get_status(&self) -> Option<RecordingStatus> {
+        self.state.lock().ok().and_then(|state| {
+            let session = state.session.as_ref()?;
+            Some(RecordingStatus {
+                session_id: session.session_id.clone(),
+                start_time: session.start_time,
+                is_recording: session.is_recording,
+                action_count: state.actions.len(),
+                duration_ms: state
+                    .start_instant
+                    .as_ref()
+                    .map(|started| started.elapsed().as_millis() as u64)
+                    .unwrap_or_default(),
+            })
+        })
+    }
+
+    pub fn get_last_recording(&self) -> Option<Recording> {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|state| state.last_recording.clone())
+    }
+
+    pub fn clear_last_recording(&self) -> Result<()> {
+        let mut state = self.state.lock().map_err(|_| anyhow!("Lock poisoned"))?;
+        state.last_recording = None;
+        Ok(())
     }
 
     fn get_elapsed_ms(&self) -> Result<u64> {
@@ -456,5 +557,67 @@ mod tests {
 
         let recording = recorder.stop_recording().expect("stop recording");
         assert!(recording.actions.is_empty());
+    }
+
+    #[test]
+    fn status_reports_live_action_count_and_completed_recording_is_recoverable() {
+        let recorder = RecorderService::new();
+        let session = recorder.start_recording().expect("start recording");
+        recorder.record_click(10, 20, "left").expect("record click");
+
+        let status = recorder.get_status().expect("live status");
+        assert_eq!(status.session_id, session.session_id);
+        assert!(status.is_recording);
+        assert_eq!(status.action_count, 1);
+
+        let recording = recorder.stop_recording().expect("stop recording");
+        assert!(recorder.get_status().is_none());
+        assert_eq!(
+            recorder
+                .get_last_recording()
+                .expect("recover completed recording")
+                .id,
+            recording.id
+        );
+
+        recorder
+            .clear_last_recording()
+            .expect("clear recovered recording");
+        assert!(recorder.get_last_recording().is_none());
+    }
+
+    #[test]
+    fn discard_clears_actions_without_creating_a_reviewable_recording() {
+        let recorder = RecorderService::new();
+        let session = recorder.start_recording().expect("start recording");
+        recorder.record_click(10, 20, "left").expect("record click");
+
+        let discarded = recorder.discard_recording().expect("discard recording");
+        assert_eq!(discarded.session_id, session.session_id);
+        assert_eq!(discarded.action_count, 1);
+        assert!(!recorder.is_recording());
+        assert!(recorder.get_last_recording().is_none());
+    }
+
+    #[test]
+    fn narration_is_a_timestamped_local_transcription_action() {
+        let recorder = RecorderService::new();
+        recorder.start_recording().expect("start recording");
+        recorder
+            .record_narration("Open the regional report")
+            .expect("record narration");
+
+        let recording = recorder.stop_recording().expect("stop recording");
+        let narration = recording.actions.first().expect("narration action");
+        assert!(matches!(narration.action_type, ActionType::Narration));
+        assert_eq!(narration.value.as_deref(), Some("Open the regional report"));
+        assert_eq!(
+            narration
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("source"))
+                .and_then(serde_json::Value::as_str),
+            Some("microphone")
+        );
     }
 }

@@ -37,7 +37,7 @@ agiworkforce-mcp = { path = "../../../crates/agiworkforce-mcp" }
 agiworkforce-protocol = { path = "../../../crates/agiworkforce-protocol" }
 agiworkforce-sandbox-policy = { path = "../../../crates/agiworkforce-sandbox-policy" }
 
-tauri = { version = "2.11.0", features = ["tray-icon"] }
+tauri = { version = "2.11.0", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-shell = { version = "2.3.5", optional = true }
 tauri-plugin-process = "2.3.1"
 tauri-plugin-fs = "2.5.1"

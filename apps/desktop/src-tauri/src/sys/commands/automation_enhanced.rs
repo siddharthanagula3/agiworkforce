@@ -6,7 +6,10 @@ use crate::automation::inspector::UIInspector;
 use crate::automation::{
     codegen::{CodeGenerator, CodeLanguage, GeneratedCode},
     executor::{AutomationScript, ExecutionResult, ExecutorConfig, ExecutorService},
-    recorder::{global_recorder, RecordedAction, Recording, RecordingSession},
+    recorder::{
+        global_recorder, DiscardedRecording, RecordedAction, Recording, RecordingSession,
+        RecordingStatus,
+    },
     types::{BasicElementInfo, DetailedElementInfo, ElementSelector},
     InspectorService,
 };
@@ -24,6 +27,13 @@ pub fn automation_record_start(app: AppHandle) -> Result<RecordingSession, Strin
 pub fn automation_record_stop() -> Result<Recording, String> {
     let recorder = global_recorder();
     recorder.stop_recording().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn automation_record_discard() -> Result<DiscardedRecording, String> {
+    global_recorder()
+        .discard_recording()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -69,6 +79,16 @@ pub fn automation_record_action_wait(duration_ms: u64) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn automation_record_action_narration(text: String) -> Result<(), String> {
+    let recorder = global_recorder();
+    if recorder.is_recording() {
+        recorder.record_narration(&text).map_err(|e| e.to_string())
+    } else {
+        Ok(())
+    }
+}
+
+#[tauri::command]
 pub fn automation_record_is_recording() -> Result<bool, String> {
     let recorder = global_recorder();
     Ok(recorder.is_recording())
@@ -78,6 +98,23 @@ pub fn automation_record_is_recording() -> Result<bool, String> {
 pub fn automation_record_get_session() -> Result<Option<RecordingSession>, String> {
     let recorder = global_recorder();
     Ok(recorder.get_session())
+}
+
+#[tauri::command]
+pub fn automation_record_get_status() -> Result<Option<RecordingStatus>, String> {
+    Ok(global_recorder().get_status())
+}
+
+#[tauri::command]
+pub fn automation_record_get_last() -> Result<Option<Recording>, String> {
+    Ok(global_recorder().get_last_recording())
+}
+
+#[tauri::command]
+pub fn automation_record_clear_last() -> Result<(), String> {
+    global_recorder()
+        .clear_last_recording()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

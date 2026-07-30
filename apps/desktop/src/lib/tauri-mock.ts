@@ -760,6 +760,52 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return undefined as T;
 
     // Automation script commands
+    case 'automation_record_start':
+      return {
+        session_id: 'mock-recorder-session',
+        start_time: Date.now(),
+        is_recording: true,
+      } as T;
+    case 'automation_record_stop':
+      return {
+        id: 'mock-recording',
+        name: 'Mock recording',
+        actions: [],
+        duration_ms: 0,
+        created_at: Date.now(),
+      } as T;
+    case 'automation_record_discard':
+      return {
+        session_id: 'mock-recorder-session',
+        action_count: 0,
+        duration_ms: 0,
+      } as T;
+    case 'automation_record_get_status':
+      return {
+        session_id: 'mock-recorder-session',
+        start_time: Date.now() - 12_000,
+        is_recording: true,
+        action_count: 3,
+        duration_ms: 12_000,
+      } as T;
+    case 'automation_record_get_last':
+      return null as T;
+    case 'automation_record_is_recording':
+      return true as T;
+    case 'automation_record_get_session':
+      return {
+        session_id: 'mock-recorder-session',
+        start_time: Date.now() - 12_000,
+        is_recording: true,
+      } as T;
+    case 'automation_record_action_click':
+    case 'automation_record_action_type':
+    case 'automation_record_action_screenshot':
+    case 'automation_record_action_wait':
+    case 'automation_record_action_narration':
+    case 'automation_record_clear_last':
+      return undefined as T;
+
     case 'list_automation_scripts':
       return [] as T;
     case 'save_recording_as_script':
