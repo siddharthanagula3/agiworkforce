@@ -74,8 +74,13 @@ function reconcileCurrentPremises(record) {
         'Duplicate disposition complete; retain GAP-004 as the canonical P0 record and GAP-096 for the narrower remaining multi-device scope.',
     },
     'GAP-006': {
+      title: 'Cowork Dispatch lacks an execution lifecycle and authoritative settings surface',
+      detail:
+        "The reference exposes a full Cowork settings section whose controls govern real dispatch, storage, trusted-folder, cloud-run, and instruction lifecycles. agiworkforce has an HMAC transport helper in services/dispatch.ts and connectionStore verifies mobile control envelopes, but the source audit's claim that Dispatch is wired into the runtime/chat layer is stale: verified controls are emitted as mobile-companion:control events with no consumer, and the current mobile companion sends commands for existing agents rather than a new-task dispatch request. No Cowork settings surface can truthfully control this yet.",
+      evidence:
+        'apps/desktop/src/services/dispatch.ts derives, verifies, signs, rotates, and resets HMAC session keys only. apps/desktop/src/stores/connectionStore.ts dispatches a mobile-companion:control CustomEvent after verification. Current code search finds no listener for that event. apps/mobile/services/companion.ts sends sync_request, approval_response, heartbeat, cancel, and agent-command dispatch_request messages; it does not expose a new Cowork task dispatch flow.',
       suggestedFix:
-        'Add a Cowork settings destination in the shared settings IA, but expose only controls with real backing contracts. Start with Dispatch state once the existing HMAC session service has an enable/disable lifecycle; add storage location, trusted folders, cloud-run defaults, and global instructions only as their persistence and runtime consumers are implemented.',
+        'Define and implement the cross-surface Dispatch execution contract first: validated new-task payload, Desktop consumer, response/status protocol, enable/disable lifecycle, persistence, and cancellation. Then add a Cowork settings destination whose Dispatch control gates that consumer. Add storage location, trusted folders, cloud-run defaults, and global instructions only with their runtime consumers; do not mount inert settings.',
     },
     'GAP-007': {
       status: 'Done',
