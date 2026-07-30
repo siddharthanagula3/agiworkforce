@@ -115,6 +115,7 @@ const allowedLiveNonMarkdownPrefixes = [
 ];
 const allowedLiveNonMarkdownFiles = new Set([
   'audit/inventory.json',
+  'audit/capability-gaps.csv',
   'audit/ui-gaps-baseline.json',
   'audit/ui-gaps.csv',
 ]);
