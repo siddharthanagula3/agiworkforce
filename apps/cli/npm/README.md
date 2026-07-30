@@ -31,15 +31,15 @@ benefit on Pro, Max 5x, Max 15x, Team, and Enterprise. Free and Basic accounts
 can keep using Local/BYOK, but the CLI does not present managed models as
 unlocked.
 
-| Plan           | Public price                     | CLI Managed Cloud |
-| -------------- | -------------------------------- | ----------------- |
-| **Free**       | Free                             | No                |
-| **Basic**      | $7/month                         | No                |
-| **Pro**        | $20/month or $200/year           | Yes               |
-| **Max 5x**     | $100/month                       | Yes               |
-| **Max 15x**    | $200/month                       | Yes               |
-| **Team**       | $25/seat/month or $240/seat/year | Yes               |
-| **Enterprise** | Contract                         | Contract          |
+| Plan           | Public price           | CLI Managed Cloud |
+| -------------- | ---------------------- | ----------------- |
+| **Free**       | Free                   | No                |
+| **Basic**      | $7/month               | No                |
+| **Pro**        | $20/month or $200/year | Yes               |
+| **Max 5x**     | $100/month             | Yes               |
+| **Max 15x**    | $200/month             | Yes               |
+| **Team**       | Contact sales          | Yes               |
+| **Enterprise** | Contract               | Contract          |
 
 Account, billing, Team administration, connector setup, and Enterprise sales
 remain in the Web control plane at

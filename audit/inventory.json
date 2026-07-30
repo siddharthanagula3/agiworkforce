@@ -3818,14 +3818,14 @@
   {
     "item": "seat-billing",
     "surface": "admin-and-billing",
-    "status": "stub",
-    "evidence": "Marketing/pricing copy promises per-seat billing for Team: apps/web/lib/marketing-constants.ts:141-142 and apps/web/app/pricing/page.tsx:428 show '$25/seat/mo'. apps/web/shared/types/teams.ts:94-95,132 defines `BillingSeatsAdded`/`BillingSeatsRemoved` enum values and a `seatCount` field, but grepping the whole apps/web tree for these identifiers outside their own definition finds zero other references — never read or written anywhere. The actual Stripe checkout always creates a subscription with a flat quantity: apps/web/app/api/checkout/route.ts:292 `quantity: 1`. Team is also excluded from self-serve checkout entirely (billing-catalog.ts:13-18)."
+    "status": "missing",
+    "evidence": "Team remains a real sales-assisted entitlement/admin tier, but no licensed-seat billing runtime exists and the product no longer claims one. packages/contracts/types/src/billing-catalog.ts gives Team no public self-serve price; Web pricing/upgrade surfaces say Custom and contracted capacity, while checkout validation still excludes Team. apps/web/lib/pricing.ts, localized-pricing-service.ts, price-tier-mapping.ts, validate-env.ts, and apps/web/.env.example no longer expose Team Stripe Price configuration; stale Web billing types were removed. The unmounted Desktop local charge estimator, its seven Tauri commands, renderer/client wrappers, and billing tab were removed; the historical SQLite table and decode-only activity values remain solely to avoid destructive local-data rewrites."
   },
   {
     "item": "annual-billing",
     "surface": "admin-and-billing",
     "status": "built",
-    "evidence": "packages/contracts/types/src/billing-catalog.ts:70-96 defines real yearlyPriceUsd for pro ($200) and team ($240); apps/web/app/api/checkout/route.ts:111,117 accepts a `billingInterval` and resolves pricing via getCheckoutPriceSelection(plan, billingInterval, country); apps/web/features/billing/pages/BillingDashboard.tsx:73,386-391 exposes a monthly/yearly toggle passed through to upgradeToProPlan/upgradeToMaxPlan (billingPeriod param)."
+    "evidence": "packages/contracts/types/src/billing-catalog.ts defines a real yearlyPriceUsd for the self-serve Pro plan; apps/web/app/api/checkout/route.ts accepts a billingInterval and resolves pricing via getCheckoutPriceSelection(plan, billingInterval, country). apps/web/features/billing/pages/BillingDashboard.tsx exposes a monthly/yearly toggle passed through the self-serve upgrade flow. Team is sales-assisted with no published annual price."
   },
   {
     "item": "credits-prepaid",

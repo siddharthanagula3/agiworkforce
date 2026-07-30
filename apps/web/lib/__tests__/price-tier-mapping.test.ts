@@ -6,6 +6,7 @@ describe('price tier mapping', () => {
   afterEach(() => {
     delete process.env['STRIPE_PRICE_PRO_MONTHLY'];
     delete process.env['STRIPE_PRICE_MAX_15X_MONTHLY'];
+    delete process.env['PRICE_ID_OVERRIDES'];
     vi.resetModules();
   });
 
@@ -30,5 +31,12 @@ describe('price tier mapping', () => {
 
     expect(resolvePlanTier({ plan_tier: 'pro' }, 'price_unregistered')).toBeNull();
     expect(resolvePlanTier({ plan_tier: 'pro' }, null)).toBeNull();
+  });
+
+  it('rejects a generic Stripe override for sales-assisted Team', async () => {
+    process.env['PRICE_ID_OVERRIDES'] = 'price_team_override,team,monthly';
+    const { getPlanTierFromPriceId } = await import('../price-tier-mapping');
+
+    expect(getPlanTierFromPriceId('price_team_override')).toBeNull();
   });
 });

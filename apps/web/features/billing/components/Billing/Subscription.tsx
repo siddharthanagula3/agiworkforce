@@ -55,7 +55,7 @@ function annualSavingsPct(plan: DisplayPaidPlan): number {
   return Math.round((1 - pricing.yearlyPriceUsd / 12 / pricing.monthlyPriceUsd) * 100);
 }
 
-const MAX_DISPLAYED_ANNUAL_SAVINGS = Math.max(annualSavingsPct('pro'), annualSavingsPct('team'));
+const PRO_ANNUAL_SAVINGS = annualSavingsPct('pro');
 
 function getPlanIcon(plan: string) {
   const normalized = normalizePlan(plan);
@@ -290,7 +290,7 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                   >
                     Yearly
                     <Badge variant="secondary" className="ml-1 text-xs">
-                      Save {MAX_DISPLAYED_ANNUAL_SAVINGS}%
+                      Save {PRO_ANNUAL_SAVINGS}%
                     </Badge>
                   </button>
                 </div>
@@ -498,8 +498,8 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                 </Card>
               )}
 
-              {/* Team is a Pro-level seat plan, so it is offered from Free,
-                  Basic, or Pro rather than as a downgrade from Max. */}
+              {/* Team is sales-assisted, so it is offered from Free, Basic,
+                  or Pro rather than as a self-serve downgrade from Max. */}
               {['free', 'basic', 'pro'].includes(normalizePlan(billing?.plan)) &&
                 isPlanSelectableOnSurface('team', 'web') && (
                   <Card className="border-2 border-muted-foreground/30">
@@ -509,22 +509,11 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                         <CardTitle>{getBillingPlanPricing('team').label}</CardTitle>
                       </div>
                       <div className="text-2xl font-bold">
-                        {billingPeriod === 'yearly' ? (
-                          <>
-                            <div className="text-3xl font-bold">
-                              {formatPlanPrice('team', 'yearly')}
-                              <span className="text-lg text-muted-foreground">/seat/month</span>
-                            </div>
-                            <div className="mt-1 text-sm text-muted-foreground">
-                              Billed yearly as {formatPlanBilledAmount('team', 'yearly')}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            {formatPlanPrice('team', 'monthly')}
-                            <span className="text-sm text-muted-foreground">/seat/month</span>
-                          </>
-                        )}
+                        Custom
+                        <span className="text-sm text-muted-foreground">
+                          {' '}
+                          sales-assisted pricing
+                        </span>
                       </div>
                     </CardHeader>
                     <CardContent>

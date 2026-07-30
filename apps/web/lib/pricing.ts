@@ -5,13 +5,10 @@ import {
   getPlanPriceUsd,
   getPlanPriceInr,
   type BillingInterval,
-  type BillingPlanTier,
+  type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 
-export type ConfiguredCheckoutPlan = Extract<
-  BillingPlanTier,
-  'basic' | 'pro' | 'max' | 'max_15x' | 'team'
->;
+export type ConfiguredCheckoutPlan = SelfServePaidPlanTier;
 
 /**
  * Validate that a Stripe price ID is properly configured
@@ -69,10 +66,6 @@ export const STRIPE_PRICE_IDS = {
     ),
     yearly: undefined, // Max 15x is monthly-only
   },
-  team: {
-    monthly: validatePriceId(process.env['STRIPE_PRICE_TEAM_MONTHLY'], 'STRIPE_PRICE_TEAM_MONTHLY'),
-    yearly: validatePriceId(process.env['STRIPE_PRICE_TEAM_YEARLY'], 'STRIPE_PRICE_TEAM_YEARLY'),
-  },
 };
 
 /**
@@ -80,7 +73,7 @@ export const STRIPE_PRICE_IDS = {
  * Returns true if at least one plan has both monthly and annual prices configured
  */
 export function arePriceIdsConfigured(): boolean {
-  const plans = ['pro', 'max', 'max_15x', 'team'] as const;
+  const plans = ['pro', 'max', 'max_15x'] as const;
   return plans.some(
     (plan) =>
       STRIPE_PRICE_IDS[plan].monthly !== undefined || STRIPE_PRICE_IDS[plan].yearly !== undefined,
@@ -141,15 +134,6 @@ export const PRICING_CONFIG = {
       },
       stripe_price_ids: STRIPE_PRICE_IDS.max_15x,
     },
-    {
-      id: 'team',
-      name: 'Team',
-      price: {
-        monthly: getPlanPriceUsd('team', 'monthly'),
-        yearly: getPlanPriceUsd('team', 'yearly'),
-      },
-      stripe_price_ids: STRIPE_PRICE_IDS.team,
-    },
   ],
   getPlanFromPriceId: (priceId: string): string | null => {
     if (
@@ -158,7 +142,7 @@ export const PRICING_CONFIG = {
     ) {
       return 'basic';
     }
-    const allPlans = ['pro', 'max', 'max_15x', 'team'] as const;
+    const allPlans = ['pro', 'max', 'max_15x'] as const;
     for (const plan of allPlans) {
       const prices = STRIPE_PRICE_IDS[plan];
       if (prices.monthly === priceId || prices.yearly === priceId) {

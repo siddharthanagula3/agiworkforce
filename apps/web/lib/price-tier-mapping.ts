@@ -19,6 +19,14 @@ interface PriceMappingEntry {
   interval: BillingInterval;
 }
 
+const STRIPE_BILLED_TIERS = new Set<BillingPlanTier>([
+  'basic',
+  'pro',
+  'max',
+  'max_15x',
+  'enterprise',
+]);
+
 // Build price ID mapping from environment variables (single source of truth)
 // This ensures checkout and webhook use the same price IDs
 function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
@@ -47,12 +55,6 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   const max15xMonthly = process.env['STRIPE_PRICE_MAX_15X_MONTHLY'];
   if (max15xMonthly)
     mapping[max15xMonthly.toLowerCase()] = { tier: 'max_15x', interval: 'monthly' };
-
-  // Team tier
-  const teamMonthly = process.env['STRIPE_PRICE_TEAM_MONTHLY'];
-  const teamYearly = process.env['STRIPE_PRICE_TEAM_YEARLY'];
-  if (teamMonthly) mapping[teamMonthly.toLowerCase()] = { tier: 'team', interval: 'monthly' };
-  if (teamYearly) mapping[teamYearly.toLowerCase()] = { tier: 'team', interval: 'yearly' };
 
   // Enterprise tier (if configured)
   const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
@@ -87,8 +89,10 @@ function loadOverrides(): Record<string, PriceMappingEntry> {
     for (const pair of pairs) {
       const [priceId, tier, interval] = pair.trim().split(',');
       if (priceId && tier) {
+        const normalizedTier = tier.toLowerCase() as BillingPlanTier;
+        if (!STRIPE_BILLED_TIERS.has(normalizedTier)) continue;
         overrides[priceId.toLowerCase()] = {
-          tier: tier.toLowerCase() as BillingPlanTier,
+          tier: normalizedTier,
           interval: interval === 'yearly' ? 'yearly' : 'monthly',
         };
       }
@@ -208,7 +212,6 @@ export function getMappingStatus(): {
     pro: [],
     max: [],
     max_15x: [],
-    team: [],
     enterprise: [],
   };
 

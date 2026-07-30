@@ -91,8 +91,10 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
   team: {
     id: 'team',
     label: 'Team',
-    monthlyPriceUsd: 25,
-    yearlyPriceUsd: 240,
+    // Team is sales-assisted. Zero means there is no public self-serve price;
+    // contracted amounts must come from the customer's invoice.
+    monthlyPriceUsd: 0,
+    yearlyPriceUsd: 0,
   },
   enterprise: {
     id: 'enterprise',

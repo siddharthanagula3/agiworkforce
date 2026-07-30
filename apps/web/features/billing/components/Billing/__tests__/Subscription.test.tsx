@@ -101,7 +101,7 @@ describe('Subscription', () => {
 
   it('derives the annual savings label from the public catalog', () => {
     renderSubscription('free');
-    expect(screen.getByRole('button', { name: 'Yearly Save 20%' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Yearly Save 17%' })).toBeTruthy();
   });
 
   it('offers Max 15x as the next upgrade from Max 5x', () => {
@@ -124,13 +124,14 @@ describe('Subscription', () => {
     expect(screen.getByRole('button', { name: /Manage/ })).toBeEnabled();
   });
 
-  it('shows Team pricing but routes provisioning to sales', () => {
+  it('shows Team as custom and routes provisioning to sales', () => {
     const onUpgrade = vi.fn();
     renderSubscription('pro', 'yearly', onUpgrade);
 
     expect(screen.getByText('Team')).toBeTruthy();
-    expect(screen.getByText('$20')).toBeTruthy();
-    expect(screen.getByText('Billed yearly as $240')).toBeTruthy();
+    expect(screen.getAllByText('Custom')).not.toHaveLength(0);
+    expect(screen.getByText('sales-assisted pricing')).toBeTruthy();
+    expect(screen.queryByText('/seat/month')).toBeNull();
     expect(screen.getByRole('link', { name: 'Contact sales' })).toHaveAttribute(
       'href',
       '/contact-sales?plan=team',

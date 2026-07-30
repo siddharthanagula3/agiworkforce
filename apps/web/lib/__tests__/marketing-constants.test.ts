@@ -11,8 +11,8 @@ describe('marketing plan matrix', () => {
         expect.objectContaining({
           planId: 'team',
           label: 'Team',
-          price: '$25/seat/mo',
-          billingInterval: 'Monthly or annual ($240/seat/yr)',
+          price: 'Custom',
+          billingInterval: 'Sales-assisted contract',
         }),
       ]),
     );
