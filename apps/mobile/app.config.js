@@ -4,6 +4,7 @@
 const appEnv = process.env.APP_ENV || process.env.EXPO_PUBLIC_APP_ENV || 'development';
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim();
 const easProjectId = '38f0941c-88a7-468a-9750-fcd8b357ff4c';
+const iosShareAppGroupIdentifier = 'group.com.agiworkforce.app.share';
 
 if (
   (appEnv === 'production' || appEnv === 'preview') &&
@@ -99,6 +100,10 @@ const config = {
     },
     entitlements: {
       ...iosEntitlements,
+      // Supported iOS Share Extension handoff: the extension cannot reliably
+      // launch its containing app, so it persists reviewed drafts here and the
+      // app imports them on its next authenticated foreground.
+      'com.apple.security.application-groups': [iosShareAppGroupIdentifier],
     },
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [
@@ -283,6 +288,10 @@ const config = {
     // into the generated ios/<AppName>/ directory and registers them with the Xcode project target.
     // RCT_EXTERN_MODULE bridges auto-register with React Native bridge scanning — no manual list needed.
     './native/ios/withAGINativeModulesIOS.cjs',
+    // iOS Share Extension: adds the generated app-extension target and copies
+    // its tracked UIKit source/Info.plist. It accepts text and web links only,
+    // previews and saves them to the App Group for the containing app to import.
+    './native/ios/withAGIShareExtension.cjs',
     // iOS local device builds: remove production-only entitlement keys after Expo package plugins run.
     './native/ios/withAGIDevEntitlements.cjs',
     // iOS: opt Clerk's static-linked Google pods (GoogleUtilities/RecaptchaInterop/

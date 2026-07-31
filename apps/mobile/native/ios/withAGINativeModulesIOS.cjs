@@ -4,6 +4,7 @@
 //   - AGIFoundationModels (.m + .swift) — Apple Foundation Models (iOS 26+)
 //   - AGITranslate (.m + .swift) — Apple Translate framework (iOS 17.4+)
 //   - AGIVisionOCR (.m + .swift) — Apple Vision text recognition (iOS 13+)
+//   - AGIShareInbox (.m + .swift) — consume App Group share-extension drafts
 //   - AGIAppIntents/*.swift — App Intents + Siri phrases (iOS 16+)
 //   - AGIAppIntents/AppShortcuts.xcstrings — localization for Siri phrases
 //
@@ -33,6 +34,8 @@ const TOP_LEVEL_FILES = [
   'AGITranslate.swift',
   'AGIVisionOCR.m',
   'AGIVisionOCR.swift',
+  'AGIShareInbox.m',
+  'AGIShareInbox.swift',
 ];
 
 // Files relative to native/ios/AGIAppIntents/

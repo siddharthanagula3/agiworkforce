@@ -7,8 +7,8 @@
  * availability product-rule violation.
  *
  * The screen now describes only what ships:
- *   iOS      — Siri App Shortcuts (native/ios/AGIAppIntents/) and universal
- *              links; share sheet clearly marked as not yet available.
+ *   iOS      — Siri App Shortcuts, native text/link Share Extension, and
+ *              universal links.
  *   Android  — share-sheet target + selected-text (ACTION_PROCESS_TEXT)
  *              action (both rewritten by MainActivity.kt onto the
  *              agiworkforce://intent/share deep link) and verified app links.
@@ -64,9 +64,9 @@ afterEach(() => {
 });
 
 describe('Quick Access screen — describes only real integrations', () => {
-  it('iOS: lists the real Siri App Shortcuts and marks the share sheet honestly unavailable', () => {
+  it('iOS: lists the real Siri App Shortcuts and native share-extension review flow', () => {
     setPlatform('ios');
-    const { getByText, queryByText } = render(<WidgetSetupScreen />);
+    const { getAllByText, getByText, queryByText } = render(<WidgetSetupScreen />);
 
     // Real Siri phrases (mirror native/ios/AGIAppIntents/AppShortcuts.swift).
     expect(getByText('"Hey Siri, start chat with AGI Workforce"')).toBeTruthy();
@@ -86,8 +86,11 @@ describe('Quick Access screen — describes only real integrations', () => {
       expect(getByText(label)).toBeTruthy();
     }
 
-    // No iOS share extension exists — the screen must say so, not imply one.
-    expect(getByText(/not yet available on iOS/)).toBeTruthy();
+    expect(getByText('Share Sheet')).toBeTruthy();
+    expect(getAllByText(/choose Share to AGI/i).length).toBeGreaterThan(0);
+    expect(getByText(/Save for AGI Review/)).toBeTruthy();
+    expect(getByText(/then open AGI Workforce/)).toBeTruthy();
+    expect(queryByText(/not yet available on iOS/)).toBeNull();
 
     // Retired fake-availability copy must not come back.
     expect(queryByText(/Control Center/)).toBeNull();
