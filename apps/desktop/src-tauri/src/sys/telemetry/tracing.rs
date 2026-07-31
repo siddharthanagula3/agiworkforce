@@ -56,24 +56,6 @@ pub fn init_tracing(config: LogConfig) -> Result<(WorkerGuard, WorkerGuard)> {
     Ok((file_guard, stdout_guard))
 }
 
-#[cfg(feature = "sentry")]
-pub fn init_sentry(dsn: &str, environment: &str) -> Result<sentry::ClientInitGuard> {
-    let guard = sentry::init((
-        dsn,
-        sentry::ClientOptions {
-            release: Some(env!("CARGO_PKG_VERSION").into()),
-            environment: Some(environment.to_string().into()),
-            attach_stacktrace: true,
-            send_default_pii: false,
-            ..Default::default()
-        },
-    ));
-
-    tracing::info!("Sentry initialized for environment: {}", environment);
-
-    Ok(guard)
-}
-
 #[macro_export]
 macro_rules! trace_operation {
     ($name:expr) => {
@@ -84,13 +66,6 @@ macro_rules! trace_operation {
     };
 }
 
-#[cfg(feature = "sentry")]
-pub fn capture_error(error: &anyhow::Error) {
-    tracing::error!("Error: {:?}", error);
-    sentry::capture_error(&**error);
-}
-
-#[cfg(not(feature = "sentry"))]
 pub fn capture_error(error: &anyhow::Error) {
     tracing::error!("Error: {:?}", error);
 }

@@ -72,6 +72,30 @@ const SURFACES = [
 ];
 
 const failures = [];
+
+const desktopCargo = fs.readFileSync(path.join(root, 'apps/desktop/src-tauri/Cargo.toml'), 'utf8');
+const desktopNativeDiagnosticSources = [
+  'apps/desktop/src-tauri/src/sys/commands/error_reporting.rs',
+  'apps/desktop/src-tauri/src/sys/telemetry/mod.rs',
+  'apps/desktop/src-tauri/src/sys/telemetry/tracing.rs',
+];
+const nativeDiagnosticSource = desktopNativeDiagnosticSources
+  .map((relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8'))
+  .join('\n');
+if (
+  /^\s*sentry\s*=/m.test(desktopCargo) ||
+  /SENTRY_DSN|sentry::|X-Sentry-Auth|\/api\/[^/]+\/store\//.test(nativeDiagnosticSource)
+) {
+  console.error(
+    '\n❌ [trust-boundaries] desktop-native-diagnostics: remote native crash egress bypasses the renderer-owned consent boundary',
+  );
+  failures.push('desktop-native-diagnostics');
+} else {
+  console.log(
+    '\n✅ [trust-boundaries] desktop-native-diagnostics: panic and submitted diagnostics remain local-only',
+  );
+}
+
 for (const surface of SURFACES) {
   const proofPath = path.join(root, surface.proof);
   if (!fs.existsSync(proofPath)) {
