@@ -470,8 +470,8 @@
   {
     "item": "linux-target-deb",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "apps/desktop/src-tauri/tauri.conf.json:42 sets bundle.targets: \"all\" (which includes deb/rpm in Tauri's bundler), and apps/desktop/package.json:12 'build:release': 'tauri build' (no --bundles restriction) would produce a .deb locally on Linux. However .github/workflows/release-desktop.yml:389 explicitly restricts CI to `args: --bundles appimage`, and scripts/check-ci-guardrails.mjs:141 pins that flag — no .deb is ever built, tested, or published in CI."
+    "status": "built",
+    "evidence": "The Linux release job builds both supported x86_64 distribution formats with Tauri: .github/workflows/release-desktop.yml:383-389 passes the existing draft releaseId and `args: --bundles appimage,deb`; :391-430 requires exactly one non-empty `.deb`, validates its package structure with `dpkg-deb --info`, and preserves minisign verification for the AppImage updater pair; :432-440 retains both formats in `linux-x64-artifacts`. Release notes at :236-248 advertise both formats with separate install instructions and correctly describe the signed updater artifact. scripts/check-ci-guardrails.mjs:254-268 pins the dual-bundle command, Debian artifact path, structural package check, and updater verification so CI cannot silently regress to AppImage-only publication."
   },
   {
     "item": "linux-target-rpm-or-appimage",
