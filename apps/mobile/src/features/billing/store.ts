@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { effectivePlanTier, normalizeBillingPlanTier } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
@@ -115,6 +116,11 @@ export const useTierStore = create<TierState>()(
         // `app/_layout.tsx` already gate on `isClerkSignedIn`.
         // js-early-exit: skip if already refreshing
         if (get().isRefreshing) return;
+        // Local mode has no managed-cloud plan to read, and egressGuard blocks
+        // /api/me before any network I/O. Attempting it anyway threw on every
+        // launch and logged the catch below as a warning, which trained readers
+        // to ignore the one diagnostic that exists for real tier failures.
+        if (useChatAppModeStore.getState().appMode !== 'cloud') return;
         const account = captureCloudAccountEpoch();
         if (!account) return;
 
