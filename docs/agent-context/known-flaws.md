@@ -6,6 +6,16 @@ Last updated: 2026-07-25
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+## 2026-07-30 workspace-index boundary update
+
+- **Partially supersedes `DESKTOP-WORKSPACE-INDEXING-UNWIRED-01`:** the orphaned
+  `workspace_*` regex symbol/dependency scanner, its duplicate renderer
+  clients, and its browser mocks were removed as one vertical slice. It had no
+  runtime caller and did not provide parser- or LSP-backed definitions,
+  references, or resolved dependencies. Reachable grep/glob search and the
+  editor LSP path remain. The separate semantic-embedding index remains open
+  and is not authorized to send Local workspace content to a remote provider.
+
 ## 2026-07-25 demo-readiness remediation checkpoint
 
 This checkpoint supersedes older rows where the implementation named below has

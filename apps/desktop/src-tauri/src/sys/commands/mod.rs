@@ -108,7 +108,6 @@ pub mod vision;
 pub mod voice;
 pub mod voice_global;
 pub mod window;
-pub mod workspace;
 
 #[cfg(test)]
 mod file_ops_tests;
@@ -223,6 +222,5 @@ pub use vision::*;
 pub use voice::*;
 pub use voice_global::*;
 pub use window::*;
-pub use workspace::*;
 
 // Re-export web_search command from features

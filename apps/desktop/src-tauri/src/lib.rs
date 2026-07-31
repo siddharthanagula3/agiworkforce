@@ -28,7 +28,6 @@ use crate::sys::commands::{
     LSPState, McpOAuthState, McpState, McpbState, MemoryState, NativeMessagingStateWrapper,
     NotificationState, ProductivityState, SchedulerState, SettingsServiceState, SettingsState,
     ShortcutsState, TaskManagerState, TemplateManagerState, VoiceState, WorkflowEngineState,
-    WorkspaceIndexState,
 };
 use crate::sys::security::{AuthManager, SecretManager};
 use crate::sys::telemetry;
@@ -908,8 +907,6 @@ pub fn run() {
 
             app.manage(Arc::new(TokioMutex::new(ShortcutsState::with_defaults())));
 
-            app.manage(Arc::new(TokioMutex::new(WorkspaceIndexState::new())));
-
             app.manage(Arc::new(LSPState::new()));
 
             // Codebase indexer state (async_sqlite backed, Send+Sync)
@@ -1731,15 +1728,6 @@ pub fn run() {
             crate::sys::commands::format_detect,
 
             // Test runner integration
-
-            // Workspace indexing & code analysis
-            crate::sys::commands::workspace_index,
-            crate::sys::commands::workspace_search_symbols,
-            crate::sys::commands::workspace_find_definition,
-            crate::sys::commands::workspace_find_references,
-            crate::sys::commands::workspace_get_dependencies,
-            crate::sys::commands::workspace_get_file_symbols,
-            crate::sys::commands::workspace_get_stats,
 
             // Project instruction files (CLAUDE.md / AGENTS.md auto-load)
 
