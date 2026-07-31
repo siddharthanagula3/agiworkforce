@@ -10,7 +10,7 @@
 //!     `mcp_{server}_{tool}` namespacing, prompt slash-command parsing, and
 //!     tool-result text extraction;
 //!   * the host capability adapters wired into the crate via `ClientHooks`:
-//!     [`FileTokenStore`] (OAuth persistence), [`HookFiringElicitationHandler`]
+//!     [`KeyringTokenStore`] (OAuth persistence), [`HookFiringElicitationHandler`]
 //!     (fires the CLI hooks around elicitation), and [`CliBrowserAuthorizer`]
 //!     (the user-action browser chokepoint);
 //!   * the elicitation UI (`tui_handler`) and the connection pool.
@@ -44,6 +44,7 @@ pub use connection_pool::McpConnectionManager;
 pub use oauth_store::McpOAuthStore;
 #[allow(unused_imports)]
 pub use oauth_store::McpOAuthToken;
+use oauth_store::{McpServerOAuthStore, McpServerToken};
 #[allow(unused_imports)]
 pub use resources::{McpResource, McpResourceList};
 #[allow(unused_imports)]
@@ -94,7 +95,7 @@ pub struct McpOAuthConfig {
 
 /// Discriminated transport union. The `Http` variant carries an optional typed
 /// `McpOAuthConfig`; when present, the HTTP layer transparently runs the PKCE
-/// flow on first 401 and persists tokens to `~/.agiworkforce/mcp-oauth.json`.
+/// flow on first 401 and persists tokens to the OS credential store.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "transport", rename_all = "lowercase")]
 pub enum McpTransport {
@@ -281,34 +282,58 @@ fn mcp_token_to_crate(t: &McpOAuthToken) -> OAuthToken {
     }
 }
 
-fn crate_token_to_mcp(t: OAuthToken) -> McpOAuthToken {
-    McpOAuthToken {
-        access_token: t.access_token,
-        refresh_token: t.refresh_token,
-        token_type: t.token_type,
-        expires_at: t.expires_at,
-        scope: t.scope,
-        auth_server_metadata_url: t.auth_server_metadata_url,
-        token_url: t.token_url,
-        client_id: t.client_id,
+fn secure_mcp_token_to_crate(token: McpServerToken) -> OAuthToken {
+    OAuthToken {
+        access_token: token.access_token,
+        refresh_token: token.refresh_token,
+        token_type: token.token_type,
+        expires_at: token.expires_at,
+        scope: token.scope,
+        auth_server_metadata_url: token.auth_server_metadata_url,
+        token_url: token.token_url,
+        client_id: token.client_id,
     }
 }
 
-/// The CLI's on-disk OAuth token store (`~/.agiworkforce/mcp-oauth.json`),
-/// adapted to the engine's [`TokenStore`] trait. Load-per-call, matching the
-/// original transport behavior.
-struct FileTokenStore;
+fn crate_token_to_secure_mcp(token: OAuthToken) -> McpServerToken {
+    McpServerToken {
+        access_token: token.access_token,
+        refresh_token: token.refresh_token,
+        token_type: token.token_type,
+        expires_at: token.expires_at,
+        scope: token.scope,
+        auth_server_metadata_url: token.auth_server_metadata_url,
+        token_url: token.token_url,
+        client_id: token.client_id,
+    }
+}
 
-impl TokenStore for FileTokenStore {
+/// OS-keyring-backed MCP OAuth adapter. The old aggregate JSON map is read
+/// only to migrate an individual server credential on first use.
+struct KeyringTokenStore;
+
+impl TokenStore for KeyringTokenStore {
     fn get(&self, server_url: &str) -> Option<OAuthToken> {
-        let store = McpOAuthStore::load().ok()?;
-        store.get(server_url).map(mcp_token_to_crate)
+        let secure_store = McpServerOAuthStore::new().ok()?;
+        if let Some(token) = secure_store.load(server_url).ok()? {
+            return Some(secure_mcp_token_to_crate(token));
+        }
+
+        let mut legacy = McpOAuthStore::load().ok()?;
+        let token = legacy.get(server_url)?.clone();
+        secure_store
+            .save(
+                server_url,
+                &crate_token_to_secure_mcp(mcp_token_to_crate(&token)),
+            )
+            .ok()?;
+        legacy.remove(server_url);
+        legacy.save().ok()?;
+        Some(mcp_token_to_crate(&token))
     }
 
     fn set(&self, server_url: &str, token: OAuthToken) -> anyhow::Result<()> {
-        let mut store = McpOAuthStore::load()?;
-        store.put(server_url.to_string(), crate_token_to_mcp(token));
-        store.save()
+        McpServerOAuthStore::new()?.save(server_url, &crate_token_to_secure_mcp(token))
     }
 }
 
@@ -394,7 +419,7 @@ impl ElicitationHandler for HookFiringElicitationHandler {
 /// queue. The wrapper keeps the CLI hook lifecycle identical in both cases.
 fn build_client_hooks(elicitation: Arc<dyn ElicitationHandler>) -> ClientHooks {
     ClientHooks {
-        token_store: Arc::new(FileTokenStore),
+        token_store: Arc::new(KeyringTokenStore),
         elicitation: Arc::new(HookFiringElicitationHandler::new(elicitation)),
         browser: Arc::new(CliBrowserAuthorizer),
         client_info: ClientInfo {

@@ -2,7 +2,7 @@ use crate::sys::api::{ApiClient, ApiRequest, ApiResponse, AuthType, HttpMethod};
 use crate::sys::commands::{security::SecretManagerState, ApiState};
 use crate::sys::security::SecretManager;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, State};
 
 /// Deserialize an optional API timestamp from the canonical `/api/me` wire shape.
 ///
@@ -451,13 +451,120 @@ pub async fn oauth_refresh(
 
 use std::sync::RwLock;
 
-// In-memory token storage for the Rust backend
-// This avoids keyring permission prompts while still allowing Rust to make API calls
+// In-memory token cache for Rust API calls. Durable copies live in the OS
+// credential store and are repopulated only after structural validation.
 static ACCESS_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static REFRESH_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static API_BASE_URL_OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
 const CLOUD_ACCESS_TOKEN_SECRET_KEY: &str = "cloud_account_access_token";
 const CLOUD_REFRESH_TOKEN_SECRET_KEY: &str = "cloud_account_refresh_token";
+const CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT: &str = "access-token";
+const CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT: &str = "refresh-token";
+
+trait CloudCredentialVault {
+    fn load(&self, account: &str) -> Result<Option<String>, String>;
+    fn store(&self, account: &str, secret: &str) -> Result<(), String>;
+    fn delete(&self, account: &str) -> Result<(), String>;
+}
+
+struct OsCloudCredentialVault {
+    service: String,
+}
+
+impl OsCloudCredentialVault {
+    fn for_app(app: &AppHandle) -> Self {
+        Self::for_bundle_identifier(&app.config().identifier)
+    }
+
+    fn for_bundle_identifier(identifier: &str) -> Self {
+        Self {
+            service: format!("{identifier}.cloud-account"),
+        }
+    }
+
+    fn entry(&self, account: &str) -> Result<keyring::Entry, String> {
+        keyring::Entry::new(&self.service, account)
+            .map_err(|_| "Could not open the operating-system credential store".to_string())
+    }
+}
+
+impl CloudCredentialVault for OsCloudCredentialVault {
+    fn load(&self, account: &str) -> Result<Option<String>, String> {
+        match self.entry(account)?.get_password() {
+            Ok(secret) => Ok(Some(secret)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(_) => Err("Could not read the Cloud credential from the OS keyring".to_string()),
+        }
+    }
+
+    fn store(&self, account: &str, secret: &str) -> Result<(), String> {
+        self.entry(account)?
+            .set_password(secret)
+            .map_err(|_| "Could not save the Cloud credential in the OS keyring".to_string())
+    }
+
+    fn delete(&self, account: &str) -> Result<(), String> {
+        match self.entry(account)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(_) => Err("Could not delete the Cloud credential from the OS keyring".to_string()),
+        }
+    }
+}
+
+fn store_cloud_credential(
+    vault: &dyn CloudCredentialVault,
+    secret_manager: &SecretManager,
+    keyring_account: &str,
+    legacy_database_key: &str,
+    secret: &str,
+) -> Result<(), String> {
+    vault.store(keyring_account, secret)?;
+    secret_manager
+        .delete_secret(legacy_database_key)
+        .map_err(|_| "Cloud credential was saved but legacy cleanup failed".to_string())
+}
+
+fn load_cloud_credential(
+    vault: &dyn CloudCredentialVault,
+    secret_manager: &SecretManager,
+    keyring_account: &str,
+    legacy_database_key: &str,
+    validate: impl Fn(&str) -> Result<(), String>,
+) -> Result<Option<String>, String> {
+    if let Some(secret) = vault.load(keyring_account)? {
+        validate(&secret)?;
+        return Ok(Some(secret));
+    }
+
+    let legacy_exists = secret_manager
+        .has_secret(legacy_database_key)
+        .map_err(|_| "Could not inspect the legacy Cloud credential".to_string())?;
+    if !legacy_exists {
+        return Ok(None);
+    }
+
+    let secret = secret_manager
+        .get_secret(legacy_database_key)
+        .map_err(|_| "Could not read the legacy Cloud credential".to_string())?;
+    validate(&secret)?;
+    vault.store(keyring_account, &secret)?;
+    secret_manager
+        .delete_secret(legacy_database_key)
+        .map_err(|_| "Cloud credential migrated but legacy cleanup failed".to_string())?;
+    Ok(Some(secret))
+}
+
+fn delete_cloud_credential(
+    vault: &dyn CloudCredentialVault,
+    secret_manager: &SecretManager,
+    keyring_account: &str,
+    legacy_database_key: &str,
+) -> Result<(), String> {
+    vault.delete(keyring_account)?;
+    secret_manager
+        .delete_secret(legacy_database_key)
+        .map_err(|_| "Could not clear the legacy Cloud credential".to_string())
+}
 
 /// Get the API base URL for desktop -> backend calls.
 ///
@@ -610,10 +717,15 @@ fn validate_token_format(token: &str, label: &str) -> Result<(), String> {
 #[allow(non_snake_case)]
 pub fn account_store_access_token(
     accessToken: String,
+    app: AppHandle,
     secret_state: State<'_, SecretManagerState>,
 ) -> Result<(), String> {
     validate_token_format(&accessToken, "Access token")?;
-    store_cloud_access_token(secret_state.manager(), &accessToken)?;
+    store_cloud_access_token(
+        &OsCloudCredentialVault::for_app(&app),
+        secret_state.manager(),
+        &accessToken,
+    )?;
     let mut token = ACCESS_TOKEN
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -622,12 +734,17 @@ pub fn account_store_access_token(
 }
 
 fn store_cloud_access_token(
+    vault: &dyn CloudCredentialVault,
     secret_manager: &SecretManager,
     access_token: &str,
 ) -> Result<(), String> {
-    secret_manager
-        .set_secret(CLOUD_ACCESS_TOKEN_SECRET_KEY, access_token)
-        .map_err(|_| "Failed to securely store the Cloud access token".to_string())
+    store_cloud_credential(
+        vault,
+        secret_manager,
+        CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_ACCESS_TOKEN_SECRET_KEY,
+        access_token,
+    )
 }
 
 /// Validate that a refresh token is non-empty and within size bounds.
@@ -651,10 +768,15 @@ fn validate_refresh_token_format(token: &str) -> Result<(), String> {
 #[allow(non_snake_case)]
 pub fn account_store_refresh_token(
     refreshToken: String,
+    app: AppHandle,
     secret_state: State<'_, SecretManagerState>,
 ) -> Result<(), String> {
     validate_refresh_token_format(&refreshToken)?;
-    store_cloud_refresh_token(secret_state.manager(), &refreshToken)?;
+    store_cloud_refresh_token(
+        &OsCloudCredentialVault::for_app(&app),
+        secret_state.manager(),
+        &refreshToken,
+    )?;
     let mut token = REFRESH_TOKEN
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -663,18 +785,29 @@ pub fn account_store_refresh_token(
 }
 
 fn store_cloud_refresh_token(
+    vault: &dyn CloudCredentialVault,
     secret_manager: &SecretManager,
     refresh_token: &str,
 ) -> Result<(), String> {
-    secret_manager
-        .set_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY, refresh_token)
-        .map_err(|_| "Failed to securely store the Cloud refresh token".to_string())
+    store_cloud_credential(
+        vault,
+        secret_manager,
+        CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_REFRESH_TOKEN_SECRET_KEY,
+        refresh_token,
+    )
 }
 
 /// Clear stored tokens (called on logout)
 #[tauri::command]
-pub fn account_clear_tokens(secret_state: State<'_, SecretManagerState>) -> Result<(), String> {
-    clear_cloud_tokens(secret_state.manager())?;
+pub fn account_clear_tokens(
+    app: AppHandle,
+    secret_state: State<'_, SecretManagerState>,
+) -> Result<(), String> {
+    clear_cloud_tokens(
+        &OsCloudCredentialVault::for_app(&app),
+        secret_state.manager(),
+    )?;
     {
         let mut token = ACCESS_TOKEN
             .write()
@@ -690,52 +823,70 @@ pub fn account_clear_tokens(secret_state: State<'_, SecretManagerState>) -> Resu
     Ok(())
 }
 
-fn clear_cloud_tokens(secret_manager: &SecretManager) -> Result<(), String> {
-    secret_manager
-        .delete_secret(CLOUD_ACCESS_TOKEN_SECRET_KEY)
-        .map_err(|_| "Failed to clear the stored Cloud access token".to_string())?;
-    secret_manager
-        .delete_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY)
-        .map_err(|_| "Failed to clear the stored Cloud refresh token".to_string())
+fn clear_cloud_tokens(
+    vault: &dyn CloudCredentialVault,
+    secret_manager: &SecretManager,
+) -> Result<(), String> {
+    delete_cloud_credential(
+        vault,
+        secret_manager,
+        CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_ACCESS_TOKEN_SECRET_KEY,
+    )?;
+    delete_cloud_credential(
+        vault,
+        secret_manager,
+        CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_REFRESH_TOKEN_SECRET_KEY,
+    )
 }
 
-/// Restore the encrypted Cloud access token after a Desktop process restart.
+/// Restore the OS-keyring Cloud access token after a Desktop process restart.
 ///
 /// Returning `None` is the normal signed-out state. The token is validated
 /// structurally before it is copied back into Rust memory; the frontend then
 /// validates it against `/api/me` before exposing the Cloud workspace.
 #[tauri::command]
 pub fn account_restore_access_token(
+    app: AppHandle,
     secret_state: State<'_, SecretManagerState>,
 ) -> Result<Option<String>, String> {
-    restore_cloud_access_token(secret_state.manager())
+    restore_cloud_access_token(
+        &OsCloudCredentialVault::for_app(&app),
+        secret_state.manager(),
+    )
 }
 
-/// Restore the encrypted Cloud refresh token after a Desktop process restart.
+/// Restore the OS-keyring Cloud refresh token after a Desktop process restart.
 ///
 /// The raw value crosses IPC only into the authenticated Desktop webview, which
 /// immediately exchanges it over the allowlisted AGI Cloud origin when the
 /// access token is near expiry. It is never logged or persisted in plaintext.
 #[tauri::command]
 pub fn account_restore_refresh_token(
+    app: AppHandle,
     secret_state: State<'_, SecretManagerState>,
 ) -> Result<Option<String>, String> {
-    restore_cloud_refresh_token(secret_state.manager())
+    restore_cloud_refresh_token(
+        &OsCloudCredentialVault::for_app(&app),
+        secret_state.manager(),
+    )
 }
 
-fn restore_cloud_access_token(secret_manager: &SecretManager) -> Result<Option<String>, String> {
-    let exists = secret_manager
-        .has_secret(CLOUD_ACCESS_TOKEN_SECRET_KEY)
-        .map_err(|_| "Failed to inspect the stored Cloud session".to_string())?;
-    if !exists {
+fn restore_cloud_access_token(
+    vault: &dyn CloudCredentialVault,
+    secret_manager: &SecretManager,
+) -> Result<Option<String>, String> {
+    let Some(access_token) = load_cloud_credential(
+        vault,
+        secret_manager,
+        CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_ACCESS_TOKEN_SECRET_KEY,
+        |token| validate_token_format(token, "Stored access token"),
+    )?
+    else {
         return Ok(None);
-    }
-
-    let access_token = secret_manager
-        .get_secret(CLOUD_ACCESS_TOKEN_SECRET_KEY)
-        .map_err(|_| "Failed to restore the stored Cloud session".to_string())?;
-    validate_token_format(&access_token, "Stored access token")?;
-
+    };
     let mut token = ACCESS_TOKEN
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -743,19 +894,20 @@ fn restore_cloud_access_token(secret_manager: &SecretManager) -> Result<Option<S
     Ok(Some(access_token))
 }
 
-fn restore_cloud_refresh_token(secret_manager: &SecretManager) -> Result<Option<String>, String> {
-    let exists = secret_manager
-        .has_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY)
-        .map_err(|_| "Failed to inspect the stored Cloud refresh credential".to_string())?;
-    if !exists {
+fn restore_cloud_refresh_token(
+    vault: &dyn CloudCredentialVault,
+    secret_manager: &SecretManager,
+) -> Result<Option<String>, String> {
+    let Some(refresh_token) = load_cloud_credential(
+        vault,
+        secret_manager,
+        CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_REFRESH_TOKEN_SECRET_KEY,
+        validate_refresh_token_format,
+    )?
+    else {
         return Ok(None);
-    }
-
-    let refresh_token = secret_manager
-        .get_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY)
-        .map_err(|_| "Failed to restore the stored Cloud refresh credential".to_string())?;
-    validate_refresh_token_format(&refresh_token)?;
-
+    };
     let mut token = REFRESH_TOKEN
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -941,14 +1093,41 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
 #[cfg(test)]
 mod tests {
     use super::{
-        build_device_authorization_request, clear_cloud_tokens, restore_cloud_access_token,
-        restore_cloud_refresh_token, store_cloud_access_token, store_cloud_refresh_token,
-        validate_api_base_url, CreditBalanceResponse, UserProfile,
+        build_device_authorization_request, delete_cloud_credential, load_cloud_credential,
+        store_cloud_credential, validate_api_base_url, CloudCredentialVault, CreditBalanceResponse,
+        OsCloudCredentialVault, UserProfile, CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_ACCESS_TOKEN_SECRET_KEY, CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+        CLOUD_REFRESH_TOKEN_SECRET_KEY,
     };
     use crate::sys::api::HttpMethod;
     use crate::sys::security::SecretManager;
     use rusqlite::Connection;
+    use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct MemoryCredentialVault {
+        entries: Mutex<HashMap<String, String>>,
+    }
+
+    impl CloudCredentialVault for MemoryCredentialVault {
+        fn load(&self, account: &str) -> Result<Option<String>, String> {
+            Ok(self.entries.lock().unwrap().get(account).cloned())
+        }
+
+        fn store(&self, account: &str, secret: &str) -> Result<(), String> {
+            self.entries
+                .lock()
+                .unwrap()
+                .insert(account.to_string(), secret.to_string());
+            Ok(())
+        }
+
+        fn delete(&self, account: &str) -> Result<(), String> {
+            self.entries.lock().unwrap().remove(account);
+            Ok(())
+        }
+    }
 
     fn secret_manager() -> SecretManager {
         let connection = Connection::open_in_memory().expect("open in-memory database");
@@ -966,35 +1145,158 @@ mod tests {
     }
 
     #[test]
-    fn cloud_access_token_survives_memory_boundary_in_encrypted_storage() {
+    fn cloud_access_token_roundtrips_through_credential_vault() {
         let manager = secret_manager();
+        let vault = MemoryCredentialVault::default();
         let token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1c2VyXzEyMyJ9.signature";
 
-        assert_eq!(restore_cloud_access_token(&manager).unwrap(), None);
-        store_cloud_access_token(&manager, token).unwrap();
         assert_eq!(
-            restore_cloud_access_token(&manager).unwrap().as_deref(),
+            load_cloud_credential(
+                &vault,
+                &manager,
+                CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
+                CLOUD_ACCESS_TOKEN_SECRET_KEY,
+                |_| Ok(()),
+            )
+            .unwrap(),
+            None
+        );
+        store_cloud_credential(
+            &vault,
+            &manager,
+            CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
+            CLOUD_ACCESS_TOKEN_SECRET_KEY,
+            token,
+        )
+        .unwrap();
+        assert_eq!(
+            load_cloud_credential(
+                &vault,
+                &manager,
+                CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
+                CLOUD_ACCESS_TOKEN_SECRET_KEY,
+                |_| Ok(()),
+            )
+            .unwrap()
+            .as_deref(),
             Some(token)
         );
 
-        clear_cloud_tokens(&manager).unwrap();
-        assert_eq!(restore_cloud_access_token(&manager).unwrap(), None);
+        delete_cloud_credential(
+            &vault,
+            &manager,
+            CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT,
+            CLOUD_ACCESS_TOKEN_SECRET_KEY,
+        )
+        .unwrap();
+        assert!(vault
+            .load(CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
-    fn cloud_refresh_token_survives_memory_boundary_in_encrypted_storage() {
+    fn cloud_refresh_token_roundtrips_through_credential_vault() {
         let manager = secret_manager();
+        let vault = MemoryCredentialVault::default();
         let token = "opaque-refresh-token-with-sufficient-randomness";
 
-        assert_eq!(restore_cloud_refresh_token(&manager).unwrap(), None);
-        store_cloud_refresh_token(&manager, token).unwrap();
+        store_cloud_credential(
+            &vault,
+            &manager,
+            CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+            CLOUD_REFRESH_TOKEN_SECRET_KEY,
+            token,
+        )
+        .unwrap();
         assert_eq!(
-            restore_cloud_refresh_token(&manager).unwrap().as_deref(),
+            load_cloud_credential(
+                &vault,
+                &manager,
+                CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+                CLOUD_REFRESH_TOKEN_SECRET_KEY,
+                |_| Ok(()),
+            )
+            .unwrap()
+            .as_deref(),
             Some(token)
         );
 
-        clear_cloud_tokens(&manager).unwrap();
-        assert_eq!(restore_cloud_refresh_token(&manager).unwrap(), None);
+        delete_cloud_credential(
+            &vault,
+            &manager,
+            CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+            CLOUD_REFRESH_TOKEN_SECRET_KEY,
+        )
+        .unwrap();
+        assert!(vault
+            .load(CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn legacy_encrypted_cloud_token_migrates_and_is_deleted() {
+        let manager = secret_manager();
+        let vault = MemoryCredentialVault::default();
+        let token = "opaque-refresh-token-with-sufficient-randomness";
+        manager
+            .set_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY, token)
+            .unwrap();
+
+        let restored = load_cloud_credential(
+            &vault,
+            &manager,
+            CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+            CLOUD_REFRESH_TOKEN_SECRET_KEY,
+            |_| Ok(()),
+        )
+        .unwrap();
+
+        assert_eq!(restored.as_deref(), Some(token));
+        assert_eq!(
+            vault
+                .load(CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT)
+                .unwrap()
+                .as_deref(),
+            Some(token)
+        );
+        assert!(!manager.has_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY).unwrap());
+    }
+
+    #[test]
+    fn invalid_legacy_cloud_token_is_not_migrated() {
+        let manager = secret_manager();
+        let vault = MemoryCredentialVault::default();
+        manager
+            .set_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY, "invalid")
+            .unwrap();
+
+        let error = load_cloud_credential(
+            &vault,
+            &manager,
+            CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT,
+            CLOUD_REFRESH_TOKEN_SECRET_KEY,
+            |_| Err("invalid credential".to_string()),
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "invalid credential");
+        assert!(vault
+            .load(CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT)
+            .unwrap()
+            .is_none());
+        assert!(manager.has_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY).unwrap());
+    }
+
+    #[test]
+    fn bundle_identifiers_isolate_cloud_keyring_namespaces() {
+        let production = OsCloudCredentialVault::for_bundle_identifier("com.agiworkforce.desktop");
+        let wdio = OsCloudCredentialVault::for_bundle_identifier("com.agiworkforce.desktop.wdio");
+
+        assert_eq!(production.service, "com.agiworkforce.desktop.cloud-account");
+        assert_eq!(wdio.service, "com.agiworkforce.desktop.wdio.cloud-account");
+        assert_ne!(production.service, wdio.service);
     }
 
     #[test]

@@ -318,7 +318,7 @@ enum AuthChoice {
     /// A LOCAL provider (Ollama/LM Studio) — runs on-device, needs no account,
     /// and must NEVER fall through to the cloud login menu.
     Local(&'static str),
-    /// A named provider that stores a BYOK credential in auth.json.
+    /// A named provider that stores a BYOK credential in the OS keyring.
     ApiKeyProvider(&'static str),
     ApiKey,
     OtherProviders,

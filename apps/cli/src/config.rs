@@ -599,7 +599,7 @@ impl CliConfig {
         // SEV-CLI-12 fix: config.toml may carry provider configuration that the
         // user expects to remain private (custom base_urls, env-var key names,
         // model preferences, fallback chains). The other CLI state files
-        // (auth.json, mcp-oauth.json, permissions.toml) all chmod 0o600 after
+        // (credential indexes/fallbacks and permissions.toml) all chmod 0o600 after
         // write; config.toml was the outlier inheriting the umask (0o644 on a
         // typical Unix shell), making it world-readable. Match the rest.
         #[cfg(unix)]

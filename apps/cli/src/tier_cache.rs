@@ -19,8 +19,8 @@
 //! 3. Write result to cache.  On any error, return `None` (caller uses config default).
 //!
 //! ## Security
-//! - JWT is read from `AGIWORKFORCE_JWT`, then `~/.agiworkforce/auth.json`
-//!   written by `agi login`, then the legacy `~/.agiworkforce/auth.toml`.
+//! - JWT is read from `AGIWORKFORCE_JWT`, then the OS credential store populated
+//!   by `agi login`, then the legacy `~/.agiworkforce/auth.toml`.
 //! - Request always uses HTTPS, and only to an allowlisted `*.agiworkforce.com` host.
 //! - Cache file is written atomically via temp-file + rename.
 //! - Timeout: 3 seconds — never blocks interactive startup visibly.
