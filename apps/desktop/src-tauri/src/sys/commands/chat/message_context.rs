@@ -40,12 +40,12 @@ pub(super) fn append_history_messages(
 /// Load relevant project memories and inject them as a system message into the LLM context.
 ///
 /// This is non-fatal: if loading fails, a warning is logged but execution continues.
-pub(super) fn inject_memory_context(
+pub(super) async fn inject_memory_context(
     memory_handler: &ChatMemoryHandler,
     project_folder: Option<&str>,
     llm_messages: &mut Vec<ChatMessage>,
 ) {
-    match memory_handler.load_project_memories(project_folder) {
+    match memory_handler.load_project_memories(project_folder).await {
         Ok(memory_response) => {
             if memory_response.injection_result.has_relevant_memories {
                 llm_messages.push(ChatMessage {

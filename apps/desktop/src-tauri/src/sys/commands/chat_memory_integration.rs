@@ -8,6 +8,7 @@ use super::chat::memory_handler::{
 };
 use super::memory::MemoryState;
 use super::project_context::ProjectContextState;
+use super::project_memory::ProjectMemoryState;
 use crate::core::llm::memory_integration::MemoryInjectionConfig;
 use crate::sys::error::Result;
 use tauri::State;
@@ -17,6 +18,7 @@ use tracing::info;
 #[tauri::command]
 pub async fn chat_load_project_memories(
     memory_state: State<'_, MemoryState>,
+    project_memory_state: State<'_, ProjectMemoryState>,
     project_context: State<'_, ProjectContextState>,
     settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
 ) -> Result<LoadProjectMemoriesResponse> {
@@ -30,9 +32,13 @@ pub async fn chat_load_project_memories(
             .map(|preferences| preferences.memory_enabled)
             .unwrap_or(false)
     };
-    let handler = ChatMemoryHandler::with_config(Some(memory_state.manager.clone()), config)?;
+    let handler = ChatMemoryHandler::with_project_config(
+        Some(memory_state.manager.clone()),
+        Some(project_memory_state.manager.clone()),
+        config,
+    )?;
 
-    handler.load_project_memories(project_path.as_deref())
+    handler.load_project_memories(project_path.as_deref()).await
 }
 
 /// Detect and save a decision from a chat message
@@ -40,6 +46,8 @@ pub async fn chat_load_project_memories(
 pub async fn chat_detect_and_save_decision(
     message: String,
     memory_state: State<'_, MemoryState>,
+    project_memory_state: State<'_, ProjectMemoryState>,
+    project_context: State<'_, ProjectContextState>,
     settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
 ) -> Result<Option<SaveDecisionResponse>> {
     let memory_enabled = {
@@ -53,8 +61,15 @@ pub async fn chat_detect_and_save_decision(
     if !memory_enabled {
         return Ok(None);
     }
-    let handler = ChatMemoryHandler::new(Some(memory_state.manager.clone()))?;
-    handler.detect_and_save_decision(&message)
+    let project_path = project_context.get_folder().await;
+    let handler = ChatMemoryHandler::with_project_config(
+        Some(memory_state.manager.clone()),
+        Some(project_memory_state.manager.clone()),
+        MemoryInjectionConfig::default(),
+    )?;
+    handler
+        .detect_and_save_decision(&message, project_path.as_deref())
+        .await
 }
 
 /// Manually save a decision to memory with auto-detection

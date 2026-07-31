@@ -259,7 +259,10 @@ fn spawn_streaming_deep_research(
                     flags.incognito,
                     true,
                 ) {
-                    if let Err(error) = memory_handler.detect_and_save_decision(&result.report) {
+                    if let Err(error) = memory_handler
+                        .detect_and_save_decision(&result.report, request.project_folder.as_deref())
+                        .await
+                    {
                         warn!(
                             "[Chat] Failed to auto-save research memory (non-fatal): {}",
                             error
@@ -578,7 +581,10 @@ fn spawn_streaming_agent(
                     flags.incognito,
                     success,
                 ) {
-                    if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
+                    if let Err(error) = memory_handler
+                        .detect_and_save_decision(&final_content, request.project_folder.as_deref())
+                        .await
+                    {
                         warn!(
                             "[Chat] Failed to auto-save agent memory (non-fatal): {}",
                             error
@@ -1308,7 +1314,10 @@ fn spawn_streaming_chat(
                     flags.incognito,
                     !was_stopped,
                 ) {
-                    if let Err(error) = memory_handler.detect_and_save_decision(&full_content) {
+                    if let Err(error) = memory_handler
+                        .detect_and_save_decision(&full_content, request.project_folder.as_deref())
+                        .await
+                    {
                         warn!("[Chat] Failed to auto-save memory (non-fatal): {}", error);
                     }
                 }
@@ -1427,7 +1436,10 @@ async fn run_nonstreaming_deep_research(
         flags.incognito,
         true,
     ) {
-        if let Err(error) = memory_handler.detect_and_save_decision(&result.report) {
+        if let Err(error) = memory_handler
+            .detect_and_save_decision(&result.report, request.project_folder.as_deref())
+            .await
+        {
             warn!(
                 "[Chat] Failed to auto-save research memory (non-fatal): {}",
                 error
@@ -1581,7 +1593,10 @@ async fn run_nonstreaming_agent(
         flags.incognito,
         orchestrator_result.success,
     ) {
-        if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
+        if let Err(error) = memory_handler
+            .detect_and_save_decision(&final_content, request.project_folder.as_deref())
+            .await
+        {
             warn!(
                 "[Chat] Failed to auto-save agent memory (non-fatal): {}",
                 error
@@ -1785,7 +1800,10 @@ async fn run_nonstreaming_chat(
                     flags.incognito,
                     true,
                 ) {
-                    if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
+                    if let Err(error) = memory_handler
+                        .detect_and_save_decision(&final_content, request.project_folder.as_deref())
+                        .await
+                    {
                         warn!("[Chat] Failed to auto-save decision (non-fatal): {}", error);
                     }
                 }

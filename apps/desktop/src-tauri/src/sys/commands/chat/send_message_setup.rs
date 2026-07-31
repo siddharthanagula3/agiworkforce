@@ -195,6 +195,7 @@ pub(super) async fn prepare_send_message(
     mcp_state: &State<'_, crate::sys::commands::mcp::McpState>,
     project_context_state: &State<'_, crate::sys::commands::project_context::ProjectContextState>,
     memory_state: &State<'_, crate::sys::commands::memory::MemoryState>,
+    project_memory_state: &State<'_, crate::sys::commands::project_memory::ProjectMemoryState>,
     app_handle: &tauri::AppHandle,
     router: Arc<RwLock<LLMRouter>>,
     request: ChatSendMessageRequest,
@@ -244,8 +245,9 @@ pub(super) async fn prepare_send_message(
     // config supplies selection limits only and can never bypass a disabled
     // persisted policy.
     memory_config.enabled = memory_enabled;
-    let memory_handler = memory_handler::ChatMemoryHandler::with_config(
+    let memory_handler = memory_handler::ChatMemoryHandler::with_project_config(
         Some(memory_state.manager.clone()),
+        Some(project_memory_state.manager.clone()),
         memory_config,
     )
     .map_err(|e| format!("Failed to initialize memory handler: {e}"))?;
@@ -255,7 +257,8 @@ pub(super) async fn prepare_send_message(
             &memory_handler,
             request.project_folder.as_deref(),
             &mut llm_messages,
-        );
+        )
+        .await;
     } else {
         debug!("[Chat] Incognito mode: skipping memory injection");
     }

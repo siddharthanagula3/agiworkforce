@@ -8,10 +8,10 @@
 //! - Maintaining memory importance and relevance
 
 use crate::core::agi::memory_manager::{MemoryCategory, MemoryEntry, MemoryManager};
+use crate::core::agi::project_memory::{ProjectMemory, ProjectMemoryManager, ProjectMemoryType};
 use crate::sys::error::Result;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::sync::LazyLock;
 
 static DECISION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
@@ -125,6 +125,7 @@ impl MemoryInjector {
     pub fn load_project_memories(
         &self,
         manager: &MemoryManager,
+        project_manager: Option<&ProjectMemoryManager>,
         project_path: Option<&str>,
     ) -> Result<MemoryInjectionResult> {
         if !self.config.enabled {
@@ -142,30 +143,43 @@ impl MemoryInjector {
             });
         }
 
-        let mut memories = Vec::new();
+        // Exact project rows are loaded from the dedicated project store. The
+        // former basename search over global user_memory could match unrelated
+        // repositories with the same final path segment (or merely mention the
+        // project name in prose), which is not project scoping.
+        let scoped_project_path = project_path.map(str::trim).filter(|path| !path.is_empty());
+        let mut project_memories = match (project_manager, scoped_project_path) {
+            (Some(project_manager), Some(path)) => project_manager
+                .search_project_memories(path, "", self.config.max_memories)?
+                .into_iter()
+                .filter(|memory| memory.importance >= self.config.min_importance)
+                .map(project_memory_as_entry)
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
 
-        // Load high-importance memories
-        let important_memories = manager.get_important_memories(self.config.min_importance)?;
-        memories.extend(important_memories);
-
-        // If project path is provided, search for project-specific memories
-        if let Some(path) = project_path {
-            let project_name = Path::new(path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or(path);
-
-            let project_memories = manager.search(project_name, self.config.max_memories)?;
-            memories.extend(project_memories);
+        // Account/device memories remain available as global preferences and
+        // facts, but exact project rows get first claim on the bounded budget.
+        let mut global_memories = manager.get_important_memories(self.config.min_importance)?;
+        if scoped_project_path.is_some() {
+            // Global decisions and context may predate exact project storage and
+            // therefore cannot be proven to belong to this folder. Only truly
+            // account-wide preferences and facts are safe project fallbacks.
+            global_memories.retain(|memory| {
+                matches!(
+                    memory.category,
+                    MemoryCategory::Preference | MemoryCategory::Fact
+                )
+            });
         }
-
-        // Deduplicate by ID
-        memories.sort_by_key(|m| m.id);
-        memories.dedup_by_key(|m| m.id);
-
-        // Sort by importance and limit
-        memories.sort_by(|a, b| b.importance.cmp(&a.importance));
-        memories.truncate(self.config.max_memories);
+        global_memories.sort_by(|a, b| b.importance.cmp(&a.importance));
+        global_memories.truncate(
+            self.config
+                .max_memories
+                .saturating_sub(project_memories.len()),
+        );
+        project_memories.extend(global_memories);
+        let memories = project_memories;
 
         let summary = self.summarize_memories(&memories);
         let context = self.format_memories(&memories);
@@ -343,6 +357,53 @@ impl MemoryInjector {
     }
 }
 
+fn project_memory_as_entry(memory: ProjectMemory) -> MemoryEntry {
+    let content = project_memory_prompt_content(&memory.memory_type, &memory.content);
+    let (category, topic) = match memory.memory_type {
+        ProjectMemoryType::Context => (MemoryCategory::Context, "project_context"),
+        ProjectMemoryType::CodingStyle => (MemoryCategory::Preference, "coding_style"),
+        ProjectMemoryType::ArchitecturalDecision => {
+            (MemoryCategory::Decision, "architectural_decision")
+        }
+    };
+
+    MemoryEntry {
+        // Project and global memories use separate SQLite tables; formatting
+        // never exposes this synthetic identity, so preserve the row id only.
+        id: memory.id,
+        category,
+        topic: topic.to_string(),
+        content,
+        importance: memory.importance,
+        // The exact folder selects the row but is local identity metadata, not
+        // prompt content. Do not expose an absolute filesystem path to models.
+        source: Some("project".to_string()),
+        created_at: memory.created_at,
+        updated_at: memory.updated_at,
+        last_accessed: memory.last_accessed,
+    }
+}
+
+fn project_memory_prompt_content(memory_type: &ProjectMemoryType, content: &str) -> String {
+    let Ok(serde_json::Value::Object(stored)) = serde_json::from_str(content) else {
+        // Legacy rows may contain plain text. Preserve the actual user content;
+        // structured rows below are allowlisted to remove identity metadata.
+        return content.to_string();
+    };
+    let allowed_fields: &[&str] = match memory_type {
+        ProjectMemoryType::Context => &["tech_stack", "main_language", "conventions", "frameworks"],
+        ProjectMemoryType::CodingStyle => &["style_key", "style_value", "category"],
+        ProjectMemoryType::ArchitecturalDecision => &["decision", "rationale", "status"],
+    };
+    let mut prompt_data = serde_json::Map::new();
+    for field in allowed_fields {
+        if let Some(value) = stored.get(*field).filter(|value| !value.is_null()) {
+            prompt_data.insert((*field).to_string(), value.clone());
+        }
+    }
+    serde_json::Value::Object(prompt_data).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,6 +506,38 @@ mod tests {
     }
 
     #[test]
+    fn project_prompt_projection_keeps_context_but_drops_local_identity_metadata() {
+        let entry = project_memory_as_entry(ProjectMemory {
+            id: 7,
+            project_folder: "/Users/alice/private/repository".to_string(),
+            memory_type: ProjectMemoryType::Context,
+            content: serde_json::json!({
+                "id": 7,
+                "project_folder": "/Users/alice/private/repository",
+                "tech_stack": ["Rust"],
+                "main_language": "Rust",
+                "conventions": "Use typed errors",
+                "frameworks": ["Tauri"],
+                "importance": 9,
+                "created_at": "2026-07-31",
+                "unexpected": "ignore this metadata"
+            })
+            .to_string(),
+            importance: 9,
+            created_at: "2026-07-31".to_string(),
+            updated_at: "2026-07-31".to_string(),
+            last_accessed: None,
+        });
+
+        assert!(entry.content.contains("Use typed errors"));
+        assert!(entry.content.contains("Tauri"));
+        assert!(!entry.content.contains("/Users/alice"));
+        assert!(!entry.content.contains("created_at"));
+        assert!(!entry.content.contains("unexpected"));
+        assert_eq!(entry.source.as_deref(), Some("project"));
+    }
+
+    #[test]
     fn disabled_policy_returns_zero_memories_without_retrieval() {
         // Deliberately leave this in-memory manager without a user_memory table:
         // any attempted retrieval would fail, so success proves the disabled
@@ -456,7 +549,9 @@ mod tests {
         })
         .unwrap();
 
-        let result = injector.load_project_memories(&manager, None).unwrap();
+        let result = injector
+            .load_project_memories(&manager, None, None)
+            .unwrap();
 
         assert_eq!(result.memories_loaded, 0);
         assert!(!result.has_relevant_memories);
