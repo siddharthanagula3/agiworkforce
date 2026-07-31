@@ -16,6 +16,7 @@ import {
   isManagedComputePrivateBetaEnabled,
   MANAGED_COMPUTE_PRIVATE_BETA_ENV,
 } from '@/lib/managed-compute-gate';
+import SecurityOperationsPanel from '../components/SecurityOperationsPanel';
 
 // Managed compute has been public alpha (open by default) since 2026-06-27.
 // AGI_MANAGED_COMPUTE_PRIVATE_BETA is an incident-response kill-switch only
@@ -150,6 +151,8 @@ export default function AdminConsolePage() {
             );
           })}
         </section>
+
+        <SecurityOperationsPanel />
 
         <section className="overflow-hidden rounded-md border border-white/10 bg-white/[0.02]">
           <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
