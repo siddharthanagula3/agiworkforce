@@ -5,7 +5,7 @@ import { ollamaCheckStatus, ollamaListModels, ollamaPullModel } from '@/api/olla
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { Search } from 'lucide-react';
+import { ChevronRight, Search } from 'lucide-react';
 import {
   SETTINGS_NAV,
   SETTINGS_NAV_GROUPS as NAV_GROUPS,
@@ -58,6 +58,7 @@ import { DeveloperTab } from './tabs/Developer';
 import { AgiCodeTab } from './tabs/AgiCode';
 import { BillingTab } from './tabs/Billing';
 import { AgiInChromeTab } from './tabs/AgiInChrome';
+import { searchDesktopSettings, type DesktopSettingSearchEntry } from './settingsSearchIndex';
 
 // Canonical settings tab keys — single source of truth in @agiworkforce/ui.
 type CanonicalTab = SettingsNavKey;
@@ -196,8 +197,12 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [navQuery, setNavQuery] = useState('');
+  const [activeSearchResult, setActiveSearchResult] = useState<DesktopSettingSearchEntry | null>(
+    null,
+  );
   const { confirm, dialog: discardChangesDialog } = useConfirm();
   const baselineSnapshotRef = useRef<string | null>(null);
+  const settingsContentRef = useRef<HTMLDivElement | null>(null);
   // Baseline for personalization specifically (separate from baselineSnapshotRef's
   // serialized string) so `handleCancel` can restore it directly via
   // `setPersonalization`. Needed because `loadSettings()` — unlike every other
@@ -235,6 +240,30 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           );
         }),
     })).filter((group) => group.items.length > 0);
+  }, [normalizedNavQuery]);
+  const settingSearchGroups = useMemo(() => {
+    if (!normalizedNavQuery) return [];
+
+    const visibleKeys = new Set(visibleNav.map((item) => item.key));
+    const matchesByTab = new Map<CanonicalTab, DesktopSettingSearchEntry[]>();
+    for (const match of searchDesktopSettings(normalizedNavQuery)) {
+      if (!visibleKeys.has(match.tab)) continue;
+      const matches = matchesByTab.get(match.tab) ?? [];
+      matches.push(match);
+      matchesByTab.set(match.tab, matches);
+    }
+
+    return visibleNav
+      .map((item) => ({
+        item,
+        matches: matchesByTab.get(item.key) ?? [],
+        sectionMatches:
+          item.label.toLowerCase().includes(normalizedNavQuery) ||
+          item.key.toLowerCase().includes(normalizedNavQuery) ||
+          (item.keywords?.some((keyword) => keyword.toLowerCase().includes(normalizedNavQuery)) ??
+            false),
+      }))
+      .filter((group) => group.sectionMatches || group.matches.length > 0);
   }, [normalizedNavQuery]);
 
   const handleExportSettings = useCallback(async () => {
@@ -435,6 +464,55 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       setActiveTab(resolveVisibleTab(initialTab));
     }
   }, [open, initialTab]);
+
+  useEffect(() => {
+    if (normalizedNavQuery) return;
+    setActiveSearchResult(null);
+  }, [normalizedNavQuery]);
+
+  useEffect(() => {
+    if (!activeSearchResult || activeSearchResult.tab !== activeTab) return;
+
+    let cancelled = false;
+    let cleanupHighlight: (() => void) | undefined;
+    let attempt = 0;
+    const locateAndHighlight = () => {
+      if (cancelled) return;
+      const content = settingsContentRef.current;
+      const target = content?.querySelector<HTMLElement>(
+        `[data-setting-search-id="${activeSearchResult.id}"]`,
+      );
+
+      if (!target && attempt < 20) {
+        attempt += 1;
+        window.setTimeout(locateAndHighlight, 50);
+        return;
+      }
+
+      if (!target) {
+        content?.scrollTo?.({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      target.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      target.classList.add('outline', 'outline-2', 'outline-primary/60', 'outline-offset-4');
+      target.focus?.({ preventScroll: true });
+
+      const timeout = window.setTimeout(() => {
+        target.classList.remove('outline', 'outline-2', 'outline-primary/60', 'outline-offset-4');
+      }, 2400);
+      cleanupHighlight = () => {
+        window.clearTimeout(timeout);
+        target.classList.remove('outline', 'outline-2', 'outline-primary/60', 'outline-offset-4');
+      };
+    };
+
+    window.setTimeout(locateAndHighlight, 0);
+    return () => {
+      cancelled = true;
+      cleanupHighlight?.();
+    };
+  }, [activeSearchResult, activeTab]);
 
   useEffect(() => {
     if (!open || !baselineSnapshotRef.current) return;
@@ -749,51 +827,106 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 <input
                   type="search"
                   value={navQuery}
-                  onChange={(event) => setNavQuery(event.target.value)}
+                  onChange={(event) => {
+                    setNavQuery(event.target.value);
+                    setActiveSearchResult(null);
+                  }}
                   placeholder="Search"
                   className="h-10 w-full rounded-lg border border-transparent bg-background/70 py-2 pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground focus-visible:border-border focus-visible:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
                 />
               </label>
 
               <div className="space-y-5">
-                {filteredNavGroups.map((group, groupIndex) => (
-                  <div key={group.label ?? 'primary'} className="space-y-1">
-                    {group.label && (
-                      <div className="px-3 pb-1 text-xs font-medium text-muted-foreground">
-                        {group.label}
-                      </div>
-                    )}
-                    {group.items.map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() => setActiveTab(item.key)}
-                        disabled={isBusy}
-                        aria-current={activeTab === item.key ? 'page' : undefined}
-                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                          activeTab === item.key
-                            ? 'bg-background text-foreground shadow-xs'
-                            : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
-                        } ${isBusy ? 'cursor-not-allowed opacity-60' : ''}`}
-                      >
-                        <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                        <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
-                        {item.key === 'connectors' && connectedConnectorCount > 0 && (
-                          <span
-                            className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary"
-                            aria-label={`${connectedConnectorCount} connected`}
-                          >
-                            {connectedConnectorCount}
+                {normalizedNavQuery
+                  ? settingSearchGroups.map(({ item, matches }) => (
+                      <div key={item.key} className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveSearchResult(null);
+                            setActiveTab(item.key);
+                          }}
+                          disabled={isBusy}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span className="min-w-0 flex-1 truncate text-left font-medium">
+                            {item.label}
                           </span>
+                        </button>
+                        {matches.map((match) => (
+                          <button
+                            key={match.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveSearchResult(match);
+                              setActiveTab(match.tab);
+                            }}
+                            disabled={isBusy}
+                            aria-label={`${match.label}, ${item.label}`}
+                            aria-current={activeSearchResult?.id === match.id ? 'true' : undefined}
+                            className={`group flex w-full items-start gap-2 rounded-lg py-2 pl-10 pr-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
+                              activeSearchResult?.id === match.id
+                                ? 'bg-background text-foreground shadow-xs'
+                                : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                            }`}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium">
+                                {match.label}
+                              </span>
+                              <span className="mt-0.5 block line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                                {match.description}
+                              </span>
+                            </span>
+                            <ChevronRight
+                              className="mt-1 h-3.5 w-3.5 shrink-0 opacity-50 transition-transform group-hover:translate-x-0.5"
+                              aria-hidden="true"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    ))
+                  : filteredNavGroups.map((group, groupIndex) => (
+                      <div key={group.label ?? 'primary'} className="space-y-1">
+                        {group.label && (
+                          <div className="px-3 pb-1 text-xs font-medium text-muted-foreground">
+                            {group.label}
+                          </div>
                         )}
-                      </button>
+                        {group.items.map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => setActiveTab(item.key)}
+                            disabled={isBusy}
+                            aria-current={activeTab === item.key ? 'page' : undefined}
+                            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                              activeTab === item.key
+                                ? 'bg-background text-foreground shadow-xs'
+                                : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+                            } ${isBusy ? 'cursor-not-allowed opacity-60' : ''}`}
+                          >
+                            <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
+                            {item.key === 'connectors' && connectedConnectorCount > 0 && (
+                              <span
+                                className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary"
+                                aria-label={`${connectedConnectorCount} connected`}
+                              >
+                                {connectedConnectorCount}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                        {groupIndex === 0 && filteredNavGroups.length > 1 && (
+                          <div className="mx-3 mt-3 border-t border-border/70" aria-hidden="true" />
+                        )}
+                      </div>
                     ))}
-                    {groupIndex === 0 && filteredNavGroups.length > 1 && (
-                      <div className="mx-3 mt-3 border-t border-border/70" aria-hidden="true" />
-                    )}
-                  </div>
-                ))}
-                {filteredNavGroups.length === 0 && (
+                {(normalizedNavQuery
+                  ? settingSearchGroups.length === 0
+                  : filteredNavGroups.length === 0) && (
                   <div className="rounded-lg border border-border bg-background/60 px-3 py-3 text-sm text-muted-foreground">
                     No settings found
                   </div>
@@ -803,6 +936,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <div
+                ref={settingsContentRef}
                 aria-busy={isBusy || undefined}
                 className={`flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7 ${
                   isBusy ? 'pointer-events-none opacity-80' : ''
@@ -811,6 +945,20 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                 {/* Same bounded measure as the shared SettingsModal pane, so
                     Local and Cloud settings read at one width. */}
                 <div className="mx-auto w-full max-w-[672px]">
+                  {activeSearchResult && activeSearchResult.tab === activeTab && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className="mb-5 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3"
+                    >
+                      <p className="text-sm font-medium text-foreground">
+                        Showing {activeSearchResult.label}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {activeSearchResult.description}
+                      </p>
+                    </div>
+                  )}
                   {error && (
                     <div
                       role="alert"

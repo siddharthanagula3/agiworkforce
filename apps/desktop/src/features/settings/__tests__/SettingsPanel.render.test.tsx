@@ -283,6 +283,32 @@ describe('SettingsPanel render stability', () => {
     expect(screen.getByRole('searchbox', { name: 'Search settings' })).toBeInTheDocument();
   });
 
+  it('searches individual settings and jumps to the selected control (GAP-233/234)', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="general" />);
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search settings' }), {
+      target: { value: 'remo' },
+    });
+
+    const remoteControl = screen.getByRole('button', {
+      name: 'Remote control, Connections',
+    });
+    expect(remoteControl).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Reduce motion, Personalization' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(remoteControl);
+
+    expect(await screen.findByText('Live mobile pairing workflow')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Showing Remote control');
+    const pairingTarget = screen.getByRole('region', { name: 'Mobile companion pairing' });
+    await waitFor(() => {
+      expect(pairingTarget).toHaveFocus();
+      expect(pairingTarget.className).toContain('outline-primary/60');
+    });
+  });
+
   it('shows the backend-owned account plan in the mode summary', async () => {
     // A real desktop Cloud session: tenant id + device bearer. The email claim
     // is empty on purpose — that is what /api/auth/device/token mints.
