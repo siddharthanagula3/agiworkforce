@@ -3680,8 +3680,8 @@
   {
     "item": "refusal-and-appeal-surface",
     "surface": "packages/safety",
-    "status": "partial",
-    "evidence": "Refusal half is built: apps/web/features/chat/components/messages/ChatMessageList.tsx:50-53 isRefusalFinish() matches metadata.finishReason 'refusal'/'content_filter'; showRefusalNotice (line 828-834) renders a neutral notice ('The model declined to finish this response for safety reasons.') with a Retry button at lines 1132-1150. Backed by protocol-level plumbing: crates/agiworkforce-protocol/src/agent_events.rs:333-338 documents the canonical 'refusal' stop_reason, and packages/ai/provider-runtime/src/errors.ts:507-511 maps provider safety refusals to a 'safety_refusal' error code."
+    "status": "built",
+    "evidence": "The web chat now provides both halves of the flow. apps/web/features/chat/components/messages/ChatMessageList.tsx:947-955 detects completed assistant turns whose finishReason is 'refusal'/'content_filter' and :1236-1270 renders the honest safety notice with always-available 'Report issue' plus conditional Retry. apps/web/features/chat/components/Composer/ComposerFeedbackDialog.tsx:37-226 switches into a focused 'Report an incorrect refusal' form, discloses exactly what is attached, and submits only the user-authored explanation plus bounded conversation/message IDs and finish reason — never prompt or response content. apps/web/app/api/feedback/route.ts:39-108 validates those refusal identifiers and persists the report to public.feedback with soft authentication, CSRF protection, and rate limiting. Route/component regression tests cover the complete contract, including privacy boundaries and the no-Retry state; production rendering was browser-verified at desktop and 390px viewport widths."
   },
   {
     "item": "report-content",

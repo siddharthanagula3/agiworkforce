@@ -41,14 +41,35 @@ const FeedbackSchema = z.object({
   message: z.string().trim().min(1).max(10_000),
   /** Client-claimed identity. Untrusted — see module doc. */
   user_id: z.string().trim().max(200).nullish(),
-  metadata: z.object({
-    source: z.enum(['desktop', 'web']).optional(),
-    platform: z.string().trim().max(100),
-    version: z.string().trim().max(100),
-    user_agent: z.string().trim().max(500),
-    page_path: z.string().trim().max(2_000).optional(),
-    conversation_id: z.string().trim().max(200).optional(),
-  }),
+  metadata: z
+    .object({
+      source: z.enum(['desktop', 'web']).optional(),
+      platform: z.string().trim().max(100),
+      version: z.string().trim().max(100),
+      user_agent: z.string().trim().max(500),
+      page_path: z.string().trim().max(2_000).optional(),
+      conversation_id: z.string().trim().max(200).optional(),
+      feedback_context: z.enum(['safety_refusal']).optional(),
+      message_id: z.string().trim().max(200).optional(),
+      finish_reason: z.enum(['refusal', 'content_filter']).optional(),
+    })
+    .superRefine((metadata, context) => {
+      if (metadata.feedback_context !== 'safety_refusal') return;
+      if (!metadata.message_id) {
+        context.addIssue({
+          code: 'custom',
+          path: ['message_id'],
+          message: 'message_id is required for a safety refusal report',
+        });
+      }
+      if (!metadata.finish_reason) {
+        context.addIssue({
+          code: 'custom',
+          path: ['finish_reason'],
+          message: 'finish_reason is required for a safety refusal report',
+        });
+      }
+    }),
   /** WARN/ERROR log lines, already filtered and truncated on the desktop side. */
   logs: z.string().max(MAX_LOGS_CHARS).nullish(),
 });
@@ -89,6 +110,9 @@ async function handleSubmitFeedback(request: NextRequest) {
           user_agent: metadata.user_agent,
           ...(metadata.page_path ? { page_path: metadata.page_path } : {}),
           ...(metadata.conversation_id ? { conversation_id: metadata.conversation_id } : {}),
+          ...(metadata.feedback_context ? { feedback_context: metadata.feedback_context } : {}),
+          ...(metadata.message_id ? { message_id: metadata.message_id } : {}),
+          ...(metadata.finish_reason ? { finish_reason: metadata.finish_reason } : {}),
           ...(claimedUserId ? { claimed_user_id: claimedUserId } : {}),
           ...(logs ? { logs } : {}),
         }),

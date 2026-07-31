@@ -35,6 +35,7 @@ import {
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
+import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
 import { ChevronDown, ArrowRight, AlertCircle, RefreshCw, ShieldAlert } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useTTS } from '@/lib/hooks/useTTS';
@@ -1237,17 +1238,31 @@ const ChatMessageListComponent = ({
           <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
             <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span>The model declined to finish this response for safety reasons.</span>
-            {onRegenerate && (
-              <button
-                type="button"
-                onClick={() => onRegenerate(lastMessage.id)}
-                className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
-                aria-label="Regenerate this response"
-              >
-                <RefreshCw className="h-3 w-3" aria-hidden="true" />
-                Retry
-              </button>
-            )}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <ComposerFeedbackDialog
+                variant="safety-appeal"
+                conversationId={conversationId}
+                messageId={lastMessage.id}
+                finishReason={
+                  (
+                    lastMessage.metadata as
+                      | { finishReason?: 'refusal' | 'content_filter' }
+                      | undefined
+                  )?.finishReason
+                }
+              />
+              {onRegenerate && (
+                <button
+                  type="button"
+                  onClick={() => onRegenerate(lastMessage.id)}
+                  className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+                  aria-label="Regenerate this response"
+                >
+                  <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                  Retry
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
