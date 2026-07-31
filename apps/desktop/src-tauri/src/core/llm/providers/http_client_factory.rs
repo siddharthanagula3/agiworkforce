@@ -5,19 +5,81 @@
 //! accepts an optional explicit proxy URL and custom root CA certificate path
 //! for corporate SSL inspection proxies.
 
-use reqwest::{Certificate, Client, Proxy};
+use reqwest::{Certificate, Client, NoProxy, Proxy, Url};
+use std::sync::{OnceLock, RwLock};
 use std::time::Duration;
+
+/// Process-wide proxy profile used by every LLM provider created after an
+/// update. The persisted owner lives in `sys::commands::network_proxy`; this
+/// module deliberately only owns the runtime copy needed by HTTP clients.
+#[derive(Clone, PartialEq, Eq)]
+pub struct NetworkProxyConfig {
+    pub enabled: bool,
+    pub proxy_url: String,
+    pub no_proxy: String,
+    pub ca_cert_path: String,
+    pub username: String,
+    pub password: String,
+}
+
+impl Default for NetworkProxyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            proxy_url: String::new(),
+            no_proxy: "localhost,127.0.0.1,::1".to_string(),
+            ca_cert_path: String::new(),
+            username: String::new(),
+            password: String::new(),
+        }
+    }
+}
+
+static NETWORK_PROXY_CONFIG: OnceLock<RwLock<NetworkProxyConfig>> = OnceLock::new();
+
+fn network_proxy_config() -> &'static RwLock<NetworkProxyConfig> {
+    NETWORK_PROXY_CONFIG.get_or_init(|| RwLock::new(NetworkProxyConfig::default()))
+}
+
+/// Return the live proxy profile without exposing the global lock to callers.
+pub fn get_network_proxy_config() -> NetworkProxyConfig {
+    network_proxy_config()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+/// Validate and atomically install the profile used by subsequently-created
+/// LLM HTTP clients. Existing clients must be rebuilt by the caller.
+pub fn set_network_proxy_config(config: NetworkProxyConfig) -> Result<(), String> {
+    create_http_client(&HttpClientConfig::from_network_proxy(&config))?;
+    *network_proxy_config()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = config;
+    Ok(())
+}
 
 /// Configuration for creating an HTTP client via [`create_http_client`].
 ///
 /// When all fields are left at their defaults the factory produces a client that
 /// is functionally identical to `Client::builder().connect_timeout(30s).timeout(300s).build()`,
 /// preserving backward compatibility with the previous hand-rolled builders.
+#[derive(Clone)]
 pub struct HttpClientConfig {
     /// Optional explicit proxy URL applied to all traffic via `Proxy::all()`.
     /// When `None`, reqwest still reads `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
     /// from the environment automatically.
     pub proxy_url: Option<String>,
+
+    /// Optional comma-separated bypass list applied to an explicit proxy.
+    pub no_proxy: Option<String>,
+
+    /// Optional Basic-auth username for the explicit proxy.
+    pub proxy_username: Option<String>,
+
+    /// Optional Basic-auth password for the explicit proxy. This value only
+    /// exists in native memory and encrypted native storage.
+    pub proxy_password: Option<String>,
 
     /// Optional path to a PEM-encoded root CA certificate file.
     /// Added as an additional trusted root so that corporate SSL inspection
@@ -35,9 +97,31 @@ pub struct HttpClientConfig {
 
 impl Default for HttpClientConfig {
     fn default() -> Self {
+        Self::from_network_proxy(&get_network_proxy_config())
+    }
+}
+
+impl HttpClientConfig {
+    pub fn from_network_proxy(config: &NetworkProxyConfig) -> Self {
         Self {
-            proxy_url: None,
-            ca_cert_path: None,
+            proxy_url: config
+                .enabled
+                .then(|| config.proxy_url.trim().to_string())
+                .filter(|value| !value.is_empty()),
+            no_proxy: config
+                .enabled
+                .then(|| config.no_proxy.trim().to_string())
+                .filter(|value| !value.is_empty()),
+            proxy_username: config
+                .enabled
+                .then(|| config.username.clone())
+                .filter(|value| !value.is_empty()),
+            proxy_password: config
+                .enabled
+                .then(|| config.password.clone())
+                .filter(|value| !value.is_empty()),
+            ca_cert_path: Some(config.ca_cert_path.trim().to_string())
+                .filter(|value| !value.is_empty()),
             connect_timeout_secs: 30,
             read_timeout_secs: Some(300),
         }
@@ -64,8 +148,32 @@ pub fn create_http_client(config: &HttpClientConfig) -> Result<Client, String> {
     // Note: even without this, reqwest will honour HTTP_PROXY / HTTPS_PROXY
     // environment variables because we have NOT called `.no_proxy()`.
     if let Some(ref proxy_url) = config.proxy_url {
-        let proxy = Proxy::all(proxy_url)
+        let parsed = Url::parse(proxy_url)
             .map_err(|e| format!("Invalid proxy URL '{}': {}", proxy_url, e))?;
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return Err(format!(
+                "Invalid proxy URL '{}': only http:// and https:// proxies are supported",
+                proxy_url
+            ));
+        }
+        if !parsed.username().is_empty() || parsed.password().is_some() {
+            return Err(
+                "Proxy credentials must use the username and password fields, not the proxy URL"
+                    .to_string(),
+            );
+        }
+
+        let mut proxy = Proxy::all(proxy_url)
+            .map_err(|e| format!("Invalid proxy URL '{}': {}", proxy_url, e))?;
+        if let Some(ref no_proxy) = config.no_proxy {
+            proxy = proxy.no_proxy(NoProxy::from_string(no_proxy));
+        }
+        if let Some(ref username) = config.proxy_username {
+            proxy = proxy.basic_auth(
+                username,
+                config.proxy_password.as_deref().unwrap_or_default(),
+            );
+        }
         builder = builder.proxy(proxy);
     }
 
@@ -107,6 +215,28 @@ mod tests {
         };
         let result = create_http_client(&config);
         assert!(result.is_err(), "Invalid proxy URL should produce an error");
+    }
+
+    #[test]
+    fn proxy_url_rejects_embedded_credentials() {
+        let config = HttpClientConfig {
+            proxy_url: Some("https://user:password@proxy.example.com:8443".to_string()),
+            ..HttpClientConfig::from_network_proxy(&NetworkProxyConfig::default())
+        };
+        let error = create_http_client(&config).expect_err("URL credentials must be rejected");
+        assert!(error.contains("username and password fields"), "{error}");
+    }
+
+    #[test]
+    fn explicit_proxy_supports_auth_and_bypass_list() {
+        let config = HttpClientConfig {
+            proxy_url: Some("http://proxy.example.com:8080".to_string()),
+            no_proxy: Some("localhost,127.0.0.1,.internal.example".to_string()),
+            proxy_username: Some("corporate-user".to_string()),
+            proxy_password: Some("test-only-password".to_string()),
+            ..HttpClientConfig::from_network_proxy(&NetworkProxyConfig::default())
+        };
+        assert!(create_http_client(&config).is_ok());
     }
 
     #[test]

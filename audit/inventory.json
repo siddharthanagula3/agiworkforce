@@ -740,8 +740,8 @@
   {
     "item": "proxy-config",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "apps/desktop/src-tauri/src/core/llm/providers/http_client_factory.rs:1-70 builds every provider HTTP client via `create_http_client`, which automatically honors `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` env vars (reqwest's built-in behavior, since `.no_proxy()` is never called) and additionally supports an explicit `proxy_url`/`ca_cert_path` in `HttpClientConfig`. This factory is used by direct_api_provider.rs:45,58, managed_cloud_provider.rs:135,154, ollama.rs:252, and http_client.rs:35,39."
+    "status": "built",
+    "evidence": "apps/desktop/src-tauri/src/sys/commands/network_proxy.rs owns native `llm_network_proxy_get`/`set` commands, stores the complete profile (including authentication) through AES-256-GCM `SecretManager`, never returns the password, validates before persistence, rebuilds BYOK providers, and is applied in lib.rs before router/provider initialization. apps/desktop/src-tauri/src/core/llm/providers/http_client_factory.rs applies explicit HTTP(S) proxy auth, NO_PROXY-style bypasses, custom PEM roots, and environment-proxy fallback to every subsequently created provider client; llm.rs uses the same factory for status, model discovery, OpenRouter catalog, and capability probes. apps/desktop/src/features/settings/NetworkProxySettings.tsx provides the mounted, searchable General > Network UI with CA file selection and restores all custom local-runtime providers after live router invalidation; Rust and React regression tests cover validation, password non-disclosure/preservation/removal, bypass/auth construction, UI IPC, and local-provider rebuilds."
   },
   {
     "item": "mdm-managed-policy",

@@ -151,10 +151,8 @@ impl ManagedCloudProvider {
         // Streaming client: same proxy/CA settings but no overall timeout
         // (connect timeout still applies so unreachable hosts fail fast)
         let streaming_config = HttpClientConfig {
-            proxy_url: config.proxy_url.clone(),
-            ca_cert_path: config.ca_cert_path.clone(),
-            connect_timeout_secs: config.connect_timeout_secs,
             read_timeout_secs: None,
+            ..config.clone()
         };
         let streaming_client = create_http_client(&streaming_config)
             .map_err(Box::<dyn std::error::Error + Send + Sync>::from)?;

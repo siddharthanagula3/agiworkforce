@@ -411,6 +411,15 @@ pub fn run() {
             tracing::info!("SecretManager initialized");
             app.manage(SecretManagerState(secret_manager.clone()));
 
+            // Install the encrypted native proxy profile before any provider
+            // constructs its reqwest clients. Corrupt settings do not prevent
+            // startup; the factory remains on its environment-proxy defaults.
+            if let Err(error) =
+                crate::sys::commands::network_proxy::apply_saved_network_proxy(&secret_manager)
+            {
+                tracing::warn!("Network proxy settings were not applied: {error}");
+            }
+
             let auth_manager = Arc::new(parking_lot::RwLock::new(AuthManager::new(secret_manager.clone())));
             app.manage(AuthManagerState(auth_manager));
             tracing::info!("AuthManager initialized");
@@ -1585,6 +1594,8 @@ pub fn run() {
 
             crate::sys::commands::llm_send_message,
             crate::sys::commands::llm_configure_provider,
+            crate::sys::commands::llm_network_proxy_get,
+            crate::sys::commands::llm_network_proxy_set,
             crate::sys::commands::llm_set_default_provider,
             crate::sys::commands::llm_ensure_managed_cloud,
             crate::sys::commands::llm_get_available_models,

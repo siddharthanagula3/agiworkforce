@@ -821,6 +821,13 @@ impl LLMRouter {
         self.providers.insert(provider, instance);
     }
 
+    /// Drop all provider clients while preserving router policy, cache, cost,
+    /// and rate-limit state. Used after a proxy profile changes so no request
+    /// can continue through an HTTP client built with stale network settings.
+    pub fn clear_providers(&mut self) {
+        self.providers.clear();
+    }
+
     pub fn set_openai(&mut self, provider: Box<dyn LLMProvider>) {
         self.set_provider(Provider::OpenAI, provider);
     }

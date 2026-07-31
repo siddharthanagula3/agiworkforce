@@ -1,3 +1,4 @@
+use crate::core::llm::providers::http_client_factory::{create_http_client, HttpClientConfig};
 use crate::core::llm::providers::{
     direct_api_provider::DirectApiProvider, managed_cloud_provider::ManagedCloudProvider,
     ollama::OllamaProvider,
@@ -27,6 +28,13 @@ const LLAMACPP_DEFAULT_BASE_URL: &str = "http://localhost:8080/v1";
 /// Default vLLM base URL (OpenAI-compatible server). Configurable via
 /// `llm_configure_provider("vllm", ...)`.
 const VLLM_DEFAULT_BASE_URL: &str = "http://localhost:8000/v1";
+
+fn create_llm_command_client(timeout_secs: u64) -> Result<reqwest::Client, String> {
+    create_http_client(&HttpClientConfig {
+        read_timeout_secs: Some(timeout_secs),
+        ..Default::default()
+    })
+}
 
 fn default_model() -> String {
     Provider::OpenAI
@@ -882,10 +890,7 @@ pub async fn llm_check_provider_status(
 
     let mut ollama_running = None;
     if provider == "ollama" {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        let client = create_llm_command_client(5)?;
         match client
             .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
             .timeout(std::time::Duration::from_secs(2))
@@ -905,10 +910,7 @@ pub async fn llm_check_provider_status(
             "llamacpp" => LLAMACPP_DEFAULT_BASE_URL,
             _ => VLLM_DEFAULT_BASE_URL,
         };
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        let client = create_llm_command_client(5)?;
         match client
             .get(format!("{}/models", base_url))
             .timeout(std::time::Duration::from_secs(2))
@@ -1087,10 +1089,7 @@ pub async fn llm_get_ollama_models() -> Result<Vec<ModelInfo>, String> {
 }
 
 async fn list_ollama_models_internal() -> Result<Vec<ModelInfo>, String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = create_llm_command_client(10)?;
     let response = client
         .get(format!("{}/api/tags", OLLAMA_DEFAULT_BASE_URL))
         .timeout(Duration::from_secs(5))
@@ -1166,10 +1165,7 @@ async fn list_openai_compat_models_internal(
     provider: Provider,
     display_name: &str,
 ) -> Result<Vec<ModelInfo>, String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = create_llm_command_client(10)?;
 
     let response = client
         .get(format!("{}/models", base_url))
@@ -1294,10 +1290,7 @@ fn map_openrouter_entry(entry: &OpenRouterModelEntry) -> Option<ModelInfo> {
 
 /// Shared implementation: fetch and map OpenRouter's live model catalog.
 async fn list_openrouter_models_internal() -> Result<Vec<ModelInfo>, String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = create_llm_command_client(10)?;
 
     let response = client
         .get("https://openrouter.ai/api/v1/models")
@@ -1367,10 +1360,7 @@ pub async fn get_model_capabilities(
             .filter(|u| !u.is_empty())
             .unwrap_or_else(|| OLLAMA_DEFAULT_BASE_URL.to_string());
 
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        let client = create_llm_command_client(10)?;
 
         let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
             &client, &url, &model_id,
