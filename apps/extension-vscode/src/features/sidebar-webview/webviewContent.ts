@@ -2902,6 +2902,20 @@ export function getWebviewContent(
         showMentionResults(msg.payload.files);
       }
 
+      else if (msg.type === 'composerDraft') {
+        userInput.value = msg.payload.text || '';
+        pendingFileReferences = (msg.payload.references || []).map(function(reference) {
+          var range = reference.range;
+          var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
+            ? range.endLine
+            : range ? range.endLine + 1 : 0;
+          var suffix = range ? '#L' + (range.startLine + 1) + '-L' + endLine : '';
+          return { token: '@' + reference.path + suffix, reference: reference };
+        });
+        autoResize();
+        userInput.focus();
+      }
+
       else if (msg.type === 'conversationCleared') {
         messagesEl.innerHTML = '';
         activePlanCard = null;

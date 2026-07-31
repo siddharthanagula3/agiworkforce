@@ -79,6 +79,44 @@ function buildChatReferenceQuery(target: vscode.Uri): string {
   return `@agi #file:${vscode.workspace.asRelativePath(target)} `;
 }
 
+function buildSidebarReferenceDraft(target: vscode.Uri): {
+  text: string;
+  reference: {
+    path: string;
+    range?: {
+      startLine: number;
+      startCharacter: number;
+      endLine: number;
+      endCharacter: number;
+    };
+  };
+} {
+  const relativePath = vscode.workspace.asRelativePath(target);
+  const editor = vscode.window.activeTextEditor;
+  const selection =
+    editor !== undefined &&
+    editor.document.uri.toString() === target.toString() &&
+    !editor.selection.isEmpty
+      ? editor.selection
+      : undefined;
+  if (selection === undefined) {
+    return { text: `@${relativePath} `, reference: { path: relativePath } };
+  }
+
+  const range = {
+    startLine: selection.start.line,
+    startCharacter: selection.start.character,
+    endLine: selection.end.line,
+    endCharacter: selection.end.character,
+  };
+  const endLine =
+    range.endCharacter === 0 && range.endLine > range.startLine ? range.endLine : range.endLine + 1;
+  return {
+    text: `@${relativePath}#L${range.startLine + 1}-L${endLine} `,
+    reference: { path: relativePath, range },
+  };
+}
+
 /**
  * Output channel for git/test commands invoked via execFile.
  * PR-3B (F-12, F-19): replaces `terminal.sendText` for hardcoded commands
@@ -130,6 +168,7 @@ export interface CommandDeps {
   memoryTreeProvider: MemoryTreeProvider;
   diffDecorationProvider: DiffDecorationProvider;
   diagnosticsProvider: AgiDiagnosticsProvider;
+  nativeChatAvailable: boolean;
 }
 
 export function setupCommands(context: vscode.ExtensionContext, deps: CommandDeps): void {
@@ -141,6 +180,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     memoryTreeProvider,
     diffDecorationProvider,
     diagnosticsProvider,
+    nativeChatAvailable,
   } = deps;
 
   // Per-command registration guard. All commands below are elements of big
@@ -161,6 +201,23 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       recordFailure(`command:${id}`, err);
       return new vscode.Disposable(() => undefined);
     }
+  };
+  const revealFirstPartyChat = async (): Promise<void> => {
+    try {
+      await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
+    } finally {
+      sidebarProvider.reveal();
+    }
+  };
+  const prefillFirstPartyReference = async (target: vscode.Uri): Promise<void> => {
+    const validated = await validateWorkspaceContextFile(target);
+    if (!validated.ok) {
+      vscode.window.showWarningMessage(`AGI Workforce: ${validated.message}`);
+      return;
+    }
+    const draft = buildSidebarReferenceDraft(validated.uri);
+    sidebarProvider.prefillComposer(draft.text, [draft.reference]);
+    await revealFirstPartyChat();
   };
 
   context.subscriptions.push(
@@ -229,6 +286,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.window.showWarningMessage('AGI Workforce: No file selected to mention in chat.');
         return;
       }
+      if (!nativeChatAvailable) {
+        await prefillFirstPartyReference(target);
+        return;
+      }
       const query = buildChatReferenceQuery(target);
       try {
         await vscode.commands.executeCommand('workbench.action.chat.open', { query });
@@ -287,6 +348,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     // ── inline command shortcuts ────────────────────────────────────────────────
     register('agi-workforce.chat', async () => {
+      if (!nativeChatAvailable) {
+        await revealFirstPartyChat();
+        return;
+      }
       try {
         await vscode.commands.executeCommand('workbench.action.chat.open');
       } catch {
@@ -1469,6 +1534,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const result = await validateWorkspaceContextFile(uris[0]);
       if (!result.ok) {
         vscode.window.showWarningMessage(`AGI Workforce: ${result.message}`);
+        return;
+      }
+      if (!nativeChatAvailable) {
+        await prefillFirstPartyReference(result.uri);
         return;
       }
       const query = buildChatReferenceQuery(result.uri);
