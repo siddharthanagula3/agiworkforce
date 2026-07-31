@@ -9,6 +9,7 @@ import {
 } from 'crypto';
 import { z } from 'zod';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { findInGitHubRestPages } from './github-rest-pagination';
 
 /**
  * SECURITY: Validate GitHub API path segments to prevent SSRF and path traversal.
@@ -57,17 +58,18 @@ const gitHubInstallationTokenResponseSchema = z.object({
   expires_at: z.string().datetime({ offset: true }),
 });
 
+const gitHubUserInstallationSchema = z.object({
+  id: z.number().int().positive().safe(),
+  account: z.object({
+    login: z.string().min(1).max(255),
+    type: z.enum(['User', 'Organization']),
+  }),
+});
+type GitHubUserInstallation = z.infer<typeof gitHubUserInstallationSchema>;
+
 const gitHubUserInstallationsResponseSchema = z.object({
   total_count: z.number().int().nonnegative(),
-  installations: z.array(
-    z.object({
-      id: z.number().int().positive().safe(),
-      account: z.object({
-        login: z.string().min(1).max(255),
-        type: z.enum(['User', 'Organization']),
-      }),
-    }),
-  ),
+  installations: z.array(gitHubUserInstallationSchema),
 });
 
 export interface VerifiedGitHubInstallation {
@@ -197,47 +199,47 @@ export async function findGitHubInstallationForUser(
     throw new Error('Invalid GitHub installation id');
   }
 
-  for (let page = 1; page <= MAX_GITHUB_INSTALLATION_PAGES; page += 1) {
-    const response = await fetch(
-      buildGitHubApiUrl(
-        `/user/installations?per_page=${GITHUB_INSTALLATIONS_PER_PAGE}&page=${page}`,
-      ),
-      {
-        headers: {
-          Authorization: `Bearer ${userAccessToken}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': GITHUB_API_VERSION,
+  const match = await findInGitHubRestPages<GitHubUserInstallation>({
+    perPage: GITHUB_INSTALLATIONS_PER_PAGE,
+    maxPages: MAX_GITHUB_INSTALLATION_PAGES,
+    matches: (installation) => installation.id === targetInstallationId,
+    loadPage: async (page) => {
+      const response = await fetch(
+        buildGitHubApiUrl(
+          `/user/installations?per_page=${GITHUB_INSTALLATIONS_PER_PAGE}&page=${page}`,
+        ),
+        {
+          headers: {
+            Authorization: `Bearer ${userAccessToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': GITHUB_API_VERSION,
+          },
+          signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
         },
-        signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`Failed to verify GitHub installation ownership: ${response.status}`);
-    }
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to verify GitHub installation ownership: ${response.status}`);
+      }
 
-    const parsed = gitHubUserInstallationsResponseSchema.safeParse(await response.json());
-    if (!parsed.success) {
-      throw new Error('GitHub installation ownership response was invalid');
-    }
-
-    const match = parsed.data.installations.find(
-      (installation) => installation.id === targetInstallationId,
-    );
-    if (match) {
+      const parsed = gitHubUserInstallationsResponseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        throw new Error('GitHub installation ownership response was invalid');
+      }
       return {
+        items: parsed.data.installations,
+        totalCount: parsed.data.total_count,
+        linkHeader: response.headers.get('link'),
+      };
+    },
+  });
+
+  return match
+    ? {
         installationId: match.id,
         accountLogin: match.account.login,
         accountType: match.account.type,
-      };
-    }
-
-    const exhausted =
-      parsed.data.installations.length < GITHUB_INSTALLATIONS_PER_PAGE ||
-      page * GITHUB_INSTALLATIONS_PER_PAGE >= parsed.data.total_count;
-    if (exhausted) return null;
-  }
-
-  throw new Error('GitHub installation ownership check exceeded the pagination limit');
+      }
+    : null;
 }
 
 export function verifyGitHubWebhookSignature(
