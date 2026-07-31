@@ -31,7 +31,9 @@ jest.mock('../services/companionNotifications', () => ({
 
 import {
   buildRelayControlMessage,
+  ingestApprovalClosedPayload,
   ingestApprovalRequestPayload,
+  ingestApprovalSnapshotPayload,
   parseApprovalRequest,
   parseDispatchTaskStatus,
   useConnectionStore,
@@ -67,6 +69,7 @@ describe('Wave 1 control relay fixes', () => {
     const approval = parseApprovalRequest({
       action: 'approval_request',
       data: {
+        version: 1,
         requestId: 'req-1',
         toolName: 'delete_file',
         description: 'Delete /tmp/demo.txt',
@@ -115,7 +118,53 @@ describe('Wave 1 control relay fixes', () => {
       description: 'Run pnpm test',
       status: 'pending',
     });
-    expect(mockNotifyCompanionMessage).toHaveBeenCalledTimes(2);
+    expect(mockNotifyCompanionMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes a companion approval when Desktop reports it is no longer pending', () => {
+    useAgentStore.getState().addApproval({
+      id: 'req-closed',
+      toolName: 'run_command',
+      description: 'Run pnpm test',
+      riskLevel: 'medium',
+      type: 'command',
+      status: 'pending',
+    });
+
+    expect(
+      ingestApprovalClosedPayload({
+        action: 'approval_closed',
+        version: 1,
+        requestId: 'req-closed',
+        closedAt: '2026-07-30T12:00:00.000Z',
+      }),
+    ).toBe(true);
+    expect(useAgentStore.getState().pendingApprovals).toHaveLength(0);
+  });
+
+  it('reconciles stale local approvals against a Desktop approval snapshot', () => {
+    for (const id of ['req-current', 'req-stale']) {
+      useAgentStore.getState().addApproval({
+        id,
+        toolName: 'run_command',
+        description: 'Run pnpm test',
+        riskLevel: 'medium',
+        type: 'command',
+        status: 'pending',
+      });
+    }
+
+    expect(
+      ingestApprovalSnapshotPayload({
+        action: 'approval_snapshot',
+        version: 1,
+        pendingRequestIds: ['req-current'],
+        syncedAt: '2026-07-30T12:00:00.000Z',
+      }),
+    ).toBe(true);
+    expect(useAgentStore.getState().pendingApprovals.map((request) => request.id)).toEqual([
+      'req-current',
+    ]);
   });
 
   it('rejects malformed approval_request payloads before touching state', () => {

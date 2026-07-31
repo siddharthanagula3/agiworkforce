@@ -49,13 +49,15 @@ interface AgentState {
 
   /** Approval actions */
   addApproval: (approval: ApprovalRequest) => void;
+  reconcileApprovals: (pendingIds: string[]) => void;
+  removeApproval: (id: string) => void;
   approveRequest: (id: string) => void;
   rejectRequest: (id: string, reason?: string) => void;
 }
 
 export const useAgentStore = create<AgentState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       agents: [],
       selectedAgentId: null,
       pendingApprovals: [],
@@ -94,7 +96,24 @@ export const useAgentStore = create<AgentState>()(
             : [...state.pendingApprovals, approval],
         })),
 
+      reconcileApprovals: (pendingIds) => {
+        const pendingIdSet = new Set(pendingIds);
+        set((state) => ({
+          pendingApprovals: state.pendingApprovals.filter((request) =>
+            pendingIdSet.has(request.id),
+          ),
+        }));
+      },
+
+      removeApproval: (id) =>
+        set((state) => ({
+          pendingApprovals: state.pendingApprovals.filter((request) => request.id !== id),
+        })),
+
       approveRequest: (id) => {
+        const approval = get().pendingApprovals.find((request) => request.id === id);
+        if (!approval || approval.status !== 'pending') return;
+
         // Update local state
         set((state) => ({
           pendingApprovals: state.pendingApprovals.map((r) =>
@@ -104,14 +123,32 @@ export const useAgentStore = create<AgentState>()(
         // Send decision to desktop via WebRTC
         void import('@/services/companion')
           .then(({ sendApprovalResponse }) => {
-            sendApprovalResponse(id, true);
+            if (!sendApprovalResponse(id, true)) {
+              set((state) => ({
+                pendingApprovals: state.pendingApprovals.map((request) =>
+                  request.id === id && request.status === 'approved'
+                    ? { ...request, status: 'pending' as const }
+                    : request,
+                ),
+              }));
+            }
           })
           .catch((error) => {
+            set((state) => ({
+              pendingApprovals: state.pendingApprovals.map((request) =>
+                request.id === id && request.status === 'approved'
+                  ? { ...request, status: 'pending' as const }
+                  : request,
+              ),
+            }));
             console.warn('[agentStore] Failed to send approval response:', error);
           });
       },
 
       rejectRequest: (id, reason) => {
+        const approval = get().pendingApprovals.find((request) => request.id === id);
+        if (!approval || approval.status !== 'pending') return;
+
         // Update local state
         set((state) => ({
           pendingApprovals: state.pendingApprovals.map((r) =>
@@ -121,9 +158,24 @@ export const useAgentStore = create<AgentState>()(
         // Send decision to desktop via WebRTC
         void import('@/services/companion')
           .then(({ sendApprovalResponse }) => {
-            sendApprovalResponse(id, false, reason);
+            if (!sendApprovalResponse(id, false, reason)) {
+              set((state) => ({
+                pendingApprovals: state.pendingApprovals.map((request) =>
+                  request.id === id && request.status === 'rejected'
+                    ? { ...request, status: 'pending' as const }
+                    : request,
+                ),
+              }));
+            }
           })
           .catch((error) => {
+            set((state) => ({
+              pendingApprovals: state.pendingApprovals.map((request) =>
+                request.id === id && request.status === 'rejected'
+                  ? { ...request, status: 'pending' as const }
+                  : request,
+              ),
+            }));
             console.warn('[agentStore] Failed to send rejection response:', error);
           });
       },

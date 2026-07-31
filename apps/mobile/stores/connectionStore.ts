@@ -333,7 +333,9 @@ function parseApprovalType(v: unknown): ApprovalRequest['type'] | null {
 
 export function parseApprovalRequest(payload: unknown): ApprovalRequest | null {
   const normalized = normalizeIncomingControlPayload(payload);
-  if (!normalized) return null;
+  if (!normalized || (normalized['version'] !== undefined && normalized['version'] !== 1)) {
+    return null;
+  }
 
   const id =
     boundedString(normalized['id'], 128) ??
@@ -356,7 +358,27 @@ export function parseApprovalRequest(payload: unknown): ApprovalRequest | null {
 
   if (!id || !toolName || !description || !riskLevel || !type) return null;
 
-  const countdown = isNumber(normalized['countdown']) ? normalized['countdown'] : undefined;
+  const createdAt =
+    normalized['createdAt'] === undefined ? undefined : boundedString(normalized['createdAt'], 64);
+  const expiresAt =
+    normalized['expiresAt'] === undefined ? undefined : boundedString(normalized['expiresAt'], 64);
+  const countdown =
+    isNumber(normalized['countdown']) &&
+    Number.isInteger(normalized['countdown']) &&
+    normalized['countdown'] >= 0 &&
+    normalized['countdown'] <= 3_600
+      ? normalized['countdown']
+      : undefined;
+  if (
+    (normalized['createdAt'] !== undefined &&
+      (!createdAt || !Number.isFinite(Date.parse(createdAt)))) ||
+    (normalized['expiresAt'] !== undefined &&
+      (!expiresAt || !Number.isFinite(Date.parse(expiresAt)))) ||
+    (normalized['countdown'] !== undefined && countdown === undefined)
+  ) {
+    return null;
+  }
+
   return {
     id,
     toolName,
@@ -364,6 +386,8 @@ export function parseApprovalRequest(payload: unknown): ApprovalRequest | null {
     riskLevel,
     type,
     status: 'pending',
+    ...(createdAt ? { createdAt } : {}),
+    ...(expiresAt ? { expiresAt } : {}),
     ...(countdown !== undefined ? { countdown } : {}),
   };
 }
@@ -373,8 +397,55 @@ export function ingestApprovalRequestPayload(payload: unknown): boolean {
   const approval = parseApprovalRequest(normalized);
   if (!normalized || !approval) return false;
 
+  const existing = useAgentStore
+    .getState()
+    .pendingApprovals.find((candidate) => candidate.id === approval.id);
   useAgentStore.getState().addApproval(approval);
-  notifyCompanionMessage({ ...normalized, action: 'approval_request' });
+  if (!existing || existing.status !== 'pending') {
+    notifyCompanionMessage({ ...normalized, action: 'approval_request' });
+  }
+  return true;
+}
+
+export function ingestApprovalClosedPayload(payload: unknown): boolean {
+  const normalized = normalizeIncomingControlPayload(payload);
+  if (!normalized || normalized['version'] !== 1 || normalized['action'] !== 'approval_closed') {
+    return false;
+  }
+
+  const requestId = boundedString(normalized['requestId'], 128);
+  const closedAt = boundedString(normalized['closedAt'], 64);
+  if (!requestId || !closedAt || !Number.isFinite(Date.parse(closedAt))) return false;
+
+  useAgentStore.getState().removeApproval(requestId);
+  return true;
+}
+
+export function ingestApprovalSnapshotPayload(payload: unknown): boolean {
+  const normalized = normalizeIncomingControlPayload(payload);
+  if (
+    !normalized ||
+    normalized['version'] !== 1 ||
+    normalized['action'] !== 'approval_snapshot' ||
+    !Array.isArray(normalized['pendingRequestIds']) ||
+    normalized['pendingRequestIds'].length > 50
+  ) {
+    return false;
+  }
+
+  const syncedAt = boundedString(normalized['syncedAt'], 64);
+  const pendingRequestIds = normalized['pendingRequestIds'].map((value) =>
+    boundedString(value, 128),
+  );
+  if (
+    !syncedAt ||
+    !Number.isFinite(Date.parse(syncedAt)) ||
+    pendingRequestIds.some((value) => value === undefined)
+  ) {
+    return false;
+  }
+
+  useAgentStore.getState().reconcileApprovals(pendingRequestIds as string[]);
   return true;
 }
 
@@ -555,6 +626,14 @@ function handleControlMessageInner(payload: unknown): void {
     }
     case 'approval_request': {
       ingestApprovalRequestPayload(normalizedPayload);
+      break;
+    }
+    case 'approval_closed': {
+      ingestApprovalClosedPayload(normalizedPayload);
+      break;
+    }
+    case 'approval_snapshot': {
+      ingestApprovalSnapshotPayload(normalizedPayload);
       break;
     }
     case 'dispatch.task.status': {

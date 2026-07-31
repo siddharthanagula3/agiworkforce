@@ -665,6 +665,7 @@ describe('Connection Store — sendControl delegation', () => {
     setConnectionStatus('connected');
     sendApprovalResponse('req-001', true);
     expect(mockSendControl).toHaveBeenCalledWith('approval_response', {
+      version: 1,
       requestId: 'req-001',
       approved: true,
       respondedAt: expect.any(String),
@@ -1750,13 +1751,17 @@ describe('Cross-device thread persistence — queueControl', () => {
     });
   });
 
-  it('sendControl queues messages when status is reconnecting', () => {
-    // When status is 'reconnecting', sendControl stores the message for later
-    // We verify this by checking sendControl is called and testing the companion
-    // functions check status before calling sendControl
+  it('queues approval decisions while reconnecting', () => {
     setConnectionStatus('reconnecting');
     sendApprovalResponse('req-stale', true);
-    // Should NOT call sendControl when reconnecting (companion checks status)
+    expect(connectionMod.__mocks.queueControl).toHaveBeenCalledWith(
+      'approval_response',
+      expect.objectContaining({
+        version: 1,
+        requestId: 'req-stale',
+        approved: true,
+      }),
+    );
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
