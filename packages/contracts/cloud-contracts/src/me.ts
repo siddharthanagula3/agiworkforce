@@ -41,7 +41,6 @@ export const MePlanSchema = z.object({
 
 export const MeFeatureFlagsSchema = z
   .object({
-    beta_features: z.boolean(),
     advanced_model_access: z.boolean(),
     /**
      * Deployment capability (not a user entitlement): the reachable E2B

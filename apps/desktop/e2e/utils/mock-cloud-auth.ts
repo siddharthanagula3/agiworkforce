@@ -124,7 +124,6 @@ export async function mockCloudAccountEndpoints(
       current_period_end: null,
     },
     feature_flags: {
-      beta_features: true,
       advanced_model_access: planTier === 'max',
       code_execution: true,
     },

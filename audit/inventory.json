@@ -3428,8 +3428,8 @@
   {
     "item": "beta-features-toggles",
     "surface": "packages/settings",
-    "status": "unwired",
-    "evidence": "apps/desktop/src/services/featureFlags.ts is a fully implemented feature-flag service: FeatureFlagName enum (lines 6-29), rollout percentages, local-override support (`setLocalOverride` at line 285, `clearLocalOverride`, persisted to storage at lines 286-310). Whole-repo grep (`grep -rn '.setOverride(\\|setLocalOverride(' apps/desktop/src`) shows it is called ONLY from apps/desktop/src/services/__tests__/featureFlags.test.ts — no settings screen, menu, or component in the shipped product calls it. The backend only exposes read commands (`feature_flag_get`/`feature_flag_get_all` at apps/desktop/src-tauri/src/sys/commands/analytics.rs:92-122, registered lib.rs:2227-2228); no `feature_flag_set` Tauri command exists. On web, `beta_features` returned by apps/web/app/api/me/route.ts:123 is hardcoded to `true` for every user — not a real per-user toggle."
+    "status": "missing",
+    "evidence": "There is no user-controlled beta-features preference or runtime. The orphaned Desktop local-rollout service, test-only override persistence, unused analytics-store facade methods, read-only IPC/client chain, mocks, and dead analytics flag types were removed together on 2026-07-30. The equally inert `/api/me.feature_flags.beta_features` hardcoded `true` field was removed from the shared contract, route, stores, fixtures, and mocks. Real authenticated entitlement/deployment flags such as `advanced_model_access`, `code_execution`, and `generic_web_search` remain server-owned and continue to gate shipped affordances."
   },
   {
     "item": "developer-mode",

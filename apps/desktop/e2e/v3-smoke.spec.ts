@@ -8,38 +8,21 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
  * primitives (sidebar, composer, mode switcher, search affordance,
  * account menu trigger) are reachable, and the page is interactive.
  *
- * Forces `desktop_chat_v3` on via localStorage using the same key that
- * `FeatureFlagsService.setLocalOverride` writes — production code path
- * matches the v3-locks suite.
- *
  * Auth-gate note: this suite runs against the plain-browser web-target
  * bundle (`VITE_BUILD_TARGET=web`, no Tauri). `appModeStore`'s
  * `supportsLocalAppMode` is `isTauri || isDesktopUiDevLocal`, so without
  * Tauri (and without `VITE_DESKTOP_UI_DEV_LOCAL=1` on the dev server) the
  * app boots in Cloud mode. `App.tsx` renders `<AuthPage />` — not the v3
  * shell, not the legacy shell — for `isCloudMode && !hasCloudSession`,
- * before the `desktop_chat_v3` flag branch ever runs. This is the same
- * intentional cloud-web sign-in gate pinned by `visual-regression.spec.ts`.
- * The flag itself has
- * no Tauri coupling — `injectMockCloudAuth` seeds the real
+ * which is the same intentional cloud-web sign-in gate pinned by
+ * `visual-regression.spec.ts`. `injectMockCloudAuth` seeds the real
  * `unified-auth-storage` key (the same mechanism `self-healing.spec.ts`
- * uses) so `hasCloudSession` is true and the flag-gated branch is
- * actually reached.
+ * uses) so `hasCloudSession` is true and the production shell is reached.
  */
 test.describe('@smoke v3 shell', () => {
   test.beforeEach(async ({ page }) => {
     await injectMockCloudAuth(page);
     await mockCloudAccountEndpoints(page);
-    await page.addInitScript(() => {
-      try {
-        window.localStorage.setItem(
-          'feature_flags_overrides',
-          JSON.stringify([['desktop_chat_v3', true]]),
-        );
-      } catch {
-        // localStorage unavailable — assertions below will fail loudly
-      }
-    });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 30000 });
   });

@@ -1035,7 +1035,6 @@ mod tests {
                     "current_period_end":null
                 },
                 "feature_flags":{
-                    "beta_features":true,
                     "advanced_model_access":false
                 }
             }"#,

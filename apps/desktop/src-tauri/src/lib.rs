@@ -2147,8 +2147,6 @@ pub fn run() {
             crate::sys::commands::analytics_set_user_property,
             crate::sys::commands::metrics_get_system,
             crate::sys::commands::metrics_get_app,
-            crate::sys::commands::feature_flag_get,
-            crate::sys::commands::feature_flag_get_all,
             crate::sys::commands::analytics_delete_all_data,
             crate::sys::commands::analytics_calculate_roi,
             crate::sys::commands::analytics_get_process_metrics,

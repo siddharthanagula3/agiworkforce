@@ -6,7 +6,7 @@
  *   costSlice.ts         — cost overview / analytics
  *   usageSlice.ts        — Stripe usage tracking (automations, tokens, storage …)
  *   budgetSlice.ts       — token budget enforcement and alerts
- *   analyticsSlice.ts    — performance metrics, ROI, feature flags
+ *   analyticsSlice.ts    — performance metrics and ROI
  */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';

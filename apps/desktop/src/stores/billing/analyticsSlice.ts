@@ -1,6 +1,5 @@
 import { analytics } from '../../services/analytics';
 import { ErrorSeverity, errorTracking } from '../../services/errorTracking';
-import { featureFlags } from '../../services/featureFlags';
 import { performanceMonitor } from '../../services/performance';
 import {
   analyticsDeleteAllData,
@@ -60,8 +59,6 @@ export interface AnalyticsSliceActions {
   updatePrivacyConsent: (consent: PrivacyConsent) => void;
   exportAnalyticsData: () => Promise<void>;
   deleteAllAnalyticsData: () => Promise<void>;
-  isFeatureEnabled: (flagName: string) => boolean;
-  trackFeatureUsage: (flagName: string) => void;
   incrementAutomationsMetric: () => Promise<void>;
   incrementGoalsMetric: () => Promise<void>;
   setMcpServersMetric: (count: number) => Promise<void>;
@@ -222,9 +219,6 @@ export const createAnalyticsSlice = (
       });
     }
   },
-
-  isFeatureEnabled: (flagName) => featureFlags.isEnabled(flagName),
-  trackFeatureUsage: (flagName) => featureFlags.trackFeatureUsage(flagName),
 
   incrementAutomationsMetric: async () => {
     try {

@@ -763,13 +763,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         failed_operations: 0,
       } as T;
 
-    // Analytics — feature flags
-    case 'feature_flag_get':
-      return false as T;
-
-    case 'feature_flag_get_all':
-      return {} as T;
-
     // Analytics — usage stats
     case 'analytics_get_usage_stats':
       return {

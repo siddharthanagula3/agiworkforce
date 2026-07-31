@@ -137,7 +137,6 @@ async function handleGetMe(request: NextRequest) {
     const effectiveTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
 
     const feature_flags = {
-      beta_features: true,
       advanced_model_access: canAccessManualModelSelection(effectiveTier),
       // Deployment capability, not a user entitlement: whether this deployment
       // has the reachable E2B execution loop enabled (AGI_E2B_EXECUTION=1).

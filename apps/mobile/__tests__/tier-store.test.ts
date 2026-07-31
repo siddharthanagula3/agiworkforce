@@ -116,7 +116,6 @@ function mePayload(
       subscription_source: subscriptionSource,
     },
     feature_flags: {
-      beta_features: true,
       advanced_model_access: true,
       code_execution: codeExecution,
       generic_web_search: true,

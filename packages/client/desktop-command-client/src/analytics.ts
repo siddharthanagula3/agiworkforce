@@ -254,15 +254,6 @@ export async function metricsSetCacheHitRate(rate: number): Promise<void> {
   return command<void>('metrics_set_cache_hit_rate', { rate });
 }
 
-// ---- Feature Flags ----
-
-export async function featureFlagGet(flagName: string): Promise<boolean> {
-  return command<boolean>('feature_flag_get', { flagName });
-}
-export async function featureFlagGetAll(): Promise<Record<string, boolean>> {
-  return command<Record<string, boolean>>('feature_flag_get_all');
-}
-
 // ---- ROI / Comparison Metrics ----
 
 export async function getRealtimeStats(): Promise<RealtimeStats> {

@@ -55,7 +55,7 @@ describe('cloudAccountAuth', () => {
         ok: true,
         // Contract-valid /api/me payload (packages/contracts/cloud-contracts/src/me.ts):
         // the route returns unix-second numbers for updated_at/current_period_end
-        // and always includes display_name, the two base flags, credits, and
+        // and always includes display_name, entitlement/deployment flags, credits, and
         // routing_preferences. Extra feature flags exercise normalizeFeatureFlags.
         json: vi.fn().mockResolvedValue({
           id: 'user_123',
@@ -71,7 +71,6 @@ describe('cloudAccountAuth', () => {
             current_period_end: 1752278400,
           },
           feature_flags: {
-            beta_features: true,
             advanced_model_access: true,
             cloud_managed: true,
             local_only: false,
