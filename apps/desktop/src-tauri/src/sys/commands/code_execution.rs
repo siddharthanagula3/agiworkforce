@@ -58,9 +58,9 @@ pub async fn execute_code(
 ) -> Result<CodeExecutionResponse, String> {
     // FIX-F5 (audit 2026-05-19): require HITL before running arbitrary LLM-
     // supplied code in 8 supported languages. SandboxManager creates a
-    // temporary workspace and applies path/env checks, but it is not an
-    // OS-level Seatbelt/Bubblewrap/Landlock boundary. This gate ensures the
-    // user sees what the agent is about to run and can refuse. Goes through
+    // temporary workspace and applies fail-closed Seatbelt/Bubblewrap network
+    // isolation when allow_network is false. This gate ensures the user sees
+    // both the code preview and network choice and can refuse. Goes through
     // request_confirmation_simple -> request_tool_confirmation so Safe/Plan
     // agent modes can also block.
     let code_preview: String = code.chars().take(400).collect();

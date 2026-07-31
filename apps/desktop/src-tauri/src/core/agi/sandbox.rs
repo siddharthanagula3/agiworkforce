@@ -18,6 +18,14 @@ const MAX_TIMEOUT_SECS: u64 = 60;
 /// Default memory limit in MB (for documentation - actual enforcement is OS-dependent)
 const DEFAULT_MEMORY_LIMIT_MB: u64 = 512;
 
+/// The Desktop code runner needs network isolation, not a cooperative proxy.
+/// `allow default` preserves the existing runtime/filesystem behavior while
+/// Seatbelt's deny rule blocks inbound and outbound sockets for the complete
+/// child process tree.
+#[cfg(target_os = "macos")]
+const MACOS_NETWORK_DENY_PROFILE: &str =
+    "(version 1)\n(allow default)\n(deny network*)\n";
+
 /// Result of code execution in a sandbox
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CodeExecutionResult {
@@ -154,6 +162,89 @@ impl LanguageRunner {
     }
 }
 
+/// Build the process launch for a code execution.
+///
+/// Network-enabled execution retains the direct runner invocation. The
+/// default network-disabled path must be backed by an OS primitive and fails
+/// closed when that primitive is unavailable; environment variables are not
+/// treated as a security boundary.
+fn build_execution_command(
+    runner: &LanguageRunner,
+    script_path: &Path,
+    _workspace_path: &Path,
+    allow_network: bool,
+) -> Result<Command> {
+    if allow_network {
+        let mut cmd = Command::new(&runner.command);
+        cmd.args(&runner.args).arg(script_path);
+        return Ok(cmd);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let sandbox_exec = Path::new("/usr/bin/sandbox-exec");
+        if !sandbox_exec.is_file() {
+            return Err(anyhow!(
+                "Network-disabled code execution requires macOS Seatbelt, but /usr/bin/sandbox-exec is unavailable; refusing unsandboxed execution"
+            ));
+        }
+
+        let mut cmd = Command::new(sandbox_exec);
+        cmd.arg("-p")
+            .arg(MACOS_NETWORK_DENY_PROFILE)
+            .arg(&runner.command)
+            .args(&runner.args)
+            .arg(script_path);
+        return Ok(cmd);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if !_workspace_path.is_absolute() || _workspace_path == Path::new("/") {
+            return Err(anyhow!(
+                "Network-disabled code execution requires a bounded absolute workspace, got {}",
+                _workspace_path.display()
+            ));
+        }
+
+        let bubblewrap = which::which("bwrap").map_err(|_| {
+            anyhow!(
+                "Network-disabled code execution requires Linux Bubblewrap (`bwrap`), but it is unavailable; refusing unsandboxed execution"
+            )
+        })?;
+        let mut cmd = Command::new(bubblewrap);
+        cmd.arg("--die-with-parent")
+            .arg("--new-session")
+            .arg("--unshare-pid")
+            .arg("--unshare-uts")
+            .arg("--unshare-net")
+            .arg("--ro-bind")
+            .arg("/")
+            .arg("/")
+            .arg("--bind")
+            .arg(_workspace_path)
+            .arg(_workspace_path)
+            .arg("--dev")
+            .arg("/dev")
+            .arg("--proc")
+            .arg("/proc")
+            .arg("--")
+            .arg(&runner.command)
+            .args(&runner.args)
+            .arg(script_path);
+        return Ok(cmd);
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = (runner, script_path, _workspace_path);
+        Err(anyhow!(
+            "Network-disabled code execution is unsupported on {}; refusing to run without OS-level egress isolation",
+            std::env::consts::OS
+        ))
+    }
+}
+
 /// A sandbox for isolated code execution
 #[derive(Debug, Clone)]
 pub struct Sandbox {
@@ -248,18 +339,16 @@ impl Sandbox {
         let script_path = self.workspace_path.join(&script_filename);
         std::fs::write(&script_path, &config.code)?;
 
-        // Build command using tokio::process::Command with explicit arguments
-        // This is NOT shell execution - it uses execve-style argument passing
-        let mut cmd = Command::new(&runner.command);
+        // Build an argument-only process launch. The default path is wrapped in
+        // Seatbelt/bubblewrap so network denial is enforced by the OS rather
+        // than advisory proxy variables.
+        let mut cmd = build_execution_command(
+            &runner,
+            &script_path,
+            &self.workspace_path,
+            config.allow_network,
+        )?;
         cmd.current_dir(&self.workspace_path);
-
-        // Add runner arguments
-        for arg in &runner.args {
-            cmd.arg(arg);
-        }
-
-        // Add script path as an argument (not interpolated into a shell string)
-        cmd.arg(&script_path);
 
         // Set environment variables
         cmd.env("HOME", &self.workspace_path);
@@ -270,7 +359,10 @@ impl Sandbox {
         // Restrict PATH to essential directories only
         #[cfg(not(windows))]
         {
-            cmd.env("PATH", "/usr/local/bin:/usr/bin:/bin");
+            cmd.env(
+                "PATH",
+                "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+            );
         }
 
         // Add custom environment variables.
@@ -293,38 +385,13 @@ impl Sandbox {
             }
         }
 
-        // Network isolation configuration
-        // SECURITY NOTE: Environment variables (OFFLINE, NO_PROXY) are ADVISORY ONLY.
-        // They rely on application-level cooperation and can be bypassed by:
-        // - Direct socket syscalls
-        // - Libraries that ignore these variables
-        // - Malicious code that explicitly ignores environment hints
-        //
-        // For true network isolation, consider:
-        // - Linux: Use network namespaces (unshare -n) or iptables with process-specific rules
-        // - macOS: Use sandbox-exec profiles or Application Firewall rules
-        // - Windows: Use Windows Filtering Platform (WFP) or container isolation
-        // - Cross-platform: Run in a container (Docker) with --network=none
-        //
-        // The current implementation provides defense-in-depth but should not be
-        // relied upon for security-critical network isolation requirements.
+        // Keep common package managers in offline mode as defense in depth.
+        // This is not the enforcement boundary; build_execution_command above
+        // has already selected an OS sandbox or refused the launch.
         if !config.allow_network {
-            // Advisory environment variables - respected by well-behaved applications
             cmd.env("OFFLINE", "1");
-            cmd.env("NO_PROXY", "*");
-            cmd.env("HTTP_PROXY", "http://127.0.0.1:0"); // Invalid proxy to break HTTP
-            cmd.env("HTTPS_PROXY", "http://127.0.0.1:0");
-            cmd.env("ALL_PROXY", "http://127.0.0.1:0");
-
-            // Disable common networking in language runtimes
-            cmd.env("NODE_TLS_REJECT_UNAUTHORIZED", "0"); // May cause TLS to fail
-            cmd.env("REQUESTS_CA_BUNDLE", "/dev/null"); // Python requests will fail SSL
-
-            // Log warning about advisory nature of network restriction
-            tracing::warn!(
-                "[Sandbox] Network restriction is ADVISORY ONLY. Environment variables set but \
-                cannot guarantee network isolation without OS-level sandboxing (namespaces/containers)."
-            );
+            cmd.env("npm_config_offline", "true");
+            cmd.env("PIP_NO_INDEX", "1");
         }
 
         // Set up stdio
@@ -830,6 +897,7 @@ mod tests {
         let config = ExecutionConfig {
             language: "python".to_string(),
             code: "print('Hello from Python!')".to_string(),
+            allow_network: true,
             ..Default::default()
         };
 
@@ -856,6 +924,7 @@ mod tests {
             language: "python".to_string(),
             code: "import time; time.sleep(10)".to_string(),
             timeout_secs: Some(1),
+            allow_network: true,
             ..Default::default()
         };
 
@@ -880,6 +949,7 @@ mod tests {
         let config = ExecutionConfig {
             language: "python".to_string(),
             code: "import sys; sys.stderr.write('Error message\\n'); sys.exit(1)".to_string(),
+            allow_network: true,
             ..Default::default()
         };
 
@@ -906,6 +976,7 @@ mod tests {
             language: "python".to_string(),
             code: "name = input(); print(f'Hello, {name}!')".to_string(),
             stdin: Some("World".to_string()),
+            allow_network: true,
             ..Default::default()
         };
 
@@ -992,6 +1063,7 @@ mod tests {
             language: "python".to_string(),
             code: "print(open('subdir/valid_file.txt').read())".to_string(),
             files: Some(files3),
+            allow_network: true,
             ..Default::default()
         };
 
@@ -1001,5 +1073,78 @@ mod tests {
             assert!(res.success);
             assert!(res.stdout.contains("safe content"));
         }
+    }
+
+    #[test]
+    fn network_enabled_execution_uses_the_language_runner_directly() {
+        let runner = LanguageRunner::for_language("python").unwrap();
+        let script = Path::new("/tmp/agi-sandbox/script.py");
+        let workspace = Path::new("/tmp/agi-sandbox");
+        let cmd = build_execution_command(&runner, script, workspace, true).unwrap();
+        let std_cmd = cmd.as_std();
+
+        assert_eq!(std_cmd.get_program(), std::ffi::OsStr::new("python3"));
+        let args = std_cmd.get_args().collect::<Vec<_>>();
+        assert_eq!(args.last().copied(), Some(script.as_os_str()));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn network_disabled_execution_uses_seatbelt_deny_profile() {
+        let runner = LanguageRunner::for_language("python").unwrap();
+        let script = Path::new("/tmp/agi-sandbox/script.py");
+        let workspace = Path::new("/tmp/agi-sandbox");
+        let cmd = build_execution_command(&runner, script, workspace, false).unwrap();
+        let std_cmd = cmd.as_std();
+        let args = std_cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            std_cmd.get_program(),
+            std::ffi::OsStr::new("/usr/bin/sandbox-exec")
+        );
+        assert_eq!(args[0], "-p");
+        assert_eq!(args[1], MACOS_NETWORK_DENY_PROFILE);
+        assert_eq!(args[2], "python3");
+        assert_eq!(args.last().map(String::as_str), Some("/tmp/agi-sandbox/script.py"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn network_disabled_execution_uses_a_private_network_namespace_or_fails_closed() {
+        let runner = LanguageRunner::for_language("python").unwrap();
+        let script = Path::new("/tmp/agi-sandbox/script.py");
+        let workspace = Path::new("/tmp/agi-sandbox");
+
+        match build_execution_command(&runner, script, workspace, false) {
+            Ok(cmd) => {
+                let args = cmd
+                    .as_std()
+                    .get_args()
+                    .map(|arg| arg.to_string_lossy().into_owned())
+                    .collect::<Vec<_>>();
+                assert!(args.iter().any(|arg| arg == "--unshare-net"));
+                assert!(args.iter().any(|arg| arg == "--die-with-parent"));
+            }
+            Err(error) => assert!(error.to_string().contains("requires Linux Bubblewrap")),
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn network_disabled_execution_blocks_outbound_socket_connects() {
+        let manager = SandboxManager::new().unwrap();
+        let config = ExecutionConfig {
+            language: "python".to_string(),
+            code: "import socket; print(socket.socket().connect_ex(('127.0.0.1', 9)))"
+                .to_string(),
+            ..Default::default()
+        };
+
+        let result = manager.execute_code(config).await.unwrap();
+        assert!(result.success, "{}", result.stderr);
+        assert_eq!(result.stdout.trim(), "1");
     }
 }

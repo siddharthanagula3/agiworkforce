@@ -8,14 +8,14 @@
 //!
 //! Code execution is performed in a temporary workspace with:
 //! - Script and generated-file writes kept under the workspace path
-//! - Advisory network reduction when network is disabled
+//! - OS-enforced network denial on macOS/Linux when network is disabled
 //! - Advisory memory limit metadata
 //! - Execution timeouts
 //! - Dangerous pattern detection before execution
 //!
-//! This is not an OS-level process sandbox. Absolute-path access and network
-//! syscalls are not guaranteed to be contained without an external sandbox
-//! runtime.
+//! The network boundary fails closed if Seatbelt/Bubblewrap is unavailable.
+//! Filesystem isolation is narrower: the workspace is bounded and Linux uses
+//! a read-only host bind, but macOS does not claim full path containment.
 //!
 //! # Supported Languages
 //!
@@ -323,7 +323,9 @@ impl CodeExecutor {
     /// - `code` (required): Code to execute
     /// - `timeout` / `timeout_secs` (optional): Execution timeout in seconds (default: 30, max: 60)
     /// - `stdin` (optional): Input to provide to the program
-    /// - `allow_network` (optional): Whether to allow network access (default: false)
+    /// Agent-owned execution is always network-disabled. The separate
+    /// user-initiated `execute_code` Tauri command is the only entry point that
+    /// can request network access, and it presents that choice for approval.
     /// - `env` / `env_vars` (optional): Environment variables as key-value pairs
     /// - `files` (optional): Additional files to create in sandbox before execution
     ///
@@ -335,7 +337,7 @@ impl CodeExecutor {
     ///
     /// - Code is validated for dangerous patterns before execution
     /// - Execution occurs in a temporary workspace
-    /// - Network access is reduced by advisory environment controls by default
+    /// - Network access is denied by Seatbelt/Bubblewrap by default
     /// - Time limits are enforced, while memory limits are advisory metadata
     async fn execute_code(
         &self,
@@ -377,11 +379,6 @@ impl CodeExecutor {
             .get("stdin")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        let allow_network = parameters
-            .get("allow_network")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-
         let env_vars = parameters
             .get("env")
             .or_else(|| parameters.get("env_vars"))
@@ -435,7 +432,7 @@ impl CodeExecutor {
             stdin,
             timeout_secs,
             env_vars,
-            allow_network,
+            allow_network: false,
             memory_limit_mb: Some(DEFAULT_MEMORY_LIMIT_MB),
             files,
         };

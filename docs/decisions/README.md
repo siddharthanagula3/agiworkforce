@@ -10,6 +10,7 @@ For higher-level architectural narrative, see `docs/architecture/foundation-2026
 
 ### Current integration decisions
 
+- [2026-07-31-desktop-code-egress-boundary.md](2026-07-31-desktop-code-egress-boundary.md) — route every model-owned Desktop code execution path through fail-closed Seatbelt/Bubblewrap network isolation and delete the uncalled sandbox-profile stub module.
 - [2026-07-30-mobile-store-billing-boundary.md](2026-07-30-mobile-store-billing-boundary.md) — remove the unreachable placeholder-backed IAP prototype while retaining IAP-first as a future product requirement gated by real store products and lifecycle infrastructure.
 - [2026-07-30-cut-shallow-workspace-index.md](2026-07-30-cut-shallow-workspace-index.md) — remove the orphaned regex symbol/dependency index and require any future repository index to use one parser/LSP-backed authority.
 - [2026-07-30-web-conversation-branching.md](2026-07-30-web-conversation-branching.md) — persist Web branches as idempotent owner-scoped conversation copies and mount direct sibling navigation at the mapped fork point.

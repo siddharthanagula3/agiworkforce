@@ -616,73 +616,42 @@ impl ToolExecutor {
             ));
         }
 
-        if let Some(ref app) = self.app_handle {
-            use crate::features::terminal::{SessionManager, ShellType};
-            use tauri::Manager;
-
-            let session_manager = app.state::<SessionManager>();
-
-            let shell_type = match language.to_lowercase().as_str() {
-                "powershell" | "ps1" => ShellType::PowerShell,
-                // On Windows, WSL may not be installed; fall back to the system default shell
-                // (PowerShell or Cmd) so bash/sh code snippets still execute rather than fail.
-                // On non-Windows the system default shell will be bash/zsh/sh as expected.
-                "bash" | "sh" | "shell" => {
-                    use crate::features::terminal::get_default_shell;
-                    get_default_shell()
-                }
-                "cmd" | "batch" => ShellType::Cmd,
-                _ => {
-                    use crate::features::terminal::get_default_shell;
-                    get_default_shell()
-                }
-            };
-
-            let session_id = match session_manager.create_session(shell_type, None).await {
-                Ok(sid) => sid,
-                Err(e) => {
-                    let err_msg = format!("Failed to create session: {}", e);
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::new(),
-                    });
-                }
-            };
-
-            match session_manager
-                .send_input(&session_id, &format!("{}\n", code))
-                .await
-            {
-                Ok(_) => {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                    Ok(ToolResult {
-                        success: true,
-                        data: json!({ "success": true, "session_id": session_id, "code": code }),
-                        error: None,
-                        metadata: HashMap::from([("session_id".to_string(), json!(session_id))]),
-                    })
-                }
-                Err(e) => {
-                    let err_msg = format!("Failed to execute code: {}", e);
-                    Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::new(),
-                    })
-                }
-            }
-        } else {
-            let err_msg = "App handle not available for code execution".to_string();
-            Ok(ToolResult {
-                success: false,
-                data: json!({ "error": err_msg.clone(), "success": false }),
-                error: Some(err_msg),
-                metadata: HashMap::new(),
+        // All model-owned code execution shares the same fail-closed boundary
+        // as the AGI executor and direct command. In particular, do not feed
+        // code into an interactive terminal session: that path inherits normal
+        // host networking and cannot uphold the default-deny contract.
+        let sandbox_manager = crate::core::agi::SandboxManager::new()
+            .map_err(|error| anyhow!("Failed to create sandbox manager: {error}"))?;
+        let execution = sandbox_manager
+            .execute_code(crate::core::agi::ExecutionConfig {
+                language: language.to_string(),
+                code: code.to_string(),
+                allow_network: false,
+                ..Default::default()
             })
-        }
+            .await
+            .map_err(|error| anyhow!("Sandbox execution failed: {error}"))?;
+
+        let error = execution.error.clone();
+        Ok(ToolResult {
+            success: execution.success,
+            data: json!({
+                "success": execution.success,
+                "stdout": execution.stdout,
+                "stderr": execution.stderr,
+                "output": execution.output,
+                "exitCode": execution.exit_code,
+                "timedOut": execution.timed_out,
+                "executionTimeMs": execution.execution_time_ms,
+                "language": execution.language,
+                "networkAccess": false,
+            }),
+            error,
+            metadata: HashMap::from([
+                ("language".to_string(), json!(language)),
+                ("network_access".to_string(), json!(false)),
+            ]),
+        })
     }
 
     /// Execute the `test_run` tool: auto-detect the test runner and invoke it.
