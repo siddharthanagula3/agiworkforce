@@ -15,6 +15,7 @@ import {
 import { GATEWAY_BASE_URL } from '../api/config';
 import { cloudFetch } from '../api/cloudApi';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
+import { isDesktopUiDevLocal } from '../lib/runtimeEnvironment';
 
 const MAX_CONTROL_MESSAGE_BYTES = 64 * 1024;
 
@@ -421,6 +422,20 @@ export const useConnectionStore = create<MobileCompanionState>()(
           stream: null,
           wsUrl: null,
         });
+        if (isDesktopUiDevLocal) {
+          set({
+            status: 'waiting',
+            pairingCode: 'AGI2DEV4PAIR',
+            expiresAt: Date.now() + 10 * 60 * 1000,
+            qrData: 'agiworkforce-ui-preview:AGI2DEV4PAIR',
+            wsUrl: null,
+            peerConnected: false,
+            stream: null,
+            error: null,
+          });
+          return;
+        }
+
         try {
           const session = await cloudAccountAuth.getValidSession();
           if (!session?.access_token) {
