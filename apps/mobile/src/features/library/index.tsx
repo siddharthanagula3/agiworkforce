@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, TextInput, View, useWindowDimensions } from 'react-native';
+import { FlatList, Pressable, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,8 +32,11 @@ import {
   collectSearchableMobileFiles,
   type SearchableMobileFile,
 } from '@/src/features/search/mobileGlobalSearch';
+import {
+  MAX_GRID_CONTENT_WIDTH,
+  useResponsiveLayout,
+} from '@/src/shared/hooks/useResponsiveLayout';
 
-const NUM_COLUMNS = 2;
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
 
@@ -48,7 +51,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const c = useThemeColors();
   const navigation = useNavigation();
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { contentWidth, gridColumns } = useResponsiveLayout();
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [query, setQuery] = useState('');
   const [previewImage, setPreviewImage] = useState<LibraryImage | null>(null);
@@ -160,8 +163,8 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     openNearestDrawer(navigation);
   }, [navigation]);
 
-  const gridWidth = Math.min(width, 920) - HORIZONTAL_PADDING * 2;
-  const cardWidth = Math.floor((gridWidth - CARD_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS);
+  const gridWidth = Math.min(contentWidth, MAX_GRID_CONTENT_WIDTH) - HORIZONTAL_PADDING * 2;
+  const cardWidth = Math.floor((gridWidth - CARD_GAP * (gridColumns - 1)) / gridColumns);
 
   const keyExtractor = useCallback((item: LibraryItem) => `${item.kind}-${item.id}`, []);
 
@@ -190,7 +193,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
 
   const renderItem = useCallback(
     ({ item, index }: { item: LibraryItem; index: number }) => {
-      const style = index % NUM_COLUMNS !== 0 ? { marginLeft: CARD_GAP } : undefined;
+      const style = index % gridColumns !== 0 ? { marginLeft: CARD_GAP } : undefined;
       if (item.kind === 'image') {
         return (
           <LibraryImageCard
@@ -218,7 +221,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       }
       return <LibraryArtifactCard artifact={item.artifact} width={cardWidth} style={style} />;
     },
-    [cardWidth, handleOpenImage, router],
+    [cardWidth, gridColumns, handleOpenImage, router],
   );
 
   return (
@@ -305,10 +308,11 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       </View>
 
       <FlatList
+        key={`library-${gridColumns}`}
         data={items}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
-        numColumns={NUM_COLUMNS}
+        numColumns={gridColumns}
         contentInsetAdjustmentBehavior="automatic"
         testID="library-grid"
         contentContainerStyle={{
@@ -316,7 +320,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           paddingTop: 4,
           paddingBottom: 56,
           alignSelf: 'center',
-          width: Math.min(width, 920),
+          width: Math.min(contentWidth, MAX_GRID_CONTENT_WIDTH),
         }}
         ListEmptyComponent={<LibraryEmptyState filter={filter} query={query} />}
         showsVerticalScrollIndicator={false}

@@ -1058,14 +1058,14 @@
   {
     "item": "tablet-layout",
     "surface": "apps/mobile",
-    "status": "partial",
-    "evidence": "apps/mobile/app/(app)/_layout.tsx:41-58 switches the Drawer to a permanent 280px sidebar when useWindowDimensions().width >= 768; apps/mobile/app/(app)/(tabs)/agents.tsx:32-34 changes the agent grid from 2 to 3 columns at the same breakpoint."
+    "status": "built",
+    "evidence": "apps/mobile/src/shared/hooks/useResponsiveLayout.ts owns one available-content-width policy for phone, iPad portrait, and iPad landscape: the permanent 280px drawer is used only when at least 720px remains for content, overlay drawers stay dismissible on narrow windows, and grids select 1/2/3 columns from usable content width. The authenticated drawer, Agents, Artifacts, and Library production surfaces consume that policy; the gallery surfaces cap readable content at 920px. apps/mobile/app.config.js explicitly enables tablet support without requiring full screen, and Expo prebuild generates all four required iPad orientations while retaining the iPhone portrait lock. responsive-layout.test.ts, responsive-layout-wiring.test.ts, and ipad-multitasking-config.test.ts pin the native and rendered-layout contracts."
   },
   {
     "item": "split-view-slide-over",
     "surface": "apps/mobile",
-    "status": "partial",
-    "evidence": "apps/mobile/app/(app)/_layout.tsx:41-58 and agents.tsx:32-34 use the reactive useWindowDimensions() hook (not a static Dimensions.get call), so drawer type / column count re-evaluate live as the window is resized — the mechanism that would also fire during iPad Split View/Slide Over resize."
+    "status": "built",
+    "evidence": "apps/mobile/src/shared/hooks/useResponsiveLayout.ts derives every layout decision from reactive useWindowDimensions() values and has verified states for 507px Slide Over, 683px half Split View, 834px portrait, and 1024/1366px landscape. On resize, the drawer changes between overlay and permanent only when the remaining pane is usable; Agents, Artifacts, and Library key their FlashList/FlatList by gridColumns so the list safely remounts instead of hitting React Native's unsupported in-place numColumns transition. app.config.js sets ios.supportsTablet=true and ios.requireFullScreen=false; a fresh Expo SDK 55 prebuild confirmed UIRequiresFullScreen=false and all four UISupportedInterfaceOrientations~ipad values."
   },
   {
     "item": "navigation-stack",
