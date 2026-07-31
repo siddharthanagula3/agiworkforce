@@ -1460,8 +1460,8 @@
   {
     "item": "keybindings-custom",
     "surface": "apps/cli",
-    "status": "partial",
-    "evidence": "apps/cli/src/repl/mod.rs:178-184 toggles `rustyline::EditMode::Vi` vs `Emacs` based on `AGIWORKFORCE_VI` env var or `$EDITOR` containing 'vi', applied to the classic (`--no-tui`) REPL's line editor (apps/cli/src/command_registry.rs:208 documents the `AGIWORKFORCE_VI=1` toggle)."
+    "status": "built",
+    "evidence": "apps/cli/src/keybindings.rs:13-287 defines the validated custom-keybinding contract for quit, permission-mode cycling, chat clearing, input clearing, and command-palette opening, including terminal chord parsing, effective-collision rejection, safe rejection of unmodified character bindings for destructive global actions, Shift+Tab backend normalization, and active help rendering. apps/cli/src/config.rs:31-51 persists `ui.edit_mode` plus `[ui.keybindings]` in global or project TOML, merges overrides, validates them, displays them, and exposes `/config get|set` keys such as `ui.keybindings.open_palette`. apps/cli/src/tui/tui_app.rs:1850-1938 routes live global TUI dispatch through the resolved bindings while fixed send/approval keys remain non-configurable; apps/cli/src/tui/tui_app.rs:5051-5080 proves a remapped Ctrl+P opens the palette and `/` returns to ordinary input. apps/cli/src/repl/mod.rs:178-185 applies persisted Vi/Emacs mode with the existing AGIWORKFORCE_VI and EDITOR behavior retained as compatibility fallback/override. `/keybindings` reports the active TUI and REPL values on both shells, first-run config documents the schema, and invalid effective maps fail back to safe defaults after validation warning. Verified by all 1,716 passing CLI library tests (one ignored), strict Clippy with only the repository's three pre-existing doc-lazy-continuation warnings allowed, and CLI compile/diff checks."
   },
   {
     "item": "flicker-free-render",

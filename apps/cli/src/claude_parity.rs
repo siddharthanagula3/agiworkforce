@@ -592,11 +592,13 @@ pub fn render_upgrade() -> String {
 
 pub fn render_vim(arg: &str) -> String {
     match arg.trim() {
-        "on" | "true" | "1" => "Vim mode requested. Restart with AGIWORKFORCE_VI=1.".to_string(),
-        "off" | "false" | "0" => {
-            "Vim mode disabled for new shells by unsetting AGIWORKFORCE_VI.".to_string()
+        "on" | "true" | "1" => {
+            "Vim mode: set `ui.edit_mode = \"vi\"` in config.toml and restart. AGIWORKFORCE_VI=1 remains an override.".to_string()
         }
-        _ => "Vim mode: set AGIWORKFORCE_VI=1 before launching the CLI.".to_string(),
+        "off" | "false" | "0" => {
+            "Emacs mode: set `ui.edit_mode = \"emacs\"` in config.toml and unset AGIWORKFORCE_VI.".to_string()
+        }
+        _ => "REPL edit mode is configured with `ui.edit_mode = \"vi\" | \"emacs\"`; AGIWORKFORCE_VI=1 overrides it.".to_string(),
     }
 }
 
@@ -894,7 +896,8 @@ pub fn render_keybindings() -> String {
         "  Esc           close overlay or quit",
         "  Ctrl-L        clear screen",
         "  Ctrl-C        clear current input",
-        "  AGIWORKFORCE_VI=1 enables vi-style line editing in REPL mode",
+        "  Configure active bindings under [ui.keybindings] in config.toml",
+        "  Configure REPL editing with ui.edit_mode = \"vi\" | \"emacs\"",
     ]
     .join("\n")
 }

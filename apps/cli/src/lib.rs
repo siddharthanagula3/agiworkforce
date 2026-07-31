@@ -65,6 +65,7 @@ pub mod apply_patch;
 pub mod approval_audit;
 pub mod ecosystem;
 pub mod init;
+pub mod keybindings;
 pub mod local_models;
 pub mod model_catalog;
 pub mod models_cache;
