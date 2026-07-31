@@ -36,11 +36,13 @@ vi.mock('@/lib/rate-limit', () => ({
 
 const mockDbQuery = vi.fn();
 const mockDbExecute = vi.fn();
+const mockDbTransaction = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockDbQuery(...args),
     execute: (...args: unknown[]) => mockDbExecute(...args),
+    transaction: (...args: unknown[]) => mockDbTransaction(...args),
   })),
 }));
 
@@ -132,6 +134,10 @@ describe('POST /api/github/webhook', () => {
     // Default: installation found and PR review enabled
     mockDbQuery.mockResolvedValue([{ user_id: 'u1', pr_review_enabled: true, review_model: null }]);
     mockDbExecute.mockResolvedValue(undefined);
+    mockDbTransaction.mockImplementation(
+      async (callback: (tx: { execute: typeof mockDbExecute }) => Promise<unknown>) =>
+        callback({ execute: mockDbExecute }),
+    );
     mockGetInstallationAccessToken.mockResolvedValue('ghs_access_token');
     mockGetPrDiff.mockResolvedValue('diff --git a/foo.ts b/foo.ts\n+const x = 1;');
     mockPostIssueComment.mockResolvedValue(undefined);
@@ -196,6 +202,70 @@ describe('POST /api/github/webhook', () => {
     expect(json.received).toBe(true);
 
     // No downstream calls should be made for non-comment events
+    expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges GitHub webhook setup pings through the event router', async () => {
+    const body = JSON.stringify({ zen: 'Keep it logically awesome.' });
+    const request = new NextRequest('http://localhost/api/github/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hub-signature-256': signPayload(body, SECRET),
+        'x-github-event': 'ping',
+      },
+      body,
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ received: true, event: 'ping' });
+    expect(mockDbTransaction).not.toHaveBeenCalled();
+  });
+
+  it('atomically removes a GitHub installation after an uninstall event', async () => {
+    const body = JSON.stringify({ action: 'deleted', installation: { id: 999 } });
+    const request = new NextRequest('http://localhost/api/github/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hub-signature-256': signPayload(body, SECRET),
+        'x-github-event': 'installation',
+      },
+      body,
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      received: true,
+      event: 'installation.deleted',
+    });
+    expect(mockDbTransaction).toHaveBeenCalledOnce();
+    expect(mockDbExecute).toHaveBeenCalledTimes(2);
+    expect(mockDbExecute.mock.calls[0]?.[0]).toContain('github_pr_review_attempts');
+    expect(mockDbExecute.mock.calls[1]?.[0]).toContain('github_installations');
+    expect(mockDbExecute.mock.calls[0]?.[1]).toEqual([999]);
+    expect(mockDbExecute.mock.calls[1]?.[1]).toEqual([999]);
+    expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('returns a retryable failure when installation cleanup cannot commit', async () => {
+    mockDbTransaction.mockRejectedValueOnce(new Error('database unavailable'));
+    const body = JSON.stringify({ action: 'deleted', installation: { id: 999 } });
+    const request = new NextRequest('http://localhost/api/github/webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hub-signature-256': signPayload(body, SECRET),
+        'x-github-event': 'installation',
+      },
+      body,
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(500);
+    expect(response.headers.get('retry-after')).toBe('10');
     expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
   });
 

@@ -13,6 +13,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { getProviderDefaultModel, getTaskModelForProvider } from '@agiworkforce/types';
+import { routeGitHubWebhookEvent } from './webhook-router';
 
 const GITHUB_BOT_LOGIN = process.env['GITHUB_BOT_LOGIN'] ?? 'agi-workforce[bot]';
 const BOT_MENTION = '@agi-workforce';
@@ -57,17 +58,61 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const event = request.headers.get('x-github-event');
-  let payload: Record<string, unknown>;
+  let rawPayload: unknown;
   try {
-    payload = JSON.parse(rawBody) as Record<string, unknown>;
+    rawPayload = JSON.parse(rawBody) as unknown;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // Only handle new issue comments that mention the bot
-  if (event !== 'issue_comment' || payload['action'] !== 'created') {
+  const routedEvent = routeGitHubWebhookEvent(event, rawPayload);
+  if (routedEvent.kind === 'invalid') {
+    logger.warn({ event, reason: routedEvent.reason }, 'Invalid GitHub webhook payload');
+    return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 });
+  }
+  if (routedEvent.kind === 'ignored') {
+    logger.debug(
+      {
+        event: routedEvent.event,
+        action: routedEvent.action,
+        reason: routedEvent.reason,
+      },
+      'Ignored unsupported GitHub webhook event',
+    );
     return NextResponse.json({ received: true });
   }
+  if (routedEvent.kind === 'ping') {
+    return NextResponse.json({ received: true, event: 'ping' });
+  }
+  if (routedEvent.kind === 'installation-deleted') {
+    try {
+      const db = getNeonDb();
+      await db.transaction(async (tx) => {
+        await tx.execute('delete from github_pr_review_attempts where installation_id = $1', [
+          routedEvent.installationId,
+        ]);
+        await tx.execute('delete from github_installations where installation_id = $1', [
+          routedEvent.installationId,
+        ]);
+      });
+    } catch (error) {
+      logger.error(
+        { error, installationId: routedEvent.installationId },
+        'Failed to remove deleted GitHub installation',
+      );
+      return NextResponse.json(
+        { error: 'Webhook processing failed' },
+        { status: 500, headers: { 'Retry-After': '10' } },
+      );
+    }
+    logger.info(
+      { installationId: routedEvent.installationId },
+      'Removed deleted GitHub installation',
+    );
+    return NextResponse.json({ received: true, event: 'installation.deleted' });
+  }
+
+  const payload = routedEvent.payload;
 
   const commentBody: string =
     ((payload['comment'] as Record<string, unknown>)?.['body'] as string) ?? '';

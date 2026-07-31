@@ -2246,8 +2246,8 @@
   {
     "item": "event-payload-router",
     "surface": "apps/github-app",
-    "status": "partial",
-    "evidence": "apps/web/app/api/github/webhook/route.ts:59-70 reads the x-github-event header and payload.action, but the only branch is a single early-return gate: `if (event !== 'issue_comment' || payload['action'] !== 'created') return {received:true}`."
+    "status": "built",
+    "evidence": "apps/web/app/api/github/webhook/webhook-router.ts provides a bounded dispatch table over the signed x-github-event header and untrusted JSON body, with explicit routed, ignored, and invalid outcomes. It routes webhook setup pings, issue_comment.created, and installation.deleted while rejecting malformed event names/payloads and explicitly ignoring unsupported events/actions. apps/web/app/api/github/webhook/route.ts consumes the discriminated result: pings are acknowledged, comments enter the review pipeline, and uninstall events atomically delete the installation plus review-attempt data with a retryable failure on transaction errors. webhook-router.test.ts and coverage-wave2-github-webhook.test.ts cover dispatch and route integration."
   },
   {
     "item": "issue-comment-event",
