@@ -28,6 +28,8 @@ import { Text } from '@/components/ui/text';
 import { StreamingIndicator } from './StreamingIndicator';
 import { ThinkingChip } from './ThinkingChip';
 import { InlineArtifactCard } from './InlineArtifactCard';
+import { useArtifactStore } from '@/src/features/artifacts/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 import { ToolCallTimeline } from './ToolCallTimeline';
 import { AgentActivityTimeline } from './AgentActivityTimeline';
@@ -201,6 +203,34 @@ export const MessageBubble = memo(function MessageBubble({
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const reducedMotion = useReducedMotion();
   const themeColors = useThemeColors();
+
+  // Artifacts are derived into the artifact store as a turn completes
+  // (captureArtifactsFromMessage). `message.artifacts` is declared on the type
+  // but no writer ever populates it, so reading it here rendered nothing —
+  // inline artifact cards were unreachable. Source them from the store, which
+  // also means historical turns light up rather than only newly-streamed ones.
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const storedArtifacts = useArtifactStore((s) => s.artifacts);
+  const inlineArtifacts = useMemo<Artifact[]>(() => {
+    // Only the locally-derived store is consulted, not the merged gallery: this
+    // runs for every bubble in the list, and a cloud artifact pulled from
+    // another device has no message in this transcript to attach to anyway.
+    // Scope is still checked so a Local turn can never surface a Cloud artifact.
+    return storedArtifacts
+      .filter(
+        (artifact) =>
+          artifact.messageId === message.id && (artifact.provenance?.scope ?? 'local') === appMode,
+      )
+      .map((artifact) => ({
+        id: artifact.id,
+        // MobileArtifactKind is a subset of Artifact['type'], so the kinds map
+        // across directly.
+        type: artifact.kind,
+        title: artifact.title,
+        content: artifact.content,
+        ...(artifact.language ? { language: artifact.language } : {}),
+      }));
+  }, [appMode, storedArtifacts, message.id]);
 
   const handleExpandArtifact = useCallback(
     (artifact: Artifact) => {
@@ -745,9 +775,9 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {/* Inline artifacts */}
-            {isAssistant && message.artifacts && message.artifacts.length > 0 ? (
+            {isAssistant && inlineArtifacts.length > 0 ? (
               <View style={{ gap: 4 }}>
-                {message.artifacts.map((artifact) => (
+                {inlineArtifacts.map((artifact) => (
                   <InlineArtifactCard
                     key={artifact.id}
                     artifact={artifact}

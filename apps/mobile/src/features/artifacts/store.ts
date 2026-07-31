@@ -490,6 +490,7 @@ export function deriveAndMapToMobileArtifacts(
     const kind = toMobileKind(s.type);
     return {
       id: s.id, // shared deterministic id — do NOT regenerate
+      messageId,
       title: s.title,
       kind,
       // 'text' is the shared service's sentinel for unlabeled blocks; map to
