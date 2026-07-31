@@ -122,7 +122,6 @@ pub async fn chat_get_memory_dashboard(
     memory_state: State<'_, MemoryState>,
 ) -> Result<serde_json::Value> {
     let stats = memory_state.manager.get_memory_stats()?;
-    let compaction_stats = memory_state.manager.get_compaction_stats()?;
 
     let trending_memories = memory_state
         .manager
@@ -131,7 +130,6 @@ pub async fn chat_get_memory_dashboard(
 
     Ok(serde_json::json!({
         "stats": stats,
-        "compaction": compaction_stats,
         "trending_count": trending_memories.len(),
         "timestamp": chrono::Utc::now().to_rfc3339()
     }))

@@ -31,7 +31,7 @@ export interface MemoryEntry {
   updated_at: string;
 }
 
-// --- Types for decay, compaction, export/import, and dashboard ---
+// --- Types for decay, export/import, and dashboard ---
 
 export interface DecayConfig {
   enabled: boolean;
@@ -76,37 +76,6 @@ export interface DecayCandidate {
   importance: number;
   last_accessed?: string;
   days_since_access: number;
-}
-
-export interface CompactionConfig {
-  enabled: boolean;
-  days_before_compaction: number;
-  summary_prompt?: string;
-  delete_after_compaction: boolean;
-}
-
-export interface CompactionCandidate {
-  log_date: string;
-  entry_count: number;
-  days_old: number;
-  is_compacted: boolean;
-}
-
-export interface MemoryCompactionResult {
-  logs_processed: number;
-  dates_compacted: number;
-  memories_created: number;
-  facts_extracted: number;
-  decisions_extracted: number;
-  preferences_extracted: number;
-}
-
-export interface ExtractedMemory {
-  category: string;
-  topic: string;
-  content: string;
-  importance: number;
-  source: string;
 }
 
 interface MemoryState {
@@ -177,19 +146,6 @@ interface MemoryState {
   getDecayCandidates: () => Promise<DecayCandidate[]>;
   recallWithBoost: (category: MemoryCategory, topic: string) => Promise<MemoryEntry | null>;
   decaySingle: (memoryId: number, decayAmount: number) => Promise<number>;
-
-  // Compaction operations
-  getCompactionCandidates: (config?: CompactionConfig) => Promise<CompactionCandidate[]>;
-  getLogsInRange: (startDate?: string, endDate?: string) => Promise<DailyLogEntry[]>;
-  compactOldLogs: (startDate?: string, endDate?: string) => Promise<MemoryCompactionResult>;
-  promoteExtracted: (memories: ExtractedMemory[]) => Promise<number>;
-  archiveCompactedLogs: (dates: string[], deleteCompacted?: boolean) => Promise<number>;
-  getExtractionPrompt: (
-    startDate?: string,
-    endDate?: string,
-    config?: CompactionConfig,
-  ) => Promise<string>;
-  getCompactionStats: () => Promise<Record<string, unknown>>;
 
   // Import operations (additional)
   importJsonString: (json: string, strategy?: string) => Promise<ImportResult>;
@@ -767,125 +723,6 @@ export const useMemoryStore = create<MemoryState>()(
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[memoryStore] failed to decay single memory:', msg);
             set({ error: msg, isLoading: false }, undefined, 'memory/decaySingle/error');
-            throw error;
-          }
-        },
-
-        // ---------------------------------------------------------------
-        // Compaction operations
-        // ---------------------------------------------------------------
-
-        getCompactionCandidates: async (config?: CompactionConfig) => {
-          set({ isLoading: true, error: null }, undefined, 'memory/getCompactionCandidates/start');
-          try {
-            const candidates = await memoryApi.getCompactionCandidates(config);
-            set({ isLoading: false }, undefined, 'memory/getCompactionCandidates/success');
-            return candidates;
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            console.error('[memoryStore] failed to get compaction candidates:', msg);
-            set(
-              { error: msg, isLoading: false },
-              undefined,
-              'memory/getCompactionCandidates/error',
-            );
-            throw error;
-          }
-        },
-
-        getLogsInRange: async (startDate?: string, endDate?: string) => {
-          set({ isLoading: true, error: null }, undefined, 'memory/getLogsInRange/start');
-          try {
-            const logs = await memoryApi.getLogsInRange(startDate, endDate);
-            set({ isLoading: false }, undefined, 'memory/getLogsInRange/success');
-            return logs;
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            console.error('[memoryStore] failed to get logs in range:', msg);
-            set({ error: msg, isLoading: false }, undefined, 'memory/getLogsInRange/error');
-            throw error;
-          }
-        },
-
-        compactOldLogs: async (startDate?: string, endDate?: string) => {
-          set({ isLoading: true, error: null }, undefined, 'memory/compactOldLogs/start');
-          try {
-            const result = await memoryApi.compactOldLogs(startDate, endDate);
-            set({ isLoading: false }, undefined, 'memory/compactOldLogs/success');
-            toast.success(
-              `Compacted ${result.dates_compacted} dates (${result.logs_processed} logs)`,
-            );
-            return result;
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            console.error('[memoryStore] failed to compact old logs:', msg);
-            set({ error: msg, isLoading: false }, undefined, 'memory/compactOldLogs/error');
-            toast.error(`Failed to compact logs: ${msg}`);
-            throw error;
-          }
-        },
-
-        promoteExtracted: async (memories: ExtractedMemory[]) => {
-          set({ isLoading: true, error: null }, undefined, 'memory/promoteExtracted/start');
-          try {
-            const count = await memoryApi.promoteExtracted(memories);
-            await get().loadAll();
-            set({ isLoading: false }, undefined, 'memory/promoteExtracted/success');
-            toast.success(`Promoted ${count} memories to long-term storage`);
-            return count;
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            console.error('[memoryStore] failed to promote extracted:', msg);
-            set({ error: msg, isLoading: false }, undefined, 'memory/promoteExtracted/error');
-            toast.error(`Failed to promote memories: ${msg}`);
-            throw error;
-          }
-        },
-
-        archiveCompactedLogs: async (dates: string[], deleteCompacted: boolean = false) => {
-          set({ isLoading: true, error: null }, undefined, 'memory/archiveCompactedLogs/start');
-          try {
-            const count = await memoryApi.archiveCompactedLogs(dates, deleteCompacted);
-            set({ isLoading: false }, undefined, 'memory/archiveCompactedLogs/success');
-            toast.success(`Archived ${count} compacted log entries`);
-            return count;
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            console.error('[memoryStore] failed to archive compacted logs:', msg);
-            set({ error: msg, isLoading: false }, undefined, 'memory/archiveCompactedLogs/error');
-            toast.error(`Failed to archive logs: ${msg}`);
-            throw error;
-          }
-        },
-
-        getExtractionPrompt: async (
-          startDate?: string,
-          endDate?: string,
-          config?: CompactionConfig,
-        ) => {
-          set({ isLoading: true, error: null }, undefined, 'memory/getExtractionPrompt/start');
-          try {
-            const prompt = await memoryApi.getExtractionPrompt(startDate, endDate, config);
-            set({ isLoading: false }, undefined, 'memory/getExtractionPrompt/success');
-            return prompt;
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            console.error('[memoryStore] failed to get extraction prompt:', msg);
-            set({ error: msg, isLoading: false }, undefined, 'memory/getExtractionPrompt/error');
-            throw error;
-          }
-        },
-
-        getCompactionStats: async () => {
-          set({ isLoading: true, error: null }, undefined, 'memory/getCompactionStats/start');
-          try {
-            const stats = await memoryApi.getCompactionStats();
-            set({ isLoading: false }, undefined, 'memory/getCompactionStats/success');
-            return stats;
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            console.error('[memoryStore] failed to get compaction stats:', msg);
-            set({ error: msg, isLoading: false }, undefined, 'memory/getCompactionStats/error');
             throw error;
           }
         },

@@ -13,14 +13,12 @@
 //! guard in `mark_memory_for_push` makes it impossible to mark a local row.
 
 use chrono::Utc;
-use std::collections::HashSet;
 use std::sync::Arc;
 use tauri::State;
 
 use crate::core::agi::memory_manager::{
-    CompactionCandidate, CompactionConfig, DailyLogEntry, DecayCandidate, DecayConfig, DecayResult,
-    ExtractedMemory, ImportConflictStrategy, ImportResult, LogEntryType, MemoryCategory,
-    MemoryCompactionResult, MemoryEntry, MemoryExport, MemoryManager, MemoryStats,
+    DailyLogEntry, DecayCandidate, DecayConfig, DecayResult, ImportConflictStrategy, ImportResult,
+    LogEntryType, MemoryCategory, MemoryEntry, MemoryExport, MemoryManager, MemoryStats,
 };
 use crate::core::llm::memory_integration::MemoryInjectionConfig;
 use crate::data::memory_sync;
@@ -531,108 +529,6 @@ pub async fn memory_get_stats(state: State<'_, MemoryState>) -> Result<MemorySta
 }
 
 // =============================================================================
-// Memory Compaction Commands
-// =============================================================================
-
-/// Get daily logs that are candidates for compaction
-#[tauri::command]
-pub async fn memory_get_compaction_candidates(
-    config: Option<CompactionConfig>,
-    state: State<'_, MemoryState>,
-) -> Result<Vec<CompactionCandidate>> {
-    let config = config.unwrap_or_default();
-    state.manager.get_logs_for_compaction(&config)
-}
-
-/// Get logs in a date range for compaction preview
-#[tauri::command]
-pub async fn memory_get_logs_in_range(
-    start_date: Option<String>,
-    end_date: Option<String>,
-    state: State<'_, MemoryState>,
-) -> Result<Vec<DailyLogEntry>> {
-    state
-        .manager
-        .get_logs_in_range(start_date.as_deref(), end_date.as_deref())
-}
-
-/// Compact old daily logs into long-term memories
-#[tauri::command]
-pub async fn memory_compact_old_logs(
-    start_date: Option<String>,
-    end_date: Option<String>,
-    state: State<'_, MemoryState>,
-) -> Result<MemoryCompactionResult> {
-    let logs = state
-        .manager
-        .get_logs_in_range(start_date.as_deref(), end_date.as_deref())?;
-
-    if logs.is_empty() {
-        return Ok(MemoryCompactionResult::default());
-    }
-
-    let unique_dates: HashSet<&str> = logs.iter().map(|l| l.log_date.as_str()).collect();
-
-    Ok(MemoryCompactionResult {
-        logs_processed: logs.len(),
-        dates_compacted: unique_dates.len(),
-        memories_created: 0,
-        facts_extracted: 0,
-        decisions_extracted: 0,
-        preferences_extracted: 0,
-    })
-}
-
-/// Promote extracted memories to long-term storage
-#[tauri::command]
-pub async fn memory_promote_extracted(
-    memories: Vec<ExtractedMemory>,
-    state: State<'_, MemoryState>,
-) -> Result<usize> {
-    state.manager.promote_to_long_term(&memories)
-}
-
-/// Archive compacted daily logs
-#[tauri::command]
-pub async fn memory_archive_compacted_logs(
-    dates: Vec<String>,
-    delete_compacted: bool,
-    state: State<'_, MemoryState>,
-) -> Result<usize> {
-    state
-        .manager
-        .archive_compacted_logs(&dates, delete_compacted)
-}
-
-/// Get the extraction prompt for a date range
-#[tauri::command]
-pub async fn memory_get_extraction_prompt(
-    start_date: Option<String>,
-    end_date: Option<String>,
-    config: Option<CompactionConfig>,
-    state: State<'_, MemoryState>,
-) -> Result<String> {
-    let config = config.unwrap_or_default();
-    let logs = state
-        .manager
-        .get_logs_in_range(start_date.as_deref(), end_date.as_deref())?;
-
-    if logs.is_empty() {
-        return Ok(String::new());
-    }
-
-    Ok(state.manager.build_extraction_prompt(&logs, &config))
-}
-
-/// Get compaction statistics
-#[tauri::command]
-pub async fn memory_get_compaction_stats(
-    state: State<'_, MemoryState>,
-) -> Result<serde_json::Value> {
-    state.manager.get_compaction_stats()
-}
-
-// =============================================================================
 // Memory Export Commands
 // =============================================================================
 
@@ -769,11 +665,9 @@ pub async fn memory_get_dashboard_stats(
     state: State<'_, MemoryState>,
 ) -> Result<serde_json::Value> {
     let stats = state.manager.get_memory_stats()?;
-    let compaction_stats = state.manager.get_compaction_stats()?;
 
     Ok(serde_json::json!({
         "memory_stats": stats,
-        "compaction_stats": compaction_stats,
     }))
 }
 

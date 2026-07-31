@@ -3206,8 +3206,8 @@
   {
     "item": "memory-reorganization-job",
     "surface": "packages/memory",
-    "status": "unwired",
-    "evidence": "Full compaction backend exists: apps/desktop/src-tauri/src/sys/commands/memory.rs:536-640 (memory_get_compaction_candidates, memory_get_logs_in_range, memory_compact_old_logs, memory_promote_extracted, memory_archive_compacted_logs, memory_get_extraction_prompt, memory_get_compaction_stats), all registered as Tauri commands (e.g. lib.rs:2687 memory_compact_old_logs); TS wrappers in apps/desktop/src/api/memory.ts:555-663 re-exposed by apps/desktop/src/stores/memoryStore.ts:778-891."
+    "status": "missing",
+    "evidence": "There is no daily-log memory reorganization job. The orphaned command chain was removed on 2026-07-30: its `compact` step only counted selected logs and always reported zero memories created; extraction merely returned a prompt without invoking an LLM; promotion accepted caller-supplied memories; and archive was a separate non-transactional mutation. No scheduler, model-policy gate, mounted UI, or production caller connected those steps. Daily-log capture/export/cleanup and saved-memory CRUD/search remain. The separate conversation-context compactor is live in the local turn host and is not this capability."
   },
   {
     "item": "recap-generation",

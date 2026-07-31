@@ -1,7 +1,7 @@
 /**
  * Memory System API Client
  *
- * TypeScript wrappers for all 39 Rust memory commands.
+ * TypeScript wrappers for the Rust memory commands used by Desktop.
  * invoke() params: camelCase. Command names: snake_case.
  * All functions have try/catch error handling.
  */
@@ -64,37 +64,6 @@ export interface DailyLogEntry {
   created_at: string;
 }
 
-export interface CompactionConfig {
-  enabled: boolean;
-  days_before_compaction: number;
-  summary_prompt?: string;
-  delete_after_compaction: boolean;
-}
-
-export interface CompactionCandidate {
-  log_date: string;
-  entry_count: number;
-  days_old: number;
-  is_compacted: boolean;
-}
-
-export interface MemoryCompactionResult {
-  logs_processed: number;
-  dates_compacted: number;
-  memories_created: number;
-  facts_extracted: number;
-  decisions_extracted: number;
-  preferences_extracted: number;
-}
-
-export interface ExtractedMemory {
-  category: string;
-  topic: string;
-  content: string;
-  importance: number;
-  source: string;
-}
-
 export interface ImportResult {
   memories_imported: number;
   logs_imported: number;
@@ -140,13 +109,6 @@ export interface SaveDecisionResponse {
 
 export interface MemoryDashboard {
   stats: MemoryStats;
-  compaction: {
-    total_logs: number;
-    compacted_logs: number;
-    uncompacted_logs: number;
-    unique_dates: number;
-    compaction_rate: number;
-  };
   trending_count: number;
   timestamp: string;
 }
@@ -542,133 +504,6 @@ export async function getStats(): Promise<MemoryStats> {
 }
 
 // ============================================================================
-// MEMORY COMPACTION COMMANDS
-// ============================================================================
-
-/**
- * Get daily logs that are candidates for compaction (memory_get_compaction_candidates).
- */
-export async function getCompactionCandidates(
-  config?: CompactionConfig,
-): Promise<CompactionCandidate[]> {
-  try {
-    return await invoke<CompactionCandidate[]>('memory_get_compaction_candidates', {
-      config: config ?? null,
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('[memory-api] getCompactionCandidates failed:', msg);
-    throw error;
-  }
-}
-
-/**
- * Get logs in a date range for compaction preview (memory_get_logs_in_range).
- */
-export async function getLogsInRange(
-  startDate?: string,
-  endDate?: string,
-): Promise<DailyLogEntry[]> {
-  try {
-    return await invoke<DailyLogEntry[]>('memory_get_logs_in_range', {
-      startDate,
-      endDate,
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('[memory-api] getLogsInRange failed:', msg);
-    throw error;
-  }
-}
-
-/**
- * Compact old daily logs into long-term memories (memory_compact_old_logs).
- */
-export async function compactOldLogs(
-  startDate?: string,
-  endDate?: string,
-): Promise<MemoryCompactionResult> {
-  try {
-    return await invoke<MemoryCompactionResult>('memory_compact_old_logs', {
-      startDate,
-      endDate,
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('[memory-api] compactOldLogs failed:', msg);
-    throw error;
-  }
-}
-
-/**
- * Promote extracted memories to long-term storage (memory_promote_extracted).
- * Returns the number of memories promoted.
- */
-export async function promoteExtracted(memories: ExtractedMemory[]): Promise<number> {
-  try {
-    return await invoke<number>('memory_promote_extracted', { memories });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('[memory-api] promoteExtracted failed:', msg);
-    throw error;
-  }
-}
-
-/**
- * Archive compacted daily logs (memory_archive_compacted_logs).
- * Returns the number of log entries archived.
- */
-export async function archiveCompactedLogs(
-  dates: string[],
-  deleteCompacted: boolean = false,
-): Promise<number> {
-  try {
-    return await invoke<number>('memory_archive_compacted_logs', {
-      dates,
-      deleteCompacted,
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('[memory-api] archiveCompactedLogs failed:', msg);
-    throw error;
-  }
-}
-
-/**
- * Get the extraction prompt for LLM-based memory extraction (memory_get_extraction_prompt).
- */
-export async function getExtractionPrompt(
-  startDate?: string,
-  endDate?: string,
-  config?: CompactionConfig,
-): Promise<string> {
-  try {
-    return await invoke<string>('memory_get_extraction_prompt', {
-      startDate,
-      endDate,
-      config: config ?? null,
-    });
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('[memory-api] getExtractionPrompt failed:', msg);
-    throw error;
-  }
-}
-
-/**
- * Get compaction statistics (memory_get_compaction_stats).
- */
-export async function getCompactionStats(): Promise<Record<string, unknown>> {
-  try {
-    return await invoke<Record<string, unknown>>('memory_get_compaction_stats');
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('[memory-api] getCompactionStats failed:', msg);
-    throw error;
-  }
-}
-
-// ============================================================================
 // MEMORY EXPORT COMMANDS
 // ============================================================================
 
@@ -749,7 +584,7 @@ export async function importFromJsonString(
 
 /**
  * Get memory dashboard statistics (memory_get_dashboard_stats).
- * Returns combined memory stats and compaction stats.
+ * Returns memory statistics.
  */
 export async function getDashboardStats(): Promise<Record<string, unknown>> {
   try {
