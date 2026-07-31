@@ -85,6 +85,27 @@ impl std::fmt::Debug for ToolEventSink {
     }
 }
 
+/// Stable identifiers shared by every SDK stream event in one CLI turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SdkStreamContext {
+    pub(crate) session_id: String,
+    pub(crate) message_id: String,
+}
+
+impl SdkStreamContext {
+    pub(crate) fn text_delta_event(&self, delta: &str) -> crate::sdk_io::SdkEvent {
+        crate::sdk_io::SdkEvent::StreamEvent(crate::sdk_io::StreamEvent::TextDelta {
+            session_id: self.session_id.clone(),
+            message_id: self.message_id.clone(),
+            delta: delta.to_string(),
+        })
+    }
+
+    pub(crate) fn emit_text_delta(&self, delta: &str) {
+        let _ = crate::sdk_io::write_event_stdout(&self.text_delta_event(delta));
+    }
+}
+
 /// Tracks the state of an agent conversation session.
 #[derive(Debug)]
 pub struct AgentSession {
@@ -187,6 +208,10 @@ pub struct AgentSession {
     /// Session-ID string to embed in `MessageDelta` events when `json_events`
     /// is `true`.  Usually the managed-session UUID; falls back to "exec".
     pub json_session_id: String,
+    /// Canonical SDK stream identifiers for `--output-format stream-json`.
+    /// Unlike the legacy `--json-events` schema, this emits `type=stream_event`
+    /// records and is also used by continuation turns after tool execution.
+    pub(crate) sdk_stream_context: Option<SdkStreamContext>,
     /// When set, send extended-thinking with this token budget (Anthropic only).
     /// Maps from the TUI Effort picker: Medium=None, High=Some(16384), Max=Some(32768).
     /// Only applied when the active provider is Anthropic.
@@ -572,6 +597,7 @@ impl AgentSession {
             pending_image_blocks: Vec::new(),
             json_events: false,
             json_session_id: String::new(),
+            sdk_stream_context: None,
             thinking_budget_tokens: None,
             effort: None,
         }
@@ -2205,6 +2231,7 @@ mod tests {
         let session = AgentSession::new("test-model", &ctx, None);
         assert!(!session.json_events);
         assert!(session.json_session_id.is_empty());
+        assert!(session.sdk_stream_context.is_none());
     }
 
     #[test]

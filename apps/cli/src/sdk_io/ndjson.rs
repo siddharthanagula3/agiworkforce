@@ -35,6 +35,17 @@ pub(crate) fn write_event_sync<W: Write, T: Serialize>(w: &mut W, event: &T) -> 
     w.flush()
 }
 
+/// Emit one complete NDJSON event to process stdout.
+///
+/// Streaming provider callbacks are synchronous, so they cannot await an
+/// [`NdjsonWriter`]. Locking stdout for the duration of one serialized line
+/// preserves the same no-torn-record guarantee for deltas and tool events.
+pub(crate) fn write_event_stdout<T: Serialize>(event: &T) -> io::Result<()> {
+    let stdout = io::stdout();
+    let mut handle = stdout.lock();
+    write_event_sync(&mut handle, event)
+}
+
 /// Async NDJSON writer wrapping any [`AsyncWrite`]. Holds a mutex so multiple
 /// emitters (the agent loop, the control channel, status updates) can share
 /// the same stdout without interleaving partial lines.
