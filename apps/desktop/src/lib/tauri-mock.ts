@@ -1985,8 +1985,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'memory_export_all':
     case 'memory_list_all':
     case 'memory_get_decay_candidates':
-    case 'memory_get_compaction_candidates':
-    case 'memory_get_logs_in_range':
     case 'memory_suggest_important':
     case 'memory_get_project_memories':
     case 'memory_get_daily_logs':
@@ -2001,7 +1999,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return 1 as T;
 
     case 'memory_get_session_context':
-    case 'memory_get_extraction_prompt':
     case 'memory_export_markdown':
       return '' as T;
 
@@ -2009,8 +2006,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return ['preference', 'fact', 'decision', 'context'] as T;
 
     case 'memory_cleanup_logs':
-    case 'memory_archive_compacted_logs':
-    case 'memory_promote_extracted':
       return 0 as T;
 
     case 'memory_run_decay':
@@ -2045,25 +2040,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         low_importance_count: 0,
       } as T;
 
-    case 'memory_get_compaction_stats':
-      return {
-        total_logs: 0,
-        compacted_logs: 0,
-        uncompacted_logs: 0,
-        unique_dates: 0,
-        compaction_rate: 0,
-      } as T;
-
-    case 'memory_compact_old_logs':
-      return {
-        logs_processed: 0,
-        dates_compacted: 0,
-        memories_created: 0,
-        facts_extracted: 0,
-        decisions_extracted: 0,
-        preferences_extracted: 0,
-      } as T;
-
     case 'memory_export_json':
       return {
         version: '1.0',
@@ -2083,13 +2059,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
           avg_importance: 0,
           high_importance_count: 0,
           low_importance_count: 0,
-        },
-        compaction_stats: {
-          total_logs: 0,
-          compacted_logs: 0,
-          uncompacted_logs: 0,
-          unique_dates: 0,
-          compaction_rate: 0,
         },
       } as T;
 
@@ -2138,13 +2107,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
           avg_importance: 0,
           high_importance_count: 0,
           low_importance_count: 0,
-        },
-        compaction: {
-          total_logs: 0,
-          compacted_logs: 0,
-          uncompacted_logs: 0,
-          unique_dates: 0,
-          compaction_rate: 0,
         },
         trending_count: 0,
         timestamp: new Date().toISOString(),
