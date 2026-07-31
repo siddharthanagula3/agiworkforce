@@ -12,6 +12,7 @@ export const DEVELOPER_TOKEN_EXPIRES_SECONDS = 604800;
 export interface VerifiedDeveloperToken {
   userId: string;
   email?: string;
+  sessionFamilyId?: string;
   jti: string;
   exp: number;
 }
@@ -21,7 +22,11 @@ function getSigningSecret(): string | null {
   return secret && secret.length > 0 ? secret : null;
 }
 
-export function issueDeveloperToken(input: { userId: string; email?: string }): {
+export function issueDeveloperToken(input: {
+  userId: string;
+  email?: string;
+  sessionFamilyId?: string;
+}): {
   accessToken: string;
   expiresIn: number;
 } {
@@ -36,6 +41,7 @@ export function issueDeveloperToken(input: { userId: string; email?: string }): 
       sub: input.userId,
       email: input.email ?? '',
       surface: 'developer',
+      ...(input.sessionFamilyId ? { sid: input.sessionFamilyId } : {}),
     },
     secret,
     {
@@ -64,6 +70,7 @@ export function verifyDeveloperTokenSignature(token: string): VerifiedDeveloperT
     const subject = typeof payload.sub === 'string' ? payload.sub : null;
     const jti = typeof payload.jti === 'string' ? payload.jti : null;
     const exp = typeof payload.exp === 'number' ? payload.exp : null;
+    const sessionFamilyId = typeof payload['sid'] === 'string' ? payload['sid'] : undefined;
     if (
       payload['surface'] !== 'developer' ||
       !userId ||
@@ -79,6 +86,7 @@ export function verifyDeveloperTokenSignature(token: string): VerifiedDeveloperT
     return {
       userId,
       ...(email ? { email } : {}),
+      ...(sessionFamilyId ? { sessionFamilyId } : {}),
       jti,
       exp,
     };
@@ -108,4 +116,15 @@ export async function revokeDeveloperToken(token: VerifiedDeveloperToken): Promi
     [token.jti, token.userId, new Date(token.exp * 1000).toISOString(), 'sign_out'],
   );
   return rows.length > 0;
+}
+
+export async function revokeDeveloperSessionFamily(sessionFamilyId: string): Promise<boolean> {
+  const affected = await getNeonDb().execute(
+    `UPDATE device_refresh_tokens
+        SET revoked_at = COALESCE(revoked_at, now())
+      WHERE family_id = $1
+        AND revoked_at IS NULL`,
+    [sessionFamilyId],
+  );
+  return affected > 0;
 }

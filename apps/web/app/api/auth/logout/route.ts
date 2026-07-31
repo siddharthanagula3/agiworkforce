@@ -6,7 +6,11 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { revokeDeveloperToken, verifyDeveloperTokenSignature } from '@/lib/server/developer-token';
+import {
+  revokeDeveloperSessionFamily,
+  revokeDeveloperToken,
+  verifyDeveloperTokenSignature,
+} from '@/lib/server/developer-token';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -25,9 +29,14 @@ async function handleDeveloperLogout(request: NextRequest): Promise<NextResponse
   const csrfError = await requireCsrfToken(request, verified.userId);
   if (csrfError) return csrfError as NextResponse;
 
-  const inserted = await revokeDeveloperToken(verified);
+  const [inserted, familyRevoked] = await Promise.all([
+    revokeDeveloperToken(verified),
+    verified.sessionFamilyId
+      ? revokeDeveloperSessionFamily(verified.sessionFamilyId)
+      : Promise.resolve(false),
+  ]);
   return NextResponse.json(
-    { ok: true, revoked: inserted },
+    { ok: true, revoked: inserted || familyRevoked },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

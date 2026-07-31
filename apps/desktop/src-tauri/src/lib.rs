@@ -1660,6 +1660,7 @@ pub fn run() {
             crate::sys::account::account_store_refresh_token,
             crate::sys::account::account_clear_tokens,
             crate::sys::account::account_restore_access_token,
+            crate::sys::account::account_restore_refresh_token,
             crate::sys::account::account_start_device_authorization,
             crate::sys::account::account_poll_device_authorization,
             crate::sys::account::account_list_devices,

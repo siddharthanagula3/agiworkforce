@@ -73,6 +73,7 @@ describe('shared device authorization client', () => {
       status: 200,
       body: JSON.stringify({
         access_token: 'device-token',
+        refresh_token: 'refresh-token-with-at-least-forty-random-looking-characters',
         token_type: 'Bearer',
         expires_in: 600,
       }),
@@ -88,6 +89,7 @@ describe('shared device authorization client', () => {
     ).resolves.toEqual({
       kind: 'approved',
       token: 'device-token',
+      refreshToken: 'refresh-token-with-at-least-forty-random-looking-characters',
       expiresAt: 1_600_000,
     });
 

@@ -14,6 +14,7 @@ export interface DesktopDeviceAuthorizationOptions {
 
 export interface DesktopDeviceCredential {
   accessToken: string;
+  refreshToken?: string;
   expiresAt: number;
 }
 
@@ -66,7 +67,11 @@ export async function authorizeDesktopDevice({
 
     const result = await pollDeviceAuthorization(origin, authorization.deviceCode, post);
     if (result.kind === 'approved') {
-      return { accessToken: result.token, expiresAt: result.expiresAt };
+      return {
+        accessToken: result.token,
+        ...(result.refreshToken ? { refreshToken: result.refreshToken } : {}),
+        expiresAt: result.expiresAt,
+      };
     }
     if (result.kind === 'denied') {
       throw new Error('AGI Cloud sign-in was denied.');

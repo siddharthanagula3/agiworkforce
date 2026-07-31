@@ -82,6 +82,7 @@ const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
 const AUTH_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const DEV_BROWSER_SESSION_STORAGE_KEY = '__AGI_DEV_BROWSER_CLOUD_SESSION__';
 const NATIVE_SESSION_RESTORE_TIMEOUT_MS = 8_000;
+const SESSION_REFRESH_SKEW_SECONDS = 5 * 60;
 
 interface CachedAuthData<T> {
   data: T;
@@ -94,11 +95,20 @@ function isLocalDevBrowser(): boolean {
   return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 }
 
-async function restoreNativeAccessToken(): Promise<string | null> {
+async function restoreNativeSessionSeed(): Promise<{
+  access_token: string | null;
+  refresh_token: string | null;
+}> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   try {
     return await Promise.race([
-      invoke<string | null>('account_restore_access_token'),
+      Promise.all([
+        invoke<string | null>('account_restore_access_token'),
+        invoke<string | null>('account_restore_refresh_token'),
+      ]).then(([accessToken, refreshToken]) => ({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      })),
       new Promise<never>((_, reject) => {
         timeoutId = setTimeout(
           () => reject(new Error('The system credential vault did not respond in time.')),
@@ -284,6 +294,7 @@ class CloudAccountAuthService {
   };
   private deviceAuthorizationController: AbortController | null = null;
   private invalidSessionCleanup: Promise<void> | null = null;
+  private sessionRefreshPromise: Promise<{ error: AuthError | null }> | null = null;
   private sessionExpiryTimer: ReturnType<typeof setTimeout> | null = null;
 
   static getInstance(): CloudAccountAuthService {
@@ -303,9 +314,16 @@ class CloudAccountAuthService {
     if (isTauri && !this.currentState.session) {
       this.updateState({ isLoading: true, error: null });
       try {
-        const accessToken = await restoreNativeAccessToken();
-        if (accessToken) {
-          await this.setSession({ access_token: accessToken });
+        const seed = await restoreNativeSessionSeed();
+        if (seed.access_token) {
+          await this.setSession({
+            access_token: seed.access_token,
+            refresh_token: seed.refresh_token,
+          });
+          return;
+        }
+        if (seed.refresh_token) {
+          await this.refreshSession(seed.refresh_token);
           return;
         }
       } catch (error) {
@@ -414,7 +432,7 @@ class CloudAccountAuthService {
       }
       await signInWindow.current?.close();
       signInWindow.current = null;
-      return await this.finishDeviceAuthorization(credential.accessToken);
+      return await this.finishDeviceAuthorization(credential);
     } catch (error) {
       const authError =
         error instanceof AuthError
@@ -434,8 +452,14 @@ class CloudAccountAuthService {
     }
   }
 
-  private async finishDeviceAuthorization(accessToken: string): Promise<AuthResponse> {
-    const result = await this.setSession({ access_token: accessToken });
+  private async finishDeviceAuthorization(credential: {
+    accessToken: string;
+    refreshToken?: string;
+  }): Promise<AuthResponse> {
+    const result = await this.setSession({
+      access_token: credential.accessToken,
+      refresh_token: credential.refreshToken ?? null,
+    });
     if (result.error) {
       return { data: { user: null, session: null }, error: result.error };
     }
@@ -575,7 +599,17 @@ class CloudAccountAuthService {
     const session = this.currentState.session;
     if (!session) return null;
 
-    if (session.expires_at && session.expires_at <= Math.floor(Date.now() / 1000)) {
+    const now = Math.floor(Date.now() / 1000);
+    if (
+      session.refresh_token &&
+      session.expires_at &&
+      session.expires_at <= now + SESSION_REFRESH_SKEW_SECONDS
+    ) {
+      const result = await this.refreshSession(session.refresh_token);
+      return result.error ? null : this.currentState.session;
+    }
+
+    if (session.expires_at && session.expires_at <= now) {
       await this.invalidateSession('Your AGI Cloud session has expired. Please connect again.');
       return null;
     }
@@ -624,6 +658,9 @@ class CloudAccountAuthService {
 
     const session = buildSession(tokens.access_token, tokens.refresh_token);
     if (session.expires_at && session.expires_at <= Math.floor(Date.now() / 1000)) {
+      if (session.refresh_token && !this.sessionRefreshPromise) {
+        return this.refreshSession(session.refresh_token);
+      }
       const error = new AuthError(
         'Your AGI Cloud session has expired. Please connect again.',
         401,
@@ -788,11 +825,91 @@ class CloudAccountAuthService {
     this.clearSessionExpiryTimer();
     if (!session.expires_at) return;
 
-    const delayMs = Math.max(0, session.expires_at * 1000 - Date.now());
+    const refreshSkewMs = session.refresh_token ? SESSION_REFRESH_SKEW_SECONDS * 1000 : 0;
+    const delayMs = Math.max(0, session.expires_at * 1000 - Date.now() - refreshSkewMs);
     this.sessionExpiryTimer = setTimeout(() => {
       this.sessionExpiryTimer = null;
-      void this.invalidateSession('Your AGI Cloud session has expired. Please connect again.');
+      void this.getValidSession();
     }, delayMs);
+  }
+
+  private async refreshSession(refreshToken: string): Promise<{ error: AuthError | null }> {
+    if (this.sessionRefreshPromise) return this.sessionRefreshPromise;
+
+    this.sessionRefreshPromise = (async () => {
+      try {
+        const tokens = await this.requestDeviceTokenRefresh(refreshToken);
+        return await this.setSession(tokens);
+      } catch (error) {
+        const authError =
+          error instanceof AuthError
+            ? error
+            : new AuthError(
+                error instanceof Error ? error.message : String(error),
+                401,
+                'refresh_failed',
+              );
+        await this.invalidateSession(
+          'Your AGI Cloud session could not be renewed. Please connect again.',
+        );
+        return { error: authError };
+      }
+    })();
+
+    try {
+      return await this.sessionRefreshPromise;
+    } finally {
+      this.sessionRefreshPromise = null;
+    }
+  }
+
+  private async requestDeviceTokenRefresh(refreshToken: string): Promise<{
+    access_token: string;
+    refresh_token: string;
+  }> {
+    const { guardedFetch } = await import('../lib/egressGuard');
+    const response = await guardedFetch(`${WEB_APP_URL}/api/auth/device/refresh`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-AGI-Surface': 'desktop',
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!response.ok) {
+      throw new AuthError(
+        'AGI Cloud rejected the saved refresh credential.',
+        response.status,
+        'invalid_refresh_token',
+      );
+    }
+    const payload = (await response.json()) as unknown;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new AuthError(
+        'AGI Cloud returned an invalid refresh response.',
+        502,
+        'invalid_refresh',
+      );
+    }
+    const record = payload as Record<string, unknown>;
+    const accessToken = record['access_token'];
+    const nextRefreshToken = record['refresh_token'];
+    if (
+      typeof accessToken !== 'string' ||
+      !accessToken ||
+      typeof nextRefreshToken !== 'string' ||
+      !nextRefreshToken
+    ) {
+      throw new AuthError(
+        'AGI Cloud returned an invalid refresh response.',
+        502,
+        'invalid_refresh',
+      );
+    }
+    return { access_token: accessToken, refresh_token: nextRefreshToken };
   }
 
   private async fetchAccountSnapshot(accessToken: string): Promise<AccountSnapshot> {

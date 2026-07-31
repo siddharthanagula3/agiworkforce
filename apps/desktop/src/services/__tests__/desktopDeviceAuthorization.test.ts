@@ -25,6 +25,7 @@ describe('authorizeDesktopDevice', () => {
         status: 200,
         body: JSON.stringify({
           access_token: 'approved-token',
+          refresh_token: 'approved-refresh-token',
           token_type: 'Bearer',
           expires_in: 600,
         }),
@@ -44,6 +45,7 @@ describe('authorizeDesktopDevice', () => {
     );
     expect(wait).toHaveBeenCalledTimes(2);
     expect(result.accessToken).toBe('approved-token');
+    expect(result.refreshToken).toBe('approved-refresh-token');
   });
 
   it.each([
