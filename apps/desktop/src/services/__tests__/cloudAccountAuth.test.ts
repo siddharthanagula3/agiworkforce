@@ -102,6 +102,71 @@ describe('cloudAccountAuth', () => {
     expect(cloudAccountAuth.getPlanTier()).toBe('pro');
   });
 
+  it('rotates an expired saved session with the encrypted refresh credential', async () => {
+    const expiredAccessToken = jwtWithClaims({
+      sub: 'user_123',
+      email: 'user@example.com',
+      exp: Math.floor(Date.now() / 1000) - 60,
+    });
+    const nextAccessToken = jwtWithClaims({
+      sub: 'user_123',
+      email: 'user@example.com',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'account_restore_access_token') return expiredAccessToken;
+      if (command === 'account_restore_refresh_token') return 'saved-refresh-token';
+      return undefined;
+    });
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      if (String(input).includes('/api/auth/device/refresh')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            access_token: nextAccessToken,
+            refresh_token: 'rotated-refresh-token',
+          }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'user_123',
+          email: 'user@example.com',
+          name: 'Example User',
+          avatar_url: null,
+          created_at: null,
+          updated_at: 1751712000,
+          plan: null,
+          feature_flags: {},
+          credits: null,
+          routing_preferences: {},
+        }),
+      } as Response;
+    });
+
+    await cloudAccountAuth.checkSession();
+
+    expect(fetch).toHaveBeenCalledWith(
+      `${WEB_APP_URL}/api/auth/device/refresh`,
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'omit',
+        body: JSON.stringify({ refresh_token: 'saved-refresh-token' }),
+      }),
+    );
+    expect(cloudAccountAuth.getSession()?.access_token).toBe(nextAccessToken);
+    expect(cloudAccountAuth.getSession()?.refresh_token).toBe('rotated-refresh-token');
+    expect(invokeMock).toHaveBeenCalledWith('account_store_access_token', {
+      accessToken: nextAccessToken,
+    });
+    expect(invokeMock).toHaveBeenCalledWith('account_store_refresh_token', {
+      refreshToken: 'rotated-refresh-token',
+    });
+  });
+
   it('fails closed when a restored Cloud token is expired or revoked', async () => {
     const accessToken = jwtWithClaims({
       sub: 'user_123',
@@ -185,6 +250,7 @@ describe('cloudAccountAuth', () => {
       await options.openAuthorization('https://agiworkforce.com/auth/device?user_code=ABCD-1234');
       return {
         accessToken,
+        refreshToken: 'desktop-refresh-token',
         expiresAt: Date.now() + 3_600_000,
       };
     });
@@ -202,6 +268,7 @@ describe('cloudAccountAuth', () => {
     );
     expect(close).toHaveBeenCalledOnce();
     expect(cloudAccountAuth.getSession()?.access_token).toBe(accessToken);
+    expect(cloudAccountAuth.getSession()?.refresh_token).toBe('desktop-refresh-token');
   });
 
   it('uses the native allowlisted transport for Desktop device authorization', async () => {

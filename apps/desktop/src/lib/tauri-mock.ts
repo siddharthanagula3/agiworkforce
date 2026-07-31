@@ -2359,6 +2359,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'account_store_refresh_token':
     case 'account_clear_tokens':
     case 'account_restore_access_token':
+    case 'account_restore_refresh_token':
     case 'llm_ensure_managed_cloud':
     case 'secret_manager_set':
     case 'secret_manager_delete':

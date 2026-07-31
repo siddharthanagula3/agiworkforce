@@ -21,7 +21,7 @@ export interface DeviceAuthorizationRequest {
 }
 
 export type DeviceAuthorizationPollResult =
-  | { kind: 'approved'; token: string; expiresAt: number }
+  | { kind: 'approved'; token: string; refreshToken?: string; expiresAt: number }
   | { kind: 'pending' }
   | { kind: 'denied' }
   | { kind: 'expired' }
@@ -126,6 +126,9 @@ export async function pollDeviceAuthorization(
 
   const tokenResponse: TokenResponse = {
     access_token: requiredString(body, 'access_token'),
+    ...(typeof body['refresh_token'] === 'string'
+      ? { refresh_token: requiredString(body, 'refresh_token') }
+      : {}),
     token_type: requiredString(body, 'token_type'),
     expires_in: requiredPositiveNumber(body, 'expires_in'),
   };
@@ -136,6 +139,7 @@ export async function pollDeviceAuthorization(
   return {
     kind: 'approved',
     token: tokenResponse.access_token,
+    ...(tokenResponse.refresh_token ? { refreshToken: tokenResponse.refresh_token } : {}),
     expiresAt: Date.now() + tokenResponse.expires_in * 1000,
   };
 }
