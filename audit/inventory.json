@@ -746,8 +746,8 @@
   {
     "item": "mdm-managed-policy",
     "surface": "apps/desktop",
-    "status": "unwired",
-    "evidence": "packages/contracts/licensing/src/org-policy.ts:1-90 implements a complete, tested org-policy schema (Zod), signature verification (`verifySignedContainer`), and monotonic-tightening lattice for enterprise policy distributed via 'file drop, MDM, or self-hosted gateway' (per its own docstring, which states verbatim at lines 18-21: 'this pass ships the schema + verifier + fixtures only. It is not wired into any surface's enforcement path'). Whole-repo grep for 'OrgPolicy'/'org-policy'/'checkPolicyTightening' across apps/desktop, apps/web, apps/mobile, and apps/extension returns zero consumers outside packages/contracts/licensing itself."
+    "status": "missing",
+    "evidence": "MDM policy distribution and Desktop enforcement are absent. `packages/contracts/licensing/src/org-policy.ts` is intentionally retained only as a pure cross-language contract-test verifier under `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`; it has no non-test app or service consumer, filesystem/MDM loader, precedence resolver, revocation path, or enforcement call site. The accepted decision explicitly forbids treating the verifier as evidence that Enterprise Local managed policy is shipped."
   },
   {
     "item": "manifest-v3",
@@ -3002,8 +3002,8 @@
   {
     "item": "managed-policy-override",
     "surface": "packages/permissions",
-    "status": "unwired",
-    "evidence": "crates/agiworkforce-licensing/src/org_policy.rs:1-416 implements a complete, well-tested signed org-policy system: OrgPolicy{allowed_providers,allowed_models,byok,egress,retention_days,audit_export} (56-75), monotonic-tightening lattice verification so a policy can only restrict never grant (check_policy_tightening:203-277), and offline signature verification rooted in the org license (verify_org_policy:342-415). Mirrored in TS at packages/contracts/licensing/src/org-policy.ts."
+    "status": "missing",
+    "evidence": "No shipped permission engine loads or enforces an organization override. `crates/agiworkforce-licensing/src/org_policy.rs` and `packages/contracts/licensing/src/org-policy.ts` remain pure, zero-runtime-consumer verifier fixtures that replay one cross-language corpus; `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md` explicitly prohibits a partial license/policy gate until key distribution, revocation, identity/seat, precedence, audit, and recovery are approved together."
   },
   {
     "item": "tool-restriction-policy",
@@ -3014,8 +3014,8 @@
   {
     "item": "model-restriction-policy",
     "surface": "packages/permissions",
-    "status": "unwired",
-    "evidence": "crates/agiworkforce-licensing/src/org_policy.rs:65-66,103-104 (OrgPolicy.allowed_models / PolicyPermissions.allowed_models, part of the same signed, monotonic-tightening org policy as managed-policy-override) is the admin-governed model restriction mechanism. It is unreachable from any app for the same reason as managed-policy-override (no Cargo.toml/package.json outside the crate itself depends on it)."
+    "status": "missing",
+    "evidence": "No app/runtime consumes `OrgPolicy.allowed_models` or `PolicyPermissions.allowed_models`, so there is no admin-governed model restriction enforcement. The Rust and TypeScript fields are retained only inside the accepted cross-language verifier-fixture boundary documented by `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`; neither verifier package has a production manifest consumer."
   },
   {
     "item": "session-store",
@@ -3770,8 +3770,8 @@
   {
     "item": "config-defaults-push",
     "surface": "admin-and-billing",
-    "status": "unwired",
-    "evidence": "A complete, matched pair of signed-policy verifiers exists purely as a library with zero callers: crates/agiworkforce-licensing/src/org_policy.rs:1-88 implements 'signed org policy' (monotonic-tightening BYOK/provider/model/retention/egress restrictions) explicitly as a 'Port of packages/contracts/licensing/src/org-policy.ts'; grepping every Cargo.toml in the repo for 'agiworkforce-licensing' as a dependency returns only the crate's own manifest — no app or other crate depends on it. Likewise packages/contracts/licensing (package @agiworkforce/licensing) is never imported outside its own package (grep across apps/, packages/ai, packages/client, packages/platform, packages/ui, services returns nothing). Separately, services/api-gateway/src/routes/enterprise.ts:221-261 exposes a read-only GET /organizations/:orgId/policy against a nonexistent `organization_admin_policies` table (no migration anywhere creates it — see audit-log-viewer finding), and there is no POST/PATCH route anywhere to actually push new policy defaults."
+    "status": "missing",
+    "evidence": "Admin-to-client defaults push is absent. Migration `0076_enterprise_control_plane_tables.sql` now owns the RLS-protected `organization_admin_policies` relation, and `services/api-gateway/src/routes/enterprise.ts` exposes only a member-readable GET; there is no policy mutation route, signed distribution channel, client subscription/pull, precedence resolver, or runtime enforcement consumer. The separate Rust/TypeScript signed-policy verifiers are intentionally retained only as zero-consumer cross-language contract fixtures under `docs/decisions/2026-07-30-enterprise-local-verifier-retention.md`."
   },
   {
     "item": "departmental-spend-allocation",
