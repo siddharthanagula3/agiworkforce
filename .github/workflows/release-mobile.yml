@@ -1,0 +1,281 @@
+name: Release Mobile Apps
+
+on:
+  push:
+    tags:
+      - 'v-mobile-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v-mobile-X.Y.Z tag to validate or release'
+        required: true
+        type: string
+      publish:
+        description: 'Build and submit after protected-environment approval'
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-mobile-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+  PNPM_VERSION: '9.15.3'
+  EAS_CLI_VERSION: '21.4.0'
+
+jobs:
+  validate:
+    name: Validate tagged mobile release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      version: ${{ steps.metadata.outputs.version }}
+    steps:
+      - name: Checkout the selected release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Require an exact stable tag and matching app versions
+        id: metadata
+        shell: bash
+        env:
+          SELECTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$SELECTED_TAG" | grep -Eq '^v-mobile-[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: mobile release tags must use v-mobile-X.Y.Z" >&2
+            exit 1
+          fi
+          if [ "$(git describe --tags --exact-match HEAD)" != "$SELECTED_TAG" ]; then
+            echo "ERROR: checked-out commit is not the selected release tag $SELECTED_TAG" >&2
+            exit 1
+          fi
+
+          VERSION="${SELECTED_TAG#v-mobile-}"
+          PACKAGE_VERSION=$(node -p "require('./apps/mobile/package.json').version")
+          CONFIG_VERSION=$(
+            APP_ENV=production \
+            EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_release_metadata_check \
+            node -p "require('./apps/mobile/app.config.js').expo.version"
+          )
+          if [ "$PACKAGE_VERSION" != "$VERSION" ] || [ "$CONFIG_VERSION" != "$VERSION" ]; then
+            echo "ERROR: tag $SELECTED_TAG does not match mobile versions (package=$PACKAGE_VERSION config=$CONFIG_VERSION)" >&2
+            exit 1
+          fi
+
+          echo "tag=${SELECTED_TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate mobile source and release configuration
+        run: |
+          pnpm --filter @agiworkforce/mobile check:expo-deps
+          pnpm --filter @agiworkforce/mobile typecheck
+          pnpm --filter @agiworkforce/mobile lint
+          pnpm --filter @agiworkforce/mobile test
+          pnpm --filter @agiworkforce/mobile check:tls-pins
+          jq -e '.build.production.environment == "production"' apps/mobile/eas.json >/dev/null
+          jq -e '.submit.production.android.track == "internal"' apps/mobile/eas.json >/dev/null
+          jq -e '.submit.production.android.releaseStatus == "draft"' apps/mobile/eas.json >/dev/null
+
+  release-ios:
+    name: Build and submit iOS to TestFlight
+    if: github.event_name == 'push' || inputs.publish == true
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment:
+      name: mobile-store-release
+      url: https://appstoreconnect.apple.com/apps
+    permissions:
+      contents: read
+    env:
+      APP_ENV: production
+      EXPO_PUBLIC_APP_ENV: production
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      ASC_APP_ID: ${{ vars.ASC_APP_ID }}
+    steps:
+      - name: Checkout the exact validated release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Expo and pinned EAS CLI
+        uses: expo/expo-github-action@c7b66a9c327a43a8fa7c0158e7f30d6040d2481e # v8
+        with:
+          eas-version: ${{ env.EAS_CLI_VERSION }}
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Require protected iOS release configuration
+        shell: bash
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+          ASC_API_PRIVATE_KEY_BASE64: ${{ secrets.ASC_API_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          for name in EXPO_TOKEN EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ASC_APP_ID ASC_API_KEY_ID ASC_API_KEY_ISSUER_ID ASC_API_PRIVATE_KEY_BASE64; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: mobile-store-release value ${name} is required" >&2
+              exit 1
+            fi
+          done
+          if [[ "$EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY" != pk_live_* ]]; then
+            echo "ERROR: EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY must be a live key" >&2
+            exit 1
+          fi
+
+          bash apps/mobile/scripts/release/configure-ios-submit.sh "$ASC_APP_ID"
+          mkdir -p apps/mobile/secrets
+          chmod 700 apps/mobile/secrets
+          printf '%s' "$ASC_API_PRIVATE_KEY_BASE64" | base64 --decode > apps/mobile/secrets/asc-api-key.p8
+          chmod 600 apps/mobile/secrets/asc-api-key.p8
+          grep -q 'BEGIN PRIVATE KEY' apps/mobile/secrets/asc-api-key.p8
+
+      - name: Preserve exact tagged source with only protected submit configuration
+        shell: bash
+        env:
+          SOURCE_TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          UNEXPECTED=$(git diff --name-only "$SOURCE_TAG" -- . ':!apps/mobile/eas.json')
+          if [ -n "$UNEXPECTED" ]; then
+            echo "ERROR: release preparation changed source outside apps/mobile/eas.json" >&2
+            printf '%s\n' "$UNEXPECTED" >&2
+            exit 1
+          fi
+          git add apps/mobile/eas.json
+          if ! git diff --cached --quiet; then
+            git -c user.name='AGI Workforce Release CI' \
+              -c user.email='release-ci@agiworkforce.com' \
+              commit --no-verify -m "ci(release): materialize protected App Store destination for ${SOURCE_TAG}"
+          fi
+          test -z "$(git status --porcelain)"
+
+      - name: Build the tagged iOS source and submit that exact build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+        run: pnpm --filter @agiworkforce/mobile release:ios:prod -- --auto-submit
+
+      - name: Remove local App Store credential
+        if: always()
+        run: rm -f apps/mobile/secrets/asc-api-key.p8
+
+  release-android:
+    name: Build and submit Android to Play Internal
+    if: github.event_name == 'push' || inputs.publish == true
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment:
+      name: mobile-store-release
+      url: https://play.google.com/console
+    permissions:
+      contents: read
+    env:
+      APP_ENV: production
+      EXPO_PUBLIC_APP_ENV: production
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+    steps:
+      - name: Checkout the exact validated release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Expo and pinned EAS CLI
+        uses: expo/expo-github-action@c7b66a9c327a43a8fa7c0158e7f30d6040d2481e # v8
+        with:
+          eas-version: ${{ env.EAS_CLI_VERSION }}
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Require protected Android release configuration
+        shell: bash
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          for name in EXPO_TOKEN EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: mobile-store-release value ${name} is required" >&2
+              exit 1
+            fi
+          done
+          if [[ "$EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY" != pk_live_* ]]; then
+            echo "ERROR: EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY must be a live key" >&2
+            exit 1
+          fi
+
+          mkdir -p apps/mobile/secrets
+          chmod 700 apps/mobile/secrets
+          printf '%s' "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64" | base64 --decode > apps/mobile/secrets/google-play-service-account.json
+          chmod 600 apps/mobile/secrets/google-play-service-account.json
+          jq -e '
+            .type == "service_account" and
+            (.client_email | type == "string" and length > 0) and
+            (.private_key | type == "string" and contains("BEGIN PRIVATE KEY"))
+          ' apps/mobile/secrets/google-play-service-account.json >/dev/null
+          test -z "$(git status --porcelain)"
+
+      - name: Build the tagged Android source and submit that exact build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: pnpm --filter @agiworkforce/mobile release:android:prod -- --auto-submit
+
+      - name: Remove local Google Play credential
+        if: always()
+        run: rm -f apps/mobile/secrets/google-play-service-account.json
