@@ -94,6 +94,7 @@ jobs:
           pnpm --filter @agiworkforce/mobile typecheck
           pnpm --filter @agiworkforce/mobile lint
           pnpm --filter @agiworkforce/mobile test
+          pnpm --filter @agiworkforce/mobile test:release-associations
           pnpm --filter @agiworkforce/mobile check:tls-pins
           jq -e '.build.production.environment == "production"' apps/mobile/eas.json >/dev/null
           jq -e '.submit.production.android.track == "internal"' apps/mobile/eas.json >/dev/null
@@ -235,6 +236,11 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Verify deployed Apple and Android association documents
+        env:
+          ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS: ${{ vars.ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS }}
+        run: pnpm --filter @agiworkforce/mobile release:verify-associations
 
       - name: Setup Expo and pinned EAS CLI
         uses: expo/expo-github-action@c7b66a9c327a43a8fa7c0158e7f30d6040d2481e # v8

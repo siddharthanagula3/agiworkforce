@@ -388,6 +388,11 @@ requireIncludes('.github/workflows/release-mobile.yml', 'name: mobile-store-rele
 requireIncludes('.github/workflows/release-mobile.yml', "EAS_CLI_VERSION: '21.4.0'");
 requireIncludes('.github/workflows/release-mobile.yml', 'release:ios:prod -- --auto-submit');
 requireIncludes('.github/workflows/release-mobile.yml', 'release:android:prod -- --auto-submit');
+requireIncludes('.github/workflows/release-mobile.yml', 'release:verify-associations');
+requireIncludes(
+  '.github/workflows/release-mobile.yml',
+  'ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS',
+);
 requireIncludes('.github/workflows/release-mobile.yml', 'ASC_API_PRIVATE_KEY_BASE64');
 requireIncludes('.github/workflows/release-mobile.yml', 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64');
 requireNotIncludes('.github/workflows/release-mobile.yml', '--latest');
@@ -395,6 +400,14 @@ requireIncludes('apps/mobile/scripts/release/configure-ios-submit.sh', 'ASC_APP_
 requireIncludes(
   'apps/mobile/scripts/release/configure-ios-submit.sh',
   '.submit.production.ios.ascAppId',
+);
+requireIncludes(
+  'apps/mobile/scripts/release/verify-production-associations.mjs',
+  "redirect: 'manual'",
+);
+requireIncludes(
+  'apps/mobile/scripts/release/verify-production-associations.mjs',
+  'fingerprints do not match the protected Play signing value',
 );
 requireIncludes('apps/mobile/scripts/release/preflight.sh', 'EAS project is not linked');
 requireIncludes('apps/mobile/scripts/release/preflight.sh', 'numeric ascAppId');
