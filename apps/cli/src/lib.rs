@@ -891,10 +891,13 @@ async fn handle_models_command(
     match action {
         ModelsSubcommand::List { json } => {
             if *json {
-                let value = models_json_with_local(config).await;
+                let value = models_json_with_discovery(config).await;
                 println!("{}", serde_json::to_string_pretty(&value)?);
             } else {
-                println!("{}", provider::format_model_list_with_local(config).await);
+                println!(
+                    "{}",
+                    provider::format_model_list_with_discovery(config).await
+                );
             }
             Ok(())
         }
@@ -953,7 +956,7 @@ async fn infer_provider_for_model(config: &config::CliConfig, model: &str) -> Re
     )
 }
 
-async fn models_json_with_local(config: &config::CliConfig) -> serde_json::Value {
+async fn models_json_with_discovery(config: &config::CliConfig) -> serde_json::Value {
     let catalog = provider::model_catalog();
     let mut models: Vec<serde_json::Value> = catalog
         .iter()
@@ -974,7 +977,38 @@ async fn models_json_with_local(config: &config::CliConfig) -> serde_json::Value
         })
         .collect();
 
-    let probes = local_models::discover_all(config).await;
+    let (probes, gateway) = tokio::join!(
+        local_models::discover_all(config),
+        models::gateway_models::discover_gateway_models(),
+    );
+    match gateway {
+        Ok(catalog) => {
+            for model in models::gateway_models::picker_models(&catalog) {
+                let upstream = catalog
+                    .models
+                    .iter()
+                    .find(|remote| remote.id == model.id)
+                    .map(|remote| remote.owned_by.as_str())
+                    .unwrap_or_default();
+                models.push(serde_json::json!({
+                    "id": model.id,
+                    "provider": "managed_cloud",
+                    "upstream_provider": upstream,
+                    "source": "gateway",
+                    "user_tier": catalog.user_tier,
+                    "authenticated": catalog.authenticated,
+                    "context_window": model.context_window,
+                    "max_output_tokens": model.max_output_tokens,
+                    "supports_tools": model.supports_tools,
+                    "supports_vision": model.supports_vision,
+                    "supports_reasoning": model.supports_reasoning,
+                    "status": model.status,
+                }));
+            }
+        }
+        Err(error) => eprintln!("Warning: AGI managed model discovery unavailable: {error}"),
+    }
+
     for model in local_models::discovered_models(&probes) {
         models.push(serde_json::json!({
             "id": model.id,
@@ -2161,12 +2195,12 @@ pub async fn run_main() -> Result<()> {
         if matches!(cli.output, Some(OutputFormat::Json)) {
             println!(
                 "{}",
-                serde_json::to_string_pretty(&models_json_with_local(&app_config).await)?
+                serde_json::to_string_pretty(&models_json_with_discovery(&app_config).await)?
             );
         } else {
             println!(
                 "{}",
-                crate::provider::format_model_list_with_local(&app_config).await
+                crate::provider::format_model_list_with_discovery(&app_config).await
             );
         }
         return Ok(());

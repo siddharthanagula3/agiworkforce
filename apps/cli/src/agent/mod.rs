@@ -725,6 +725,22 @@ impl AgentSession {
         Ok(())
     }
 
+    /// Switch to a model discovered from the AGI managed gateway while
+    /// preserving the managed trust/billing boundary instead of inferring the
+    /// upstream vendor from the model id.
+    pub fn switch_managed_model(&mut self, model: &str) -> Result<()> {
+        if !crate::models::gateway_models::cached_model_is_available(model) {
+            anyhow::bail!(
+                "model '{}' is not in the live managed gateway catalog; run `agi models list` and choose an available Cloud model",
+                model
+            );
+        }
+        self.model = model.to_string();
+        self.provider = models::Provider::ManagedCloud;
+        self.adopt_provider_privacy_mode();
+        Ok(())
+    }
+
     /// Add an additional directory root at runtime, mirroring Claude Code's
     /// `/add-dir` semantics for tool access and directory-scoped instructions.
     pub fn add_context_dir(&mut self, raw_path: &str) -> Result<AddContextDirReport> {

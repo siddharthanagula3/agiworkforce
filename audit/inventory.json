@@ -1730,8 +1730,8 @@
   {
     "item": "gateway-model-list-discovery",
     "surface": "apps/cli",
-    "status": "partial",
-    "evidence": "apps/cli/src/local_models.rs:69-82 discover_all() only probes two hardcoded local providers ('ollama' via /api/tags, 'lmstudio' via /v1/models); apps/cli/src/models/openrouter_models.rs:126 fetch_openrouter_models() separately hits openrouter.ai/api/v1/models. Both are wired into `agi models list/scan/status` (apps/cli/src/lib.rs:892-912)."
+    "status": "built",
+    "evidence": "apps/cli/src/models/gateway_models.rs discovers the live OpenAI-compatible `/api/llm/v1/models` roster through the same trusted AGI HTTPS-host and saved-JWT boundary as managed inference, bounds and validates responses, rejects explicit 401/403 credentials without anonymous downgrade, and applies the Pro-or-higher CLI developer-surface gate. apps/cli/src/lib.rs and provider.rs merge live gateway availability into text/JSON `agi models list` alongside bundled and local sources. apps/cli/src/tui/tui_app.rs refreshes discovery off the startup path and composes gateway, OpenRouter, local, and bundled picker sources through one function; model_picker.rs carries the selected access identity, and agent/mod.rs preserves `Provider::ManagedCloud` rather than misrouting the upstream model ID as BYOK. Focused gateway/picker tests, all 1,722 non-ignored CLI library tests, all 29 integration tests, cargo check, and strict clippy pass."
   },
   {
     "item": "bedrock-vertex-adapters",

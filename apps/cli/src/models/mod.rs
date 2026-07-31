@@ -1,3 +1,4 @@
+pub mod gateway_models;
 pub mod openrouter_models;
 pub mod provider_dispatch;
 pub mod streaming;
