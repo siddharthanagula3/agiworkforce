@@ -76,8 +76,8 @@ impl InteractiveView for TerminalTitleSetupView {
         for (i, label) in ITEM_LABELS.iter().enumerate() {
             let cursor = if i == self.state.cursor() { "❯" } else { " " };
             let check = if self.item_enabled(i) { "[x]" } else { "[ ]" };
-            let row = crate::tui::truncate_cols(&format!("{check} {label}"), 58);
-            out.push_str(&format!("│ {cursor} {row:<58}│\n"));
+            let row = crate::tui::pad_to_cols(&format!("{check} {label}"), 58);
+            out.push_str(&format!("│ {cursor} {row}│\n"));
         }
         out.push_str("│                                                            │\n");
         out.push_str("│  ↑↓ navigate   Space toggle   Enter save   Esc cancel      │\n");

@@ -1478,8 +1478,8 @@
   {
     "item": "cjk-render-correctness",
     "surface": "apps/cli",
-    "status": "partial",
-    "evidence": "apps/cli/src/tui/tui_app.rs:1456-1459 `input_prefix_display_width()` uses `Line::from(...).width()` (ratatui's own unicode-width-based measurement) for cursor positioning, verified correct for CJK by test `mixed_ascii_unicode_cursor_and_display_width_are_character_aware` (tui_app.rs:4431-4441, e.g. \"abé界\" -> width 5, correctly counting 界 as 2 columns) and `cjk_cursor_movement_uses_valid_byte_boundaries` (tui_app.rs:4390-4403)."
+    "status": "built",
+    "evidence": "apps/cli/src/tui/mod.rs:69-104 centralizes ratatui terminal-column measurement, ellipsis truncation, and exact padding in `display_width`, `truncate_cols`, and `pad_to_cols`. The shared helpers are used by live composer/status/banner/model output plus fixed-width command, diff, approval, elicitation, picker, settings, skill, recap, transcript, and Markdown-table renderers under apps/cli/src/tui/. CJK regression tests cover command borders (widgets/command_popup.rs:374-389), diff borders (widgets/diff_review.rs:368-386), 80-column approval/elicitation boxes (widgets/approval_overlay.rs:546-561; widgets/elicitation_overlay.rs:892-907), model rows (widgets/model_picker.rs:734-744), transcript wrapping (transcript_cell.rs:164-173), and table alignment (markdown_renderer.rs:442-456); `cargo test -p agiworkforce-cli` passes 1,711 tests with 1 ignored."
   },
   {
     "item": "screen-reader-output-mode",

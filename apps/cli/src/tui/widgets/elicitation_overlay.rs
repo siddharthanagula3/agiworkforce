@@ -26,6 +26,7 @@
 
 use crate::mcp::elicitation::{ElicitationMode, ElicitationRequest, ElicitationResponse};
 use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
+use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
 // ---------------------------------------------------------------------------
 // Schema field types extracted from requestedSchema
@@ -413,24 +414,29 @@ impl ElicitationOverlayState {
         let mut out = String::new();
 
         // Top border
-        let top = format!("┌─{:─<inner$}┐", title, inner = inner.saturating_sub(2));
+        let title = truncate_cols(&title, inner.saturating_sub(1));
+        let top = format!(
+            "┌─{}{}┐",
+            title,
+            "─".repeat(inner.saturating_sub(1 + display_width(&title)))
+        );
         out.push_str(&top);
         out.push('\n');
 
         // Message
-        out.push_str(&format!("│  {:<inner$}│\n", "", inner = inner - 2));
+        out.push_str(&format!("│{}│\n", pad_to_cols("", inner)));
         for line in self.message.lines() {
-            out.push_str(&format!("│  {:<inner$}│\n", line, inner = inner - 2));
+            out.push_str(&format!("│{}│\n", pad_to_cols(&format!("  {line}"), inner)));
         }
         if let Some(url) = self
             .url
             .as_deref()
             .filter(|_| self.mode == ElicitationMode::Url)
         {
-            out.push_str(&format!("│  {:<inner$}│\n", "", inner = inner - 2));
-            out.push_str(&format!("│  {:<inner$}│\n", url, inner = inner - 2));
+            out.push_str(&format!("│{}│\n", pad_to_cols("", inner)));
+            out.push_str(&format!("│{}│\n", pad_to_cols(&format!("  {url}"), inner)));
         }
-        out.push_str(&format!("│  {:<inner$}│\n", "", inner = inner - 2));
+        out.push_str(&format!("│{}│\n", pad_to_cols("", inner)));
 
         // Fields
         for (i, field) in self.fields.iter().enumerate() {
@@ -445,11 +451,11 @@ impl ElicitationOverlayState {
             let val = field.render_value();
             let req_mark = if field.required { "*" } else { " " };
             let row = format!("{}{}{} [{}]{}", prefix, req_mark, field.name, val, suffix);
-            out.push_str(&format!("│  {:<inner$}│\n", row, inner = inner - 2));
+            out.push_str(&format!("│{}│\n", pad_to_cols(&format!("  {row}"), inner)));
         }
 
         if !self.fields.is_empty() {
-            out.push_str(&format!("│  {:<inner$}│\n", "", inner = inner - 2));
+            out.push_str(&format!("│{}│\n", pad_to_cols("", inner)));
         }
 
         // Button strip
@@ -462,17 +468,22 @@ impl ElicitationOverlayState {
                 buttons.push_str(&format!(" {}   ", label.trim()));
             }
         }
-        out.push_str(&format!("│  {:<inner$}│\n", buttons, inner = inner - 2));
+        out.push_str(&format!(
+            "│{}│\n",
+            pad_to_cols(&format!("  {buttons}"), inner)
+        ));
 
         // Hint
         out.push_str(&format!(
-            "│  {:<inner$}│\n",
-            "Tab/↑↓ field   ← → enum/bool   Enter confirm   Esc = Cancel",
-            inner = inner - 2
+            "│{}│\n",
+            pad_to_cols(
+                "  Tab/↑↓ field   ← → enum/bool   Enter confirm   Esc = Cancel",
+                inner
+            )
         ));
 
         // Bottom border
-        out.push_str(&format!("└{:─<inner$}┘\n", "", inner = inner));
+        out.push_str(&format!("└{}┘\n", "─".repeat(inner)));
 
         out
     }
@@ -875,6 +886,21 @@ mod tests {
         assert!(text.contains("Accept"));
         assert!(text.contains("Decline"));
         assert!(text.contains("Cancel"));
+    }
+
+    #[test]
+    fn text_render_keeps_cjk_content_inside_eighty_columns() {
+        let mut s = ElicitationOverlayState::default();
+        let mut request = text_request();
+        request.message = "请提供用于连接服务器的详细认证信息".repeat(6);
+        s.open("中文服务器名称".repeat(6), request);
+        let text = s.render_text();
+        assert!(
+            text.lines()
+                .all(|line| crate::tui::display_width(line) == 80),
+            "elicitation box rows must remain exactly 80 terminal columns: {text}"
+        );
+        assert!(text.contains('…'));
     }
 
     #[test]

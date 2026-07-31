@@ -11,6 +11,7 @@ use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
 use crate::tui::terminal_palette::{rgb_color, ui_accent, ui_muted, ui_success};
+use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
 static THEME: OnceLock<Theme> = OnceLock::new();
@@ -282,7 +283,7 @@ fn render_table(rows: &[Vec<String>], header_rows: usize) -> Vec<Line<'static>> 
     let mut widths = vec![0usize; ncols];
     for row in rows {
         for (i, cell) in row.iter().enumerate() {
-            let w = cell.chars().count().min(MAX_COL);
+            let w = display_width(cell).min(MAX_COL);
             if w > widths[i] {
                 widths[i] = w;
             }
@@ -294,14 +295,19 @@ fn render_table(rows: &[Vec<String>], header_rows: usize) -> Vec<Line<'static>> 
         let mut spans: Vec<Span<'static>> = vec![Span::styled("    │ ".to_string(), border)];
         for (i, w) in widths.iter().enumerate() {
             let cell = row.get(i).map(String::as_str).unwrap_or("");
-            let truncated: String = cell.chars().take(*w).collect();
+            let padded = pad_to_cols(&truncate_cols(cell, *w), *w);
             let style = if bold {
                 Style::default().add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
-            spans.push(Span::styled(format!("{truncated:<w$}", w = *w), style));
-            spans.push(Span::styled(" │ ".to_string(), border));
+            spans.push(Span::styled(padded, style));
+            let separator = if i + 1 == widths.len() {
+                " │"
+            } else {
+                " │ "
+            };
+            spans.push(Span::styled(separator.to_string(), border));
         }
         Line::from(spans)
     };
@@ -430,5 +436,21 @@ mod tests {
         );
         assert!(joined.contains("Apple") && joined.contains("Red"), "row 1");
         assert!(joined.contains("Lime") && joined.contains("Green"), "row 2");
+    }
+
+    #[test]
+    fn cjk_table_cells_keep_all_rows_column_aligned() {
+        let md = "| 名称 | Status |\n|---|---|\n| 模型 | Ready |\n| 工具调用 | Active |";
+        let rendered = lines_to_strings(&render_markdown(md));
+        let widths: Vec<usize> = rendered
+            .iter()
+            .filter(|line| line.contains('│') || line.contains('┌') || line.contains('└'))
+            .map(|line| display_width(line))
+            .collect();
+        assert!(!widths.is_empty());
+        assert!(
+            widths.iter().all(|width| *width == widths[0]),
+            "table rows have inconsistent terminal widths: {widths:?}"
+        );
     }
 }
