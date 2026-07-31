@@ -1,6 +1,6 @@
 name: Release Desktop
 
-# Linux x86_64 is the only target produced and published by this workflow.
+# This workflow publishes Linux x86_64 and notarized universal macOS artifacts.
 # Add another target only after its build, signing, updater, smoke-test, and
 # release-ingestion paths are implemented and verified together. Release copy
 # and database records must describe only artifacts produced by this run.
@@ -238,14 +238,15 @@ jobs:
             | Platform | Architecture | Download |
             |----------|--------------|----------|
             | Linux | x86_64 | \`.AppImage\` plus Tauri updater signature, or \`.deb\` installer |
+            | macOS | Universal (Apple Silicon + Intel) | Notarized \`.dmg\`, or signed \`.app.tar.gz\` updater |
 
             ### Installation
 
-            For the portable build, download the \`.AppImage\`, make it executable (\`chmod +x <file>.AppImage\`), and run it. On Debian or Ubuntu, download the \`.deb\` and install it with \`sudo apt install ./<file>.deb\`. This workflow does not publish macOS or Windows desktop artifacts.
+            On macOS, download the notarized \`.dmg\`, open it, and move AGI to Applications. For the portable Linux build, download the \`.AppImage\`, make it executable (\`chmod +x <file>.AppImage\`), and run it. On Debian or Ubuntu, download the \`.deb\` and install it with \`sudo apt install ./<file>.deb\`.
 
             ### Auto-Updates
 
-            Supported Linux installations can discover this signed updater artifact through the configured AGI update endpoint.
+            Supported Linux and macOS installations can discover their signed updater artifact through the configured AGI update endpoint.
 
             ---
             ${comparison}
@@ -440,6 +441,175 @@ jobs:
           retention-days: 7
 
   # ==========================================================================
+  # Build macOS - notarized universal DMG and signed updater archive
+  # ==========================================================================
+  build-macos:
+    name: Build notarized macOS universal release
+    needs: [prepare-release, validate]
+    runs-on: macos-15
+    timeout-minutes: 120
+    environment:
+      name: macos-release
+      url: https://appstoreconnect.apple.com/access/integrations/api
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup Rust and both macOS targets
+        uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          target: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          workspaces: 'apps/desktop/src-tauri -> target'
+          cache-on-failure: true
+
+      - name: Install JavaScript and verification dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          brew install minisign
+
+      - name: Require Apple signing and notarization credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_API_KEY APPLE_API_ISSUER APPLE_API_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: macos-release secret ${name} is required" >&2
+              exit 1
+            fi
+          done
+
+          key_path="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY}.p8"
+          printf '%s' "$APPLE_API_PRIVATE_KEY" | openssl base64 -d -A -out "$key_path"
+          chmod 600 "$key_path"
+          if ! grep -q -- '-----BEGIN PRIVATE KEY-----' "$key_path"; then
+            echo "ERROR: APPLE_API_PRIVATE_KEY is not a base64-encoded App Store Connect .p8 key" >&2
+            exit 1
+          fi
+          echo "APPLE_API_KEY_PATH=${key_path}" >> "$GITHUB_ENV"
+
+      - name: Build, sign, notarize, and staple macOS bundles
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          CI: 'true'
+        with:
+          projectPath: apps/desktop
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}
+          includeUpdaterJson: false
+          args: --target universal-apple-darwin --bundles app,dmg
+
+      - name: Verify notarized universal app, DMG, and updater archive
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          bundle_root="target/universal-apple-darwin/release/bundle"
+          apps=("${bundle_root}/macos/"*.app)
+          updaters=("${bundle_root}/macos/"*.app.tar.gz)
+          signatures=("${bundle_root}/macos/"*.app.tar.gz.sig)
+          dmgs=("${bundle_root}/dmg/"*.dmg)
+          if [ "${#apps[@]}" -ne 1 ] || [ "${#updaters[@]}" -ne 1 ] || [ "${#signatures[@]}" -ne 1 ] || [ "${#dmgs[@]}" -ne 1 ]; then
+            echo "ERROR: expected one .app, .app.tar.gz, updater signature, and .dmg" >&2
+            exit 1
+          fi
+          for artifact in "${updaters[0]}" "${signatures[0]}" "${dmgs[0]}"; do
+            if [ ! -s "$artifact" ]; then
+              echo "ERROR: empty macOS release artifact: $artifact" >&2
+              exit 1
+            fi
+          done
+
+          app_path="${apps[0]}"
+          plist_path="${app_path}/Contents/Info.plist"
+          executable_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist_path")
+          bundle_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist_path")
+          if [ "$bundle_version" != "$EXPECTED_VERSION" ]; then
+            echo "ERROR: macOS bundle version ${bundle_version} does not match ${EXPECTED_VERSION}" >&2
+            exit 1
+          fi
+
+          main_executable="${app_path}/Contents/MacOS/${executable_name}"
+          sidecars=("${app_path}/Contents/MacOS/"native_messaging_host*)
+          if [ "${#sidecars[@]}" -ne 1 ]; then
+            echo "ERROR: expected exactly one bundled native messaging host" >&2
+            exit 1
+          fi
+          lipo "$main_executable" -verify_arch arm64 x86_64
+          lipo "${sidecars[0]}" -verify_arch arm64 x86_64
+
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          signature_info=$(codesign -d --verbose=4 "$app_path" 2>&1)
+          printf '%s\n' "$signature_info" | grep -F 'Authority=Developer ID Application: AGI AUTOMATION LLC (D2PR62RLT4)'
+          printf '%s\n' "$signature_info" | grep -F 'TeamIdentifier=D2PR62RLT4'
+          printf '%s\n' "$signature_info" | grep -E 'flags=.*runtime'
+          spctl --assess --type execute --verbose=4 "$app_path"
+          xcrun stapler validate "$app_path"
+
+          codesign --verify --strict --verbose=2 "${dmgs[0]}"
+          xcrun stapler validate "${dmgs[0]}"
+          tar -tzf "${updaters[0]}" >/dev/null
+
+          public_key_file="${RUNNER_TEMP}/agi-updater.pub"
+          node - "$public_key_file" <<'NODE'
+          const fs = require('node:fs');
+          const config = require('./apps/desktop/src-tauri/tauri.conf.json');
+          const encoded = config.plugins?.updater?.pubkey;
+          if (typeof encoded !== 'string' || encoded.length === 0) {
+            throw new Error('committed Tauri updater public key is missing');
+          }
+          const decoded = Buffer.from(encoded, 'base64');
+          if (!decoded.toString('utf8').includes('minisign public key')) {
+            throw new Error('committed Tauri updater public key is invalid');
+          }
+          fs.writeFileSync(process.argv[2], decoded);
+          NODE
+          minisign -Vm "${updaters[0]}" -x "${signatures[0]}" -p "$public_key_file"
+
+      - name: Upload verified macOS artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-universal-artifacts
+          path: |
+            target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
+            target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
+            target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+
+  # ==========================================================================
   # Update Release Database - Store release info in Neon
   # ==========================================================================
   update-database:
@@ -447,7 +617,7 @@ jobs:
     # Ingest only after GitHub serves the artifact URL. Publishing database
     # metadata first creates an updater-visible 404 window and leaves a stale
     # row when draft publication fails.
-    needs: [prepare-release, build-linux, publish-release]
+    needs: [prepare-release, build-linux, build-macos, publish-release]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
@@ -523,6 +693,8 @@ jobs:
           # Platform mapping: artifact_dir platform extension
           PLATFORMS="
           linux-x64-artifacts linux-x86_64 .AppImage
+          macos-universal-artifacts darwin-aarch64 .app.tar.gz
+          macos-universal-artifacts darwin-x86_64 .app.tar.gz
           "
 
           echo "$PLATFORMS" | while read -r dir platform ext; do
@@ -561,7 +733,7 @@ jobs:
   # ==========================================================================
   publish-release:
     name: Publish Release
-    needs: [prepare-release, build-linux]
+    needs: [prepare-release, build-linux, build-macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

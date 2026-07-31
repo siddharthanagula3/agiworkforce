@@ -354,7 +354,7 @@ pnpm check:model-catalog      # Model catalog integrity
 ## Deployment
 
 - **Web** — A successful `CI` run for an exact `main` commit triggers `.github/workflows/deploy-production.yml`, which builds and deploys a prebuilt Vercel artifact. Vercel's direct `main` Git deployment is disabled to prevent an unverified race.
-- **Desktop** — `release-desktop.yml` currently ships Linux `.AppImage`/`.deb` bundles only; the macOS and Windows build jobs are disabled (`if: false`) pending code-signing and toolchain setup (see [architecture-manifest.md](docs/00-foundation/architecture-manifest.md) §11).
+- **Desktop** — `release-desktop.yml` ships Linux `.AppImage`/`.deb` bundles and a notarized universal macOS `.dmg` plus signed updater archive. `build-windows-release.yml` ships the signed Windows NSIS installer.
 - **CLI** — Distributed via GitHub Releases, Homebrew (`siddharthanagula3/tap/agiworkforce`), and `cargo install`. Release workflow: `release-cli.yml`.
 - **Mobile** — Built with EAS (Expo Application Services). Release scripts for iOS App Store and Google Play in `apps/mobile/scripts/release/`.
 - **API Gateway** — Dockerized (`services/api-gateway/Dockerfile`). Deployable to any container host.
