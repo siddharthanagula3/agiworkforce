@@ -1,0 +1,4 @@
+# Generated comparison output belongs in Playwright test-results, not here.
+*
+!.gitignore
+!desktop-cloud-sign-in.png

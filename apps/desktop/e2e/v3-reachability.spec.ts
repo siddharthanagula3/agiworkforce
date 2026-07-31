@@ -15,9 +15,9 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
  * `supportsLocalAppMode` is `isTauri || isDesktopUiDevLocal`, so without
  * Tauri the app boots in Cloud mode and `App.tsx` renders `<AuthPage />`
  * for `isCloudMode && !hasCloudSession` — before the `desktop_chat_v3`
- * flag branch ever runs. `visual-verification.spec.ts` documents this same
- * gate as intentional for the cloud-web bundle ("desktop root (sign-in)
- * renders"). `injectMockCloudAuth` seeds the real `unified-auth-storage`
+ * flag branch ever runs. `visual-regression.spec.ts` pins this same
+ * intentional cloud-web sign-in gate. `injectMockCloudAuth` seeds the real
+ * `unified-auth-storage`
  * persisted key (the same mechanism `self-healing.spec.ts` uses) so
  * `hasCloudSession` is true and the flag-gated branch is reached — no
  * change to the flag resolution itself was needed or made.

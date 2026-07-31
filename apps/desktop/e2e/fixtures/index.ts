@@ -6,7 +6,6 @@ import { SettingsPage } from '../page-objects/SettingsPage';
 import { OnboardingPage } from '../page-objects/OnboardingPage';
 import { TestDatabase } from '../utils/test-database';
 import { MockLLMProvider } from '../utils/mock-llm-provider';
-import { ScreenshotHelper } from '../utils/screenshot-helper';
 import { WaitHelper } from '../utils/wait-helper';
 
 type CustomFixtures = {
@@ -17,7 +16,6 @@ type CustomFixtures = {
   onboardingPage: OnboardingPage;
   testDb: TestDatabase;
   mockLLM: MockLLMProvider;
-  screenshotHelper: ScreenshotHelper;
   waitHelper: WaitHelper;
 };
 
@@ -95,11 +93,6 @@ export const test = base.extend<CustomFixtures>({
     await mockLLM.setup();
     await use(mockLLM);
     await mockLLM.teardown();
-  },
-
-  screenshotHelper: async ({ page }, use) => {
-    const helper = new ScreenshotHelper(page);
-    await use(helper);
   },
 
   waitHelper: async ({ page }, use) => {

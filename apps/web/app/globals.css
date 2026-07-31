@@ -24,8 +24,7 @@
  * under apps/web/public/fonts/ + change the @font-face src to
  * '/fonts/OpenDyslexic-Regular.woff' (same-origin, no CSP change
  * needed). Tracked as follow-up; removing the broken rules now so
- * the CSP violation stops appearing in browser consoles and our
- * visual-verification findings JSON.
+ * the CSP violation stops appearing in browser consoles.
  */
 
 /* Make dark: variant respond to the .dark class (set by next-themes ThemeProvider)
