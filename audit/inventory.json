@@ -326,8 +326,8 @@
   {
     "item": "cowork-web-session-view",
     "surface": "apps/web",
-    "status": "partial",
-    "evidence": "'AGI Work' composer mode (claude.ai Chat/Cowork parity per comment at apps/web/features/chat/components/Composer/ChatComposerNew.tsx:81-96) drives a rich in-message live activity view: apps/web/features/chat/components/messages/ToolTimeline.tsx (1042 lines) renders file-operation icons (FolderOpen/FilePen/FilePlus2), terminal steps (SquareTerminal), and tool cards, fed by `agentActivity` metadata rendered at MessageBubble.tsx:743,859-869 ('One canonical Cloud run spine')."
+    "status": "built",
+    "evidence": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx adds the persistent, collapsible AGI Work task side panel required by UI audit GAP-109. It aggregates canonical agentActivity progress/tool/error events, deduplicates generated files and artifacts into Outputs with Open/Download actions, and lists input attachments, referenced paths, and context events. WebChatPage.tsx restores the panel from persisted AGI Work metadata after reload and mounts its output-count toggle in the active-chat header. WorkSessionPanel.test.tsx covers persisted-session detection, aggregation/deduplication, all three rendered sections, download/open behavior, Escape close, and focus restoration; real-browser validation confirmed desktop and full-screen mobile layouts."
   },
   {
     "item": "remote-session-attach",
