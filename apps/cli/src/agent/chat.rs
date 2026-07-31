@@ -1367,7 +1367,13 @@ impl TurnHost for TurnHostAdapter<'_> {
     }
 
     fn classify(&self, call: &ToolCallResponse) -> ToolClass {
-        if call.name == "task" {
+        let runs_named_agent = call.name == "agent"
+            && call
+                .arguments
+                .get("action")
+                .and_then(|value| value.as_str())
+                == Some("run");
+        if call.name == "task" || runs_named_agent {
             return ToolClass::Task;
         }
         let concurrent_eligible = self.session.skip_permissions
@@ -1473,16 +1479,76 @@ impl TurnHost for TurnHostAdapter<'_> {
                 continue;
             }
 
-            let description = effective_args
-                .get("description")
-                .and_then(|v| v.as_str())
-                .unwrap_or("subagent task")
-                .to_string();
             let prompt = effective_args
                 .get("prompt")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
+            let named_agent = if tc.name == "agent" {
+                let action = effective_args
+                    .get("action")
+                    .and_then(|value| value.as_str());
+                let name = effective_args
+                    .get("name")
+                    .and_then(|value| value.as_str())
+                    .map(str::trim)
+                    .unwrap_or("");
+                let invalid_name = name.is_empty()
+                    || name.chars().count() > 128
+                    || name.chars().any(char::is_control);
+                if action != Some("run") || invalid_name || prompt.trim().is_empty() {
+                    result_blocks.push(ResultBlock {
+                        tool_use_id: tc.id.clone(),
+                        content: serde_json::json!({
+                            "ok": false,
+                            "error": "invalid_agent_run",
+                            "message": "agent run requires action='run', an exact installed name of 1-128 non-control characters, and a non-empty prompt"
+                        })
+                        .to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
+                if prompt.len() > 100_000 {
+                    result_blocks.push(ResultBlock {
+                        tool_use_id: tc.id.clone(),
+                        content: serde_json::json!({
+                            "ok": false,
+                            "error": "agent_prompt_too_large",
+                            "message": "agent run prompt exceeds the 100000-byte limit"
+                        })
+                        .to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
+                let Some(definition) = crate::agents::find_agent_exact(name) else {
+                    result_blocks.push(ResultBlock {
+                        tool_use_id: tc.id.clone(),
+                        content: serde_json::json!({
+                            "ok": false,
+                            "error": "agent_not_found",
+                            "message": format!("No installed agent named '{name}'. Call agent with action='list' to discover exact names.")
+                        })
+                        .to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                };
+                Some(definition)
+            } else {
+                None
+            };
+            let description = named_agent
+                .as_ref()
+                .map(|definition| format!("agent {}", definition.name))
+                .unwrap_or_else(|| {
+                    effective_args
+                        .get("description")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or("subagent task")
+                        .to_string()
+                });
 
             if self.session.subagent_manager.is_none() {
                 self.session.subagent_manager = Some(crate::subagent::SubagentManager::new(
@@ -1490,8 +1556,28 @@ impl TurnHost for TurnHostAdapter<'_> {
                     self.session.model.clone(),
                     crate::context::gather_system_context(),
                     self.session.skip_permissions,
+                    self.session.permission_mode,
+                    self.session.allowed_tools.clone(),
+                    self.session.disallowed_tools.clone(),
                 ));
             }
+
+            let parent_model = self.session.model.clone();
+            let parent_skip_permissions = self.session.skip_permissions;
+            let parent_permission_mode = self.session.permission_mode;
+            let parent_allowed_tools = self.session.allowed_tools.clone();
+            let parent_disallowed_tools = self.session.disallowed_tools.clone();
+            self.session
+                .subagent_manager
+                .as_mut()
+                .expect("subagent_manager was just initialized above")
+                .sync_parent_authority(
+                    parent_model,
+                    parent_skip_permissions,
+                    parent_permission_mode,
+                    parent_allowed_tools,
+                    parent_disallowed_tools,
+                );
 
             hooks::run_hooks(
                 &hcfg,
@@ -1518,7 +1604,10 @@ impl TurnHost for TurnHostAdapter<'_> {
                 .subagent_manager
                 .as_ref()
                 .expect("subagent_manager was just initialized above");
-            let id_result = mgr.spawn(&description, &prompt).await;
+            let id_result = match named_agent {
+                Some(definition) => mgr.spawn_named(definition, &prompt).await,
+                None => mgr.spawn(&description, &prompt).await,
+            };
 
             hooks::run_hooks(
                 &hcfg,
@@ -1564,13 +1653,13 @@ impl TurnHost for TurnHostAdapter<'_> {
                                 }
                             }
                             crate::tools::ToolResult {
-                                tool_name: "task".to_string(),
+                                tool_name: tool_name.clone(),
                                 success: true,
                                 output,
                             }
                         } else if let Some(sa_status) = mgr.get_status(id).await {
                             crate::tools::ToolResult {
-                                tool_name: "task".to_string(),
+                                tool_name: tool_name.clone(),
                                 success: false,
                                 output: format!(
                                     "Subagent {} finished with status: {}",
@@ -1579,21 +1668,21 @@ impl TurnHost for TurnHostAdapter<'_> {
                             }
                         } else {
                             crate::tools::ToolResult {
-                                tool_name: "task".to_string(),
+                                tool_name: tool_name.clone(),
                                 success: false,
                                 output: format!("Subagent {} not found.", id),
                             }
                         }
                     } else {
                         crate::tools::ToolResult {
-                            tool_name: "task".to_string(),
+                            tool_name: tool_name.clone(),
                             success: false,
                             output: "Subagent manager not initialized.".to_string(),
                         }
                     }
                 }
                 Err(e) => crate::tools::ToolResult {
-                    tool_name: "task".to_string(),
+                    tool_name: tool_name.clone(),
                     success: false,
                     output: format!("Failed to spawn subagent: {:#}", e),
                 },
@@ -2380,6 +2469,35 @@ mod tests {
             name: name.to_string(),
             arguments,
         }
+    }
+
+    #[test]
+    fn named_agent_run_uses_foreground_subagent_lifecycle() {
+        let mut session = make_local_session();
+        let config = CliConfig::default();
+        let adapter = TurnHostAdapter {
+            session: &mut session,
+            config: &config,
+            tool_defs: Vec::new(),
+            available_tool_names: HashSet::from(["agent".to_string()]),
+            concurrency_safe_names: HashSet::new(),
+            plan_mode_mutating_names: HashSet::new(),
+            max_tokens: 1_024,
+            first_on_chunk: None,
+            hook_additional_contexts: Vec::new(),
+        };
+
+        assert_eq!(
+            adapter.classify(&tool_call(
+                "agent",
+                serde_json::json!({"action":"run","name":"reviewer","prompt":"review"}),
+            )),
+            ToolClass::Task
+        );
+        assert_eq!(
+            adapter.classify(&tool_call("agent", serde_json::json!({"action":"list"}))),
+            ToolClass::Other
+        );
     }
 
     // -----------------------------------------------------------------------

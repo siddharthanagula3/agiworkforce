@@ -175,6 +175,7 @@ fn policy_alias_tool_names(alias: &str) -> &'static [&'static str] {
         "toolsearch" => &["tool_search"],
         "skill" => &["skill"],
         "task" => &["task"],
+        "agent" => &["agent"],
         "batch" => &["batch"],
         "todoread" => &["todo_read"],
         "todowrite" => &["todo_write"],
@@ -199,7 +200,7 @@ fn tool_owner(name: &str) -> &'static str {
         "search_files" | "grep_files" | "glob" | "list_directory" => "cli-navigation",
         "web_search" | "web_fetch" | "tool_search" => "cli-research",
         "skill" => "cli-skills",
-        "task" => "cli-subagents",
+        "task" | "agent" => "cli-subagents",
         "team_create" | "team_delete" => "cli-team-registry",
         "cron_create" | "cron_delete" | "cron_list" => "cli-scheduler",
         "enter_worktree" | "exit_worktree" | "list_worktrees" => "cli-worktree",
@@ -378,8 +379,8 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
         def(
             "task",
             "Spawn a subagent to handle a focused task in parallel. \
-             The subagent has access to all the same tools (read, write, edit, \
-             run commands, search) and runs concurrently. Use this to parallelize \
+             The subagent inherits the current session's tool restrictions and \
+             runs concurrently. Use this to parallelize \
              independent work items — e.g., fixing multiple files, running \
              separate investigations, or implementing independent features. \
              Each task runs to completion and returns its result.",
@@ -392,6 +393,20 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["description", "prompt"]
             }),
         ),
+        def(
+            "agent",
+            "List installed custom agents or run one exact named agent as a foreground subagent. Agent definitions can narrow tools and turn limits and add persona context, but model-invoked agents cannot change the parent model, trust boundary, or permission mode.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["list", "run"], "description": "List installed agent metadata or run one named agent"},
+                    "name": {"type": "string", "minLength": 1, "maxLength": 128, "description": "Exact installed agent name; required for run"},
+                    "prompt": {"type": "string", "minLength": 1, "maxLength": 100000, "description": "Focused task for the named agent; required for run"}
+                },
+                "required": ["action"],
+                "additionalProperties": false
+            }),
+        ).deferred().with_size_cap(20_000),
         // --- Extended tool set ---
         def(
             "grep_files",
@@ -1216,6 +1231,7 @@ mod tests {
         assert_eq!(caps.get("grep_files"), Some(&Some(50_000)));
         assert_eq!(caps.get("tool_search"), Some(&Some(20_000)));
         assert_eq!(caps.get("task"), Some(&None));
+        assert_eq!(caps.get("agent"), Some(&Some(20_000)));
         assert_eq!(caps.get("update_plan"), Some(&Some(2_000)));
     }
 
@@ -1225,6 +1241,7 @@ mod tests {
         assert_eq!(tool_result_size_cap("Bash"), Some(50_000));
         assert_eq!(tool_result_size_cap("web_fetch"), Some(200_000));
         assert_eq!(tool_result_size_cap("task"), None);
+        assert_eq!(tool_result_size_cap("agent"), Some(20_000));
         assert_eq!(tool_result_size_cap("unknown_tool"), None);
     }
 }

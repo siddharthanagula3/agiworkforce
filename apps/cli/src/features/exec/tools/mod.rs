@@ -351,6 +351,29 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             execute_apply_patch(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
         "tool_search" => execute_tool_search(&call.args).await,
+        "agent" => {
+            let action = call.args.get("action").map(String::as_str).unwrap_or("");
+            if action == "list" {
+                Ok(ToolResult {
+                    tool_name: "agent".to_string(),
+                    success: true,
+                    output: crate::agents::agent_tool_catalog(),
+                })
+            } else if action == "run" {
+                Ok(ToolResult {
+                    tool_name: "agent".to_string(),
+                    success: false,
+                    output: "Named-agent runs must be handled by the foreground subagent orchestrator."
+                        .to_string(),
+                })
+            } else {
+                Ok(ToolResult {
+                    tool_name: "agent".to_string(),
+                    success: false,
+                    output: "agent.action must be 'list' or 'run'.".to_string(),
+                })
+            }
+        }
         "batch" => Box::pin(execute_batch(call, opts)).await,
         "multiedit" => {
             execute_multiedit(&call.args, require_confirm, opts.approval_callback.as_ref()).await
