@@ -2558,8 +2558,8 @@
   {
     "item": "agent-tool",
     "surface": "packages/core-agent",
-    "status": "partial",
-    "evidence": "apps/cli/src/agents.rs:19-105 implements a full custom-agent-persona system (YAML-frontmatter markdown, model/tools/permission overrides, `apply_to_session`), discoverable/manageable via `/agents` (agents.rs:299-349) and reachable from apps/cli/src/tui/tui_app.rs."
+    "status": "built",
+    "evidence": "apps/cli/src/platform/runtime/tool_catalog.rs defines a deferred model-callable `agent {list|run}` tool, apps/cli/src/features/exec/tools/mod.rs dispatches bounded metadata listing, and apps/cli/src/agent/chat.rs routes `run` through the foreground subagent lifecycle. apps/cli/src/agents.rs resolves exact installed names, withholds prompt/path/model/permission metadata, and applies named definitions with authority clamps: model and permission overrides are ignored, tool allowlists intersect, denylists union, and turn limits only decrease. apps/cli/src/subagent.rs refreshes and inherits the current parent model, permission mode, allowlist, and denylist before every generic or named spawn. Regression coverage verifies deferred discovery/runtime dispatch, foreground classification, bounded metadata, and authority inheritance; the full CLI library/integration suites and strict Clippy pass."
   },
   {
     "item": "workflow-tool",

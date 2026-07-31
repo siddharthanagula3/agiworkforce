@@ -633,6 +633,9 @@ impl AgentSession {
             self.model.clone(),
             sys_context.clone(),
             self.skip_permissions,
+            self.permission_mode,
+            self.allowed_tools.clone(),
+            self.disallowed_tools.clone(),
         ));
     }
 
@@ -1447,8 +1450,9 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 38);
+        assert_eq!(defs.len(), 39);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
+        assert!(defs.iter().any(|definition| definition.name == "agent"));
     }
 
     #[test]
@@ -1490,6 +1494,7 @@ mod tests {
         assert!(names.contains(&"web_search"));
         assert!(names.contains(&"web_fetch"));
         assert!(names.contains(&"task"));
+        assert!(names.contains(&"agent"));
     }
 
     #[test]

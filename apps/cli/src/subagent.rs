@@ -79,7 +79,7 @@ impl std::fmt::Debug for SubagentEntry {
 /// Default maximum number of concurrent subagents.
 const DEFAULT_MAX_CONCURRENT: usize = 7;
 
-/// Manages concurrent subagent tasks spawned via the `Task` tool.
+/// Manages concurrent subagent tasks spawned via `task` or a named `agent`.
 ///
 /// Each subagent runs on a dedicated OS thread with its own tokio runtime,
 /// which avoids `Send` requirements that `tokio::spawn` imposes. This lets
@@ -98,6 +98,23 @@ pub struct SubagentManager {
     sys_context: SystemContext,
     /// Whether subagents skip tool confirmation prompts.
     skip_permissions: bool,
+    /// Parent permission policy inherited by every subagent.
+    permission_mode: crate::cli_options::PermissionMode,
+    /// Parent tool filters are inherited by every subagent. Named agent
+    /// definitions may narrow these further but never widen them.
+    allowed_tools: Option<Vec<String>>,
+    disallowed_tools: Vec<String>,
+}
+
+struct SubagentRunConfig {
+    config: CliConfig,
+    model: String,
+    sys_context: SystemContext,
+    skip_permissions: bool,
+    permission_mode: crate::cli_options::PermissionMode,
+    allowed_tools: Option<Vec<String>>,
+    disallowed_tools: Vec<String>,
+    named_agent: Option<crate::agents::AgentDefinition>,
 }
 
 impl SubagentManager {
@@ -107,6 +124,9 @@ impl SubagentManager {
         model: String,
         sys_context: SystemContext,
         skip_permissions: bool,
+        permission_mode: crate::cli_options::PermissionMode,
+        allowed_tools: Option<Vec<String>>,
+        disallowed_tools: Vec<String>,
     ) -> Self {
         Self {
             entries: Arc::new(RwLock::new(HashMap::new())),
@@ -116,11 +136,51 @@ impl SubagentManager {
             model,
             sys_context,
             skip_permissions,
+            permission_mode,
+            allowed_tools,
+            disallowed_tools,
         }
+    }
+
+    /// Refresh authority-bearing values that can change during a long-lived
+    /// interactive session before the next spawn.
+    pub fn sync_parent_authority(
+        &mut self,
+        model: String,
+        skip_permissions: bool,
+        permission_mode: crate::cli_options::PermissionMode,
+        allowed_tools: Option<Vec<String>>,
+        disallowed_tools: Vec<String>,
+    ) {
+        self.model = model;
+        self.skip_permissions = skip_permissions;
+        self.permission_mode = permission_mode;
+        self.allowed_tools = allowed_tools;
+        self.disallowed_tools = disallowed_tools;
     }
 
     /// Spawn a new subagent task. Returns the subagent ID.
     pub async fn spawn(&self, description: &str, prompt: &str) -> Result<String> {
+        self.spawn_inner(description, prompt, None).await
+    }
+
+    /// Spawn an installed named agent through the same bounded foreground
+    /// lifecycle as a generic task.
+    pub async fn spawn_named(
+        &self,
+        definition: crate::agents::AgentDefinition,
+        prompt: &str,
+    ) -> Result<String> {
+        let description = format!("agent {}", definition.name);
+        self.spawn_inner(&description, prompt, Some(definition)).await
+    }
+
+    async fn spawn_inner(
+        &self,
+        description: &str,
+        prompt: &str,
+        named_agent: Option<crate::agents::AgentDefinition>,
+    ) -> Result<String> {
         // Check concurrency limit
         let running_count = {
             let entries = self.entries.read().await;
@@ -157,10 +217,16 @@ impl SubagentManager {
         // Clone values for the spawned thread
         let task_id = id.clone();
         let task_prompt = prompt.to_string();
-        let task_config = self.config.clone();
-        let task_model = self.model.clone();
-        let task_sys_context = self.sys_context.clone();
-        let task_skip_permissions = self.skip_permissions;
+        let task_run_config = SubagentRunConfig {
+            config: self.config.clone(),
+            model: self.model.clone(),
+            sys_context: self.sys_context.clone(),
+            skip_permissions: self.skip_permissions,
+            permission_mode: self.permission_mode,
+            allowed_tools: self.allowed_tools.clone(),
+            disallowed_tools: self.disallowed_tools.clone(),
+            named_agent,
+        };
         let task_status = Arc::clone(&status);
         let task_result = Arc::clone(&result);
         let task_cancelled = Arc::clone(&cancelled);
@@ -191,11 +257,8 @@ impl SubagentManager {
                     }
 
                     let outcome = run_subagent(
-                        &task_config,
-                        &task_model,
-                        &task_sys_context,
+                        &task_run_config,
                         &task_prompt,
-                        task_skip_permissions,
                         &task_cancelled,
                     )
                     .await;
@@ -384,30 +447,33 @@ impl SubagentManager {
 /// Run a subagent session: create an AgentSession, send the prompt, return
 /// the final response text.
 async fn run_subagent(
-    config: &CliConfig,
-    model: &str,
-    sys_context: &SystemContext,
+    run_config: &SubagentRunConfig,
     prompt: &str,
-    skip_permissions: bool,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<String> {
     let mut session = crate::agent::AgentSession::new_checked(
-        model,
-        sys_context,
+        &run_config.model,
+        &run_config.sys_context,
         None,
         crate::models::selection_provider_override(
-            model,
-            &config.default.model,
-            &config.default.provider,
+            &run_config.model,
+            &run_config.config.default.model,
+            &run_config.config.default.provider,
             None,
         ),
     )?;
-    session.skip_permissions = skip_permissions;
+    session.skip_permissions = run_config.skip_permissions;
+    session.permission_mode = run_config.permission_mode;
+    session.allowed_tools = run_config.allowed_tools.clone();
+    session.disallowed_tools.clone_from(&run_config.disallowed_tools);
     // Subagents get a reasonable max turns to avoid runaway loops
     session.max_turns = Some(15);
+    if let Some(definition) = run_config.named_agent.as_ref() {
+        definition.apply_to_subagent_session(&mut session);
+    }
 
     let send_fut = session.send(
-        config,
+        &run_config.config,
         prompt,
         Box::new(|_chunk| {
             // Subagent output is collected silently -- not streamed to terminal.
@@ -643,5 +709,35 @@ mod tests {
     #[test]
     fn test_default_max_concurrent() {
         assert_eq!(DEFAULT_MAX_CONCURRENT, 7);
+    }
+
+    #[test]
+    fn manager_refreshes_parent_authority_before_spawn() {
+        let mut manager = SubagentManager::new(
+            CliConfig::default(),
+            "llama3".to_string(),
+            crate::context::gather_system_context(),
+            false,
+            crate::cli_options::PermissionMode::Default,
+            None,
+            Vec::new(),
+        );
+
+        manager.sync_parent_authority(
+            "claude-sonnet-5".to_string(),
+            true,
+            crate::cli_options::PermissionMode::AcceptEdits,
+            Some(vec!["read_file".to_string()]),
+            vec!["web_fetch".to_string()],
+        );
+
+        assert_eq!(manager.model, "claude-sonnet-5");
+        assert!(manager.skip_permissions);
+        assert_eq!(
+            manager.permission_mode,
+            crate::cli_options::PermissionMode::AcceptEdits
+        );
+        assert_eq!(manager.allowed_tools, Some(vec!["read_file".to_string()]));
+        assert_eq!(manager.disallowed_tools, vec!["web_fetch".to_string()]);
     }
 }

@@ -102,6 +102,50 @@ impl AgentDefinition {
             ));
         }
     }
+
+    /// Apply a named agent to a model-spawned subagent without allowing the
+    /// definition to widen the parent session's authority.
+    ///
+    /// Model and permission-mode overrides are intentionally ignored here:
+    /// choosing a different egress/billing boundary or bypassing approvals is
+    /// a user action. Tool allowlists are intersected with the inherited parent
+    /// allowlist, denylists are unioned, and max turns can only be reduced.
+    pub fn apply_to_subagent_session(&self, session: &mut crate::agent::AgentSession) {
+        if let Some(ref tools) = self.tools {
+            session.allowed_tools = Some(match session.allowed_tools.take() {
+                Some(parent_tools) => parent_tools
+                    .into_iter()
+                    .filter(|tool| tools.iter().any(|allowed| allowed == tool))
+                    .collect(),
+                None => tools.clone(),
+            });
+        }
+        if let Some(ref disallowed) = self.disallowed_tools {
+            for tool in disallowed {
+                if !session.disallowed_tools.contains(tool) {
+                    session.disallowed_tools.push(tool.clone());
+                }
+            }
+        }
+        if let Some(max_turns) = self.max_turns {
+            session.max_turns = Some(
+                session
+                    .max_turns
+                    .map_or(max_turns, |parent_limit| parent_limit.min(max_turns)),
+            );
+        }
+        if !self.system_prompt.trim().is_empty() {
+            use crate::models::Message;
+            session.messages.push(Message::text(
+                "system",
+                format!(
+                    "<agent_system_prompt agent=\"{}\">\n{}\n</agent_system_prompt>",
+                    self.name,
+                    self.system_prompt.trim()
+                ),
+            ));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +312,52 @@ pub fn find_agent(name: &str) -> Option<AgentDefinition> {
     agents
         .into_iter()
         .find(|a| a.name.to_lowercase() == name_lower)
+}
+
+/// Find an agent using an exact, case-sensitive installed name. Model tool
+/// calls use this stricter resolver so the catalog output is authoritative.
+pub fn find_agent_exact(name: &str) -> Option<AgentDefinition> {
+    discover_agents().into_iter().find(|agent| agent.name == name)
+}
+
+/// Return bounded metadata for the model-callable `agent` tool. Prompt bodies,
+/// paths, model overrides, and permission modes are deliberately withheld.
+pub fn agent_tool_catalog() -> String {
+    const MAX_CATALOG_BYTES: usize = 18_000;
+    let discovered = discover_agents();
+    let available_count = discovered.len();
+    let mut agents = Vec::new();
+    let mut truncated = available_count > 200;
+    for agent in discovered.into_iter().take(200) {
+        agents.push(serde_json::json!({
+            "name": agent.name.chars().take(128).collect::<String>(),
+            "description": agent.description.chars().take(500).collect::<String>(),
+            "has_tool_allowlist": agent.tools.as_ref().is_some_and(|tools| !tools.is_empty()),
+            "max_turns": agent.max_turns,
+        }));
+        let candidate = serde_json::json!({
+            "untrusted": true,
+            "agents": agents,
+            "count": agents.len(),
+            "available_count": available_count,
+            "truncated": truncated,
+        })
+        .to_string();
+        if candidate.len() > MAX_CATALOG_BYTES {
+            agents.pop();
+            truncated = true;
+            break;
+        }
+    }
+    let count = agents.len();
+    serde_json::json!({
+        "untrusted": true,
+        "agents": agents,
+        "count": count,
+        "available_count": available_count,
+        "truncated": truncated,
+    })
+    .to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1209,5 +1299,64 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         agent.apply_to_session(&mut session);
         assert_ne!(session.model, initial_model);
         assert_eq!(session.model, "claude-opus-5");
+    }
+
+    #[test]
+    fn model_invoked_agent_can_only_narrow_parent_authority() {
+        let ctx = make_test_context();
+        let mut session = crate::agent::AgentSession::new("claude-sonnet-5", &ctx, None);
+        session.allowed_tools = Some(vec!["read_file".to_string(), "write_file".to_string()]);
+        session.disallowed_tools = vec!["web_fetch".to_string()];
+        session.max_turns = Some(15);
+        let original_model = session.model.clone();
+        let original_permission_mode = session.permission_mode;
+
+        let agent = AgentDefinition {
+            name: "reviewer".to_string(),
+            description: "Review safely".to_string(),
+            model: Some("claude-opus-5".to_string()),
+            tools: Some(vec!["read_file".to_string(), "run_command".to_string()]),
+            disallowed_tools: Some(vec!["write_file".to_string()]),
+            max_turns: Some(20),
+            permission_mode: Some("bypassPermissions".to_string()),
+            system_prompt: "Review the requested change.".to_string(),
+            path: PathBuf::from("/tmp/reviewer.md"),
+        };
+
+        agent.apply_to_subagent_session(&mut session);
+
+        assert_eq!(session.model, original_model, "model override must be ignored");
+        assert_eq!(session.permission_mode, original_permission_mode);
+        assert_eq!(
+            session.allowed_tools,
+            Some(vec!["read_file".to_string()]),
+            "named agent allowlist must intersect the parent allowlist"
+        );
+        assert_eq!(session.max_turns, Some(15), "turn limit cannot be widened");
+        assert!(session.disallowed_tools.contains(&"web_fetch".to_string()));
+        assert!(session.disallowed_tools.contains(&"write_file".to_string()));
+        assert!(session
+            .messages
+            .iter()
+            .any(|message| message.text_content().contains("Review the requested change.")));
+    }
+
+    #[test]
+    fn model_agent_catalog_is_bounded_and_withholds_definition_secrets() {
+        let output = agent_tool_catalog();
+        assert!(output.len() <= 20_000);
+        let catalog: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(catalog.get("untrusted").and_then(|value| value.as_bool()), Some(true));
+        for agent in catalog
+            .get("agents")
+            .and_then(|value| value.as_array())
+            .unwrap()
+        {
+            let object = agent.as_object().unwrap();
+            assert!(!object.contains_key("system_prompt"));
+            assert!(!object.contains_key("path"));
+            assert!(!object.contains_key("model"));
+            assert!(!object.contains_key("permission_mode"));
+        }
     }
 }
