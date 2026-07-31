@@ -443,6 +443,10 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "apply_patch");
         assert!(results[0].was_deferred);
+
+        let agent_results = search_tool_schemas("select:agent", &catalog, 10);
+        assert_eq!(agent_results.len(), 1);
+        assert!(agent_results[0].was_deferred);
     }
 
     #[test]

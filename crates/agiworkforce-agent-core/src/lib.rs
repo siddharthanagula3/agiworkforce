@@ -89,7 +89,7 @@ pub enum DispatchMode {
 /// set, team/MCP name conventions), but the PARTITION and ORDER are the engine's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolClass {
-    /// A subagent `task` call — spawned/awaited/collected entirely host-side.
+    /// A generic `task` or named `agent` subagent call, handled host-side.
     Task,
     /// Eligible for the parallel read-only batch.
     ConcurrentEligible,
