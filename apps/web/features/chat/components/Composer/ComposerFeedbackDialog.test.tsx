@@ -66,4 +66,44 @@ describe('ComposerFeedbackDialog', () => {
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('unavailable'));
     expect(screen.getByRole('button', { name: 'Send feedback' })).not.toBeDisabled();
   });
+
+  it('submits a refusal report with bounded identifiers and no conversation content', async () => {
+    render(
+      <ComposerFeedbackDialog
+        variant="safety-appeal"
+        conversationId="conversation-9"
+        messageId="assistant-4"
+        finishReason="content_filter"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report issue' }));
+    expect(screen.getByRole('heading', { name: 'Report an incorrect refusal' })).toBeDefined();
+    expect(screen.queryByText('Feedback type')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Details'), {
+      target: { value: 'This was a benign request about defensive security.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit report' }));
+
+    await waitFor(() => expect(screen.getByText(/your report was recorded/i)).toBeDefined());
+
+    const [, request] = vi.mocked(fetch).mock.calls[0] ?? [];
+    const body = JSON.parse(String(request?.body)) as {
+      subject: string;
+      message: string;
+      metadata: Record<string, string>;
+    };
+    expect(body.subject).toContain('Incorrect safety refusal');
+    expect(body.metadata).toMatchObject({
+      source: 'web',
+      feedback_context: 'safety_refusal',
+      conversation_id: 'conversation-9',
+      message_id: 'assistant-4',
+      finish_reason: 'content_filter',
+    });
+    expect(body.metadata).not.toHaveProperty('prompt');
+    expect(body.metadata).not.toHaveProperty('response');
+    expect(body.metadata).not.toHaveProperty('conversation_content');
+  });
 });

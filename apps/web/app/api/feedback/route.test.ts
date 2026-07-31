@@ -92,4 +92,50 @@ describe('POST /api/feedback', () => {
     expect(metadata).toContain('"source":"desktop"');
     expect(metadata).toContain('"claimed_user_id":"untrusted-client-id"');
   });
+
+  it('stores a safety-refusal report with identifiers but no transcript fields', async () => {
+    const response = await POST(
+      request({
+        subject: 'Incorrect safety refusal · Web chat',
+        message: 'This was a benign defensive-security request.',
+        metadata: {
+          source: 'web',
+          platform: 'web',
+          version: '1.2.3',
+          user_agent: 'test browser',
+          page_path: '/chat/conversation-9',
+          conversation_id: 'conversation-9',
+          feedback_context: 'safety_refusal',
+          message_id: 'assistant-4',
+          finish_reason: 'refusal',
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const metadata = String(feedbackRouteMocks.query.mock.calls[0]?.[1]?.[3]);
+    expect(metadata).toContain('"feedback_context":"safety_refusal"');
+    expect(metadata).toContain('"message_id":"assistant-4"');
+    expect(metadata).toContain('"finish_reason":"refusal"');
+    expect(metadata).not.toContain('defensive-security request');
+  });
+
+  it('rejects a safety-refusal report without the bounded refusal identifiers', async () => {
+    const response = await POST(
+      request({
+        subject: 'Incorrect safety refusal · Web chat',
+        message: 'Please review this refusal.',
+        metadata: {
+          source: 'web',
+          platform: 'web',
+          version: '1.2.3',
+          user_agent: 'test browser',
+          feedback_context: 'safety_refusal',
+        },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
+  });
 });

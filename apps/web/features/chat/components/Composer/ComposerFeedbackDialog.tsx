@@ -14,6 +14,7 @@ import { getCsrfToken } from '@/lib/client/csrf';
 
 type FeedbackKind = 'bug' | 'feature' | 'general';
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
+type FeedbackVariant = 'general' | 'safety-appeal';
 
 const FEEDBACK_KINDS: Array<{ value: FeedbackKind; label: string }> = [
   { value: 'general', label: 'General feedback' },
@@ -23,15 +24,24 @@ const FEEDBACK_KINDS: Array<{ value: FeedbackKind; label: string }> = [
 
 interface ComposerFeedbackDialogProps {
   conversationId?: string | null;
+  messageId?: string | null;
+  finishReason?: 'refusal' | 'content_filter' | null;
+  variant?: FeedbackVariant;
 }
 
-export function ComposerFeedbackDialog({ conversationId }: ComposerFeedbackDialogProps) {
-  const messageId = useId();
+export function ComposerFeedbackDialog({
+  conversationId,
+  messageId,
+  finishReason,
+  variant = 'general',
+}: ComposerFeedbackDialogProps) {
+  const detailsId = useId();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<FeedbackKind>('general');
   const [message, setMessage] = useState('');
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isSafetyAppeal = variant === 'safety-appeal';
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -51,8 +61,9 @@ export function ComposerFeedbackDialog({ conversationId }: ComposerFeedbackDialo
 
     try {
       const csrfToken = await getCsrfToken();
-      const selectedKind =
-        FEEDBACK_KINDS.find((option) => option.value === kind)?.label ?? 'Feedback';
+      const selectedKind = isSafetyAppeal
+        ? 'Incorrect safety refusal'
+        : (FEEDBACK_KINDS.find((option) => option.value === kind)?.label ?? 'Feedback');
       const response = await fetch('/api/feedback', {
         method: 'POST',
         credentials: 'include',
@@ -70,6 +81,9 @@ export function ComposerFeedbackDialog({ conversationId }: ComposerFeedbackDialo
             user_agent: navigator.userAgent,
             page_path: window.location.pathname,
             ...(conversationId ? { conversation_id: conversationId } : {}),
+            ...(isSafetyAppeal ? { feedback_context: 'safety_refusal' } : {}),
+            ...(isSafetyAppeal && messageId ? { message_id: messageId } : {}),
+            ...(isSafetyAppeal && finishReason ? { finish_reason: finishReason } : {}),
           },
         }),
       });
@@ -103,7 +117,7 @@ export function ComposerFeedbackDialog({ conversationId }: ComposerFeedbackDialo
         onClick={() => setOpen(true)}
         className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        Feedback
+        {isSafetyAppeal ? 'Report issue' : 'Feedback'}
       </button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -112,16 +126,22 @@ export function ComposerFeedbackDialog({ conversationId }: ComposerFeedbackDialo
           closeLabel="Close feedback dialog"
         >
           <DialogHeader>
-            <DialogTitle>Share feedback</DialogTitle>
+            <DialogTitle>
+              {isSafetyAppeal ? 'Report an incorrect refusal' : 'Share feedback'}
+            </DialogTitle>
             <DialogDescription>
-              Tell us what worked, what did not, or what you would like AGI to do next.
+              {isSafetyAppeal
+                ? 'Tell us why this request should have been allowed. Your report helps us improve safety decisions.'
+                : 'Tell us what worked, what did not, or what you would like AGI to do next.'}
             </DialogDescription>
           </DialogHeader>
 
           {submitState === 'success' ? (
             <div className="space-y-4 py-2">
               <p role="status" className="text-sm text-foreground">
-                Thanks — your feedback was sent.
+                {isSafetyAppeal
+                  ? 'Thanks — your report was recorded.'
+                  : 'Thanks — your feedback was sent.'}
               </p>
               <div className="flex justify-end">
                 <Button type="button" onClick={() => setOpen(false)}>
@@ -131,31 +151,40 @@ export function ComposerFeedbackDialog({ conversationId }: ComposerFeedbackDialo
             </div>
           ) : (
             <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-medium text-foreground">Feedback type</legend>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {FEEDBACK_KINDS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      aria-pressed={kind === option.value}
-                      onClick={() => setKind(option.value)}
-                      className={
-                        kind === option.value
-                          ? 'rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 text-left text-xs font-medium text-foreground'
-                          : 'rounded-lg border border-border bg-muted/30 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground'
-                      }
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+              {!isSafetyAppeal ? (
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium text-foreground">Feedback type</legend>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {FEEDBACK_KINDS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={kind === option.value}
+                        onClick={() => setKind(option.value)}
+                        className={
+                          kind === option.value
+                            ? 'rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 text-left text-xs font-medium text-foreground'
+                            : 'rounded-lg border border-border bg-muted/30 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground'
+                        }
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+
+              {isSafetyAppeal ? (
+                <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                  We attach only technical identifiers for this refusal. Your prompt and response
+                  are not included.
                 </div>
-              </fieldset>
+              ) : null}
 
               <div className="space-y-2">
-                <Label htmlFor={messageId}>Details</Label>
+                <Label htmlFor={detailsId}>Details</Label>
                 <textarea
-                  id={messageId}
+                  id={detailsId}
                   value={message}
                   onChange={(event) => {
                     setMessage(event.target.value);
@@ -165,12 +194,17 @@ export function ComposerFeedbackDialog({ conversationId }: ComposerFeedbackDialo
                   maxLength={10_000}
                   rows={6}
                   autoFocus
-                  placeholder="What happened, what did you expect, or what should we build?"
+                  placeholder={
+                    isSafetyAppeal
+                      ? 'Explain why this request was appropriate and what response you expected.'
+                      : 'What happened, what did you expect, or what should we build?'
+                  }
                   className="w-full resize-y rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
                 />
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  We include your app version, browser type, and current AGI page so we can diagnose
-                  the report. Your prompt and conversation content are not attached.
+                  {isSafetyAppeal
+                    ? 'We include your app version, browser type, current AGI page, and refusal identifiers. Conversation content is not attached.'
+                    : 'We include your app version, browser type, and current AGI page so we can diagnose the report. Your prompt and conversation content are not attached.'}
                 </p>
               </div>
 
@@ -189,7 +223,7 @@ export function ComposerFeedbackDialog({ conversationId }: ComposerFeedbackDialo
                   disabled={!message.trim() || submitState === 'submitting'}
                   isLoading={submitState === 'submitting'}
                 >
-                  Send feedback
+                  {isSafetyAppeal ? 'Submit report' : 'Send feedback'}
                 </Button>
               </div>
             </form>
