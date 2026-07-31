@@ -94,6 +94,31 @@ fn test_terminal_registry_does_not_expose_model_shell_override() {
     assert!(!names.contains(&"shell"));
 }
 
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn code_execute_routes_through_network_denied_sandbox() {
+    let executor = ToolExecutor::new(create_registry_with_all_tools());
+    let args = HashMap::from([
+        ("language".to_string(), json!("python")),
+        (
+            "code".to_string(),
+            json!("import socket; print(socket.socket().connect_ex(('127.0.0.1', 9)))"),
+        ),
+    ]);
+
+    let result = executor
+        .execute_code_execute_tool(&args)
+        .await
+        .expect("code_execute should reach the sandbox manager");
+
+    assert!(result.success, "{:?}", result.error);
+    assert_eq!(result.data["networkAccess"], false);
+    assert_eq!(
+        result.data["stdout"].as_str().map(str::trim),
+        Some("1")
+    );
+}
+
 #[test]
 fn gap_002_extracts_nested_paths_and_assigns_capabilities() {
     let args = HashMap::from([(
