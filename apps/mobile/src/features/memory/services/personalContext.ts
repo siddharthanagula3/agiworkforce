@@ -12,6 +12,7 @@
  */
 import type { Personalization } from '@/stores/settingsStore';
 import type { MemoryFact } from '@/storage/types';
+import { fenceUntrustedMemoryContent } from '@agiworkforce/utils/fence';
 import { renderPersonalizationBlock } from './personalization';
 
 export interface PersonalContextInput {
@@ -24,12 +25,24 @@ export interface PersonalContextBlock {
   content: string;
 }
 
+const MAX_MEMORY_FACTS = 50;
+const MAX_MEMORY_FACT_CHARS = 1_000;
+const MAX_MEMORY_TOTAL_CHARS = 8_000;
+
 export function renderMemoryBlock(memories: MemoryFact[]): string {
   if (memories.length === 0) return '';
-  return [
-    'User memory (retrieved for this turn — treat as background context):',
-    ...memories.map((f, i) => `${i + 1}. ${f.fact}`),
-  ].join('\n');
+
+  const facts: string[] = [];
+  let remaining = MAX_MEMORY_TOTAL_CHARS;
+  for (const memory of memories.slice(0, MAX_MEMORY_FACTS)) {
+    const text = memory.fact.trim();
+    if (!text || remaining <= 0) continue;
+    const bounded = Array.from(text).slice(0, Math.min(MAX_MEMORY_FACT_CHARS, remaining)).join('');
+    facts.push(bounded);
+    remaining -= bounded.length;
+  }
+
+  return fenceUntrustedMemoryContent(JSON.stringify(facts));
 }
 
 export function buildPersonalContextBlocks(input: PersonalContextInput): PersonalContextBlock[] {

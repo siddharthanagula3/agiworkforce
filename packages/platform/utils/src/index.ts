@@ -141,7 +141,11 @@ export { resolveContained, isContainedIn } from './pathContainment';
 export type { ContainmentResult } from './pathContainment';
 
 // Trust boundary fencing for untrusted content injected into LLM prompts.
-export { fenceUntrustedContent } from './fence';
+export {
+  fenceUntrustedContent,
+  fenceUntrustedMemoryContent,
+  UNTRUSTED_MEMORY_CONTEXT_RULES,
+} from './fence';
 
 // Shared reasoning/thinking-block presentation logic (web ThinkingBlock,
 // mobile ThinkingChip) — duration formatting + live verb-phrase inference.
