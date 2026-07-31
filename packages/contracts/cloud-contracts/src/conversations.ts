@@ -191,6 +191,51 @@ export const ManagedCloudDeleteConversationResponseSchema = z.object({
 });
 export const ManagedCloudDeleteMessageResponseSchema = ManagedCloudDeleteConversationResponseSchema;
 
+/**
+ * A group of sibling conversations that share one fork point. The Web host
+ * renders the group beside `messageId` and navigates by `conversationId`;
+ * message copying and ownership remain server concerns.
+ */
+export const ManagedCloudConversationBranchItemSchema = z.object({
+  conversationId: z.string().uuid(),
+  title: z.string().min(1).max(500),
+});
+export type ManagedCloudConversationBranchItem = z.infer<
+  typeof ManagedCloudConversationBranchItemSchema
+>;
+
+export const ManagedCloudConversationBranchGroupSchema = z.object({
+  messageId: z.string().uuid(),
+  activeConversationId: z.string().uuid(),
+  branches: z.array(ManagedCloudConversationBranchItemSchema).min(2).max(50),
+});
+export type ManagedCloudConversationBranchGroup = z.infer<
+  typeof ManagedCloudConversationBranchGroupSchema
+>;
+
+export const ManagedCloudConversationBranchesResponseSchema = z.object({
+  groups: z.array(ManagedCloudConversationBranchGroupSchema).max(100),
+});
+export type ManagedCloudConversationBranchesResponse = z.infer<
+  typeof ManagedCloudConversationBranchesResponseSchema
+>;
+
+export const ManagedCloudCreateConversationBranchRequestSchema = z.object({
+  messageId: z.string().uuid(),
+  /** Client-generated idempotency key; retries return the original branch. */
+  requestId: z.string().uuid(),
+});
+export type ManagedCloudCreateConversationBranchRequest = z.infer<
+  typeof ManagedCloudCreateConversationBranchRequestSchema
+>;
+
+export const ManagedCloudCreateConversationBranchResponseSchema = z.object({
+  conversation: ManagedCloudConversationWireSchema,
+});
+export type ManagedCloudCreateConversationBranchResponse = z.infer<
+  typeof ManagedCloudCreateConversationBranchResponseSchema
+>;
+
 const ManagedCloudReflectDateKeySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const ManagedCloudReflectRecapSchema = z.object({
@@ -316,6 +361,10 @@ export function managedCloudConversationPath(conversationId: string): string {
 
 export function managedCloudConversationMessagesPath(conversationId: string): string {
   return `${managedCloudConversationPath(conversationId)}/messages`;
+}
+
+export function managedCloudConversationBranchesPath(conversationId: string): string {
+  return `${managedCloudConversationPath(conversationId)}/branches`;
 }
 
 export function managedCloudMessagePath(conversationId: string, messageId: string): string {

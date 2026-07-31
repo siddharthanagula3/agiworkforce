@@ -76,6 +76,9 @@ vi.mock('./MessageBubble', () => ({
     onReadAloud,
     isReadingAloud,
     isReadAloudSupported,
+    onBranch,
+    isBranching,
+    branchNavigation,
   }: {
     message: {
       id: string;
@@ -89,6 +92,13 @@ vi.mock('./MessageBubble', () => ({
     onReadAloud?: (messageId: string, content: string) => void;
     isReadingAloud?: boolean;
     isReadAloudSupported?: boolean;
+    onBranch?: () => void;
+    isBranching?: boolean;
+    branchNavigation?: {
+      branches: Array<{ id: string }>;
+      activeBranchId: string;
+      onSwitch: (conversationId: string) => void;
+    };
   }) => (
     <div
       data-testid={`bubble-${message.id}`}
@@ -113,6 +123,22 @@ vi.mock('./MessageBubble', () => ({
         >
           {isReadingAloud ? 'stop' : 'read'}
         </button>
+      )}
+      {onBranch && (
+        <button onClick={onBranch} disabled={isBranching} aria-label={`branch-${message.id}`}>
+          branch
+        </button>
+      )}
+      {branchNavigation && (
+        <>
+          <span data-testid={`branch-count-${message.id}`}>{branchNavigation.branches.length}</span>
+          <button
+            onClick={() => branchNavigation.onSwitch(branchNavigation.branches[1]!.id)}
+            aria-label={`switch-branch-${message.id}`}
+          >
+            switch branch
+          </button>
+        </>
       )}
     </div>
   ),
@@ -371,6 +397,50 @@ describe('ChatMessageList actions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'regenerate' }));
     expect(onRegenerate).toHaveBeenCalledWith('msg-2');
+  });
+
+  it('mounts branch creation and persisted branch navigation on the fork-point message', () => {
+    const onBranch = vi.fn();
+    const onSwitchBranch = vi.fn();
+    const messages = [makeMessage({ id: 'fork-point', role: 'assistant', content: 'reply' })];
+
+    render(
+      <ChatMessageList
+        messages={messages}
+        branchGroupsByMessageId={{
+          'fork-point': {
+            messageId: 'fork-point',
+            activeConversationId: 'conversation-main',
+            branches: [
+              { conversationId: 'conversation-main', title: 'Original' },
+              { conversationId: 'conversation-branch', title: 'Alternative' },
+            ],
+          },
+        }}
+        onBranch={onBranch}
+        onSwitchBranch={onSwitchBranch}
+      />,
+    );
+
+    expect(screen.getByTestId('branch-count-fork-point')).toHaveTextContent('2');
+    fireEvent.click(screen.getByRole('button', { name: 'branch-fork-point' }));
+    expect(onBranch).toHaveBeenCalledWith('fork-point');
+    fireEvent.click(screen.getByRole('button', { name: 'switch-branch-fork-point' }));
+    expect(onSwitchBranch).toHaveBeenCalledWith('conversation-branch');
+  });
+
+  it('disables branch creation only for the message currently being forked', () => {
+    const messages = [
+      makeMessage({ id: 'fork-point', role: 'assistant', content: 'reply' }),
+      makeMessage({ id: 'other-message', role: 'assistant', content: 'other' }),
+    ];
+
+    render(
+      <ChatMessageList messages={messages} branchingMessageId="fork-point" onBranch={vi.fn()} />,
+    );
+
+    expect(screen.getByRole('button', { name: 'branch-fork-point' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'branch-other-message' })).toBeEnabled();
   });
 
   it('owns one read-aloud controller and switches the active response', () => {

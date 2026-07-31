@@ -140,8 +140,8 @@
   {
     "item": "branch-navigator",
     "surface": "apps/web",
-    "status": "unwired",
-    "evidence": "A full implementation exists - packages/ui/unified-chat/src/components/BranchNavigator.tsx (BranchNavigator + BranchNavigatorContainer reading useCheckpointStore) - but grep of the whole repo (excluding node_modules/target/dist/.next) shows it is only referenced from its own package export, its own test, and desktop's archive/ folder. In the live web path, MessageBubble.tsx:313,342 declares an onBranch prop with the comment 'kept in interface for future wiring; not rendered until connected', and no caller (ChatMessageList.tsx/WebChatPage.tsx) ever passes onBranch or hasBranches. Regenerate/edit instead destructively replace messages rather than creating navigable branches."
+    "status": "built",
+    "evidence": "The live Web transcript mounts packages/ui/unified-chat BranchNavigator through MessageBubble.tsx and ChatMessageList.tsx. WebChatPage supplies useConversationBranches, whose authenticated client calls /api/chat/conversations/[id]/branches to create or list owner-scoped persisted branches. conversation-branch-service.ts validates the owned source/fork point, transactionally creates an idempotent target, copies every message through the selected point with complete persisted message fields, and records source/target message mappings. Migration 0078 forces RLS over branch relations and their message map. Component, hook, route, service, contract, and migration tests cover creation, pending/error boundaries, sibling navigation, CSRF, ownership predicates, mapping, and idempotent retry."
   },
   {
     "item": "regenerate",
