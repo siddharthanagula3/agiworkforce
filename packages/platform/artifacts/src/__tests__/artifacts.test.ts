@@ -3,7 +3,7 @@
  *
  * Covers:
  *   1. Local publish returns file:// URL and a LocalPublishResult.
- *   2. Cloud (byok/managed) publish returns WaitlistPublishResult — no network.
+ *   2. Cloud (byok/managed) reports unavailable unless the host supplies a publisher.
  *   3. Trust-boundary throws when generated-file URI is not file://.
  *   4. Sync-rule throws on developer-session surfaces (cli, vscode, chrome).
  *   5. Missing localFileWriter throws on local path.
@@ -51,7 +51,6 @@ describe('publishArtifact — local path', () => {
 
     expect(result.shareUrl).toMatch(/^file:\/\//);
     expect(result.shareToken).toBeTruthy();
-    expect(result.waitlistGated).toBe(false);
     expect(typeof result.publishedAt).toBe('string');
     expect(result.publishedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/); // ISO 8601
   });
@@ -75,16 +74,9 @@ describe('publishArtifact — local path', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Cloud paths return waitlist-gated (no network)
+// 2. Cloud paths use an injected publisher or report unavailability
 // ---------------------------------------------------------------------------
 
-// AUDIT-FIX ART-27: this suite used to assert `kind: 'waitlist'` /
-// `waitlistGated: true` for byok+managed. That expectation encoded a product
-// gate the founder removed on 2026-06-27 (managed cloud is public alpha, open
-// by default; AGI_MANAGED_COMPUTE_PRIVATE_BETA survives only as an incident
-// kill-switch — and this code path never read it). The behaviour under test has
-// changed deliberately: no gate, a host-injected publisher when one exists, and
-// an honest capability statement when one does not.
 describe('publishArtifact — cloud path (no waitlist gate)', () => {
   it.each(['byok', 'managed'] as const)(
     'returns an honest unavailable result for privacyMode=%s when no cloudPublisher is injected',
@@ -102,7 +94,6 @@ describe('publishArtifact — cloud path (no waitlist gate)', () => {
 
       expect(result.kind).toBe('unavailable');
       expect(result.shareUrl).toBeNull();
-      expect(result.waitlistGated).toBe(false);
       if (result.kind === 'unavailable') {
         // No waitlist language, and no invented endpoint.
         expect(result.reason).not.toMatch(/waitlist/i);
@@ -132,7 +123,6 @@ describe('publishArtifact — cloud path (no waitlist gate)', () => {
       expect(cloudPublisher).toHaveBeenCalledWith(baseArtifact, privacyMode);
       expect(result.kind).toBe('cloud');
       expect(result.shareUrl).toBe('https://share.example.invalid/a1');
-      expect(result.waitlistGated).toBe(false);
     },
   );
 
