@@ -974,8 +974,8 @@
   {
     "item": "chrome-storage-sync",
     "surface": "apps/chrome-extension",
-    "status": "partial",
-    "evidence": "apps/extension/src/features/content/autofill/filler.ts:871 chrome.storage.sync.get and :890 chrome.storage.sync.remove, called from migrateAutofillProfile() which background.ts:407 invokes on startup."
+    "status": "built",
+    "evidence": "apps/extension/src/features/background/synced-preferences.ts:8-14 defines the only five non-sensitive boolean preferences allowed into chrome.storage.sync; :89-109 hydrates local state from sync (or migrates an existing local-only value), and :116-139 mirrors later local/sync changes bidirectionally while comparing destination values to prevent loops. apps/extension/src/background.ts:389-393 starts the bridge on every service-worker boot. History, credentials, autofill profiles, allowlists, task payloads, and native-bridge state are excluded by construction. synced-preferences.test.ts covers sync-wins conflict resolution, local migration, two-way updates, invalid-value rejection, secret/allowlist exclusion, and listener cleanup; all 1,217 extension tests, typecheck, lint, and both production bundles pass."
   },
   {
     "item": "chrome-storage-local",
