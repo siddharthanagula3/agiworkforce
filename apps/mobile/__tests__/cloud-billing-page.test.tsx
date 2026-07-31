@@ -101,24 +101,10 @@ jest.mock('@/lib/safeOpenURL', () => ({ openExternalUrl: jest.fn() }));
 jest.mock('@/src/features/billing/service', () => ({
   fetchPortalSessionUrl: jest.fn().mockResolvedValue('https://example.com/portal'),
 }));
-const mockManageSubscription = jest.fn();
-const mockRestore = jest.fn();
-jest.mock('@/src/features/billing/useIapPurchaseFlow', () => ({
-  useIapPurchaseFlow: () => ({
-    connected: false,
-    manageSubscription: mockManageSubscription,
-    restore: mockRestore,
-  }),
-}));
-jest.mock('@/src/features/billing/iapStore', () => ({
-  useIapStore: (selector: (s: { status: string; errorMessage: string | null }) => unknown) =>
-    selector({ status: 'idle', errorMessage: null }),
-}));
 jest.mock('@/lib/v1FeatureFlags', () => ({
-  FEATURES: { iap: false, billing: false },
+  FEATURES: { billing: false },
 }));
 const mockFeatures = jest.requireMock('@/lib/v1FeatureFlags').FEATURES as {
-  iap: boolean;
   billing: boolean;
 };
 
@@ -147,9 +133,7 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     jest.clearAllMocks();
     mockRefreshTier.mockResolvedValue(undefined);
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
-    Object.assign(mockFeatures, { iap: false, billing: false });
-    mockManageSubscription.mockResolvedValue(undefined);
-    mockRestore.mockResolvedValue({ kind: 'none' });
+    Object.assign(mockFeatures, { billing: false });
     Object.assign(mockTierState, {
       tier: 'free',
       billingTier: 'free',
@@ -300,7 +284,6 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
   });
 
   it('blocks plan changes owned by Web and links to the correct management surface', () => {
-    Object.assign(mockFeatures, { iap: true });
     Object.assign(mockTierState, {
       tier: 'pro',
       billingTier: 'pro',
@@ -323,13 +306,9 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     }>;
     buttons.find((button) => button.text === 'Manage on web')?.onPress?.();
     expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/settings/billing');
-
-    fireEvent.press(getByLabelText('Manage subscription'));
-    expect(mockManageSubscription).not.toHaveBeenCalled();
   });
 
-  it('uses native subscription management when the current store owns the plan', () => {
-    Object.assign(mockFeatures, { iap: true });
+  it('links an Apple-owned subscription to the Apple management surface', () => {
     Object.assign(mockTierState, {
       tier: 'pro',
       billingTier: 'pro',
@@ -339,60 +318,18 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     useChatAppModeStore.setState({ appMode: 'cloud' });
 
     const { getByLabelText } = render(<CloudBillingScreen />);
-    fireEvent.press(getByLabelText('Manage subscription'));
+    fireEvent.press(getByLabelText('Adjust plan'));
 
-    expect(mockManageSubscription).toHaveBeenCalledTimes(1);
-    expect(Alert.alert).not.toHaveBeenCalledWith(
+    expect(Alert.alert).toHaveBeenCalledWith(
       'Subscription managed elsewhere',
-      expect.anything(),
-      expect.anything(),
+      expect.stringContaining('Apple App Store'),
+      expect.any(Array),
     );
-  });
-
-  it('reports when restore finds no purchases', async () => {
-    Object.assign(mockFeatures, { iap: true });
-    mockRestore.mockResolvedValue({ kind: 'none' });
-    useChatAppModeStore.setState({ appMode: 'cloud' });
-
-    const { getByLabelText } = render(<CloudBillingScreen />);
-    fireEvent.press(getByLabelText('Restore purchases'));
-
-    await waitFor(() => {
-      expect(Alert.alert).toHaveBeenCalledWith(
-        'No purchases found',
-        expect.stringContaining('Apple ID'),
-      );
-    });
-  });
-
-  it('names restored plans and offers a real retry after failure', async () => {
-    Object.assign(mockFeatures, { iap: true });
-    mockRestore
-      .mockResolvedValueOnce({ kind: 'failed', message: 'Store connection failed' })
-      .mockResolvedValueOnce({ kind: 'restored', tiers: ['pro'] });
-    useChatAppModeStore.setState({ appMode: 'cloud' });
-
-    const { getByLabelText } = render(<CloudBillingScreen />);
-    fireEvent.press(getByLabelText('Restore purchases'));
-
-    await waitFor(() => {
-      expect(Alert.alert).toHaveBeenCalledWith(
-        'Restore purchases failed',
-        'Store connection failed',
-        expect.any(Array),
-      );
-    });
-    const retryButtons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{
       text?: string;
       onPress?: () => void;
     }>;
-    retryButtons.find((button) => button.text === 'Try again')?.onPress?.();
-
-    await waitFor(() => {
-      expect(Alert.alert).toHaveBeenCalledWith(
-        'Purchases restored',
-        'Restored Pro for this AGI Cloud account.',
-      );
-    });
+    buttons.find((button) => button.text === 'Open subscriptions')?.onPress?.();
+    expect(openExternalUrl).toHaveBeenCalledWith('https://apps.apple.com/account/subscriptions');
   });
 });

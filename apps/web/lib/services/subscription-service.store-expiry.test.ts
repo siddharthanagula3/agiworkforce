@@ -70,9 +70,9 @@ describe('getSubscription — lapsed store subscriptions', () => {
   });
 
   it('never expires a row with a null period end', async () => {
-    // `current_period_end` is nullable and the IAP route writes null when Apple
-    // returns no expiry. Treating null as expired would downgrade real
-    // subscribers and every manually provisioned Team/Enterprise row.
+    // `current_period_end` is nullable on historical store records and manual
+    // provisions. Treating null as expired would downgrade real subscribers
+    // and every manually provisioned Team/Enterprise row.
     const db = dbReturning(
       baseRow({ apple_original_transaction_id: 'apple-tx-1', current_period_end: null }),
     );

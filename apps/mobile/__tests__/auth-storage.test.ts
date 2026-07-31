@@ -225,12 +225,6 @@ jest.mock('../services/backgroundFetch', () => ({
   resetBackgroundFetchAccountState: jest.fn(),
 }));
 
-jest.mock('../src/features/billing/iapStore', () => ({
-  useIapStore: {
-    getState: jest.fn(() => ({ reset: jest.fn() })),
-  },
-}));
-
 jest.mock('../stores/chat/chatViewStore', () => ({
   useChatViewStore: {
     getState: jest.fn(() => ({ clearCloudSearchState: jest.fn() })),

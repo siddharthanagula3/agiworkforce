@@ -147,7 +147,7 @@ jest.mock('@clerk/expo', () => ({
 }));
 
 jest.mock('@/lib/v1FeatureFlags', () => ({
-  FEATURES: { companion: false, connectors: false, iap: false },
+  FEATURES: { companion: false, connectors: false },
 }));
 
 jest.mock('@/src/features/auth/store', () => ({

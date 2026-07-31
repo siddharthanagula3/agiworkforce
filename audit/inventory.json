@@ -1310,26 +1310,26 @@
   {
     "item": "in-app-purchase-storekit",
     "surface": "apps/mobile",
-    "status": "unwired",
-    "evidence": "apps/mobile/src/features/billing/useIapPurchaseFlow.ts:105-258 implements a complete StoreKit 2 purchase flow via react-native-iap (requestPurchase, onPurchaseSuccess -> reportPurchaseToServer -> finishTransaction), rendered by apps/mobile/src/features/settings/cloud-billing/index.tsx:321 as '{FEATURES.iap && <IapManagementSection />}'. But apps/mobile/lib/v1FeatureFlags.ts:83 hardcodes 'iap: false', so IapManagementSection never mounts and useIapPurchaseFlow is never invoked in the shipped app."
+    "status": "missing",
+    "evidence": "No App Store products or live product identifiers exist. The unreachable placeholder-backed StoreKit client/server prototype was removed on 2026-07-30 instead of advertising a disabled implementation. Delivery requires App Store Connect product creation, live credentials, server notification/reverification lifecycle handling, and device/store sandbox QA."
   },
   {
     "item": "play-billing",
     "surface": "apps/mobile",
-    "status": "unwired",
-    "evidence": "Same code path as in-app-purchase-storekit handles Android via react-native-iap's Google branch (apps/mobile/src/features/billing/useIapPurchaseFlow.ts:198-203, request.google.skus). Gated behind the same disabled FEATURES.iap flag (apps/mobile/lib/v1FeatureFlags.ts:83)."
+    "status": "missing",
+    "evidence": "No Google Play products or live product identifiers exist. The unreachable placeholder-backed Play Billing client/server prototype was removed on 2026-07-30 instead of advertising a disabled implementation. Delivery requires Play Console product creation, live credentials, RTDN/reverification lifecycle handling, and device/store sandbox QA."
   },
   {
     "item": "subscription-restore",
     "surface": "apps/mobile",
-    "status": "unwired",
-    "evidence": "apps/mobile/src/features/billing/useIapPurchaseFlow.ts:214-248 implements restore() (restorePurchases -> getAvailablePurchases -> reportPurchaseToServer for each -> refreshTier), exposed as the 'Restore purchases' row in apps/mobile/src/features/settings/cloud-billing/index.tsx:83-87 inside IapManagementSection, which only renders when FEATURES.iap is true (line 321) — currently false (apps/mobile/lib/v1FeatureFlags.ts:83)."
+    "status": "missing",
+    "evidence": "There are no live AGI Workforce store purchases to restore because neither store has real subscription products. The unreachable placeholder-backed restore control was removed on 2026-07-30. Restore must be implemented with the real StoreKit/Play Billing products, account-conflict policy, server reconciliation, and sandbox/device QA."
   },
   {
     "item": "receipt-validation",
     "surface": "apps/mobile",
-    "status": "unwired",
-    "evidence": "apps/web/app/api/mobile/iap/verify/route.ts:1-80+ is a fully implemented, tested (route.test.ts) receipt-verification endpoint (Apple via lib/server/iap-verify-apple.ts, Google via lib/server/iap-verify-google.ts), correctly reconciling into the shared subscriptions table. It is called from apps/mobile/src/features/billing/useIapPurchaseFlow.ts:67-81 (reportPurchaseToServer) inside the onPurchaseSuccess/restore flows."
+    "status": "missing",
+    "evidence": "No live store products, receipts, credentials, or notification lifecycle exist. The otherwise unreachable verification route and provider adapters were removed on 2026-07-30 with the placeholder purchase clients. Validation must be rebuilt against real Apple/Google products with signed server notifications, replay/idempotency controls, scheduled revalidation, and sanctioned sandbox QA."
   },
   {
     "item": "force-upgrade-prompt",

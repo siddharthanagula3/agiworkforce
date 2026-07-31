@@ -78,10 +78,6 @@ jest.mock('../services/backgroundFetch', () => ({
   resetBackgroundFetchAccountState: jest.fn(),
 }));
 
-jest.mock('../src/features/billing/iapStore', () => ({
-  useIapStore: { getState: jest.fn() },
-}));
-
 jest.mock('../stores/chat/chatViewStore', () => ({
   useChatViewStore: { getState: jest.fn() },
 }));
@@ -171,9 +167,6 @@ const { notificationCenterStore } = require('../services/notifications') as {
 const { resetBackgroundFetchAccountState } = require('../services/backgroundFetch') as {
   resetBackgroundFetchAccountState: jest.Mock;
 };
-const { useIapStore } = require('../src/features/billing/iapStore') as {
-  useIapStore: { getState: jest.Mock };
-};
 const { useChatViewStore } = require('../stores/chat/chatViewStore') as {
   useChatViewStore: { getState: jest.Mock };
 };
@@ -208,7 +201,6 @@ describe('clearLocalCloudAccountState', () => {
   const clearCloudAgentControls = jest.fn();
   const clearEntitlements = jest.fn();
   const clearSchedules = jest.fn();
-  const resetIapFlow = jest.fn();
   const clearCloudSearch = jest.fn();
   const clearManagedCloudAccess = jest.fn();
   let mmkvReadyCallbacks: Array<() => void>;
@@ -242,7 +234,6 @@ describe('clearLocalCloudAccountState', () => {
       clearAccountEntitlements: clearEntitlements,
     });
     useScheduleStore.getState.mockReturnValue({ clearAccountSchedules: clearSchedules });
-    useIapStore.getState.mockReturnValue({ reset: resetIapFlow });
     useChatViewStore.getState.mockReturnValue({ clearCloudSearchState: clearCloudSearch });
     useWaitlistStore.getState.mockReturnValue({ clear: clearManagedCloudAccess });
   });
@@ -273,7 +264,6 @@ describe('clearLocalCloudAccountState', () => {
     expect(resetApiAccountState).toHaveBeenCalledTimes(1);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(1);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(1);
-    expect(resetIapFlow).toHaveBeenCalledTimes(1);
     expect(clearCloudSearch).toHaveBeenCalledTimes(1);
     expect(useCloudSettingsStore.setState).toHaveBeenCalledWith({
       themeMode: 'system',
@@ -325,7 +315,6 @@ describe('clearLocalCloudAccountState', () => {
     expect(resetApiAccountState).toHaveBeenCalledTimes(2);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(2);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(2);
-    expect(resetIapFlow).toHaveBeenCalledTimes(2);
     expect(clearCloudSearch).toHaveBeenCalledTimes(2);
     expect(clearManagedCloudAccess).toHaveBeenCalledTimes(2);
     expect(useLocalSettingsStore.setState).not.toHaveBeenCalled();

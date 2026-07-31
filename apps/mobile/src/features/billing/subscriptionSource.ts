@@ -2,17 +2,12 @@ import type { MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
 import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
 
 export type MobileBillingSource = MeSubscriptionSource | 'unknown';
-export type MobileStorePlatform = 'ios' | 'android';
 
-export interface IapSubscriptionGuard {
+export interface SubscriptionOwnerGuard {
   blocked: boolean;
   sourceLabel: string;
   managementUrl: string | null;
   managementActionLabel: string;
-}
-
-export function currentStoreSource(platform: MobileStorePlatform): MeSubscriptionSource {
-  return platform === 'ios' ? 'apple' : 'google';
 }
 
 export function subscriptionSourceLabel(source: MobileBillingSource): string {
@@ -48,22 +43,19 @@ export function subscriptionManagementUrl(source: MobileBillingSource): string |
 }
 
 /**
- * Fail closed when an entitled subscription is not owned by the current
- * device store. An unknown owner is blocked too: an offline/stale client must
- * not risk selling a second subscription merely because `/api/me` has not
- * refreshed yet.
+ * Fail closed when a paid subscription already has an owner. Mobile does not
+ * sell subscriptions, so every entitled plan must be managed at its recorded
+ * source rather than presenting a second plan-change path.
  */
-export function getIapSubscriptionGuard(
+export function getSubscriptionOwnerGuard(
   source: MobileBillingSource,
   status: string,
-  platform: MobileStorePlatform,
-): IapSubscriptionGuard {
+): SubscriptionOwnerGuard {
   const entitled = isEntitledSubscriptionStatus(status);
-  const blocked = entitled && source !== currentStoreSource(platform);
   const managementUrl = subscriptionManagementUrl(source);
 
   return {
-    blocked,
+    blocked: entitled,
     sourceLabel: subscriptionSourceLabel(source),
     managementUrl,
     managementActionLabel:

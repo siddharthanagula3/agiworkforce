@@ -51,9 +51,9 @@ export const FEATURES = {
    * Billing / subscription MANAGEMENT — specifically the "Manage billing"
    * Stripe Customer Portal link (fetchPortalSessionUrl -> openExternalUrl).
    * Stays false on mobile: opening an external checkout/management link for
-   * a subscription from inside the app risks Apple Guideline 3.1.1, and
-   * `FEATURES.iap` (the native alternative) isn't live yet either. Does NOT
-   * gate read-only usage display — see `usageDashboard` below.
+   * a subscription from inside the app risks Apple Guideline 3.1.1. There is
+   * no native store purchase path. Does NOT gate read-only usage display —
+   * see `usageDashboard` below.
    */
   billing: false,
 
@@ -64,21 +64,6 @@ export const FEATURES = {
    * carries none of `billing`'s App Store Guideline 3.1.1 risk.
    */
   usageDashboard: true,
-
-  /**
-   * Native in-app purchase (StoreKit 2 / Play Billing) for subscription
-   * upgrades. Stays FALSE: every SKU in `iapProducts.ts` is a PLACEHOLDER — the
-   * products do not yet exist in App Store Connect or Google Play Console
-   * (creating them needs the founder's store-console access). Activating IAP
-   * against placeholder SKUs would present fake/broken purchase availability
-   * (fetchProducts returns nothing; a purchase attempt fails), which violates
-   * capability honesty. The server path is ready — POST /api/mobile/iap/verify
-   * reconciles into the same `subscriptions` table Stripe uses and the client
-   * (useIapPurchaseFlow.ts) verifies before finalizing — but do not flip this to
-   * true until the real self-serve products (basic, pro, max, max_15x; NOT the
-   * sales-assisted Team tier) are created and verified against a live console.
-   */
-  iap: false,
 
   /** Auth (login, OAuth, password reset). Signing in IS the Managed Cloud entitlement
    *  in public alpha — Mobile keeps a real auth gate (no demo bypass; user must sign in).

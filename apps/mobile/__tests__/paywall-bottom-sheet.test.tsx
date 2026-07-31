@@ -3,12 +3,8 @@
  *
  * Verifies:
  *  - Renders the correct feature name, tier label, and reason
- *  - When FEATURES.iap is off (current default), renders the
- *    "not available yet" copy instead of a purchase CTA
- *  - When FEATURES.iap is on and the tier is purchasable, renders the native
- *    "Upgrade to <Tier>" button and calls `purchase()` from
- *    `useIapPurchaseFlow` (never an external web checkout — Apple/Google
- *    require native IAP for in-app subscription purchases)
+ *  - Renders honest "not available yet" copy instead of a purchase CTA
+ *  - Hands sales-assisted Team and Enterprise plans to Contact Sales
  *  - "Try later" Pressable does not throw
  *  - Renders without reason when reason is omitted
  */
@@ -16,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -53,7 +49,7 @@ jest.mock('../src/ui/theme', () => {
   };
 });
 
-// Button component — render a Pressable with testID so tests can find it
+// Button component — render a Pressable so sales-handoff tests can use it.
 jest.mock('../components/ui/button', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
@@ -70,7 +66,7 @@ jest.mock('../components/ui/button', () => {
       <Pressable
         onPress={onPress}
         accessibilityLabel={accessibilityLabel}
-        testID="paywall-upgrade-button"
+        testID="paywall-action-button"
       >
         <Text>{title}</Text>
       </Pressable>
@@ -89,31 +85,8 @@ jest.mock('../components/ui/text', () => {
   };
 });
 
-// FEATURES.iap toggled per-test via jest.mock + jest.resetModules
-const mockPurchase = jest.fn().mockResolvedValue(undefined);
-jest.mock('../src/features/billing/useIapPurchaseFlow', () => ({
-  useIapPurchaseFlow: () => ({
-    connected: true,
-    purchase: mockPurchase,
-    restore: jest.fn(),
-    manageSubscription: jest.fn(),
-  }),
-}));
-
-jest.mock('../src/features/billing/iapStore', () => ({
-  useIapStore: (selector: (s: { status: string; errorMessage: string | null }) => unknown) =>
-    selector({ status: 'idle', errorMessage: null }),
-}));
-
 jest.mock('../lib/safeOpenURL', () => ({
   openExternalUrl: jest.fn().mockResolvedValue(true),
-}));
-
-// Mutable FEATURES object so individual tests can flip `iap` without
-// jest.resetModules() (which would load a second copy of React and break
-// hooks inside the same test file).
-jest.mock('../lib/v1FeatureFlags', () => ({
-  FEATURES: { iap: false },
 }));
 
 // ---------------------------------------------------------------------------
@@ -121,7 +94,6 @@ jest.mock('../lib/v1FeatureFlags', () => ({
 // ---------------------------------------------------------------------------
 
 import { PaywallBottomSheet } from '../src/features/chat/components/PaywallBottomSheet';
-import { FEATURES } from '../lib/v1FeatureFlags';
 import { openExternalUrl } from '../lib/safeOpenURL';
 
 // ---------------------------------------------------------------------------
@@ -193,10 +165,10 @@ describe('PaywallBottomSheet rendering', () => {
     expect(getAllByText('Upgrade to Max').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows "not available yet" copy instead of a purchase CTA while FEATURES.iap is off', () => {
+  it('shows "not available yet" copy instead of a purchase CTA', () => {
     const { getByText, queryByTestId } = render(<PaywallBottomSheet {...defaultProps} />);
     expect(getByText(/Upgrades aren't available in the app yet/i)).toBeTruthy();
-    expect(queryByTestId('paywall-upgrade-button')).toBeNull();
+    expect(queryByTestId('paywall-action-button')).toBeNull();
   });
 
   it.each(['team', 'enterprise'] as const)(
@@ -237,34 +209,5 @@ describe('PaywallBottomSheet interactions', () => {
     expect(onDismiss).not.toHaveBeenCalled(); // handleDismiss calls sheetRef.close(), not onDismiss directly
     // The onDismiss is called via BottomSheet.onChange(-1) which is mocked away.
     // What we CAN verify is that pressing "Try later" doesn't throw.
-  });
-});
-
-describe('PaywallBottomSheet interactions (FEATURES.iap on)', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    FEATURES.iap = true;
-  });
-
-  afterEach(() => {
-    FEATURES.iap = false;
-  });
-
-  it('renders the native IAP button and calls purchase() when tapped, never an external URL', async () => {
-    const { getByTestId } = render(
-      <PaywallBottomSheet
-        feature="image_quota"
-        requiredTier="pro"
-        reason="2M tokens used this month"
-        onDismiss={jest.fn()}
-      />,
-    );
-
-    await act(async () => {
-      fireEvent.press(getByTestId('paywall-upgrade-button'));
-    });
-
-    expect(mockPurchase).toHaveBeenCalledTimes(1);
-    expect(mockPurchase).toHaveBeenCalledWith('pro', 'monthly');
   });
 });

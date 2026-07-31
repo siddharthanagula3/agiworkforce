@@ -172,11 +172,6 @@ function clearLocalCloudAccountStateNow(): void {
     resetBackgroundFetchAccountState();
   });
 
-  runTeardownStep('in-app purchase flow', () => {
-    const { useIapStore } = require('@/src/features/billing/iapStore');
-    useIapStore.getState().reset();
-  });
-
   runTeardownStep('server search cache', () => {
     const { useChatViewStore } = require('@/stores/chat/chatViewStore');
     useChatViewStore.getState().clearCloudSearchState();
