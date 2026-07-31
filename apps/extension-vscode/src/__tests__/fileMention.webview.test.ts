@@ -93,4 +93,33 @@ describe('VS Code sidebar file mentions', () => {
       },
     });
   });
+
+  it('accepts a host-prefilled fallback draft with the same structured reference', () => {
+    const postMessage = boot();
+    const reference = {
+      path: 'src/fallback.ts',
+      range: { startLine: 2, startCharacter: 0, endLine: 4, endCharacter: 5 },
+    };
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'composerDraft',
+          payload: { text: '@src/fallback.ts#L3-L5 ', references: [reference] },
+        },
+      }),
+    );
+
+    const input = document.getElementById('userInput') as HTMLTextAreaElement;
+    expect(input.value).toBe('@src/fallback.ts#L3-L5 ');
+    (document.getElementById('sendBtn') as HTMLButtonElement).click();
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'sendMessage',
+      payload: {
+        text: '@src/fallback.ts#L3-L5',
+        browseWeb: false,
+        references: [reference],
+      },
+    });
+  });
 });

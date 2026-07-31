@@ -16,6 +16,7 @@ export interface ChatState {
   sidebarProvider: SidebarProvider;
   contextPanelProvider: ContextPanelProvider;
   memoryTreeProvider: MemoryTreeProvider;
+  nativeChatAvailable: boolean;
 }
 
 export function setupChat(
@@ -26,7 +27,7 @@ export function setupChat(
   const conversationTreeProvider = new ConversationTreeProvider(localRuntimes);
 
   const chatParticipant = registerChatParticipant(context, conversationTreeProvider, localRuntimes);
-  context.subscriptions.push(chatParticipant);
+  if (chatParticipant !== undefined) context.subscriptions.push(chatParticipant);
 
   const sidebarProvider = new SidebarProvider(
     context.extensionUri,
@@ -68,5 +69,6 @@ export function setupChat(
     sidebarProvider,
     contextPanelProvider,
     memoryTreeProvider,
+    nativeChatAvailable: chatParticipant !== undefined,
   };
 }

@@ -426,7 +426,10 @@ export function registerChatParticipant(
   context: vscode.ExtensionContext,
   conversationTreeProvider?: ConversationTreeProvider,
   localRuntimes?: LocalRuntimePool,
-): vscode.Disposable {
+): vscode.Disposable | undefined {
+  const createParticipant = vscode.chat?.createChatParticipant;
+  if (typeof createParticipant !== 'function') return undefined;
+
   const handler = createChatHandler(
     context.secrets,
     conversationTreeProvider,
@@ -435,7 +438,16 @@ export function registerChatParticipant(
     context.workspaceState,
   );
 
-  const participant = vscode.chat.createChatParticipant('agiworkforce.agi', handler);
+  let participant: vscode.ChatParticipant;
+  try {
+    participant = createParticipant.call(vscode.chat, 'agiworkforce.agi', handler);
+  } catch (error) {
+    console.warn(
+      '[AGI Workforce] Native Chat participant is unavailable; using the AGI sidebar instead.',
+      error,
+    );
+    return undefined;
+  }
 
   // Icon shown next to @agi in the chat UI
   participant.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icon-chat.png');

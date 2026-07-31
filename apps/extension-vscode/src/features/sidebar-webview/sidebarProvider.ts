@@ -18,6 +18,7 @@ import { getWebviewContent, getNonce } from './webviewContent';
 import { parseWebviewMessage } from '../../protocol/webviewMessages';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { resolveTierSync } from '../../integrations/tierResolver';
+import { type WorkspaceFileReference } from '../chat-participant/promptReferences';
 
 // Re-export for chatEditorPanel.ts (imported from ./sidebarProvider)
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
@@ -34,6 +35,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   private _view?: vscode.WebviewView;
   private _messageListener?: vscode.Disposable;
+  private _pendingComposerDraft?: Extract<ExtToWebviewMessage, { type: 'composerDraft' }>;
   private readonly _stateManager: ChatStateManager;
 
   constructor(
@@ -106,6 +108,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       await this._stateManager.handleMessage(
         parsed as unknown as Parameters<typeof this._stateManager.handleMessage>[0],
       );
+      if (parsed.type === 'ready') await this._deliverComposerDraft();
     });
 
     webviewView.onDidDispose(() => {
@@ -119,6 +122,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** Programmatically reveal the sidebar panel. */
   public reveal(): void {
     this._view?.show?.(true);
+  }
+
+  /** Prefill the first-party sidebar when the host has no native Chat participant API. */
+  public prefillComposer(text: string, references: WorkspaceFileReference[] = []): void {
+    this._pendingComposerDraft = { type: 'composerDraft', payload: { text, references } };
+    void this._deliverComposerDraft();
+  }
+
+  private async _deliverComposerDraft(): Promise<void> {
+    const draft = this._pendingComposerDraft;
+    const view = this._view;
+    if (draft === undefined || view === undefined) return;
+    if (await view.webview.postMessage(draft)) delete this._pendingComposerDraft;
   }
 
   /** Public entry-point so extension.ts can push a fresh usage meter on config change. */

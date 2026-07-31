@@ -80,8 +80,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ── 2. Chat participant + sidebar + conversation tree + context tree ─────────
   const chatState = setupChat(context, localRuntimes, diffDecorationProvider);
-  const { sidebarProvider, conversationTreeProvider, contextPanelProvider, memoryTreeProvider } =
-    chatState;
+  const {
+    sidebarProvider,
+    conversationTreeProvider,
+    contextPanelProvider,
+    memoryTreeProvider,
+    nativeChatAvailable,
+  } = chatState;
 
   // ── 3. Commands ──────────────────────────────────────────────────────────────
   setupCommands(context, {
@@ -92,6 +97,7 @@ export function activate(context: vscode.ExtensionContext): void {
     memoryTreeProvider,
     diffDecorationProvider,
     diagnosticsProvider,
+    nativeChatAvailable,
   });
 
   // ── 4. Status bar ────────────────────────────────────────────────────────────
