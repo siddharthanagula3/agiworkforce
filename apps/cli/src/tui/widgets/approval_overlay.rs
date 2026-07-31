@@ -31,6 +31,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
+use crate::tui::pad_to_cols;
 use crate::tui::terminal_palette::{ui_muted, ui_on_light, ui_warning};
 
 // ---------------------------------------------------------------------------
@@ -231,19 +232,22 @@ impl ApprovalOverlayState {
 
         let mut out = String::new();
         out.push_str(
-            "┌─ Tool Approval ─────────────────────────────────────────────────────────────┐\n",
+            "┌─ Tool Approval ──────────────────────────────────────────────────────────────┐\n",
         );
-        out.push_str(&format!("│  {:<76} │\n", &self.prompt));
+        out.push_str(&format!(
+            "│{}│\n",
+            pad_to_cols(&format!("  {}", self.prompt), 78)
+        ));
 
         for d in &self.detail {
-            out.push_str(&format!("│    {:<74} │\n", d));
+            out.push_str(&format!("│{}│\n", pad_to_cols(&format!("    {d}"), 78)));
         }
 
         out.push_str(
             "│                                                                              │\n",
         );
 
-        let mut buttons = String::from("│  ");
+        let mut buttons = String::from("  ");
         for (i, choice) in CHOICES.iter().enumerate() {
             if i == self.cursor {
                 buttons.push_str(&format!("[{}]", choice.label().trim()));
@@ -252,10 +256,11 @@ impl ApprovalOverlayState {
             }
             buttons.push_str("  ");
         }
-        out.push_str(&format!("{:<78} │\n", buttons));
-        out.push_str(
-            "│  ←/→ move   Enter confirm   Esc = No                                        │\n",
-        );
+        out.push_str(&format!("│{}│\n", pad_to_cols(&buttons, 78)));
+        out.push_str(&format!(
+            "│{}│\n",
+            pad_to_cols("  ←/→ move   Enter confirm   Esc = No", 78)
+        ));
         out.push_str(
             "└──────────────────────────────────────────────────────────────────────────────┘\n",
         );
@@ -535,6 +540,22 @@ mod tests {
         assert!(text.contains("Allow Session"));
         assert!(text.contains("Always Allow"));
         assert!(text.contains("Deny All"));
+    }
+
+    #[test]
+    fn text_render_keeps_cjk_content_inside_eighty_columns() {
+        let mut s = ApprovalOverlayState::default();
+        s.open(
+            "允许工具修改非常长的中文项目路径和配置文件吗？".repeat(4),
+            vec!["详细信息包含中文字符".repeat(8)],
+        );
+        let text = s.render_text();
+        assert!(
+            text.lines()
+                .all(|line| crate::tui::display_width(line) == 80),
+            "approval box rows must remain exactly 80 terminal columns: {text}"
+        );
+        assert!(text.contains('…'));
     }
 
     #[test]

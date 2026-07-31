@@ -24,6 +24,7 @@ use crate::design_system::{
 };
 use crate::model_catalog::Model;
 use crate::tui::terminal_palette::{ui_accent, ui_muted};
+use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
 // ---------------------------------------------------------------------------
 // Environment-gate stub (Phase A)
@@ -546,7 +547,7 @@ fn format_model_row(
         return format!(
             "{}{}",
             prefix,
-            truncate_chars(model_id, row_width.saturating_sub(prefix.chars().count()))
+            truncate_cols(model_id, row_width.saturating_sub(display_width(&prefix)))
         );
     }
 
@@ -557,29 +558,11 @@ fn format_model_row(
     } else {
         format!("{ctx_k:>4}K ctx")
     };
-    let suffix = format!("  {tier_label:<12} {ctx_col}");
+    let suffix = format!("  {} {ctx_col}", pad_to_cols(tier_label, 12));
     let id_width = row_width
-        .saturating_sub(prefix.chars().count() + suffix.chars().count())
-        .clamp(12, 34);
-    format!(
-        "{}{:<id_width$}{}",
-        prefix,
-        truncate_chars(model_id, id_width),
-        suffix,
-        id_width = id_width
-    )
-}
-
-fn truncate_chars(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return value.to_string();
-    }
-    if max_chars <= 1 {
-        return "…".to_string();
-    }
-    let mut out: String = value.chars().take(max_chars - 1).collect();
-    out.push('…');
-    out
+        .saturating_sub(display_width(&prefix) + display_width(&suffix))
+        .min(34);
+    format!("{}{}{}", prefix, pad_to_cols(model_id, id_width), suffix)
 }
 
 // ---------------------------------------------------------------------------
@@ -746,6 +729,16 @@ pub fn handle_key(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_rows_use_terminal_columns_for_cjk_ids() {
+        let wide = format_model_row(60, "●", "供应商/中文模型版本", "balanced", 128);
+        assert_eq!(display_width(&wide), 60);
+
+        let narrow = format_model_row(20, "●", "供应商/中文模型版本", "balanced", 128);
+        assert!(display_width(&narrow) <= 20);
+        assert!(narrow.ends_with('…'));
+    }
 
     fn model(id: &str, provider: &str) -> Model {
         serde_json::from_str(&format!(

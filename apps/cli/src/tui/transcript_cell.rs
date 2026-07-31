@@ -7,6 +7,8 @@
 
 #![allow(dead_code)]
 
+use crate::tui::display_width;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TranscriptCellKind {
     User,
@@ -107,12 +109,25 @@ fn wrap_line(line: &str, width: usize) -> Vec<String> {
 
     let mut out = Vec::new();
     let mut current = String::new();
+    let mut current_width = 0usize;
     for ch in line.chars() {
-        if current.chars().count() == width {
+        let ch_width = display_width(&ch.to_string());
+        if ch_width > width {
+            if !current.is_empty() {
+                out.push(current);
+                current = String::new();
+                current_width = 0;
+            }
+            out.push("…".to_string());
+            continue;
+        }
+        if current_width + ch_width > width {
             out.push(current);
             current = String::new();
+            current_width = 0;
         }
         current.push(ch);
+        current_width += ch_width;
     }
     if !current.is_empty() {
         out.push(current);
@@ -143,5 +158,17 @@ mod tests {
     fn render_preserves_empty_lines() {
         let cell = PlainTranscriptCell::new(TranscriptCellKind::User, "a\n\nb");
         assert_eq!(cell.render_text(80), vec!["a", "", "b"]);
+    }
+
+    #[test]
+    fn render_wraps_cjk_by_terminal_columns() {
+        let cell = PlainTranscriptCell::new(TranscriptCellKind::Assistant, "ab界cd");
+        assert_eq!(cell.render_text(4), vec!["ab界", "cd"]);
+    }
+
+    #[test]
+    fn render_replaces_a_wide_glyph_when_the_row_is_too_narrow() {
+        let cell = PlainTranscriptCell::new(TranscriptCellKind::Assistant, "界");
+        assert_eq!(cell.render_text(1), vec!["…"]);
     }
 }

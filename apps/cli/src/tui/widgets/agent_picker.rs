@@ -19,6 +19,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 
 use crate::agents::AgentDefinition;
+use crate::tui::pad_to_cols;
 use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light};
 
 // ---------------------------------------------------------------------------
@@ -246,17 +247,12 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
             let name_col = 18usize;
             let scope_col = 9usize;
             let desc_budget = (area.width as usize).saturating_sub(name_col + scope_col + 7);
-            let name_short = truncate_chars(&agent.name, name_col);
-            let desc_short = truncate_chars(desc, desc_budget);
+            let name_short = pad_to_cols(&agent.name, name_col);
+            let desc_short = pad_to_cols(desc, desc_budget);
 
             let text = format!(
-                " {} {:<name_col$}  {:<desc_short_len$}  [{}]",
-                cursor_marker,
-                name_short,
-                desc_short,
-                scope,
-                name_col = name_col,
-                desc_short_len = desc_budget,
+                " {} {}  {}  [{}]",
+                cursor_marker, name_short, desc_short, scope,
             );
 
             let style = if is_cursor {
@@ -311,18 +307,6 @@ fn render_detail(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
 
 fn agent_scope_label(agent: &AgentDefinition) -> &'static str {
     crate::agents::agent_scope_label(agent)
-}
-
-fn truncate_chars(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return value.to_string();
-    }
-    if max_chars <= 1 {
-        return "…".to_string();
-    }
-    let mut out: String = value.chars().take(max_chars - 1).collect();
-    out.push('…');
-    out
 }
 
 // ---------------------------------------------------------------------------

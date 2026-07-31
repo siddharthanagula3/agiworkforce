@@ -18,6 +18,8 @@
 
 use std::path::Path;
 
+use crate::tui::{display_width, pad_to_cols};
+
 // Sized to fit the common-minimum 80-column terminal: these screens render as
 // chat `SystemMessage`s that get a 4-space indent and sit inside the chat block's
 // L/R borders, so a wider rule wraps and breaks the layout. 72 + indent + borders
@@ -386,7 +388,11 @@ pub fn render_skills(skills: &[SkillSummary]) -> String {
             String::new(),
         ];
         for s in skills {
-            b.push(format!("    {:<28} {}", s.name, s.description));
+            b.push(format!(
+                "    {} {}",
+                pad_to_cols(&s.name, 28),
+                s.description
+            ));
         }
         b
     };
@@ -779,14 +785,18 @@ impl DoctorStatus {
 
 pub fn render_doctor(checks: &[DoctorCheck]) -> String {
     let mut body: Vec<String> = Vec::new();
-    let width = checks.iter().map(|c| c.label.len()).max().unwrap_or(0) + 2;
+    let width = checks
+        .iter()
+        .map(|c| display_width(&c.label))
+        .max()
+        .unwrap_or(0)
+        + 2;
     for c in checks {
         body.push(format!(
-            "    {} {:<width$} {}",
+            "    {} {} {}",
             c.status.glyph(),
-            format!("{}:", c.label),
-            c.detail,
-            width = width
+            pad_to_cols(&format!("{}:", c.label), width),
+            c.detail
         ));
     }
     let any_fail = checks.iter().any(|c| c.status == DoctorStatus::Fail);
@@ -824,8 +834,10 @@ pub fn render_recap(entries: &[RecapEntry], turn_count: u32, recent_edits: &[Str
     } else {
         for e in entries {
             body.push(format!(
-                "    {:<12} {:<14} {}",
-                e.role, e.age_label, e.summary
+                "    {} {} {}",
+                pad_to_cols(&e.role, 12),
+                pad_to_cols(&e.age_label, 14),
+                e.summary
             ));
         }
     }

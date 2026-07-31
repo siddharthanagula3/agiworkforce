@@ -74,8 +74,8 @@ impl InteractiveView for SkillsToggleView {
             for (i, skill) in self.skills.iter().enumerate() {
                 let cursor = if i == self.state.cursor() { "❯" } else { " " };
                 let check = if skill.enabled { "[x]" } else { "[ ]" };
-                let row = crate::tui::truncate_cols(&format!("{check} {}", skill.name), 58);
-                out.push_str(&format!("│ {cursor} {row:<58}│\n"));
+                let row = crate::tui::pad_to_cols(&format!("{check} {}", skill.name), 58);
+                out.push_str(&format!("│ {cursor} {row}│\n"));
             }
         }
 

@@ -12,6 +12,7 @@
 use std::fmt;
 
 use super::interactive::{InteractiveView, KeyAction, SelectionState, ViewAction};
+use crate::tui::{display_width, pad_to_cols};
 
 /// A generic vertical-list overlay that supports ↑↓ Enter Esc navigation.
 pub struct ListSelectionView<T: Clone + fmt::Display> {
@@ -48,7 +49,7 @@ impl<T: Clone + fmt::Display + Send> InteractiveView for ListSelectionView<T> {
     fn render(&self) -> String {
         let header = format!("─ {} ", self.title);
         let width = 60usize;
-        let bar = "─".repeat(width.saturating_sub(header.chars().count()));
+        let bar = "─".repeat(width.saturating_sub(display_width(&header)));
         let mut out = format!("┌{header}{bar}┐\n");
 
         if self.items.is_empty() {
@@ -56,8 +57,8 @@ impl<T: Clone + fmt::Display + Send> InteractiveView for ListSelectionView<T> {
         } else {
             for (i, item) in self.items.iter().enumerate() {
                 let cursor = if i == self.state.cursor() { "❯" } else { " " };
-                let row = format!("{cursor} {item}");
-                out.push_str(&format!("│  {row:<58}│\n"));
+                let row = pad_to_cols(&format!("{cursor} {item}"), 58);
+                out.push_str(&format!("│  {row}│\n"));
             }
         }
 
