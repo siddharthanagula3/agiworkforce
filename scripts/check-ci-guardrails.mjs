@@ -280,6 +280,27 @@ requireIncludes(
 );
 requireIncludes(
   '.github/workflows/release-desktop.yml',
+  'CHANNEL: ${{ needs.prepare-release.outputs.channel }}',
+);
+requireIncludes(
+  'apps/web/db/neon/0079_desktop_release_channels.sql',
+  "check (channel in ('stable', 'beta', 'nightly'))",
+);
+requireIncludes('apps/web/db/neon/0079_desktop_release_channels.sql', 'r.channel = p_channel');
+requireIncludes(
+  'apps/web/db/neon/0079_desktop_release_channels.sql',
+  "p_is_prerelease <> (p_channel <> 'stable')",
+);
+requireIncludes(
+  'apps/web/app/api/releases/[target]/[version]/route.ts',
+  'fetchLatestDesktopRelease(channel)',
+);
+requireIncludes(
+  'apps/web/lib/releases/github-desktop-releases.ts',
+  "DESKTOP_RELEASE_CHANNELS = ['stable', 'beta', 'nightly']",
+);
+requireIncludes(
+  '.github/workflows/release-desktop.yml',
   'needs: [prepare-release, build-linux, publish-release]',
 );
 requireNotIncludes(

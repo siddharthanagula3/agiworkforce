@@ -11,9 +11,11 @@ export const DESKTOP_RELEASE_PLATFORMS = [
   'windows-x86_64',
   'linux-x86_64',
 ] as const;
+export const DESKTOP_RELEASE_CHANNELS = ['stable', 'beta', 'nightly'] as const;
 
 export type DesktopReleasePlatform = (typeof DESKTOP_RELEASE_PLATFORMS)[number];
 export type DesktopDownloadPlatform = 'mac' | 'windows' | 'linux';
+export type DesktopReleaseChannel = (typeof DESKTOP_RELEASE_CHANNELS)[number];
 
 const httpsUrlSchema = z
   .string()
@@ -57,6 +59,12 @@ export interface StableDesktopRelease {
   assets: DesktopReleaseAsset[];
 }
 
+interface ParsedSemanticVersion {
+  normalized: string;
+  core: readonly [number, number, number];
+  prerelease: readonly string[];
+}
+
 export interface SignedDesktopUpdaterAsset {
   binary: DesktopReleaseAsset;
   signature: DesktopReleaseAsset;
@@ -68,8 +76,9 @@ interface FetchDesktopReleaseOptions {
   revalidateSeconds?: number;
 }
 
-const DESKTOP_TAG_PATTERN = /^v-desktop-(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const SEMVER_PATTERN = /^(?:v)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const DESKTOP_TAG_PREFIX = 'v-desktop-';
+const SEMVER_PATTERN =
+  /^(?:v)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*))?(?:\+([0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*))?$/;
 const MAX_RELEASE_PAGES = 10;
 
 function toAsset(asset: GitHubAssetPayload): DesktopReleaseAsset {
@@ -81,10 +90,14 @@ function toAsset(asset: GitHubAssetPayload): DesktopReleaseAsset {
   };
 }
 
-export function parseSemanticVersion(version: string): [number, number, number] | null {
+export function parseSemanticVersion(version: string): ParsedSemanticVersion | null {
   const match = SEMVER_PATTERN.exec(version.trim());
   if (!match) return null;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  return {
+    normalized: version.trim().replace(/^v/u, ''),
+    core: [Number(match[1]), Number(match[2]), Number(match[3])],
+    prerelease: match[4]?.split('.') ?? [],
+  };
 }
 
 export function compareSemanticVersions(left: string, right: string): number | null {
@@ -92,14 +105,55 @@ export function compareSemanticVersions(left: string, right: string): number | n
   const parsedRight = parseSemanticVersion(right);
   if (!parsedLeft || !parsedRight) return null;
 
-  for (let index = 0; index < parsedLeft.length; index += 1) {
-    const difference = parsedLeft[index]! - parsedRight[index]!;
+  for (let index = 0; index < parsedLeft.core.length; index += 1) {
+    const difference = parsedLeft.core[index]! - parsedRight.core[index]!;
     if (difference !== 0) return difference > 0 ? 1 : -1;
+  }
+
+  if (parsedLeft.prerelease.length === 0 || parsedRight.prerelease.length === 0) {
+    if (parsedLeft.prerelease.length === parsedRight.prerelease.length) return 0;
+    return parsedLeft.prerelease.length === 0 ? 1 : -1;
+  }
+
+  const identifierCount = Math.max(parsedLeft.prerelease.length, parsedRight.prerelease.length);
+  for (let index = 0; index < identifierCount; index += 1) {
+    const leftIdentifier = parsedLeft.prerelease[index];
+    const rightIdentifier = parsedRight.prerelease[index];
+    if (leftIdentifier === undefined || rightIdentifier === undefined) {
+      return leftIdentifier === undefined ? -1 : 1;
+    }
+    if (leftIdentifier === rightIdentifier) continue;
+
+    const leftNumeric = /^\d+$/u.test(leftIdentifier);
+    const rightNumeric = /^\d+$/u.test(rightIdentifier);
+    if (leftNumeric && rightNumeric) {
+      const leftNumber = BigInt(leftIdentifier);
+      const rightNumber = BigInt(rightIdentifier);
+      if (leftNumber === rightNumber) continue;
+      return leftNumber > rightNumber ? 1 : -1;
+    }
+    if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+    return leftIdentifier > rightIdentifier ? 1 : -1;
   }
   return 0;
 }
 
-export function selectLatestStableDesktopRelease(payload: unknown): StableDesktopRelease | null {
+export function desktopReleaseChannelForVersion(version: string): DesktopReleaseChannel | null {
+  const parsed = parseSemanticVersion(version);
+  if (!parsed) return null;
+  if (parsed.prerelease.length === 0) return 'stable';
+  const label = parsed.prerelease[0]!.toLowerCase();
+  return label === 'alpha' || label === 'nightly' || label === 'canary' ? 'nightly' : 'beta';
+}
+
+export function isDesktopReleaseChannel(value: string): value is DesktopReleaseChannel {
+  return DESKTOP_RELEASE_CHANNELS.some((channel) => channel === value);
+}
+
+export function selectLatestDesktopRelease(
+  payload: unknown,
+  channel: DesktopReleaseChannel,
+): StableDesktopRelease | null {
   const parsed = githubReleaseListSchema.safeParse(payload);
   if (!parsed.success) {
     logger.warn({ issues: parsed.error.issues }, 'GitHub desktop release payload is invalid');
@@ -107,15 +161,24 @@ export function selectLatestStableDesktopRelease(payload: unknown): StableDeskto
   }
 
   const candidates = parsed.data.flatMap((release) => {
-    if (release.draft || release.prerelease || !release.published_at) return [];
-    const tagMatch = DESKTOP_TAG_PATTERN.exec(release.tag_name);
-    if (!tagMatch) return [];
+    if (
+      release.draft ||
+      !release.published_at ||
+      !release.tag_name.startsWith(DESKTOP_TAG_PREFIX)
+    ) {
+      return [];
+    }
+    const parsedVersion = parseSemanticVersion(release.tag_name.slice(DESKTOP_TAG_PREFIX.length));
+    if (!parsedVersion || desktopReleaseChannelForVersion(parsedVersion.normalized) !== channel) {
+      return [];
+    }
+    if (release.prerelease !== (channel !== 'stable')) return [];
 
     return [
       {
         id: release.id,
         tagName: release.tag_name,
-        version: `${tagMatch[1]}.${tagMatch[2]}.${tagMatch[3]}`,
+        version: parsedVersion.normalized,
         notes: release.body ?? '',
         publishedAt: release.published_at,
         assets: release.assets.map(toAsset),
@@ -125,6 +188,10 @@ export function selectLatestStableDesktopRelease(payload: unknown): StableDeskto
 
   candidates.sort((left, right) => compareSemanticVersions(right.version, left.version) ?? 0);
   return candidates[0] ?? null;
+}
+
+export function selectLatestStableDesktopRelease(payload: unknown): StableDesktopRelease | null {
+  return selectLatestDesktopRelease(payload, 'stable');
 }
 
 function githubHeaders(): HeadersInit {
@@ -138,7 +205,8 @@ function githubHeaders(): HeadersInit {
   return headers;
 }
 
-export async function fetchLatestStableDesktopRelease(
+export async function fetchLatestDesktopRelease(
+  channel: DesktopReleaseChannel,
   options: FetchDesktopReleaseOptions = {},
 ): Promise<StableDesktopRelease | null> {
   const owner = options.owner ?? getOptionalEnv('DESKTOP_GITHUB_OWNER');
@@ -166,12 +234,12 @@ export async function fetchLatestStableDesktopRelease(
 
       const payload: unknown = await response.json();
       if (!Array.isArray(payload)) {
-        return selectLatestStableDesktopRelease(payload);
+        return selectLatestDesktopRelease(payload, channel);
       }
       releases.push(...payload);
 
       const hasNextPage = response.headers.get('link')?.includes('rel="next"') ?? false;
-      if (!hasNextPage) return selectLatestStableDesktopRelease(releases);
+      if (!hasNextPage) return selectLatestDesktopRelease(releases, channel);
       if (page === MAX_RELEASE_PAGES) {
         logger.warn(
           { owner, repo, maxPages: MAX_RELEASE_PAGES },
@@ -186,6 +254,12 @@ export async function fetchLatestStableDesktopRelease(
     logger.warn({ error }, 'GitHub desktop release request failed');
     return null;
   }
+}
+
+export function fetchLatestStableDesktopRelease(
+  options: FetchDesktopReleaseOptions = {},
+): Promise<StableDesktopRelease | null> {
+  return fetchLatestDesktopRelease('stable', options);
 }
 
 function hasX64Marker(name: string): boolean {

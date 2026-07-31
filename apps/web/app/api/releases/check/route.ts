@@ -11,25 +11,22 @@ import { getOptionalEnv } from '@shared/utils/env';
 import {
   compareSemanticVersions,
   DESKTOP_RELEASE_PLATFORMS,
-  fetchLatestStableDesktopRelease,
+  fetchLatestDesktopRelease,
+  isDesktopReleaseChannel,
   parseSemanticVersion,
+  type DesktopReleaseChannel,
   selectSignedDesktopUpdaterAsset,
   type DesktopReleasePlatform,
 } from '@/lib/releases/github-desktop-releases';
 
 const VALID_PLATFORMS = DESKTOP_RELEASE_PLATFORMS;
 
-// AUDIT-FIX STB-11: `releases.channel` is free-form text with no seeded
-// allowlist, so this validates shape rather than membership — enough to reject
-// non-strings and injection-shaped values without breaking a channel an
-// operator adds later.
-const CHANNEL_SLUG_RE = /^[a-z][a-z0-9-]{0,31}$/;
 type Platform = DesktopReleasePlatform;
 
 interface UpdateCheckRequest {
   current_version: string;
   platform: Platform;
-  channel?: string;
+  channel?: DesktopReleaseChannel;
 }
 
 interface UpdateCheckResponse {
@@ -61,7 +58,7 @@ function isUpdateAvailable(currentVersion: string, latestVersion: string): boole
  */
 async function getLatestRelease(
   platform: Platform,
-  channel: string = 'stable',
+  channel: DesktopReleaseChannel = 'stable',
 ): Promise<ReleaseRecord | null> {
   const neonUrl = getOptionalEnv('DATABASE_URL') ?? getOptionalEnv('AGI_DATABASE_URL');
 
@@ -77,7 +74,7 @@ async function getLatestRelease(
       'version' | 'download_url' | 'notes' | 'pub_date' | 'file_size_bytes' | 'is_critical'
     >;
     const rows = await db.query<ReleaseQueryRow>(
-      'select version, download_url, notes, pub_date, file_size_bytes, is_critical from releases where platform = $1 and channel = $2 and is_prerelease = false order by pub_date desc limit 1',
+      "select version, download_url, notes, pub_date, file_size_bytes, is_critical from releases where platform = $1 and channel = $2 and is_prerelease = ($2 <> 'stable') order by pub_date desc limit 1",
       [platform, channel],
     );
 
@@ -95,15 +92,18 @@ async function getLatestRelease(
 /**
  * Fallback: Get latest version from GitHub
  */
-async function getLatestReleaseFromGitHub(platform: Platform): Promise<ReleaseRecord | null> {
-  const release = await fetchLatestStableDesktopRelease();
+async function getLatestReleaseFromGitHub(
+  platform: Platform,
+  channel: DesktopReleaseChannel,
+): Promise<ReleaseRecord | null> {
+  const release = await fetchLatestDesktopRelease(channel);
   if (!release) return null;
   const updaterAsset = selectSignedDesktopUpdaterAsset(release, platform);
   if (!updaterAsset) return null;
 
   return {
     version: release.version,
-    download_url: `https://agiworkforce.com/api/releases/latest/${platform}`,
+    download_url: `https://agiworkforce.com/api/releases/latest/${platform}?channel=${channel}`,
     notes: release.notes,
     pub_date: release.publishedAt,
     file_size_bytes: updaterAsset.binary.size,
@@ -140,16 +140,8 @@ async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
 
   const { current_version, platform, channel = 'stable' } = body;
 
-  // AUDIT-FIX STB-11: `channel` was the one field on this route with no type
-  // check and no allowlist, and it flowed straight into a SQL parameter. This
-  // handler is unauthenticated (rate limit only), so it was the only
-  // pre-auth-reachable unvalidated input in the API. An arbitrary string also
-  // silently bypassed the GitHub fallback below, which is gated on
-  // `channel === 'stable'`.
-  if (typeof channel !== 'string' || !CHANNEL_SLUG_RE.test(channel)) {
-    throw createError.validation(
-      'Invalid channel. Expected a short lowercase slug (e.g. "stable", "beta").',
-    );
+  if (typeof channel !== 'string' || !isDesktopReleaseChannel(channel)) {
+    throw createError.validation('Invalid channel. Expected stable, beta, or nightly.');
   }
 
   // Validate required fields
@@ -180,8 +172,8 @@ async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
   let latest = await getLatestRelease(platform, channel);
 
   // Fall back to GitHub if database is empty
-  if (!latest && channel === 'stable') {
-    latest = await getLatestReleaseFromGitHub(platform);
+  if (!latest) {
+    latest = await getLatestReleaseFromGitHub(platform, channel);
   }
 
   // Build response
@@ -239,13 +231,12 @@ async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse>
   const url = new URL(request.url);
   const current_version = url.searchParams.get('version');
   const platform = url.searchParams.get('platform') as Platform | null;
-  const channel = url.searchParams.get('channel') || 'stable';
+  const rawChannel = url.searchParams.get('channel') || 'stable';
 
-  if (!CHANNEL_SLUG_RE.test(channel)) {
-    throw createError.validation(
-      'Invalid channel. Expected a short lowercase slug (e.g. "stable", "beta").',
-    );
+  if (!isDesktopReleaseChannel(rawChannel)) {
+    throw createError.validation('Invalid channel. Expected stable, beta, or nightly.');
   }
+  const channel = rawChannel;
 
   // Validate required params
   if (!current_version) {
@@ -271,8 +262,8 @@ async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse>
   let latest = await getLatestRelease(platform, channel);
 
   // Fall back to GitHub
-  if (!latest && channel === 'stable') {
-    latest = await getLatestReleaseFromGitHub(platform);
+  if (!latest) {
+    latest = await getLatestReleaseFromGitHub(platform, channel);
   }
 
   // Build response

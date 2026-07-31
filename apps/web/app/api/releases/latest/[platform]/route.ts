@@ -11,10 +11,12 @@ import { getOptionalEnv } from '@shared/utils/env';
 import {
   DESKTOP_RELEASE_PLATFORMS,
   fetchDesktopAssetSignature,
-  fetchLatestStableDesktopRelease,
+  fetchLatestDesktopRelease,
+  isDesktopReleaseChannel,
   parseSemanticVersion,
   selectSignedDesktopUpdaterAsset,
   type DesktopReleasePlatform,
+  type DesktopReleaseChannel,
 } from '@/lib/releases/github-desktop-releases';
 
 const VALID_PLATFORMS = DESKTOP_RELEASE_PLATFORMS;
@@ -50,7 +52,7 @@ interface ReleaseRecord {
  */
 async function getReleaseFromDatabase(
   platform: Platform,
-  channel: string = 'stable',
+  channel: DesktopReleaseChannel = 'stable',
 ): Promise<ReleaseRecord | null> {
   const neonUrl = getOptionalEnv('DATABASE_URL') ?? getOptionalEnv('AGI_DATABASE_URL');
 
@@ -61,7 +63,7 @@ async function getReleaseFromDatabase(
   try {
     const db = getNeonDb();
     const rows = await db.query<ReleaseRow>(
-      'select * from releases where platform = $1 and channel = $2 and is_prerelease = false order by pub_date desc limit 1',
+      "select * from releases where platform = $1 and channel = $2 and is_prerelease = ($2 <> 'stable') order by pub_date desc limit 1",
       [platform, channel],
     );
 
@@ -79,8 +81,11 @@ async function getReleaseFromDatabase(
 /**
  * Fallback: Get release from GitHub Releases API
  */
-async function getReleaseFromGitHub(platform: Platform): Promise<ReleaseRecord | null> {
-  const release = await fetchLatestStableDesktopRelease();
+async function getReleaseFromGitHub(
+  platform: Platform,
+  channel: DesktopReleaseChannel,
+): Promise<ReleaseRecord | null> {
+  const release = await fetchLatestDesktopRelease(channel);
   if (!release) return null;
   const updaterAsset = selectSignedDesktopUpdaterAsset(release, platform);
   if (!updaterAsset) return null;
@@ -163,18 +168,18 @@ async function handleGetLatestRelease(
 
   // Get channel from query params (default: stable)
   const url = new URL(request.url);
-  const VALID_CHANNELS = ['stable', 'beta'] as const;
   const rawChannel = url.searchParams.get('channel') || 'stable';
-  const channel = VALID_CHANNELS.includes(rawChannel as (typeof VALID_CHANNELS)[number])
-    ? rawChannel
-    : 'stable';
+  if (!isDesktopReleaseChannel(rawChannel)) {
+    throw createError.validation('Invalid channel. Expected stable, beta, or nightly.');
+  }
+  const channel = rawChannel;
 
   // Try database first
   let release = await getReleaseFromDatabase(validPlatform, channel);
 
   // Fall back to GitHub if database doesn't have the release
-  if (!release && channel === 'stable') {
-    release = await getReleaseFromGitHub(validPlatform);
+  if (!release) {
+    release = await getReleaseFromGitHub(validPlatform, channel);
   }
 
   // No release found
@@ -201,7 +206,7 @@ async function handleGetLatestRelease(
   }
 
   const manifest: TauriUpdateManifest = {
-    version: parsedVersion.join('.'),
+    version: parsedVersion.normalized,
     notes: release.notes || `Release ${release.version}`,
     pub_date: release.pub_date,
     platforms: {
