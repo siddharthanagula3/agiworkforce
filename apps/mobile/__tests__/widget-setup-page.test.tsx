@@ -87,6 +87,7 @@ describe('Quick Access screen — describes only real integrations', () => {
     }
 
     expect(getByText('Share Sheet')).toBeTruthy();
+    expect(getByText('Review and create a real Apple Reminder')).toBeTruthy();
     expect(getAllByText(/choose Share to AGI/i).length).toBeGreaterThan(0);
     expect(getByText(/Save for AGI Review/)).toBeTruthy();
     expect(getByText(/then open AGI Workforce/)).toBeTruthy();
