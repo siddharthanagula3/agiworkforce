@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-29",
+  "lastUpdated": "2026-07-30",
   "rule": "Non-Markdown artifacts outside docs/archive must be operational contracts, active verification outputs, or explicitly marked rebuild-required. Historical evidence belongs under docs/archive.",
   "keepActive": [
     {
@@ -32,12 +32,6 @@
       "status": "tool-contract",
       "owner": "Platform lead",
       "reason": "Codex agent profiles and config are loader-owned operational files."
-    },
-    {
-      "path": "docs/visual-verification/**",
-      "status": "active-test-output",
-      "owner": "Platform lead",
-      "reason": "Current Playwright and snapshot specs write here; regenerate before using as current visual truth."
     },
     {
       "path": "docs/design/ui-ux-reference-2026-07/**",

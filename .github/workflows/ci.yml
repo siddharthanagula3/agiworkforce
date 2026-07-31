@@ -407,6 +407,7 @@ jobs:
           pnpm exec playwright test \
             --project=smoke \
             --project=self-healing \
+            --project=visual-regression \
             --project=accessibility-audit \
             --retries=2 \
             --workers=1

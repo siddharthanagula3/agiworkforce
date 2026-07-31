@@ -85,8 +85,12 @@ requireIncludes(
   'cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib',
 );
 requireIncludes('.github/workflows/ci.yml', 'bash apps/desktop/check-wiring.sh');
+requireIncludes('.github/workflows/ci.yml', '--project=visual-regression');
 requireIncludes('.github/workflows/ci.yml', '--project=accessibility-audit');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/web a11y:audit');
+requireIncludes('apps/desktop/playwright.config.ts', "name: 'visual-regression'");
+requireIncludes('apps/desktop/playwright.config.ts', "testMatch: '**/visual-regression.spec.ts'");
+requireNotIncludes('apps/desktop/playwright.config.ts', "name: 'visual-verification'");
 requireIncludes('apps/desktop/playwright.config.ts', "name: 'accessibility-audit'");
 requireIncludes('apps/desktop/playwright.config.ts', "testMatch: '**/accessibility-audit.spec.ts'");
 

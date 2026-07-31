@@ -108,7 +108,6 @@ const allowedLiveNonMarkdownPrefixes = [
   'docs/api/',
   'docs/design/ui-ux-reference-2026-07/',
   'docs/spec/artifacts/',
-  'docs/visual-verification/',
   'audit/desktop-ui-computer-use/screenshots/',
   'audit/demo-readiness/screenshots/',
   'reports/generated/',

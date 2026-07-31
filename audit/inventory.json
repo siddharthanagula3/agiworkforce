@@ -3878,8 +3878,8 @@
   {
     "item": "screenshot-tests",
     "surface": "release-infra",
-    "status": "unwired",
-    "evidence": "Real visual-regression harness exists: apps/desktop/e2e/visual-regression.spec.ts uses screenshotHelper.captureFullPage/compareVisual/createBaseline (apps/desktop/e2e/utils/screenshot-helper.ts) across chat/AGI/automation/settings/theme views, registered as the 'visual-regression' Playwright project (apps/desktop/playwright.config.ts:64-68); a second 'visual-verification' project also exists (apps/desktop/playwright.config.ts:69-73, apps/desktop/e2e/visual-verification.spec.ts). apps/web/e2e/visual-verification.spec.ts, round-17-visual-verification.spec.ts, round-18-visual-verification.spec.ts are the web equivalents. Grepped every .github/workflows/*.yml for 'visual-regression' and 'visual-verification' - zero matches; the desktop-e2e CI job only ever passes `--project=smoke --project=self-healing` (ci.yml:349-353) or `--project=smoke/chat/v3-locks` (e2e-tests.yml:93-119)."
+    "status": "built",
+    "evidence": "apps/desktop/e2e/visual-regression.spec.ts is a fail-closed pixel comparison for the deterministic Desktop cloud sign-in surface. It requires the reviewed apps/desktop/e2e/visual-baselines/desktop-cloud-sign-in.png artifact, rejects dimension changes, allows at most a 3% pixel-diff ratio, attaches a diff on failure, and permits regeneration only with explicit UPDATE_VISUAL_BASELINES=1. apps/desktop/playwright.config.ts fixes the project at 1440x900 and deviceScaleFactor 1; .github/workflows/ci.yml invokes --project=visual-regression in the blocking path-scoped Desktop E2E job; scripts/check-ci-guardrails.mjs pins both connections. The stale auto-creating screenshot helper and capture-only Desktop/Web specs were removed. docs/decisions/2026-07-30-fail-closed-visual-baselines.md records the contract. Verified locally after visual review: explicit baseline generation passed, then a normal comparison-only run passed without rewriting the baseline."
   },
   {
     "item": "a11y-audit",
