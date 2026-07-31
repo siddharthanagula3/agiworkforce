@@ -297,12 +297,13 @@ export interface BundleToolParam {
 }
 
 export interface RequiredCredential {
-  key: string;
+  key?: string;
   displayName: string;
   description: string;
   required: boolean;
   envVar?: string;
   placeholder?: string;
+  helpUrl?: string;
 }
 
 export interface BundleInstallProgress {

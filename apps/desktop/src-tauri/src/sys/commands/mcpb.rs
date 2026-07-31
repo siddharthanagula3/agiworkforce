@@ -5,7 +5,7 @@
 //! that can be easily installed via npm.
 //!
 //! ## Features
-//! - Registry-based bundle discovery (with embedded data + future API support)
+//! - Registry-based bundle discovery (official MCP Registry + reviewed embedded data)
 //! - Bundle installation via npm
 //! - Bundle updates and version management
 //! - Progress events during installation
@@ -160,6 +160,10 @@ pub struct InstalledBundleMetadata {
     pub updated_at: u64,
     /// Server name in MCP config
     pub server_name: String,
+    /// Normalized registry record retained so an installed official entry
+    /// remains manageable after an offline restart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle: Option<McpBundle>,
 }
 
 /// Container for all installed bundle metadata
@@ -167,6 +171,332 @@ pub struct InstalledBundleMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct InstalledBundlesData {
     pub bundles: HashMap<String, InstalledBundleMetadata>,
+}
+
+const OFFICIAL_MCP_REGISTRY_SERVERS_URL: &str =
+    "https://registry.modelcontextprotocol.io/v0.1/servers";
+const OFFICIAL_REGISTRY_BUNDLE_PREFIX: &str = "mcp-registry-";
+
+#[derive(Debug, Deserialize)]
+struct OfficialRegistryResponse {
+    #[serde(default)]
+    servers: Vec<OfficialRegistryEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialRegistryEntry {
+    server: OfficialRegistryServer,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OfficialRegistryServer {
+    name: String,
+    title: Option<String>,
+    description: String,
+    version: String,
+    packages: Option<Vec<OfficialRegistryPackage>>,
+    remotes: Option<Vec<OfficialRegistryRemote>>,
+    repository: Option<OfficialRegistryRepository>,
+    website_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OfficialRegistryPackage {
+    registry_type: String,
+    identifier: String,
+    version: Option<String>,
+    runtime_hint: Option<String>,
+    transport: Option<OfficialRegistryTransport>,
+    runtime_arguments: Option<Vec<OfficialRegistryArgument>>,
+    package_arguments: Option<Vec<OfficialRegistryArgument>>,
+    environment_variables: Option<Vec<OfficialRegistryEnvironmentVariable>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialRegistryTransport {
+    #[serde(rename = "type")]
+    transport_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialRegistryArgument {
+    value: Option<String>,
+    default: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OfficialRegistryEnvironmentVariable {
+    name: String,
+    description: Option<String>,
+    default: Option<String>,
+    value: Option<String>,
+    #[serde(default)]
+    is_required: bool,
+    #[serde(default)]
+    is_secret: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialRegistryRemote {
+    #[serde(rename = "type")]
+    transport_type: String,
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OfficialRegistryRepository {
+    url: String,
+}
+
+fn registry_bundle_id(server_name: &str) -> String {
+    let mut slug = String::with_capacity(server_name.len());
+    let mut previous_was_separator = false;
+
+    for character in server_name.chars().flat_map(char::to_lowercase) {
+        if character.is_ascii_alphanumeric() {
+            slug.push(character);
+            previous_was_separator = false;
+        } else if !previous_was_separator && !slug.is_empty() {
+            slug.push('-');
+            previous_was_separator = true;
+        }
+    }
+
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+
+    if slug.is_empty() {
+        slug.push_str("server");
+    }
+
+    format!("{OFFICIAL_REGISTRY_BUNDLE_PREFIX}{slug}")
+}
+
+fn registry_argument_value(argument: &OfficialRegistryArgument) -> Option<String> {
+    argument
+        .value
+        .as_ref()
+        .or(argument.default.as_ref())
+        .filter(|value| !value.is_empty())
+        .cloned()
+}
+
+fn official_registry_bundle(entry: OfficialRegistryEntry) -> McpBundle {
+    let server = entry.server;
+    let packages = server.packages.unwrap_or_default();
+    let remotes = server.remotes.unwrap_or_default();
+    let npm_package = packages.iter().find(|package| {
+        package.registry_type.eq_ignore_ascii_case("npm")
+            && package
+                .transport
+                .as_ref()
+                .is_some_and(|transport| transport.transport_type == "stdio")
+    });
+
+    let (installable_package, config_template, required_credentials, transport_tag) =
+        if let Some(package) = npm_package {
+            let command = package
+                .runtime_hint
+                .clone()
+                .filter(|hint| !hint.is_empty())
+                .unwrap_or_else(|| "npx".to_string());
+            let mut args = package
+                .runtime_arguments
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .filter_map(registry_argument_value)
+                .collect::<Vec<_>>();
+
+            if command == "npx" && !args.iter().any(|arg| arg == "-y" || arg == "--yes") {
+                args.push("-y".to_string());
+            }
+
+            let package_version = package.version.as_deref().unwrap_or(&server.version);
+            args.push(format!("{}@{}", package.identifier, package_version));
+            args.extend(
+                package
+                    .package_arguments
+                    .as_deref()
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(registry_argument_value),
+            );
+
+            let mut env = HashMap::new();
+            let mut credentials = Vec::new();
+            for variable in package.environment_variables.as_deref().unwrap_or_default() {
+                let configured_value = variable
+                    .value
+                    .as_ref()
+                    .or(variable.default.as_ref())
+                    .cloned();
+                env.insert(
+                    variable.name.clone(),
+                    configured_value
+                        .clone()
+                        .unwrap_or_else(|| format!("<configure:{}>", variable.name)),
+                );
+
+                if variable.is_required || variable.is_secret || configured_value.is_none() {
+                    credentials.push(RequiredCredential {
+                        env_var: variable.name.clone(),
+                        display_name: variable.name.replace('_', " "),
+                        description: variable.description.clone().unwrap_or_else(|| {
+                            format!("Configuration required by {}", server.name)
+                        }),
+                        help_url: server.website_url.clone(),
+                        required: variable.is_required,
+                    });
+                }
+            }
+
+            (
+                Some(package.identifier.clone()),
+                McpConfigTemplate { command, args, env },
+                credentials,
+                "npm".to_string(),
+            )
+        } else if let Some(remote) = remotes.first() {
+            (
+                None,
+                McpConfigTemplate {
+                    command: remote.transport_type.clone(),
+                    args: vec![remote.url.clone()],
+                    env: HashMap::new(),
+                },
+                Vec::new(),
+                "remote".to_string(),
+            )
+        } else if let Some(package) = packages.first() {
+            (
+                None,
+                McpConfigTemplate {
+                    command: package.registry_type.clone(),
+                    args: vec![package.identifier.clone()],
+                    env: HashMap::new(),
+                },
+                Vec::new(),
+                package.registry_type.to_lowercase(),
+            )
+        } else {
+            (
+                None,
+                McpConfigTemplate {
+                    command: "manual".to_string(),
+                    args: Vec::new(),
+                    env: HashMap::new(),
+                },
+                Vec::new(),
+                "manual".to_string(),
+            )
+        };
+
+    let display_name = server
+        .title
+        .filter(|title| !title.trim().is_empty())
+        .unwrap_or_else(|| server.name.clone());
+    let author = server
+        .name
+        .split('/')
+        .next()
+        .filter(|namespace| !namespace.is_empty())
+        .unwrap_or("Official MCP Registry")
+        .to_string();
+
+    let mut tags = vec![
+        "official-registry".to_string(),
+        "community".to_string(),
+        transport_tag,
+        server.name.clone(),
+    ];
+    if let Some(package) = npm_package {
+        tags.push(package.identifier.clone());
+    }
+
+    McpBundle {
+        id: registry_bundle_id(&server.name),
+        name: display_name,
+        version: server.version,
+        description: server.description,
+        author,
+        category: "other".to_string(),
+        icon_url: None,
+        npm_package: installable_package,
+        github_url: server.repository.map(|repository| repository.url),
+        documentation_url: server.website_url,
+        tools: Vec::new(),
+        config_template,
+        required_credentials,
+        rating: None,
+        downloads: None,
+        // Namespace ownership in the official registry is not an AGI Workforce
+        // review of the package. Keep the explicit unverified-install gate.
+        verified: false,
+        featured: false,
+        tags,
+        installed: false,
+        installed_version: None,
+        update_available: false,
+    }
+}
+
+fn merge_registry_bundles(target: &mut Vec<McpBundle>, incoming: Vec<McpBundle>) {
+    for bundle in incoming {
+        if let Some(existing) = target
+            .iter_mut()
+            .find(|candidate| candidate.id == bundle.id)
+        {
+            if !existing.verified {
+                *existing = bundle;
+            }
+        } else {
+            target.push(bundle);
+        }
+    }
+}
+
+fn mark_installed_bundles(
+    bundles: &mut [McpBundle],
+    installed: &HashMap<String, InstalledBundleMetadata>,
+) {
+    for bundle in bundles {
+        if let Some(metadata) = installed.get(&bundle.id) {
+            bundle.installed = true;
+            bundle.installed_version = Some(metadata.version.clone());
+            bundle.update_available = metadata.version != bundle.version;
+        }
+    }
+}
+
+fn merge_installed_bundle_snapshots(
+    bundles: &mut Vec<McpBundle>,
+    installed: &HashMap<String, InstalledBundleMetadata>,
+) {
+    for metadata in installed.values() {
+        if let Some(bundle) = metadata.bundle.as_ref() {
+            merge_registry_bundles(bundles, vec![bundle.clone()]);
+        }
+    }
+}
+
+fn npm_install_spec(bundle: &McpBundle, npm_package: &str) -> String {
+    if bundle.id.starts_with(OFFICIAL_REGISTRY_BUNDLE_PREFIX) {
+        let versioned_prefix = format!("{npm_package}@");
+        bundle
+            .config_template
+            .args
+            .iter()
+            .find(|argument| argument.starts_with(&versioned_prefix))
+            .cloned()
+            .unwrap_or_else(|| format!("{npm_package}@{}", bundle.version))
+    } else {
+        npm_package.to_string()
+    }
 }
 
 // ============================================================================
@@ -2158,10 +2488,12 @@ fn get_embedded_registry() -> Vec<McpBundle> {
 // Remote Registry API
 // ============================================================================
 
-/// Fetch bundles from the remote MCP registry API.
+/// Fetch servers from the official MCP Registry and adapt its published
+/// server.json contract to the bundle model used by the Desktop client.
 ///
-/// Uses a timeout and returns an error if the API is unavailable.
-async fn fetch_remote_registry() -> Result<Vec<McpBundle>, String> {
+/// The registry search endpoint is also used for queries so discovery is not
+/// limited to the first result page loaded by the browser.
+async fn fetch_official_registry(search: Option<&str>) -> Result<Vec<McpBundle>, String> {
     use std::time::Duration;
 
     let client = reqwest::Client::builder()
@@ -2169,35 +2501,40 @@ async fn fetch_remote_registry() -> Result<Vec<McpBundle>, String> {
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    let response = client
-        .get("https://registry.mcpservers.io/api/v1/bundles")
+    let mut request = client
+        .get(OFFICIAL_MCP_REGISTRY_SERVERS_URL)
+        .query(&[("limit", "100"), ("version", "latest")])
         .header("Accept", "application/json")
-        .header("User-Agent", "AGIWorkforce/1.0")
-        .send()
-        .await
-        .map_err(|e| format!("API request failed: {}", e))?;
+        .header(
+            "User-Agent",
+            format!("AGIWorkforce/{}", env!("CARGO_PKG_VERSION")),
+        );
 
-    if !response.status().is_success() {
-        return Err(format!("API returned status: {}", response.status()));
+    if let Some(query) = search.filter(|query| !query.trim().is_empty()) {
+        request = request.query(&[("search", query.trim())]);
     }
 
-    // Try to parse as our McpBundle format
-    let bundles: Vec<McpBundle> = response
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Official MCP Registry request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Official MCP Registry returned status: {}",
+            response.status()
+        ));
+    }
+
+    let registry: OfficialRegistryResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse registry response: {}", e))?;
+        .map_err(|e| format!("Failed to parse official MCP Registry response: {}", e))?;
 
-    // A remote response cannot self-attest publisher verification. Until the
-    // registry response is signature-verified against a bundled trust root,
-    // every remote-only entry must pass through the renderer's explicit
-    // unverified-install confirmation. Embedded entries retain their reviewed
-    // verification metadata when the two sources are merged by id.
-    Ok(bundles
+    Ok(registry
+        .servers
         .into_iter()
-        .map(|mut bundle| {
-            bundle.verified = false;
-            bundle
-        })
+        .map(official_registry_bundle)
         .collect())
 }
 
@@ -2207,48 +2544,34 @@ async fn fetch_remote_registry() -> Result<Vec<McpBundle>, String> {
 
 /// Fetch the bundle registry.
 ///
-/// Tries to fetch from the remote API first, falls back to embedded data.
-/// Cache results with a 1-hour TTL to avoid excessive API calls.
+/// Merges the official MCP Registry with reviewed embedded entries. If the
+/// network is unavailable, the embedded directory remains usable.
 #[tauri::command]
 pub async fn mcpb_fetch_registry(state: State<'_, McpbState>) -> Result<Vec<McpBundle>, String> {
     tracing::info!("Fetching MCPB registry");
 
-    // Try to fetch from remote API
-    let mut bundles = match fetch_remote_registry().await {
-        Ok(remote_bundles) => {
+    let mut bundles = get_embedded_registry();
+    match fetch_official_registry(None).await {
+        Ok(official_bundles) => {
             tracing::info!(
-                "Fetched {} bundles from remote registry",
-                remote_bundles.len()
+                "Fetched {} servers from the official MCP Registry",
+                official_bundles.len()
             );
-            // Merge with embedded registry to ensure we have all bundles
-            let mut combined = get_embedded_registry();
-            for bundle in remote_bundles {
-                if !combined.iter().any(|b| b.id == bundle.id) {
-                    combined.push(bundle);
-                }
-            }
-            combined
+            merge_registry_bundles(&mut bundles, official_bundles);
         }
         Err(e) => {
             tracing::warn!(
-                "Failed to fetch remote registry, using embedded data: {}",
+                "Failed to fetch the official MCP Registry, using reviewed embedded data: {}",
                 e
             );
-            get_embedded_registry()
-        }
-    };
-
-    // Mark installed bundles
-    let installed = state.installed.lock();
-    for bundle in &mut bundles {
-        if let Some(metadata) = installed.bundles.get(&bundle.id) {
-            bundle.installed = true;
-            bundle.installed_version = Some(metadata.version.clone());
-            bundle.update_available = metadata.version != bundle.version;
         }
     }
 
-    // Cache the registry
+    let installed = state.installed.lock();
+    merge_installed_bundle_snapshots(&mut bundles, &installed.bundles);
+    mark_installed_bundles(&mut bundles, &installed.bundles);
+    drop(installed);
+
     *state.registry_cache.lock() = bundles.clone();
 
     tracing::info!("Fetched {} bundles from registry", bundles.len());
@@ -2268,25 +2591,42 @@ pub async fn mcpb_search_bundles(
         category
     );
 
-    let cache = state.registry_cache.lock();
-    let bundles = if cache.is_empty() {
-        drop(cache);
-        // Re-fetch if cache is empty
-        let mut bundles = get_embedded_registry();
-        let installed = state.installed.lock();
-        for bundle in &mut bundles {
-            if let Some(metadata) = installed.bundles.get(&bundle.id) {
-                bundle.installed = true;
-                bundle.installed_version = Some(metadata.version.clone());
-                bundle.update_available = metadata.version != bundle.version;
-            }
+    let mut bundles = {
+        let cache = state.registry_cache.lock();
+        if cache.is_empty() {
+            get_embedded_registry()
+        } else {
+            cache.clone()
         }
-        bundles
-    } else {
-        cache.clone()
     };
 
-    let query_lower = query.to_lowercase();
+    {
+        let installed = state.installed.lock();
+        merge_installed_bundle_snapshots(&mut bundles, &installed.bundles);
+    }
+
+    let normalized_query = query.trim();
+    if !normalized_query.is_empty() {
+        match fetch_official_registry(Some(normalized_query)).await {
+            Ok(official_matches) => {
+                merge_registry_bundles(&mut bundles, official_matches);
+                let mut cache = state.registry_cache.lock();
+                merge_registry_bundles(&mut cache, bundles.clone());
+            }
+            Err(error) => {
+                tracing::warn!(
+                    "Official MCP Registry search failed; searching cached entries only: {}",
+                    error
+                );
+            }
+        }
+    }
+
+    let installed = state.installed.lock();
+    mark_installed_bundles(&mut bundles, &installed.bundles);
+    drop(installed);
+
+    let query_lower = normalized_query.to_lowercase();
 
     let filtered: Vec<McpBundle> = bundles
         .into_iter()
@@ -2305,6 +2645,10 @@ pub async fn mcpb_search_bundles(
 
             bundle.name.to_lowercase().contains(&query_lower)
                 || bundle.description.to_lowercase().contains(&query_lower)
+                || bundle
+                    .npm_package
+                    .as_ref()
+                    .is_some_and(|package| package.to_lowercase().contains(&query_lower))
                 || bundle
                     .tags
                     .iter()
@@ -2325,13 +2669,17 @@ pub async fn mcpb_get_bundle_details(
 ) -> Result<McpBundle, String> {
     tracing::info!("Getting bundle details: {}", bundle_id);
 
-    let cache = state.registry_cache.lock();
-    let bundles = if cache.is_empty() {
-        drop(cache);
-        get_embedded_registry()
-    } else {
-        cache.clone()
+    let mut bundles = {
+        let cache = state.registry_cache.lock();
+        if cache.is_empty() {
+            get_embedded_registry()
+        } else {
+            cache.clone()
+        }
     };
+
+    let installed = state.installed.lock();
+    merge_installed_bundle_snapshots(&mut bundles, &installed.bundles);
 
     let mut bundle = bundles
         .into_iter()
@@ -2339,7 +2687,6 @@ pub async fn mcpb_get_bundle_details(
         .ok_or_else(|| format!("Bundle not found: {}", bundle_id))?;
 
     // Check installed status
-    let installed = state.installed.lock();
     if let Some(metadata) = installed.bundles.get(&bundle.id) {
         bundle.installed = true;
         bundle.installed_version = Some(metadata.version.clone());
@@ -2378,6 +2725,7 @@ pub async fn mcpb_install_bundle(
         .npm_package
         .clone()
         .ok_or_else(|| "Bundle has no npm package".to_string())?;
+    let install_spec = npm_install_spec(&bundle, &npm_package);
 
     // Emit install started event
     emit_install_started(&app, &bundle_id);
@@ -2389,19 +2737,19 @@ pub async fn mcpb_install_bundle(
             bundle_id: bundle_id.clone(),
             phase: "installing".to_string(),
             progress: 10,
-            message: format!("Installing {}...", npm_package),
+            message: format!("Installing {}...", install_spec),
         },
     );
 
     // Run npm install globally
     let npm_result = if cfg!(target_os = "windows") {
         Command::new("cmd")
-            .args(["/C", "npm", "install", "-g", &npm_package])
+            .args(["/C", "npm", "install", "-g", &install_spec])
             .output()
             .await
     } else {
         Command::new("npm")
-            .args(["install", "-g", &npm_package])
+            .args(["install", "-g", &install_spec])
             .output()
             .await
     };
@@ -2414,7 +2762,7 @@ pub async fn mcpb_install_bundle(
                 emit_install_failed(&app, &bundle_id, &stderr);
                 return Err(format!("npm install failed: {}", stderr));
             }
-            tracing::info!("npm install succeeded for {}", npm_package);
+            tracing::info!("npm install succeeded for {}", install_spec);
         }
         Err(e) => {
             tracing::error!("Failed to run npm: {}", e);
@@ -2486,6 +2834,7 @@ pub async fn mcpb_install_bundle(
                 installed_at: now,
                 updated_at: now,
                 server_name: server_name.clone(),
+                bundle: Some(bundle.clone()),
             },
         );
     }
@@ -2563,7 +2912,15 @@ pub async fn mcpb_get_installed_bundles(
     tracing::info!("Getting installed bundles");
 
     let installed = state.installed.lock();
-    let registry = get_embedded_registry();
+    let mut registry = {
+        let cache = state.registry_cache.lock();
+        if cache.is_empty() {
+            get_embedded_registry()
+        } else {
+            cache.clone()
+        }
+    };
+    merge_installed_bundle_snapshots(&mut registry, &installed.bundles);
 
     let installed_bundles: Vec<McpBundle> = registry
         .into_iter()
@@ -2589,7 +2946,15 @@ pub async fn mcpb_check_updates(state: State<'_, McpbState>) -> Result<Vec<McpBu
     tracing::info!("Checking for bundle updates");
 
     let installed = state.installed.lock();
-    let registry = get_embedded_registry();
+    let mut registry = {
+        let cache = state.registry_cache.lock();
+        if cache.is_empty() {
+            get_embedded_registry()
+        } else {
+            cache.clone()
+        }
+    };
+    merge_installed_bundle_snapshots(&mut registry, &installed.bundles);
 
     let updates: Vec<McpBundle> = registry
         .into_iter()
@@ -2632,7 +2997,15 @@ pub async fn mcpb_update_bundle(
 
     // Get latest bundle info
     let bundle = {
-        let registry = get_embedded_registry();
+        let cache = state.registry_cache.lock();
+        let mut registry = if cache.is_empty() {
+            get_embedded_registry()
+        } else {
+            cache.clone()
+        };
+        if let Some(snapshot) = metadata.bundle.clone() {
+            merge_registry_bundles(&mut registry, vec![snapshot]);
+        }
         registry
             .into_iter()
             .find(|b| b.id == bundle_id)
@@ -2647,6 +3020,7 @@ pub async fn mcpb_update_bundle(
         .npm_package
         .clone()
         .ok_or_else(|| "Bundle has no npm package".to_string())?;
+    let install_spec = npm_install_spec(&bundle, &npm_package);
 
     emit_install_started(&app, &bundle_id);
 
@@ -2663,18 +3037,12 @@ pub async fn mcpb_update_bundle(
     // Run npm update
     let npm_result = if cfg!(target_os = "windows") {
         Command::new("cmd")
-            .args([
-                "/C",
-                "npm",
-                "install",
-                "-g",
-                &format!("{}@latest", npm_package),
-            ])
+            .args(["/C", "npm", "install", "-g", &install_spec])
             .output()
             .await
     } else {
         Command::new("npm")
-            .args(["install", "-g", &format!("{}@latest", npm_package)])
+            .args(["install", "-g", &install_spec])
             .output()
             .await
     };
@@ -2727,6 +3095,7 @@ pub async fn mcpb_update_bundle(
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
+            meta.bundle = Some(bundle.clone());
         }
     }
 
@@ -2784,4 +3153,213 @@ pub async fn mcpb_get_featured(state: State<'_, McpbState>) -> Result<Vec<McpBun
     let featured: Vec<McpBundle> = bundles.into_iter().filter(|b| b.featured).collect();
 
     Ok(featured)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_official_fixture(json: &str) -> Vec<McpBundle> {
+        serde_json::from_str::<OfficialRegistryResponse>(json)
+            .expect("official registry fixture should parse")
+            .servers
+            .into_iter()
+            .map(official_registry_bundle)
+            .collect()
+    }
+
+    #[test]
+    fn adapts_official_npm_server_without_claiming_agi_verification() {
+        let bundles = parse_official_fixture(
+            r#"{
+                "servers": [{
+                    "server": {
+                        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+                        "name": "ai.example/secure-tools",
+                        "title": "Secure Tools",
+                        "description": "Example tools from the official registry.",
+                        "version": "1.2.3",
+                        "packages": [{
+                            "registryType": "npm",
+                            "identifier": "@example/secure-tools",
+                            "version": "1.2.3",
+                            "runtimeHint": "npx",
+                            "transport": { "type": "stdio" },
+                            "packageArguments": [{ "type": "positional", "value": "--stdio" }],
+                            "environmentVariables": [{
+                                "name": "EXAMPLE_API_KEY",
+                                "description": "Publisher API key",
+                                "isRequired": true,
+                                "isSecret": true
+                            }]
+                        }],
+                        "repository": {
+                            "url": "https://github.com/example/secure-tools",
+                            "source": "github"
+                        },
+                        "websiteUrl": "https://example.ai/docs"
+                    },
+                    "_meta": {
+                        "io.modelcontextprotocol.registry/official": {
+                            "status": "active",
+                            "isLatest": true
+                        }
+                    }
+                }],
+                "metadata": { "count": 1 }
+            }"#,
+        );
+
+        let bundle = bundles.first().expect("mapped bundle");
+        assert_eq!(bundle.id, "mcp-registry-ai-example-secure-tools");
+        assert_eq!(bundle.name, "Secure Tools");
+        assert_eq!(bundle.npm_package.as_deref(), Some("@example/secure-tools"));
+        assert_eq!(
+            bundle.config_template.args,
+            vec!["-y", "@example/secure-tools@1.2.3", "--stdio"]
+        );
+        assert_eq!(
+            bundle.config_template.env.get("EXAMPLE_API_KEY"),
+            Some(&"<configure:EXAMPLE_API_KEY>".to_string())
+        );
+        assert_eq!(bundle.required_credentials.len(), 1);
+        assert!(bundle.required_credentials[0].required);
+        assert!(!bundle.verified);
+        assert_eq!(
+            npm_install_spec(bundle, "@example/secure-tools"),
+            "@example/secure-tools@1.2.3"
+        );
+    }
+
+    #[test]
+    fn maps_remote_only_server_to_honest_manual_setup() {
+        let bundles = parse_official_fixture(
+            r#"{
+                "servers": [{
+                    "server": {
+                        "name": "cloud.example/remote",
+                        "description": "Remote-only MCP server.",
+                        "version": "4.0.0",
+                        "remotes": [{
+                            "type": "streamable-http",
+                            "url": "https://cloud.example/mcp"
+                        }]
+                    }
+                }]
+            }"#,
+        );
+
+        let bundle = bundles.first().expect("mapped bundle");
+        assert_eq!(bundle.name, "cloud.example/remote");
+        assert!(bundle.npm_package.is_none());
+        assert_eq!(bundle.config_template.command, "streamable-http");
+        assert_eq!(
+            bundle.config_template.args,
+            vec!["https://cloud.example/mcp"]
+        );
+        assert!(bundle.tags.contains(&"remote".to_string()));
+    }
+
+    #[test]
+    fn npm_package_without_stdio_transport_is_not_installable() {
+        let bundle = parse_official_fixture(
+            r#"{
+                "servers": [{
+                    "server": {
+                        "name": "unsafe.example/ambiguous-package",
+                        "description": "Package with no declared transport.",
+                        "version": "1.0.0",
+                        "packages": [{
+                            "registryType": "npm",
+                            "identifier": "@unsafe/ambiguous-package",
+                            "version": "1.0.0"
+                        }]
+                    }
+                }]
+            }"#,
+        )
+        .remove(0);
+
+        assert!(bundle.npm_package.is_none());
+        assert_eq!(bundle.config_template.command, "npm");
+    }
+
+    #[test]
+    fn reviewed_embedded_entry_wins_an_id_collision() {
+        let mut target = get_embedded_registry();
+        let reviewed = target
+            .iter()
+            .find(|bundle| bundle.verified)
+            .expect("embedded registry should contain a reviewed entry")
+            .clone();
+        let mut unreviewed_collision = reviewed.clone();
+        unreviewed_collision.name = "Unreviewed replacement".to_string();
+        unreviewed_collision.verified = false;
+
+        merge_registry_bundles(&mut target, vec![unreviewed_collision]);
+
+        let merged = target
+            .iter()
+            .find(|bundle| bundle.id == reviewed.id)
+            .expect("reviewed entry should remain");
+        assert_eq!(merged.name, reviewed.name);
+        assert!(merged.verified);
+    }
+
+    #[test]
+    fn installed_registry_snapshot_survives_an_offline_restart() {
+        let bundle = parse_official_fixture(
+            r#"{
+                "servers": [{
+                    "server": {
+                        "name": "offline.example/tools",
+                        "description": "Installed registry server.",
+                        "version": "1.0.0",
+                        "packages": [{
+                            "registryType": "npm",
+                            "identifier": "@offline/example-tools",
+                            "version": "1.0.0",
+                            "transport": { "type": "stdio" }
+                        }]
+                    }
+                }]
+            }"#,
+        )
+        .remove(0);
+        let metadata = InstalledBundleMetadata {
+            bundle_id: bundle.id.clone(),
+            version: bundle.version.clone(),
+            npm_package: bundle.npm_package.clone(),
+            installed_at: 1,
+            updated_at: 1,
+            server_name: "registry-offline-example-tools".to_string(),
+            bundle: Some(bundle.clone()),
+        };
+        let installed = HashMap::from([(bundle.id.clone(), metadata)]);
+        let mut offline_registry = Vec::new();
+
+        merge_installed_bundle_snapshots(&mut offline_registry, &installed);
+        mark_installed_bundles(&mut offline_registry, &installed);
+
+        assert_eq!(offline_registry.len(), 1);
+        assert_eq!(offline_registry[0].id, bundle.id);
+        assert!(offline_registry[0].installed);
+    }
+
+    #[test]
+    fn legacy_install_metadata_without_snapshot_still_loads() {
+        let metadata: InstalledBundleMetadata = serde_json::from_str(
+            r#"{
+                "bundleId": "mcp-filesystem",
+                "version": "1.0.0",
+                "npmPackage": "@modelcontextprotocol/server-filesystem",
+                "installedAt": 1,
+                "updatedAt": 1,
+                "serverName": "filesystem"
+            }"#,
+        )
+        .expect("legacy metadata should remain compatible");
+
+        assert!(metadata.bundle.is_none());
+    }
 }
