@@ -488,8 +488,12 @@ pub(crate) fn should_generate_memory(
     allow_tool_assisted_memory_generation: bool,
     tool_assisted: bool,
     incognito: bool,
+    completed_successfully: bool,
 ) -> bool {
-    auto_save_memories && !incognito && (allow_tool_assisted_memory_generation || !tool_assisted)
+    completed_successfully
+        && auto_save_memories
+        && !incognito
+        && (allow_tool_assisted_memory_generation || !tool_assisted)
 }
 
 fn resolve_routing_strategy(model: &str) -> RoutingStrategy {
@@ -1569,12 +1573,13 @@ mod tests {
     }
 
     #[test]
-    fn memory_generation_gate_blocks_disabled_incognito_and_tool_assisted_turns() {
-        assert!(!should_generate_memory(false, true, false, false));
-        assert!(!should_generate_memory(true, true, false, true));
-        assert!(!should_generate_memory(true, false, true, false));
-        assert!(should_generate_memory(true, false, false, false));
-        assert!(should_generate_memory(true, true, true, false));
+    fn memory_generation_gate_requires_a_successful_eligible_turn() {
+        assert!(!should_generate_memory(false, true, false, false, true));
+        assert!(!should_generate_memory(true, true, false, true, true));
+        assert!(!should_generate_memory(true, false, true, false, true));
+        assert!(!should_generate_memory(true, true, false, false, false));
+        assert!(should_generate_memory(true, false, false, false, true));
+        assert!(should_generate_memory(true, true, true, false, true));
     }
 
     // ── DESKTOP-PROJECT-SCOPING-UNWIRED-01 seam B: project scope prompt ─────

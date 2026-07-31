@@ -314,7 +314,7 @@ impl AgentSession {
             let text = if partial.trim().is_empty() {
                 "[stopped]".to_string()
             } else {
-                partial.to_string()
+                format!("{}\n\n[stopped]", partial.trim_end())
             };
             self.messages.push(Message::text("assistant", text));
         }
@@ -2589,7 +2589,7 @@ mod tests {
 
         let last = session.messages.last().unwrap();
         assert_eq!(last.role, "assistant");
-        assert_eq!(last.text_content(), "partial answ");
+        assert_eq!(last.text_content(), "partial answ\n\n[stopped]");
     }
 
     #[test]
