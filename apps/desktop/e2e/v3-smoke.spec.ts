@@ -19,8 +19,8 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
  * app boots in Cloud mode. `App.tsx` renders `<AuthPage />` — not the v3
  * shell, not the legacy shell — for `isCloudMode && !hasCloudSession`,
  * before the `desktop_chat_v3` flag branch ever runs. This is the same
- * gate `visual-verification.spec.ts` documents as intentional ("desktop
- * root (sign-in) renders" for the cloud-web bundle). The flag itself has
+ * intentional cloud-web sign-in gate pinned by `visual-regression.spec.ts`.
+ * The flag itself has
  * no Tauri coupling — `injectMockCloudAuth` seeds the real
  * `unified-auth-storage` key (the same mechanism `self-healing.spec.ts`
  * uses) so `hasCloudSession` is true and the flag-gated branch is
