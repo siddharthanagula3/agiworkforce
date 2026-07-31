@@ -16,7 +16,7 @@ const SUPPRESSED_WARNINGS = [
   'Attempted to import the module',
   'SafeAreaView has been deprecated',
   'expo-notifications:',
-  'expo-background-fetch:',
+  'expo-background-task:',
   '`expo-notifications` functionality',
   '`Background Fetch` functionality',
   '[mmkv] Storage not yet initialized, returning no-op',

@@ -7,16 +7,14 @@ jest.mock('expo-task-manager', () => ({
   isTaskRegisteredAsync: jest.fn(async () => false),
 }));
 
-jest.mock('expo-background-fetch', () => ({
-  BackgroundFetchResult: {
-    NewData: 'NewData',
-    NoData: 'NoData',
+jest.mock('expo-background-task', () => ({
+  BackgroundTaskResult: {
+    Success: 'Success',
     Failed: 'Failed',
   },
-  BackgroundFetchStatus: {
-    Available: 'Available',
-    Denied: 'Denied',
+  BackgroundTaskStatus: {
     Restricted: 'Restricted',
+    Available: 'Available',
   },
   getStatusAsync: jest.fn(async () => 'Available'),
   registerTaskAsync: jest.fn(async () => undefined),
@@ -43,7 +41,7 @@ jest.mock('../stores/settingsStore', () => ({
   },
 }));
 
-import * as BackgroundFetch from 'expo-background-fetch';
+import * as BackgroundTask from 'expo-background-task';
 import * as Notifications from 'expo-notifications';
 import { api } from '../services/api';
 import {
@@ -81,8 +79,12 @@ describe('backgroundFetch Wave 1 approval notification dedupe', () => {
     const first = await mockDefinedTask!();
     const second = await mockDefinedTask!();
 
-    expect(first).toBe(BackgroundFetch.BackgroundFetchResult.NewData);
-    expect(second).toBe(BackgroundFetch.BackgroundFetchResult.NoData);
+    // expo-background-task has no NewData/NoData distinction, so the return
+    // value can no longer witness the dedupe — both runs report Success. The
+    // notification call count is the assertion that actually proves it: the
+    // second run saw the same approval batch and scheduled nothing.
+    expect(first).toBe(BackgroundTask.BackgroundTaskResult.Success);
+    expect(second).toBe(BackgroundTask.BackgroundTaskResult.Success);
     expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(1);
     expect(mockScheduleNotificationAsync).toHaveBeenCalledWith(
       expect.objectContaining({

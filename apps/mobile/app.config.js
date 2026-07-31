@@ -191,6 +191,10 @@ const config = {
   },
   plugins: [
     'expo-asset',
+    // Registers the BGTaskScheduler identifier and the `processing` background
+    // mode that expo-background-task needs; without it registerTaskAsync throws
+    // at runtime. Replaces expo-background-fetch, which Expo deprecated.
+    'expo-background-task',
     'expo-image',
     'expo-router',
     'expo-secure-store',
