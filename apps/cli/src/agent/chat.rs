@@ -278,14 +278,15 @@ fn content_block_to_result(block: ContentBlock) -> ResultBlock {
 }
 
 impl AgentSession {
-    /// Build a streaming chunk callback that is json-events-aware.
+    /// Build a streaming chunk callback that is machine-output-aware.
     ///
-    /// When `self.json_events` is `true` the callback emits every chunk as a
-    /// `MessageDelta` JSONL event to stdout (matching the first-turn sink wired
-    /// by `lib.rs`).  Otherwise it falls back to a raw `print!` so human-mode
-    /// output is unaffected.
+    /// Canonical SDK stream-json takes precedence over the legacy
+    /// `--json-events` envelope. Otherwise it falls back to raw text so human
+    /// output remains unaffected.
     pub(crate) fn continuation_sink(&self) -> StreamCallback {
-        if self.json_events {
+        if let Some(context) = self.sdk_stream_context.clone() {
+            Box::new(move |chunk: &str| context.emit_text_delta(chunk))
+        } else if self.json_events {
             let sid = self.json_session_id.clone();
             Box::new(move |chunk: &str| {
                 crate::agent_events::AgentEvent::MessageDelta {
