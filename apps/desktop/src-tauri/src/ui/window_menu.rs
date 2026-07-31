@@ -1,3 +1,4 @@
+use crate::data::state::AppState;
 use anyhow::Result;
 use tauri::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
@@ -19,7 +20,7 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
     // while keeping the process/window host alive, which leaves a black window.
     let close = MenuItem::with_id(
         app,
-        "menu_quit_application",
+        "menu_close_window",
         "Close Window",
         true,
         Some("CmdOrCtrl+W"),
@@ -158,14 +159,21 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
     Ok(())
 }
 
-fn should_quit_application_for_menu_id(id: &str) -> bool {
-    id == "menu_quit_application"
+fn is_close_window_menu_id(id: &str) -> bool {
+    id == "menu_close_window"
 }
 
 fn handle_window_menu_event(app: &AppHandle, event: MenuEvent) {
     let id = event.id.0.as_ref();
-    if should_quit_application_for_menu_id(id) {
-        app.exit(0);
+    if is_close_window_menu_id(id) {
+        if let Some(state) = app.try_state::<AppState>() {
+            if let Err(err) = crate::ui::window::request_main_window_close(app, &state) {
+                tracing::error!("[menu] failed to close main window: {err:?}");
+                app.exit(0);
+            }
+        } else {
+            app.exit(0);
+        }
         return;
     }
 
@@ -205,13 +213,11 @@ fn handle_window_menu_event(app: &AppHandle, event: MenuEvent) {
 
 #[cfg(test)]
 mod tests {
-    use super::should_quit_application_for_menu_id;
+    use super::is_close_window_menu_id;
 
     #[test]
-    fn close_window_menu_action_quits_the_application() {
-        assert!(should_quit_application_for_menu_id("menu_quit_application"));
-        assert!(!should_quit_application_for_menu_id(
-            "menu_new_conversation"
-        ));
+    fn close_window_menu_action_uses_the_residency_policy() {
+        assert!(is_close_window_menu_id("menu_close_window"));
+        assert!(!is_close_window_menu_id("menu_new_conversation"));
     }
 }

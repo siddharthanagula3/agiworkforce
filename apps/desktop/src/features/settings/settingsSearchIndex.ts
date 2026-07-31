@@ -21,6 +21,13 @@ export const DESKTOP_SETTINGS_SEARCH_INDEX: DesktopSettingSearchEntry[] = [
     keywords: ['shortcut', 'key combination'],
   },
   {
+    id: 'menu-bar',
+    tab: 'general',
+    label: 'Show in menu bar',
+    description: 'Keep AGI Workforce available after the main window closes.',
+    keywords: ['tray', 'background', 'close', 'dock'],
+  },
+  {
     id: 'theme',
     tab: 'general',
     label: 'Theme',

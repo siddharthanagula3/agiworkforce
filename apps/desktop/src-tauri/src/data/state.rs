@@ -43,6 +43,8 @@ impl Default for WindowGeometry {
 pub struct PersistentWindowState {
     pub pinned: bool,
     pub always_on_top: bool,
+    #[serde(default = "default_keep_in_menu_bar")]
+    pub keep_in_menu_bar: bool,
     pub dock: Option<DockPosition>,
     pub geometry: Option<WindowGeometry>,
     pub previous_geometry: Option<WindowGeometry>,
@@ -57,6 +59,7 @@ impl Default for PersistentWindowState {
         Self {
             pinned: true,
             always_on_top: false,
+            keep_in_menu_bar: default_keep_in_menu_bar(),
             dock: None,
             geometry: Some(WindowGeometry::default()),
             previous_geometry: None,
@@ -64,6 +67,10 @@ impl Default for PersistentWindowState {
             fullscreen: false,
         }
     }
+}
+
+fn default_keep_in_menu_bar() -> bool {
+    true
 }
 
 #[derive(Clone)]

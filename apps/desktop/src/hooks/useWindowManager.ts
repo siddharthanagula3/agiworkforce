@@ -196,9 +196,9 @@ export function useWindowManager(): { state: WindowState; actions: WindowActions
     }
 
     try {
-      await invoke('window_quit_application');
+      await invoke('window_request_close');
     } catch (error) {
-      console.error('Failed to quit application', error);
+      console.error('Failed to close the main window', error);
     }
   }, []);
 

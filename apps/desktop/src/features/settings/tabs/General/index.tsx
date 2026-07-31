@@ -1,6 +1,8 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Cloud, Loader2, Shield } from 'lucide-react';
 import { formatChatExecutionModeLabel } from '@agiworkforce/types';
+import { window as desktopWindow } from '@agiworkforce/desktop-command-client';
+import { toast } from 'sonner';
 import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
@@ -159,6 +161,78 @@ function RestartOnboardingSection() {
   );
 }
 
+export function MenuBarResidencySetting() {
+  const [enabled, setEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void desktopWindow
+      .windowGetState()
+      .then((state) => {
+        if (!cancelled) setEnabled(state.keepInMenuBar);
+      })
+      .catch((cause) => {
+        if (cancelled) return;
+        console.error('Failed to load menu bar preference', cause);
+        setError('Could not load the menu bar preference.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleChange = async (nextEnabled: boolean) => {
+    const previous = enabled;
+    setEnabled(nextEnabled);
+    setUpdating(true);
+    setError(null);
+    try {
+      await desktopWindow.windowSetMenuBarMode(nextEnabled);
+    } catch (cause) {
+      console.error('Failed to update menu bar preference', cause);
+      setEnabled(previous);
+      setError('Could not update the menu bar preference.');
+      toast.error('Could not update the menu bar preference');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-lg border border-border bg-card p-6"
+      data-setting-search-id="menu-bar"
+      tabIndex={-1}
+    >
+      <div className="flex items-center justify-between gap-6">
+        <div className="min-w-0 space-y-0.5">
+          <Label htmlFor="keepInMenuBar">Show in menu bar</Label>
+          <p className="text-xs text-muted-foreground">
+            Keep AGI Workforce in the macOS menu bar or system tray when the main window is closed.
+          </p>
+        </div>
+        <Switch
+          id="keepInMenuBar"
+          checked={enabled}
+          disabled={loading || updating}
+          onCheckedChange={(value) => void handleChange(value)}
+        />
+      </div>
+      {error && (
+        <p className="mt-3 text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export interface GeneralTabProps {
   resolvedWindowPreferences: { theme: string; language: string };
   resolvedGlobalHotkeyPreferences: GlobalHotkeyPreferences;
@@ -199,6 +273,8 @@ export function GeneralTab({
             Configure window behavior and appearance
           </p>
           <div className="space-y-6">
+            <MenuBarResidencySetting />
+
             <div className="rounded-lg border border-border bg-card p-6 space-y-4">
               <h4 className="font-semibold">Global Hotkey</h4>
               <div className="flex items-center justify-between">

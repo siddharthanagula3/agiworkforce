@@ -1,6 +1,6 @@
 use crate::{
     data::state::{AppState, DockPosition},
-    ui::window,
+    ui::{tray, window},
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewWindow};
@@ -10,6 +10,7 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 pub struct WindowStatePayload {
     pub pinned: bool,
     pub always_on_top: bool,
+    pub keep_in_menu_bar: bool,
     pub dock: Option<DockPosition>,
     pub maximized: bool,
     pub fullscreen: bool,
@@ -26,6 +27,7 @@ pub fn window_get_state(state: State<AppState>) -> Result<WindowStatePayload, St
     Ok(WindowStatePayload {
         pinned: snapshot.pinned,
         always_on_top: snapshot.always_on_top,
+        keep_in_menu_bar: snapshot.keep_in_menu_bar,
         dock: snapshot.dock,
         maximized: snapshot.maximized,
         fullscreen: snapshot.fullscreen,
@@ -64,8 +66,49 @@ pub fn window_set_visibility(app: AppHandle, visible: bool) -> Result<(), String
 }
 
 #[tauri::command]
-pub fn window_quit_application(app: AppHandle) {
-    app.exit(0);
+pub fn window_set_menu_bar_mode(
+    app: AppHandle,
+    state: State<AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let previous = state.snapshot().keep_in_menu_bar;
+    if previous == enabled {
+        return Ok(());
+    }
+
+    state
+        .update(|window_state| {
+            window_state.keep_in_menu_bar = enabled;
+            true
+        })
+        .map_err(|err| err.to_string())?;
+
+    if let Err(err) = tray::set_tray_visible(&app, enabled) {
+        let _ = state.update(|window_state| {
+            window_state.keep_in_menu_bar = previous;
+            true
+        });
+        return Err(err.to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    if !enabled {
+        if let Err(err) = app.set_dock_visibility(true) {
+            let _ = tray::set_tray_visible(&app, previous);
+            let _ = state.update(|window_state| {
+                window_state.keep_in_menu_bar = previous;
+                true
+            });
+            return Err(err.to_string());
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn window_request_close(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    window::request_main_window_close(&app, &state).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
