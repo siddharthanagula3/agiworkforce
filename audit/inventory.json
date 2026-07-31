@@ -1808,8 +1808,8 @@
   {
     "item": "three-way-diff-editor",
     "surface": "apps/ide-extensions",
-    "status": "partial",
-    "evidence": "The primary accept/reject flow uses inline gutter/text decorations + CodeLens (apps/extension-vscode/src/providers/diffDecorationProvider.ts:198-320), not a VS Code diff-editor pane. A real two-way vscode.diff view exists only for the debugging feature 'Show Original Context' — apps/extension-vscode/src/integrations/patchEngine.ts:663-679 'await vscode.commands.executeCommand(\"vscode.diff\", expectedDoc.uri, matchedDoc.uri, ...)' — which is expected-vs-actual, not a merge/three-way (base/incoming/result) editor."
+    "status": "missing",
+    "evidence": "No three-way merge editor exists in the VS Code extension. The shipped proposal-review implementation in apps/extension-vscode/src/providers/diffDecorationProvider.ts is an inline gutter/text-decoration and CodeLens accept/reject flow over originalText/newText; it has no base/incoming/result document model. The sole editor-pane diff call is apps/extension-vscode/src/integrations/patchEngine.ts:376-383, where `vscode.diff` compares two ephemeral expected-vs-actual debugging documents for Show Original Context. Repository searches find no merge-editor provider, mergeEditor/three-way command, or base/incoming/result registration. A complete adjacent inline review feature and a two-way diagnostic viewer are not partial implementation of this specifically three-way capability."
   },
   {
     "item": "accept-all",
