@@ -1844,8 +1844,8 @@
   {
     "item": "checkpoint-ui",
     "surface": "apps/ide-extensions",
-    "status": "unwired",
-    "evidence": "apps/extension-vscode/src/integrations/localRuntimeClient.ts:53 'checkpoints: z.boolean()' is parsed from the app-server capabilities response but grepping the whole extension for '.checkpoints' usage elsewhere returns no hits — the flag is never read. Additionally patchEngine.ts:582,601,609 define storeBatchForUndo/isBatchUndoable/undoPatchBatch (a batch-level undo primitive) which are re-exported via apps/extension-vscode/src/integrations/index.ts:27-28 but never called from any command (grepped commandSetup.ts and webviewContent.ts for the three names, zero call sites outside their own definitions)."
+    "status": "missing",
+    "evidence": "The local app-server host explicitly advertises `checkpoints: false` (`apps/cli/src/app_server/developer_host.rs`), exposes no checkpoint/restore RPC, and the extension's command-parity test requires that no checkpoint, worktree, or rewind control be declared. `localRuntimeClient.ts` still validates the complete typed capability response, but parsing a false field is not a UI implementation. The unrelated, uncalled patch-batch apply/snapshot/undo store and its barrel exports were removed on 2026-07-30; the reachable native diff review flow and VS Code's normal edit undo stack remain."
   },
   {
     "item": "selection-context",

@@ -23,12 +23,9 @@ export {
   applyPatch,
   aggressiveFuzzyMatch,
   applyPatchAggressive,
-  applyPatchBatch,
-  storeBatchForUndo,
-  undoPatchBatch,
   showOriginalContext,
 } from './patchEngine';
-export type { PatchConfidence, PatchBlock, PatchResult, BatchResult } from './patchEngine';
+export type { PatchConfidence, PatchBlock, PatchResult } from './patchEngine';
 
 export { TIER_ORDER, tierAtLeast, resolveTier } from './tierResolver';
 export type { Tier } from './tierResolver';
