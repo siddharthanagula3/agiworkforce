@@ -3920,7 +3920,7 @@
   {
     "item": "incident-banner",
     "surface": "release-infra",
-    "status": "partial",
-    "evidence": "apps/desktop/src/features/status-banner/index.tsx implements a real StatusBanner component: polls a status feed every 5 minutes via `guardedFetch` (line 77, routed through the egress guard so BYOK/local sessions don't silently phone home), parses severity-typed messages (info/warning/critical), supports dismiss and expiry (isExpired, line 64-67), and renders styled banners (lines 96-171). It is wired into the real app shell: lazily imported and rendered in apps/desktop/src/App.tsx:167-169,1639."
+    "status": "built",
+    "evidence": "apps/desktop/src/features/status-banner/index.tsx implements and exports the production StatusBanner: it polls the configured status feed every five minutes through guardedFetch, so Local/BYOK sessions fail closed instead of silently contacting AGI infrastructure; applies a ten-second timeout; renders semantic info/warning/critical notices; filters expiry; supports per-notice dismissal; and degrades to no banner on transport failure. parseStatusMessages treats the remote JSON as untrusted, independently rejecting malformed rows, unknown severities, blank identities/titles, invalid expiry dates, and expired notices so one bad incident cannot crash or suppress valid app chrome. StatusBanner.test.ts covers valid, expired, malformed, and mixed feeds. The component is lazily imported and mounted at dashboard scope in apps/desktop/src/App.tsx alongside the offline indicator, so it is reachable across the real shell."
   }
 ]

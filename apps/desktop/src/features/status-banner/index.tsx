@@ -14,7 +14,7 @@ const FETCH_TIMEOUT_MS = 10_000;
 
 type Severity = 'info' | 'warning' | 'critical';
 
-interface StatusMessage {
+export interface StatusMessage {
   id: string;
   severity: Severity;
   title: string;
@@ -23,9 +23,8 @@ interface StatusMessage {
   expiresAt?: string;
 }
 
-interface StatusResponse {
-  messages: StatusMessage[];
-  updatedAt: string;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 const severityConfig: Record<
@@ -61,9 +60,56 @@ const severityConfig: Record<
   },
 };
 
-function isExpired(message: StatusMessage): boolean {
+function isExpired(message: StatusMessage, now = Date.now()): boolean {
   if (!message.expiresAt) return false;
-  return new Date(message.expiresAt).getTime() < Date.now();
+  return new Date(message.expiresAt).getTime() <= now;
+}
+
+/**
+ * Treat the remote status document as untrusted input.
+ *
+ * A malformed severity previously reached StatusBannerItem where the
+ * severity configuration lookup returned undefined and crashed the mounted
+ * shell. Invalid expiry dates also survived forever because `NaN < now` is
+ * false. Reject malformed rows independently so one bad incident cannot hide
+ * valid notices or take down the app chrome.
+ */
+export function parseStatusMessages(value: unknown, now = Date.now()): StatusMessage[] {
+  if (!isRecord(value) || !Array.isArray(value['messages'])) return [];
+
+  const messages: StatusMessage[] = [];
+  for (const candidate of value['messages']) {
+    if (!isRecord(candidate)) continue;
+
+    const id = candidate['id'];
+    const severity = candidate['severity'];
+    const title = candidate['title'];
+    const message = candidate['message'];
+    const dismissible = candidate['dismissible'];
+    const expiresAt = candidate['expiresAt'];
+
+    if (typeof id !== 'string' || id.trim().length === 0) continue;
+    if (severity !== 'info' && severity !== 'warning' && severity !== 'critical') continue;
+    if (typeof title !== 'string' || title.trim().length === 0) continue;
+    if (typeof message !== 'string') continue;
+    if (typeof dismissible !== 'boolean') continue;
+    if (expiresAt !== undefined) {
+      if (typeof expiresAt !== 'string' || !Number.isFinite(new Date(expiresAt).getTime()))
+        continue;
+    }
+
+    const parsed: StatusMessage = {
+      id,
+      severity,
+      title,
+      message,
+      dismissible,
+      ...(typeof expiresAt === 'string' ? { expiresAt } : {}),
+    };
+    if (!isExpired(parsed, now)) messages.push(parsed);
+  }
+
+  return messages;
 }
 
 async function fetchStatusMessages(): Promise<StatusMessage[]> {
@@ -79,9 +125,7 @@ async function fetchStatusMessages(): Promise<StatusMessage[]> {
       cache: 'no-store',
     });
     if (!response.ok) return [];
-    const data = (await response.json()) as StatusResponse;
-    if (!Array.isArray(data?.messages)) return [];
-    return data.messages.filter((msg) => !isExpired(msg));
+    return parseStatusMessages(await response.json());
   } catch {
     // Silently fail — status endpoint is non-critical
     return [];
