@@ -13,6 +13,7 @@
  * place rather than inline in the runtime.
  */
 import type { MemoryFact } from '@agiworkforce/unified-chat';
+import { fenceUntrustedMemoryContent } from '@agiworkforce/utils';
 
 /** Hard caps so a large memory list can't blow up the prompt or cost. */
 const MAX_FACTS = 50;
@@ -41,12 +42,7 @@ export function buildMemorySystemContent(facts: readonly MemoryFact[]): string |
 
   if (!lines.length) return null;
 
-  return (
-    'The user has saved the following facts about themselves for you to remember ' +
-    'across conversations. Use them when they are relevant to the request. Do not ' +
-    'list or mention these facts unless the user asks what you remember.\n\n' +
-    lines.join('\n')
-  );
+  return fenceUntrustedMemoryContent(lines.join('\n'));
 }
 
 /**
