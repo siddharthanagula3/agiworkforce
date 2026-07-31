@@ -2678,8 +2678,8 @@
   {
     "item": "progressive-skill-loading",
     "surface": "packages/extensibility",
-    "status": "partial",
-    "evidence": "Web/CLI implement true progressive disclosure: packages/tools/skills/src/tool.ts:207-258 (action=list returns metadata only, action=load returns body); apps/web/app/api/skills/route.ts:1-15 (\"this endpoint never returns body content for the index\"); apps/cli/src/skills.rs:583-608 format_skill_catalog_for_prompt (metadata-only) vs invoke_skill_tool 'load' action (629-707) for bodies."
+    "status": "built",
+    "evidence": "Progressive skill disclosure is implemented in both managed Web and CLI runtimes. packages/tools/skills/src/tool.ts:50-74 defines a path-free list/load tool, :97-124 formats metadata-only prompt catalogs, and :189-258 lists metadata or loads one exact dependency-checked body inside an untrusted bounded result. apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:342-361 injects only the catalog and canonical tool into the live managed model request; the authenticated /api/skills index and named-body routes expose the same split to UI consumers. apps/cli/src/skills.rs:580-707 implements metadata-only prompt/list output and exact-name lazy body loading, dispatched by the registered read-only skill tool at apps/cli/src/features/exec/tools/mod.rs:175-205. packages/tools/skills/src/__tests__/tool.test.ts, apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.skill.test.ts, apps/web/__tests__/api/skills.security.test.ts, and apps/cli/src/skills.rs tests cover body withholding, live load dispatch, auth, dependency failure, path rejection, output bounds, and untrusted-container breakout."
   },
   {
     "item": "stacked-skill-invocation",
