@@ -870,6 +870,7 @@ describe('ChatMessageList safety refusal notice', () => {
     render(<ChatMessageList messages={refusalThread('refusal')} onRegenerate={vi.fn()} />);
     expect(refusalText()).toBeInTheDocument();
     expect(retryButton()).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Report issue' })).toBeInTheDocument();
   });
 
   it("shows the notice for finishReason 'content_filter' (OpenAI wire vocabulary)", () => {
@@ -887,6 +888,7 @@ describe('ChatMessageList safety refusal notice', () => {
     render(<ChatMessageList messages={refusalThread('refusal')} />);
     expect(refusalText()).toBeInTheDocument();
     expect(retryButton()).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Report issue' })).toBeInTheDocument();
   });
 
   it('calls onRegenerate with the refused message id when Retry is clicked', () => {
