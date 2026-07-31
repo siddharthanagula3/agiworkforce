@@ -654,15 +654,21 @@ pub fn account_store_refresh_token(
     secret_state: State<'_, SecretManagerState>,
 ) -> Result<(), String> {
     validate_refresh_token_format(&refreshToken)?;
-    secret_state
-        .manager()
-        .set_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY, &refreshToken)
-        .map_err(|_| "Failed to securely store the Cloud refresh token".to_string())?;
+    store_cloud_refresh_token(secret_state.manager(), &refreshToken)?;
     let mut token = REFRESH_TOKEN
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     *token = Some(refreshToken);
     Ok(())
+}
+
+fn store_cloud_refresh_token(
+    secret_manager: &SecretManager,
+    refresh_token: &str,
+) -> Result<(), String> {
+    secret_manager
+        .set_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY, refresh_token)
+        .map_err(|_| "Failed to securely store the Cloud refresh token".to_string())
 }
 
 /// Clear stored tokens (called on logout)
@@ -705,6 +711,18 @@ pub fn account_restore_access_token(
     restore_cloud_access_token(secret_state.manager())
 }
 
+/// Restore the encrypted Cloud refresh token after a Desktop process restart.
+///
+/// The raw value crosses IPC only into the authenticated Desktop webview, which
+/// immediately exchanges it over the allowlisted AGI Cloud origin when the
+/// access token is near expiry. It is never logged or persisted in plaintext.
+#[tauri::command]
+pub fn account_restore_refresh_token(
+    secret_state: State<'_, SecretManagerState>,
+) -> Result<Option<String>, String> {
+    restore_cloud_refresh_token(secret_state.manager())
+}
+
 fn restore_cloud_access_token(secret_manager: &SecretManager) -> Result<Option<String>, String> {
     let exists = secret_manager
         .has_secret(CLOUD_ACCESS_TOKEN_SECRET_KEY)
@@ -723,6 +741,26 @@ fn restore_cloud_access_token(secret_manager: &SecretManager) -> Result<Option<S
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     *token = Some(access_token.clone());
     Ok(Some(access_token))
+}
+
+fn restore_cloud_refresh_token(secret_manager: &SecretManager) -> Result<Option<String>, String> {
+    let exists = secret_manager
+        .has_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY)
+        .map_err(|_| "Failed to inspect the stored Cloud refresh credential".to_string())?;
+    if !exists {
+        return Ok(None);
+    }
+
+    let refresh_token = secret_manager
+        .get_secret(CLOUD_REFRESH_TOKEN_SECRET_KEY)
+        .map_err(|_| "Failed to restore the stored Cloud refresh credential".to_string())?;
+    validate_refresh_token_format(&refresh_token)?;
+
+    let mut token = REFRESH_TOKEN
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *token = Some(refresh_token.clone());
+    Ok(Some(refresh_token))
 }
 
 // Helpers to get tokens from in-memory storage
@@ -904,7 +942,8 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
 mod tests {
     use super::{
         build_device_authorization_request, clear_cloud_tokens, restore_cloud_access_token,
-        store_cloud_access_token, validate_api_base_url, CreditBalanceResponse, UserProfile,
+        restore_cloud_refresh_token, store_cloud_access_token, store_cloud_refresh_token,
+        validate_api_base_url, CreditBalanceResponse, UserProfile,
     };
     use crate::sys::api::HttpMethod;
     use crate::sys::security::SecretManager;
@@ -940,6 +979,22 @@ mod tests {
 
         clear_cloud_tokens(&manager).unwrap();
         assert_eq!(restore_cloud_access_token(&manager).unwrap(), None);
+    }
+
+    #[test]
+    fn cloud_refresh_token_survives_memory_boundary_in_encrypted_storage() {
+        let manager = secret_manager();
+        let token = "opaque-refresh-token-with-sufficient-randomness";
+
+        assert_eq!(restore_cloud_refresh_token(&manager).unwrap(), None);
+        store_cloud_refresh_token(&manager, token).unwrap();
+        assert_eq!(
+            restore_cloud_refresh_token(&manager).unwrap().as_deref(),
+            Some(token)
+        );
+
+        clear_cloud_tokens(&manager).unwrap();
+        assert_eq!(restore_cloud_refresh_token(&manager).unwrap(), None);
     }
 
     #[test]

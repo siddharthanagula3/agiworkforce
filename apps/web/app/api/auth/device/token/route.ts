@@ -11,6 +11,10 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { issueDeveloperToken } from '@/lib/server/developer-token';
+import {
+  createDeviceRefreshCredential,
+  DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
+} from '@/lib/server/device-refresh-token';
 
 // RFC 8628 device-code POLL. Mirrors services/api-gateway deviceAuth.ts `/token`.
 // The CLI polls this until the user approves at /auth/device. Status codes are
@@ -88,10 +92,13 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
 
   let accessToken: string;
   let expiresIn: number;
+  const familyId = crypto.randomUUID();
+  const refreshCredential = createDeviceRefreshCredential();
   try {
     ({ accessToken, expiresIn } = issueDeveloperToken({
       userId: record.user_id,
       ...(record.user_email ? { email: record.user_email } : {}),
+      sessionFamilyId: familyId,
     }));
   } catch (error) {
     logger.error({ error }, 'Device token: signing is not configured');
@@ -99,14 +106,31 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
   }
 
   // Single-use: mark consumed so a leaked device_code cannot be replayed.
-  const consumed = await db.query<{ status: string }>(
-    `UPDATE device_authorization_codes
-        SET status = 'consumed', consumed_at = $1, updated_at = $1
-      WHERE device_id = $2 AND status = 'approved'
-      RETURNING status`,
-    [nowIso, record.device_id],
-  );
-  if (!consumed.length) {
+  const consumed = await db.transaction(async (tx) => {
+    const consumedRows = await tx.query<{ status: string }>(
+      `UPDATE device_authorization_codes
+          SET status = 'consumed', consumed_at = $1, updated_at = $1
+        WHERE device_id = $2 AND status = 'approved'
+        RETURNING status`,
+      [nowIso, record.device_id],
+    );
+    if (!consumedRows.length) return false;
+
+    await tx.execute(
+      `INSERT INTO device_refresh_tokens
+         (family_id, user_id, user_email, token_hash, expires_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        familyId,
+        record.user_id,
+        record.user_email,
+        refreshCredential.tokenHash,
+        refreshCredential.expiresAt,
+      ],
+    );
+    return true;
+  });
+  if (!consumed) {
     // Lost the race to another poll that already consumed it.
     return NextResponse.json({ error: 'expired_token' }, { status: 400, ...noStore });
   }
@@ -119,7 +143,13 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     .slice(0, 12);
   logger.info({ deviceRef, userId: record.user_id }, 'Device token issued');
   return NextResponse.json(
-    { access_token: accessToken, token_type: 'Bearer', expires_in: expiresIn },
+    {
+      access_token: accessToken,
+      refresh_token: refreshCredential.token,
+      token_type: 'Bearer',
+      expires_in: expiresIn,
+      refresh_token_expires_in: DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
+    },
     noStore,
   );
 }

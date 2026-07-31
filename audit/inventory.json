@@ -3296,8 +3296,8 @@
   {
     "item": "refresh-token-rotation",
     "surface": "packages/auth",
-    "status": "partial",
-    "evidence": "CLI: refresh_chatgpt_token (apps/cli/src/auth.rs:652-729) is wired into resolve_auth (apps/cli/src/auth.rs:820-834), auto-refreshing a near-expiry ChatGPT OAuth token before use. Web/mobile app-surface sessions are rotated transparently by Clerk's SDK (apps/web/app/layout.tsx:171 ClerkProvider; apps/mobile/services/authSession.ts:51-58 getClerkTokenFresh)."
+    "status": "built",
+    "evidence": "First-party device sessions now use server-issued opaque refresh credentials that are stored only as SHA-256 hashes (apps/web/lib/server/device-refresh-token.ts; apps/web/db/neon/0080_device_refresh_token_rotation.sql), rotated transactionally with row locking and whole-family replay revocation (apps/web/app/api/auth/device/refresh/route.ts), bound to signed access-token session-family claims and revoked on logout (apps/web/lib/server/developer-token.ts; apps/web/app/api/auth/logout/route.ts). The shared device client transports the credential (packages/client/client-runtime/src/deviceAuthorization.ts), while Desktop restores it from encrypted native secret storage and rotates before access expiry (apps/desktop/src-tauri/src/sys/account/mod.rs; apps/desktop/src/services/cloudAccountAuth.ts). Existing CLI ChatGPT OAuth rotation remains wired through apps/cli/src/auth.rs, and Web/mobile Clerk sessions continue to use provider-managed rotation. Focused web, client, Desktop, and Rust tests cover issuance, restart recovery, rotation, replay rejection, family logout, and encrypted persistence."
   },
   {
     "item": "session-management",
