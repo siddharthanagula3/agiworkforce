@@ -1,10 +1,19 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
-const mockSetLanguage = jest.fn(async () => undefined);
+const mockSetLanguage = jest.fn<
+  Promise<{ language: string; directionChanged: boolean } | null>,
+  [string]
+>(async (language) => ({ language, directionChanged: false }));
 const mockReadLanguage = jest.fn(async () => 'device');
+const mockReloadAppAsync = jest.fn(async () => undefined);
+
+jest.mock('expo', () => ({
+  reloadAppAsync: (reason: string) => mockReloadAppAsync(reason),
+}));
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({
@@ -32,6 +41,7 @@ jest.mock('../src/i18n', () => ({
     { code: 'en', name: 'English', nativeName: 'English', flag: '🇺🇸' },
     { code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸' },
     { code: 'fr', name: 'French', nativeName: 'Français', flag: '🇫🇷' },
+    { code: 'ar', name: 'Arabic', nativeName: 'العربية', flag: '🇸🇦', rtl: true },
   ],
   getDeviceLanguage: () => 'en',
   readStoredLanguagePreference: () => mockReadLanguage(),
@@ -132,6 +142,12 @@ describe('Mobile app language settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockReadLanguage.mockResolvedValue('device');
+    mockSetLanguage.mockImplementation(async (language) => ({
+      language,
+      directionChanged: false,
+    }));
+    mockReloadAppAsync.mockResolvedValue(undefined);
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
   });
 
   it('exposes the active app language from General settings', () => {
@@ -167,5 +183,33 @@ describe('Mobile app language settings', () => {
     expect(screen.getByText('Français')).toBeTruthy();
     expect(screen.queryByText('Español')).toBeNull();
     expect(screen.queryByText('Match device')).toBeNull();
+  });
+
+  it('reloads the current bundle when the selected language changes layout direction', async () => {
+    mockSetLanguage.mockResolvedValueOnce({ language: 'ar', directionChanged: true });
+    const screen = render(<AppLanguageScreen />);
+    await waitFor(() => expect(mockReadLanguage).toHaveBeenCalled());
+
+    fireEvent.press(screen.getByLabelText('العربية. Arabic · AR'));
+
+    await waitFor(() => {
+      expect(mockReloadAppAsync).toHaveBeenCalledWith('Apply app language direction');
+    });
+  });
+
+  it('asks for a manual restart when the current host declines a direction reload', async () => {
+    mockSetLanguage.mockResolvedValueOnce({ language: 'ar', directionChanged: true });
+    mockReloadAppAsync.mockRejectedValueOnce(new Error('Reload unavailable'));
+    const screen = render(<AppLanguageScreen />);
+    await waitFor(() => expect(mockReadLanguage).toHaveBeenCalled());
+
+    fireEvent.press(screen.getByLabelText('العربية. Arabic · AR'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Restart required',
+        'Close and reopen AGI Workforce to apply the new layout direction.',
+      );
+    });
   });
 });

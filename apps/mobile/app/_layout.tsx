@@ -5,6 +5,7 @@ import * as Linking from 'expo-linking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { reloadAppAsync } from 'expo';
 import {
   View,
   ActivityIndicator,
@@ -248,7 +249,17 @@ export default function RootLayout() {
   useEffect(() => {
     initMmkvEncryption()
       .then(async () => {
-        await restoreStoredLanguage();
+        const language = await restoreStoredLanguage();
+        if (language.directionChanged) {
+          // reloadAppAsync works in release and debug builds. If a host still
+          // declines it, keep startup usable; the persisted direction applies
+          // the next time the app opens.
+          void reloadAppAsync('Apply stored app language direction').catch((err) => {
+            console.warn('[RootLayout] app-language direction reload failed:', err);
+            setIsMmkvReady(true);
+          });
+          return;
+        }
         setIsMmkvReady(true);
       })
       .catch((err) => {

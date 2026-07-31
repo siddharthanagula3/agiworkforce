@@ -216,7 +216,15 @@ const config = {
         androidSpeechServicePackages: ['com.google.android.googlequicksearchbox'],
       },
     ],
-    'expo-localization',
+    [
+      'expo-localization',
+      {
+        // Arabic is selectable in-app. Native startup must permit RTL before
+        // React Native applies the persisted per-language forceRTL preference.
+        supportsRTL: true,
+        forcesRTL: false,
+      },
+    ],
     [
       'expo-calendar',
       {
