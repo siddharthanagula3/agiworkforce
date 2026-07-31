@@ -405,8 +405,13 @@ impl ArtifactRenderer {
             _ => (true, None),
         };
 
-        // Default sandbox permissions
-        let sandbox_permissions = vec!["allow-scripts".to_string(), "allow-modals".to_string()];
+        // Keep the native response aligned with the renderer's fail-closed
+        // contract. The frontend revalidates these tokens before applying them.
+        let sandbox_permissions = if scripts_enabled {
+            vec!["allow-scripts".to_string(), "allow-modals".to_string()]
+        } else {
+            vec!["allow-modals".to_string()]
+        };
 
         WebRenderData {
             html: artifact.content.clone(),

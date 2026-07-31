@@ -722,8 +722,8 @@
   {
     "item": "embedded-code-surface",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "A sandboxed HTML/JS artifact-preview surface is built and reachable: apps/desktop/src/features/artifacts/ArtifactRendererView.tsx:343-433 renders artifacts in a CSP-constrained `<iframe sandbox=...>`; ArtifactPanel (which hosts it) is imported into the mounted shell at apps/desktop/src/features/v3/DesktopShellV3.tsx:18,518."
+    "status": "built",
+    "evidence": "The mounted Local artifact panel provides a fail-closed embedded HTML/JS surface: apps/desktop/src/features/artifacts/ArtifactRendererView.tsx:341-446 allowlists sandbox tokens, removes script permission when scripts are disabled, never grants same-origin access, and injects a network-blocking CSP with scripts, frames, objects, forms, and base URLs independently bounded. apps/desktop/src-tauri/src/core/artifacts/renderer.rs:402-420 emits the matching native policy; ArtifactPanel hosts the renderer at apps/desktop/src/features/artifacts/ArtifactPanel.tsx:826-830 and the mounted shell renders that panel at apps/desktop/src/features/v3/DesktopShellV3.tsx:19,574. apps/desktop/src/features/artifacts/__tests__/ArtifactRendererView.webSandbox.test.tsx proves unsafe sandbox tokens are dropped, script-disabled artifacts fail closed, unsafe-eval is absent, and full documents without a head still receive the CSP."
   },
   {
     "item": "cowork-mode",
