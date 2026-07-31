@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Pressable, RefreshControl, Alert, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
@@ -41,7 +41,6 @@ import { useAgentStore, type Agent, type RunArtifact } from '@/stores/agentStore
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
 import {
-  sendApprovalResponse,
   requestAgentRefresh,
   sendAgentCommand,
   sendEmergencyStop,
@@ -335,33 +334,53 @@ const TYPE_ICONS: Record<ApprovalRequest['type'], typeof Terminal> = {
 
 interface ApprovalCardProps {
   request: ApprovalRequest;
-  agentId: string;
 }
 
-function ApprovalCard({ request, agentId: _agentId }: ApprovalCardProps) {
+function ApprovalCard({ request }: ApprovalCardProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const approveRequest = useAgentStore((state) => state.approveRequest);
+  const rejectRequest = useAgentStore((state) => state.rejectRequest);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(request.countdown ?? null);
+
+  useEffect(() => {
+    const parsedExpiry = request.expiresAt ? Date.parse(request.expiresAt) : Number.NaN;
+    const deadline = Number.isFinite(parsedExpiry)
+      ? parsedExpiry
+      : request.countdown !== undefined
+        ? Date.now() + request.countdown * 1_000
+        : null;
+    if (deadline === null) {
+      setSecondsLeft(null);
+      return undefined;
+    }
+
+    const update = () => {
+      setSecondsLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1_000)));
+    };
+    update();
+    const timer = setInterval(update, 1_000);
+    return () => clearInterval(timer);
+  }, [request.countdown, request.expiresAt, request.id]);
 
   const handleApprove = useCallback(() => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    sendApprovalResponse(request.id, true);
-  }, [request.id, hapticsEnabled]);
+    approveRequest(request.id);
+  }, [approveRequest, request.id, hapticsEnabled]);
 
   const handleReject = useCallback(() => {
     if (hapticsEnabled) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
-    sendApprovalResponse(request.id, false);
-  }, [request.id, hapticsEnabled]);
+    rejectRequest(request.id);
+  }, [rejectRequest, request.id, hapticsEnabled]);
 
   if (request.status !== 'pending') return null;
 
   const TypeIcon = TYPE_ICONS[request.type];
   const riskColor = RISK_TEXT_COLORS[request.riskLevel];
   const RiskShieldIcon = request.riskLevel === 'high' ? ShieldAlert : ShieldCheck;
-  const hasCountdown = typeof request.countdown === 'number' && request.countdown > 0;
-
   return (
     <Animated.View
       entering={FadeIn.duration(200)}
@@ -404,10 +423,14 @@ function ApprovalCard({ request, agentId: _agentId }: ApprovalCardProps) {
         </View>
 
         {/* Countdown badge (time until auto-timeout) */}
-        {hasCountdown && (
+        {secondsLeft !== null && (
           <View className="px-3 pb-2 flex-row items-center gap-1.5">
             <Clock size={10} color={colors.textMuted} />
-            <Text className="text-[10px] text-white/40">Auto-reject in {request.countdown}s</Text>
+            <Text className="text-[10px] text-white/40">
+              {secondsLeft > 0
+                ? `Desktop decision window: ${secondsLeft}s`
+                : 'Desktop decision window reached'}
+            </Text>
           </View>
         )}
 
@@ -452,19 +475,6 @@ interface AgentCardProps {
 
 function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-
-  // Approval requests from the agent store, filtered to pending ones for this
-  // context. Select the raw (stable-reference) array and filter in a memo —
-  // filtering inline inside the selector returns a brand-new array on every
-  // store read, which Zustand's default reference equality treats as
-  // "changed" every render, causing an infinite resubscribe/re-render loop
-  // ("Maximum update depth exceeded"). Especially severe here since AgentCard
-  // renders once per agent in a list.
-  const allApprovals = useAgentStore((state) => state.pendingApprovals);
-  const pendingApprovals = useMemo(
-    () => allApprovals.filter((r) => r.status === 'pending'),
-    [allApprovals],
-  );
 
   const handleCommand = useCallback(
     (command: 'pause' | 'resume' | 'cancel') => {
@@ -618,11 +628,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
               <RunArtifactsList artifacts={agent.artifacts} maxVisible={3} />
             </>
           )}
-
-          {/* Inline approval requests */}
-          {pendingApprovals.map((req) => (
-            <ApprovalCard key={req.id} request={req} agentId={agent.id} />
-          ))}
 
           {/* Steps accordion (shown when selected) */}
           {isSelected && agent.steps && agent.steps.length > 0 && (
@@ -930,6 +935,11 @@ export function AgentDashboard() {
   const agents = useAgentStore((s) => s.agents);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const selectAgent = useAgentStore((s) => s.selectAgent);
+  const allApprovals = useAgentStore((s) => s.pendingApprovals);
+  const pendingApprovals = useMemo(
+    () => allApprovals.filter((request) => request.status === 'pending'),
+    [allApprovals],
+  );
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const router = useRouter();
 
@@ -1020,12 +1030,17 @@ export function AgentDashboard() {
           />
         )}
         ListHeaderComponent={
-          <View className="flex-row items-center justify-between py-3">
-            <Text className="text-xs text-white/50 uppercase tracking-wider">Active Agents</Text>
-            <Badge
-              label={`${agents.length} running`}
-              color={agents.some((a) => a.status === 'running') ? 'blue' : 'gray'}
-            />
+          <View className="pb-3">
+            <View className="flex-row items-center justify-between py-3">
+              <Text className="text-xs text-white/50 uppercase tracking-wider">Active Agents</Text>
+              <Badge
+                label={`${agents.length} running`}
+                color={agents.some((a) => a.status === 'running') ? 'blue' : 'gray'}
+              />
+            </View>
+            {pendingApprovals.map((request) => (
+              <ApprovalCard key={request.id} request={request} />
+            ))}
           </View>
         }
         ListFooterComponent={

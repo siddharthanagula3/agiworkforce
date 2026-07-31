@@ -94,6 +94,8 @@ export interface ApprovalRequest {
   riskLevel: RiskLevel;
   type: 'file_delete' | 'command' | 'api_call' | 'data_modification' | 'other';
   status: 'pending' | 'approved' | 'rejected';
+  createdAt?: string;
+  expiresAt?: string;
   countdown?: number;
 }
 

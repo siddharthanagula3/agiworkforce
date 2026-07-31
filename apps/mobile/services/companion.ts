@@ -11,6 +11,7 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useDispatchTaskStore } from '@/stores/dispatchTaskStore';
 import type { ConnectionQuality } from '@/stores/connectionStore';
 import type { RiskLevel } from '@/types/chat';
+import type { CompanionApprovalResponse } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { normalizePairingInput } from '@/services/manualPairing';
@@ -62,12 +63,7 @@ export function extractPairingCode(raw: string): string {
 // Control Message Builders
 // ---------------------------------------------------------------------------
 
-export interface ApprovalResponsePayload {
-  requestId: string;
-  approved: boolean;
-  respondedAt: string;
-  reason?: string;
-}
+export type ApprovalResponsePayload = Omit<CompanionApprovalResponse, 'action'>;
 
 export function buildApprovalResponsePayload(
   requestId: string,
@@ -75,6 +71,7 @@ export function buildApprovalResponsePayload(
   reason?: string,
 ): ApprovalResponsePayload {
   return {
+    version: 1,
     requestId,
     approved,
     respondedAt: new Date().toISOString(),
@@ -86,11 +83,22 @@ export function buildApprovalResponsePayload(
  * Send an approval response back to the desktop.
  * This approves or rejects a pending tool execution.
  */
-export function sendApprovalResponse(requestId: string, approved: boolean, reason?: string): void {
-  const { sendControl, status } = useConnectionStore.getState();
-  if (status !== 'connected') return;
-
-  sendControl('approval_response', buildApprovalResponsePayload(requestId, approved, reason));
+export function sendApprovalResponse(
+  requestId: string,
+  approved: boolean,
+  reason?: string,
+): boolean {
+  const { queueControl, sendControl, status } = useConnectionStore.getState();
+  const payload = buildApprovalResponsePayload(requestId, approved, reason);
+  if (status === 'connected') {
+    sendControl('approval_response', payload);
+    return true;
+  }
+  if (status === 'reconnecting' || status === 'stale') {
+    queueControl('approval_response', payload);
+    return true;
+  }
+  return false;
 }
 
 /**
