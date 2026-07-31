@@ -7,7 +7,7 @@ import {
   Platform,
 } from 'react-native';
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
   Clock,
@@ -18,6 +18,9 @@ import {
   Copy,
   ThumbsUp,
   ThumbsDown,
+  Volume2,
+  Share2,
+  Square,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
@@ -28,6 +31,7 @@ import { Text } from '@/components/ui/text';
 import { StreamingIndicator } from './StreamingIndicator';
 import { ThinkingChip } from './ThinkingChip';
 import { InlineArtifactCard } from './InlineArtifactCard';
+import * as voiceOutput from '@/src/features/voice/services/voiceOutput';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
@@ -271,6 +275,37 @@ export const MessageBubble = memo(function MessageBubble({
   const handleCloseFullScreenImage = useCallback(() => {
     setFullScreenImageUrl(null);
   }, [setFullScreenImageUrl]);
+
+  // Read-aloud state is deliberately per-bubble: only one message can be
+  // speaking at a time, and unmounting mid-speech (FlashList recycles rows on
+  // scroll) must not leave the synthesiser running with no way to stop it.
+  const [isSpeaking, setIsSpeaking] = useRecyclingState(false, [message.id]);
+
+  const handleToggleReadAloud = useCallback(() => {
+    if (isSpeaking) {
+      void voiceOutput.stop();
+      setIsSpeaking(false);
+      return;
+    }
+    // Stop whatever else is speaking first — the engine is a single shared
+    // resource, so starting a second utterance would overlap the first.
+    void voiceOutput.stop();
+    setIsSpeaking(true);
+    void voiceOutput
+      .speak(message.content, {
+        onDone: () => setIsSpeaking(false),
+        onStopped: () => setIsSpeaking(false),
+      })
+      .catch(() => setIsSpeaking(false));
+  }, [isSpeaking, message.content, setIsSpeaking]);
+
+  useEffect(() => {
+    return () => {
+      // Recycled or unmounted while speaking: silence it, or the audio outlives
+      // the row that owns the stop control.
+      if (isSpeaking) void voiceOutput.stop();
+    };
+  }, [isSpeaking]);
 
   const handleShowExport = useCallback(() => {
     setShowExportSheet(true);
@@ -893,6 +928,23 @@ export const MessageBubble = memo(function MessageBubble({
             label="Copy"
             icon={Copy}
             onPress={() => copyToClipboard(message.content)}
+            color={themeColors.textMuted}
+          />
+          {/* Read aloud — reuses the on-device TTS service the voice companion
+              already uses. Toggles, so a long answer can be stopped without
+              waiting it out. */}
+          <MessageActionButton
+            label={isSpeaking ? 'Stop reading aloud' : 'Read aloud'}
+            icon={isSpeaking ? Square : Volume2}
+            onPress={handleToggleReadAloud}
+            color={isSpeaking ? themeColors.teal : themeColors.textMuted}
+          />
+          {/* Share/export — the same sheet the long-press menu opens, surfaced
+              inline to match the reference apps. */}
+          <MessageActionButton
+            label="Share message"
+            icon={Share2}
+            onPress={handleShowExport}
             color={themeColors.textMuted}
           />
           {onRetryMessage ? (
