@@ -812,7 +812,12 @@ export default function PricingPage() {
             {t('compareHeading')}
           </h2>
           <p className="agi-fl-section-lede">{t('compareSubheading')}</p>
-          <div style={{ overflowX: 'auto', marginTop: 36 }}>
+          <div
+            aria-label="Scrollable plan comparison"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto', marginTop: 36 }}
+          >
             <table
               aria-label="Plan capabilities"
               style={{

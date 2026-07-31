@@ -27,6 +27,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     outputs:
+      web_changed: ${{ steps.scope.outputs.web }}
       desktop_changed: ${{ steps.scope.outputs.desktop }}
       native_changed: ${{ steps.scope.outputs.native }}
     services:
@@ -406,6 +407,7 @@ jobs:
           pnpm exec playwright test \
             --project=smoke \
             --project=self-healing \
+            --project=accessibility-audit \
             --retries=2 \
             --workers=1
 
@@ -422,6 +424,82 @@ jobs:
         run: |
           if [ -f apps/desktop/app.pid ]; then
             kill "$(cat apps/desktop/app.pid)" 2>/dev/null || true
+          fi
+
+  web-a11y:
+    name: Web accessibility audit
+    runs-on: ubuntu-24.04
+    needs: check
+    if: needs.check.outputs.web_changed == 'true'
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
+      NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
+      CLERK_SECRET_KEY: test-clerk-secret-key
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_mock
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build Web app
+        run: pnpm --filter @agiworkforce/web build
+
+      - name: Start Web app
+        run: |
+          set -euo pipefail
+          pnpm --filter @agiworkforce/web start > apps/web/app.log 2>&1 &
+          echo $! > apps/web/app.pid
+
+      - name: Wait for Web app
+        run: |
+          set -euo pipefail
+          for i in {1..90}; do
+            if ! kill -0 "$(cat apps/web/app.pid)" > /dev/null 2>&1; then
+              echo "Web process exited before the app became ready"
+              tail -200 apps/web/app.log || true
+              exit 1
+            fi
+            if curl -fsS http://127.0.0.1:3000/ > /dev/null; then
+              echo "Web app is ready after $((i*2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Web app failed to start"
+          tail -200 apps/web/app.log || true
+          exit 1
+
+      - name: Run blocking WCAG 2.1 A/AA audit
+        run: pnpm --filter @agiworkforce/web a11y:audit
+
+      - name: Upload accessibility report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-accessibility-report
+          path: apps/web/reports/a11y-report.json
+          retention-days: 14
+
+      - name: Stop Web app
+        if: always()
+        run: |
+          if [ -f apps/web/app.pid ]; then
+            kill "$(cat apps/web/app.pid)" 2>/dev/null || true
           fi
 
   clippy-all-features:

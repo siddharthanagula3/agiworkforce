@@ -72,6 +72,11 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      name: 'accessibility-audit',
+      testMatch: '**/accessibility-audit.spec.ts',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       name: 'integration',
       testMatch: '**/integration*.spec.ts',
       use: { ...devices['Desktop Chrome'] },
