@@ -13,7 +13,7 @@ function pngDimensions(filePath: string): { width: number; height: number } {
 describe('VS Code AGI brand assets', () => {
   const mediaDir = path.resolve(__dirname, '../../media');
 
-  it('uses the canonical twelve-spoke mark in the activity bar', () => {
+  it('uses the canonical twelve-spoke mark in workbench navigation', () => {
     const svg = fs.readFileSync(path.join(mediaDir, 'icon-sidebar.svg'), 'utf8');
     expect(svg.match(/<line\b/g)).toHaveLength(12);
     expect(svg).not.toContain('Robot head');

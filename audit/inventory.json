@@ -1772,8 +1772,8 @@
   {
     "item": "secondary-sidebar-panel",
     "surface": "apps/ide-extensions",
-    "status": "partial",
-    "evidence": "apps/extension-vscode/package.json:462-470 registers the view container only under viewsContainers.activitybar (primary side bar), not an auxiliarybar container. VS Code natively lets users drag any contributed view to the Secondary Side Bar (built-in editor chrome, not extension code), so the capability is reachable but the extension does not target or optimize for that placement by default."
+    "status": "built",
+    "evidence": "apps/extension-vscode/package.json:525-553 registers the single AGI Workforce view container under the stable viewsContainers.secondarySidebar contribution and keeps the Chat webview, History tree, and Context tree together in that container; package.json:12-14 requires VS Code ^1.106.0, the first stable release supporting this contribution. apps/extension-vscode/src/__tests__/secondarySidebarContribution.test.ts:4-26 locks the placement, absence of a duplicate activity-bar container, complete view membership, and minimum engine. A real @vscode/vsce package run produced a valid VSIX whose embedded manifest retained secondarySidebar and all views."
   },
   {
     "item": "draggable-view-location",
