@@ -10,7 +10,7 @@
     "url": "https://github.com/siddharthanagula3/agiworkforce"
   },
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.106.0"
   },
   "preview": true,
   "pricing": "Free",
@@ -523,7 +523,7 @@
       }
     ],
     "viewsContainers": {
-      "activitybar": [
+      "secondarySidebar": [
         {
           "id": "agi-workforce-sidebar",
           "title": "AGI Workforce",
