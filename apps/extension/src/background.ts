@@ -30,6 +30,7 @@ import {
   handleDeleteShortcut,
   planShortcutReplay,
 } from './features/background/shortcuts';
+import { initializeSyncedPreferences } from './features/background/synced-preferences';
 import {
   loadScheduledTasks,
   handleCreateScheduledTask,
@@ -385,6 +386,11 @@ async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
 function initialize(): void {
   chrome.runtime.onMessage.addListener(handleMessage);
   chrome.runtime.onConnect.addListener(handleManagedChatKeepalivePort);
+  void initializeSyncedPreferences(chrome.storage, (error) => {
+    logger.warn('Failed to mirror a cross-device preference', error);
+  }).catch((error) => {
+    logger.warn('Failed to initialize cross-device preferences', error);
+  });
   void purgeLegacyProviderCredentials(chrome.storage).then((failures) => {
     if (failures.length > 0) {
       logger.warn('Failed to purge the obsolete provider credential from Chrome storage', {
