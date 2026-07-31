@@ -122,6 +122,10 @@ export type ExtToWebviewMessage =
       payload: { files: Array<WorkspaceFileReference & { label: string }> };
     }
   | { type: 'conversationCleared' }
+  | {
+      type: 'composerDraft';
+      payload: { text: string; references: WorkspaceFileReference[] };
+    }
   | { type: 'addUserMessage'; payload: { text: string } }
   | { type: 'modeChanged'; payload: { mode: AgentMode } }
   | {

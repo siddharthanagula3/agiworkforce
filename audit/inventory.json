@@ -1946,8 +1946,8 @@
   {
     "item": "fork-compatibility-cursor-kiro",
     "surface": "apps/ide-extensions",
-    "status": "partial",
-    "evidence": "No extensionDependencies/extensionPack declared (package.json), so nothing hard-blocks installation in forks. apps/extension-vscode/src/core/commandSetup.ts:179-186,236-240,1514-1520 wrap calls to VS Code's proprietary chat commands (workbench.action.chat.open, workbench.panel.chat.view.copilot.focus) in try/catch with a fallback to sidebarProvider.reveal(), which is a defensive concession to those commands not existing in a fork."
+    "status": "built",
+    "evidence": "apps/extension-vscode/package.json declares neither extensionDependencies nor extensionPack. src/features/chat-participant/chatParticipant.ts:430-450 feature-detects createChatParticipant and returns without failing activation when a Code-OSS fork omits or rejects the native Chat API; core/chatSetup.ts:72 carries that availability into core/commandSetup.ts:289-294,351-355,1539-1543, where Chat and file-mention commands route to the first-party sidebar instead of proprietary workbench chat commands. sidebarProvider.ts:38,128-137 queues exact structured file/range drafts until its webview is ready, and webviewContent.ts:2905-2918 restores the draft into the composer. __tests__/forkCompatibility.test.ts covers absent and rejected native APIs, direct sidebar routing, exact selected ranges, and queued ready delivery."
   },
   {
     "item": "shared-settings-json-resolution",
