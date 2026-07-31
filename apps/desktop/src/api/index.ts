@@ -681,7 +681,7 @@ export {
   type ApprovalRequest as TaskApprovalRequest,
 } from './taskPersistence';
 
-// Analytics - Telemetry, metrics, feature flags, ROI, reports (29 commands)
+// Analytics - Telemetry, metrics, ROI, and reports
 export {
   AnalyticsClient,
   analyticsTrackEvent,
@@ -695,8 +695,6 @@ export {
   metricsIncrementGoals,
   metricsSetMcpServers,
   metricsSetCacheHitRate,
-  featureFlagGet,
-  featureFlagGetAll,
   analyticsGetUsageStats,
   analyticsGetFeatureUsage,
   analyticsCalculateRoi,

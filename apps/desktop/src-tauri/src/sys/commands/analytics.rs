@@ -4,7 +4,6 @@ use crate::sys::telemetry::{
 };
 use chrono;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
@@ -84,42 +83,6 @@ pub async fn metrics_get_system(state: State<'_, TelemetryState>) -> Result<Syst
 pub async fn metrics_get_app(state: State<'_, TelemetryState>) -> Result<AppMetrics, String> {
     let collector = state.metrics_collector.read().await;
     Ok(collector.collect_app_metrics())
-}
-
-use crate::sys::commands::settings::SettingsState;
-
-#[tauri::command]
-pub async fn feature_flag_get(
-    flag_name: String,
-    settings_state: State<'_, SettingsState>,
-) -> Result<bool, String> {
-    get_feature_flag(&flag_name, &settings_state).await
-}
-
-pub async fn get_feature_flag(
-    flag_name: &str,
-    settings_state: &SettingsState,
-) -> Result<bool, String> {
-    let settings = settings_state.settings.lock().await;
-    Ok(settings
-        .feature_flags
-        .get(flag_name)
-        .copied()
-        .unwrap_or(false))
-}
-
-#[tauri::command]
-pub async fn feature_flag_get_all(
-    settings_state: State<'_, SettingsState>,
-) -> Result<HashMap<String, bool>, String> {
-    get_all_feature_flags(&settings_state).await
-}
-
-pub async fn get_all_feature_flags(
-    settings_state: &SettingsState,
-) -> Result<HashMap<String, bool>, String> {
-    let settings = settings_state.settings.lock().await;
-    Ok(settings.feature_flags.clone())
 }
 
 /// TRUST-BOUNDARY: Called by the TS analytics service whenever AppMode changes.
@@ -631,7 +594,7 @@ mod tests {
         let state = create_test_state();
         let event = TelemetryEvent {
             name: "test_event".to_string(),
-            properties: HashMap::new(),
+            properties: std::collections::HashMap::new(),
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
             session_id: "test_session".to_string(),
             user_id: None,
@@ -666,44 +629,6 @@ mod tests {
         let metrics = state.metrics_collector.read().await.collect_app_metrics();
         assert_eq!(metrics.automations_count, 0);
         assert_eq!(metrics.goals_count, 0);
-    }
-
-    #[tokio::test]
-    async fn test_feature_flag_get() {
-        let state = SettingsState::new();
-        // Insert parallel_execution = true
-        {
-            let mut settings = state.settings.lock().await;
-            settings
-                .feature_flags
-                .insert("parallel_execution".to_string(), true);
-        }
-
-        let result = get_feature_flag("parallel_execution", &state).await;
-        assert!(result.is_ok());
-        assert!(result.unwrap());
-
-        let result = get_feature_flag("unknown_flag", &state).await;
-        assert!(result.is_ok());
-        assert!(!result.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_feature_flag_get_all() {
-        let state = SettingsState::new();
-        {
-            let mut settings = state.settings.lock().await;
-            settings
-                .feature_flags
-                .insert("parallel_execution".to_string(), true);
-        }
-
-        let result = get_all_feature_flags(&state).await;
-        assert!(result.is_ok());
-
-        let flags = result.unwrap();
-        assert!(!flags.is_empty());
-        assert_eq!(flags.get("parallel_execution"), Some(&true));
     }
 
     #[test]

@@ -272,31 +272,7 @@ export async function metricsSetCacheHitRate(rate: number): Promise<void> {
 }
 
 // ============================================================================
-// 3. Feature Flag Commands
-// ============================================================================
-
-/** Get a single feature flag value by name. */
-export async function featureFlagGet(flagName: string): Promise<boolean> {
-  try {
-    return await invoke<boolean>('feature_flag_get', { flagName });
-  } catch (error) {
-    console.error('[analytics] failed to get feature flag:', error);
-    throw error;
-  }
-}
-
-/** Get all feature flags as a map of name to enabled state. */
-export async function featureFlagGetAll(): Promise<Record<string, boolean>> {
-  try {
-    return await invoke<Record<string, boolean>>('feature_flag_get_all');
-  } catch (error) {
-    console.error('[analytics] failed to get all feature flags:', error);
-    throw error;
-  }
-}
-
-// ============================================================================
-// 4. Usage & Feature Analytics Commands
+// 3. Usage & Feature Analytics Commands
 // ============================================================================
 
 /** Get aggregated usage statistics (DAU, MAU, session duration, etc). */
@@ -532,9 +508,6 @@ export const AnalyticsClient = {
   incrementGoals: metricsIncrementGoals,
   setMcpServers: metricsSetMcpServers,
   setCacheHitRate: metricsSetCacheHitRate,
-  // Feature Flags
-  getFeatureFlag: featureFlagGet,
-  getAllFeatureFlags: featureFlagGetAll,
   // Usage & Feature Analytics
   getUsageStats: analyticsGetUsageStats,
   getFeatureUsage: analyticsGetFeatureUsage,

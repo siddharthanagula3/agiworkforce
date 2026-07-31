@@ -29,7 +29,7 @@ function mePayload(overrides: Record<string, unknown> = {}) {
     created_at: null,
     updated_at: 1751712000,
     plan: { tier: 'free', display_name: 'Free', status: 'none', current_period_end: null },
-    feature_flags: { beta_features: true, advanced_model_access: false },
+    feature_flags: { advanced_model_access: false },
     credits: null,
     routing_preferences: {},
     ...overrides,

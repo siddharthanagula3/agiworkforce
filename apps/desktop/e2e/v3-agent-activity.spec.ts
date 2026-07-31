@@ -122,9 +122,6 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
   await injectMockCloudAuth(page, { planTier: 'max' });
   await mockCloudAccountEndpoints(page, { planTier: 'max' });
   await mockCloudChat(page);
-  await page.addInitScript(() => {
-    localStorage.setItem('feature_flags_overrides', JSON.stringify([['desktop_chat_v3', true]]));
-  });
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle');

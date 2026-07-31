@@ -193,22 +193,6 @@ export interface EventBatch {
   sessionId: string;
 }
 
-export interface FeatureFlag {
-  name: string;
-  enabled: boolean;
-  rolloutPercentage?: number;
-  targetUserIds?: string[];
-  targetPlanTiers?: ('free' | 'pro' | 'enterprise')[];
-  enabledForAll?: boolean;
-  description?: string;
-}
-
-export interface FeatureFlagConfig {
-  flags: Record<string, FeatureFlag>;
-  environment: 'development' | 'staging' | 'production';
-  lastUpdated: number;
-}
-
 export interface UsageStats {
   dau: number;
   mau: number;

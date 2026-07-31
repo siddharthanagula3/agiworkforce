@@ -517,7 +517,6 @@ describe('ChatComposerNew', () => {
     useModelStore.getState().setSelectedModelId(genericSearchModel!.id);
     useBillingStore.setState({
       featureFlags: {
-        beta_features: originalFeatureFlags?.beta_features ?? false,
         advanced_model_access: originalFeatureFlags?.advanced_model_access ?? false,
         ...originalFeatureFlags,
         generic_web_search: true,
@@ -544,7 +543,6 @@ describe('ChatComposerNew', () => {
     useModelStore.getState().setSelectedModelId('auto');
     useBillingStore.setState({
       featureFlags: {
-        beta_features: originalFeatureFlags?.beta_features ?? false,
         advanced_model_access: originalFeatureFlags?.advanced_model_access ?? false,
         ...originalFeatureFlags,
         generic_web_search: true,
@@ -576,7 +574,6 @@ describe('ChatComposerNew', () => {
     useModelStore.getState().setSelectedModelId(genericSearchModel!.id);
     useBillingStore.setState({
       featureFlags: {
-        beta_features: originalFeatureFlags?.beta_features ?? false,
         advanced_model_access: originalFeatureFlags?.advanced_model_access ?? false,
         ...originalFeatureFlags,
         generic_web_search: false,

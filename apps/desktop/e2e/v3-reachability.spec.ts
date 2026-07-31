@@ -5,22 +5,20 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
  * v3 reachability suite (@reachability).
  *
  * Asserts that every v3 surface component is reachable through the DOM
- * once the v3 flag is on. These checks are intentionally permissive —
+ * in the production shell. These checks are intentionally permissive —
  * they verify the component renders or its trigger is present, not that
  * specific business state matches. The goal is a regression net for
- * route/feature-flag misconfig, not for behaviour.
+ * route/shell misconfiguration, not for behaviour.
  *
  * Auth-gate note: this suite runs against the plain-browser web-target
  * bundle (`VITE_BUILD_TARGET=web`, no Tauri). `appModeStore`'s
  * `supportsLocalAppMode` is `isTauri || isDesktopUiDevLocal`, so without
  * Tauri the app boots in Cloud mode and `App.tsx` renders `<AuthPage />`
- * for `isCloudMode && !hasCloudSession` — before the `desktop_chat_v3`
- * flag branch ever runs. `visual-regression.spec.ts` pins this same
+ * for `isCloudMode && !hasCloudSession`. `visual-regression.spec.ts` pins this same
  * intentional cloud-web sign-in gate. `injectMockCloudAuth` seeds the real
- * `unified-auth-storage`
- * persisted key (the same mechanism `self-healing.spec.ts` uses) so
- * `hasCloudSession` is true and the flag-gated branch is reached — no
- * change to the flag resolution itself was needed or made.
+ * `unified-auth-storage` persisted key (the same mechanism
+ * `self-healing.spec.ts` uses) so `hasCloudSession` is true and the
+ * production shell is reached.
  *
  * Beyond that gate, the mock cloud session in `gotoV3` guarantees the shell
  * (and its sub-components below) mount deterministically, so per-surface
@@ -31,16 +29,6 @@ import { injectMockCloudAuth, mockCloudAccountEndpoints } from './utils/mock-clo
 async function gotoV3(page: Page) {
   await injectMockCloudAuth(page);
   await mockCloudAccountEndpoints(page);
-  await page.addInitScript(() => {
-    try {
-      window.localStorage.setItem(
-        'feature_flags_overrides',
-        JSON.stringify([['desktop_chat_v3', true]]),
-      );
-    } catch {
-      // localStorage unavailable
-    }
-  });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 30000 });
 }

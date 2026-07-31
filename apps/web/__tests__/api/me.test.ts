@@ -186,7 +186,6 @@ describe('Me API', () => {
         const data = await response.json();
 
         expect(data.feature_flags).toBeDefined();
-        expect(data.feature_flags.beta_features).toBe(true);
         // Pro tier exposes the Advanced-mode manual picker
         expect(data.feature_flags.advanced_model_access).toBe(true);
       });

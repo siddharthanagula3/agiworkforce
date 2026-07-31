@@ -62,7 +62,6 @@ export interface SubscriptionPlan {
 }
 
 export interface FeatureFlags {
-  beta_features: boolean;
   advanced_model_access: boolean;
   /** Deployment capability: the E2B code-execution loop is enabled server-side. */
   code_execution?: boolean;
