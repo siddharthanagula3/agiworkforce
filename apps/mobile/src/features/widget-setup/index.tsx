@@ -145,8 +145,8 @@ function ActionRow({
 // Quick Access Screen
 //
 // Describes ONLY integrations that actually ship:
-//   iOS      — Siri App Shortcuts (native/ios/AGIAppIntents/), universal links.
-//              There is NO iOS share extension yet — say so, don't imply one.
+//   iOS      — Siri App Shortcuts, a native text/link Share Extension, and
+//              universal links.
 //   Android  — share-sheet target (ACTION_SEND) and text-selection action
 //              (ACTION_PROCESS_TEXT), both rewritten by MainActivity.kt onto
 //              the agiworkforce://intent/share deep link; verified App Links.
@@ -201,7 +201,7 @@ export default function WidgetSetupScreen() {
           </Text>
           <Text className="text-sm text-white/50 text-center px-4">
             {isIOS
-              ? 'Trigger AGI Workforce with Siri and open agiworkforce.com links directly in the app.'
+              ? 'Trigger AGI Workforce with Siri, share text or links from other apps, and open agiworkforce.com links directly in the app.'
               : 'Share text from any app, act on selected text, and open agiworkforce.com links directly in the app.'}
           </Text>
         </View>
@@ -243,21 +243,32 @@ export default function WidgetSetupScreen() {
               ))}
             </Card>
 
-            {/* iOS Section 2: Share sheet — honest not-yet-available note */}
+            {/* iOS Section 2: native Share Extension */}
             <Card>
               <SectionHeader icon={Share2} title="Share Sheet" step={2} />
+              <Text className="text-xs text-white/50 mb-3">
+                Share text or a web link from another app, choose{' '}
+                <Text className="text-xs text-white/70 font-medium">Share to AGI</Text>, and review
+                the content twice: once while saving and once after you open AGI Workforce.
+              </Text>
               <View
-                className="rounded-xl p-3 flex-row items-center gap-2"
-                style={{
-                  backgroundColor: `${colors.teal}11`,
-                  borderWidth: 1,
-                  borderColor: `${colors.teal}22`,
-                }}
+                className="rounded-xl p-3 gap-2"
+                style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Smartphone size={14} color={colors.teal} />
-                <Text className="text-[11px] text-white/50 flex-1">
-                  Sharing into AGI Workforce from other apps is not yet available on iOS. Use the
-                  Siri actions above instead.
+                <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-1">
+                  How to share
+                </Text>
+                <Text className="text-xs text-white/40">
+                  1. In Safari, Notes, or another app, tap{' '}
+                  <Text className="text-xs text-white/60 font-medium">Share</Text>
+                </Text>
+                <Text className="text-xs text-white/40">
+                  2. Choose <Text className="text-xs text-white/60 font-medium">Share to AGI</Text>
+                </Text>
+                <Text className="text-xs text-white/40">
+                  3. Preview it, tap{' '}
+                  <Text className="text-xs text-white/60 font-medium">Save for AGI Review</Text>,
+                  then open AGI Workforce and decide whether to send it
                 </Text>
               </View>
             </Card>

@@ -1226,8 +1226,8 @@
   {
     "item": "share-sheet-extension",
     "surface": "apps/mobile",
-    "status": "partial",
-    "evidence": "Android: real ACTION_SEND/ACTION_PROCESS_TEXT intent filters declared in apps/mobile/app.config.js:164-179, rewritten to the agiworkforce://intent/share deep link by apps/mobile/native/android/withAGIShareIntent.cjs:29-60 (patches generated MainActivity.kt), consumed in apps/mobile/app/_layout.tsx:714-725 -> share-preview review screen."
+    "status": "built",
+    "evidence": "Android: real ACTION_SEND/ACTION_PROCESS_TEXT filters in apps/mobile/app.config.js:159-179 are rewritten by apps/mobile/native/android/withAGIShareIntent.cjs onto the bounded agiworkforce://intent/share seam. iOS: apps/mobile/native/ios/withAGIShareExtension.cjs:1-219 copies tracked Swift/plist/entitlement sources, generates/signs/embeds an idempotent AGIShareExtension target, and explicitly links it as a host dependency. apps/mobile/native/ios/AGIShareExtension/ShareViewController.swift:4-292 accepts text/one web URL, provides a native preview, bounds content to 100 KB, and atomically saves only after the explicit Save for AGI Review action into the App Group declared for both targets. apps/mobile/native/ios/AGIShareInbox.swift:4-117, apps/mobile/src/features/share-preview/iosShareInbox.ts:1-71, and apps/mobile/app/_layout.tsx:631-649 consume pending drafts on authenticated launch/foreground and route them to apps/mobile/src/features/share-preview/index.tsx:19-150 for a second explicit review before any model send. Contract/UI tests: apps/mobile/__tests__/ios-share-extension.test.ts, ios-share-inbox.test.ts, share-intent-plugin.test.ts, android-intent-filters.test.ts, widget-setup-page.test.tsx, app-config-backup.test.ts. Verified by two consecutive clean-temp Expo iOS prebuilds (exactly one target/dependency/embed/source with matching App Group entitlements), CocoaPods installation, an unsigned AGIShareExtension simulator build, and a full unsigned containing-app workspace simulator build."
   },
   {
     "item": "app-intents",
