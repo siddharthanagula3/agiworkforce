@@ -3260,14 +3260,14 @@
   {
     "item": "saml",
     "surface": "packages/auth",
-    "status": "partial",
-    "evidence": "The formerly broken configuration path is repaired: apps/web/db/neon/0076_enterprise_control_plane_tables.sql:39-68 owns `sso_connections` and :219-232 enforces organization-role RLS; apps/web/app/api/admin/sso/route.ts:86-392 provides role-checked, rate-limited, audited metadata CRUD and its DELETE lookup now reads the migrated `provider_type` column at :306. The remaining first-party sign-in/assertion-consumer and provisioning runtime is intentionally absent, disclosed as deferred in apps/web/features/admin/pages/AdminConsolePage.tsx:47-50,192-193, and dispositioned for Phase 3 by audit/capability-gaps.csv CAP-028 plus docs/adr/wire-or-cut.md:39. Configuration storage is built; authentication/provisioning is an ADR-accepted Partial, not a broken reachable flow."
+    "status": "missing",
+    "evidence": "First-party SAML authentication is absent. Migration 0076 and apps/web/app/api/admin/sso/route.ts provide guarded identity-provider metadata storage, but the repository has no SAML authorization redirect, assertion-consumer service, metadata exchange runtime, signature/assertion validation, session issuance, or SAML sign-in entry point. The admin page explicitly describes that configuration as schema-ready while runtime is deferred, and CAP-028 plus docs/adr/wire-or-cut.md place the runtime in Phase 3. Configuration metadata is an adjacent foundation, not a partial implementation of SAML authentication."
   },
   {
     "item": "scim",
     "surface": "packages/auth",
-    "status": "partial",
-    "evidence": "Directory-sync configuration is real: apps/web/db/neon/0076_enterprise_control_plane_tables.sql:70-98 owns `directory_sync_connections` and :235-240 enforces organization-role RLS; apps/web/app/api/admin/directory-sync/route.ts:51-326 provides guarded configuration CRUD. The unconsumed `/api/webhooks/directory-sync` route that always returned HTTP 501 after signature verification was deleted, its sole `WORKOS_WEBHOOK_SECRET` consumer and stale environment-example key were removed, and no provisioning endpoint is now advertised. The remaining first-party provisioning runtime is explicitly disclosed at apps/web/features/admin/pages/AdminConsolePage.tsx:47-50,192-193 and ADR-deferred to Phase 3 by CAP-028 plus docs/adr/wire-or-cut.md. This is an honest configuration-only Partial, not a reachable Stub."
+    "status": "missing",
+    "evidence": "First-party SCIM provisioning is absent. Migration 0076 and apps/web/app/api/admin/directory-sync/route.ts retain guarded directory-connection metadata CRUD, but there is no SCIM service-provider base route, Users or Groups resource endpoint, bearer-token lifecycle, filter/patch/bulk implementation, inbound provisioning handler, or synchronization worker. The former unconsumed webhook that returned HTTP 501 was removed. AdminConsolePage, CAP-028, and docs/adr/wire-or-cut.md explicitly defer provisioning to Phase 3. Connection metadata is an adjacent foundation, not a partial SCIM runtime."
   },
   {
     "item": "mfa-totp",
@@ -3368,8 +3368,8 @@
   {
     "item": "managed-enterprise-settings",
     "surface": "packages/settings",
-    "status": "partial",
-    "evidence": "Migration 0076 canonically owns organization_admin_policies, enterprise_audit_events, organization_usage_ledger, support_cases, sso_connections, and directory_sync_connections with FORCE RLS. services/api-gateway/src/routes/enterprise.ts reads/writes the enterprise rows through getUserScopedClient, and the clean-Postgres CI gate plus two-tenant probe verifies the schema and isolation. apps/web/features/admin/pages/AdminConsolePage.tsx remains a truthful readiness ledger rather than a policy editor; first-party SSO sign-in/SCIM provisioning and signed OrgPolicy enforcement are explicitly deferred to the Phase 3 enterprise runtime."
+    "status": "missing",
+    "evidence": "A managed enterprise-settings product capability is absent. Migration 0076 provides an RLS-backed organization_admin_policies foundation and services/api-gateway/src/routes/enterprise.ts exposes a member-readable GET that returns the stored row or fail-closed defaults, but it has no write route. AdminConsolePage renders compile-time DEFAULT_ENTERPRISE_ADMIN_POLICY values rather than loading organization policy, and no Web, Desktop, Mobile, CLI, VS Code, or Chrome runtime subscribes to or enforces that row. docs/adr/wire-or-cut.md explicitly classifies managed overrides, model restrictions, defaults push, and their distribution/precedence/enforcement path as cut claims. A dormant schema plus read projection is not partial managed settings."
   },
   {
     "item": "user-settings",
@@ -3722,14 +3722,14 @@
   {
     "item": "group-and-domain-capture",
     "surface": "admin-and-billing",
-    "status": "partial",
-    "evidence": "The misleading reachable Stub was removed: the unconsumed `/api/webhooks/directory-sync` route that always returned HTTP 501 and its unused secret contract no longer exist. Configuration remains bounded and fail-closed: migration 0076 owns directory connection rows with organization RLS, the guarded admin CRUD manages only those rows, and apps/web/app/api/settings/organization/route.ts:46-59,265-273 rejects `allowedDomains` instead of claiming unenforced auto-join. CAP-028 and docs/adr/wire-or-cut.md defer group/domain provisioning with the first-party SCIM runtime to Phase 3, while AdminConsolePage.tsx:47-50,192-193 discloses the boundary. The retained configuration is an ADR-accepted Partial; no capture or provisioning endpoint is advertised."
+    "status": "missing",
+    "evidence": "Group and domain capture is absent. The organization settings route explicitly rejects allowedDomains, no verified-domain ownership or auto-join rule is persisted, and there is no group mapping, capture, or provisioning endpoint. Migration 0076 and the directory-sync admin route store only provider/directory connection metadata; the former unconsumed HTTP-501 webhook was removed. CAP-028 and docs/adr/wire-or-cut.md defer group/domain provisioning with the first-party SCIM runtime to Phase 3, and AdminConsolePage discloses that boundary. Directory connection metadata is not partial domain capture."
   },
   {
     "item": "sso-enforcement",
     "surface": "admin-and-billing",
-    "status": "partial",
-    "evidence": "The configuration schema and API are no longer broken: migration 0076 creates `sso_connections` at apps/web/db/neon/0076_enterprise_control_plane_tables.sql:39-68 and organization-role RLS at :219-232, while apps/web/app/api/admin/sso/route.ts:86-392 provides guarded metadata CRUD. Enforcement remains deliberately unavailable: apps/web/app/api/settings/organization/route.ts:47 accepts `enforceSSO` only for validation but :54-59,265-273 rejects the unsupported settings mutation, with fail-closed coverage in route.capability-honesty.test.ts:66-84. CAP-028 and docs/adr/wire-or-cut.md:39 defer the first-party sign-in/provisioning runtime to Phase 3, and AdminConsolePage.tsx:47-50,192-193 discloses that boundary. This is an ADR-accepted Partial rather than a reachable broken promise."
+    "status": "missing",
+    "evidence": "SSO enforcement is absent. Migration 0076 and the admin SSO route store guarded provider metadata, but apps/web/app/api/settings/organization/route.ts explicitly rejects enforceSSO and no login, session, organization-access, or recovery path consumes an enforcement flag. The fail-closed rejection is covered by route.capability-honesty.test.ts. CAP-028 and docs/adr/wire-or-cut.md defer the sign-in runtime to Phase 3, while AdminConsolePage discloses that boundary. SSO metadata configuration is not partial enforcement."
   },
   {
     "item": "audit-log-viewer",
@@ -3740,8 +3740,8 @@
   {
     "item": "retention-policy",
     "surface": "admin-and-billing",
-    "status": "partial",
-    "evidence": "Two fixed, system-wide retention windows are real: apps/web/db/neon/0043_audit_log_immutability.sql:32-46 makes `security_audit_logs` append-only and routes a 90-day purge through `cleanup_old_security_logs()` (apps/web/db/neon/0020_functions.sql:1193), triggerable via apps/web/app/api/admin/security/route.ts:201-208 (POST ?action=cleanup); apps/web/db/neon/0050_temporary_chat_retention.sql:1-11 marks temp-chat conversations for a ~30-day purge. Org-admin-configurable retention is explicitly not wired: apps/web/app/api/settings/organization/route.ts:49 declares `settings.dataRetention`, but line 54-59's UNSUPPORTED_PATCH_FIELDS rejects any `settings` update outright (263-273); the gateway's `organization_admin_policies.retention_days` (services/api-gateway/src/routes/enterprise.ts:69,102) has no backing table (see config-defaults-push finding)."
+    "status": "missing",
+    "evidence": "Organization-admin retention policy is absent. The platform has separate fixed system behavior—a privileged 90-day security-log cleanup function and roughly 30-day temporary-chat expiry—but no organization can configure those windows. The organization settings route explicitly rejects settings.dataRetention; the gateway only reads organization_admin_policies.retention_days or a default and exposes no mutation; and no purge, expiration, conversation, artifact, or audit runtime consumes that row. Fixed platform maintenance windows are adjacent built behavior, not a partial organization retention-policy capability."
   },
   {
     "item": "legal-hold",
