@@ -1,0 +1,186 @@
+name: Release VS Code Extension
+
+on:
+  push:
+    tags:
+      - 'v-vscode-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v-vscode-X.Y.Z tag to package'
+        required: true
+        type: string
+      publish:
+        description: 'Publish the verified VSIX after protected-environment approval'
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-vscode-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+  PNPM_VERSION: '9.15.3'
+
+jobs:
+  package:
+    name: Verify and package VS Code extension
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      version: ${{ steps.metadata.outputs.version }}
+      vsix: ${{ steps.metadata.outputs.vsix }}
+    steps:
+      - name: Checkout the selected release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Require an exact stable tag and matching source version
+        id: metadata
+        shell: bash
+        env:
+          SELECTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$SELECTED_TAG" | grep -Eq '^v-vscode-[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: VS Code release tags must use v-vscode-X.Y.Z" >&2
+            exit 1
+          fi
+          if [ "$(git describe --tags --exact-match HEAD)" != "$SELECTED_TAG" ]; then
+            echo "ERROR: checked-out commit is not the selected release tag $SELECTED_TAG" >&2
+            exit 1
+          fi
+
+          VERSION="${SELECTED_TAG#v-vscode-}"
+          PACKAGE_VERSION=$(node -p "require('./apps/extension-vscode/package.json').version")
+          if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
+            echo "ERROR: tag $SELECTED_TAG does not match extension version $PACKAGE_VERSION" >&2
+            exit 1
+          fi
+
+          echo "tag=${SELECTED_TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "vsix=agi-workforce-${VERSION}.vsix" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate extension source
+        run: |
+          pnpm --filter agi-workforce typecheck
+          pnpm --filter agi-workforce lint
+          pnpm --filter agi-workforce test
+          pnpm --filter agi-workforce test:webview
+          pnpm --filter agi-workforce check:vscode-theme-tokens
+
+      - name: Build and verify the VSIX
+        env:
+          VSIX_NAME: ${{ steps.metadata.outputs.vsix }}
+        run: |
+          set -euo pipefail
+          pnpm --filter agi-workforce package
+          pnpm --dir apps/extension-vscode verify:package
+          test -f "apps/extension-vscode/${VSIX_NAME}"
+
+          mkdir -p dist/vscode
+          cp "apps/extension-vscode/${VSIX_NAME}" "dist/vscode/${VSIX_NAME}"
+          sha256sum "dist/vscode/${VSIX_NAME}" > "dist/vscode/${VSIX_NAME}.sha256"
+
+      - name: Upload verified VSIX
+        uses: actions/upload-artifact@v7
+        with:
+          name: vscode-extension-${{ steps.metadata.outputs.version }}
+          path: dist/vscode/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish verified VSIX to Marketplace
+    if: github.event_name == 'push' || inputs.publish == true
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: vscode-marketplace
+      url: https://marketplace.visualstudio.com/items?itemName=agiworkforce.agi-workforce
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_CLIENT_ID: ${{ vars.VSCODE_MARKETPLACE_AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.VSCODE_MARKETPLACE_AZURE_TENANT_ID }}
+      VSIX_PATH: dist/vscode/${{ needs.package.outputs.vsix }}
+    steps:
+      - name: Checkout the exact packaged release source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.package.outputs.tag }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install pinned publisher tooling
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the verified VSIX
+        uses: actions/download-artifact@v8
+        with:
+          name: vscode-extension-${{ needs.package.outputs.version }}
+          path: dist/vscode
+
+      - name: Re-verify the release artifact
+        run: |
+          set -euo pipefail
+          sha256sum --check "${VSIX_PATH}.sha256"
+          node apps/extension-vscode/scripts/verify-vsix.mjs "$VSIX_PATH"
+
+      - name: Require Marketplace workload identity configuration
+        run: |
+          set -euo pipefail
+          if [ -z "$AZURE_CLIENT_ID" ] || [ -z "$AZURE_TENANT_ID" ]; then
+            echo "ERROR: vscode-marketplace environment variables VSCODE_MARKETPLACE_AZURE_CLIENT_ID and VSCODE_MARKETPLACE_AZURE_TENANT_ID are required" >&2
+            exit 1
+          fi
+
+      - name: Authenticate to Microsoft Entra with GitHub OIDC
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Publish the previously verified VSIX
+        run: |
+          set -euo pipefail
+          pnpm --dir apps/extension-vscode exec vsce publish \
+            --azure-credential \
+            --packagePath "$GITHUB_WORKSPACE/$VSIX_PATH" \
+            --no-dependencies

@@ -343,10 +343,45 @@ requireIncludes(
 );
 requireIncludes('apps/extension-vscode/MARKETPLACE_PUBLISH_RUNBOOK.md', 'December 1, 2026');
 requireNotIncludes('apps/extension-vscode/MARKETPLACE_PUBLISH_RUNBOOK.md', '--pat');
+requireIncludes('.github/workflows/release-vscode-extension.yml', "- 'v-vscode-*'");
+requireIncludes(
+  '.github/workflows/release-vscode-extension.yml',
+  "grep -Eq '^v-vscode-[0-9]+\\.[0-9]+\\.[0-9]+$'",
+);
+requireIncludes(
+  '.github/workflows/release-vscode-extension.yml',
+  'does not match extension version',
+);
+requireIncludes(
+  '.github/workflows/release-vscode-extension.yml',
+  'pnpm --filter agi-workforce test:webview',
+);
+requireIncludes(
+  '.github/workflows/release-vscode-extension.yml',
+  'pnpm --dir apps/extension-vscode verify:package',
+);
+requireIncludes('.github/workflows/release-vscode-extension.yml', 'sha256sum --check');
+requireIncludes('.github/workflows/release-vscode-extension.yml', 'name: vscode-marketplace');
+requireIncludes('.github/workflows/release-vscode-extension.yml', 'id-token: write');
+requireIncludes(
+  '.github/workflows/release-vscode-extension.yml',
+  'azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0',
+);
+requireIncludes('.github/workflows/release-vscode-extension.yml', '--azure-credential');
+requireIncludes(
+  '.github/workflows/release-vscode-extension.yml',
+  '--packagePath "$GITHUB_WORKSPACE/$VSIX_PATH"',
+);
+requireNotIncludes('.github/workflows/release-vscode-extension.yml', 'VSCE_PAT');
+requireNotIncludes('.github/workflows/release-vscode-extension.yml', '--pat');
+requireNotIncludes('.github/workflows/release-vscode-extension.yml', '--skip-duplicate');
+requireNotIncludes('.github/workflows/release-vscode-extension.yml', '--no-verify');
 requireIncludes('apps/extension-vscode/.vscodeignore', '**/*.map');
 requireNotIncludes('apps/extension-vscode/.vscodeignore', '!out/**');
 requireIncludes('apps/extension-vscode/scripts/vsce-package.js', 'rejectDevelopmentArtifacts');
 requireIncludes('apps/extension-vscode/scripts/vsce-package.js', 'PackageManager.None');
+requireIncludes('apps/extension-vscode/scripts/verify-vsix.mjs', 'extension/package.json');
+requireIncludes('apps/extension-vscode/scripts/verify-vsix.mjs', 'development-only or sensitive');
 requireIncludes('apps/extension/package.json', 'node scripts/prepare-package.mjs');
 requireIncludes(
   'apps/extension/scripts/prepare-package.mjs',
