@@ -133,7 +133,9 @@ Extension release also requires external evidence that Clerk Native API is
 enabled and `chrome-extension://<stable-id>` is present in the production Clerk
 instance's `allowed_origins`. A clean build alone does not prove either dashboard
 setting. Manifest review, permission review, native-host installer verification,
-and Chrome Web Store package checks remain required.
+and Chrome Web Store package checks remain required. Tagged package/submission
+automation, its keyless workload-identity setup, and operator recovery are
+documented in `CHROME_WEB_STORE_PUBLISH_RUNBOOK.md`.
 
 ## Known Caveats
 

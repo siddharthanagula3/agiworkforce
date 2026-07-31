@@ -1,0 +1,196 @@
+name: Release Chrome Extension
+
+on:
+  push:
+    tags:
+      - 'v-ext-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v-ext-X.Y.Z tag to package'
+        required: true
+        type: string
+      publish:
+        description: 'Submit the verified ZIP after protected-environment approval'
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-chrome-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+  PNPM_VERSION: '9.15.3'
+
+jobs:
+  package:
+    name: Verify and package Chrome extension
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      version: ${{ steps.metadata.outputs.version }}
+      archive: ${{ steps.metadata.outputs.archive }}
+    env:
+      CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+      CLERK_FRONTEND_API: ${{ vars.CLERK_FRONTEND_API }}
+      CLERK_SYNC_HOST: ${{ vars.CLERK_SYNC_HOST }}
+      CHROME_EXTENSION_PUBLIC_KEY: ${{ vars.CHROME_EXTENSION_PUBLIC_KEY }}
+    steps:
+      - name: Checkout the selected release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Require an exact stable tag and matching source versions
+        id: metadata
+        shell: bash
+        env:
+          SELECTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$SELECTED_TAG" | grep -Eq '^v-ext-[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: Chrome release tags must use v-ext-X.Y.Z" >&2
+            exit 1
+          fi
+          if [ "$(git describe --tags --exact-match HEAD)" != "$SELECTED_TAG" ]; then
+            echo "ERROR: checked-out commit is not the selected release tag $SELECTED_TAG" >&2
+            exit 1
+          fi
+
+          VERSION="${SELECTED_TAG#v-ext-}"
+          PACKAGE_VERSION=$(node -p "require('./apps/extension/package.json').version")
+          MANIFEST_VERSION=$(node -p "require('./apps/extension/manifest.json').version")
+          if [ "$PACKAGE_VERSION" != "$VERSION" ] || [ "$MANIFEST_VERSION" != "$VERSION" ]; then
+            echo "ERROR: tag $SELECTED_TAG does not match Chrome versions (package=$PACKAGE_VERSION manifest=$MANIFEST_VERSION)" >&2
+            exit 1
+          fi
+
+          echo "tag=${SELECTED_TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "archive=agi-browser-companion-${VERSION}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Require public production extension configuration
+        run: |
+          set -euo pipefail
+          for name in CLERK_PUBLISHABLE_KEY CLERK_FRONTEND_API CLERK_SYNC_HOST CHROME_EXTENSION_PUBLIC_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: repository variable ${name} is required for a Chrome release" >&2
+              exit 1
+            fi
+          done
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate extension source
+        run: |
+          pnpm --filter @agiworkforce/extension typecheck
+          pnpm --filter @agiworkforce/extension lint
+          pnpm --filter @agiworkforce/extension test
+          pnpm --filter @agiworkforce/extension check:no-hex
+          pnpm --filter @agiworkforce/extension check:no-cloud-ipc
+
+      - name: Build and verify the store ZIP
+        env:
+          ARCHIVE_NAME: ${{ steps.metadata.outputs.archive }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @agiworkforce/extension package
+          mkdir -p dist/chrome
+          cp apps/extension/extension.zip "dist/chrome/${ARCHIVE_NAME}"
+          node apps/extension/scripts/verify-package.mjs "dist/chrome/${ARCHIVE_NAME}"
+          sha256sum "dist/chrome/${ARCHIVE_NAME}" > "dist/chrome/${ARCHIVE_NAME}.sha256"
+
+      - name: Upload verified Chrome package
+        uses: actions/upload-artifact@v7
+        with:
+          name: chrome-extension-${{ steps.metadata.outputs.version }}
+          path: dist/chrome/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Submit verified ZIP to Chrome Web Store
+    if: github.event_name == 'push' || inputs.publish == true
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: chrome-web-store
+      url: https://chrome.google.com/webstore/devconsole
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+      CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+      ARCHIVE_PATH: dist/chrome/${{ needs.package.outputs.archive }}
+    steps:
+      - name: Checkout the exact packaged release source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.package.outputs.tag }}
+
+      - name: Download the verified Chrome package
+        uses: actions/download-artifact@v8
+        with:
+          name: chrome-extension-${{ needs.package.outputs.version }}
+          path: dist/chrome
+
+      - name: Re-verify the release artifact
+        env:
+          CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+          CLERK_FRONTEND_API: ${{ vars.CLERK_FRONTEND_API }}
+          CLERK_SYNC_HOST: ${{ vars.CLERK_SYNC_HOST }}
+          CHROME_EXTENSION_PUBLIC_KEY: ${{ vars.CHROME_EXTENSION_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          sha256sum --check "${ARCHIVE_PATH}.sha256"
+          node apps/extension/scripts/verify-package.mjs "$ARCHIVE_PATH"
+
+      - name: Require Chrome Web Store workload identity configuration
+        env:
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          CWS_SERVICE_ACCOUNT: ${{ vars.CWS_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          for name in GCP_WORKLOAD_IDENTITY_PROVIDER CWS_SERVICE_ACCOUNT CWS_PUBLISHER_ID CWS_EXTENSION_ID; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: chrome-web-store environment variable ${name} is required" >&2
+              exit 1
+            fi
+          done
+
+      - name: Authenticate to Google Cloud with GitHub OIDC
+        id: google-auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.CWS_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          create_credentials_file: false
+
+      - name: Upload and submit the previously verified ZIP
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.google-auth.outputs.access_token }}
+        run: node apps/extension/scripts/publish-chrome-web-store.mjs "$ARCHIVE_PATH"
