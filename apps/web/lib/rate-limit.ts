@@ -340,6 +340,16 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'settings-sessions-list': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-session-revoke': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
   'settings-audit-logs': {
     limit: 60,
     window: '1 m',
