@@ -17,7 +17,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::config::CliConfig;
-use crate::models::{self, Message, Provider};
+use crate::models::{self, ContentBlock, Message, MessageContent, Provider};
 
 /// Maximum number of message characters to include in the extraction prompt.
 const MAX_MESSAGE_CHARS: usize = 20_000; // ~5000 tokens at 4 chars/token
@@ -490,37 +490,98 @@ impl MemoryPipeline {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Collect recent message text from a session, skipping the system prompt
-/// and capping at `MAX_MESSAGE_CHARS`.
+fn is_root_user_prompt(message: &Message) -> bool {
+    if message.role != "user" {
+        return false;
+    }
+    match &message.content {
+        MessageContent::Text(_) => true,
+        MessageContent::Blocks(blocks) => blocks.iter().any(|block| {
+            matches!(
+                block,
+                ContentBlock::Text { .. } | ContentBlock::Image { .. }
+            )
+        }),
+    }
+}
+
+fn is_terminal_assistant(message: &Message) -> bool {
+    if message.role != "assistant" {
+        return false;
+    }
+    match &message.content {
+        MessageContent::Text(text) => !text.trim().is_empty(),
+        MessageContent::Blocks(blocks) => {
+            !blocks
+                .iter()
+                .any(|block| matches!(block, ContentBlock::ToolUse { .. }))
+                && blocks.iter().any(
+                    |block| matches!(block, ContentBlock::Text { text } if !text.trim().is_empty()),
+                )
+        }
+    }
+}
+
+fn is_cancelled_terminal(message: &Message) -> bool {
+    is_terminal_assistant(message) && message.text_content().trim_end().ends_with("[stopped]")
+}
+
+/// Collect recent text from completed user→assistant turns only, skipping system
+/// prompts, failed trailing prompts, cancelled turns, and unfinished tool loops.
+/// The result is capped at `MAX_MESSAGE_CHARS`.
 fn collect_recent_messages(messages: &[Message]) -> String {
     let mut collected = String::new();
     let mut total_chars = 0usize;
+    let mut collecting_completed_turn = false;
+    let mut skipping_cancelled_turn = false;
 
-    // Walk backward from most recent, skip system prompt (index 0)
+    // Walk backward so an unmatched trailing prompt is ignored until a genuine
+    // terminal assistant response proves that a turn completed.
     for msg in messages.iter().rev() {
         if msg.role == "system" {
             continue;
         }
-        let text = msg.text_content();
-        if text.trim().is_empty() {
+
+        if skipping_cancelled_turn {
+            if is_root_user_prompt(msg) {
+                skipping_cancelled_turn = false;
+            }
             continue;
         }
 
-        let entry = format!("[{}]: {}\n\n", msg.role, text);
-        let entry_len = entry.chars().count();
-
-        if total_chars + entry_len > MAX_MESSAGE_CHARS {
-            // Include partial if we haven't collected anything yet
-            if collected.is_empty() {
-                let remaining = MAX_MESSAGE_CHARS.saturating_sub(total_chars);
-                let truncated: String = entry.chars().take(remaining).collect();
-                collected = format!("{truncated}{collected}");
+        if !collecting_completed_turn {
+            if is_cancelled_terminal(msg) {
+                skipping_cancelled_turn = true;
+                continue;
             }
-            break;
+            if !is_terminal_assistant(msg) {
+                continue;
+            }
+            collecting_completed_turn = true;
         }
 
-        collected = format!("{}{}", entry, collected);
-        total_chars += entry_len;
+        let text = msg.text_content();
+        if !text.trim().is_empty() {
+            let entry = format!("[{}]: {}\n\n", msg.role, text);
+            let entry_len = entry.chars().count();
+
+            if total_chars + entry_len > MAX_MESSAGE_CHARS {
+                // Include partial if we haven't collected anything yet.
+                if collected.is_empty() {
+                    let remaining = MAX_MESSAGE_CHARS.saturating_sub(total_chars);
+                    let truncated: String = entry.chars().take(remaining).collect();
+                    collected = format!("{truncated}{collected}");
+                }
+                break;
+            }
+
+            collected = format!("{}{}", entry, collected);
+            total_chars += entry_len;
+        }
+
+        if is_root_user_prompt(msg) {
+            collecting_completed_turn = false;
+        }
     }
 
     collected
@@ -654,11 +715,60 @@ mod tests {
     }
 
     #[test]
+    fn test_collect_recent_messages_excludes_failed_trailing_prompt() {
+        let messages = vec![
+            Message::text("user", "I prefer tabs."),
+            Message::text("assistant", "Understood."),
+            Message::text("user", "This request never completed."),
+        ];
+
+        let text = collect_recent_messages(&messages);
+
+        assert!(text.contains("I prefer tabs."));
+        assert!(text.contains("Understood."));
+        assert!(!text.contains("never completed"));
+    }
+
+    #[test]
+    fn test_collect_recent_messages_excludes_cancelled_turn() {
+        let messages = vec![
+            Message::text("user", "I prefer tabs."),
+            Message::text("assistant", "Understood."),
+            Message::text("user", "Cancelled private draft."),
+            Message::text("assistant", "Partial output\n\n[stopped]"),
+        ];
+
+        let text = collect_recent_messages(&messages);
+
+        assert!(text.contains("I prefer tabs."));
+        assert!(!text.contains("Cancelled private draft"));
+        assert!(!text.contains("Partial output"));
+    }
+
+    #[test]
+    fn test_collect_recent_messages_waits_for_terminal_tool_loop_answer() {
+        let messages = vec![
+            Message::text("user", "Use the repository tool."),
+            Message::blocks(
+                "assistant",
+                vec![ContentBlock::ToolUse {
+                    id: "call-1".to_string(),
+                    name: "read_file".to_string(),
+                    input: serde_json::json!({"path": "README.md"}),
+                }],
+            ),
+        ];
+
+        assert!(collect_recent_messages(&messages).is_empty());
+    }
+
+    #[test]
     fn test_collect_recent_messages_caps_length() {
         let long_text = "x".repeat(MAX_MESSAGE_CHARS + 1000);
         let messages = vec![
             Message::text("system", "sys"),
-            Message::text("user", &long_text),
+            Message::text("user", "Summarize the completed response."),
+            Message::text("assistant", &long_text),
         ];
         let text = collect_recent_messages(&messages);
         assert!(text.len() <= MAX_MESSAGE_CHARS + 100); // Allow some overhead for formatting
@@ -666,7 +776,10 @@ mod tests {
 
     #[test]
     fn test_collect_recent_messages_truncates_unicode_on_character_boundaries() {
-        let messages = vec![Message::text("user", "🦀".repeat(MAX_MESSAGE_CHARS + 10))];
+        let messages = vec![
+            Message::text("user", "Return the completed Unicode response."),
+            Message::text("assistant", "🦀".repeat(MAX_MESSAGE_CHARS + 10)),
+        ];
         let text = collect_recent_messages(&messages);
         assert!(text.chars().count() <= MAX_MESSAGE_CHARS);
         assert!(text.is_char_boundary(text.len()));
@@ -678,6 +791,7 @@ mod tests {
         let messages = vec![
             Message::text("system", "policy"),
             Message::text("user", "I always prefer strict type checking."),
+            Message::text("assistant", "I will follow that preference."),
         ];
         let config = CliConfig::default();
 

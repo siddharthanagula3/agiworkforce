@@ -1274,25 +1274,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     if (!isTurnAccountCurrent()) return false;
 
-    // Learn from this turn (LOCAL mode only): extract durable facts from the user's
-    // message and persist new ones (deduped) into the on-device SQLite memory.
-    // Fire-and-forget — never await, never block the turn — and skip temporary chats.
-    //
-    // Cloud mode intentionally does NOT consolidate here. The managed server owns
-    // cloud auto-memory: `recordManagedAutoMemoryTurn` persists the same conservative
-    // user-authored facts, but only AFTER a completed turn (outcome === 'completed'),
-    // exactly like web. Consolidating on the client for cloud mode would duplicate the
-    // server's write and — worse — learn from this send BEFORE the turn succeeds.
-    if (
-      shouldConsolidateMemoryOnClient({
-        executionMode,
-        isTemporaryChat,
-        memoryEnabled: memorySettings.referencePastChats,
-        generateMemoryFromHistory: memorySettings.generateMemoryFromHistory,
-      })
-    ) {
+    // Snapshot the Local auto-memory policy at turn admission, but do not write
+    // anything yet. Persistence belongs to the successful Local terminal branch
+    // below: a pre-stream cancellation, model/setup failure, abort, or incomplete
+    // stream must never teach durable memory merely because the user pressed Send.
+    // Cloud remains server-owned (`recordManagedAutoMemoryTurn`, completed only).
+    const shouldCaptureCompletedLocalTurn = shouldConsolidateMemoryOnClient({
+      executionMode,
+      isTemporaryChat,
+      memoryEnabled: memorySettings.referencePastChats,
+      generateMemoryFromHistory: memorySettings.generateMemoryFromHistory,
+    });
+    let completedLocalMemoryCaptured = false;
+    const captureCompletedLocalMemory = () => {
+      if (!shouldCaptureCompletedLocalTurn || completedLocalMemoryCaptured) return;
+      completedLocalMemoryCaptured = true;
       void consolidateFactsFromTurn({ message: content, conversationId });
-    }
+    };
 
     msgStore.setState((state) => {
       const existing = state.messages[conversationId] ?? [];
@@ -1438,7 +1436,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             updateLocalStream(parseLocalThinking(localStreamingRaw));
           },
         });
-        if (controller.signal.aborted) {
+        if (controller.signal.aborted || result.aborted) {
           abortControllers.delete(conversationId);
           streamingConversations.delete(conversationId);
           set({ ...streamingFlags() });
@@ -1527,6 +1525,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           error: null,
           paywallError: null,
         });
+
+        // Best-effort and deliberately after the assistant reply is finalized.
+        // The service dedupes and bounds inserts; memory failure must not turn a
+        // successful chat response into a failed send.
+        if (parsedFinal.content.trim()) {
+          captureCompletedLocalMemory();
+        }
         return true;
       }
 
@@ -1852,7 +1857,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           },
 
           onDone: () => {
-            if (!isTurnAccountCurrent()) return;
+            if (controller.signal.aborted || !isTurnAccountCurrent()) return;
             const startedAt = thinkingStartTimes.get(conversationId);
             const endedAt = thinkingEndTimes.get(conversationId) ?? Date.now();
             const thinkingDuration = startedAt
@@ -1971,6 +1976,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               streamingContent: '',
               streamingReasoning: '',
             });
+
+            // Local-mode BYOK streams use this transport too. Capture only a
+            // clean terminal response; Cloud is excluded by the policy snapshot,
+            // and an x_stream_error completion is still a failed turn.
+            if (turnStreamError === undefined && finalContent.trim()) {
+              captureCompletedLocalMemory();
+            }
           },
 
           onError: (error: Error) => {

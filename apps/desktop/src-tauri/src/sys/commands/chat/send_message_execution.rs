@@ -257,6 +257,7 @@ fn spawn_streaming_deep_research(
                     allow_tool_assisted_memory_generation,
                     true,
                     flags.incognito,
+                    true,
                 ) {
                     if let Err(error) = memory_handler.detect_and_save_decision(&result.report) {
                         warn!(
@@ -575,6 +576,7 @@ fn spawn_streaming_agent(
                     allow_tool_assisted_memory_generation,
                     true,
                     flags.incognito,
+                    success,
                 ) {
                     if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
                         warn!(
@@ -1304,6 +1306,7 @@ fn spawn_streaming_chat(
                     allow_tool_assisted_memory_generation,
                     has_tool_calls || flags.is_web_focus,
                     flags.incognito,
+                    !was_stopped,
                 ) {
                     if let Err(error) = memory_handler.detect_and_save_decision(&full_content) {
                         warn!("[Chat] Failed to auto-save memory (non-fatal): {}", error);
@@ -1422,6 +1425,7 @@ async fn run_nonstreaming_deep_research(
         allow_tool_assisted_memory_generation,
         true,
         flags.incognito,
+        true,
     ) {
         if let Err(error) = memory_handler.detect_and_save_decision(&result.report) {
             warn!(
@@ -1575,6 +1579,7 @@ async fn run_nonstreaming_agent(
         allow_tool_assisted_memory_generation,
         true,
         flags.incognito,
+        orchestrator_result.success,
     ) {
         if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
             warn!(
@@ -1778,6 +1783,7 @@ async fn run_nonstreaming_chat(
                     allow_tool_assisted_memory_generation,
                     tool_iteration > 0 || flags.is_web_focus,
                     flags.incognito,
+                    true,
                 ) {
                     if let Err(error) = memory_handler.detect_and_save_decision(&final_content) {
                         warn!("[Chat] Failed to auto-save decision (non-fatal): {}", error);

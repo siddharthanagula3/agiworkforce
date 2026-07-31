@@ -91,6 +91,22 @@ jest.mock('../storage/installedModels', () => ({
   markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../src/features/memory/services/consolidation', () => ({
+  consolidateFactsFromTurn: jest.fn(),
+  shouldConsolidateMemoryOnClient: jest.fn(
+    (opts: {
+      executionMode: 'local' | 'cloud';
+      isTemporaryChat: boolean;
+      memoryEnabled: boolean;
+      generateMemoryFromHistory: boolean;
+    }) =>
+      opts.executionMode === 'local' &&
+      !opts.isTemporaryChat &&
+      opts.memoryEnabled &&
+      opts.generateMemoryFromHistory,
+  ),
+}));
+
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -130,6 +146,8 @@ import {
 import type { StreamCallbacks } from '../services/streaming';
 import { useAuthStore } from '../src/features/auth/store';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import { consolidateFactsFromTurn } from '../src/features/memory/services/consolidation';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -151,6 +169,9 @@ const mockListInstalledModels = listInstalledModels as jest.MockedFunction<
 const mockGetInstalledModel = getInstalledModel as jest.MockedFunction<typeof getInstalledModel>;
 const mockMarkInstalledModelUsed = markInstalledModelUsed as jest.MockedFunction<
   typeof markInstalledModelUsed
+>;
+const mockConsolidateFactsFromTurn = consolidateFactsFromTurn as jest.MockedFunction<
+  typeof consolidateFactsFromTurn
 >;
 let capturedLocalGenerateOptions: Parameters<typeof localGenerate>[1] | null = null;
 
@@ -251,6 +272,11 @@ describe('chatStore — streaming state', () => {
     });
     resetStore();
     useSettingsStore.setState({ reduceSensitiveContent: false });
+    useSettingsStore.setState({ isTemporaryChat: false });
+    useLocalSettingsStore.setState({
+      referencePastChats: true,
+      generateMemoryFromHistory: true,
+    });
     jest.clearAllMocks();
     mockRemoteDisabledReason.mockReturnValue(null);
     mockListInstalledModels.mockResolvedValue([]);
@@ -813,6 +839,228 @@ describe('chatStore — streaming state', () => {
   });
 
   describe('local LLM path', () => {
+    it('captures durable facts only after a successful local assistant turn', async () => {
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockImplementation(async () => {
+        // Regression guard: the previous implementation persisted immediately
+        // after preflight, before local generation had produced any result.
+        expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+        return { text: 'Nice to meet you.', runtime: 'executorch', aborted: false };
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', LOCAL_MODEL);
+      });
+
+      expect(mockConsolidateFactsFromTurn).toHaveBeenCalledTimes(1);
+      expect(mockConsolidateFactsFromTurn).toHaveBeenCalledWith({
+        message: 'My name is Grace Hopper.',
+        conversationId: CONV_ID,
+      });
+    });
+
+    it('does not capture durable facts when local generation fails', async () => {
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockRejectedValue(new Error('local runtime unavailable'));
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', LOCAL_MODEL);
+      });
+
+      expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+    });
+
+    it('does not capture durable facts when local generation is cancelled', async () => {
+      useChatStore.setState({ currentConversationId: CONV_ID });
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockImplementation(
+        (_modelPath, opts) =>
+          new Promise((resolve) => {
+            opts.signal.addEventListener(
+              'abort',
+              () => resolve({ text: 'Partial reply', runtime: 'executorch', aborted: true }),
+              { once: true },
+            );
+          }),
+      );
+
+      const send = getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', LOCAL_MODEL);
+      await waitFor(() => expect(mockLocalGenerate).toHaveBeenCalledTimes(1));
+      act(() => getState().stopStreaming());
+      await act(async () => {
+        await send;
+      });
+
+      expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+    });
+
+    it('does not capture durable facts when the local runtime reports an abort', async () => {
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockResolvedValue({
+        text: 'Partial reply',
+        runtime: 'executorch',
+        aborted: true,
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', LOCAL_MODEL);
+      });
+
+      expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+    });
+
+    it('does not capture durable facts when the local runtime returns no answer', async () => {
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockResolvedValue({
+        text: '',
+        runtime: 'executorch',
+        aborted: false,
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', LOCAL_MODEL);
+      });
+
+      expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+    });
+
+    it('does not capture durable facts when the local turn is temporary', async () => {
+      useSettingsStore.setState({ isTemporaryChat: true });
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockResolvedValue({
+        text: 'Nice to meet you.',
+        runtime: 'executorch',
+        aborted: false,
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', LOCAL_MODEL);
+      });
+
+      expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+    });
+
+    it('captures only after a successful local-mode BYOK stream completes', async () => {
+      mockRemoteDisabledReason.mockReturnValue(null);
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+            callbacks.onDelta({ content: 'Nice to meet you.' });
+            expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', MODEL);
+      });
+
+      expect(mockConsolidateFactsFromTurn).toHaveBeenCalledTimes(1);
+      expect(mockConsolidateFactsFromTurn).toHaveBeenCalledWith({
+        message: 'My name is Grace Hopper.',
+        conversationId: CONV_ID,
+      });
+    });
+
+    it('does not capture durable facts when a local-mode BYOK stream has no answer', async () => {
+      mockRemoteDisabledReason.mockReturnValue(null);
+      mockStreamChat.mockImplementation(async (_body, callbacks) => {
+        callbacks.onDone();
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', MODEL);
+      });
+
+      expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+    });
+
     it('sends selected chat mode and style context to local generation', async () => {
       useChatStore.setState({ chatMode: 'research', chatStyle: 'concise' });
       mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
