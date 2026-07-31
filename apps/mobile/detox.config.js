@@ -14,6 +14,8 @@
  */
 
 /** @type {Detox.DetoxConfig} */
+const simulatorArch = process.arch === 'arm64' ? 'arm64' : 'x86_64';
+
 module.exports = {
   testRunner: {
     args: {
@@ -35,8 +37,7 @@ module.exports = {
     'ios.release': {
       type: 'ios.app',
       binaryPath: 'ios/build/Build/Products/Release-iphonesimulator/AGIWorkforce.app',
-      build:
-        'xcodebuild -workspace ios/AGIWorkforce.xcworkspace -scheme AGIWorkforce -configuration Release -sdk iphonesimulator -derivedDataPath ios/build',
+      build: `xcodebuild -workspace ios/AGIWorkforce.xcworkspace -scheme AGIWorkforce -configuration Release -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath ios/build ONLY_ACTIVE_ARCH=YES ARCHS=${simulatorArch}`,
     },
     'android.debug': {
       type: 'android.apk',
@@ -51,7 +52,7 @@ module.exports = {
     'ios.sim': {
       type: 'ios.simulator',
       device: {
-        type: 'iPhone 17 Pro',
+        type: process.env.DETOX_IOS_DEVICE || 'iPhone 17 Pro',
       },
     },
     'android.emu': {

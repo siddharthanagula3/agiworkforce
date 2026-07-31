@@ -29,6 +29,7 @@
     "test": "jest --runInBand --forceExit",
     "test:local": "jest --runInBand --forceExit",
     "test:handles": "jest --runInBand --detectOpenHandles --openHandlesTimeout=5000",
+    "test:e2e:ios:ci": "detox test --configuration ios.sim.release --artifacts-location artifacts/mobile-e2e scripts/screenshots/specs/ci-smoke.spec.ts",
     "screenshots": "tsx scripts/screenshots/pipeline.ts all",
     "screenshots:ios": "tsx scripts/screenshots/pipeline.ts ios",
     "screenshots:android": "tsx scripts/screenshots/pipeline.ts android",

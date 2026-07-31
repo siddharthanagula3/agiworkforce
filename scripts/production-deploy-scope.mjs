@@ -30,6 +30,9 @@ export function classifyDeployScope(files, { all = false } = {}) {
       signaling: true,
       desktop: true,
       native: true,
+      extension: true,
+      vscode: true,
+      mobile: true,
     };
   }
 
@@ -39,6 +42,9 @@ export function classifyDeployScope(files, { all = false } = {}) {
     signaling: false,
     desktop: false,
     native: false,
+    extension: false,
+    vscode: false,
+    mobile: false,
   };
 
   for (const rawFile of files) {
@@ -99,6 +105,23 @@ export function classifyDeployScope(files, { all = false } = {}) {
       isWithin(file, 'crates')
     ) {
       scope.native = true;
+    }
+
+    if (sharedBuildFile || sharedPackage || deployContract || isWithin(file, 'apps/extension')) {
+      scope.extension = true;
+    }
+
+    if (
+      sharedBuildFile ||
+      sharedPackage ||
+      deployContract ||
+      isWithin(file, 'apps/extension-vscode')
+    ) {
+      scope.vscode = true;
+    }
+
+    if (sharedBuildFile || sharedPackage || deployContract || isWithin(file, 'apps/mobile')) {
+      scope.mobile = true;
     }
   }
 

@@ -30,6 +30,9 @@ jobs:
       web_changed: ${{ steps.scope.outputs.web }}
       desktop_changed: ${{ steps.scope.outputs.desktop }}
       native_changed: ${{ steps.scope.outputs.native }}
+      extension_changed: ${{ steps.scope.outputs.extension }}
+      vscode_changed: ${{ steps.scope.outputs.vscode }}
+      mobile_changed: ${{ steps.scope.outputs.mobile }}
     services:
       postgres:
         image: postgres:16-alpine
@@ -301,7 +304,9 @@ jobs:
           # Clippy step below; keep the Test step focused on test outcomes.
           RUSTFLAGS: ''
           CARGO_INCREMENTAL: '0'
-        run: xvfb-run --auto-servernum cargo test -p agiworkforce-desktop -p agiworkforce-cli --lib
+        run: |
+          xvfb-run --auto-servernum cargo test -p agiworkforce-desktop --lib
+          xvfb-run --auto-servernum cargo test -p agiworkforce-cli
 
       - name: Free Rust test artifacts before clippy
         if: steps.scope.outputs.native == 'true'
@@ -427,8 +432,128 @@ jobs:
             kill "$(cat apps/desktop/app.pid)" 2>/dev/null || true
           fi
 
+  browser-extension-e2e:
+    name: Chrome extension E2E (real Chromium)
+    runs-on: ubuntu-24.04
+    needs: check
+    if: needs.check.outputs.extension_changed == 'true'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Exercise the unpacked extension in Chromium
+        run: pnpm --filter @agiworkforce/extension test:e2e
+
+  vscode-extension-e2e:
+    name: VS Code extension-host E2E
+    runs-on: ubuntu-24.04
+    needs: check
+    if: needs.check.outputs.vscode_changed == 'true'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install extension-host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          pnpm install --frozen-lockfile
+
+      - name: Exercise the extension in VS Code
+        run: xvfb-run --auto-servernum pnpm --filter agi-workforce test:integration
+
+  mobile-e2e:
+    name: Mobile E2E (iOS simulator)
+    runs-on: macos-15
+    needs: check
+    if: needs.check.outputs.mobile_changed == 'true'
+    timeout-minutes: 75
+    env:
+      APP_ENV: development
+      EXPO_NO_DOTENV: '1'
+      EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC: '1'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Detox simulator utilities
+        run: |
+          brew tap wix/brew
+          brew install applesimutils
+          pnpm --filter @agiworkforce/mobile exec detox build-framework-cache
+
+      - name: Select an available iPhone simulator
+        run: |
+          set -euo pipefail
+          device_name="$(xcrun simctl list devices available -j | node -e '
+            let input = "";
+            process.stdin.on("data", (chunk) => (input += chunk));
+            process.stdin.on("end", () => {
+              const runtimes = Object.values(JSON.parse(input).devices);
+              const device = runtimes.flat().find(
+                (candidate) => candidate.isAvailable && candidate.name.startsWith("iPhone"),
+              );
+              if (!device) process.exit(1);
+              process.stdout.write(device.name);
+            });
+          ')"
+          echo "DETOX_IOS_DEVICE=$device_name" >> "$GITHUB_ENV"
+          echo "Selected $device_name"
+
+      - name: Generate the ignored iOS project
+        run: pnpm --filter @agiworkforce/mobile exec expo prebuild --platform ios --clean
+
+      - name: Build the release simulator app
+        run: pnpm --filter @agiworkforce/mobile exec detox build --configuration ios.sim.release
+
+      - name: Exercise first-run onboarding on the simulator
+        run: pnpm --filter @agiworkforce/mobile test:e2e:ios:ci
+
+      - name: Upload Detox artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-detox-artifacts
+          path: apps/mobile/artifacts/mobile-e2e
+          retention-days: 14
+
   web-a11y:
-    name: Web accessibility audit
+    name: Web E2E and accessibility audit
     runs-on: ubuntu-24.04
     needs: check
     if: needs.check.outputs.web_changed == 'true'
@@ -487,6 +612,20 @@ jobs:
 
       - name: Run blocking WCAG 2.1 A/AA audit
         run: pnpm --filter @agiworkforce/web a11y:audit
+
+      - name: Run signed-out Web Playwright flows
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_REUSE_RUNNING_SERVER: '1'
+        run: pnpm exec playwright test public-auth-clean.spec.ts --project=chromium --workers=1
+
+      - name: Upload Web Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-playwright-report
+          path: apps/web/playwright-report
+          retention-days: 14
 
       - name: Upload accessibility report
         if: always()
