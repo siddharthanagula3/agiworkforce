@@ -9,6 +9,7 @@
 //! The render shows `/name — description` rows with `❯ ` bolding the cursor row.
 
 use super::interactive::{InteractiveView, KeyAction, SelectionState, ViewAction};
+use crate::tui::pad_to_cols;
 
 #[derive(Debug, Clone)]
 pub struct RegistryCommand {
@@ -28,20 +29,6 @@ impl RegistryCommand {
 
 /// Inner content width of the popup box (chars between the `│ ` and `│` borders).
 const POPUP_INNER_WIDTH: usize = 59;
-
-/// Truncate a row to at most `max` columns, appending `…` when it would
-/// otherwise overflow the popup's fixed inner width and break the box border.
-/// Counts Unicode scalar values, which matches display width for the ASCII plus
-/// `—`/`❯`/`…` glyphs used in these rows.
-fn truncate_to_cols(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        let mut t: String = s.chars().take(max.saturating_sub(1)).collect();
-        t.push('…');
-        t
-    }
-}
 
 pub struct CommandPopup {
     pub all: Vec<RegistryCommand>,
@@ -113,8 +100,8 @@ impl InteractiveView for CommandPopup {
     fn render(&self) -> String {
         let mut out =
             String::from("┌─ Commands ─────────────────────────────────────────────────┐\n");
-        let filter_line = truncate_to_cols(&format!("  /{}", self.filter), POPUP_INNER_WIDTH);
-        out.push_str(&format!("│ {filter_line:<59}│\n"));
+        let filter_line = pad_to_cols(&format!("  /{}", self.filter), POPUP_INNER_WIDTH);
+        out.push_str(&format!("│ {filter_line}│\n"));
         out.push_str("│ ────────────────────────────────────────────────────────── │\n");
 
         let items = self.filtered();
@@ -127,11 +114,11 @@ impl InteractiveView for CommandPopup {
                 } else {
                     "  "
                 };
-                let row = truncate_to_cols(
+                let row = pad_to_cols(
                     &format!("{cursor}/{} — {}", cmd.name, cmd.description),
                     POPUP_INNER_WIDTH,
                 );
-                out.push_str(&format!("│ {row:<59}│\n"));
+                out.push_str(&format!("│ {row}│\n"));
             }
         }
 
@@ -368,9 +355,9 @@ mod tests {
         // width, or it pushes past the right border like the original bug did.
         for line in text.lines() {
             assert!(
-                line.chars().count() <= 62,
+                crate::tui::display_width(line) <= 62,
                 "row overflows the popup box ({} cols): {line:?}",
-                line.chars().count()
+                crate::tui::display_width(line)
             );
         }
         let sandbox_row = text
@@ -381,5 +368,21 @@ mod tests {
             sandbox_row.ends_with("…│"),
             "long row should be ellipsized: {sandbox_row:?}"
         );
+    }
+
+    #[test]
+    fn cjk_command_rows_preserve_the_popup_border() {
+        let popup = CommandPopup::new(vec![RegistryCommand::new(
+            "模型管理",
+            "检查中文命令说明是否按照终端显示列安全截断而不破坏右侧边框".repeat(3),
+        )]);
+        let text = popup.render();
+        for line in text.lines() {
+            assert!(
+                crate::tui::display_width(line) <= 62,
+                "CJK row overflows the popup box: {line:?}"
+            );
+        }
+        assert!(text.lines().any(|line| line.ends_with("…│")));
     }
 }

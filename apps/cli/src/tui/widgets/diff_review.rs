@@ -9,19 +9,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
-
-/// Truncate a row to at most `max` columns with an ellipsis so long filenames or
-/// diff lines can't overflow the box border. Counts Unicode scalar values
-/// (matches display width for the ASCII + `…` used here).
-fn truncate_cols(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        s.to_string()
-    } else {
-        let mut t: String = s.chars().take(max.saturating_sub(1)).collect();
-        t.push('…');
-        t
-    }
-}
+use crate::tui::pad_to_cols;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReviewDecision {
@@ -141,16 +129,16 @@ impl InteractiveView for DiffReviewView {
                 .and_then(|n| n.to_str())
                 .unwrap_or("?");
             let stat = format!("+{} -{}", file.additions, file.deletions);
-            let row = truncate_cols(&format!("{decision_str}  {name}  {stat}"), 58);
-            out.push_str(&format!("│ {cursor} {row:<58}│\n"));
+            let row = pad_to_cols(&format!("{decision_str}  {name}  {stat}"), 58);
+            out.push_str(&format!("│ {cursor} {row}│\n"));
         }
 
         out.push_str("│ ──────────────────────────────────────────────────────────  │\n");
 
         // Hunk preview for current file
         for hunk in self.current_hunks().iter().take(3) {
-            let hunk = truncate_cols(hunk, 58);
-            out.push_str(&format!("│  {hunk:<58}│\n"));
+            let hunk = pad_to_cols(hunk, 58);
+            out.push_str(&format!("│  {hunk}│\n"));
         }
 
         out.push_str("│                                                            │\n");
@@ -205,8 +193,7 @@ impl InteractiveView for DiffReviewView {
                 .and_then(|n| n.to_str())
                 .unwrap_or("?");
             let stat = format!("+{} -{}", file.additions, file.deletions);
-            let row = truncate_cols(&format!("{decision_str}  {name}  {stat}"), 58);
-            let row = format!("{row:<58}");
+            let row = pad_to_cols(&format!("{decision_str}  {name}  {stat}"), 58);
             // Color just the leading decision label (ASCII → byte len == char count).
             let dlen = decision_str.len().min(row.len());
             let (dec_part, rest_part) = row.split_at(dlen);
@@ -226,8 +213,7 @@ impl InteractiveView for DiffReviewView {
 
         // Hunk preview — +added green, -removed red, @@ headers accented.
         for hunk in self.current_hunks().iter().take(3) {
-            let hunk = truncate_cols(hunk, 58);
-            let hunk = format!("{hunk:<58}");
+            let hunk = pad_to_cols(hunk, 58);
             let style = if hunk.starts_with('+') {
                 Style::default().fg(ui_success())
             } else if hunk.starts_with('-') {
@@ -370,12 +356,30 @@ mod tests {
         // No rendered line may blow past the box border (row line is 63 cols).
         for line in text.lines() {
             assert!(
-                line.chars().count() <= 64,
+                crate::tui::display_width(line) <= 64,
                 "diff-review line overflows the box ({} cols): {line:?}",
-                line.chars().count()
+                crate::tui::display_width(line)
             );
         }
         assert!(text.contains('…'), "overlong content should be ellipsized");
+    }
+
+    #[test]
+    fn cjk_filename_and_hunk_preserve_the_diff_border() {
+        let view = DiffReviewView::new(vec![FileDiff::new(
+            "src/功能/非常长的中文文件名称用于验证终端宽度.rs",
+            vec![format!("+{}", "新增内容".repeat(30))],
+            1,
+            0,
+        )]);
+        let text = view.render();
+        for line in text.lines() {
+            assert!(
+                crate::tui::display_width(line) <= 64,
+                "CJK diff row overflows the box: {line:?}"
+            );
+        }
+        assert!(text.contains('…'));
     }
 
     #[test]

@@ -24,6 +24,8 @@ use crate::command_registry::{
 use crate::config::CliConfig;
 use crate::context::SystemContext;
 
+use super::{display_width, pad_to_cols, truncate_cols};
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -1467,7 +1469,7 @@ fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &Tui
         " ↘ Falling back: {} → {} ({})  ",
         banner.from, banner.to, banner.reason
     );
-    let width = (text.chars().count() as u16).min(chat_area.width.saturating_sub(2));
+    let width = (display_width(&text) as u16).min(chat_area.width.saturating_sub(2));
     if width == 0 {
         return;
     }
@@ -1700,9 +1702,9 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     optional.push(Span::styled("/: commands".to_string(), Style::default().fg(ui_muted())));
     optional.push(Span::styled("Esc: quit".to_string(), Style::default().fg(ui_muted())));
     let avail = area.width as usize;
-    let mut used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+    let mut used: usize = spans.iter().map(|s| display_width(&s.content)).sum();
     for opt in optional {
-        let w = opt.content.chars().count() + 2;
+        let w = display_width(&opt.content) + 2;
         if used + w <= avail {
             spans.push(opt);
             spans.push(Span::raw("  "));
@@ -1726,7 +1728,7 @@ fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
         return;
     }
     let text = format!("  Mode: {} (shift+tab to cycle)  ", app.mode.label());
-    let width = (text.chars().count() as u16).min(chat_area.width.saturating_sub(2));
+    let width = (display_width(&text) as u16).min(chat_area.width.saturating_sub(2));
     if width == 0 {
         return;
     }
@@ -2546,7 +2548,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 lines.push("Available styles:".to_string());
                 for s in crate::output_styles::load_all() {
                     let marker = if s.name == *active { "*" } else { " " };
-                    lines.push(format!(" {} {:<14}  {}", marker, s.name, s.description));
+                    lines.push(format!(
+                        " {} {}  {}",
+                        marker,
+                        pad_to_cols(&s.name, 14),
+                        s.description
+                    ));
                 }
                 lines.push(String::new());
                 lines.push("Switch with: /output-style <name>".to_string());
@@ -2664,8 +2671,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         if m.supports_reasoning { "R" } else { " " },
                     );
                     format!(
-                        "  {:<32} [{}] {:>6}K ctx  ${:.2}/${:.2}",
-                        m.id,
+                        "  {} [{}] {:>6}K ctx  ${:.2}/${:.2}",
+                        pad_to_cols(&m.id, 32),
                         flags,
                         m.context_window / 1000,
                         m.input_price_per_1m,
@@ -2877,7 +2884,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             } else {
                 let mut msg = format!("Skills ({}):\n", skills.len());
                 for s in &skills {
-                    msg.push_str(&format!("  {:<25} {}\n", s.name, s.description));
+                    msg.push_str(&format!(
+                        "  {} {}\n",
+                        pad_to_cols(&s.name, 25),
+                        s.description
+                    ));
                 }
                 SlashResult::SystemMessage(msg)
             }
@@ -3918,17 +3929,8 @@ fn compact_tool_output_preview(output: &str) -> Option<String> {
         .lines()
         .map(str::trim)
         .find(|line| !line.is_empty())?;
-    const MAX_CHARS: usize = 96;
-    if line.chars().count() > MAX_CHARS {
-        Some(format!(
-            "{}…",
-            line.chars()
-                .take(MAX_CHARS.saturating_sub(1))
-                .collect::<String>()
-        ))
-    } else {
-        Some(line.to_string())
-    }
+    const MAX_COLS: usize = 96;
+    Some(truncate_cols(line, MAX_COLS))
 }
 
 async fn send_message(
@@ -4590,7 +4592,7 @@ mod tests {
 
         let long = "x".repeat(120);
         let preview = compact_tool_output_preview(&long).expect("preview");
-        assert_eq!(preview.chars().count(), 96);
+        assert_eq!(display_width(&preview), 96);
         assert!(preview.ends_with('…'));
     }
 
