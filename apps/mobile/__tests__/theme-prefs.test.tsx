@@ -46,7 +46,13 @@ jest.mock('../services/authSession', () => ({
 
 import { act } from '@testing-library/react-native';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
-import { getColors, colors, lightColors } from '../src/ui/theme';
+import {
+  getColors,
+  colors,
+  highContrastColors,
+  highContrastLightColors,
+  lightColors,
+} from '../src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -115,5 +121,17 @@ describe('getColors resolution', () => {
 
   it('system falls back to dark when systemScheme is null', () => {
     expect(getColors('system', null)).toBe(colors);
+  });
+
+  it('uses the dark high-contrast palette when dark mode is active', () => {
+    expect(getColors('dark', null, true)).toBe(highContrastColors);
+    expect(highContrastColors.textSecondary).toBe('#ffffff');
+    expect(highContrastColors.border).toBe('#ffffff');
+  });
+
+  it('uses the light high-contrast palette when light mode is active', () => {
+    expect(getColors('system', 'light', true)).toBe(highContrastLightColors);
+    expect(highContrastLightColors.textSecondary).toBe('#000000');
+    expect(highContrastLightColors.border).toBe('#000000');
   });
 });

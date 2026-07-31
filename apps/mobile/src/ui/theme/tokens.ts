@@ -134,6 +134,73 @@ export type ColorScheme = {
   [K in keyof typeof mobileNativeColors.dark]: string;
 };
 
+export const highContrastColors: ColorScheme = {
+  ...mobileNativeColors.dark,
+  terraCotta: '#ffffff',
+  teal: '#ffffff',
+  background: '#000000',
+  surfaceBase: '#000000',
+  surfaceElevated: '#111111',
+  surfaceOverlay: '#1a1a1a',
+  surfaceHover: '#262626',
+  textPrimary: '#ffffff',
+  textSecondary: '#ffffff',
+  textMuted: '#d9d9d9',
+  border: '#ffffff',
+  borderLight: '#a6a6a6',
+  accentSurface: '#262626',
+  accentBorder: '#ffffff',
+  inputSurface: '#111111',
+  composerBorder: '#ffffff',
+  successBorder: '#66e0bd',
+  warningBorder: '#ffd666',
+  dangerBorder: '#ff8f8f',
+  neutralSurface: '#1a1a1a',
+  neutralBorder: '#ffffff',
+  progressTrack: '#737373',
+  cameraOverlayBorder: '#ffffff',
+  cameraOverlayTextMuted: '#ffffff',
+  cameraScanRegionBorder: '#66e0bd',
+  cameraShutterBorder: '#ffffff',
+  voiceControlSurface: '#262626',
+  voiceTranscriptSurface: '#111111',
+  voiceAccentBorder: '#ffffff',
+};
+
+export const highContrastLightColors: ColorScheme = {
+  ...mobileNativeColors.light,
+  terraCotta: '#000000',
+  teal: '#000000',
+  warmPeach: '#e0e0e0',
+  background: '#ffffff',
+  surfaceBase: '#ffffff',
+  surfaceElevated: '#ffffff',
+  surfaceOverlay: '#f2f2f2',
+  surfaceHover: '#e0e0e0',
+  textPrimary: '#000000',
+  textSecondary: '#000000',
+  textMuted: '#333333',
+  border: '#000000',
+  borderLight: '#595959',
+  accentSurface: '#e0e0e0',
+  accentBorder: '#000000',
+  inputSurface: '#ffffff',
+  composerBorder: '#000000',
+  successBorder: '#006b52',
+  warningBorder: '#8a4200',
+  dangerBorder: '#a60000',
+  neutralSurface: '#f2f2f2',
+  neutralBorder: '#000000',
+  progressTrack: '#737373',
+  cameraOverlayBorder: '#ffffff',
+  cameraOverlayTextMuted: '#ffffff',
+  cameraScanRegionBorder: '#66e0bd',
+  cameraShutterBorder: '#ffffff',
+  voiceControlSurface: '#262626',
+  voiceTranscriptSurface: '#111111',
+  voiceAccentBorder: '#ffffff',
+};
+
 export type AccentToken = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'amber';
 
 const accentSwatches: Record<AccentToken, { light: string; dark: string }> = {
@@ -151,11 +218,13 @@ const accentSwatches: Record<AccentToken, { light: string; dark: string }> = {
 export function getColors(
   mode: 'dark' | 'light' | 'system',
   systemScheme: string | null | undefined,
+  highContrast = false,
 ): ColorScheme {
-  if (mode === 'system') {
-    return systemScheme === 'light' ? lightColors : colors;
+  const isLight = mode === 'light' || (mode === 'system' && systemScheme === 'light');
+  if (highContrast) {
+    return isLight ? highContrastLightColors : highContrastColors;
   }
-  return mode === 'light' ? lightColors : colors;
+  return isLight ? lightColors : colors;
 }
 
 export function getAccentSwatch(color: AccentToken, isDark: boolean): string {
