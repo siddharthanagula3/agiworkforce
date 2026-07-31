@@ -56,6 +56,11 @@ describe('agi-workforce.mentionFileInChat', () => {
     handlers = new Map();
     originalRegister = vscode.commands.registerCommand;
     originalExecute = vscode.commands.executeCommand;
+    Object.defineProperty(vscode.window, 'activeTextEditor', {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
 
     (
       vscode.commands as { registerCommand: typeof vscode.commands.registerCommand }
@@ -109,6 +114,25 @@ describe('agi-workforce.mentionFileInChat', () => {
     expect(chatCall).toBeDefined();
     const opts = chatCall![1] as { query: string };
     expect(opts.query).toBe('@agi #file:src/bar.ts ');
+  });
+
+  it('uses the native #selection reference for a selected range in the target editor', async () => {
+    const handler = handlers.get('agi-workforce.mentionFileInChat')!;
+    const uri = vscode.Uri.file('/mock/workspace/src/selected.ts');
+    Object.defineProperty(vscode.window, 'activeTextEditor', {
+      value: {
+        document: { uri },
+        selection: new vscode.Selection(4, 0, 7, 3),
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    await handler(uri);
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.action.chat.open', {
+      query: '@agi #selection ',
+    });
   });
 
   it('shows warning and does not call executeCommand when no uri and no active editor', async () => {

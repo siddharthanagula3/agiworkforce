@@ -2014,6 +2014,7 @@ export function getWebviewContent(
     let streaming = false;
     let mentionIndex = -1;
     let mentionStart = -1;
+    let pendingFileReferences = [];
     let currentAssistantEl = null;
     let accumulatedContent = '';
     let pendingAttachmentCount = 0;
@@ -2292,10 +2293,13 @@ export function getWebviewContent(
       currentAssistantEl = null;
       accumulatedContent = '';
 
-      vscode.postMessage({
-        type: 'sendMessage',
-        payload: { text, browseWeb: browseWebEnabled }
-      });
+      var activeFileReferences = pendingFileReferences
+        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
+        .map(function(ref) { return ref.reference; });
+      var sendPayload = { text: text, browseWeb: browseWebEnabled };
+      if (activeFileReferences.length > 0) sendPayload.references = activeFileReferences;
+      vscode.postMessage({ type: 'sendMessage', payload: sendPayload });
+      pendingFileReferences = [];
       setBrowseWebEnabled(false);
     }
 
@@ -2327,7 +2331,7 @@ export function getWebviewContent(
         if (e.key === 'Enter' || e.key === 'Tab') {
           e.preventDefault();
           var sel = items[mentionIndex];
-          if (sel) insertMention(sel.textContent);
+          if (sel && sel._mentionReference) insertMention(sel._mentionReference);
           return;
         }
         if (e.key === 'Escape') {
@@ -2999,7 +3003,8 @@ export function getWebviewContent(
       files.forEach(function(f, idx) {
         var item = document.createElement('div');
         item.className = 'mention-item' + (idx === 0 ? ' selected' : '');
-        item.textContent = f;
+        item.textContent = f.label;
+        item._mentionReference = f;
         item.addEventListener('mousedown', function(e) {
           e.preventDefault();
           insertMention(f);
@@ -3013,8 +3018,19 @@ export function getWebviewContent(
       var val = userInput.value;
       var before = val.substring(0, mentionStart);
       var after = val.substring(userInput.selectionStart);
-      userInput.value = before + '@' + file + ' ' + after;
-      var newPos = mentionStart + file.length + 2;
+      var referencedEndLine = file.range && file.range.endCharacter === 0 && file.range.endLine > file.range.startLine
+        ? file.range.endLine
+        : file.range ? file.range.endLine + 1 : 0;
+      var lineSuffix = file.range
+        ? '#L' + (file.range.startLine + 1) + '-L' + referencedEndLine
+        : '';
+      var token = '@' + file.path + lineSuffix;
+      userInput.value = before + token + ' ' + after;
+      pendingFileReferences.push({
+        token: token,
+        reference: { path: file.path, range: file.range }
+      });
+      var newPos = mentionStart + token.length + 1;
       userInput.setSelectionRange(newPos, newPos);
       hideMentionDropdown();
       userInput.focus();

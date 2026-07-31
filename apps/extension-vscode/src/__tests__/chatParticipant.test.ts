@@ -25,8 +25,12 @@ const editorContext: EditorContext = {
   workspaceName: 'workspace',
 };
 
-function request(command: string | undefined, prompt: string): vscode.ChatRequest {
-  return { command, prompt } as vscode.ChatRequest;
+function request(
+  command: string | undefined,
+  prompt: string,
+  references: vscode.ChatPromptReference[] = [],
+): vscode.ChatRequest {
+  return { command, prompt, references } as vscode.ChatRequest;
 }
 
 describe('chat participant runtime input', () => {
@@ -115,6 +119,79 @@ describe('chat participant approval lifecycle', () => {
       expect.objectContaining({
         model: 'auto',
         routingTaskType: 'research',
+      }),
+    );
+    for (const listener of listeners) {
+      listener({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+    }
+    await response;
+  });
+
+  it('passes the exact native file-selection reference to the local runtime', async () => {
+    const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+    const runtime = {
+      startThread: vi.fn().mockResolvedValue({ id: 'thread-1' }),
+      startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
+      interruptTurn: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const context = new vscode.ExtensionContext();
+    const uri = vscode.Uri.file('/workspace/src/reference.ts');
+    const range = new vscode.Range(2, 0, 3, 12);
+    vi.mocked(vscode.workspace.fs.stat).mockResolvedValueOnce({
+      type: vscode.FileType.File,
+      ctime: 0,
+      mtime: 0,
+      size: 24,
+    });
+    vi.mocked(vscode.workspace.openTextDocument).mockResolvedValueOnce({
+      getText: vi.fn((receivedRange?: vscode.Range) =>
+        receivedRange === range ? 'const selected = true;' : 'wrong whole file',
+      ),
+    } as unknown as vscode.TextDocument);
+    vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('src/reference.ts');
+    const handler = createChatHandler(context.secrets, undefined, context.globalState, pool);
+    const response = handler(
+      request(undefined, 'Review this selection', [
+        { id: 'selection', value: { uri, range } } as vscode.ChatPromptReference,
+      ]),
+      { history: [] } as vscode.ChatContext,
+      {
+        progress: vi.fn(),
+        markdown: vi.fn(),
+        button: vi.fn(),
+      } as unknown as vscode.ChatResponseStream,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+      } as unknown as vscode.CancellationToken,
+    );
+
+    await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
+    expect(runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'text',
+            text: expect.stringContaining(
+              '<untrusted_file_reference path="src/reference.ts" lines="3-4">\nconst selected = true;',
+            ),
+          }),
+        ]),
       }),
     );
     for (const listener of listeners) {
