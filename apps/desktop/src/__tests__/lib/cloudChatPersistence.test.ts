@@ -25,6 +25,13 @@ vi.mock('../../lib/runtimeEnvironment', () => ({
   supportsLocalAppMode: true,
   isCloudWeb: false,
 }));
+// Keep the production-origin assertion deterministic when a developer has a
+// valid localhost override in the untracked .env.local file.
+vi.mock('../../api/config', () => ({
+  API_BASE_URL: 'https://agiworkforce.com',
+  WEB_APP_URL: 'https://agiworkforce.com',
+  GATEWAY_BASE_URL: 'https://api.agiworkforce.com',
+}));
 
 const { toastInfo, toastError } = vi.hoisted(() => ({
   toastInfo: vi.fn(),

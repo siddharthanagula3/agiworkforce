@@ -25,6 +25,10 @@ vi.mock('../../stores/appModeStore', () => ({
   useAppModeStore: { getState: getStateMock },
   selectPrivacyMode: (state: { privacyMode: unknown }) => state.privacyMode,
 }));
+// Keep this trust-boundary contract independent of a developer's local Vite
+// endpoint. Environment-specific config has its own validation; this suite
+// must always exercise a real non-local AGI cloud origin.
+vi.mock('../../api/config', () => ({ WEB_APP_URL: 'https://agiworkforce.com' }));
 
 import { createManagedCloudChatClient } from '@agiworkforce/cloud-contracts';
 import { guardedFetch } from '../../lib/egressGuard';
