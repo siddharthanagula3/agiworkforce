@@ -32,6 +32,22 @@ export function isSelfServePaidPlanTier(
   );
 }
 
+/**
+ * Whether a self-serve upgrade still exists for this tier — i.e. whether an
+ * "Upgrade" affordance should be offered at all.
+ *
+ * False for `max_15x` (the top self-serve plan, so there is nothing above it to
+ * buy) and for `team`/`enterprise` (sales-assisted; a checkout CTA would be
+ * wrong). Offering "Upgrade" to someone already on the highest plan reads as a
+ * billing error and undermines trust in what they are paying for.
+ *
+ * Shared rather than inlined per surface so web, desktop and mobile cannot
+ * drift on who is shown an upgrade prompt.
+ */
+export function hasSelfServeUpgradePath(value: string | null | undefined): boolean {
+  return value !== 'max_15x' && value !== 'team' && value !== 'enterprise';
+}
+
 export interface BillingPlanPricing {
   id: BillingPlanTier;
   label: string;

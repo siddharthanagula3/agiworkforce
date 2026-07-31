@@ -44,6 +44,7 @@ import {
   type CloudWorkMode,
   type ProviderMode,
   type SendPreviewPresentation,
+  hasSelfServeUpgradePath,
 } from '@agiworkforce/types';
 import {
   Menu,
@@ -2750,10 +2751,15 @@ export default function WebChatPage() {
             {t('common:navGetHelp')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleOpenUpgradeDialog}>
-            <CreditCard className="mr-2 h-4 w-4" />
-            {t('common:navUpgrade')}
-          </DropdownMenuItem>
+          {/* Hidden once there is nothing left to buy — this menu offered
+              "Upgrade" to max_15x accounts, which reads as a billing error next
+              to the plan badge in the same sidebar. */}
+          {hasSelfServeUpgradePath(subscriptionTier) ? (
+            <DropdownMenuItem onClick={handleOpenUpgradeDialog}>
+              <CreditCard className="mr-2 h-4 w-4" />
+              {t('common:navUpgrade')}
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem onClick={() => router.push('/download')}>
             <Download className="mr-2 h-4 w-4" />
             {t('common:navGetApps')}
