@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  FlatList,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Share,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { FlatList, Modal, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -38,13 +29,16 @@ import {
   isAccountScopedUiStateOwned,
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
+import {
+  MAX_GRID_CONTENT_WIDTH,
+  useResponsiveLayout,
+} from '@/src/shared/hooks/useResponsiveLayout';
 
 interface ArtifactsGalleryScreenProps {
   initialLoading?: boolean;
   initialArtifactId?: string;
 }
 
-const NUM_COLUMNS = 2;
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
 
@@ -85,7 +79,7 @@ export function ArtifactsGalleryScreen({
 }: ArtifactsGalleryScreenProps) {
   const c = useThemeColors();
   const navigation = useNavigation();
-  const { width } = useWindowDimensions();
+  const { contentWidth, gridColumns } = useResponsiveLayout();
   const [selectedArtifact, setSelectedArtifact] = useState<MobileArtifact | null>(null);
   const selectedArtifactScopeRef = useRef<AccountScopedUiState | null>(null);
   const openedInitialArtifactRef = useRef<string | null>(null);
@@ -124,8 +118,8 @@ export function ArtifactsGalleryScreen({
     openNearestDrawer(navigation);
   }, [navigation]);
 
-  const gridWidth = Math.min(width, 920) - HORIZONTAL_PADDING * 2;
-  const cardWidth = Math.floor((gridWidth - CARD_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS);
+  const gridWidth = Math.min(contentWidth, MAX_GRID_CONTENT_WIDTH) - HORIZONTAL_PADDING * 2;
+  const cardWidth = Math.floor((gridWidth - CARD_GAP * (gridColumns - 1)) / gridColumns);
 
   const listContentStyle = useMemo(
     () => ({
@@ -133,9 +127,9 @@ export function ArtifactsGalleryScreen({
       paddingTop: 18,
       paddingBottom: 56,
       alignSelf: 'center' as const,
-      width: Math.min(width, 920),
+      width: Math.min(contentWidth, MAX_GRID_CONTENT_WIDTH),
     }),
-    [width],
+    [contentWidth],
   );
 
   const keyExtractor = useCallback((item: MobileArtifact) => item.id, []);
@@ -174,11 +168,10 @@ export function ArtifactsGalleryScreen({
         artifact={item}
         width={cardWidth}
         onPress={handleOpenArtifact}
-        // Right-column cards get left margin to match the gap
-        style={index % NUM_COLUMNS !== 0 ? { marginLeft: CARD_GAP } : undefined}
+        style={index % gridColumns !== 0 ? { marginLeft: CARD_GAP } : undefined}
       />
     ),
-    [cardWidth, handleOpenArtifact],
+    [cardWidth, gridColumns, handleOpenArtifact],
   );
 
   return (
@@ -217,14 +210,15 @@ export function ArtifactsGalleryScreen({
 
       {isLoading ? (
         <ScrollView contentContainerStyle={listContentStyle} showsVerticalScrollIndicator={false}>
-          <ArtifactsSkeletonGrid cardWidth={cardWidth} />
+          <ArtifactsSkeletonGrid cardWidth={cardWidth} columns={gridColumns} />
         </ScrollView>
       ) : (
         <FlatList
+          key={`artifacts-${gridColumns}`}
           data={galleryArtifacts}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
-          numColumns={NUM_COLUMNS}
+          numColumns={gridColumns}
           testID="artifacts-grid"
           contentContainerStyle={listContentStyle}
           ListEmptyComponent={<ArtifactsEmptyState />}
@@ -361,14 +355,14 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton (2-column, fixed)
+// Skeleton
 // ---------------------------------------------------------------------------
 
-function ArtifactsSkeletonGrid({ cardWidth }: { cardWidth: number }) {
+function ArtifactsSkeletonGrid({ cardWidth, columns }: { cardWidth: number; columns: number }) {
   const c = useThemeColors();
   const placeholders = useMemo(
-    () => Array.from({ length: NUM_COLUMNS * 3 }, (_, index) => index),
-    [],
+    () => Array.from({ length: columns * 3 }, (_, index) => index),
+    [columns],
   );
 
   return (

@@ -1,5 +1,5 @@
 import { useCallback, useState, useMemo } from 'react';
-import { View, useWindowDimensions, RefreshControl, Pressable } from 'react-native';
+import { View, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
@@ -13,6 +13,7 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 
 /**
  * Agents tab. The unimplemented Dispatch fallback was removed; disabled
@@ -23,9 +24,7 @@ export default function AgentsTabScreen() {
   const colors = useThemeColors();
   const agents = useAgentStore((s) => s.agents);
 
-  const { width } = useWindowDimensions();
-  const isTablet = width >= 768;
-  const numColumns = isTablet ? 3 : 2;
+  const { gridColumns } = useResponsiveLayout();
 
   const selectAgent = useAgentStore((s) => s.selectAgent);
   const clearCompleted = useAgentStore((s) => s.clearCompleted);
@@ -136,8 +135,9 @@ export default function AgentsTabScreen() {
         </View>
       ) : (
         <FlashList
+          key={`agents-${gridColumns}`}
           data={agents}
-          numColumns={numColumns}
+          numColumns={gridColumns}
           contentContainerStyle={{ padding: 12 }}
           refreshControl={
             <RefreshControl
