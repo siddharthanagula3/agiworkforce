@@ -16,6 +16,12 @@
 
 import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import {
+  List,
+  useDynamicRowHeight,
+  type ListImperativeAPI,
+  type RowComponentProps,
+} from 'react-window';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
@@ -717,24 +723,86 @@ const MessageGroupRow = memo(
 );
 MessageGroupRow.displayName = 'MessageGroupRow';
 
+interface VirtualizedTranscriptRowData {
+  groups: MessageGroup[];
+  groupProps: Omit<MessageGroupRowProps, 'group' | 'isLastGroup'>;
+  hasMounted: boolean;
+  topSpacerHeight: number;
+  footer: React.ReactNode;
+}
+
+/**
+ * One variable-height row in the recycled transcript.
+ *
+ * Row zero is a measured presentation spacer that keeps short conversations
+ * bottom-aligned. The final row owns all turn-level controls (typing, retry,
+ * continuation, and follow-up suggestions), so those controls scroll with the
+ * transcript instead of floating outside its history.
+ */
+const VirtualizedTranscriptRow = ({
+  index,
+  style,
+  ariaAttributes,
+  groups,
+  groupProps,
+  hasMounted,
+  topSpacerHeight,
+  footer,
+}: RowComponentProps<VirtualizedTranscriptRowData>) => {
+  if (index === 0) {
+    return (
+      <div
+        {...ariaAttributes}
+        role="presentation"
+        style={{ ...style, height: topSpacerHeight }}
+        data-testid="transcript-top-spacer"
+      />
+    );
+  }
+
+  const groupIndex = index - 1;
+  const group = groups[groupIndex];
+
+  if (!group) {
+    return (
+      <div {...ariaAttributes} style={style} className="pb-2">
+        {footer}
+      </div>
+    );
+  }
+
+  const firstMessage = group.messages[0];
+  const firstMessageDate = firstMessage?.createdAt ? new Date(firstMessage.createdAt) : undefined;
+  const groupDateKey = firstMessageDate ? toDateKey(firstMessageDate) : '';
+  const previousGroup = groupIndex > 0 ? groups[groupIndex - 1] : null;
+  const previousFirstMessage = previousGroup?.messages[0];
+  const previousFirstMessageDate = previousFirstMessage?.createdAt
+    ? new Date(previousFirstMessage.createdAt)
+    : undefined;
+  const previousDateKey = previousFirstMessageDate ? toDateKey(previousFirstMessageDate) : '';
+  const showDivider = hasMounted && firstMessageDate && groupDateKey !== previousDateKey;
+
+  return (
+    <div {...ariaAttributes} style={style}>
+      {showDivider && firstMessageDate && (
+        <DateDivider label={formatDateDivider(firstMessageDate)} />
+      )}
+      <MessageGroupRow
+        group={group}
+        isLastGroup={groupIndex === groups.length - 1}
+        {...groupProps}
+      />
+    </div>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
 const SCROLL_THRESHOLD_PX = 120;
-
-/**
- * AUDIT-FIX STR-18: hard bound on how many message groups are mounted.
- *
- * `groups.map` rendered the entire transcript — there is no virtualization
- * anywhere in this surface — so a long conversation mounted thousands of
- * bubbles, each with its own markdown renderer, and every streaming delta
- * walked the whole array through the memo comparators. Rendering a window of
- * the most recent groups bounds both costs; older groups stay one click away
- * and are never silently dropped (the "Show earlier messages" control below
- * states exactly how many are hidden).
- */
-const GROUP_WINDOW_SIZE = 40;
+const DEFAULT_TRANSCRIPT_ROW_HEIGHT = 160;
+const DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT = 640;
 
 /**
  * AUDIT-FIX GOV-29: what the live region says when generation starts and when
@@ -770,8 +838,7 @@ const ChatMessageListComponent = ({
   onPaywallUpgrade,
   onPaywallDismiss,
 }: ChatMessageListProps) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listApiRef = useRef<ListImperativeAPI | null>(null);
   const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS();
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
@@ -809,32 +876,26 @@ const ChatMessageListComponent = ({
   /** AUDIT-FIX GOV-33: honour prefers-reduced-motion for inline motion styles. */
   const prefersReducedMotion = useReducedMotion();
 
-  /**
-   * AUDIT-FIX STR-18: how many trailing message groups are mounted. Resets to
-   * one window whenever a different conversation is displayed so switching
-   * chats never carries another transcript's expansion.
-   */
-  const [groupWindow, setGroupWindow] = useState(GROUP_WINDOW_SIZE);
-  useEffect(() => {
-    setGroupWindow(GROUP_WINDOW_SIZE);
-  }, [conversationId]);
-
   // ---------------------------------------------------------------------------
   // Derived state
   // ---------------------------------------------------------------------------
 
   const groups = useMemo(() => groupMessages(messages), [messages]);
-
-  /**
-   * AUDIT-FIX STR-18: the mounted window — the most recent `groupWindow`
-   * groups. `hiddenGroupCount` is surfaced to the user rather than silently
-   * truncating history.
-   */
-  const hiddenGroupCount = Math.max(0, groups.length - groupWindow);
-  const visibleGroups = useMemo(
-    () => (hiddenGroupCount > 0 ? groups.slice(hiddenGroupCount) : groups),
-    [groups, hiddenGroupCount],
-  );
+  const virtualizationKey = conversationId ?? groups[0]?.firstId ?? 'empty-transcript';
+  const dynamicRowHeight = useDynamicRowHeight({
+    defaultRowHeight: DEFAULT_TRANSCRIPT_ROW_HEIGHT,
+    key: virtualizationKey,
+  });
+  const virtualRowCount = groups.length + 2;
+  const [viewportHeight, setViewportHeight] = useState(DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT);
+  const estimatedContentHeight = useMemo(() => {
+    let height = 0;
+    for (let index = 1; index < virtualRowCount; index += 1) {
+      height += dynamicRowHeight.getRowHeight(index) ?? DEFAULT_TRANSCRIPT_ROW_HEIGHT;
+    }
+    return height;
+  }, [dynamicRowHeight, virtualRowCount]);
+  const topSpacerHeight = Math.max(1, viewportHeight - estimatedContentHeight);
 
   const lastMessage = useMemo(() => messages[messages.length - 1], [messages]);
 
@@ -903,9 +964,18 @@ const ChatMessageListComponent = ({
   // Scroll management
   // ---------------------------------------------------------------------------
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
-  }, []);
+  const scrollToBottom = useCallback(
+    (behavior: ScrollBehavior = 'smooth') => {
+      const listApi = listApiRef.current;
+      if (!listApi || virtualRowCount === 0) return;
+      listApi.scrollToRow({
+        align: 'end',
+        behavior,
+        index: virtualRowCount - 1,
+      });
+    },
+    [virtualRowCount],
+  );
 
   /**
    * AUDIT-FIX STR-19: coalesce auto-scroll to at most one call per animation
@@ -950,7 +1020,7 @@ const ChatMessageListComponent = ({
 
   /** Detect when user scrolls away from the bottom. */
   const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
+    const el = listApiRef.current?.element;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setUserScrolledUp(distanceFromBottom > SCROLL_THRESHOLD_PX);
@@ -975,6 +1045,45 @@ const ChatMessageListComponent = ({
     prefersReducedMotion,
     userScrolledUp,
     requestScrollToBottom,
+    conversationId,
+  ]);
+
+  /**
+   * Variable-height rows are first positioned from an estimate and then
+   * corrected as ResizeObserver reports markdown, artifact, and image sizes.
+   * If the reader still owns the bottom pin, follow those measurement changes
+   * with an instant correction; otherwise a newly measured long response can
+   * grow below the viewport after the initial scroll and strand the reader in
+   * the middle of the transcript.
+   *
+   * A newly appended message is left to the effect above so completed turns
+   * can retain their smooth transition. Subsequent measurements for that same
+   * message count use the correction path here.
+   */
+  const measuredLayoutRef = useRef({
+    contentHeight: estimatedContentHeight,
+    messageCount: messages.length,
+    viewportHeight,
+  });
+  useEffect(() => {
+    const previous = measuredLayoutRef.current;
+    measuredLayoutRef.current = {
+      contentHeight: estimatedContentHeight,
+      messageCount: messages.length,
+      viewportHeight,
+    };
+
+    const layoutChanged =
+      previous.contentHeight !== estimatedContentHeight ||
+      previous.viewportHeight !== viewportHeight;
+    if (!layoutChanged || previous.messageCount !== messages.length || userScrolledUp) return;
+    requestScrollToBottom('auto');
+  }, [
+    estimatedContentHeight,
+    messages.length,
+    requestScrollToBottom,
+    userScrolledUp,
+    viewportHeight,
   ]);
 
   /**
@@ -1046,6 +1155,131 @@ const ChatMessageListComponent = ({
     [onRegenerateImage],
   );
 
+  const groupProps = useMemo<Omit<MessageGroupRowProps, 'group' | 'isLastGroup'>>(
+    () => ({
+      onRegenerate: handleRegenerate,
+      onEdit: handleEdit,
+      onDelete: handleDelete,
+      onReact: handleReact,
+      onPin,
+      branchGroupsByMessageId,
+      branchingMessageId,
+      onBranch,
+      onSwitchBranch,
+      onPaywallUpgrade: handlePaywallUpgrade,
+      onPaywallDismiss: handlePaywallDismiss,
+      onRegenerateImage: onRegenerateImage ? handleRegenerateImage : undefined,
+      speakingMessageId: isSpeaking ? speakingMessageId : null,
+      isReadAloudSupported,
+      onReadAloud: handleReadAloud,
+    }),
+    [
+      branchGroupsByMessageId,
+      branchingMessageId,
+      handleDelete,
+      handleEdit,
+      handlePaywallDismiss,
+      handlePaywallUpgrade,
+      handleReact,
+      handleReadAloud,
+      handleRegenerate,
+      handleRegenerateImage,
+      isReadAloudSupported,
+      isSpeaking,
+      onBranch,
+      onPin,
+      onRegenerateImage,
+      onSwitchBranch,
+      speakingMessageId,
+    ],
+  );
+
+  const transcriptFooter = (
+    <>
+      {showContinue && lastMessage && (
+        <div className="px-4 pt-1 md:px-12 lg:px-20">
+          <button
+            type="button"
+            onClick={() => onContinue?.(lastMessage.id)}
+            className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+            aria-label="Continue generating this response"
+          >
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            Continue generating
+          </button>
+        </div>
+      )}
+
+      {showStreamErrorNotice && lastMessage && (
+        <div className="px-4 pt-1 md:px-12 lg:px-20">
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-muted-foreground">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+            <span>
+              {getStreamErrorMessage(lastMessage)
+                ? `Response may be incomplete: ${getStreamErrorMessage(lastMessage)}`
+                : 'This response may be incomplete — the connection to the model was interrupted.'}
+            </span>
+            <button
+              type="button"
+              onClick={() => onRegenerate?.(lastMessage.id)}
+              className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+              aria-label="Regenerate this response"
+            >
+              <RefreshCw className="h-3 w-3" aria-hidden="true" />
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showRefusalNotice && lastMessage && (
+        <div className="px-4 pt-1 md:px-12 lg:px-20">
+          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+            <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>The model declined to finish this response for safety reasons.</span>
+            {onRegenerate && (
+              <button
+                type="button"
+                onClick={() => onRegenerate(lastMessage.id)}
+                className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+                aria-label="Regenerate this response"
+              >
+                <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                Retry
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showTypingIndicator && (
+          <motion.div
+            key="typing-indicator"
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
+          >
+            <TypingIndicator />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {showFollowUps && lastMessage && (
+        <div className="mx-auto w-full max-w-3xl px-4" data-testid="follow-up-suggestions-shell">
+          <FollowUpSuggestions
+            lastAssistantContent={lastMessage.content}
+            onSelect={onSendMessage!}
+            isGenerating={isLoading}
+            isUserTyping={isUserTyping}
+            messageCount={messages.length}
+          />
+        </div>
+      )}
+    </>
+  );
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -1070,8 +1304,21 @@ const ChatMessageListComponent = ({
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {streamAnnouncement}
       </p>
-      <div
-        ref={scrollRef}
+      <List
+        listRef={listApiRef}
+        rowComponent={VirtualizedTranscriptRow}
+        rowCount={virtualRowCount}
+        rowHeight={dynamicRowHeight}
+        rowProps={{
+          groups,
+          groupProps,
+          hasMounted,
+          topSpacerHeight,
+          footer: transcriptFooter,
+        }}
+        defaultHeight={DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT}
+        overscanCount={6}
+        onResize={({ height }) => setViewportHeight(height)}
         role="log"
         // AUDIT-FIX GOV-29: role="log" implies aria-live="polite"; the explicit
         // "off" is what actually silences the container so the region above is
@@ -1080,172 +1327,8 @@ const ChatMessageListComponent = ({
         aria-busy={isGenerating}
         aria-label="Chat messages"
         onScroll={handleScroll}
-        className="flex h-full flex-col overflow-y-auto"
-      >
-        {/* Push messages to the bottom when list is short */}
-        <div className="flex-1" />
-
-        {/* Message groups */}
-        <div className="space-y-0.5 pb-2">
-          {/* AUDIT-FIX STR-18: older groups are windowed out of the DOM, never
-              dropped — this control says exactly how many and mounts the next
-              window on demand. */}
-          {hiddenGroupCount > 0 && (
-            <div className="flex justify-center px-4 pb-2 md:px-12 lg:px-20">
-              <button
-                type="button"
-                onClick={() => setGroupWindow((prev) => prev + GROUP_WINDOW_SIZE)}
-                className="rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                {`Show earlier messages (${hiddenGroupCount} hidden)`}
-              </button>
-            </div>
-          )}
-
-          {visibleGroups.map((group, groupIdx) => {
-            const firstMsg = group.messages[0];
-            const firstMsgDate = firstMsg?.createdAt ? new Date(firstMsg.createdAt) : undefined;
-            const groupDateKey = firstMsgDate ? toDateKey(firstMsgDate) : '';
-            const prevGroup = groupIdx > 0 ? visibleGroups[groupIdx - 1] : null;
-            const prevFirstMsg = prevGroup?.messages[0];
-            const prevFirstMsgDate = prevFirstMsg?.createdAt
-              ? new Date(prevFirstMsg.createdAt)
-              : undefined;
-            const prevDateKey = prevFirstMsgDate ? toDateKey(prevFirstMsgDate) : '';
-            // AUDIT-FIX BUG-30: client-only — see the hasMounted comment above.
-            const showDivider = hasMounted && firstMsgDate && groupDateKey !== prevDateKey;
-
-            return (
-              <React.Fragment key={group.firstId}>
-                {showDivider && firstMsgDate && (
-                  <DateDivider label={formatDateDivider(firstMsgDate)} />
-                )}
-                <MessageGroupRow
-                  group={group}
-                  isLastGroup={groupIdx === visibleGroups.length - 1}
-                  onRegenerate={handleRegenerate}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onReact={handleReact}
-                  onPin={onPin}
-                  branchGroupsByMessageId={branchGroupsByMessageId}
-                  branchingMessageId={branchingMessageId}
-                  onBranch={onBranch}
-                  onSwitchBranch={onSwitchBranch}
-                  onPaywallUpgrade={handlePaywallUpgrade}
-                  onPaywallDismiss={handlePaywallDismiss}
-                  onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
-                  speakingMessageId={isSpeaking ? speakingMessageId : null}
-                  isReadAloudSupported={isReadAloudSupported}
-                  onReadAloud={handleReadAloud}
-                />
-              </React.Fragment>
-            );
-          })}
-
-          {/* Continue Generation button · below the truncated/stopped last
-              assistant message (ChatGPT/Claude placement). */}
-          {showContinue && lastMessage && (
-            <div className="px-4 pt-1 md:px-12 lg:px-20">
-              <button
-                type="button"
-                onClick={() => onContinue?.(lastMessage.id)}
-                className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-                aria-label="Continue generating this response"
-              >
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                Continue generating
-              </button>
-            </div>
-          )}
-
-          {/* Mid-stream error notice · same placement as Continue Generation,
-              below the last assistant message. The turn's partial content
-              (if any) is left exactly as it streamed — this only ADDS a
-              visible signal that it may be incomplete, it never replaces
-              the message. */}
-          {showStreamErrorNotice && lastMessage && (
-            <div className="px-4 pt-1 md:px-12 lg:px-20">
-              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-muted-foreground">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
-                <span>
-                  {getStreamErrorMessage(lastMessage)
-                    ? `Response may be incomplete: ${getStreamErrorMessage(lastMessage)}`
-                    : 'This response may be incomplete — the connection to the model was interrupted.'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onRegenerate?.(lastMessage.id)}
-                  className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
-                  aria-label="Regenerate this response"
-                >
-                  <RefreshCw className="h-3 w-3" aria-hidden="true" />
-                  Retry
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Safety refusal notice · same placement as the stream-error
-              notice. Any partial content is left exactly as it streamed —
-              this only ADDS the honest "declined" signal. Neutral styling on
-              purpose: a refusal is not a failure of the app or the model. */}
-          {showRefusalNotice && lastMessage && (
-            <div className="px-4 pt-1 md:px-12 lg:px-20">
-              <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-                <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>The model declined to finish this response for safety reasons.</span>
-                {onRegenerate && (
-                  <button
-                    type="button"
-                    onClick={() => onRegenerate(lastMessage.id)}
-                    className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
-                    aria-label="Regenerate this response"
-                  >
-                    <RefreshCw className="h-3 w-3" aria-hidden="true" />
-                    Retry
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Typing indicator while waiting for the first streaming chunk */}
-          <AnimatePresence>
-            {showTypingIndicator && (
-              <motion.div
-                key="typing-indicator"
-                /* AUDIT-FIX GOV-33 */
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
-                transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
-              >
-                <TypingIndicator />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Follow-up suggestion pills after last assistant message */}
-          {showFollowUps && lastMessage && (
-            <div
-              className="mx-auto w-full max-w-3xl px-4"
-              data-testid="follow-up-suggestions-shell"
-            >
-              <FollowUpSuggestions
-                lastAssistantContent={lastMessage.content}
-                onSelect={onSendMessage!}
-                isGenerating={isLoading}
-                isUserTyping={isUserTyping}
-                messageCount={messages.length}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Sentinel for scrollIntoView */}
-        <div ref={bottomRef} aria-hidden="true" className="h-px" />
-      </div>
+        className="h-full"
+      />
 
       {/* Scroll-to-bottom FAB · shown when user has scrolled up */}
       <AnimatePresence>
