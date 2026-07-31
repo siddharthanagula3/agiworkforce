@@ -7,7 +7,7 @@
 #   2. eas build --platform android --profile beta (AAB for Play Internal Testing)
 #   3. If --auto-submit: bind that exact build to the beta submit profile
 #
-# Founder action required first — see scripts/release/README.md.
+# Founder action required first — see scripts/release/EAS_SIGNING_RUNBOOK.md.
 
 set -euo pipefail
 # shellcheck source=_lib.sh

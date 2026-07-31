@@ -383,6 +383,19 @@ requireIncludes('apps/mobile/eas.json', '"beta"');
 requireIncludes('apps/mobile/eas.json', '"buildType": "app-bundle"');
 requireNotIncludes('apps/mobile/eas.json', '"ascAppId": "$ASC_APP_ID"');
 requireNotIncludes('apps/mobile/eas.json', '"appleId": "$APPLE_ID"');
+requireIncludes('.github/workflows/release-mobile.yml', "- 'v-mobile-*'");
+requireIncludes('.github/workflows/release-mobile.yml', 'name: mobile-store-release');
+requireIncludes('.github/workflows/release-mobile.yml', "EAS_CLI_VERSION: '21.4.0'");
+requireIncludes('.github/workflows/release-mobile.yml', 'release:ios:prod -- --auto-submit');
+requireIncludes('.github/workflows/release-mobile.yml', 'release:android:prod -- --auto-submit');
+requireIncludes('.github/workflows/release-mobile.yml', 'ASC_API_PRIVATE_KEY_BASE64');
+requireIncludes('.github/workflows/release-mobile.yml', 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64');
+requireNotIncludes('.github/workflows/release-mobile.yml', '--latest');
+requireIncludes('apps/mobile/scripts/release/configure-ios-submit.sh', 'ASC_APP_ID must be');
+requireIncludes(
+  'apps/mobile/scripts/release/configure-ios-submit.sh',
+  '.submit.production.ios.ascAppId',
+);
 requireIncludes('apps/mobile/scripts/release/preflight.sh', 'EAS project is not linked');
 requireIncludes('apps/mobile/scripts/release/preflight.sh', 'numeric ascAppId');
 requireIncludes('apps/mobile/scripts/release/ios-beta.sh', 'PROFILE="beta"');
