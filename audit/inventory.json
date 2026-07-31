@@ -494,14 +494,14 @@
   {
     "item": "preload-script",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "Tauri v2 has no Electron-style user-authored preload script; the IPC bridge is auto-injected by the tauri runtime and scoped by the capabilities file (apps/desktop/src-tauri/capabilities/default.json:1-2405, permission allow/deny lists per command). No `pattern` (isolation) field is set in apps/desktop/src-tauri/tauri.conf.json, so Tauri uses its default 'brownfield' pattern rather than a scripted isolation-secure bridge."
+    "status": "built",
+    "evidence": "Tauri v2 does not use Electron preload APIs; the secure platform-equivalent is now explicit. apps/desktop/src-tauri/tauri.conf.json:38-44 selects Tauri's compile-time isolation pattern, apps/desktop/src-tauri/isolation/index.html loads the embedded hook, and isolation/isolation-hook.js installs a non-writable `window.__TAURI_ISOLATION_HOOK__` that rejects malformed IPC envelopes before Tauri encrypts and forwards them to Rust. Cargo.toml enables `isolation` on both `tauri` and `tauri-build`, while capabilities/default.json remains the granular command/filesystem ACL. scripts/check-ci-guardrails.mjs and recorderHudWindow.test.ts pin the config/hook contract; direct `cargo check -p agiworkforce-desktop` proves Tauri embeds it successfully."
   },
   {
     "item": "context-isolation",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "Tauri's primary sandboxing mechanism, the capability/ACL system, is fully built out: apps/desktop/src-tauri/capabilities/default.json:1-2405 defines granular allow/deny path lists for fs, dialog, notification, clipboard, shortcut, updater, stronghold, shell permissions. But Tauri's dedicated 'context isolation' feature — the `security.pattern: {\"use\": \"isolation\"}` config which sandboxes IPC through a secondary iframe — is not set anywhere in tauri.conf.json or elsewhere in the repo (grep for 'isolation' finds no config, only unrelated Rust module names like sandbox.rs referencing agent isolation)."
+    "status": "built",
+    "evidence": "apps/desktop/src-tauri/tauri.conf.json:38-44 enables Tauri's dedicated `security.pattern.use = isolation` boundary and points it at the compile-time assets in src-tauri/isolation/. The hidden secondary iframe owns a non-replaceable `__TAURI_ISOLATION_HOOK__`, structurally validates each IPC envelope, and lets Tauri AES-GCM-encrypt accepted payloads before Rust receives them. Cargo.toml explicitly enables isolation for direct Cargo/CI builds, capabilities/default.json supplies the granular ACL behind the isolated transport, scripts/check-ci-guardrails.mjs prevents config or hook removal, and recorderHudWindow.test.ts asserts the exact pattern. `cargo check -p agiworkforce-desktop` passes with the embedded isolation assets."
   },
   {
     "item": "sandboxed-renderer",
