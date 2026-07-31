@@ -1224,6 +1224,54 @@ export function getWebviewContent(
       opacity: 0.8;
     }
 
+    /* ── Structured plan visualization ── */
+    .plan-card {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--bg-elevated);
+      margin: 8px 0;
+      overflow: hidden;
+    }
+    .plan-card__header {
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 7px;
+      min-height: 34px;
+      padding: 0 10px;
+    }
+    .plan-card__title { color: var(--text-primary); font-size: 12px; font-weight: 600; }
+    .plan-card__count { color: var(--text-secondary); font-size: 10px; margin-left: auto; }
+    .plan-card__explanation {
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.4;
+      margin: 0;
+      padding: 9px 10px 2px;
+    }
+    .plan-card__list { list-style: none; margin: 0; padding: 7px; }
+    .plan-card__step {
+      align-items: flex-start;
+      border-left: 2px solid transparent;
+      border-radius: 5px;
+      color: var(--text-primary);
+      display: flex;
+      font-size: 11px;
+      gap: 7px;
+      line-height: 1.4;
+      margin: 0;
+      padding: 5px 6px;
+    }
+    .plan-card__step--in-progress {
+      background: var(--bg-overlay);
+      border-left-color: var(--accent-teal);
+    }
+    .plan-card__step--completed { color: var(--text-secondary); }
+    .plan-card__step--completed .plan-card__step-text { text-decoration: line-through; }
+    .plan-card__status { color: var(--text-secondary); flex: 0 0 13px; text-align: center; }
+    .plan-card__step--in-progress .plan-card__status { color: var(--accent-teal); }
+    .plan-card__step--completed .plan-card__status { color: var(--agi-vscode-success); }
+
     /* ── Empty state (design-spec §8) ── */
     .empty-state {
       position: relative;
@@ -2015,6 +2063,7 @@ export function getWebviewContent(
     let mentionIndex = -1;
     let mentionStart = -1;
     let pendingFileReferences = [];
+    let activePlanCard = null;
     let currentAssistantEl = null;
     let accumulatedContent = '';
     let pendingAttachmentCount = 0;
@@ -2292,6 +2341,7 @@ export function getWebviewContent(
       setStreaming(true);
       currentAssistantEl = null;
       accumulatedContent = '';
+      activePlanCard = null;
 
       var activeFileReferences = pendingFileReferences
         .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
@@ -2733,6 +2783,11 @@ export function getWebviewContent(
         );
       }
 
+      else if (msg.type === 'planUpdate') {
+        removeTyping();
+        upsertPlanCard(msg.payload);
+      }
+
       else if (msg.type === 'toolCallStart') {
         removeTyping();
         createToolCallEl(
@@ -2849,6 +2904,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'conversationCleared') {
         messagesEl.innerHTML = '';
+        activePlanCard = null;
         var freshEmpty = document.createElement('div');
         freshEmpty.className = 'empty-state';
         freshEmpty.id = 'emptyState';
@@ -3040,6 +3096,73 @@ export function getWebviewContent(
     var toolCallStack = null; // active .tool-call-stack container
     var toolCallMap = {}; // toolUseId → inline disclosure state
     var progressMap = {}; // progressId → inline disclosure state
+
+    function upsertPlanCard(plan) {
+      if (!activePlanCard) {
+        var card = document.createElement('section');
+        card.className = 'plan-card';
+        card.setAttribute('aria-label', 'Current plan');
+
+        var header = document.createElement('div');
+        header.className = 'plan-card__header';
+        var icon = document.createElement('span');
+        icon.className = 'codicon codicon-checklist';
+        icon.setAttribute('aria-hidden', 'true');
+        var title = document.createElement('span');
+        title.className = 'plan-card__title';
+        title.textContent = 'Plan';
+        var count = document.createElement('span');
+        count.className = 'plan-card__count';
+        header.appendChild(icon);
+        header.appendChild(title);
+        header.appendChild(count);
+
+        var explanation = document.createElement('p');
+        explanation.className = 'plan-card__explanation';
+        var list = document.createElement('ol');
+        list.className = 'plan-card__list';
+        card.appendChild(header);
+        card.appendChild(explanation);
+        card.appendChild(list);
+        messagesEl.appendChild(card);
+        activePlanCard = { card: card, count: count, explanation: explanation, list: list };
+      }
+
+      var steps = Array.isArray(plan.plan) ? plan.plan : [];
+      var completed = steps.filter(function(item) { return item.status === 'completed'; }).length;
+      activePlanCard.count.textContent = completed + '/' + steps.length + ' complete';
+      activePlanCard.explanation.textContent = plan.explanation || '';
+      activePlanCard.explanation.hidden = !plan.explanation;
+      activePlanCard.list.textContent = '';
+
+      if (steps.length === 0) {
+        var empty = document.createElement('li');
+        empty.className = 'plan-card__step';
+        empty.textContent = 'No plan steps yet.';
+        activePlanCard.list.appendChild(empty);
+      } else {
+        steps.forEach(function(item) {
+          var row = document.createElement('li');
+          var statusClass = item.status.replace('_', '-');
+          row.className = 'plan-card__step plan-card__step--' + statusClass;
+          var statusLabel = item.status === 'completed'
+            ? 'Completed'
+            : item.status === 'in_progress' ? 'In progress' : 'Pending';
+          row.setAttribute('aria-label', statusLabel + ': ' + item.step);
+          var status = document.createElement('span');
+          status.className = 'plan-card__status';
+          status.setAttribute('aria-hidden', 'true');
+          status.textContent = item.status === 'completed' ? '✓' : item.status === 'in_progress' ? '→' : '○';
+          var text = document.createElement('span');
+          text.className = 'plan-card__step-text';
+          text.textContent = item.step;
+          row.appendChild(status);
+          row.appendChild(text);
+          activePlanCard.list.appendChild(row);
+        });
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
 
     var TOOL_ICONS = {
       bash: '$(terminal)', shell: '$(terminal)', run_command: '$(terminal)',

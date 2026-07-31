@@ -38,6 +38,7 @@ import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/ro
 import { buildMemoryContextInput } from '../../memory/memoryStore';
 import { buildCustomInstructionInput } from '../instructions';
 import { buildPromptReferenceInputs } from './promptReferences';
+import { parsePlanVisualization, renderPlanMarkdown } from '../../integrations/planVisualization';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 
@@ -254,7 +255,9 @@ export function createChatHandler(
       } else if (event.type === 'progress_update') {
         stream.progress(event.summary);
       } else if (event.type === 'tool_execution_start') {
-        stream.progress(event.summary);
+        const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
+        if (plan === undefined) stream.progress(event.summary);
+        else stream.markdown(renderPlanMarkdown(plan));
       } else if (event.type === 'tool_execution_end') {
         if (event.isError) stream.progress(`${event.name.replaceAll('_', ' ')} failed`);
       } else if (event.type === 'approval_requested') {

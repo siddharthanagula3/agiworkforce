@@ -1838,8 +1838,8 @@
   {
     "item": "plan-mode-visualization",
     "surface": "apps/ide-extensions",
-    "status": "partial",
-    "evidence": "apps/extension-vscode/src/platform/config.ts:67-71 agentMode() supports 'plan'; apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:199-202 'const planOnly = Config.agentMode() === \"plan\" ...' prepends '_Plan mode is enabled. Reply with \"proceed\" to run the plan after reviewing it._' as plain markdown text into the chat reply."
+    "status": "built",
+    "evidence": "apps/extension-vscode/src/integrations/planVisualization.ts:18-72 parses live update_plan tool input into a bounded pending/in_progress/completed model, rejects malformed/oversized data, and renders escaped native Chat task-list Markdown without command-link injection. apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:257-260 promotes valid plan events from generic progress text to that checklist. apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1160-1175 promotes valid update_plan inputs to a dedicated planUpdate protocol message while malformed payloads retain the generic tool disclosure. apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1227-1274,2786-2789,3100-3164 renders one accessible in-place checklist with completion count, explanation, and distinct pending/in-progress/completed rows using textContent. Regression coverage spans planVisualization.test.ts, chatParticipant.test.ts, chatStateManager.test.ts, planVisualization.webview.test.ts, and structural snapshots."
   },
   {
     "item": "checkpoint-ui",

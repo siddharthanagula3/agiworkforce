@@ -135,6 +135,76 @@ describe('chat participant approval lifecycle', () => {
     await response;
   });
 
+  it('renders update_plan events as a native Chat checklist', async () => {
+    const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+    const runtime = {
+      startThread: vi.fn().mockResolvedValue({ id: 'thread-1' }),
+      startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
+      interruptTurn: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const context = new vscode.ExtensionContext();
+    const stream = {
+      progress: vi.fn(),
+      markdown: vi.fn(),
+      button: vi.fn(),
+    } as unknown as vscode.ChatResponseStream;
+    const handler = createChatHandler(context.secrets, undefined, context.globalState, pool);
+    const response = handler(
+      request(undefined, 'Plan this change'),
+      { history: [] } as vscode.ChatContext,
+      stream,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+      } as unknown as vscode.CancellationToken,
+    );
+
+    await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
+    for (const listener of listeners) {
+      listener({
+        type: 'tool_execution_start',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence: 0,
+        emittedAtMs: 1_784_335_200_000,
+        toolCallId: 'plan-1',
+        name: 'update_plan',
+        category: 'other',
+        summary: 'Updating the plan',
+        input: {
+          explanation: 'Implement and verify.',
+          plan: [
+            { step: 'Inspect the flow', status: 'completed' },
+            { step: 'Build the UI', status: 'in_progress' },
+          ],
+        },
+      });
+      listener({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+    }
+    await response;
+
+    expect(stream.markdown).toHaveBeenCalledWith(expect.stringContaining('- [x] Inspect the flow'));
+    expect(stream.markdown).toHaveBeenCalledWith(
+      expect.stringContaining('- [ ] **In progress:** Build the UI'),
+    );
+    expect(stream.progress).not.toHaveBeenCalledWith('Updating the plan');
+  });
+
   it('passes the exact native file-selection reference to the local runtime', async () => {
     const listeners = new Set<(event: LocalRuntimeEvent) => void>();
     const runtime = {
