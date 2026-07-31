@@ -1,7 +1,15 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render as testingRender,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TooltipProvider } from '../../../components/ui/Tooltip';
 import { useAuthStore } from '../../../stores/auth';
 import { useAppModeStore } from '../../../stores/appModeStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
@@ -95,6 +103,10 @@ vi.mock('@/features/governance/SafetyPolicies', () => ({
 vi.mock('../../mobile-companion/MobileCompanionPanel', () => ({
   MobileCompanionPanel: () => <div>Live mobile pairing workflow</div>,
 }));
+
+function render(ui: ReactElement) {
+  return testingRender(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 describe('SettingsPanel render stability', () => {
   beforeEach(() => {
