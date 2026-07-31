@@ -3710,8 +3710,8 @@
   {
     "item": "seat-assignment",
     "surface": "admin-and-billing",
-    "status": "partial",
-    "evidence": "apps/web/app/api/settings/team/team-admin-access.ts:13-21,39 defines TeamAdminAccess.maxMembers and apps/web/app/api/settings/team/route.ts:172-182 checks member count against access.maxMembers before allowing an add. Assigning a role to an added member is real (route PATCH at [memberId]/route.ts:148-214)."
+    "status": "missing",
+    "evidence": "No paid-seat model or assignment exists. apps/web/app/api/settings/team/team-admin-access.ts explicitly documents that licensed seat quantity is not persisted and always returns maxMembers: null, so the capacity branch in apps/web/app/api/settings/team/route.ts is unreachable. packages/contracts/types/src/billing-catalog.ts deliberately excludes Team from self-serve checkout until licensed seats exist, while the subscription and organization-policy schemas carry no seat quantity. Organization membership CRUD and role assignment are real, but they are not paid-seat assignment."
   },
   {
     "item": "roles-owner-admin-member-guest",
