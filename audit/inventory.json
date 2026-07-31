@@ -644,8 +644,8 @@
   {
     "item": "local-file-index",
     "surface": "apps/desktop",
-    "status": "unwired",
-    "evidence": "apps/desktop/src-tauri/src/sys/commands/workspace.rs:101-336 implements a full workspace symbol/dependency indexer (`workspace_index`, `workspace_search_symbols`, `workspace_find_definition`, `workspace_get_dependencies`, `workspace_get_stats`), registered in invoke_handler at lib.rs:1791-1797, with a frontend wrapper at apps/desktop/src/api/workspace.ts:137-277 re-exported through apps/desktop/src/api/index.ts:343. Whole-repo grep for the exported function names (`indexWorkspaceSymbols`, `searchSymbols`, `getWorkspaceStats`) and for the raw command string `'workspace_index'` across apps/desktop/src finds only the wrapper file itself and apps/desktop/src/lib/tauri-mock.ts (the test/dev mock) — no UI component invokes it."
+    "status": "missing",
+    "evidence": "The orphaned `workspace_*` symbol/dependency index was cut on 2026-07-30. It had no runtime caller and was not a complete code-intelligence implementation: extraction recognized only a few Rust/TypeScript declaration forms, exports were always empty, dependency targets were unresolved import strings, and `find references` matched symbol-name substrings rather than references. Its native commands/state, duplicate app and shared wrappers, and browser mocks were removed together. Mounted Local workflows retain the real grep/glob search pipeline, and editor language intelligence retains the registered LSP path; a future persistent repository index must build on one authoritative parser/LSP-backed service rather than restoring this scanner."
   },
   {
     "item": "file-watcher",

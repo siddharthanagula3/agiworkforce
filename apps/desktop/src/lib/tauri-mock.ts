@@ -1155,33 +1155,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'dir_list':
       return [] as T;
 
-    // Workspace indexing & code analysis
-    case 'workspace_index':
-      return {
-        rootPath: (args?.['workspacePath'] as string | undefined) ?? '.',
-        files: [],
-        symbols: [],
-        dependencies: { nodes: [], edges: [] },
-        lastUpdated: Date.now(),
-      } as T;
-    case 'workspace_search_symbols':
-      return [] as T;
-    case 'workspace_find_definition':
-      return null as T;
-    case 'workspace_find_references':
-    case 'workspace_get_file_symbols':
-      return [] as T;
-    case 'workspace_get_dependencies':
-      return { nodes: [], edges: [] } as T;
-    case 'workspace_get_stats':
-      return {
-        totalFiles: 0,
-        totalSymbols: 0,
-        totalLines: 0,
-        languages: {},
-        symbolKinds: {},
-      } as T;
-
     // Formatter detection
     case 'format_detect':
       return {
