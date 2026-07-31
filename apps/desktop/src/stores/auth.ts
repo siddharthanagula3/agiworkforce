@@ -222,7 +222,6 @@ interface AuthActions {
   setDisplayName: (name: string) => void;
   setEmail: (email: string) => void;
   setAvatar: (avatarUrl: string | null) => void;
-  setFeatureFlag: (flag: string, enabled: boolean) => void;
   logout: () => Promise<void>;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -770,19 +769,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             }),
             undefined,
             'auth/setAvatar',
-          );
-        },
-
-        setFeatureFlag: (flag: string, enabled: boolean) => {
-          set(
-            (state) => ({
-              featureFlags: {
-                ...state.featureFlags,
-                [flag]: enabled,
-              },
-            }),
-            undefined,
-            'auth/setFeatureFlag',
           );
         },
 

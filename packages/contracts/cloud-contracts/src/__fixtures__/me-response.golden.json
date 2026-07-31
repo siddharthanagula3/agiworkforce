@@ -13,7 +13,6 @@
     "subscription_source": "stripe"
   },
   "feature_flags": {
-    "beta_features": true,
     "advanced_model_access": true
   },
   "routing_preferences": {

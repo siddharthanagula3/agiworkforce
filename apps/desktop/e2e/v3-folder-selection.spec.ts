@@ -25,16 +25,6 @@ test.describe('@smoke v3 composer folder selection', () => {
   test.beforeEach(async ({ page }) => {
     await injectMockCloudAuth(page);
     await mockCloudAccountEndpoints(page);
-    await page.addInitScript(() => {
-      try {
-        window.localStorage.setItem(
-          'feature_flags_overrides',
-          JSON.stringify([['desktop_chat_v3', true]]),
-        );
-      } catch {
-        // localStorage unavailable — assertions below will fail loudly
-      }
-    });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 30000 });
 
