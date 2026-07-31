@@ -24,7 +24,11 @@
 const appConfig = require('../app.config.js') as {
   expo: {
     android?: { allowBackup?: boolean; package?: string };
-    ios?: { bundleIdentifier?: string; associatedDomains?: string[] };
+    ios?: {
+      bundleIdentifier?: string;
+      associatedDomains?: string[];
+      entitlements?: Record<string, unknown>;
+    };
     runtimeVersion?: { policy?: string };
     updates?: { url?: string; fallbackToCacheTimeout?: number };
     extra?: { eas?: { projectId?: string } };
@@ -47,6 +51,12 @@ describe('app.config.js — Android backup is disabled', () => {
 
   it('iOS bundle id is the canonical id (sanity)', () => {
     expect(appConfig.expo.ios!.bundleIdentifier).toBe('com.agiworkforce.app');
+  });
+
+  it('iOS app and Share Extension use the canonical shared-container group', () => {
+    expect(appConfig.expo.ios!.entitlements?.['com.apple.security.application-groups']).toEqual([
+      'group.com.agiworkforce.app.share',
+    ]);
   });
 
   it('iOS advertises only the canonical non-redirecting App Link host', () => {

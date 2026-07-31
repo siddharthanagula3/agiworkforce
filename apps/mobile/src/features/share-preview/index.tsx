@@ -46,12 +46,13 @@ function sanitiseSharedText(raw: string): { text: string; truncated: boolean } {
 export default function SharePreviewScreen() {
   const { colors: themeColors } = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ text?: string }>();
+  const params = useLocalSearchParams<{ text?: string; nativeTruncated?: string }>();
   const rawText = typeof params.text === 'string' ? params.text : '';
 
   const [sending, setSending] = useState(false);
 
-  const { text: sanitised, truncated } = sanitiseSharedText(rawText);
+  const { text: sanitised, truncated: truncatedInApp } = sanitiseSharedText(rawText);
+  const truncated = truncatedInApp || params.nativeTruncated === '1';
 
   const handleSend = async () => {
     if (sending) return;

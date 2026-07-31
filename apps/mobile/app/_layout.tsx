@@ -53,6 +53,7 @@ import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloud
 import { getAuthToken } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
 import { restoreStoredLanguage } from '@/src/i18n';
+import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
 
 // Expo Router only wires up a route's error boundary when the route file
 // itself has a named `ErrorBoundary` export — a separate ./error.tsx file is
@@ -625,15 +626,31 @@ export default function RootLayout() {
     }
   }, [url, session, isInitialized, router]);
 
-  // C1c: App Intents / Siri deep links — agiworkforce://intent/<verb>?<params>
-  // Dispatched natively from native/ios/AGIAppIntents/*.swift (AGIIntentDispatch)
-  // when a user invokes a Siri phrase, Spotlight action, or Shortcuts automation.
+  // Import iOS Share Extension drafts from the supported App Group handoff.
+  // Share extensions cannot reliably launch their containing app, so the
+  // extension saves only after a native preview and this authenticated app
+  // foreground provides the second review before any model send.
+  useEffect(() => {
+    if (!isInitialized || !isClerkSignedIn) return;
+    return subscribeToIOSShareInbox(
+      ({ text, truncated }) => {
+        router.push(
+          `/(app)/share-preview?text=${encodeURIComponent(text)}${
+            truncated ? '&nativeTruncated=1' : ''
+          }` as Parameters<typeof router.push>[0],
+        );
+      },
+      (error) => {
+        console.warn('[RootLayout] Could not import iOS shared content:', error);
+      },
+    );
+  }, [isInitialized, isClerkSignedIn, router]);
+
+  // C1c: App Intents / Siri deep links — agiworkforce://intent/<verb>?<params>.
+  // AGIIntentDispatch invokes this seam for Siri, Spotlight, and Shortcuts.
   // On Android, MainActivity.kt rewrites external shares (ACTION_SEND) and
   // selected-text actions (ACTION_PROCESS_TEXT) onto the same seam as the
-  // 'share' verb, because RN's Linking only surfaces intent data URIs — the
-  // share payload lives in EXTRA_TEXT/EXTRA_PROCESS_TEXT and never reaches JS
-  // otherwise. `useLinkingURL()` covers both cold start (expo-linking captures
-  // intent.data in the activity's onCreate) and warm start (onNewIntent).
+  // 'share' verb. `useLinkingURL()` covers both cold start and warm handoff.
   // Text-bearing verbs route through the existing share-preview review screen
   // (HIGH-MOB-03) so shared text or a Siri mis-transcription is never
   // auto-sent to the model without the user seeing it first.
@@ -695,13 +712,14 @@ export default function RootLayout() {
         break;
       }
       case 'share': {
-        // Android share sheet / text selection (rewritten by MainActivity.kt).
+        // Android share sheet/text selection, rewritten by MainActivity.kt.
         const text = getParam('text');
+        const nativeTruncated = getParam('truncated') === '1';
         if (text && text.trim()) {
           router.push(
-            `/(app)/share-preview?text=${encodeURIComponent(text)}` as Parameters<
-              typeof router.push
-            >[0],
+            `/(app)/share-preview?text=${encodeURIComponent(text)}${
+              nativeTruncated ? '&nativeTruncated=1' : ''
+            }` as Parameters<typeof router.push>[0],
           );
         }
         break;
@@ -759,12 +777,8 @@ export default function RootLayout() {
     router.replace({ pathname: '/(auth)/reset-password' as const });
   }, [url, isInitialized, router]);
 
-  // NOTE: external shares (Android ACTION_SEND / ACTION_PROCESS_TEXT) are
-  // handled by the C1c 'share' verb above. The previous getInitialURL()-based
-  // handler here was dead code: RN's getInitialURL() returns intent.getData(),
-  // which is null for ACTION_SEND — the payload lives in EXTRA_TEXT, which
-  // never reaches JS. MainActivity.kt now rewrites those intents to
-  // agiworkforce://intent/share?text=… before RN sees them.
+  // NOTE: Android external shares are handled by the C1c 'share' verb above.
+  // iOS shares use the separate App Group inbox effect before this handler.
 
   // C2: Android hardware back button — navigate back or double-press to exit
   useEffect(() => {
