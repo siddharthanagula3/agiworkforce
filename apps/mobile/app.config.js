@@ -258,11 +258,6 @@ const config = {
     ],
     'expo-document-picker',
     'expo-sharing',
-    // StoreKit 2 (iOS) / Play Billing (Android) in-app purchase bridge for
-    // subscription upgrades. Wires the IAP capability + Android BILLING
-    // permission at prebuild time — requires `expo prebuild` + pod install
-    // to take effect; not yet run as of this scaffolding pass.
-    'react-native-iap',
     // Tier 3 universal fallback: llama.rn config plugin wires native GGUF runtime.
     // Models downloaded at runtime into Documents/models/ — not bundled in the binary.
     'llama.rn',

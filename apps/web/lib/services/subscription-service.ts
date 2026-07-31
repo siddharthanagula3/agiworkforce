@@ -109,12 +109,10 @@ export class SubscriptionService {
 
       const data = rows[0]!;
 
-      // A store-billed subscription has no webhook that tells us it lapsed:
-      // there is no Apple ASSN V2 or Play RTDN endpoint, no re-verification
-      // cron, and the only refresh path (mobile restorePurchases) is
-      // user-initiated. Cancel in the App Store and `status` stays 'active'
-      // forever, so `effectivePlanTier` — which gates on status alone — keeps
-      // handing out the paid tier indefinitely.
+      // Historical store-billed subscriptions have no active lifecycle
+      // integration: there is no Apple ASSN V2 or Play RTDN endpoint and no
+      // re-verification job. Without this boundary, a row left as `active`
+      // would keep handing out a paid tier after its recorded period ended.
       //
       // This is the one reader every server-side entitlement check shares, so
       // deriving expiry here covers the chat auth-gate, /api/me, model listing
@@ -124,10 +122,9 @@ export class SubscriptionService {
       //
       // Scope is deliberately narrow. Only rows owned by a store and NOT
       // linked to Stripe are eligible, and a null or unparseable
-      // `current_period_end` NEVER expires: that column is nullable, the IAP
-      // route writes null when Apple returns no expiry, and manually
-      // provisioned Team/Enterprise rows rely on it. Expiring on a null would
-      // downgrade paying customers.
+      // `current_period_end` NEVER expires: historical store rows and manually
+      // provisioned Team/Enterprise rows may carry null. Expiring on a null
+      // would downgrade paying customers.
       const storeOwned =
         Boolean(data.apple_original_transaction_id || data.google_purchase_token) &&
         !data.stripe_subscription_id;

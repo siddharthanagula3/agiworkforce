@@ -19,7 +19,6 @@ import {
   MessageCircleWarning,
   Mic,
   Palette,
-  RotateCcw,
   Shield,
   Share2,
   SlidersHorizontal,
@@ -340,16 +339,6 @@ export default function SettingsTabScreen() {
             tone: 'cloud',
             onPress: openCloudRoute('/(app)/settings/shared-links'),
           },
-          ...(FEATURES.iap
-            ? [
-                {
-                  key: 'account-restore',
-                  label: 'Restore purchases',
-                  icon: RotateCcw,
-                  onPress: push('/(app)/settings/cloud-billing'),
-                },
-              ]
-            : []),
           ...(canManageWorkspace
             ? [
                 {

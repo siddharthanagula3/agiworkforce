@@ -8,16 +8,15 @@
  * BILLING feature flag: the Stripe portal fetch is gated behind
  * FEATURES.billing. Upgrading/adjusting a subscription NEVER opens an
  * external checkout URL (Apple Guideline 3.1.1) — it opens the same
- * in-app PaywallBottomSheet used by the chat paywall, which itself falls
- * back to native StoreKit/Play IAP (FEATURES.iap) or an honest "not
- * available yet" message when neither is ready.
+ * in-app PaywallBottomSheet used by the chat paywall, which presents an honest
+ * "not available yet" message while no native store products exist.
  * No stub / fake data is shown — the screen is always honest about state.
  *
  * Cloud-only surface.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Alert, Platform } from 'react-native';
+import { View, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CreditCard, ExternalLink, FileText, Check } from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
@@ -42,13 +41,10 @@ import { useTierStore } from '@/src/features/billing/store';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { useIapPurchaseFlow } from '@/src/features/billing/useIapPurchaseFlow';
-import { useIapStore } from '@/src/features/billing/iapStore';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAuthStore } from '@/src/features/auth/store';
-import type { IapRestoreOutcome } from '@/src/features/billing/useIapPurchaseFlow';
-import { getIapSubscriptionGuard } from '@/src/features/billing/subscriptionSource';
+import { getSubscriptionOwnerGuard } from '@/src/features/billing/subscriptionSource';
 
 // Free-tier feature bullets — mirrors web BillingSection
 const FREE_FEATURES = [
@@ -58,76 +54,6 @@ const FREE_FEATURES = [
   'Analyze text and images',
   'Search the web',
 ];
-
-// ---------------------------------------------------------------------------
-// IAP subscription management — StoreKit 2 / Play Billing only. No in-app
-// web/Stripe checkout: Apple/Google require native IAP for a subscription
-// purchased or managed from inside the app. Mirrors Claude's iOS Billing
-// screen (plan name + "Manage subscription" + "Restore purchases", no
-// checkout UI in-app). Only mounted when FEATURES.iap is true, so useIAP()'s
-// native store connection never initializes while the flag is off.
-// ---------------------------------------------------------------------------
-
-function IapManagementSection({ onBlockedManage }: { onBlockedManage?: () => void }) {
-  const colors = useThemeColors();
-  const { manageSubscription, restore } = useIapPurchaseFlow();
-  const status = useIapStore((s) => s.status);
-  const errorMessage = useIapStore((s) => s.errorMessage);
-  const isBusy = status === 'purchasing' || status === 'verifying' || status === 'restoring';
-  const handleRestore = useCallback(async () => {
-    async function run(): Promise<void> {
-      const outcome: IapRestoreOutcome | null = await restore();
-      if (!outcome) return;
-      if (outcome.kind === 'restored') {
-        const planNames = outcome.tiers.map((tier) => getBillingPlanPricing(tier).label);
-        Alert.alert(
-          'Purchases restored',
-          planNames.length > 0
-            ? `Restored ${planNames.join(', ')} for this AGI Cloud account.`
-            : 'Your store purchases were restored for this AGI Cloud account.',
-        );
-        return;
-      }
-      if (outcome.kind === 'none') {
-        Alert.alert(
-          'No purchases found',
-          Platform.OS === 'ios'
-            ? 'No AGI subscription purchases were found for this Apple ID.'
-            : 'No AGI subscription purchases were found for this Google Play account.',
-        );
-        return;
-      }
-      Alert.alert('Restore purchases failed', outcome.message, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Try again', onPress: () => void run() },
-      ]);
-    }
-    await run();
-  }, [restore]);
-
-  return (
-    <SettingsGroup>
-      <SettingsRow
-        label="Manage subscription"
-        icon={CreditCard}
-        onPress={
-          isBusy ? undefined : onBlockedManage ? onBlockedManage : () => void manageSubscription()
-        }
-      />
-      <SettingsRow
-        label={status === 'restoring' ? 'Restoring…' : 'Restore purchases'}
-        icon={ExternalLink}
-        onPress={isBusy ? undefined : () => void handleRestore()}
-        isLast={!(status === 'error' && errorMessage)}
-      />
-      {status === 'error' && errorMessage && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>
-          <Text style={{ color: colors.agentError, fontSize: 12 }}>{errorMessage}</Text>
-        </View>
-      )}
-    </SettingsGroup>
-  );
-}
 
 function PlanBadge() {
   const colors = useThemeColors();
@@ -180,11 +106,7 @@ export default function CloudBillingScreen() {
   const statusLabel = billingStatus.replaceAll('_', ' ');
   const isWorkspacePlan = canUseBillingPlanCapability(tier, 'team_admin');
   const nextUpgradeTier = getNextUpgradeTier(tier);
-  const subscriptionGuard = getIapSubscriptionGuard(
-    billingSource,
-    billingStatus,
-    Platform.OS === 'ios' ? 'ios' : 'android',
-  );
+  const subscriptionGuard = getSubscriptionOwnerGuard(billingSource, billingStatus);
 
   const showSubscriptionOwnerGuard = useCallback(() => {
     const buttons: Array<{
@@ -206,11 +128,9 @@ export default function CloudBillingScreen() {
     );
   }, [subscriptionGuard]);
 
-  // Upgrading/adjusting a plan never opens an external checkout URL — Apple
-  // Guideline 3.1.1 requires in-app subscription purchases go through native
-  // IAP. This opens the same PaywallBottomSheet the chat paywall uses, which
-  // itself handles the FEATURES.iap-on (native purchase) vs -off (honest
-  // "not available yet" message) branches.
+  // Mobile has no store purchase path. Existing entitled subscriptions are
+  // managed at their recorded owner; free/inactive accounts get the same honest
+  // informational paywall used by chat.
   const handleUpgrade = useCallback(() => {
     if (subscriptionGuard.blocked) {
       showSubscriptionOwnerGuard();
@@ -232,8 +152,8 @@ export default function CloudBillingScreen() {
       }
       return;
     }
-    // No Stripe portal yet — fall back to the in-app paywall/IAP management
-    // sheet rather than an external web page.
+    // No mobile billing-management path yet; keep the user inside the honest
+    // informational sheet.
     paywallSheetRef.current?.expand();
   }, []);
 
@@ -381,12 +301,6 @@ export default function CloudBillingScreen() {
           )}
         </View>
       </View>
-
-      {FEATURES.iap && (
-        <IapManagementSection
-          onBlockedManage={subscriptionGuard.blocked ? showSubscriptionOwnerGuard : undefined}
-        />
-      )}
 
       {/* Invoices */}
       <SettingsGroup>
