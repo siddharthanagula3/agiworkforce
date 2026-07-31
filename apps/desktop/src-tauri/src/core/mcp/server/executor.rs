@@ -259,6 +259,9 @@ impl DesktopMcpServerExecutor {
                 .try_state::<crate::sys::commands::memory::MemoryState>()
                 .ok_or_else(|| "MemoryState unavailable".to_string())?,
             self.app_handle
+                .try_state::<crate::sys::commands::project_memory::ProjectMemoryState>()
+                .ok_or_else(|| "ProjectMemoryState unavailable".to_string())?,
+            self.app_handle
                 .try_state::<crate::sys::commands::research::ResearchState>()
                 .ok_or_else(|| "ResearchState unavailable".to_string())?,
             self.app_handle.clone(),
@@ -380,6 +383,9 @@ impl DesktopMcpServerExecutor {
             self.app_handle
                 .try_state::<crate::sys::commands::memory::MemoryState>()
                 .ok_or_else(|| "MemoryState unavailable".to_string())?,
+            self.app_handle
+                .try_state::<crate::sys::commands::project_memory::ProjectMemoryState>()
+                .ok_or_else(|| "ProjectMemoryState unavailable".to_string())?,
             self.app_handle
                 .try_state::<crate::sys::commands::research::ResearchState>()
                 .ok_or_else(|| "ResearchState unavailable".to_string())?,
