@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { isTauri } from '../../lib/tauri-mock';
 import { McpClient } from '../../api/mcp';
-import type { ConnectorManifest } from '../../api/mcp';
 import type {
   McpConfigLocation,
   McpRegistryPackage,
@@ -16,7 +15,6 @@ export interface McpServersState {
   config: McpServersConfig | null;
   configLocation: McpConfigLocation | null;
   registry: McpRegistryPackage[];
-  connectorManifests: ConnectorManifest[];
   connectedProviders: string[];
   runtimeServerConfig: McpRuntimeServerConfig | null;
   runtimeServerStatus: boolean;
@@ -43,7 +41,6 @@ export interface McpServersState {
   getServerLogs: (serverName: string, lines?: number) => Promise<string[]>;
   refreshConnectedProviders: () => Promise<void>;
   connectConnector: (connectorId: string) => Promise<void>;
-  refreshConnectorManifests: () => Promise<void>;
   getRuntimeServerConfig: () => Promise<McpRuntimeServerConfig>;
   startRuntimeServer: () => Promise<void>;
   stopRuntimeServer: () => Promise<void>;
@@ -73,7 +70,6 @@ export const useMcpServersStore = create<McpServersState>()(
         config: null,
         configLocation: null,
         registry: [],
-        connectorManifests: [],
         connectedProviders: [],
         runtimeServerConfig: null,
         runtimeServerStatus: false,
@@ -392,26 +388,6 @@ export const useMcpServersStore = create<McpServersState>()(
           }
         },
 
-        refreshConnectorManifests: async () => {
-          if (!isTauri) return;
-          try {
-            const connectorManifests = await McpClient.getConnectorManifests();
-            set(
-              { connectorManifests, error: null },
-              undefined,
-              'mcpServers/refreshConnectorManifests',
-            );
-          } catch (error) {
-            set(
-              {
-                error: error instanceof Error ? error.message : 'Failed to get connector manifests',
-              },
-              undefined,
-              'mcpServers/refreshConnectorManifests/error',
-            );
-          }
-        },
-
         getRuntimeServerConfig: async () => {
           if (!isTauri) throw new Error('Runtime server not available outside Tauri');
           try {
@@ -596,7 +572,6 @@ export const selectMcpServers = (state: McpServersState) => state.servers;
 export const selectMcpConfig = (state: McpServersState) => state.config;
 export const selectMcpConfigLocation = (state: McpServersState) => state.configLocation;
 export const selectMcpRegistry = (state: McpServersState) => state.registry;
-export const selectMcpConnectorManifests = (state: McpServersState) => state.connectorManifests;
 export const selectMcpConnectedProviders = (state: McpServersState) => state.connectedProviders;
 export const selectMcpRuntimeServerConfig = (state: McpServersState) => state.runtimeServerConfig;
 export const selectMcpRuntimeServerStatus = (state: McpServersState) => state.runtimeServerStatus;

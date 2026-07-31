@@ -185,15 +185,6 @@ export interface OAuthConnectionStatus {
   expiresAt?: string;
 }
 
-export interface ConnectorManifest {
-  id: string;
-  name: string;
-  description: string;
-  icon?: string;
-  category: string;
-  authType: string;
-}
-
 export async function mcpOauthStart(provider: string): Promise<OAuthStartResponse> {
   return command<OAuthStartResponse>('mcp_oauth_start', { provider });
 }
@@ -236,10 +227,6 @@ export async function mcpConnectConnector(connectorId: string): Promise<void> {
 
 export async function saveApiKey(provider: string, key: string): Promise<void> {
   return command<void>('save_api_key', { provider, key });
-}
-
-export async function getConnectorManifests(): Promise<ConnectorManifest[]> {
-  return command<ConnectorManifest[]>('get_connector_manifests');
 }
 
 // ---- MCP Extensions ----

@@ -2544,17 +2544,6 @@ fn decrypt_credential_value_machine_only(encrypted: &str) -> Result<String, Stri
     String::from_utf8(plaintext).map_err(|e| format!("Invalid UTF-8: {}", e))
 }
 
-// ============================================================================
-// Connector Manifests
-// ============================================================================
-
-/// Returns the full list of built-in connector manifests for the marketplace UI.
-#[tauri::command]
-pub async fn get_connector_manifests(
-) -> Result<Vec<crate::core::mcp::connectors::ConnectorManifest>, String> {
-    Ok(crate::core::mcp::connectors::get_builtin_connectors())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

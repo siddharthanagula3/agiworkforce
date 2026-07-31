@@ -2432,8 +2432,8 @@
   {
     "item": "gitlab-bitbucket-parity",
     "surface": "apps/github-app",
-    "status": "partial",
-    "evidence": "GitLab has a real, wired generic MCP connector manifest on desktop: apps/desktop/src-tauri/src/core/mcp/connectors.rs:367-383 registers a 'gitlab' connector launching `npx @modelcontextprotocol/server-gitlab` with GITLAB_PERSONAL_ACCESS_TOKEN (third-party community MCP server, not first-party). Bitbucket has no equivalent entry (grep for 'bitbucket' in connectors.rs returns nothing). Both exist only as marketing/catalog rows in apps/web/features/connectors/data/connectors.ts:634-651 (phase:2/phase:3 tags suggesting unreleased) with zero apps/web/app/api routes (`find apps/web/app/api -iname '*gitlab*' -o -iname '*bitbucket*'` returns nothing)."
+    "status": "missing",
+    "evidence": "No first-party GitLab or Bitbucket app parity exists. Neither provider appears in the live Desktop ConnectorGallery catalog plus get_connector_mcp_mapping backend allowlist, and neither has a Web API route, webhook, installation store, review lifecycle, or customer-installable app. The former Rust-only 86-item connector manifest catalog contained a GitLab community-package row, but its IPC result was only assigned by two never-called Zustand actions and no component read it; that dead catalog, IPC command, mock, and state were removed rather than counting unreachable metadata as implementation. Web catalogue rows remain phase-tagged marketing data. Current official provider options are separate remote MCP products—GitLab's beta MCP endpoint and Atlassian Rovo MCP (whose Bitbucket tools require scoped API-token auth)—that users may add through the existing custom MCP flow; they are not AGI-owned GitHub App parity."
   },
   {
     "item": "marketplace-listing",
