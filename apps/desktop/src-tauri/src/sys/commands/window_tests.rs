@@ -13,6 +13,7 @@ mod tests {
         let state = PersistentWindowState {
             pinned: true,
             always_on_top: false,
+            keep_in_menu_bar: true,
             dock: None,
             geometry: Some(WindowGeometry::default()),
             previous_geometry: None,
@@ -53,6 +54,7 @@ mod tests {
         let payload = WindowStatePayload {
             pinned: snapshot.pinned,
             always_on_top: snapshot.always_on_top,
+            keep_in_menu_bar: snapshot.keep_in_menu_bar,
             dock: snapshot.dock,
             maximized: snapshot.maximized,
             fullscreen: snapshot.fullscreen,
@@ -60,6 +62,7 @@ mod tests {
 
         assert!(payload.pinned);
         assert!(!payload.always_on_top);
+        assert!(payload.keep_in_menu_bar);
         assert!(payload.dock.is_none());
         assert!(!payload.maximized);
         assert!(!payload.fullscreen);
@@ -81,6 +84,7 @@ mod tests {
         let payload = WindowStatePayload {
             pinned: snapshot.pinned,
             always_on_top: snapshot.always_on_top,
+            keep_in_menu_bar: snapshot.keep_in_menu_bar,
             dock: snapshot.dock,
             maximized: snapshot.maximized,
             fullscreen: snapshot.fullscreen,
@@ -105,6 +109,7 @@ mod tests {
         let payload = WindowStatePayload {
             pinned: snapshot.pinned,
             always_on_top: snapshot.always_on_top,
+            keep_in_menu_bar: snapshot.keep_in_menu_bar,
             dock: snapshot.dock,
             maximized: snapshot.maximized,
             fullscreen: snapshot.fullscreen,
@@ -124,6 +129,7 @@ mod tests {
         let payload = WindowStatePayload {
             pinned: snapshot.pinned,
             always_on_top: snapshot.always_on_top,
+            keep_in_menu_bar: snapshot.keep_in_menu_bar,
             dock: snapshot.dock,
             maximized: snapshot.maximized,
             fullscreen: snapshot.fullscreen,
@@ -148,6 +154,7 @@ mod tests {
         let payload = WindowStatePayload {
             pinned: snapshot.pinned,
             always_on_top: snapshot.always_on_top,
+            keep_in_menu_bar: snapshot.keep_in_menu_bar,
             dock: snapshot.dock,
             maximized: snapshot.maximized,
             fullscreen: snapshot.fullscreen,
@@ -173,6 +180,7 @@ mod tests {
         let payload = WindowStatePayload {
             pinned: true,
             always_on_top: false,
+            keep_in_menu_bar: true,
             dock: Some(DockPosition::Right),
             maximized: true,
             fullscreen: true,
@@ -184,6 +192,7 @@ mod tests {
         let json = serialized.unwrap();
         assert!(json.contains("\"fullscreen\":true"));
         assert!(json.contains("\"maximized\":true"));
+        assert!(json.contains("\"keepInMenuBar\":true"));
         assert!(json.contains("\"dock\":\"right\""));
     }
 
@@ -192,6 +201,7 @@ mod tests {
         let json = r#"{
             "pinned": true,
             "alwaysOnTop": false,
+            "keepInMenuBar": true,
             "dock": "left",
             "maximized": false,
             "fullscreen": true
@@ -203,6 +213,19 @@ mod tests {
         let payload = result.unwrap();
         assert!(payload.fullscreen);
         assert_eq!(payload.dock, Some(DockPosition::Left));
+        assert!(payload.keep_in_menu_bar);
+    }
+
+    #[test]
+    fn legacy_window_state_defaults_to_menu_bar_residency() {
+        let mut value = serde_json::to_value(PersistentWindowState::default()).unwrap();
+        value
+            .as_object_mut()
+            .expect("window state should serialize as an object")
+            .remove("keepInMenuBar");
+
+        let restored: PersistentWindowState = serde_json::from_value(value).unwrap();
+        assert!(restored.keep_in_menu_bar);
     }
 
     #[test]

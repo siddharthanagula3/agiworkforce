@@ -407,7 +407,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
   });
 
   describe('Close behavior', () => {
-    it('quits the application instead of closing or hiding only the WebView', async () => {
+    it('delegates close behavior to the native menu-bar residency policy', async () => {
       const { result } = renderHook(() => useWindowManager());
 
       await waitFor(() => {
@@ -420,7 +420,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
         await result.current.actions.close();
       });
 
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_quit_application');
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_request_close');
       expect(mockWindowInstance.close).not.toHaveBeenCalled();
     });
 
@@ -450,7 +450,7 @@ describe('useWindowManager - Fullscreen Functionality', () => {
 
       expect(event.defaultPrevented).toBe(true);
       await waitFor(() => {
-        expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_quit_application');
+        expect(vi.mocked(invoke)).toHaveBeenCalledWith('window_request_close');
       });
     });
   });

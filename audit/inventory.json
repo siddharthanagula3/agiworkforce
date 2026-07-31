@@ -572,8 +572,8 @@
   {
     "item": "menu-bar-app",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "A fully functional system-tray/menu-bar icon exists (apps/desktop/src-tauri/src/ui/tray.rs:9-69, build_system_tray, invoked at lib.rs:1181) with a Show/Hide/New Conversation/Settings/Pin/Always-on-top/Quit menu and left-click toggle (tray.rs:78-104). However there is no dedicated 'menu-bar-only' residency mode: Info.plist has no LSUIElement key (app always shows a Dock icon), tauri.conf.json:31 sets skipTaskbar:false, and no dock-hiding/'hide app icon' toggle exists in settings (grep of apps/desktop/src/features/settings for login/startup/menu-bar-only turned up nothing)."
+    "status": "built",
+    "evidence": "General settings now exposes a searchable, persisted 'Show in menu bar' switch with failure rollback (apps/desktop/src/features/settings/tabs/General/index.tsx:164-226; MenuBarResidencySetting.test.tsx). Native state defaults legacy installs into residency and window_get_state returns keepInMenuBar (apps/desktop/src-tauri/src/data/state.rs; sys/commands/window.rs:10-31). window_set_menu_bar_mode persists the preference and atomically controls tray visibility plus macOS Dock restoration (window.rs:69-107; ui/tray.rs:77-82). OS CloseRequested, Cmd/Ctrl+W and the custom title bar, File > Close Window, and tray Show/Hide all share the native close/show policy: closing hides the window and Dock icon while preserving the menu-bar process when enabled, or exits when disabled; reopening restores the Dock and focus (src-tauri/src/lib.rs:214-242; ui/window/mod.rs:62-85, 542-558; ui/window_menu.rs:162-179; src/hooks/useWindowManager.ts:190-204). Explicit tray/app Quit remains an unconditional exit. Verified by renderer unit tests, Rust window/state tests, the production renderer build, cargo check, and the Desktop wiring gate."
   },
   {
     "item": "system-tray",

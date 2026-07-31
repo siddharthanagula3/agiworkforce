@@ -124,6 +124,11 @@ describe('tauri command registration contracts', () => {
         expect(libRs).toContain('window_dock');
       });
 
+      it('menu bar residency commands are registered', () => {
+        expect(libRs).toContain('window_set_menu_bar_mode');
+        expect(libRs).toContain('window_request_close');
+      });
+
       it('window commands module is registered', () => {
         // window_minimize is implemented via the Tauri Window API (getCurrentWindow().minimize())
         // and is NOT a custom #[tauri::command] — no Rust registration is needed.

@@ -1698,6 +1698,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return {
         pinned: false,
         alwaysOnTop: false,
+        keepInMenuBar: true,
         dock: null,
         maximized: false,
         fullscreen: false,
@@ -1710,6 +1711,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'window_set_pinned':
     case 'window_set_always_on_top':
     case 'window_set_visibility':
+    case 'window_set_menu_bar_mode':
+    case 'window_request_close':
     case 'window_dock':
     case 'window_open_floating':
     case 'window_close_floating':

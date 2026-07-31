@@ -60,6 +60,10 @@ pub fn set_always_on_top(window: &WebviewWindow, app_state: &AppState, value: bo
 }
 
 pub fn show_window(window: &WebviewWindow) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    if window.label() == "main" {
+        window.app_handle().set_dock_visibility(true)?;
+    }
     window.show()?;
     window.set_focus()?;
     Ok(())
@@ -67,6 +71,15 @@ pub fn show_window(window: &WebviewWindow) -> Result<()> {
 
 pub fn hide_window(window: &WebviewWindow) -> Result<()> {
     window.hide()?;
+    Ok(())
+}
+
+pub fn hide_window_to_menu_bar(window: &WebviewWindow) -> Result<()> {
+    window.hide()?;
+    #[cfg(target_os = "macos")]
+    if window.label() == "main" {
+        window.app_handle().set_dock_visibility(false)?;
+    }
     Ok(())
 }
 
@@ -508,8 +521,38 @@ pub fn is_floating_window_visible(app: &tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) fn should_quit_on_window_close(window_label: &str) -> bool {
-    window_label == "main"
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WindowCloseAction {
+    CloseWindow,
+    HideToMenuBar,
+    ExitApplication,
+}
+
+pub(crate) fn window_close_action(window_label: &str, keep_in_menu_bar: bool) -> WindowCloseAction {
+    if window_label != "main" {
+        return WindowCloseAction::CloseWindow;
+    }
+    if keep_in_menu_bar {
+        WindowCloseAction::HideToMenuBar
+    } else {
+        WindowCloseAction::ExitApplication
+    }
+}
+
+pub fn request_main_window_close(app: &tauri::AppHandle, app_state: &AppState) -> Result<()> {
+    match window_close_action("main", app_state.snapshot().keep_in_menu_bar) {
+        WindowCloseAction::HideToMenuBar => {
+            let window = app
+                .get_webview_window("main")
+                .ok_or_else(|| anyhow::anyhow!("Main window not found"))?;
+            hide_window_to_menu_bar(&window)
+        }
+        WindowCloseAction::ExitApplication => {
+            app.exit(0);
+            Ok(())
+        }
+        WindowCloseAction::CloseWindow => Ok(()),
+    }
 }
 
 fn register_event_handlers(window: &WebviewWindow, app_state: &AppState) -> Result<()> {
@@ -546,11 +589,21 @@ fn register_event_handlers(window: &WebviewWindow, app_state: &AppState) -> Resu
 
 #[cfg(test)]
 mod tests {
-    use super::should_quit_on_window_close;
+    use super::{window_close_action, WindowCloseAction};
 
     #[test]
-    fn only_closing_the_main_window_quits_the_application() {
-        assert!(should_quit_on_window_close("main"));
-        assert!(!should_quit_on_window_close("floating"));
+    fn main_window_close_respects_menu_bar_residency() {
+        assert_eq!(
+            window_close_action("main", true),
+            WindowCloseAction::HideToMenuBar
+        );
+        assert_eq!(
+            window_close_action("main", false),
+            WindowCloseAction::ExitApplication
+        );
+        assert_eq!(
+            window_close_action("floating", true),
+            WindowCloseAction::CloseWindow
+        );
     }
 }
