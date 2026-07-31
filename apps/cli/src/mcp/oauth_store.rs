@@ -1,18 +1,12 @@
 //! Token store for MCP OAuth (Sprint B3).
 //!
-//! Persisted to `~/.agiworkforce/mcp-oauth.json` with mode `0o600` on Unix.
-//! Keyed by canonical (normalized) MCP server URL. Held separately from
-//! `~/.agiworkforce/auth.json` because these tokens belong to third-party
-//! services (Slack, Atlassian, Gmail, claude.ai connectors, …) — different
-//! security model than the user's AGI Workforce account credentials.
-//!
-//! The cleartext file is the temporary norm until the master-password vault
-//! rewire (sprint1-vault-rewire.md) lands. Permission bits are the only
-//! protection on Unix; on Windows, ACLs aren't enforced and the file is
-//! readable by the user's profile only by convention.
+//! New credentials are persisted per server in the OS keyring. The legacy
+//! `~/.agiworkforce/mcp-oauth.json` map remains readable only for one-time
+//! migration and for the explicit headless keyring opt-out.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -136,19 +130,25 @@ const KEYRING_SERVICE: &str = "agiworkforce-mcp-oauth";
 pub struct McpServerToken {
     pub access_token: String,
     pub refresh_token: Option<String>,
+    pub token_type: Option<String>,
     /// Unix epoch seconds.
-    pub expires_at: Option<i64>,
+    pub expires_at: Option<u64>,
     pub scope: Option<String>,
+    pub auth_server_metadata_url: Option<String>,
+    pub token_url: Option<String>,
+    pub client_id: Option<String>,
 }
 
-/// Keyring-backed OAuth token store keyed by server *name* (not URL).
+/// Keyring-backed OAuth token store keyed by a SHA-256 digest of the canonical
+/// server URL, so tenant/path details never appear in credential metadata.
 ///
 /// Strategy:
 /// 1. Primary: OS keyring (`keyring` crate) — survives reboots, OS-encrypted.
-/// 2. Fallback: file at `~/.agiworkforce/secrets/<server>.token` with 0o600 perms.
+/// 2. Explicit headless opt-out: file at
+///    `~/.agiworkforce/secrets/<server-hash>.token` with 0o600 permissions.
 ///
-/// On Linux without DBus, keyring fails immediately; we silently fall back to
-/// the file store. On Windows, keyring uses the Windows Credential Manager.
+/// On Linux without DBus, callers receive an actionable keyring error unless
+/// `AGIWORKFORCE_NO_KEYRING=1` was explicitly configured.
 #[allow(dead_code)]
 pub struct McpServerOAuthStore {
     base_dir: PathBuf,
@@ -196,41 +196,68 @@ impl McpServerOAuthStore {
         })
     }
 
-    /// Save a token. When `use_keyring` is on, tries the OS keyring first;
-    /// on failure (or when keyring is disabled), writes to the file fallback
-    /// with 0o600 perms.
+    fn credential_id(server: &str) -> String {
+        let digest = Sha256::digest(server.as_bytes());
+        format!("server:{digest:x}")
+    }
+
+    fn fallback_path(&self, server: &str) -> PathBuf {
+        self.base_dir
+            .join(format!("{}.token", Self::credential_id(server)))
+    }
+
+    /// Save a token to the OS keyring, or to the owner-only compatibility file
+    /// when keyring use was explicitly disabled.
     pub fn save(&self, server: &str, token: &McpServerToken) -> Result<()> {
         let json = serde_json::to_string(token)?;
         if self.use_keyring {
-            if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, server) {
-                if entry.set_password(&json).is_ok() {
-                    return Ok(());
-                }
+            let entry = keyring::Entry::new(KEYRING_SERVICE, &Self::credential_id(server))
+                .context("open the OS credential store for MCP OAuth")?;
+            entry
+                .set_password(&json)
+                .context("save the MCP OAuth credential in the OS keyring")?;
+            let fallback = self.fallback_path(server);
+            if fallback.exists() {
+                fs::remove_file(&fallback)
+                    .with_context(|| format!("remove migrated {}", fallback.display()))?;
             }
+            return Ok(());
         }
         self.write_file(server, &json)
     }
 
-    pub fn load(&self, server: &str) -> Option<McpServerToken> {
+    pub fn load(&self, server: &str) -> Result<Option<McpServerToken>> {
         if self.use_keyring {
-            if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, server) {
-                if let Ok(json) = entry.get_password() {
-                    if let Ok(token) = serde_json::from_str::<McpServerToken>(&json) {
-                        return Some(token);
-                    }
+            let entry = keyring::Entry::new(KEYRING_SERVICE, &Self::credential_id(server))
+                .context("open the OS credential store for MCP OAuth")?;
+            match entry.get_password() {
+                Ok(json) => {
+                    let token = serde_json::from_str::<McpServerToken>(&json)
+                        .context("saved MCP OAuth credential is invalid")?;
+                    return Ok(Some(token));
+                }
+                Err(keyring::Error::NoEntry) => return Ok(None),
+                Err(error) => {
+                    return Err(error).context("read the MCP OAuth credential from the OS keyring")
                 }
             }
         }
-        self.read_file(server)
+        Ok(self.read_file(server))
     }
 
     pub fn delete(&self, server: &str) -> Result<()> {
         if self.use_keyring {
-            if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, server) {
-                let _ = entry.delete_password();
+            let entry = keyring::Entry::new(KEYRING_SERVICE, &Self::credential_id(server))
+                .context("open the OS credential store for MCP OAuth")?;
+            match entry.delete_password() {
+                Ok(()) | Err(keyring::Error::NoEntry) => {}
+                Err(error) => {
+                    return Err(error)
+                        .context("delete the MCP OAuth credential from the OS keyring")
+                }
             }
         }
-        let path = self.base_dir.join(format!("{server}.token"));
+        let path = self.fallback_path(server);
         if path.exists() {
             fs::remove_file(&path)?;
         }
@@ -238,7 +265,7 @@ impl McpServerOAuthStore {
     }
 
     fn write_file(&self, server: &str, json: &str) -> Result<()> {
-        let path = self.base_dir.join(format!("{server}.token"));
+        let path = self.fallback_path(server);
         fs::write(&path, json).with_context(|| format!("write {}", path.display()))?;
         #[cfg(unix)]
         {
@@ -249,7 +276,7 @@ impl McpServerOAuthStore {
     }
 
     fn read_file(&self, server: &str) -> Option<McpServerToken> {
-        let path = self.base_dir.join(format!("{server}.token"));
+        let path = self.fallback_path(server);
         let json = fs::read_to_string(&path).ok()?;
         serde_json::from_str::<McpServerToken>(&json).ok()
     }
@@ -329,8 +356,12 @@ mod tests {
         McpServerToken {
             access_token: "atk-abc".into(),
             refresh_token: Some("rtk-xyz".into()),
+            token_type: Some("Bearer".into()),
             expires_at: Some(1_700_000_000),
             scope: Some("read write".into()),
+            auth_server_metadata_url: None,
+            token_url: None,
+            client_id: None,
         }
     }
 
@@ -339,7 +370,10 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = McpServerOAuthStore::with_base_dir(dir.path().to_path_buf()).unwrap();
         store.save("server-a", &dummy_server_token()).expect("save");
-        let loaded = store.load("server-a").expect("load should succeed");
+        let loaded = store
+            .load("server-a")
+            .expect("load should succeed")
+            .expect("token should exist");
         assert_eq!(loaded.access_token, "atk-abc");
         assert_eq!(loaded.refresh_token.as_deref(), Some("rtk-xyz"));
     }
@@ -348,7 +382,7 @@ mod tests {
     fn server_store_missing_server_returns_none() {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = McpServerOAuthStore::with_base_dir(dir.path().to_path_buf()).unwrap();
-        assert!(store.load("nope").is_none());
+        assert!(store.load("nope").unwrap().is_none());
     }
 
     #[test]
@@ -356,9 +390,9 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = McpServerOAuthStore::with_base_dir(dir.path().to_path_buf()).unwrap();
         store.save("server-b", &dummy_server_token()).unwrap();
-        assert!(store.load("server-b").is_some());
+        assert!(store.load("server-b").unwrap().is_some());
         store.delete("server-b").unwrap();
-        assert!(store.load("server-b").is_none());
+        assert!(store.load("server-b").unwrap().is_none());
     }
 
     #[test]
@@ -369,11 +403,26 @@ mod tests {
         let updated = McpServerToken {
             access_token: "new-token".into(),
             refresh_token: None,
+            token_type: None,
             expires_at: None,
             scope: None,
+            auth_server_metadata_url: None,
+            token_url: None,
+            client_id: None,
         };
         store.save("server-c", &updated).unwrap();
-        let loaded = store.load("server-c").unwrap();
+        let loaded = store.load("server-c").unwrap().unwrap();
         assert_eq!(loaded.access_token, "new-token");
+    }
+
+    #[test]
+    fn server_identifiers_are_hashed_before_reaching_the_keyring_or_filesystem() {
+        let identifier = McpServerOAuthStore::credential_id(
+            "https://mcp.example.com/path?tenant=private-customer",
+        );
+        assert!(identifier.starts_with("server:"));
+        assert_eq!(identifier.len(), "server:".len() + 64);
+        assert!(!identifier.contains("example.com"));
+        assert!(!identifier.contains("private-customer"));
     }
 }

@@ -112,8 +112,9 @@ pub(super) fn handle_setup(config: &mut CliConfig) {
                         output::print_error(&format!("Failed to save API key: {:#}", e));
                     } else {
                         output::print_info(&format!(
-                            "{} saved in auth.json and set for this session.",
-                            env_var
+                            "{} saved in the {} and set for this session.",
+                            env_var,
+                            crate::auth::credential_storage_label(),
                         ));
                     }
                 }
