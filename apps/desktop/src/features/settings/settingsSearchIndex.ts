@@ -41,6 +41,13 @@ export const DESKTOP_SETTINGS_SEARCH_INDEX: DesktopSettingSearchEntry[] = [
     description: 'Choose the Desktop interface language.',
   },
   {
+    id: 'network-proxy',
+    tab: 'general',
+    label: 'LLM network proxy',
+    description: 'Configure proxy authentication, bypass hosts, and a custom root CA.',
+    keywords: ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'corporate network', 'certificate'],
+  },
+  {
     id: 'keybindings',
     tab: 'general',
     label: 'Keyboard shortcuts',
