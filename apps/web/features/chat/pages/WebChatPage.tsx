@@ -102,6 +102,11 @@ import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
+import {
+  hasWorkSession,
+  WorkSessionPanel,
+  WorkSessionToggleButton,
+} from '../components/work-session/WorkSessionPanel';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
@@ -429,6 +434,7 @@ export default function WebChatPage() {
   // Compact viewports render the sidebar as an off-canvas drawer instead of an
   // in-flow rail; this tracks whether that drawer is open.
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [workSessionPanelOpen, setWorkSessionPanelOpen] = useState(false);
 
   // Hydrate server-persisted connector per-tool permission verdicts once when
   // signed in, so a "block/allow this tool" choice follows the user across
@@ -2497,6 +2503,10 @@ export default function WebChatPage() {
         : [],
     [displayedMessages, displayedConversationId],
   );
+  const showWorkSession = hasWorkSession(displayedMessages, composerToggles?.workMode);
+  useEffect(() => {
+    if (!showWorkSession) setWorkSessionPanelOpen(false);
+  }, [showWorkSession]);
   // AUDIT-FIX STR-7/BUG-12: `isLoading` is now strictly "a turn is running", so
   // the conversation-open fetch has to be consulted explicitly here — otherwise
   // navigating into a conversation flashes the new-chat greeting until its
@@ -2905,6 +2915,13 @@ export default function WebChatPage() {
               {hasMessages && (
                 <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
               )}
+              {hasMessages && showWorkSession && (
+                <WorkSessionToggleButton
+                  messages={displayedMessages}
+                  open={workSessionPanelOpen}
+                  onToggle={() => setWorkSessionPanelOpen((open) => !open)}
+                />
+              )}
               <ResearchToggleButton count={researchSourceCount} />
               <ArtifactsToggleButton />
             </div>
@@ -3069,6 +3086,13 @@ export default function WebChatPage() {
             </>
           )}
         </div>
+        {showWorkSession && (
+          <WorkSessionPanel
+            messages={displayedMessages}
+            open={workSessionPanelOpen}
+            onClose={() => setWorkSessionPanelOpen(false)}
+          />
+        )}
         <ResearchPanel />
         <ArtifactsPanel />
       </div>
