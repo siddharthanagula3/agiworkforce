@@ -69,19 +69,19 @@ Non-product work I can execute immediately upon approval. None has been started.
 
 Documented per the project rule "identify the conflict explicitly, document it, resolve only when sufficient evidence exists." Detail in the referenced docs.
 
-| Conflict                                                          | Canonical (recommended)              | Resolver                | Status                                          |
-| ----------------------------------------------------------------- | ------------------------------------ | ----------------------- | ----------------------------------------------- |
-| Pricing 3-way divergence                                          | `billing-catalog.ts`                 | Owner (D1–D4) + code    | Open — needs decision                           |
-| `CURRENT_DECISIONS.md` #17/#13 say "Supabase"; code is Neon+Clerk | Neon+Clerk (`AGI-DATA-0001`)         | Me (A2)                 | Ready on approval                               |
-| `README.md` counts/build claims wrong                             | Implementation                       | Me (A2)                 | Ready on approval                               |
-| `AGENTS.md` missing `Owner` + required refs                       | Restore (additive)                   | Me (A1)                 | ✅ Resolved 2026-06-25 — both checks green      |
-| RLS defined (`0037`/`0039`) but dormant on live path              | Implementation = app-layer isolation | Code change (owner/eng) | Open — implementation                           |
-| Egress guard opt-in / fetch-scoped (not global)                   | Implementation (documented honestly) | Code change             | Open — implementation                           |
-| `LOCAL-CHAT-NOINVOKE-01` — Local desktop chat invoke broken       | n/a (defect)                         | Code fix                | Open — implementation, **highest product risk** |
-| `codeql.yml` runs cargo-audit+clippy, not CodeQL                  | Implementation (rename/clarify)      | Code/CI change          | Open — implementation                           |
-| Desktop macOS/Windows release builds disabled                     | Implementation                       | Code/CI change          | Open — implementation                           |
-| Web Sentry is a no-op stub                                        | Implementation                       | Code change             | Open — implementation                           |
-| CLI MCP OAuth tokens stored cleartext                             | Implementation (vault rewire)        | Code change             | Open — implementation                           |
+| Conflict                                                          | Canonical (recommended)              | Resolver                | Status                                           |
+| ----------------------------------------------------------------- | ------------------------------------ | ----------------------- | ------------------------------------------------ |
+| Pricing 3-way divergence                                          | `billing-catalog.ts`                 | Owner (D1–D4) + code    | Open — needs decision                            |
+| `CURRENT_DECISIONS.md` #17/#13 say "Supabase"; code is Neon+Clerk | Neon+Clerk (`AGI-DATA-0001`)         | Me (A2)                 | Ready on approval                                |
+| `README.md` counts/build claims wrong                             | Implementation                       | Me (A2)                 | Ready on approval                                |
+| `AGENTS.md` missing `Owner` + required refs                       | Restore (additive)                   | Me (A1)                 | ✅ Resolved 2026-06-25 — both checks green       |
+| RLS defined (`0037`/`0039`) but dormant on live path              | Implementation = app-layer isolation | Code change (owner/eng) | Open — implementation                            |
+| Egress guard opt-in / fetch-scoped (not global)                   | Implementation (documented honestly) | Code change             | Open — implementation                            |
+| `LOCAL-CHAT-NOINVOKE-01` — Local desktop chat invoke broken       | n/a (defect)                         | Code fix                | Open — implementation, **highest product risk**  |
+| `codeql.yml` runs cargo-audit+clippy, not CodeQL                  | Implementation (rename/clarify)      | Code/CI change          | Open — implementation                            |
+| Desktop macOS/Windows release builds disabled                     | Implementation                       | Code/CI change          | ✅ Resolved — protected signed release pipelines |
+| Web Sentry is a no-op stub                                        | Implementation                       | Code change             | Open — implementation                            |
+| CLI MCP OAuth tokens stored cleartext                             | Implementation (vault rewire)        | Code change             | Open — implementation                            |
 
 ## 6. CI / validation status
 

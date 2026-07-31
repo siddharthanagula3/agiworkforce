@@ -103,7 +103,7 @@ $binary --dump-system-prompt 2>&1 | head -5 | grep -qE "^(You are|<|Yo|.+)" && p
 # 6. CI workflow files exist
 echo ""
 echo "[6/8] CI workflows"
-for f in .github/workflows/release-cli.yml .github/workflows/ci.yml; do
+for f in .github/workflows/release-cli.yml .github/workflows/release-desktop.yml .github/workflows/ci.yml; do
   if [ -f "$f" ]; then
     pass "$f exists"
   else
@@ -117,9 +117,10 @@ echo "[7/8] GitHub secrets (requires manual check)"
 warn "verify these secrets are set in github repo settings:"
 info "https://github.com/siddharthanagula3/agiworkforce/settings/secrets/actions"
 info "  - NPM_TOKEN (npm automation token)"
-info "  - APPLE_CERTIFICATE + APPLE_CERTIFICATE_PASSWORD + APPLE_SIGNING_IDENTITY (for desktop, optional now)"
-info "  - APPLE_ID + APPLE_PASSWORD + APPLE_TEAM_ID (for notarization, optional now)"
-info "  - TAURI_SIGNING_PRIVATE_KEY + TAURI_SIGNING_PRIVATE_KEY_PASSWORD (auto-update, optional now)"
+info "  - macos-release environment: APPLE_CERTIFICATE + APPLE_CERTIFICATE_PASSWORD"
+info "  - macos-release environment: APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_PRIVATE_KEY"
+info "  - macos-release environment: TAURI_SIGNING_PRIVATE_KEY + TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+info "  - see apps/desktop/MACOS_RELEASE_RUNBOOK.md for encoding and rotation"
 
 # 8. Required external resources
 echo ""
