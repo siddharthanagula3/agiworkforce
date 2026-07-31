@@ -212,11 +212,32 @@ pub fn run() {
         // window-state suppression. Auxiliary windows still close normally.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if !crate::ui::window::should_quit_on_window_close(window.label()) {
-                    return;
+                let keep_in_menu_bar = window
+                    .app_handle()
+                    .try_state::<AppState>()
+                    .map(|state| state.snapshot().keep_in_menu_bar)
+                    .unwrap_or(false);
+                match crate::ui::window::window_close_action(window.label(), keep_in_menu_bar) {
+                    crate::ui::window::WindowCloseAction::CloseWindow => {}
+                    crate::ui::window::WindowCloseAction::HideToMenuBar => {
+                        api.prevent_close();
+                        let app_handle = window.app_handle();
+                        let close_result = app_handle
+                            .try_state::<AppState>()
+                            .ok_or_else(|| anyhow::anyhow!("Window state is not available"))
+                            .and_then(|state| {
+                                crate::ui::window::request_main_window_close(&app_handle, &state)
+                            });
+                        if let Err(err) = close_result {
+                            tracing::error!("[window] failed to hide main window: {err:?}");
+                            app_handle.exit(0);
+                        }
+                    }
+                    crate::ui::window::WindowCloseAction::ExitApplication => {
+                        api.prevent_close();
+                        window.app_handle().exit(0);
+                    }
                 }
-                api.prevent_close();
-                window.app_handle().exit(0);
             }
         })
         .setup(|app| {
@@ -1278,7 +1299,8 @@ pub fn run() {
             crate::sys::commands::window_set_pinned,
             crate::sys::commands::window_set_always_on_top,
             crate::sys::commands::window_set_visibility,
-            crate::sys::commands::window_quit_application,
+            crate::sys::commands::window_set_menu_bar_mode,
+            crate::sys::commands::window_request_close,
             crate::sys::commands::window_dock,
             crate::sys::commands::window_toggle_maximize,
             crate::sys::commands::window_set_fullscreen,

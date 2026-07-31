@@ -6,6 +6,8 @@ use tauri::{
     App, AppHandle, Emitter, Manager,
 };
 
+pub const MAIN_TRAY_ID: &str = "main";
+
 pub fn build_system_tray(app: &mut App) -> Result<()> {
     let show = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
     let hide = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;
@@ -49,7 +51,7 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
     let raw_tooltip = "AGI Workforce — AI Desktop Platform";
     let tooltip = &raw_tooltip[..128.min(raw_tooltip.len())];
 
-    let tray_builder = TrayIconBuilder::new()
+    let tray_builder = TrayIconBuilder::with_id(MAIN_TRAY_ID)
         .menu(&menu)
         .tooltip(tooltip)
         .on_menu_event(handle_menu_event)
@@ -63,8 +65,20 @@ pub fn build_system_tray(app: &mut App) -> Result<()> {
         tray_builder
     };
 
-    let _tray = tray_builder.build(app)?;
+    let tray = tray_builder.build(app)?;
+    let keep_in_menu_bar = app
+        .state::<AppState>()
+        .with_state(|state| state.keep_in_menu_bar);
+    tray.set_visible(keep_in_menu_bar)?;
 
+    Ok(())
+}
+
+pub fn set_tray_visible(app: &AppHandle, visible: bool) -> Result<()> {
+    let tray = app
+        .tray_by_id(MAIN_TRAY_ID)
+        .ok_or_else(|| anyhow::anyhow!("Main tray icon is not available"))?;
+    tray.set_visible(visible)?;
     Ok(())
 }
 
@@ -86,7 +100,7 @@ fn handle_tray_icon_event(tray: &tauri::tray::TrayIcon, event: TrayIconEvent) {
         if let Some(window) = app.get_webview_window("main") {
             match window.is_visible() {
                 Ok(true) => {
-                    if let Err(err) = window::hide_window(&window) {
+                    if let Err(err) = window::hide_window_to_menu_bar(&window) {
                         tracing::error!("[tray] hide error: {err:?}");
                     }
                 }
@@ -112,7 +126,7 @@ fn handle_menu_click(app: &AppHandle, id: &str) -> Result<()> {
         }
         "hide" => {
             if let Some(window) = app.get_webview_window("main") {
-                window::hide_window(&window)?;
+                window::hide_window_to_menu_bar(&window)?;
             }
         }
         "toggle_pin" => {

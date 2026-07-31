@@ -11,6 +11,7 @@ export type DockPosition = 'left' | 'right' | 'top' | 'bottom';
 export interface WindowStatePayload {
   pinned: boolean;
   alwaysOnTop: boolean;
+  keepInMenuBar: boolean;
   dock?: DockPosition;
   maximized: boolean;
   fullscreen: boolean;
@@ -32,6 +33,10 @@ export async function windowSetAlwaysOnTop(value: boolean): Promise<void> {
 
 export async function windowSetVisibility(visible: boolean): Promise<void> {
   return command<void>('window_set_visibility', { visible });
+}
+
+export async function windowSetMenuBarMode(enabled: boolean): Promise<void> {
+  return command<void>('window_set_menu_bar_mode', { enabled });
 }
 
 export async function windowDock(position?: DockPosition): Promise<void> {
