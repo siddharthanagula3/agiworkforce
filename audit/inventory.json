@@ -2420,8 +2420,8 @@
   {
     "item": "rest-pagination",
     "surface": "apps/github-app",
-    "status": "partial",
-    "evidence": "apps/web/lib/github-app.ts:196-241 findGitHubInstallationForUser() paginates GET /user/installations with per_page/page params and a MAX_GITHUB_INSTALLATION_PAGES cap (line 47), checking total_count to know when to stop (line 236). This is the only paginated GitHub REST call in the codebase."
+    "status": "built",
+    "evidence": "apps/web/lib/github-rest-pagination.ts provides a reusable, streaming page search with validated positive page size/limit, a hard maximum-page bound, authoritative RFC 8288 Link rel=next handling, and a page-size/validated-total fallback for endpoints that omit Link. apps/web/lib/github-app.ts uses it for the only GitHub REST collection call, GET /user/installations, preserving the API-version/auth/timeout contract and validating every page before ownership matching. github-rest-pagination.test.ts covers multi-page search, Link precedence and termination, limit failure, and invalid bounds; github-app.oauth.test.ts covers the real two-page ownership flow."
   },
   {
     "item": "secondary-rate-limit-handling",
