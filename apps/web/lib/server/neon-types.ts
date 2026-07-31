@@ -361,12 +361,15 @@ export type ReleaseRow = {
   version: string;
   platform: string;
   download_url: string;
+  signature: string | null;
   notes: string | null;
   pub_date: string;
   file_size_bytes: number | null;
   is_critical: boolean;
   is_prerelease: boolean;
+  channel: 'stable' | 'beta' | 'nightly';
   created_at: string;
+  updated_at: string;
 };
 
 export type SharedConversationRow = {

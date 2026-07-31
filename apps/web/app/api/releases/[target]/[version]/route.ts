@@ -7,9 +7,9 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import {
   compareSemanticVersions,
+  desktopReleaseChannelForVersion,
   fetchDesktopAssetSignature,
-  fetchLatestStableDesktopRelease,
-  parseSemanticVersion,
+  fetchLatestDesktopRelease,
   selectSignedDesktopUpdaterAsset,
   type DesktopReleasePlatform,
 } from '@/lib/releases/github-desktop-releases';
@@ -43,11 +43,12 @@ async function handleReleaseCheck(
 
   const platform = TARGET_PLATFORMS[target];
   if (!platform) return noUpdateResponse();
-  if (!parseSemanticVersion(version)) {
+  const channel = desktopReleaseChannelForVersion(version);
+  if (!channel) {
     throw createError.validation('Invalid version format');
   }
 
-  const release = await fetchLatestStableDesktopRelease();
+  const release = await fetchLatestDesktopRelease(channel);
   if (!release || compareSemanticVersions(release.version, version) !== 1) {
     return noUpdateResponse();
   }

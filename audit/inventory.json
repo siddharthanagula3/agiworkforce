@@ -3854,8 +3854,8 @@
   {
     "item": "release-channels-stable-beta-nightly",
     "surface": "release-infra",
-    "status": "partial",
-    "evidence": ".github/workflows/release-desktop.yml:23-31 (workflow_dispatch `channel` input: stable/beta/nightly), :96-107 (derives channel from prerelease id, treating alpha/nightly/canary as 'nightly'), :136-151 (validates SemVer/prerelease flag matches the chosen channel) - build pipeline genuinely supports 3 channels and tags GitHub Releases accordingly (softprops/action-gh-release). apps/desktop/src-tauri/tauri.conf.json:81-83 configures the live Tauri auto-updater endpoint as `/api/releases/{{target}}/{{current_version}}`, implemented in apps/web/app/api/releases/[target]/[version]/route.ts:50 which calls `fetchLatestStableDesktopRelease()` - channel-blind, stable-only."
+    "status": "built",
+    "evidence": ".github/workflows/release-desktop.yml derives and validates stable, beta, and nightly from the exact release SemVer, publishes the matching GitHub prerelease state, and passes CHANNEL plus PRERELEASE into the post-publication database ingestion job. apps/web/db/neon/0079_desktop_release_channels.sql adds and backfills the missing releases.channel column, constrains it to the three supported lanes, indexes platform/channel lookups, and replaces get_latest_release/upsert_release so channel and prerelease state must agree on every read and write. apps/web/lib/releases/github-desktop-releases.ts parses and orders stable/prerelease SemVer, maps alpha/nightly/canary to nightly and other prereleases to beta, and selects only GitHub releases whose tag lane agrees with the GitHub prerelease flag. The live Tauri endpoint infers its lane from current_version and fetches only that lane; the explicit check/latest APIs accept only stable/beta/nightly and preserve the chosen channel through their GitHub fallbacks instead of silently reverting to stable. Focused route tests prove stable, beta, and nightly asset isolation plus unknown-channel rejection; migration contract tests, Web typecheck, and the canonical migration verifier pass."
   },
   {
     "item": "per-surface-versioning",
