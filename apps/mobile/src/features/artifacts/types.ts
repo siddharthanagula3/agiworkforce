@@ -11,6 +11,13 @@ export type MobileArtifactProvenance = { scope: 'local' } | { scope: 'cloud'; ow
 
 export interface MobileArtifact {
   id: string;
+  /**
+   * Assistant message this artifact was derived from, so the chat transcript
+   * can render it inline beneath that turn. Optional because records persisted
+   * before this field existed cannot be back-filled — those still appear in the
+   * gallery, just not inline.
+   */
+  messageId?: string;
   title: string;
   kind: MobileArtifactKind;
   /** Optional finer-grained language label, e.g. "HTML", "Python". Falls back to kind. */
