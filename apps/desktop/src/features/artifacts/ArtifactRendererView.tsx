@@ -338,7 +338,20 @@ function DiagramRenderer({
 // Web Renderer (Sandboxed HTML)
 // =============================================================================
 
+const SAFE_WEB_SANDBOX_PERMISSIONS = new Set(['allow-modals', 'allow-scripts']);
+
+function getWebSandboxPermissions(data: WebRenderData): string {
+  return data.sandbox_permissions
+    .filter((permission, index, permissions) => {
+      if (!SAFE_WEB_SANDBOX_PERMISSIONS.has(permission)) return false;
+      if (permission === 'allow-scripts' && !data.scripts_enabled) return false;
+      return permissions.indexOf(permission) === index;
+    })
+    .join(' ');
+}
+
 function WebRenderer({ data }: { data: WebRenderData }) {
+  const sandboxPermissions = getWebSandboxPermissions(data);
   const srcDoc = useMemo(() => {
     // Content Security Policy for the sandboxed HTML iframe.
     //
@@ -354,25 +367,20 @@ function WebRenderer({ data }: { data: WebRenderData }) {
     //   raises the bar against prototype-pollution and code-injection attacks.
     //   If a user artifact explicitly calls eval() it will be blocked by the CSP
     //   and surface as a console error — the correct fail-safe.
-    //   The full interactive sandbox (HtmlArtifact in ArtifactRenderer.tsx) retains
-    //   'unsafe-eval' because it is the CodePen-style execution environment where
-    //   users intentionally run arbitrary JavaScript.
     //
     // style-src 'unsafe-inline':
     //   Required — the wrapper <style> block below is injected as inline CSS,
     //   and user HTML fragments typically contain inline style attributes.
     //
-    // style-src *:
-    //   Allows user artifacts to load stylesheets from CDNs (e.g. Bootstrap,
-    //   Tailwind CDN). Acceptable trade-off: external stylesheets are read-only
-    //   and cannot exfiltrate data; connect-src 'none' blocks all network I/O.
+    // All network-capable source directives are limited to inline, data:, or
+    // blob: content. connect-src alone does not block URL loads from CSS,
+    // images, or fonts, so those directives must be bounded independently.
     //
-    // connect-src 'none':
-    //   Blocks all fetch/XHR/WebSocket calls to prevent data exfiltration.
-    //
-    // object-src 'none':
-    //   Blocks Flash and other legacy plugin content.
-    const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'unsafe-inline'; style-src 'unsafe-inline' *; img-src * data: blob:; font-src * data:; connect-src 'none'; frame-src 'none'; object-src 'none';">`;
+    // base-uri/form-action/frame-src/object-src 'none':
+    //   Prevents base URL rewriting, form submissions, nested frames, and
+    //   legacy plugin content.
+    const scriptPolicy = data.scripts_enabled ? "'unsafe-inline'" : "'none'";
+    const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${scriptPolicy}; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';">`;
 
     const isFullDoc = /<html[\s>]/i.test(data.html);
     if (isFullDoc) {
@@ -411,7 +419,7 @@ function WebRenderer({ data }: { data: WebRenderData }) {
 ${data.html}
 </body>
 </html>`;
-  }, [data.html]);
+  }, [data.html, data.scripts_enabled]);
 
   return (
     <div className="rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800">
@@ -430,7 +438,7 @@ ${data.html}
         title="HTML Preview"
         className="w-full border-0"
         style={{ height: data.viewport?.[1] || 400 }}
-        sandbox={data.sandbox_permissions.join(' ')}
+        sandbox={sandboxPermissions}
         referrerPolicy="no-referrer"
       />
     </div>
