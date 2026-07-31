@@ -695,7 +695,11 @@ export function ThemeSettings() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-border pt-4">
+          <div
+            data-setting-search-id="reduce-motion"
+            tabIndex={-1}
+            className="flex items-center justify-between border-t border-border pt-4"
+          >
             <div className="flex-1 pr-4">
               <p className="text-sm font-medium text-foreground">Reduce motion</p>
               <p className="mt-0.5 text-xs text-muted-foreground">

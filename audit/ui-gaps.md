@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: b13f0acc990934f783c2dd4664b28f2042d0630436853536b224fcefd05d6e32 -->
+<!-- ui-gaps-csv-sha256: c1a98b036adb0f2bfec4359e0bd3b6216d267e4fd8b30a2b327f39944b4967bc -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 0 P1, 158 P2, 43 P3.
+- Unresolved: 0 P0, 0 P1, 156 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,11 +33,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  201 |
+| Open        |  199 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   68 |
+| Done        |   70 |
 | Not Planned |   72 |
 
 ## P0
@@ -5367,22 +5367,22 @@ Split the setting into holdToDictateHotkey and toggleDictationHotkey (both unass
 
 ### GAP-233 — Settings search matches section names only, never the setting that matched
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-interaction
 - **Reference:** Codex · macOS desktop · Settings search
 
 **Gap**
 
-Typing 'remo' in the reference returns section rows each annotated with the specific matching setting ('Connections → Remote control', 'Appearance → Reduce motion', 'Worktrees → Recommended for most users…'), so the user can jump straight to a control. agiworkforce filters the nav list by section label/key/keyword and shows nothing about which control matched, so searching a setting whose section name differs from its own name fails or lands the user on a long tab to scan manually.
+Desktop Settings now searches the mounted controls themselves rather than only section labels. Results are grouped under their owning section with the exact control label and help text; selecting a result opens its authoritative tab, announces the destination, and scrolls, focuses, and temporarily highlights an anchored control when present.
 
 **Evidence**
 
-apps/desktop/src/features/settings/SettingsPanel.tsx lines 213-230 (filteredNavGroups matches item.label / item.key / item.keywords) and lines 747-780 (renders section buttons only)
+apps/desktop/src/features/settings/settingsSearchIndex.ts defines the real-control index plus direct and fuzzy matching; SettingsPanel.tsx groups visible results and owns tab navigation, destination status, retry-safe anchor lookup, scroll, focus, and highlight behavior. Connections/index.tsx and ThemeSettings.tsx anchor Remote control and Reduce motion. SettingsPanel.render.test.tsx covers the 'remo' result set and destination focus. Rendered evidence: apps/desktop/docs/qa/screenshots/GAP-233-234-settings-search.png.
 
 **Suggested fix**
 
-Build a flat searchable index of individual settings (id, label, description, tab, anchor), render matched setting rows under each section in the sidebar, and on click switch tab + scroll/highlight the anchored control.
+Completed for the mounted Desktop settings owner. Keep index entries tied to real settings, add anchors as individual tabs evolve, and never add search-only feature promises.
 
 **Reference screenshot(s)**
 
@@ -5390,22 +5390,22 @@ Build a flat searchable index of individual settings (id, label, description, ta
 
 ### GAP-234 — Desktop settings search matches only section names, not individual settings
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-interaction
 - **Reference:** Codex · macOS desktop · Settings search results
 
 **Gap**
 
-Typing 'remo' in the reference returns matched settings grouped under their section (Connections > Remote control, Appearance > Reduce motion, Keyboard shortcuts > Redo…, General > The legacy WSL agent environment…), including matches on setting descriptions. agiworkforce filters only the nav item label/key/keywords, so a query that matches a control's own label or help text yields 'No settings found'.
+A query now matches individual setting labels, descriptions, and curated keywords, including partial fuzzy label matches such as 'remo' → Remote control and Reduce motion. The sidebar retains section context while exposing the matched destination, and the selected result remains visible while its real settings content opens.
 
 **Evidence**
 
-apps/desktop/src/features/settings/SettingsPanel.tsx lines 213-228 (filter on item.label / item.key / item.keywords) and 730-745 (search input)
+apps/desktop/src/features/settings/settingsSearchIndex.ts provides normalized direct matching and bounded fuzzy label matching. SettingsPanel.tsx restricts results to currently visible tabs, renders matched rows under each section, and navigates to the selected control. SettingsPanel.render.test.tsx verifies cross-section results and the focused Mobile companion pairing region; apps/desktop/docs/qa/screenshots/GAP-233-234-settings-search.png records the mounted interaction.
 
 **Suggested fix**
 
-Build a static index of setting rows (id, section, label, description) exported from @agiworkforce/ui, render matched rows beneath their section in the search results, and scroll/highlight the row on selection.
+Completed. Preserve description and keyword matching for discoverability, keep fuzzy matching label-only and query-bounded, and keep hidden or unsupported tabs out of results.
 
 **Reference screenshot(s)**
 
