@@ -2372,8 +2372,8 @@
   {
     "item": "actions-workflow",
     "surface": "apps/github-app",
-    "status": "partial",
-    "evidence": ".github/workflows/agiworkforce-bot.yml is a real, wired GitHub Actions workflow (triggers on issue_comment/pull_request_review_comment, uses actions/github-script to run help/explain/stats/check/review subcommands via github.rest.*, lines 1-268) — but it is repo-internal CI/community-bot tooling for the agiworkforce repo itself. `find . -iname action.yml` returns nothing, so there is no packaged, distributable GitHub Action customers could `uses:` in their own workflows."
+    "status": "missing",
+    "evidence": "No packaged customer-facing GitHub Action exists. Whole-repository discovery finds no action.yml/action.yaml, JavaScript or Docker action entry point, reusable workflow_call surface, customer installation documentation, or Action release artifact. .github/workflows/agiworkforce-bot.yml is an issue_comment/pull_request_review_comment workflow owned by and triggered inside this repository; it is not callable through `uses:` from a customer repository. Internal CI/community automation is adjacent functionality, not partial implementation of the distributable apps/github-app action capability."
   },
   {
     "item": "workflow-dispatch",
