@@ -87,6 +87,10 @@ export interface ChatMessageListProps {
   onDelete?: (messageId: string) => void;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (messageId: string) => void;
+  branchGroupsByMessageId?: Readonly<Record<string, MessageBranchGroup>>;
+  branchingMessageId?: string | null;
+  onBranch?: (messageId: string) => void;
+  onSwitchBranch?: (conversationId: string) => void;
   /** Called by ImageGenerationCard to re-generate in-place (aspect-ratio change / edit). */
   onRegenerateImage?: (
     messageId: string,
@@ -108,6 +112,12 @@ export interface ChatMessageListProps {
    * Receives the message ID so the parent can remove or hide the slot.
    */
   onPaywallDismiss?: (messageId: string) => void;
+}
+
+export interface MessageBranchGroup {
+  messageId: string;
+  activeConversationId: string;
+  branches: Array<{ conversationId: string; title: string }>;
 }
 
 /** A group of consecutive messages sharing the same role. */
@@ -240,6 +250,10 @@ interface MessageGroupRowProps {
   onDelete?: (id: string) => void;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (id: string) => void;
+  branchGroupsByMessageId?: Readonly<Record<string, MessageBranchGroup>>;
+  branchingMessageId?: string | null;
+  onBranch?: (messageId: string) => void;
+  onSwitchBranch?: (conversationId: string) => void;
   /** Called when a paywall Upgrade button is clicked. */
   onPaywallUpgrade?: (messageId: string) => void;
   /** Called when a paywall Try-later button is clicked. */
@@ -260,6 +274,10 @@ interface MessageRowProps {
   onDelete?: (id: string) => void;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (id: string) => void;
+  branchGroup?: MessageBranchGroup;
+  isBranching: boolean;
+  onBranch?: (messageId: string) => void;
+  onSwitchBranch?: (conversationId: string) => void;
   onPaywallUpgrade?: (messageId: string) => void;
   onPaywallDismiss?: (messageId: string) => void;
   onRegenerateImage?: (
@@ -511,6 +529,10 @@ const MessageRow = ({
   onDelete,
   onReact,
   onPin,
+  branchGroup,
+  isBranching,
+  onBranch,
+  onSwitchBranch,
   onPaywallUpgrade,
   onPaywallDismiss,
   onRegenerateImage,
@@ -537,6 +559,7 @@ const MessageRow = ({
   );
   const handleDelete = useCallback(() => onDelete?.(message.id), [onDelete, message.id]);
   const handleEdit = useCallback(() => onEdit?.(message.id), [onEdit, message.id]);
+  const handleBranch = useCallback(() => onBranch?.(message.id), [onBranch, message.id]);
   const handlePaywallUpgrade = useCallback(
     () => onPaywallUpgrade?.(message.id),
     [onPaywallUpgrade, message.id],
@@ -549,6 +572,21 @@ const MessageRow = ({
     (opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string }) =>
       onRegenerateImage!(message.id, opts),
     [onRegenerateImage, message.id],
+  );
+  const branchNavigation = useMemo(
+    () =>
+      branchGroup && onSwitchBranch
+        ? {
+            branches: branchGroup.branches.map((branch) => ({
+              id: branch.conversationId,
+              name: branch.title,
+              forkPointMessageId: message.id,
+            })),
+            activeBranchId: branchGroup.activeConversationId,
+            onSwitch: onSwitchBranch,
+          }
+        : undefined,
+    [branchGroup, message.id, onSwitchBranch],
   );
 
   if (paywall) {
@@ -587,6 +625,9 @@ const MessageRow = ({
       onDelete={onDelete ? handleDelete : undefined}
       onReact={onReact && displayRole === 'assistant' ? onReact : undefined}
       onPin={onPin}
+      onBranch={onBranch ? handleBranch : undefined}
+      isBranching={isBranching}
+      branchNavigation={branchNavigation}
       onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
       onReadAloud={displayRole === 'assistant' ? onReadAloud : undefined}
       isReadingAloud={speakingMessageId === message.id}
@@ -604,6 +645,10 @@ const MessageGroupRow = memo(
     onDelete,
     onReact,
     onPin,
+    branchGroupsByMessageId,
+    branchingMessageId,
+    onBranch,
+    onSwitchBranch,
     onPaywallUpgrade,
     onPaywallDismiss,
     onRegenerateImage,
@@ -624,6 +669,10 @@ const MessageGroupRow = memo(
             onDelete={onDelete}
             onReact={onReact}
             onPin={onPin}
+            branchGroup={branchGroupsByMessageId?.[message.id]}
+            isBranching={branchingMessageId === message.id}
+            onBranch={onBranch}
+            onSwitchBranch={onSwitchBranch}
             onPaywallUpgrade={onPaywallUpgrade}
             onPaywallDismiss={onPaywallDismiss}
             onRegenerateImage={onRegenerateImage}
@@ -653,6 +702,10 @@ const MessageGroupRow = memo(
       prev.onDelete === next.onDelete &&
       prev.onReact === next.onReact &&
       prev.onPin === next.onPin &&
+      prev.branchGroupsByMessageId === next.branchGroupsByMessageId &&
+      prev.branchingMessageId === next.branchingMessageId &&
+      prev.onBranch === next.onBranch &&
+      prev.onSwitchBranch === next.onSwitchBranch &&
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
       prev.onPaywallDismiss === next.onPaywallDismiss &&
       prev.onRegenerateImage === next.onRegenerateImage &&
@@ -706,6 +759,10 @@ const ChatMessageListComponent = ({
   onDelete,
   onReact,
   onPin,
+  branchGroupsByMessageId,
+  branchingMessageId = null,
+  onBranch,
+  onSwitchBranch,
   onRegenerateImage,
   onSendMessage,
   isUserTyping = false,
@@ -1071,6 +1128,10 @@ const ChatMessageListComponent = ({
                   onDelete={handleDelete}
                   onReact={handleReact}
                   onPin={onPin}
+                  branchGroupsByMessageId={branchGroupsByMessageId}
+                  branchingMessageId={branchingMessageId}
+                  onBranch={onBranch}
+                  onSwitchBranch={onSwitchBranch}
                   onPaywallUpgrade={handlePaywallUpgrade}
                   onPaywallDismiss={handlePaywallDismiss}
                   onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
@@ -1227,6 +1288,10 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onPaywallDismiss === next.onPaywallDismiss &&
     prev.onEdit === next.onEdit &&
     prev.onPin === next.onPin &&
+    prev.branchGroupsByMessageId === next.branchGroupsByMessageId &&
+    prev.branchingMessageId === next.branchingMessageId &&
+    prev.onBranch === next.onBranch &&
+    prev.onSwitchBranch === next.onSwitchBranch &&
     // AUDIT-FIX STR-17: the same per-message comparison MessageGroupRow uses,
     // so the two can never disagree about what "changed" means again.
     prev.messages.every((prevMessage, index) => {

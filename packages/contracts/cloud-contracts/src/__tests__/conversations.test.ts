@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   ManagedCloudConversationListResponseSchema,
+  ManagedCloudConversationBranchesResponseSchema,
   ManagedCloudConversationResponseSchema,
+  ManagedCloudCreateConversationBranchRequestSchema,
+  ManagedCloudCreateConversationBranchResponseSchema,
   ManagedCloudCreateConversationRequestSchema,
   ManagedCloudCreateMessageRequestSchema,
   ManagedCloudDeleteConversationResponseSchema,
   ManagedCloudReflectRecapSchema,
   ManagedCloudMessageWireSchema,
   ManagedCloudUpdateConversationRequestSchema,
+  managedCloudConversationBranchesPath,
   managedCloudConversationPath,
   managedCloudMessagePath,
   normalizeManagedCloudConversation,
@@ -164,6 +168,45 @@ describe('managed-cloud conversation wire contract', () => {
     expect(managedCloudMessagePath('conversation/id', 'message id')).toBe(
       '/api/chat/conversations/conversation%2Fid/messages/message%20id',
     );
+    expect(managedCloudConversationBranchesPath('conversation/id')).toBe(
+      '/api/chat/conversations/conversation%2Fid/branches',
+    );
+  });
+
+  it('validates the owner-scoped conversation branch envelopes', () => {
+    const branchConversation = {
+      ...conversation,
+      id: '0190a000-0000-7000-8000-0000000000cc',
+      title: 'Cloud chat (branch)',
+    };
+    expect(
+      ManagedCloudConversationBranchesResponseSchema.parse({
+        groups: [
+          {
+            messageId: message.id,
+            activeConversationId: conversation.id,
+            branches: [
+              { conversationId: conversation.id, title: 'Cloud chat' },
+              { conversationId: branchConversation.id, title: 'Cloud chat (branch)' },
+            ],
+          },
+        ],
+      }).groups,
+    ).toHaveLength(1);
+    expect(
+      ManagedCloudCreateConversationBranchRequestSchema.parse({
+        messageId: message.id,
+        requestId: '0190a000-0000-7000-8000-0000000000dd',
+      }),
+    ).toEqual({
+      messageId: message.id,
+      requestId: '0190a000-0000-7000-8000-0000000000dd',
+    });
+    expect(
+      ManagedCloudCreateConversationBranchResponseSchema.parse({
+        conversation: branchConversation,
+      }).conversation.id,
+    ).toBe(branchConversation.id);
   });
 
   it('validates the bounded managed Reflect recap shared by Web and later clients', () => {

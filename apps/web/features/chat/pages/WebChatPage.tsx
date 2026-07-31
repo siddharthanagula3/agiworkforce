@@ -67,6 +67,7 @@ import {
 import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
+import { useConversationBranches } from '../hooks/use-conversation-branches';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import type { KeyboardShortcut } from '../hooks/use-keyboard-shortcuts';
@@ -858,6 +859,12 @@ export default function WebChatPage() {
     updateConversation,
     setActiveConversation,
   } = useConversations();
+  const {
+    groupsByMessageId: branchGroupsByMessageId,
+    branchingMessageId,
+    createBranch,
+    switchBranch,
+  } = useConversationBranches(displayedConversationId);
 
   // A pending edit rollback is valid only for the conversation it began in and
   // only until the next send. Switching conversations abandons it (the messages
@@ -2999,6 +3006,10 @@ export default function WebChatPage() {
                     onDelete={handleDeleteMessage}
                     onReact={handleReactMessage}
                     onPin={handlePinMessage}
+                    branchGroupsByMessageId={branchGroupsByMessageId}
+                    branchingMessageId={branchingMessageId}
+                    onBranch={createBranch}
+                    onSwitchBranch={switchBranch}
                     onRegenerateImage={handleRegenerateImageInPlace}
                     onSendMessage={setComposerPrefill}
                     onPaywallUpgrade={handleOpenUpgradeDialog}
