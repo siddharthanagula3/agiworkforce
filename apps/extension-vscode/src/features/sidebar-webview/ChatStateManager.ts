@@ -50,6 +50,10 @@ import {
   isWorkspaceFileReference,
   type WorkspaceFileReference,
 } from '../chat-participant/promptReferences';
+import {
+  parsePlanVisualization,
+  type PlanVisualization,
+} from '../../integrations/planVisualization';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -134,6 +138,7 @@ export type ExtToWebviewMessage =
         status: 'running' | 'completed' | 'failed';
       };
     }
+  | { type: 'planUpdate'; payload: PlanVisualization }
   | {
       type: 'toolCallStart';
       payload: {
@@ -1153,6 +1158,11 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'tool_execution_start') {
+      const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
+      if (plan !== undefined) {
+        this._post({ type: 'planUpdate', payload: plan });
+        return;
+      }
       this._post({
         type: 'toolCallStart',
         payload: {
