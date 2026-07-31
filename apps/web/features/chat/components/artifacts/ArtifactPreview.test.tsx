@@ -223,6 +223,52 @@ describe('ArtifactPreview · PDF viewer', () => {
 });
 
 describe('ArtifactPreview · generated image viewer', () => {
+  it('navigates persisted artifact revisions in both directions', () => {
+    const artifact = imageArtifact({ content: '/api/files/image-v2' });
+    const versionHistory: SharedArtifact[] = [
+      {
+        id: artifact.id,
+        type: 'image',
+        language: 'png',
+        title: 'Launch visual',
+        content: '/api/files/image-v1',
+        version: 1,
+        createdAt: '2026-07-25T00:00:00.000Z',
+      },
+      {
+        id: artifact.id,
+        type: 'image',
+        language: 'png',
+        title: 'Launch visual',
+        content: '/api/files/image-v2',
+        version: 2,
+        createdAt: '2026-07-25T00:01:00.000Z',
+      },
+    ];
+
+    render(<ArtifactPreview variant="panel" artifact={artifact} versionHistory={versionHistory} />);
+
+    expect(screen.getByTestId('artifact-version-chip')).toHaveTextContent('v2/2');
+    expect(screen.getByRole('img', { name: 'Launch visual' })).toHaveAttribute(
+      'src',
+      '/api/files/image-v2',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous version' }));
+    expect(screen.getByTestId('artifact-version-chip')).toHaveTextContent('v1/2');
+    expect(screen.getByRole('img', { name: 'Launch visual' })).toHaveAttribute(
+      'src',
+      '/api/files/image-v1',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next version' }));
+    expect(screen.getByTestId('artifact-version-chip')).toHaveTextContent('v2/2');
+    expect(screen.getByRole('img', { name: 'Launch visual' })).toHaveAttribute(
+      'src',
+      '/api/files/image-v2',
+    );
+  });
+
   it('renders the generated image as the panel preview with a direct download action', () => {
     render(<ArtifactPreview variant="panel" artifact={imageArtifact()} />);
 

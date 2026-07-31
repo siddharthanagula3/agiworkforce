@@ -61,6 +61,26 @@ describe('chat artifacts sidecar store', () => {
     expect(state.selectedArtifactId).toBe('artifact-1');
   });
 
+  it('exposes content-keyed revision history to the artifact panel', () => {
+    const store = useArtifactsStore.getState();
+    const base = {
+      id: 'artifact-versioned',
+      type: 'html' as const,
+      title: 'Preview',
+      language: 'html',
+      messageId: 'msg-versioned',
+      conversationId: 'conv-versioned',
+    };
+
+    store.upsertArtifact({ ...base, content: '<main>Version one</main>' });
+    store.upsertArtifact({ ...base, content: '<main>Version two</main>' });
+
+    expect(useArtifactsStore.getState().getArtifactVersions(base.id)).toEqual([
+      expect.objectContaining({ version: 1, content: '<main>Version one</main>' }),
+      expect.objectContaining({ version: 2, content: '<main>Version two</main>' }),
+    ]);
+  });
+
   it('scopes artifacts to their conversationId via addArtifactForMessage', () => {
     const store = useArtifactsStore.getState();
 

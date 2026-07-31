@@ -236,8 +236,8 @@
   {
     "item": "artifact-versioning",
     "surface": "apps/web",
-    "status": "partial",
-    "evidence": "packages/platform/artifacts/src/artifact-store.ts:71-126 upsertOne() content-keyed version bumping (new version appended only when content changes); ArtifactPreview.tsx:1074-1111 renders a v{n}/{total} chip with prev/next navigation; MessageBubble.tsx:707-715 calls upsertArtifact on every regenerated fence, producing real version history."
+    "status": "built",
+    "evidence": "packages/platform/artifacts/src/artifact-store.ts implements content-keyed append-only revision history (identical content is a no-op; changed content appends a version); apps/web/features/chat/stores/artifacts-store.ts persists and rehydrates versionsById and exposes getArtifactVersions(); apps/web/features/chat/components/ArtifactsPanel.tsx passes that history into ArtifactPreview; ArtifactPreview.tsx defaults to the latest revision and Previous/Next changes the rendered content. Regression coverage: artifacts-store.test.ts proves v1/v2 history exposure and ArtifactPreview.test.tsx proves v2→v1→v2 UI navigation changes the displayed image."
   },
   {
     "item": "artifact-inline-targeted-edit",
