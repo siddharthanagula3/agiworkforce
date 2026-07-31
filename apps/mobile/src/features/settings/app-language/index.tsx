@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Alert, Pressable, TextInput, View } from 'react-native';
+import { reloadAppAsync } from 'expo';
 import { Check, Languages, Search, Smartphone } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/text';
@@ -44,10 +45,20 @@ export default function AppLanguageScreen() {
     if (saving || code === preference) return;
     setPreference(code);
     setSaving(true);
+    let directionChanged = false;
     try {
-      await setLanguage(code);
+      const result = await setLanguage(code);
+      directionChanged = result?.directionChanged ?? false;
     } finally {
       setSaving(false);
+    }
+    if (directionChanged) {
+      void reloadAppAsync('Apply app language direction').catch(() => {
+        Alert.alert(
+          'Restart required',
+          'Close and reopen AGI Workforce to apply the new layout direction.',
+        );
+      });
     }
   };
 

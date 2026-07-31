@@ -3584,8 +3584,8 @@
   {
     "item": "rtl-support",
     "surface": "packages/platform",
-    "status": "partial",
-    "evidence": "Web and desktop mirror `dir` onto <html>: apps/web/app/i18n/index.ts:78-82 (applyDocumentLanguage, wired via i18n.on('languageChanged', ...) and mounted from apps/web/app/providers.tsx) and apps/desktop/src/i18n/index.ts:56-63 (same pattern, runs at module init). Mobile only defines the helper — apps/mobile/src/i18n/index.ts:84-87 export function isRtl() — with zero call sites anywhere in apps/mobile/src or apps/mobile/app (grep confirms only the definition file matches); React Native's I18nManager.forceRTL/allowRTL is never invoked, so mobile UI does not actually mirror for Arabic despite the language being selectable."
+    "status": "built",
+    "evidence": "Web and Desktop mirror the document direction from the shared language metadata. Mobile now declares native RTL support through the expo-localization config plugin, enables React Native RTL and left/right style swapping before the first tree mounts, synchronizes I18nManager.forceRTL to the restored or newly selected app language, and reloads the current native bundle when direction changes (with an honest restart fallback if a development host declines reload). Arabic therefore changes both copy and app-level layout direction across all three UI surfaces."
   },
   {
     "item": "timezone-handling",
