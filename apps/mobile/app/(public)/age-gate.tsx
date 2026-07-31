@@ -19,13 +19,13 @@
 import { useState, useCallback, useRef } from 'react';
 import {
   View,
-  Pressable,
   TextInput,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Shield } from 'lucide-react-native';

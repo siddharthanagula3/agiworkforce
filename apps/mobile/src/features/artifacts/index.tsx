@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, Platform, Pressable, ScrollView, Share, View } from 'react-native';
+import { FlatList, Modal, Platform, ScrollView, Share, View } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {

@@ -19,7 +19,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { View, ActivityIndicator, Pressable } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { BarChart3, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';

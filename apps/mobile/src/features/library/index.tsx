@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, TextInput, View } from 'react-native';
+import { FlatList, TextInput, View } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -249,7 +250,10 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         </Text>
       </View>
 
-      <View className="flex-row px-3 pb-3 gap-2">
+      {/* px-4 keeps the chip row on the same 16pt gutter as the search field
+          below it; pb-4 restores the app's standard 16pt vertical rhythm
+          (12pt read as the two controls being one crowded group). */}
+      <View className="flex-row px-4 pb-4 gap-2">
         <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
         <FilterChip
           label="Images"

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { View, Pressable, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';

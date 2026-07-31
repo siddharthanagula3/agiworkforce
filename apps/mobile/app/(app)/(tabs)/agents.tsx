@@ -1,5 +1,6 @@
 import { useCallback, useState, useMemo } from 'react';
-import { View, RefreshControl, Pressable } from 'react-native';
+import { View, RefreshControl } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';

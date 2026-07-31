@@ -1,6 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
+  // `src/` holds every feature surface (chat, drawer, library, voice, ...).
+  // Omitting it silently dropped ~900 className usages: only classes that also
+  // happened to appear under app/ or components/ were compiled, so anything
+  // unique to a feature (custom borders, spacing, opacity ramps) rendered as if
+  // the className were absent.
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './src/**/*.{ts,tsx}'],
   presets: [require('nativewind/preset')],
   theme: {
     extend: {

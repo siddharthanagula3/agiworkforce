@@ -5,7 +5,8 @@
  * plus 4 response-style sliders (warmth, enthusiasm, headers/lists, emoji).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, Pressable, TextInput, Platform, Alert } from 'react-native';
+import { View, ScrollView, TextInput, Platform, Alert } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Slider from '@react-native-community/slider';

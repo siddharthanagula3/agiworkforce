@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, SectionList, TextInput, View, type SectionListData } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Menu,
   MessageSquare,
@@ -13,6 +13,10 @@ import {
   X,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
+// NativeWind's JSX interop silently drops function-form `style` on Pressable,
+// which stripped the row cards and the New-chat FAB of all styling. See
+// components/ui/pressable-box.tsx.
+import { PressableBox } from '@/components/ui/pressable-box';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useThemeColors } from '@/src/ui/theme';
@@ -109,6 +113,7 @@ function searchSection(
 
 export function ChatsListScreen() {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
   const [query, setQuery] = useState('');
@@ -281,7 +286,7 @@ export function ChatsListScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: ChatsListItem }) => (
-      <Pressable
+      <PressableBox
         onPress={() => openItem(item)}
         accessibilityRole="button"
         accessibilityLabel={`Open ${item.kind}: ${item.title}`}
@@ -327,7 +332,7 @@ export function ChatsListScreen() {
             </Text>
           </View>
         ) : null}
-      </Pressable>
+      </PressableBox>
     ),
     [colors, isSearching, openItem],
   );
@@ -478,14 +483,17 @@ export function ChatsListScreen() {
         }
       />
 
-      <Pressable
+      <PressableBox
         onPress={() => router.push('/(app)/(tabs)/chat')}
         accessibilityRole="button"
         accessibilityLabel="New chat"
         style={({ pressed }) => ({
           position: 'absolute',
           right: 18,
-          bottom: 24,
+          // This SafeAreaView only claims the top edge, so `bottom` is measured
+          // from the physical screen edge — a fixed 24 put the FAB underneath
+          // the home indicator. Offset by the real inset instead.
+          bottom: insets.bottom + 16,
           minHeight: 48,
           borderRadius: 24,
           paddingHorizontal: 18,
@@ -498,7 +506,7 @@ export function ChatsListScreen() {
       >
         <SquarePen size={18} color={colors.accentText} />
         <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '700' }}>New chat</Text>
-      </Pressable>
+      </PressableBox>
     </SafeAreaView>
   );
 }

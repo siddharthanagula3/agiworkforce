@@ -11,14 +11,8 @@
  *   7. Settings toggles
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  ScrollView,
-  Pressable,
-  ActivityIndicator,
-  AccessibilityInfo,
-  Platform,
-} from 'react-native';
+import { View, ScrollView, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {

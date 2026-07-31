@@ -1,7 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
-  Pressable,
   TextInput,
   Modal,
   Alert,
@@ -10,6 +9,7 @@ import {
   ScrollView,
   FlatList,
 } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';

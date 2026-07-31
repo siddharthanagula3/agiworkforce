@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { View, RefreshControl, Pressable, StyleSheet } from 'react-native';
+import { View, RefreshControl, StyleSheet } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,

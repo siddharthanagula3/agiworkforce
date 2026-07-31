@@ -1,4 +1,5 @@
-import { Pressable, Linking } from 'react-native';
+import { Linking } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
