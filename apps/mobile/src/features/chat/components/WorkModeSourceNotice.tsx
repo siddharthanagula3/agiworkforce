@@ -1,5 +1,6 @@
 import { Plug } from 'lucide-react-native';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';

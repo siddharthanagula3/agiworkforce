@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { View, Pressable, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
+import { View, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';

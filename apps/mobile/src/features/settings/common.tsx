@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type React from 'react';
-import { ActivityIndicator, View, Pressable, ScrollView } from 'react-native';
+import { ActivityIndicator, View, ScrollView } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

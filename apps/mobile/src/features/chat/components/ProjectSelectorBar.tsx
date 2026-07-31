@@ -6,7 +6,8 @@
  * indicator when a project is active.
  */
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Pressable, Modal, FlatList, useWindowDimensions } from 'react-native';
+import { View, Modal, FlatList, useWindowDimensions } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { FolderOpen, ChevronDown, X, Check, FolderMinus } from 'lucide-react-native';

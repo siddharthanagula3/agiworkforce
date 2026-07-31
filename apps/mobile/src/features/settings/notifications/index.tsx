@@ -7,7 +7,6 @@
 import { useCallback, useState } from 'react';
 import {
   View,
-  Pressable,
   ScrollView,
   Modal,
   KeyboardAvoidingView,
@@ -15,6 +14,7 @@ import {
   TextInput,
   useWindowDimensions,
 } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {

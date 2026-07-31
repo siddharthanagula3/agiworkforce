@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
-  Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -11,6 +10,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';

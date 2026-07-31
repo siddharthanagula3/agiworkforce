@@ -9,7 +9,8 @@
  * GET /api/share.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { View, ScrollView, Pressable, Share, RefreshControl, Alert } from 'react-native';
+import { View, ScrollView, Share, RefreshControl, Alert } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

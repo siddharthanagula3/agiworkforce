@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Code, PenLine, Search, Brain, FileText, Lightbulb } from 'lucide-react-native';
