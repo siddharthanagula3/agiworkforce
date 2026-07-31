@@ -31,10 +31,12 @@
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use uuid::Uuid;
 
 use crate::models::{ContentBlock, Message, MessageContent};
@@ -42,6 +44,18 @@ use crate::runtime::session::{ManagedSession, MANAGED_SESSION_JSONL_EXTENSION};
 use crate::runtime::session_control::{ManagedSessionReference, MANAGED_SESSION_DIR_NAME};
 
 const SESSION_METADATA_DIR_NAME: &str = "managed_session_metadata";
+
+static GITHUB_PR_URL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)(?:https?://)?(?:www\.)?github\.com/(?P<owner>[a-z0-9_.-]+)/(?P<repo>[a-z0-9_.-]+)/pull/(?P<number>[1-9][0-9]*)",
+    )
+    .expect("GitHub pull-request URL regex is valid")
+});
+
+static GITHUB_PR_SHORTHAND_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(?P<owner>[a-z0-9_.-]+)/(?P<repo>[a-z0-9_.-]+)#(?P<number>[1-9][0-9]*)")
+        .expect("GitHub pull-request shorthand regex is valid")
+});
 
 // ---------------------------------------------------------------------------
 // Atomic write helpers (P1-7: concurrent CLI session safety)
@@ -507,6 +521,23 @@ fn normalize_for_search(input: &str) -> String {
     input.to_lowercase()
 }
 
+fn github_pr_search_keys(input: &str) -> HashSet<String> {
+    GITHUB_PR_URL_RE
+        .captures_iter(input)
+        .chain(GITHUB_PR_SHORTHAND_RE.captures_iter(input))
+        .filter_map(|captures| {
+            let owner = captures.name("owner")?.as_str().to_ascii_lowercase();
+            let repo = captures
+                .name("repo")?
+                .as_str()
+                .trim_end_matches(".git")
+                .to_ascii_lowercase();
+            let number = captures.name("number")?.as_str();
+            Some(format!("{owner}/{repo}#{number}"))
+        })
+        .collect()
+}
+
 /// Largest char boundary `<= index` (clamped to `s.len()`).
 #[allow(dead_code)]
 fn floor_char_boundary(s: &str, index: usize) -> usize {
@@ -530,6 +561,7 @@ fn ceil_char_boundary(s: &str, index: usize) -> usize {
 /// Full-text search across managed session titles and message content.
 pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSummary>> {
     let needle = normalize_for_search(query);
+    let query_pr_keys = github_pr_search_keys(query);
     let sessions = load_all_sessions(&conn.base_dir)?;
     Ok(sessions
         .into_iter()
@@ -540,7 +572,12 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
                 .messages
                 .iter()
                 .any(|message| normalize_for_search(&message.text_content()).contains(&needle));
-            (title_matches || content_matches).then_some(summary)
+            let pr_matches = !query_pr_keys.is_empty()
+                && (!github_pr_search_keys(&summary.title).is_disjoint(&query_pr_keys)
+                    || session.messages.iter().any(|message| {
+                        !github_pr_search_keys(&message.text_content()).is_disjoint(&query_pr_keys)
+                    }));
+            (title_matches || content_matches || pr_matches).then_some(summary)
         })
         .take(50)
         .collect())
@@ -806,6 +843,60 @@ mod tests {
         assert_eq!(stats.session_count, 2);
         assert_eq!(stats.message_count, 2);
         assert!(stats.total_tokens >= 11);
+    }
+
+    #[test]
+    fn search_normalizes_github_pull_request_urls_and_shorthand() {
+        let (_tempdir, conn) = temp_connection();
+        save_session(&conn, "pr-shorthand", "Review follow-up", "claude", "/", "").unwrap();
+        save_message(
+            &conn,
+            "pr-shorthand",
+            &Message::text("user", "Continue the acme/widgets#417 review"),
+            8,
+        )
+        .unwrap();
+        save_session(&conn, "other-repo", "Unrelated review", "claude", "/", "").unwrap();
+        save_message(
+            &conn,
+            "other-repo",
+            &Message::text("user", "Review other/widgets#417"),
+            8,
+        )
+        .unwrap();
+        save_session(&conn, "pr-url", "URL review", "claude", "/", "").unwrap();
+        save_message(
+            &conn,
+            "pr-url",
+            &Message::text(
+                "assistant",
+                "Opened https://github.com/Acme/Widgets/pull/418 for review.",
+            ),
+            8,
+        )
+        .unwrap();
+
+        let from_url = search_sessions(
+            &conn,
+            "https://github.com/acme/widgets/pull/417/files?diff=split",
+        )
+        .unwrap();
+        assert_eq!(
+            from_url
+                .iter()
+                .map(|session| session.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["pr-shorthand"]
+        );
+
+        let from_shorthand = search_sessions(&conn, "acme/widgets#418").unwrap();
+        assert_eq!(
+            from_shorthand
+                .iter()
+                .map(|session| session.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["pr-url"]
+        );
     }
 
     #[test]
