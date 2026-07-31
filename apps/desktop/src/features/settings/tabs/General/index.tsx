@@ -37,6 +37,9 @@ const LazyUpdateSettings = lazy(() =>
 const LazyKeybindingsSettings = lazy(() =>
   import('../../KeybindingsSettings').then((m) => ({ default: m.KeybindingsSettings })),
 );
+const LazyNetworkProxySettings = lazy(() =>
+  import('../../NetworkProxySettings').then((m) => ({ default: m.NetworkProxySettings })),
+);
 
 function Fallback({ label }: { label: string }) {
   return (
@@ -345,6 +348,18 @@ export function GeneralTab({
               </Select>
             </div>
           </div>
+        </div>
+      )}
+
+      {isTauri && (
+        <div className="pt-6 border-t border-border">
+          <h3 className="text-lg font-semibold mb-4">Network</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Configure corporate proxy, authentication, bypass, and trust settings for model traffic.
+          </p>
+          <Suspense fallback={<Fallback label="Loading network settings..." />}>
+            <LazyNetworkProxySettings />
+          </Suspense>
         </div>
       )}
 
