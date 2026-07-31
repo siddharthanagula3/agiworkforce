@@ -956,6 +956,7 @@
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "package": "node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
+    "verify:package": "node scripts/verify-vsix.mjs",
     "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "test": "vitest run",
     "test:webview": "vitest run --config vitest.webview.config.ts",

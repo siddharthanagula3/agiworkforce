@@ -1982,8 +1982,8 @@
   {
     "item": "marketplace-publishing",
     "surface": "apps/ide-extensions",
-    "status": "partial",
-    "evidence": "apps/extension-vscode/package.json:883 'package' script runs esbuild + apps/extension-vscode/scripts/vsce-package.js (wraps @vscode/vsce's createVSIX to produce a .vsix, with rejectDevelopmentArtifacts() guard at vsce-package.js:39-51) — a prebuilt agi-workforce-0.3.0.vsix is present in the directory, confirming the packaging pipeline works. Checked .github/workflows/ (12 files) for any VS Code publish workflow — none exists (build-windows-release.yml and release-cli.yml are unrelated to the VS Code extension)."
+    "status": "built",
+    "evidence": ".github/workflows/release-vscode-extension.yml implements a tag-scoped Marketplace release lane: v-vscode-X.Y.Z must exactly identify the checked-out commit and match apps/extension-vscode/package.json, then typecheck/lint/host tests/webview tests/theme-token checks and the production VSIX build run before the artifact is SHA-256 recorded and uploaded. apps/extension-vscode/scripts/verify-vsix.mjs reopens the archive, rejects unsafe/development/sensitive entries, verifies publisher/name/version/VS Code engine against source, and requires the declared extension entry point. The separate protected vscode-marketplace job downloads and re-verifies that exact artifact, receives id-token:write only there, authenticates with SHA-pinned azure/login through GitHub OIDC, and invokes the repository-pinned vsce publish --azure-credential with --packagePath and --no-dependencies. workflow_dispatch defaults publish=false for artifact-only dry runs; apps/extension-vscode/MARKETPLACE_PUBLISH_RUNBOOK.md documents workload-identity setup, manual fallback, verification, and rollback without a long-lived PAT."
   },
   {
     "item": "extension-signing",
