@@ -3620,8 +3620,8 @@
   {
     "item": "high-contrast",
     "surface": "packages/platform",
-    "status": "partial",
-    "evidence": "Web and Desktop now respond in their shipped global stylesheets to `prefers-contrast: more` by strengthening semantic text/border/focus tokens and to `forced-colors: active` by using Windows system colors for controls, links, focus, selection, selected states, and transparent gradient text. Source contract tests pin both surfaces. Mobile still has no verified app-level high-contrast adapter, so cross-platform support remains Partial."
+    "status": "built",
+    "evidence": "Web and Desktop respond in their shipped global stylesheets to `prefers-contrast: more` and Windows `forced-colors: active`, with source contract tests pinning both surfaces. Mobile now follows the native OS preference end to end: apps/mobile/src/ui/theme/useSystemHighContrast.ts reads Android `isHighTextContrastEnabled` / `highTextContrastChanged` and iOS `isDarkerSystemColorsEnabled` / `darkerSystemColorsChanged`, sharing one reference-counted native subscription across all theme consumers with live updates, stale-read protection, cleanup, and fail-safe fallback. apps/mobile/src/ui/theme/useTheme.ts applies that signal globally through static high-contrast light/dark palettes in tokens.ts and suppresses user accent overrides while higher contrast is active. apps/mobile/__tests__/system-high-contrast.test.tsx and theme-prefs.test.tsx verify both platform adapters, shared subscription behavior, race handling, and palette resolution."
   },
   {
     "item": "safety-classifier-hook",
