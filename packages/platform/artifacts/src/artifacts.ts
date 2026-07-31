@@ -86,7 +86,6 @@ export interface LocalPublishResult {
   shareUrl: string;
   shareToken: string;
   publishedAt: string;
-  waitlistGated: false;
 }
 
 /** Cloud publish succeeded — the host's publisher returned a hosted URL. */
@@ -94,7 +93,6 @@ export interface CloudPublishResult {
   kind: 'cloud';
   shareUrl: string;
   publishedAt: string;
-  waitlistGated: false;
 }
 
 /**
@@ -106,28 +104,10 @@ export interface CloudUnavailablePublishResult {
   kind: 'unavailable';
   shareUrl: null;
   reason: string;
-  waitlistGated: false;
-}
-
-/**
- * @deprecated AUDIT-FIX ART-27 — `publishArtifact` no longer produces this.
- * It stays in the union only so adapters that still construct the pre-
- * 2026-06-27 shape (notably `apps/web/lib/artifact-publisher.ts`, owned
- * elsewhere) keep type-checking until they are migrated. Consumers must treat
- * it exactly like {@link CloudUnavailablePublishResult}: no waitlist, no CTA.
- */
-export interface WaitlistPublishResult {
-  kind: 'waitlist';
-  shareUrl: null;
-  waitlistGated: true;
 }
 
 /** Discriminated union returned by `publishArtifact`. */
-export type PublishResult =
-  | LocalPublishResult
-  | CloudPublishResult
-  | CloudUnavailablePublishResult
-  | WaitlistPublishResult;
+export type PublishResult = LocalPublishResult | CloudPublishResult | CloudUnavailablePublishResult;
 
 export interface PublishArtifactInput {
   artifact: PublishableArtifact;
@@ -289,7 +269,6 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
         shareUrl: null,
         reason:
           'Cloud publish is not available on this surface yet. Download the artifact instead.',
-        waitlistGated: false,
       };
     }
 
@@ -301,7 +280,6 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
       kind: 'cloud',
       shareUrl: published.shareUrl,
       publishedAt: published.publishedAt ?? new Date().toISOString(),
-      waitlistGated: false,
     };
   }
 
@@ -329,6 +307,5 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
     shareUrl: fileUrl,
     shareToken,
     publishedAt,
-    waitlistGated: false,
   };
 }

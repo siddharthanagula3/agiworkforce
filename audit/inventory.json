@@ -254,8 +254,8 @@
   {
     "item": "artifact-publish-share",
     "surface": "apps/web",
-    "status": "partial",
-    "evidence": "UI is wired: ArtifactPreview.tsx:1520-1531 Share button → handleShareGeneratedFile (line 735); server route apps/web/app/api/artifacts/publish/route.ts:130-153 calls publishArtifact from apps/web/lib/artifact-publisher.ts."
+    "status": "missing",
+    "evidence": "Web has no recipient-readable, revocable artifact publication contract. apps/web/features/chat/components/artifacts/ArtifactPreview.tsx exposes browser-native sharing or clipboard copy for an existing generated-file URI, but that does not publish a public artifact and an authenticated /api/files URI is not a recipient share link. The uncalled /api/artifacts/publish route and adapter were deleted because they always returned a fabricated waitlist result with no URL; repository-wide call-site tracing found no production consumer. @agiworkforce/artifacts now models only real local export, host-injected cloud publication, or honest host unavailability. A future implementation requires bounded artifact content/storage, opaque public tokens, expiry/revocation, safe recipient rendering, owner management, and abuse controls; until those exist this capability is honestly Missing rather than Partial or reachable-but-fake."
   },
   {
     "item": "sandboxed-iframe",
