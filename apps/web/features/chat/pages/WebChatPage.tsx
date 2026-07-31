@@ -101,6 +101,7 @@ import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
+import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
@@ -2901,6 +2902,9 @@ export default function WebChatPage() {
               )}
 
             <div className="flex items-center gap-1.5">
+              {hasMessages && (
+                <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
+              )}
               <ResearchToggleButton count={researchSourceCount} />
               <ArtifactsToggleButton />
             </div>
