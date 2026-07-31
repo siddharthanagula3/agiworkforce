@@ -102,6 +102,42 @@ describe('MCPBundleBrowser', () => {
     expect(screen.queryByRole('button', { name: 'Install' })).not.toBeInTheDocument();
   });
 
+  it('labels official registry entries without fabricating tool metadata', async () => {
+    setBundle({
+      ...baseBundle,
+      id: 'mcp-registry-cloud-example-remote',
+      name: 'Cloud Example',
+      npmPackage: undefined,
+      tools: [],
+      verified: false,
+    });
+    render(<MCPBundleBrowser />);
+
+    expect(screen.getByText('Official registry')).toBeInTheDocument();
+    expect(screen.getByText('Tools not listed')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manual' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+
+    expect(await screen.findByText('Official MCP Registry')).toBeInTheDocument();
+    expect(screen.getByText('Tool metadata is not published in the directory')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manual setup required' })).toBeDisabled();
+  });
+
+  it('debounces searches against the live registry', async () => {
+    render(<MCPBundleBrowser />);
+
+    fireEvent.change(
+      screen.getByPlaceholderText('Search official servers, packages, or publishers...'),
+      { target: { value: 'github' } },
+    );
+
+    expect(searchBundles).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(searchBundles).toHaveBeenCalledWith('github');
+    });
+  });
+
   it('uses the update command for an installed bundle with a newer version', async () => {
     setBundle({ ...baseBundle, installed: true, updateAvailable: true });
     render(<MCPBundleBrowser />);

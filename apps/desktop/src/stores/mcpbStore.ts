@@ -48,6 +48,8 @@ const mcpbApi = {
   getFeaturedBundles: () => invoke<McpBundle[]>('mcpb_get_featured'),
 };
 
+let latestSearchRequest = 0;
+
 interface McpbState {
   bundles: McpBundle[];
   installedBundles: McpBundle[];
@@ -91,8 +93,11 @@ export const useMcpbStore = create<McpbState>()(
       fetchRegistry: async () => {
         set({ isLoading: true, error: null });
         try {
-          const [bundles, categories, featuredBundles, installedBundles] = await Promise.all([
-            mcpbApi.fetchRegistry(),
+          // Populate the native registry cache first. The remaining commands
+          // derive categories, featured entries, and installed official
+          // registry records from that same snapshot.
+          const bundles = await mcpbApi.fetchRegistry();
+          const [categories, featuredBundles, installedBundles] = await Promise.all([
             mcpbApi.getCategories(),
             mcpbApi.getFeaturedBundles(),
             mcpbApi.getInstalledBundles(),
@@ -113,6 +118,7 @@ export const useMcpbStore = create<McpbState>()(
       },
 
       searchBundles: async (query: string) => {
+        const requestId = ++latestSearchRequest;
         set({ searchQuery: query, isLoading: true, error: null });
         if (!query.trim()) {
           await get().fetchRegistry();
@@ -121,8 +127,10 @@ export const useMcpbStore = create<McpbState>()(
 
         try {
           const bundles = await mcpbApi.searchBundles(query);
+          if (requestId !== latestSearchRequest) return;
           set({ bundles, isLoading: false });
         } catch (error) {
+          if (requestId !== latestSearchRequest) return;
           set({
             error: error instanceof Error ? error.message : 'Failed to search bundles',
             isLoading: false,

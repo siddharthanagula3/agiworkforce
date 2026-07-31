@@ -58,6 +58,12 @@ const CATEGORY_CONFIG: Record<
   other: { name: 'Other', icon: Package },
 };
 
+const OFFICIAL_REGISTRY_BUNDLE_PREFIX = 'mcp-registry-';
+
+function isOfficialRegistryEntry(bundle: McpBundle) {
+  return bundle.id.startsWith(OFFICIAL_REGISTRY_BUNDLE_PREFIX);
+}
+
 // Installation Progress Modal
 function InstallProgressModal({
   progress,
@@ -228,6 +234,7 @@ function BundleDetailsModal({
   isInstalling: boolean;
 }) {
   const canInstall = Boolean(bundle.npmPackage);
+  const comesFromOfficialRegistry = isOfficialRegistryEntry(bundle);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
@@ -268,6 +275,11 @@ function BundleDetailsModal({
               <Badge variant="secondary" className="bg-surface-base">
                 {CATEGORY_CONFIG[bundle.category]?.name || bundle.category}
               </Badge>
+              {comesFromOfficialRegistry && (
+                <Badge variant="secondary" className="bg-blue-500/10 text-blue-300">
+                  Official MCP Registry
+                </Badge>
+              )}
               {bundle.featured && (
                 <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
                   Featured
@@ -304,7 +316,11 @@ function BundleDetailsModal({
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-surface-base p-3 rounded-lg">
                 <div className="text-xs text-muted-foreground mb-1">Tools</div>
-                <div className="font-semibold text-foreground">{bundle.tools.length}</div>
+                <div className="font-semibold text-foreground">
+                  {comesFromOfficialRegistry && bundle.tools.length === 0
+                    ? 'Not listed'
+                    : bundle.tools.length}
+                </div>
               </div>
               <div className="bg-surface-base p-3 rounded-lg">
                 <div className="text-xs text-muted-foreground mb-1">Package</div>
@@ -315,17 +331,28 @@ function BundleDetailsModal({
             </div>
 
             {/* Tools */}
-            <div className="mb-6">
-              <h3 className="font-semibold text-foreground mb-3">Available Tools</h3>
-              <div className="space-y-2">
-                {bundle.tools.map((tool) => (
-                  <div key={tool.name} className="bg-surface-base p-3 rounded-lg">
-                    <div className="font-medium text-foreground text-sm">{tool.name}</div>
-                    <div className="text-xs text-muted-foreground mt-1">{tool.description}</div>
-                  </div>
-                ))}
+            {bundle.tools.length > 0 ? (
+              <div className="mb-6">
+                <h3 className="font-semibold text-foreground mb-3">Available Tools</h3>
+                <div className="space-y-2">
+                  {bundle.tools.map((tool) => (
+                    <div key={tool.name} className="bg-surface-base p-3 rounded-lg">
+                      <div className="font-medium text-foreground text-sm">{tool.name}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{tool.description}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : comesFromOfficialRegistry ? (
+              <div className="mb-6 rounded-lg border border-border bg-surface-base p-3">
+                <p className="text-sm font-medium text-foreground">
+                  Tool metadata is not published in the directory
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Review the publisher documentation and source before installing.
+                </p>
+              </div>
+            ) : null}
 
             {/* Required Credentials */}
             {bundle.requiredCredentials.length > 0 && (
@@ -336,7 +363,10 @@ function BundleDetailsModal({
                 </h3>
                 <div className="space-y-2">
                   {bundle.requiredCredentials.map((cred) => (
-                    <div key={cred.key} className="bg-surface-base p-3 rounded-lg">
+                    <div
+                      key={cred.key ?? cred.envVar ?? cred.displayName}
+                      className="bg-surface-base p-3 rounded-lg"
+                    >
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-foreground text-sm">
                           {cred.displayName}
@@ -474,6 +504,7 @@ function BundleCard({
   isInstalling: boolean;
 }) {
   const canInstall = Boolean(bundle.npmPackage);
+  const comesFromOfficialRegistry = isOfficialRegistryEntry(bundle);
 
   return (
     <Card className="p-4 hover:border-blue-500/50 transition-all duration-200 bg-surface-elevated">
@@ -503,8 +534,11 @@ function BundleCard({
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
         <Badge variant="secondary" className="text-xs">
-          {bundle.tools.length} tools
+          {comesFromOfficialRegistry && bundle.tools.length === 0
+            ? 'Tools not listed'
+            : `${bundle.tools.length} tools`}
         </Badge>
+        {comesFromOfficialRegistry && <span>Official registry</span>}
         <span>{CATEGORY_CONFIG[bundle.category]?.name || bundle.category}</span>
       </div>
 
@@ -602,11 +636,22 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
 
   const [selectedBundle, setSelectedBundle] = useState<McpBundle | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState(searchQuery);
 
   // Fetch registry on mount
   useEffect(() => {
     fetchRegistry();
   }, [fetchRegistry]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      if (searchInput !== searchQuery) {
+        searchBundles(searchInput);
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchBundles, searchInput, searchQuery]);
 
   const handleViewDetails = useCallback((bundle: McpBundle) => {
     setSelectedBundle(bundle);
@@ -666,13 +711,6 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
     setInstallProgress(null);
   }, [setInstallProgress]);
 
-  const handleSearch = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      searchBundles(e.target.value);
-    },
-    [searchBundles],
-  );
-
   return (
     <div className="h-full flex flex-col bg-surface-base">
       {/* Header */}
@@ -684,7 +722,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
               Tool Registry
             </h1>
             <p className="text-muted-foreground mt-1">
-              One-click installation of tools to extend AGI Workforce's capabilities
+              Browse reviewed bundles and search the live official MCP Registry
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -710,9 +748,9 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
           <Input
             type="text"
-            placeholder="Search bundles by name, description, or tools..."
-            value={searchQuery}
-            onChange={handleSearch}
+            placeholder="Search official servers, packages, or publishers..."
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
             className="pl-10 bg-surface-elevated"
           />
         </div>
@@ -773,7 +811,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
                 <TrendingUp className="w-5 h-5 text-amber-400" />
                 Featured Bundles
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {featuredBundles.slice(0, 3).map((bundle) => (
                   <BundleCard
                     key={bundle.id}
@@ -817,7 +855,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
                     ({filteredBundles.length})
                   </span>
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {filteredBundles.map((bundle) => (
                     <BundleCard
                       key={bundle.id}

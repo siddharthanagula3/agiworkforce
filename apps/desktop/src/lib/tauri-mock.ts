@@ -57,6 +57,28 @@ function mockMcpBundles() {
       installedVersion: MOCK_INSTALLED_MCP_BUNDLES.has('mcp-mock-search') ? '1.0.0' : undefined,
       updateAvailable: false,
     },
+    {
+      id: 'mcp-registry-cloud-example-remote',
+      name: 'Cloud Example',
+      version: '2.0.0',
+      description:
+        'Remote-only fixture shaped like an official MCP Registry entry for browser verification.',
+      author: 'cloud.example',
+      category: 'other',
+      tools: [],
+      configTemplate: {
+        command: 'streamable-http',
+        args: ['https://cloud.example/mcp'],
+        env: {},
+        enabled: false,
+      },
+      requiredCredentials: [],
+      verified: false,
+      featured: false,
+      tags: ['official-registry', 'community', 'remote'],
+      installed: false,
+      updateAvailable: false,
+    },
   ];
 }
 
@@ -574,7 +596,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
           !query ||
           bundle.name.toLowerCase().includes(query) ||
           bundle.description.toLowerCase().includes(query) ||
-          bundle.tags.some((tag) => tag.includes(query)),
+          bundle.tags.some((tag) => tag.includes(query)) ||
+          bundle.author.toLowerCase().includes(query) ||
+          ('npmPackage' in bundle && bundle.npmPackage?.toLowerCase().includes(query)),
       ) as T;
     }
     case 'mcpb_get_bundle_details': {
@@ -582,7 +606,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return (mockMcpBundles().find((bundle) => bundle.id === bundleId) ?? null) as T;
     }
     case 'mcpb_get_categories':
-      return ['search'] as T;
+      return ['other', 'search'] as T;
     case 'mcpb_get_featured':
       return mockMcpBundles().filter((bundle) => bundle.featured) as T;
     case 'mcpb_get_installed_bundles':
