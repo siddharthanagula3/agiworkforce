@@ -3170,8 +3170,8 @@
   {
     "item": "memory-toggle",
     "surface": "packages/memory",
-    "status": "partial",
-    "evidence": "Built and behavior-affecting on web: apps/web/features/settings/sections/CapabilitiesSection.tsx:119-134 ('Memory' Switch) -> savePreferenceNamespace -> apps/web/lib/runtime/memory-capability.ts:15-23 (isMemoryCapabilityEnabled/resetMemoryCapabilityCache) -> actually gates injection at apps/web/lib/runtime/WebChatRuntime.ts:181-184."
+    "status": "built",
+    "evidence": "Memory policy controls are mounted and behavior-affecting on all three chat products. Web Settings > Capabilities persists Memory and resets its runtime cache (apps/web/features/settings/sections/CapabilitiesSection.tsx:119-156); WebChatRuntime checks isMemoryCapabilityEnabled before injecting saved facts (apps/web/lib/runtime/memory-capability.ts:15-23; WebChatRuntime.ts:176-184). Desktop's mounted Memory tab exposes the master enable switch, tool-assisted generation scope, reset, and Local/Managed Cloud editors (apps/desktop/src/features/settings/tabs/Memory.tsx:20-161); settingsStore persists with rollback and configures the native injection policy (settingsStore.ts:1119-1194), with Managed Cloud synchronization covered by managedCloudSettingsSync. Mobile's Memory screen mounts Reference past chats and Generate memory from chat history over separate Local/Cloud stores (apps/mobile/app/(app)/settings/memory.tsx:25-75, 285-292); chatExecutionStore enforces both switches before retrieval/injection and Local consolidation (apps/mobile/stores/chat/chatExecutionStore.ts:1236-1295), while Cloud policy sync maps them to the account capability namespace. GAP-009, GAP-031, and GAP-077 are Done. Verified with 60 focused Desktop tests, 38 focused Mobile tests, and 14 focused Web runtime/policy tests."
   },
   {
     "item": "forget-directive",
