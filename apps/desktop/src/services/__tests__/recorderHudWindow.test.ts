@@ -125,9 +125,19 @@ describe('recorder HUD window', () => {
     const tauriConfig = JSON.parse(
       readFileSync(resolve(process.cwd(), 'src-tauri/tauri.conf.json'), 'utf8'),
     ) as {
-      app: { macOSPrivateApi?: boolean; security: { capabilities: string[] } };
+      app: {
+        macOSPrivateApi?: boolean;
+        security: {
+          capabilities: string[];
+          pattern: { use: string; options: { dir: string } };
+        };
+      };
     };
     expect(tauriConfig.app.security.capabilities).toContain('recorder-hud');
+    expect(tauriConfig.app.security.pattern).toEqual({
+      use: 'isolation',
+      options: { dir: 'isolation' },
+    });
     expect(tauriConfig.app.macOSPrivateApi).toBe(true);
   });
 });

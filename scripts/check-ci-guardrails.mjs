@@ -407,7 +407,21 @@ if (!exists(tauriConfigPath)) {
   if (tauriConfig.bundle?.createUpdaterArtifacts !== true) {
     errors.push(`${tauriConfigPath} must set bundle.createUpdaterArtifacts to true`);
   }
+  const isolationPattern = tauriConfig.app?.security?.pattern;
+  if (isolationPattern?.use !== 'isolation' || isolationPattern?.options?.dir !== 'isolation') {
+    errors.push(
+      `${tauriConfigPath} must route IPC through the compile-time Tauri isolation pattern`,
+    );
+  }
 }
+requireIncludes(
+  'apps/desktop/src-tauri/isolation/index.html',
+  '<script src="./isolation-hook.js"></script>',
+);
+requireIncludes(
+  'apps/desktop/src-tauri/isolation/isolation-hook.js',
+  "window, '__TAURI_ISOLATION_HOOK__'",
+);
 requireNotIncludes('.github/workflows/ci.yml', '--filter web');
 
 const actionPins = spawnSync('bash', ['scripts/check-action-pins.sh'], {
