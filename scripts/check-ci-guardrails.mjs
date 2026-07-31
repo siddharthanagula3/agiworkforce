@@ -68,7 +68,9 @@ requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- apply --target c
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- verify');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:rls-probe -- --target ci');
 requireIncludes('.github/workflows/ci.yml', 'node scripts/production-deploy-scope.mjs');
+requireIncludes('.github/workflows/ci.yml', 'web_changed: ${{ steps.scope.outputs.web }}');
 requireIncludes('.github/workflows/ci.yml', "if: needs.check.outputs.native_changed == 'true'");
+requireIncludes('.github/workflows/ci.yml', "if: needs.check.outputs.web_changed == 'true'");
 requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
 requireIncludes('.github/workflows/ci.yml', '--filter=agi-workforce');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter agi-workforce package');
@@ -83,6 +85,10 @@ requireIncludes(
   'cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib',
 );
 requireIncludes('.github/workflows/ci.yml', 'bash apps/desktop/check-wiring.sh');
+requireIncludes('.github/workflows/ci.yml', '--project=accessibility-audit');
+requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/web a11y:audit');
+requireIncludes('apps/desktop/playwright.config.ts', "name: 'accessibility-audit'");
+requireIncludes('apps/desktop/playwright.config.ts', "testMatch: '**/accessibility-audit.spec.ts'");
 
 requireIncludes('.github/workflows/deploy-production.yml', "workflows: ['CI']");
 requireIncludes(

@@ -1,137 +1,134 @@
 #!/usr/bin/env node
 
 /**
- * Accessibility Audit Script
- * WCAG 2.1 AA Compliance Checker using axe-core
+ * Blocking WCAG 2.1 A/AA audit for public Web routes.
  *
- * Run with: pnpm a11y:audit
- * Requires: @axe-core/playwright, playwright, fs
+ * Start the Web app first, then run `pnpm a11y:audit`. CI supplies the
+ * production server URL through A11Y_BASE_URL. Navigation failures and empty
+ * audit runs fail closed so this command can never report a false green.
  */
 
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium } from 'playwright';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const reportsDir = path.join(__dirname, '../reports');
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const reportsDirectory = path.join(scriptDirectory, '../reports');
+const baseUrl = (process.env['A11Y_BASE_URL'] || 'http://127.0.0.1:3000').replace(/\/$/, '');
+const wcagTags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+const colorSchemes = ['light', 'dark'];
+const auditedPages = [
+  { path: '/', name: 'Home' },
+  { path: '/chat', name: 'Chat' },
+  { path: '/pricing', name: 'Pricing' },
+  { path: '/features/agents', name: 'Features - Agents' },
+  { path: '/download', name: 'Download' },
+];
 
-// Ensure reports directory exists
-if (!fs.existsSync(reportsDir)) {
-  fs.mkdirSync(reportsDir, { recursive: true });
+function summarize(violations, passes) {
+  return {
+    totalViolations: violations.length,
+    totalPasses: passes.length,
+    critical: violations.filter((violation) => violation.impact === 'critical').length,
+    serious: violations.filter((violation) => violation.impact === 'serious').length,
+    moderate: violations.filter((violation) => violation.impact === 'moderate').length,
+    minor: violations.filter((violation) => violation.impact === 'minor').length,
+  };
 }
 
-async function auditPage(url, pageName) {
-  console.log(`\n🔍 Auditing: ${pageName} (${url})`);
-
-  const browser = await chromium.launch();
-  const page = await browser.newPage();
+async function auditPage(browser, pageDefinition, colorScheme) {
+  const context = await browser.newContext({ colorScheme, reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  const url = new URL(pageDefinition.path, `${baseUrl}/`).toString();
 
   try {
-    // Navigate with a reasonable timeout
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {
-      console.warn(`⚠️  Page load took longer than expected, proceeding with audit...`);
+    console.log(`Auditing ${pageDefinition.name} (${colorScheme}): ${url}`);
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    if (!response || !response.ok()) {
+      throw new Error(`Navigation returned ${response?.status() ?? 'no response'}`);
+    }
+    await page.locator('body').waitFor({ state: 'visible' });
+    await page.evaluate(async () => {
+      await document.fonts?.ready;
     });
 
-    // Wait a bit for dynamic content to load
-    await page.waitForTimeout(2000);
-
-    // Run axe accessibility audit
-    const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .analyze();
-
-    await browser.close();
-
+    const results = await new AxeBuilder({ page }).withTags(wcagTags).analyze();
     return {
-      pageName,
+      pageName: pageDefinition.name,
+      colorScheme,
       url,
       timestamp: new Date().toISOString(),
       violations: results.violations,
       passes: results.passes,
       incomplete: results.incomplete,
       inapplicable: results.inapplicable,
-      summary: {
-        totalViolations: results.violations.length,
-        totalPasses: results.passes.length,
-        critical: results.violations.filter((v) => v.impact === 'critical').length,
-        serious: results.violations.filter((v) => v.impact === 'serious').length,
-        moderate: results.violations.filter((v) => v.impact === 'moderate').length,
-        minor: results.violations.filter((v) => v.impact === 'minor').length,
-      },
+      summary: summarize(results.violations, results.passes),
     };
-  } catch (error) {
-    await browser.close();
-    console.error(`❌ Error auditing ${pageName}:`, error.message);
-    throw error;
+  } finally {
+    await context.close();
   }
 }
 
 async function main() {
-  console.log('🚀 Starting AGI Workforce Accessibility Audit (WCAG 2.1 AA)');
-  console.log('='.repeat(60));
+  fs.mkdirSync(reportsDirectory, { recursive: true });
+  const browser = await chromium.launch();
+  const results = [];
+  const failures = [];
 
-  // Pages to audit (update these based on your site structure)
-  const pagesToAudit = [
-    { url: 'http://localhost:3000/', name: 'Home' },
-    { url: 'http://localhost:3000/chat', name: 'Chat' },
-    { url: 'http://localhost:3000/pricing', name: 'Pricing' },
-    { url: 'http://localhost:3000/features/agents', name: 'Features - Agents' },
-    { url: 'http://localhost:3000/download', name: 'Download' },
-  ];
-
-  const allResults = [];
-
-  for (const { url, name } of pagesToAudit) {
-    try {
-      const result = await auditPage(url, name);
-      allResults.push(result);
-
-      // Print summary for this page
-      const { summary } = result;
-      console.log(
-        `  ✓ Results: ${summary.totalViolations} violations, ${summary.totalPasses} passes`,
-      );
-      if (summary.critical > 0) console.log(`    🔴 CRITICAL: ${summary.critical}`);
-      if (summary.serious > 0) console.log(`    🟠 SERIOUS: ${summary.serious}`);
-      if (summary.moderate > 0) console.log(`    🟡 MODERATE: ${summary.moderate}`);
-      if (summary.minor > 0) console.log(`    🔵 MINOR: ${summary.minor}`);
-    } catch (error) {
-      console.error(`❌ Failed to audit ${name}`);
+  try {
+    for (const colorScheme of colorSchemes) {
+      for (const pageDefinition of auditedPages) {
+        try {
+          const result = await auditPage(browser, pageDefinition, colorScheme);
+          results.push(result);
+          console.log(
+            `  ${result.summary.totalViolations} violation(s), ${result.summary.totalPasses} pass(es)`,
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          failures.push({
+            pageName: pageDefinition.name,
+            path: pageDefinition.path,
+            colorScheme,
+            message,
+          });
+          console.error(`  Audit failed: ${message}`);
+        }
+      }
     }
+  } finally {
+    await browser.close();
   }
 
-  // Save detailed JSON report
-  const jsonReportPath = path.join(
-    reportsDir,
-    `a11y-report-${new Date().toISOString().split('T')[0]}.json`,
+  const report = {
+    baseUrl,
+    generatedAt: new Date().toISOString(),
+    wcagTags,
+    colorSchemes,
+    results,
+    failures,
+  };
+  const reportPath = path.join(reportsDirectory, 'a11y-report.json');
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+  const totalViolations = results.reduce(
+    (total, result) => total + result.summary.totalViolations,
+    0,
   );
-  fs.writeFileSync(jsonReportPath, JSON.stringify(allResults, null, 2));
-  console.log(`\n📄 Full report saved to: ${jsonReportPath}`);
+  const expectedAudits = auditedPages.length * colorSchemes.length;
+  console.log(
+    `Audited ${results.length}/${expectedAudits} page/theme combinations; ${totalViolations} violation(s); ${failures.length} audit failure(s).`,
+  );
+  console.log(`Report: ${reportPath}`);
 
-  // Generate summary statistics
-  const totalViolations = allResults.reduce((sum, r) => sum + r.summary.totalViolations, 0);
-  const totalPasses = allResults.reduce((sum, r) => sum + r.summary.totalPasses, 0);
-  const criticalIssues = allResults.reduce((sum, r) => sum + r.summary.critical, 0);
-
-  console.log('\n📊 Overall Summary');
-  console.log('='.repeat(60));
-  console.log(`Total Pages Audited: ${allResults.length}`);
-  console.log(`Total Violations: ${totalViolations}`);
-  console.log(`Total Passes: ${totalPasses}`);
-  console.log(`Critical Issues: ${criticalIssues}`);
-
-  if (totalViolations === 0) {
-    console.log('\n✅ WCAG 2.1 AA Compliant!');
-    process.exit(0);
-  } else {
-    console.log('\n⚠️  Accessibility violations found. See report for details.');
-    process.exit(1);
+  if (results.length !== expectedAudits || failures.length > 0 || totalViolations > 0) {
+    process.exitCode = 1;
   }
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err);
-  process.exit(1);
+main().catch((error) => {
+  console.error(error instanceof Error ? error.stack : String(error));
+  process.exitCode = 1;
 });

@@ -1822,7 +1822,10 @@
   --agi-ink: #f5f0e6;
   --agi-ink-2: #c4bcac;
   --agi-ink-quiet: #948b79;
-  --agi-ink-faint: #635b4b;
+  /* Small tertiary labels still need 4.5:1 contrast on the darkest device
+     mockup surfaces. Keep a separate semantic token, but do not dim it below
+     the accessible quiet-text value. */
+  --agi-ink-faint: #948b79;
 
   /* amber-gold signal — the variable name is finally true */
   --agi-amber: #f0a84a;
@@ -1842,6 +1845,8 @@
   --agi-code-bg: rgba(245, 240, 230, 0.06);
   --agi-selection-bg: rgba(240, 168, 74, 0.32);
   --agi-selection-text: var(--agi-ink);
+  --agi-code-function: #7bb0f5;
+  --agi-code-type: #4ec9b0;
 
   --agi-font: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
   --agi-font-mono: var(--font-jetbrains), var(--font-geist-mono), ui-monospace, monospace;
@@ -3974,10 +3979,10 @@
   --agi-ink: #1c150b;
   --agi-ink-2: #524839;
   --agi-ink-quiet: #766a55;
-  --agi-ink-faint: #a89c85;
+  --agi-ink-faint: #665a47;
 
-  --agi-amber: #9c5407;
-  --agi-amber-soft: rgba(156, 84, 7, 0.12);
+  --agi-amber: #854500;
+  --agi-amber-soft: rgba(133, 69, 0, 0.12);
   --agi-surface-wash: rgba(30, 22, 10, 0.025);
   --agi-line-soft: rgba(30, 22, 10, 0.05);
   --agi-glow-soft: rgba(156, 84, 7, 0.1);
@@ -3987,12 +3992,14 @@
   --agi-button-bg-hover: #392c19;
   --agi-button-ink: #faf6ee;
   --agi-error: #c23a2c;
-  --agi-success: #2f8f5b;
+  --agi-success: #1f6b43;
   --agi-shadow: rgba(30, 22, 10, 0.14);
   --agi-header-sheen: rgba(156, 84, 7, 0.05);
   --agi-code-bg: rgba(30, 22, 10, 0.05);
   --agi-selection-bg: rgba(240, 168, 74, 0.28);
   --agi-selection-text: var(--agi-ink);
+  --agi-code-function: #245b96;
+  --agi-code-type: #176555;
 
   background: var(--agi-bg);
   color: var(--agi-ink);
@@ -6010,11 +6017,11 @@
 }
 
 [data-design='agi'] .agi-ed-fn {
-  color: #7bb0f5;
+  color: var(--agi-code-function);
 }
 
 [data-design='agi'] .agi-ed-type {
-  color: #4ec9b0;
+  color: var(--agi-code-type);
 }
 
 [data-design='agi'] .agi-ed-dim {
@@ -7676,6 +7683,8 @@
 
 [data-design='agi'] .agi-ap-btn--allow {
   border-color: transparent;
+  color: var(--agi-button-ink);
+  background: var(--agi-button-bg);
   animation: agi-ap-pulse 3.2s var(--agi-ease-out) infinite;
 }
 
