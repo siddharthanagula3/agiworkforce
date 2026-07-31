@@ -104,81 +104,6 @@ pub struct MemoryStats {
     pub low_importance_count: usize,
 }
 
-// =============================================================================
-// MEMORY COMPACTION TYPES
-// =============================================================================
-
-/// Configuration for memory compaction
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CompactionConfig {
-    /// Whether compaction is enabled
-    pub enabled: bool,
-    /// Number of days before logs are eligible for compaction
-    pub days_before_compaction: i32,
-    /// Custom summary prompt for LLM extraction (optional)
-    pub summary_prompt: Option<String>,
-    /// Whether to delete compacted logs (vs just marking them)
-    pub delete_after_compaction: bool,
-}
-
-impl Default for CompactionConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            days_before_compaction: 7,
-            summary_prompt: None,
-            delete_after_compaction: false,
-        }
-    }
-}
-
-/// A daily log entry that is a candidate for compaction
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CompactionCandidate {
-    /// The date of the logs (YYYY-MM-DD format)
-    pub log_date: String,
-    /// Number of log entries on this date
-    pub entry_count: usize,
-    /// Days since this log date
-    pub days_old: i64,
-    /// Whether this date's logs have already been compacted
-    pub is_compacted: bool,
-    /// Preview of content (first 200 chars combined)
-    pub preview: String,
-}
-
-/// Result of a compaction operation
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct MemoryCompactionResult {
-    /// Number of daily logs that were processed
-    pub logs_processed: usize,
-    /// Number of unique dates that were compacted
-    pub dates_compacted: usize,
-    /// Number of new memories created from extraction
-    pub memories_created: usize,
-    /// Facts extracted and promoted
-    pub facts_extracted: usize,
-    /// Decisions extracted and promoted
-    pub decisions_extracted: usize,
-    /// Preferences extracted and promoted
-    pub preferences_extracted: usize,
-}
-
-/// A memory to be promoted to long-term storage
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExtractedMemory {
-    /// The category of this memory
-    pub category: MemoryCategory,
-    /// Short topic identifier
-    pub topic: String,
-    /// The content/value of this memory
-    pub content: String,
-    /// Importance level (1-10)
-    pub importance: i32,
-    /// Source information (e.g., "compacted from 2025-01-20 to 2025-01-27")
-    pub source: String,
-}
-
 /// A single memory entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryEntry {
@@ -306,36 +231,25 @@ pub struct MemoryManager {
     semantic_config: RwLock<SemanticSearchConfig>,
     /// BUG-09 fix: cached at construction time — schema does not change at runtime
     has_last_accessed: bool,
-    /// BUG-09 fix: cached presence of 'compacted' column in daily_logs
-    has_compacted_col: bool,
 }
 
 impl MemoryManager {
     /// BUG-09 fix: check column presence once at construction, not on every call.
-    fn probe_schema(conn: &Connection) -> (bool, bool) {
-        let has_last_accessed = conn
-            .query_row(
-                "SELECT COUNT(*) FROM pragma_table_info('user_memory') WHERE name='last_accessed'",
-                [],
-                |row| row.get::<_, i32>(0),
-            )
-            .unwrap_or(0)
-            > 0;
-        let has_compacted_col = conn
-            .query_row(
-                "SELECT COUNT(*) > 0 FROM pragma_table_info('daily_logs') WHERE name = 'compacted'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(false);
-        (has_last_accessed, has_compacted_col)
+    fn probe_schema(conn: &Connection) -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('user_memory') WHERE name='last_accessed'",
+            [],
+            |row| row.get::<_, i32>(0),
+        )
+        .unwrap_or(0)
+            > 0
     }
 
     /// Create a new MemoryManager with a connection to the database
     pub fn new(db_path: &str) -> Result<Self> {
         let conn = Connection::open(db_path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
-        let (has_last_accessed, has_compacted_col) = Self::probe_schema(&conn);
+        let has_last_accessed = Self::probe_schema(&conn);
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -343,7 +257,6 @@ impl MemoryManager {
             tfidf_index: RwLock::new(TfIdfIndex::new()),
             semantic_config: RwLock::new(SemanticSearchConfig::default()),
             has_last_accessed,
-            has_compacted_col,
         })
     }
 
@@ -351,7 +264,7 @@ impl MemoryManager {
     pub fn from_path(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
-        let (has_last_accessed, has_compacted_col) = Self::probe_schema(&conn);
+        let has_last_accessed = Self::probe_schema(&conn);
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -359,7 +272,6 @@ impl MemoryManager {
             tfidf_index: RwLock::new(TfIdfIndex::new()),
             semantic_config: RwLock::new(SemanticSearchConfig::default()),
             has_last_accessed,
-            has_compacted_col,
         })
     }
 
@@ -367,7 +279,7 @@ impl MemoryManager {
     pub fn with_decay_config(db_path: &str, config: DecayConfig) -> Result<Self> {
         let conn = Connection::open(db_path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
-        let (has_last_accessed, has_compacted_col) = Self::probe_schema(&conn);
+        let has_last_accessed = Self::probe_schema(&conn);
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -375,7 +287,6 @@ impl MemoryManager {
             tfidf_index: RwLock::new(TfIdfIndex::new()),
             semantic_config: RwLock::new(SemanticSearchConfig::default()),
             has_last_accessed,
-            has_compacted_col,
         })
     }
 
@@ -386,7 +297,7 @@ impl MemoryManager {
     ) -> Result<Self> {
         let conn = Connection::open(db_path)
             .map_err(|e| Error::Database(format!("Failed to open database: {}", e)))?;
-        let (has_last_accessed, has_compacted_col) = Self::probe_schema(&conn);
+        let has_last_accessed = Self::probe_schema(&conn);
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -394,7 +305,6 @@ impl MemoryManager {
             tfidf_index: RwLock::new(TfIdfIndex::new()),
             semantic_config: RwLock::new(semantic_config),
             has_last_accessed,
-            has_compacted_col,
         })
     }
 
@@ -1051,114 +961,22 @@ impl MemoryManager {
         })
     }
 
-    // =========================================================================
-    // Memory Compaction Methods
-    // =========================================================================
-
-    /// Get daily logs that are candidates for compaction
-    pub fn get_logs_for_compaction(
-        &self,
-        config: &CompactionConfig,
-    ) -> Result<Vec<CompactionCandidate>> {
+    /// Get every daily log for the user-owned memory export.
+    pub fn get_all_daily_logs(&self) -> Result<Vec<DailyLogEntry>> {
         let conn = self
             .conn
             .lock()
             .map_err(|e| Error::Generic(e.to_string()))?;
-
-        let cutoff_date = Utc::now()
-            .checked_sub_signed(chrono::Duration::days(config.days_before_compaction as i64))
-            .unwrap_or_else(Utc::now)
-            .format("%Y-%m-%d")
-            .to_string();
-
-        // BUG-09 fix: use cached schema probe result instead of per-call pragma
-        let has_compacted_col = self.has_compacted_col;
-
-        let sql = if has_compacted_col {
-            "SELECT log_date, COUNT(*) as cnt,
-             julianday('now') - julianday(log_date) as days_old,
-             COALESCE(compacted, 0) as is_compacted,
-             GROUP_CONCAT(SUBSTR(content, 1, 50), ' | ') as preview
-             FROM daily_logs
-             WHERE log_date < ?1 AND COALESCE(compacted, 0) = 0
-             GROUP BY log_date
-             ORDER BY log_date ASC"
-        } else {
-            "SELECT log_date, COUNT(*) as cnt,
-             julianday('now') - julianday(log_date) as days_old,
-             0 as is_compacted,
-             GROUP_CONCAT(SUBSTR(content, 1, 50), ' | ') as preview
-             FROM daily_logs
-             WHERE log_date < ?1
-             GROUP BY log_date
-             ORDER BY log_date ASC"
-        };
 
         let mut stmt = conn
-            .prepare(sql)
-            .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
-
-        let candidates = stmt
-            .query_map(params![cutoff_date], |row| {
-                Ok(CompactionCandidate {
-                    log_date: row.get(0)?,
-                    entry_count: row.get::<_, i64>(1)? as usize,
-                    days_old: row.get::<_, f64>(2)? as i64,
-                    is_compacted: row.get::<_, i64>(3)? != 0,
-                    preview: row.get::<_, String>(4).unwrap_or_default(),
-                })
-            })
-            .map_err(|e| Error::Database(format!("Failed to query candidates: {}", e)))?
-            .filter_map(|r| r.ok())
-            .collect();
-
-        Ok(candidates)
-    }
-
-    /// Get daily logs in a date range
-    pub fn get_logs_in_range(
-        &self,
-        start_date: Option<&str>,
-        end_date: Option<&str>,
-    ) -> Result<Vec<DailyLogEntry>> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-
-        // Use parameterized queries to prevent SQL injection (MEM-012 fix)
-        let (sql, params): (&str, Vec<&str>) = match (start_date, end_date) {
-            (Some(start), Some(end)) => (
-                "SELECT id, log_date, timestamp, entry_type, content, metadata
-                 FROM daily_logs WHERE log_date >= ?1 AND log_date <= ?2
-                 ORDER BY log_date, timestamp",
-                vec![start, end],
-            ),
-            (Some(start), None) => (
-                "SELECT id, log_date, timestamp, entry_type, content, metadata
-                 FROM daily_logs WHERE log_date >= ?1
-                 ORDER BY log_date, timestamp",
-                vec![start],
-            ),
-            (None, Some(end)) => (
-                "SELECT id, log_date, timestamp, entry_type, content, metadata
-                 FROM daily_logs WHERE log_date <= ?1
-                 ORDER BY log_date, timestamp",
-                vec![end],
-            ),
-            (None, None) => (
+            .prepare(
                 "SELECT id, log_date, timestamp, entry_type, content, metadata
                  FROM daily_logs ORDER BY log_date, timestamp",
-                vec![],
-            ),
-        };
-
-        let mut stmt = conn
-            .prepare(sql)
+            )
             .map_err(|e| Error::Database(format!("Failed to prepare query: {}", e)))?;
 
         let logs = stmt
-            .query_map(rusqlite::params_from_iter(params.iter()), |row| {
+            .query_map([], |row| {
                 Ok(DailyLogEntry {
                     id: row.get(0)?,
                     log_date: row.get(1)?,
@@ -1173,154 +991,6 @@ impl MemoryManager {
             .collect();
 
         Ok(logs)
-    }
-
-    /// Promote extracted memories to long-term storage
-    pub fn promote_to_long_term(&self, memories: &[ExtractedMemory]) -> Result<usize> {
-        let mut count = 0;
-        for memory in memories {
-            self.remember(
-                memory.category,
-                &memory.topic,
-                &memory.content,
-                Some(memory.importance),
-                Some(&memory.source),
-            )?;
-            count += 1;
-        }
-        Ok(count)
-    }
-
-    /// Archive compacted daily logs
-    pub fn archive_compacted_logs(
-        &self,
-        dates: &[String],
-        delete_compacted: bool,
-    ) -> Result<usize> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-
-        let mut count = 0;
-
-        for date in dates {
-            if delete_compacted {
-                let deleted = conn
-                    .execute("DELETE FROM daily_logs WHERE log_date = ?1", params![date])
-                    .map_err(|e| Error::Database(format!("Failed to delete logs: {}", e)))?;
-                count += deleted;
-            } else {
-                // Check if compacted column exists before updating
-                let has_col: bool = conn
-                    .query_row(
-                        "SELECT COUNT(*) > 0 FROM pragma_table_info('daily_logs') WHERE name = 'compacted'",
-                        [],
-                        |row| row.get(0),
-                    )
-                    .unwrap_or(false);
-
-                if has_col {
-                    let updated = conn
-                        .execute(
-                            "UPDATE daily_logs SET compacted = 1 WHERE log_date = ?1",
-                            params![date],
-                        )
-                        .map_err(|e| Error::Database(format!("Failed to mark logs: {}", e)))?;
-                    count += updated;
-                }
-            }
-        }
-
-        Ok(count)
-    }
-
-    /// Build extraction prompt for LLM
-    pub fn build_extraction_prompt(
-        &self,
-        logs: &[DailyLogEntry],
-        config: &CompactionConfig,
-    ) -> String {
-        let custom_prompt = config.summary_prompt.as_deref().unwrap_or(
-            "You are AGI Workforce's memory extraction system. Analyze conversation logs to extract important memories that will help serve the user better in future sessions.
-Extract key facts, user preferences, and decisions that should be remembered long-term.
-Format your response as JSON with this structure:
-{
-  \"memories\": [
-    {
-      \"category\": \"preference|fact|decision\",
-      \"topic\": \"short identifier\",
-      \"content\": \"the memory content\",
-      \"importance\": 1-10
-    }
-  ]
-}",
-        );
-
-        let mut prompt = format!("{}\n\nLogs to analyze:\n", custom_prompt);
-
-        for log in logs {
-            prompt.push_str(&format!(
-                "[{}] {}: {}\n",
-                log.log_date,
-                log.entry_type.as_str(),
-                log.content
-            ));
-        }
-
-        prompt
-    }
-
-    /// Get compaction statistics
-    pub fn get_compaction_stats(&self) -> Result<serde_json::Value> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| Error::Generic(e.to_string()))?;
-
-        let total_logs: i64 = conn
-            .query_row("SELECT COUNT(*) FROM daily_logs", [], |row| row.get(0))
-            .unwrap_or(0);
-
-        // Check if compacted column exists
-        let has_col: bool = conn
-            .query_row(
-                "SELECT COUNT(*) > 0 FROM pragma_table_info('daily_logs') WHERE name = 'compacted'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(false);
-
-        let compacted_logs: i64 = if has_col {
-            conn.query_row(
-                "SELECT COUNT(*) FROM daily_logs WHERE compacted = 1",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(0)
-        } else {
-            0
-        };
-
-        let unique_dates: i64 = conn
-            .query_row(
-                "SELECT COUNT(DISTINCT log_date) FROM daily_logs",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(0);
-
-        Ok(serde_json::json!({
-            "total_logs": total_logs,
-            "compacted_logs": compacted_logs,
-            "uncompacted_logs": total_logs - compacted_logs,
-            "unique_dates": unique_dates,
-            "compaction_rate": if total_logs > 0 {
-                (compacted_logs as f64 / total_logs as f64) * 100.0
-            } else {
-                0.0
-            }
-        }))
     }
 
     // =========================================================================
@@ -1628,7 +1298,7 @@ Format your response as JSON with this structure:
     /// ```
     pub fn export_to_json(&self) -> Result<String> {
         let memories = self.export_all()?;
-        let logs = self.get_logs_in_range(None, None)?;
+        let logs = self.get_all_daily_logs()?;
 
         let export = MemoryExport {
             version: "1.0".to_string(),
