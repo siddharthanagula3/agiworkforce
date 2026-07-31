@@ -68,6 +68,7 @@ import {
 import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
+import { _sharedArtifactStore } from '../stores/artifacts-store';
 import { useConversationBranches } from '../hooks/use-conversation-branches';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
@@ -1862,6 +1863,12 @@ export default function WebChatPage() {
     setBareChatSessionId(null);
     setComposerPrefill(undefined);
     setComposerClearSignal((value) => value + 1);
+    // A new chat has no artifacts, so leaving the panel open just showed an
+    // empty "No artifacts yet" rail next to a fresh composer. Closed
+    // imperatively rather than via useArtifactsStore: that hook subscribes to
+    // the whole store, and this page would then re-render on every artifact
+    // change for the sake of one setter.
+    _sharedArtifactStore.getState().setPanelOpen(false);
     // Global "New chat" starts unscoped. Project-scoped new chats go through
     // the sidebar project row (/chat?projectId=...) or the composer picker.
     setActiveProject(null);
