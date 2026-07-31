@@ -120,6 +120,32 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.context.globalState.get<boolean>(ONBOARDING_SEEN_KEY)).toBe(true);
   });
 
+  it('returns exact active-selection metadata in sidebar file search results', async () => {
+    const harness = makeHarness();
+    const uri = vscode.Uri.file('/workspace/src/app.ts');
+    vi.mocked(vscode.workspace.findFiles).mockResolvedValueOnce([uri]);
+    vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('src/app.ts');
+    vscode.window.activeTextEditor = {
+      document: { uri },
+      selection: new vscode.Selection(4, 1, 6, 8),
+    } as unknown as vscode.TextEditor;
+
+    await harness.manager.handleMessage({ type: 'fileSearch', payload: { query: 'app' } });
+
+    expect(harness.posted).toContainEqual({
+      type: 'fileSearchResults',
+      payload: {
+        files: [
+          {
+            path: 'src/app.ts',
+            label: 'src/app.ts · lines 5-7',
+            range: { startLine: 4, startCharacter: 1, endLine: 6, endCharacter: 8 },
+          },
+        ],
+      },
+    });
+  });
+
   it('replays onboarding without mutating chat state', () => {
     const harness = makeHarness();
 
@@ -755,6 +781,108 @@ describe('ChatStateManager local turn lifecycle', () => {
         input: expect.arrayContaining([{ type: 'image', image_url: 'data:image/png;base64,AQID' }]),
       }),
     );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('forwards sidebar file mentions with their exact selected range', async () => {
+    const harness = makeHarness();
+    vi.mocked(vscode.workspace.fs.stat).mockResolvedValueOnce({
+      type: vscode.FileType.File,
+      ctime: 0,
+      mtime: 0,
+      size: 30,
+    });
+    vi.mocked(vscode.workspace.openTextDocument).mockResolvedValueOnce({
+      getText: vi.fn(() => 'const mentioned = true;'),
+    } as unknown as vscode.TextDocument);
+    vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('src/mentioned.ts');
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Review @src/mentioned.ts#L5-L7',
+        references: [
+          {
+            path: 'src/mentioned.ts',
+            range: { startLine: 4, startCharacter: 0, endLine: 6, endCharacter: 8 },
+          },
+        ],
+      },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'text',
+            text: expect.stringContaining(
+              '<untrusted_file_reference path="src/mentioned.ts" lines="5-7">\nconst mentioned = true;',
+            ),
+          }),
+        ]),
+      }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('ignores a sidebar file reference that is not visible in the user text', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Review this code',
+        references: [{ path: 'src/hidden.ts' }],
+      },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
+    const input = harness.runtime.startTurn.mock.calls[0]?.[0].input;
+    expect(input).toHaveLength(1);
+    expect(input[0]).toMatchObject({ type: 'text', text: 'Review this code' });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('ignores malformed sidebar reference payloads without failing the turn', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: {
+        text: 'Review @src/app.ts#L1-L2',
+        references: [{ path: 'src/app.ts', range: null }],
+      },
+    } as unknown as Parameters<typeof harness.manager.handleMessage>[0]);
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
     harness.emit({
       type: 'turn_completed',
       threadId: 'thread-1',

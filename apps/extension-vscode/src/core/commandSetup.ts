@@ -67,6 +67,18 @@ import { openAgentConfig } from '../features/config/agentConfig';
 
 const execFileAsync = promisify(execFile);
 
+function buildChatReferenceQuery(target: vscode.Uri): string {
+  const editor = vscode.window.activeTextEditor;
+  if (
+    editor !== undefined &&
+    editor.document.uri.toString() === target.toString() &&
+    !editor.selection.isEmpty
+  ) {
+    return '@agi #selection ';
+  }
+  return `@agi #file:${vscode.workspace.asRelativePath(target)} `;
+}
+
 /**
  * Output channel for git/test commands invoked via execFile.
  * PR-3B (F-12, F-19): replaces `terminal.sendText` for hardcoded commands
@@ -217,8 +229,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.window.showWarningMessage('AGI Workforce: No file selected to mention in chat.');
         return;
       }
-      const relPath = vscode.workspace.asRelativePath(target);
-      const query = `@agi #file:${relPath} `;
+      const query = buildChatReferenceQuery(target);
       try {
         await vscode.commands.executeCommand('workbench.action.chat.open', { query });
       } catch {
@@ -1460,8 +1471,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.window.showWarningMessage(`AGI Workforce: ${result.message}`);
         return;
       }
-      const relPath = vscode.workspace.asRelativePath(result.uri);
-      const query = `@agi #file:${relPath} `;
+      const query = buildChatReferenceQuery(result.uri);
       try {
         await vscode.commands.executeCommand('workbench.action.chat.open', { query });
       } catch {
