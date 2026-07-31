@@ -3303,19 +3303,19 @@
     "item": "session-management",
     "surface": "packages/auth",
     "status": "built",
-    "evidence": "Clerk-backed session state surfaced via useSession() (session.createdAt/lastActiveAt) in apps/web/features/settings/sections/AccountSection.tsx:40,141-150; mobile session bridging in apps/mobile/src/integrations/clerk.ts:33-99 and apps/mobile/services/authSession.ts; desktop cloud-account session lifecycle in apps/desktop/src/services/cloudAccountAuth.ts (restoreNativeAccessToken, Session type at lines 45-50) backed by Tauri commands apps/desktop/src-tauri/src/sys/account/mod.rs:612-729."
+    "evidence": "Web account-session management is server-owned: apps/web/app/api/settings/sessions/route.ts:27-159 pages Clerk's authenticated active-session list, projects bounded device/browser/location/timestamps without raw IPs, marks the current session, and provides account-wide revocation; [sessionId]/route.ts:14-60 ownership-checks individual revocation. AccountSection.tsx:125-178,488-682 renders loading/retry/error states and current/device-specific actions. Mobile session bridging remains in apps/mobile/src/integrations/clerk.ts and services/authSession.ts; Desktop cloud-account lifecycle remains in apps/desktop/src/services/cloudAccountAuth.ts backed by Tauri account commands."
   },
   {
     "item": "device-list",
     "surface": "packages/auth",
-    "status": "partial",
-    "evidence": "apps/web/features/settings/sections/AccountSection.tsx:132-150 renders an 'Active sessions' table, but the code comment explicitly states: 'Clerk's client SDK only exposes the active session, so showing more would be fabricated' — sessionRows is built from a single row (the current session) only."
+    "status": "built",
+    "evidence": "apps/web/app/api/settings/sessions/route.ts:27-115 pages every active Clerk Backend session owned by the authenticated user, safely projects device type, browser/version, coarse city/country, creation/last-active/expiry timestamps, excludes raw IP addresses, and sorts the current session first. AccountSection.tsx:488-682 renders the account-wide list with current-session labeling, loading, empty, retry, and responsive overflow states. route.test.ts and AccountSection.sessions.test.tsx cover multi-device projection, current-device identity, privacy, and mounted UI."
   },
   {
     "item": "revoke-session",
     "surface": "packages/auth",
-    "status": "partial",
-    "evidence": "apps/web/features/settings/sections/AccountSection.tsx:60-74 'Log out of all devices' calls clerkSignOut({redirectUrl}) with no sessionId, ending every session at once; services/api-gateway/src/routes/auth.ts:68-117 implements self-revocation of the CURRENT gateway JWT on /auth/logout (writes jti to revoked_jwts), mirrored by apps/web/app/api/auth/logout/route.ts calling revokeDeveloperToken."
+    "status": "built",
+    "evidence": "apps/web/app/api/settings/sessions/[sessionId]/route.ts:14-60 validates Clerk session IDs, requires CSRF and an authenticated browser session, verifies target ownership without cross-user disclosure, and revokes the selected session. sessions/route.ts:117-159 revokes all other devices in bounded batches before ending the current session, leaving the current session active when another-device revocation fails. AccountSection.tsx:125-178 and :634 route individual/current/all-device actions through these APIs before local cleanup. Tests cover ownership/IDOR, malformed IDs, current-last ordering, upstream partial failure, individual UI removal, and all-device logout."
   },
   {
     "item": "keyring-token-storage",

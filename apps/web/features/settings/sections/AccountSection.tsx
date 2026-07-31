@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useClerk, useSession } from '@clerk/nextjs';
-import { Copy, Check, LogOut, Trash2 } from 'lucide-react';
+import { useClerk } from '@clerk/nextjs';
+import { Copy, Check, LogOut, RefreshCw, Trash2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +29,35 @@ function formatDateTime(value: Date | null | undefined): string {
   });
 }
 
+interface AccountSession {
+  id: string;
+  status: string;
+  device: string;
+  browser: string | null;
+  location: string | null;
+  createdAt: string | null;
+  lastActiveAt: string | null;
+  expiresAt: string | null;
+  isCurrent: boolean;
+}
+
+function formatSessionDateTime(value: string | null): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : formatDateTime(date);
+}
+
+function readApiError(data: unknown, fallback: string): string {
+  if (data === null || typeof data !== 'object' || !('error' in data)) return fallback;
+  const error = (data as { error?: unknown }).error;
+  if (typeof error === 'string' && error.trim()) return error;
+  if (error !== null && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return fallback;
+}
+
 export function AccountSection() {
   // Reads the Clerk-backed auth store. PER-3: `useBillingStore.user` used to be
   // structurally null (its only writer, `_setUser`, had zero call sites); that
@@ -37,8 +66,6 @@ export function AccountSection() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { signOut: clerkSignOut } = useClerk();
-  // Live Clerk session — the source for the current device's real timestamps.
-  const { session } = useSession();
   const router = useRouter();
 
   const userId = user?.id ?? null;
@@ -58,21 +85,101 @@ export function AccountSection() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
+  const [sessions, setSessions] = useState<AccountSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [sessionActionError, setSessionActionError] = useState<string | null>(null);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+
+  const loadSessions = useCallback(async (signal?: AbortSignal) => {
+    setSessionsLoading(true);
+    setSessionsError(null);
+    try {
+      const response = await fetch('/api/settings/sessions', {
+        method: 'GET',
+        cache: 'no-store',
+        signal,
+      });
+      const data: unknown = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(readApiError(data, 'Unable to load active sessions.'));
+      const rows =
+        data !== null && typeof data === 'object' && 'sessions' in data
+          ? (data as { sessions?: unknown }).sessions
+          : null;
+      if (!Array.isArray(rows)) throw new Error('The active-session response was invalid.');
+      if (!signal?.aborted) setSessions(rows as AccountSession[]);
+    } catch (error) {
+      if (signal?.aborted) return;
+      setSessionsError(error instanceof Error ? error.message : 'Unable to load active sessions.');
+    } finally {
+      if (!signal?.aborted) setSessionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadSessions(controller.signal);
+    return () => controller.abort();
+  }, [loadSessions]);
+
   const handleLogOutAll = useCallback(async () => {
     setLoggingOut(true);
     setLogoutError(null);
+    let sessionsRevoked = false;
     try {
-      // Use the SAME sign-out path as the sidebar's "Log out" (useAuthStore.logout()
-      // followed by Clerk's signOut). useAuthStore.logout() calls cleanupAllStores(),
-      // which clears the per-user localStorage-backed stores. Clerk's signOut with no
-      // sessionId ends all sessions for this browser.
+      const headers = await addCsrfHeaders();
+      const response = await fetch('/api/settings/sessions', { method: 'DELETE', headers });
+      const data: unknown = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(readApiError(data, 'Unable to log out every device.'));
+      sessionsRevoked = true;
       await logout();
       await clerkSignOut({ redirectUrl: '/login' });
     } catch (err) {
+      if (sessionsRevoked) {
+        router.replace('/login');
+        return;
+      }
       setLogoutError(err instanceof Error ? err.message : 'Sign out failed.');
       setLoggingOut(false);
     }
-  }, [logout, clerkSignOut]);
+  }, [logout, clerkSignOut, router]);
+
+  const handleRevokeSession = useCallback(
+    async (session: AccountSession) => {
+      setRevokingSessionId(session.id);
+      setSessionActionError(null);
+      let sessionRevoked = false;
+      try {
+        const headers = await addCsrfHeaders();
+        const response = await fetch(`/api/settings/sessions/${encodeURIComponent(session.id)}`, {
+          method: 'DELETE',
+          headers,
+        });
+        const data: unknown = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(readApiError(data, 'Unable to revoke this session.'));
+        sessionRevoked = true;
+
+        if (session.isCurrent) {
+          await logout();
+          await clerkSignOut({ sessionId: session.id, redirectUrl: '/login' });
+          return;
+        }
+
+        setSessions((current) => current.filter((row) => row.id !== session.id));
+      } catch (error) {
+        if (sessionRevoked && session.isCurrent) {
+          router.replace('/login');
+          return;
+        }
+        setSessionActionError(
+          error instanceof Error ? error.message : 'Unable to revoke this session.',
+        );
+      } finally {
+        setRevokingSessionId(null);
+      }
+    },
+    [clerkSignOut, logout, router],
+  );
 
   // ── Delete account (canonical, working flow on this surface) ───────────────
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -130,26 +237,6 @@ export function AccountSection() {
     })();
   }, [logout, clerkSignOut, router]);
 
-  // Current-session row derived from the live Clerk session. We do NOT invent
-  // extra device rows: Clerk's client SDK only exposes the active session, so
-  // showing more would be fabricated. Location is intentionally omitted (no
-  // geo-IP signal on the client) rather than filled with a fake value.
-  const sessionRows: Array<{
-    device: string;
-    created: string;
-    updated: string;
-    isCurrent: boolean;
-  }> = session
-    ? [
-        {
-          device: getDeviceLabel(),
-          created: formatDateTime(session.createdAt),
-          updated: formatDateTime(session.lastActiveAt),
-          isCurrent: true,
-        },
-      ]
-    : [];
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
       <div>
@@ -169,7 +256,7 @@ export function AccountSection() {
         </p>
       </div>
 
-      {/* Log out of all devices */}
+      {/* Account-wide session control */}
       <section
         style={{
           border: '1px solid var(--settings-border)',
@@ -209,6 +296,7 @@ export function AccountSection() {
           </div>
           <button
             type="button"
+            aria-label="Log out of all devices"
             onClick={() => void handleLogOutAll()}
             disabled={loggingOut}
             style={{
@@ -418,7 +506,39 @@ export function AccountSection() {
           Active sessions
         </div>
 
-        {sessionRows.length === 0 ? (
+        {sessionsLoading ? (
+          <div role="status" style={{ padding: '20px', fontSize: 13, color: 'var(--text-3)' }}>
+            Loading active sessions…
+          </div>
+        ) : sessionsError ? (
+          <div style={{ padding: '20px' }}>
+            <p
+              role="alert"
+              style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--settings-destructive)' }}
+            >
+              {sessionsError}
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadSessions()}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 11px',
+                fontSize: 12,
+                color: 'var(--text-1)',
+                background: 'transparent',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+              }}
+            >
+              <RefreshCw size={13} />
+              Retry
+            </button>
+          </div>
+        ) : sessions.length === 0 ? (
           <div style={{ padding: '20px', fontSize: 13, color: 'var(--text-3)' }}>
             No active sessions found.
           </div>
@@ -432,9 +552,10 @@ export function AccountSection() {
                     background: 'var(--bg-hover, rgba(255,255,255,0.03))',
                   }}
                 >
-                  {['Device', 'Created', 'Last active'].map((col) => (
+                  {['Device', 'Location', 'Created', 'Last active', ''].map((col, index) => (
                     <th
-                      key={col}
+                      key={col || `actions-${index}`}
+                      scope="col"
                       style={{
                         padding: '10px 16px',
                         textAlign: 'left',
@@ -446,22 +567,34 @@ export function AccountSection() {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {col}
+                      {col || <span className="sr-only">Actions</span>}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {sessionRows.map((row, idx) => (
+                {sessions.map((row, idx) => (
                   <tr
-                    key={idx}
+                    key={row.id}
                     style={{
                       borderBottom:
-                        idx < sessionRows.length - 1 ? '1px solid var(--settings-border)' : 'none',
+                        idx < sessions.length - 1 ? '1px solid var(--settings-border)' : 'none',
                     }}
                   >
                     <td style={{ padding: '12px 16px', color: 'var(--text-1)', fontWeight: 500 }}>
-                      {row.device}
+                      <div>{row.device}</div>
+                      {row.browser ? (
+                        <div
+                          style={{
+                            marginTop: 2,
+                            color: 'var(--text-3)',
+                            fontSize: 11,
+                            fontWeight: 400,
+                          }}
+                        >
+                          {row.browser}
+                        </div>
+                      ) : null}
                       {row.isCurrent && (
                         <span
                           style={{
@@ -483,12 +616,46 @@ export function AccountSection() {
                     <td
                       style={{ padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}
                     >
-                      {row.created}
+                      {row.location ?? 'Not available'}
                     </td>
                     <td
                       style={{ padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}
                     >
-                      {row.updated}
+                      {formatSessionDateTime(row.createdAt)}
+                    </td>
+                    <td
+                      style={{ padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' }}
+                    >
+                      {formatSessionDateTime(row.lastActiveAt)}
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        onClick={() => void handleRevokeSession(row)}
+                        disabled={revokingSessionId !== null || loggingOut}
+                        aria-label={
+                          row.isCurrent ? 'Log out current session' : `Revoke ${row.device} session`
+                        }
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: row.isCurrent ? 'var(--text-2)' : 'var(--settings-destructive)',
+                          background: 'transparent',
+                          border: '1px solid var(--settings-border)',
+                          borderRadius: 'var(--radius-md)',
+                          cursor: revokingSessionId !== null || loggingOut ? 'default' : 'pointer',
+                          opacity:
+                            revokingSessionId !== null && revokingSessionId !== row.id ? 0.5 : 1,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {revokingSessionId === row.id
+                          ? 'Ending…'
+                          : row.isCurrent
+                            ? 'Log out'
+                            : 'Revoke'}
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -496,9 +663,22 @@ export function AccountSection() {
             </table>
           </div>
         )}
+        {sessionActionError ? (
+          <p
+            role="alert"
+            style={{
+              padding: '0 20px 12px',
+              fontSize: 12,
+              color: 'var(--settings-destructive)',
+              margin: 0,
+            }}
+          >
+            {sessionActionError}
+          </p>
+        ) : null}
         <p style={{ padding: '12px 20px 16px', fontSize: 11, color: 'var(--text-3)', margin: 0 }}>
-          Showing the session for this device. Use &ldquo;Log out of all devices&rdquo; above to end
-          every active session.
+          Sessions are reported by your account provider across devices. Revoke anything you do not
+          recognize, or use &ldquo;Log out of all devices&rdquo; above.
         </p>
       </section>
 
@@ -584,16 +764,4 @@ export function AccountSection() {
       </AlertDialog>
     </div>
   );
-}
-
-function getDeviceLabel(): string {
-  if (typeof navigator === 'undefined') return 'Browser';
-  const ua = navigator.userAgent;
-  if (/iPhone/.test(ua)) return 'iPhone';
-  if (/iPad/.test(ua)) return 'iPad';
-  if (/Android/.test(ua)) return 'Android';
-  if (/Macintosh/.test(ua)) return 'Mac';
-  if (/Windows/.test(ua)) return 'Windows';
-  if (/Linux/.test(ua)) return 'Linux';
-  return 'Browser';
 }
