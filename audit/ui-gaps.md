@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: c1a98b036adb0f2bfec4359e0bd3b6216d267e4fd8b30a2b327f39944b4967bc -->
+<!-- ui-gaps-csv-sha256: 545aadc3581ee768a7f05e8d845787be80bf3b761ba54433539add46fcf0fe36 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 0 P1, 156 P2, 43 P3.
+- Unresolved: 0 P0, 0 P1, 154 P2, 43 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  199 |
+| Open        |  197 |
 | In Progress |    0 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |   70 |
-| Not Planned |   72 |
+| Done        |   71 |
+| Not Planned |   73 |
 
 ## P0
 
@@ -4838,22 +4838,22 @@ Add optional voice narration capture during recording (so users can explain what
 
 ### GAP-210 — Pairing instructions omit where to enter the code on the receiving device
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-copy
 - **Reference:** Codex · macOS desktop · Remote pairing modal — Computer tab
 
 **Gap**
 
-The reference states the exact destination: 'Click Add in the Settings > Connections > Control other devices tab on your other computer and enter this code'. agiworkforce's card only says 'Open AGI Workforce on your phone, tap Menu -> Pair with Desktop, and scan the code' — the printed 12-char code has no stated purpose, and the phone's actual entry point is the drawer companion widget, not a 'Menu -> Pair with Desktop' item.
+The Desktop pairing card now names the real Mobile destination and action: AGI Workforce > Desktop Companion > Scan QR Code. It also explains that the receiving phone can choose Enter code manually and type the displayed 12-character code, matching the mounted Mobile scanner labels rather than inventing a Menu item.
 
 **Evidence**
 
-apps/desktop/src/features/mobile-companion/QRPairingCard.tsx lines 70-83 and 101-116; apps/mobile navigation entry points are apps/mobile/src/shared/components/DesktopCompanionWidget.tsx:375 and ConnectionStatus.tsx:64
+apps/desktop/src/features/mobile-companion/QRPairingCard.tsx owns the corrected three-step instructions and manual-code help. apps/mobile/app/(app)/companion/index.tsx names the destination Desktop Companion; ConnectionStateViews.tsx and QRScanner.tsx own Scan QR Code and Enter code manually. QRPairingCard.test.tsx pins the cross-surface copy. Browser evidence: apps/desktop/docs/qa/screenshots/GAP-210-211-mobile-pairing-full.png.
 
 **Suggested fix**
 
-Rewrite the card copy to name the real mobile path and add a line under the code explaining it can be typed on the phone's 'Enter code manually' screen; keep the copy in sync with the mobile route label.
+Completed. Keep Desktop instructions synchronized with the mounted Mobile route and scanner labels whenever the companion navigation changes.
 
 **Reference screenshot(s)**
 
@@ -4861,22 +4861,22 @@ Rewrite the card copy to name the real mobile path and add a line under the code
 
 ### GAP-211 — Pairing card has no Phone/Computer tabs, no enlarge-QR, and no copy-code button
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Remote pairing modal — Phone tab
 
 **Gap**
 
-The reference pairing modal has a Phone | Computer segmented control, a QR with expand-to-fullscreen and refresh icon buttons, and (on the Computer tab) a copy button for the typed code. agiworkforce's QRPairingCard renders a fixed 192px QR plus a text code with only a 'Refresh code' button — no enlarge (hard to scan on a hidpi display at that size), no copy, and no alternative pairing target.
+The supported phone-pairing card now generates a high-resolution QR, exposes compact refresh and enlarge actions, opens the QR in a focused full-width dialog, and copies the raw pairing code with success/failure feedback. A Phone/Computer selector is intentionally absent: the authoritative store and signaling contract support one short-lived mobile companion session, not computer-to-computer pairing.
 
 **Evidence**
 
-apps/desktop/src/features/mobile-companion/QRPairingCard.tsx lines 85-144
+QRPairingCard.tsx implements refresh, enlarged QR, and raw-code copy with accessible labels; connectionStore.ts provides a deterministic non-connectable UI-development fixture without changing production authentication. QRPairingCard.test.tsx covers refresh, enlarge, copy, and the absence of a fake Computer tab. Browser evidence: apps/desktop/docs/qa/screenshots/GAP-210-211-mobile-pairing-full.png and apps/desktop/docs/qa/screenshots/GAP-211-mobile-pairing-enlarged-qr.png.
 
 **Suggested fix**
 
-Add a segmented Phone/Computer control, an expand-QR affordance that opens the data URL at full dialog width, and a copy-to-clipboard icon button next to the pairing code.
+Supported phone affordances are complete. Reconsider a Computer tab only after the signaling, identity, authorization, routing, revocation, and UI contracts support computer-to-computer pairing as a real target.
 
 **Reference screenshot(s)**
 
