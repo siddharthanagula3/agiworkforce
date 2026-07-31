@@ -876,27 +876,6 @@ export async function mcpExtensionSetConfig(
   }
 }
 
-export interface ConnectorManifest {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  icon: string;
-  authType: string;
-  provider: string | null;
-  envKeys: string[];
-  npmPackage: string;
-  docsUrl: string | null;
-}
-
-export async function mcpGetConnectorManifests(): Promise<ConnectorManifest[]> {
-  try {
-    return await invokeWithTimeout<ConnectorManifest[]>('get_connector_manifests');
-  } catch (error) {
-    throw new Error(`Failed to get connector manifests: ${error}`);
-  }
-}
-
 /**
  * Get the status of all OAuth providers.
  *
@@ -1237,10 +1216,6 @@ export class McpClient {
     config: Record<string, unknown>,
   ): Promise<string> {
     return mcpExtensionSetConfig(extensionId, config);
-  }
-
-  static async getConnectorManifests(): Promise<ConnectorManifest[]> {
-    return mcpGetConnectorManifests();
   }
 
   /**
