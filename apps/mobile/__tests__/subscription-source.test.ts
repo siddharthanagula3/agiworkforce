@@ -1,32 +1,29 @@
 import {
-  currentStoreSource,
-  getIapSubscriptionGuard,
+  getSubscriptionOwnerGuard,
   subscriptionManagementUrl,
   subscriptionSourceLabel,
 } from '@/src/features/billing/subscriptionSource';
 
-describe('subscription source purchase guard', () => {
-  it('allows the current store to manage its own entitled subscription', () => {
-    expect(currentStoreSource('ios')).toBe('apple');
-    expect(currentStoreSource('android')).toBe('google');
-    expect(getIapSubscriptionGuard('apple', 'active', 'ios').blocked).toBe(false);
-    expect(getIapSubscriptionGuard('google', 'trialing', 'android').blocked).toBe(false);
-  });
-
-  it('blocks cross-platform and unknown entitled subscriptions', () => {
-    expect(getIapSubscriptionGuard('stripe', 'active', 'ios')).toMatchObject({
+describe('subscription owner guard', () => {
+  it('routes every entitled subscription to its recorded owner', () => {
+    expect(getSubscriptionOwnerGuard('stripe', 'active')).toMatchObject({
       blocked: true,
       sourceLabel: 'AGI Workforce on the web',
       managementUrl: 'https://agiworkforce.com/settings/billing',
       managementActionLabel: 'Manage on web',
     });
-    expect(getIapSubscriptionGuard('google', 'active', 'ios').blocked).toBe(true);
-    expect(getIapSubscriptionGuard('unknown', 'active', 'ios').blocked).toBe(true);
+    expect(getSubscriptionOwnerGuard('apple', 'active')).toMatchObject({
+      blocked: true,
+      managementUrl: 'https://apps.apple.com/account/subscriptions',
+      managementActionLabel: 'Open subscriptions',
+    });
+    expect(getSubscriptionOwnerGuard('google', 'trialing').blocked).toBe(true);
+    expect(getSubscriptionOwnerGuard('unknown', 'active').blocked).toBe(true);
   });
 
   it('does not block when there is no entitled subscription', () => {
-    expect(getIapSubscriptionGuard('none', 'none', 'ios').blocked).toBe(false);
-    expect(getIapSubscriptionGuard('stripe', 'canceled', 'ios').blocked).toBe(false);
+    expect(getSubscriptionOwnerGuard('none', 'none').blocked).toBe(false);
+    expect(getSubscriptionOwnerGuard('stripe', 'canceled').blocked).toBe(false);
   });
 
   it('provides management destinations without inventing one for unknown ownership', () => {

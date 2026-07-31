@@ -1463,10 +1463,11 @@ and founder gates remain):
 
 - Managed multi-step reservation extension wired into the real tool loop (see
   `WEB-BILLING-TRUTH-01` above). Residual: external tool fees + undeployed `0066`.
-- P0 Mobile IAP private-allowance leak fixed (`MOBILE-IAP-ALLOWANCE-LEAK-01`):
-  `apps/web/app/api/mobile/iap/verify/route.ts` and the Mobile client no longer
-  serialize `usageBudgetCents`; a behavioral regression test asserts no
-  cents/budget/allowance field is present in the response.
+- P0 Mobile IAP private-allowance leak was fixed in the former prototype
+  (`MOBILE-IAP-ALLOWANCE-LEAK-01`). On 2026-07-30 that unreachable,
+  placeholder-backed client/server slice was removed completely; native store
+  billing is now explicitly Missing until real products and store lifecycle
+  infrastructure exist.
 - P0 developer-surface entitlement bypass fixed at the exploit vector
   (`DEV-SURFACE-ENTITLEMENT-BYPASS-01`): the API gateway binds the required
   capability to a TRUSTED, verified-issuer surface class — first-party
@@ -1481,11 +1482,12 @@ and founder gates remain):
   claim in the Clerk JWT template.
 - P0 Mobile usage migrated to the percentage-only contract
   (`apps/mobile/services/usage.ts` + the cloud-usage screen): no `$NaN`, no exact
-  dollars, validated via `parseManagedUsageSummaryResponse`. Mobile IAP drift
-  fixed (`MOBILE-IAP-PLACEHOLDER-GATED-01`): Team removed from the self-serve set
-  (sales-assisted), Max 15x added, both the mobile and web-server IAP catalogs
-  derive from the canonical `SELF_SERVE_PAID_PLAN_TIERS`, and `FEATURES.iap` is
-  gated OFF while every SKU is a placeholder.
+  dollars, validated via `parseManagedUsageSummaryResponse`. The former Mobile
+  IAP catalogs were first corrected and gated
+  (`MOBILE-IAP-PLACEHOLDER-GATED-01`), then removed on 2026-07-30 because every
+  SKU remained a placeholder and no store products existed. The IAP-first
+  product decision remains current, but the capability is Missing rather than
+  represented by unreachable code.
 - P1 VS Code usage rewired from the dead `/api/auth/me` (route does not exist in
   `apps/web`) to canonical `/api/usage`, rendering a percentage and dropping the
   exact token/cap client fields, type, sidebar meter, and UI.
