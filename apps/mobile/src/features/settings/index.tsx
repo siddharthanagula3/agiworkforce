@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import { Alert, View, ScrollView, Pressable } from 'react-native';
+import { Alert, View, ScrollView } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, TextInput, View } from 'react-native';
+import { Alert, TextInput, View } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { reloadAppAsync } from 'expo';
 import { Check, Languages, Search, Smartphone } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';

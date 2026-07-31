@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock3, Globe2, ListChecks, X, type LucideIcon } from 'lucide-react-native';

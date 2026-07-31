@@ -11,7 +11,8 @@
  * Props arrive via router params: `kind: MobilePermissionKind`.
  */
 import { useCallback, useState } from 'react';
-import { View, ScrollView, Pressable, Linking, Alert } from 'react-native';
+import { View, ScrollView, Linking, Alert } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';

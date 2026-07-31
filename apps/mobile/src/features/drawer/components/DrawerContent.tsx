@@ -226,8 +226,12 @@ function SearchBox({ onPress }: { onPress: () => void }) {
       }}
     >
       <Search size={17} color={colors.textMuted} />
-      <Text style={{ flex: 1, color: colors.textMuted, fontSize: 15 }}>
-        Search chats, projects, and files
+      {/* The drawer panel is ~71% of screen width, so a long placeholder wraps
+          to two lines and stretches the pill. numberOfLines pins it to one row
+          regardless of locale/dynamic-type; the search overlay itself already
+          states the full scope (chats, projects, files). */}
+      <Text numberOfLines={1} style={{ flex: 1, color: colors.textMuted, fontSize: 15 }}>
+        Search
       </Text>
     </Pressable>
   );

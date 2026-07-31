@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Pressable, TextInput } from 'react-native';
+import { View, TextInput } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import Animated, {
   FadeInDown,
   useReducedMotion,

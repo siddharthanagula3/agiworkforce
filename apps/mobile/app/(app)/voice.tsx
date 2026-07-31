@@ -19,10 +19,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withRepeat,
   withSequence,
   withTiming,
+  Easing,
   FadeIn,
 } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
@@ -127,7 +127,13 @@ function TerraCottaOrb({
 }) {
   const scale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.15);
+  // Exponential moving average of the mic level. Raw metering is noisy at
+  // ~10-20Hz; feeding it straight into an animation reads as the orb shaking.
+  const smoothedLevel = useRef(0);
 
+  // Phase-driven animations. `audioLevel` is deliberately NOT a dependency:
+  // including it restarted these withRepeat loops on every metering tick, so
+  // the idle and thinking pulses never completed a cycle.
   useEffect(() => {
     if (phase === 'thinking') {
       scale.value = withRepeat(
@@ -136,10 +142,7 @@ function TerraCottaOrb({
         true,
       );
       glowOpacity.value = withRepeat(withTiming(0.55, { duration: 750 }), -1, true);
-    } else if (phase === 'listening' || phase === 'speaking') {
-      scale.value = withSpring(1 + audioLevel * 0.28, { damping: 10, stiffness: 200 });
-      glowOpacity.value = withSpring(0.25 + audioLevel * 0.4, { damping: 10 });
-    } else {
+    } else if (phase !== 'listening' && phase !== 'speaking') {
       // idle — gentle slow pulse
       scale.value = withRepeat(
         withSequence(withTiming(1.06, { duration: 2000 }), withTiming(0.97, { duration: 2000 })),
@@ -152,6 +155,21 @@ function TerraCottaOrb({
         true,
       );
     }
+  }, [phase, scale, glowOpacity]);
+
+  // Amplitude-reactive animation, only while the mic/playback is actually live.
+  useEffect(() => {
+    if (phase !== 'listening' && phase !== 'speaking') {
+      smoothedLevel.current = 0;
+      return;
+    }
+    // Weight history heavily so single-frame spikes cannot snap the orb.
+    smoothedLevel.current = smoothedLevel.current * 0.75 + audioLevel * 0.25;
+    const level = smoothedLevel.current;
+    // withTiming rather than withSpring: a spring re-targeted every tick never
+    // settles, and its overshoot is what made the orb visibly jitter.
+    scale.value = withTiming(1 + level * 0.28, { duration: 110, easing: Easing.out(Easing.quad) });
+    glowOpacity.value = withTiming(0.25 + level * 0.4, { duration: 110 });
   }, [phase, audioLevel, scale, glowOpacity]);
 
   const orbStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
