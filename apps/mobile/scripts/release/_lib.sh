@@ -25,18 +25,18 @@ die()      { log_err "$*"; exit 1; }
 # --- Preflight ------------------------------------------------------------
 
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1 — see scripts/release/README.md"
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1 — see scripts/release/EAS_SIGNING_RUNBOOK.md"
 }
 
 require_env() {
   local var="$1"
   if [[ -z "${!var:-}" ]]; then
-    die "missing required env var: $var — see scripts/release/README.md"
+    die "missing required env var: $var — see scripts/release/EAS_SIGNING_RUNBOOK.md"
   fi
 }
 
 require_file() {
-  [[ -f "$1" ]] || die "missing required file: $1 — see scripts/release/README.md"
+  [[ -f "$1" ]] || die "missing required file: $1 — see scripts/release/EAS_SIGNING_RUNBOOK.md"
 }
 
 # Verify the working tree is clean (EAS requireCommit will reject otherwise,

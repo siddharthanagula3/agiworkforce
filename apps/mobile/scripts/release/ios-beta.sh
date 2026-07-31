@@ -7,7 +7,7 @@
 #   2. eas build --platform ios --profile beta (App Store-signed IPA)
 #   3. If --auto-submit: bind that exact build to the beta submit profile
 #
-# Founder action required first — see scripts/release/README.md.
+# Founder action required first — see scripts/release/EAS_SIGNING_RUNBOOK.md.
 
 set -euo pipefail
 # shellcheck source=_lib.sh
@@ -24,7 +24,7 @@ while [[ $# -gt 0 ]]; do
 Usage: $0 [--auto-submit]
   --auto-submit    Upload the resulting IPA to TestFlight via eas submit.
 
-Founder action required first — see apps/mobile/scripts/release/README.md.
+Founder action required first — see apps/mobile/scripts/release/EAS_SIGNING_RUNBOOK.md.
 EOF
       exit 0
       ;;

@@ -28,7 +28,7 @@ Usage: $0 [--auto-submit]
 Production releases require:
   - Clean git working tree (eas.json requireCommit: true)
   - Apple Developer Program enrollment active (D2PR62RLT4)
-  - App Store Connect API key configured (see scripts/release/README.md)
+  - App Store Connect API key configured (see scripts/release/EAS_SIGNING_RUNBOOK.md)
 EOF
       exit 0
       ;;

@@ -19,13 +19,24 @@ work around signing errors. Reconcile the remote credential with these values.
 ## Before a beta or production build
 
 1. Authenticate the EAS CLI with the release-owner account.
-2. Put the App Store Connect API key at
+2. Set `ASC_APP_ID` to the numeric Apple ID shown in App Store Connect under
+   **App Information**, then materialize it before an iOS release:
+
+   ```bash
+   bash apps/mobile/scripts/release/configure-ios-submit.sh "$ASC_APP_ID"
+   ```
+
+   This identifier is not a secret. Commit the resulting `eas.json` change for
+   a local release. The protected GitHub workflow makes an unpushed CI-only
+   configuration commit instead, leaving the tagged application source exact.
+
+3. Put the App Store Connect API key at
    `apps/mobile/secrets/asc-api-key.p8` and export its key and issuer IDs.
-3. Put the Google Play service-account JSON at
+4. Put the Google Play service-account JSON at
    `apps/mobile/secrets/google-play-service-account.json`.
-4. Configure the environment variables listed in `apps/mobile/.env.example`
+5. Configure the environment variables listed in `apps/mobile/.env.example`
    in the matching EAS environment.
-5. Run the platform-specific release command from the repository root:
+6. Run the platform-specific release command from the repository root:
 
    ```bash
    pnpm --filter @agiworkforce/mobile run release:ios:beta
@@ -36,6 +47,38 @@ The release scripts run `release:preflight`, require a clean commit, and use
 remote EAS credentials. Production uses the `production` update channel; beta
 uses `beta`. The Expo runtime version is derived from the native fingerprint,
 so an update cannot be installed on an incompatible native binary.
+
+## Protected tagged GitHub release
+
+`.github/workflows/release-mobile.yml` validates an exact
+`v-mobile-X.Y.Z` tag whose version matches both mobile configuration sources.
+A tag push, or a manual run with `publish=true`, then waits for approval on the
+`mobile-store-release` GitHub environment before starting either store build.
+Manual runs with `publish=false` perform validation only and spend no EAS build
+credits.
+
+Configure these values on the protected environment:
+
+| Kind     | Name                                      | Purpose                                                    |
+| -------- | ----------------------------------------- | ---------------------------------------------------------- |
+| Variable | `ASC_APP_ID`                              | Numeric App Store Connect Apple ID                         |
+| Variable | `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`       | Live public Clerk key used by the production app           |
+| Secret   | `EXPO_TOKEN`                              | Token for non-interactive access to the linked EAS project |
+| Secret   | `ASC_API_KEY_ID`                          | App Store Connect API key ID                               |
+| Secret   | `ASC_API_KEY_ISSUER_ID`                   | App Store Connect API issuer ID                            |
+| Secret   | `ASC_API_PRIVATE_KEY_BASE64`              | Base64-encoded contents of the App Store Connect `.p8` key |
+| Secret   | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64` | Base64-encoded Play Console service-account JSON           |
+
+Also configure the public production variables from `apps/mobile/.env.example`
+in the EAS `production` environment. The GitHub Clerk variable and its EAS
+counterpart must be identical.
+
+The workflow pins EAS CLI, materializes credentials only into the ignored
+`apps/mobile/secrets/` directory, and deletes them even when a job fails. iOS
+uses the production profile and uploads the exact completed build to
+TestFlight. Android uses the production profile and uploads the exact completed
+build to Play Internal Testing as a draft. Promotion to either public store is
+an explicit console action after device validation and store review.
 
 ## Publish the domain-association files
 
