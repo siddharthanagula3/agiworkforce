@@ -115,8 +115,8 @@ impl ModelPickerState {
         // Free — the fail-closed default the tier cache itself uses for an
         // unknown tier — so a signed-out user sees Cloud rows marked, not
         // silently offered.
-        self.tier = crate::tier_cache::read_tier_cache()
-            .map(|cached| cached.tier)
+        self.tier = crate::models::gateway_models::cached_user_tier()
+            .or_else(|| crate::tier_cache::read_tier_cache().map(|cached| cached.tier))
             .unwrap_or(crate::tier_cache::UserTier::Free);
 
         // Group by access mode (Local / BYOK / Cloud) first, then provider,
@@ -575,9 +575,11 @@ pub enum PickerAction {
     Nothing,
     /// Close the picker without selecting.
     Close,
-    /// User confirmed a model selection.  Host should call `session.switch_model`.
+    /// User confirmed a model selection. The host must preserve the selected
+    /// provider/access identity when it switches the session.
     Select {
         model_id: String,
+        provider_id: ProviderId,
         effort: Option<Effort>,
         banner: String,
     },
@@ -669,6 +671,10 @@ pub fn handle_key(
         KeyCode::Enter => {
             if let Some(model) = state.selected_model() {
                 let model_id = model.id.clone();
+                let provider_id = state
+                    .selected_provider_id()
+                    .or_else(|| ProviderId::from_catalog_name(&model.provider))
+                    .expect("selectable model rows always have a known provider");
                 let effort_opt = if state.show_effort_bar() {
                     Some(state.effort)
                 } else {
@@ -684,6 +690,7 @@ pub fn handle_key(
                 state.close();
                 PickerAction::Select {
                     model_id,
+                    provider_id,
                     effort: effort_opt,
                     banner,
                 }
@@ -862,6 +869,30 @@ mod tests {
             Some(PickerRow::AccessModeHeader {
                 mode: AccessMode::Local
             })
+        ));
+    }
+
+    #[test]
+    fn cloud_selection_preserves_managed_provider_identity() {
+        let models = vec![model("managed-model", "agi-cloud")];
+        let mut state = ModelPickerState::default();
+        state.open(&models, "");
+
+        let action = handle_key(
+            &mut state,
+            crossterm::event::KeyEvent::new(
+                crossterm::event::KeyCode::Enter,
+                crossterm::event::KeyModifiers::NONE,
+            ),
+            &models,
+        );
+        assert!(matches!(
+            action,
+            PickerAction::Select {
+                provider_id: ProviderId::AGICloud,
+                ref model_id,
+                ..
+            } if model_id == "managed-model"
         ));
     }
 

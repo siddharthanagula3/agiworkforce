@@ -322,10 +322,47 @@ pub fn format_model_list() -> String {
     out
 }
 
-/// Format static catalog models plus live local models discovered at runtime.
-pub async fn format_model_list_with_local(config: &crate::config::CliConfig) -> String {
+/// Format static catalog models plus live managed-gateway and local discovery.
+pub async fn format_model_list_with_discovery(config: &crate::config::CliConfig) -> String {
     let mut out = format_model_list();
-    let probes = crate::local_models::discover_all(config).await;
+    let (probes, gateway) = tokio::join!(
+        crate::local_models::discover_all(config),
+        crate::models::gateway_models::discover_gateway_models(),
+    );
+    match gateway {
+        Ok(catalog) => {
+            out.push('\n');
+            out.push_str(&format!(
+                "AGI MANAGED CLOUD (live · {}{}):\n",
+                catalog.user_tier,
+                if catalog.authenticated {
+                    " · authenticated"
+                } else {
+                    " · public"
+                }
+            ));
+            let models = crate::models::gateway_models::picker_models(&catalog);
+            if models.is_empty() {
+                out.push_str("  No models available to this CLI account tier.\n");
+            } else {
+                for model in models {
+                    out.push_str(&format!(
+                        "  {:<34} {:>6} ctx {:>5} out\n",
+                        model.id,
+                        format_context_size(model.context_window),
+                        format_context_size(model.max_output_tokens),
+                    ));
+                }
+            }
+        }
+        Err(error) => {
+            out.push('\n');
+            out.push_str(&format!(
+                "AGI MANAGED CLOUD: discovery unavailable ({error})\n"
+            ));
+        }
+    }
+
     let discovered = crate::local_models::discovered_models(&probes);
     if !discovered.is_empty() {
         out.push('\n');
