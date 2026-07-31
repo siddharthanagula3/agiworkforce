@@ -1418,8 +1418,8 @@
   {
     "item": "stream-json-output",
     "surface": "apps/cli",
-    "status": "partial",
-    "evidence": "apps/cli/src/lib.rs:3151-3222 `OneShotOutputMode::JsonLine` uses `sdk_io::NdjsonWriter` (apps/cli/src/sdk_io) to emit NDJSON `StatusUpdate(session_start)` → `AssistantMessage` → `StatusUpdate(session_end)` events, reachable via `--output-format stream-json`."
+    "status": "built",
+    "evidence": "`--output-format stream-json` now emits one flushed, canonical NDJSON event sequence during the live turn rather than wrapping only the final response. apps/cli/src/lib.rs:3179-3212 assigns stable session/message identities, attaches bounded tool lifecycle and budget sinks, and keeps the incompatible legacy `--json-events` envelope mutually exclusive; :3215-3298 emits session_start, accepted user message, real provider text deltas, tool-use starts/results, the authoritative final assistant snapshot, errors, and session_end in execution order. apps/cli/src/agent/chat.rs:286-302 uses the same SDK delta sink for every continuation after tool execution, while agent/mod.rs:90-107 preserves identifiers across those callbacks. sdk_io/ndjson.rs:18-47 escapes ambiguous Unicode line terminators, locks each synchronous callback record against torn writes, appends exactly one newline, and flushes. Regression tests at lib.rs:3479-3541 verify canonical delta IDs/envelopes, matching tool-call identity/results, and schema-conflict rejection; all seven sdk_io tests and the full 1,701-pass CLI library suite also pass."
   },
   {
     "item": "output-style",

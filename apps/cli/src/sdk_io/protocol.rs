@@ -24,7 +24,7 @@ pub(crate) enum SdkEvent {
     AssistantMessage(AssistantMessageEvent),
     /// Result of executing a tool the model requested.
     ToolResult(ToolResultEvent),
-    /// Streaming delta reserved for future partial-message output.
+    /// Incremental assistant text and tool-use lifecycle output.
     StreamEvent(StreamEvent),
     /// Server-initiated request the embedder must respond to via
     /// `SdkInputMessage::ControlResponse`. Permission decisions, hook

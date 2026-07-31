@@ -97,8 +97,8 @@ pub mod tool_search;
 #[allow(dead_code)]
 // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
-#[allow(dead_code)] // PHASE2: SDK stdin-reader surface ships in Sprint B (headless mode hardening)
-pub mod sdk_io; // used by OneShotOutputMode::JsonEvents in lib.rs
+#[allow(dead_code)] // bidirectional SDK stdin/control remains intentionally inactive
+pub mod sdk_io; // used by OneShotOutputMode::JsonLine in lib.rs
 // policy lives at platform::policy; re-exported here so callers using
 // `crate::policy::*` continue to resolve unchanged.
 pub use platform::policy;
@@ -233,7 +233,8 @@ pub struct Cli {
         long = "output-format",
         alias = "output",
         value_name = "FORMAT",
-        value_enum
+        value_enum,
+        conflicts_with = "json_events"
     )]
     output: Option<OutputFormat>,
 
@@ -3028,6 +3029,35 @@ async fn build_mcp_manager_inner(
     Ok(Some(mcp_mgr))
 }
 
+fn sdk_tool_lifecycle_event(
+    session_id: &str,
+    event: &crate::tui::app_event::TuiAppEvent,
+) -> Option<sdk_io::SdkEvent> {
+    match event {
+        crate::tui::app_event::TuiAppEvent::ToolStarted { call_id, name, .. } => Some(
+            sdk_io::SdkEvent::StreamEvent(sdk_io::StreamEvent::ToolUseStart {
+                session_id: session_id.to_string(),
+                tool_use_id: call_id.clone(),
+                tool_name: name.clone(),
+            }),
+        ),
+        crate::tui::app_event::TuiAppEvent::ToolCompleted {
+            call_id,
+            name,
+            status,
+            output,
+            ..
+        } => Some(sdk_io::SdkEvent::ToolResult(sdk_io::ToolResultEvent {
+            session_id: session_id.to_string(),
+            tool_use_id: call_id.clone(),
+            tool_name: name.clone(),
+            is_error: !matches!(status, crate::tui::app_event::ToolStatus::Succeeded),
+            content: serde_json::Value::String(output.clone()),
+        })),
+        _ => None,
+    }
+}
+
 /// Execute a single prompt and exit.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_oneshot(
@@ -3109,13 +3139,13 @@ pub async fn run_oneshot(
     }
     // Thread json_events mode into the session so ALL turns (continuation,
     // retry, fallback) emit MessageDelta events instead of raw print!.
-    if json_events {
+    if json_events && output_mode != OneShotOutputMode::JsonLine {
         session.json_events = true;
         session.json_session_id = session.managed_session_id().unwrap_or("exec").to_string();
     }
     // Wire --max-budget-usd: emit BudgetExhausted only when --json-events is
     // active so stdout is not polluted in text/json-pretty output modes.
-    if max_budget_usd.is_some() && json_events {
+    if max_budget_usd.is_some() && json_events && output_mode != OneShotOutputMode::JsonLine {
         let managed_id = session
             .managed_session_id()
             .unwrap_or("(no session)")
@@ -3146,21 +3176,54 @@ pub async fn run_oneshot(
             .collect();
     }
 
+    let sdk_stream_context = if output_mode == OneShotOutputMode::JsonLine {
+        let context = agent::SdkStreamContext {
+            session_id: session
+                .managed_session_id()
+                .map(str::to_string)
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            message_id: uuid::Uuid::new_v4().to_string(),
+        };
+        session.sdk_stream_context = Some(context.clone());
+
+        let tool_session_id = context.session_id.clone();
+        session.on_tool_event = Some(agent::ToolEventSink(std::sync::Arc::new(move |event| {
+            if let Some(event) = sdk_tool_lifecycle_event(&tool_session_id, &event) {
+                let _ = sdk_io::write_event_stdout(&event);
+            }
+        })));
+
+        if max_budget_usd.is_some() {
+            let budget_session_id = context.session_id.clone();
+            session.on_budget_exhausted = Some(agent::BudgetSink(Box::new(move |spent, limit| {
+                let _ = sdk_io::write_event_stdout(&sdk_io::SdkEvent::StatusUpdate(
+                    sdk_io::StatusUpdateEvent {
+                        session_id: budget_session_id.clone(),
+                        reason: sdk_io::StatusUpdateReason::BudgetExhausted,
+                        detail: Some(format!("${spent:.4} >= ${limit:.4}")),
+                    },
+                ));
+            })));
+        }
+
+        Some(context)
+    } else {
+        None
+    };
+
     if output_mode == OneShotOutputMode::JsonLine {
-        // Stream-JSON: NDJSON events on stdout, one per line. The full
-        // streaming surface (per-token deltas, tool_use start, control
-        // requests) is wired in a follow-up; this path currently emits
-        // session_start → assistant_message → session_end so embedders see a
-        // valid event sequence even before the agent loop is fully ported
-        // through NdjsonWriter.
+        // Canonical stream-JSON: flushed NDJSON records on stdout in live turn
+        // order, including text deltas across tool continuations and bounded
+        // tool lifecycle events. The finalized assistant message remains the
+        // authoritative terminal snapshot for consumers that do not assemble
+        // deltas themselves.
         use sdk_io::{
             AssistantMessageEvent, NdjsonWriter, SdkEvent, StatusUpdateEvent, StatusUpdateReason,
+            UserMessageBody,
         };
         let writer = NdjsonWriter::new(tokio::io::stdout());
-        let session_id = session
-            .managed_session_id()
-            .map(str::to_string)
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let stream_context = sdk_stream_context.expect("stream-json context configured");
+        let session_id = stream_context.session_id.clone();
 
         writer
             .emit(&SdkEvent::StatusUpdate(StatusUpdateEvent {
@@ -3170,9 +3233,26 @@ pub async fn run_oneshot(
             }))
             .await
             .ok();
+        writer
+            .emit(&SdkEvent::UserMessage {
+                session_id: session_id.clone(),
+                message: UserMessageBody {
+                    role: "user".to_string(),
+                    content: serde_json::json!([{ "type": "text", "text": prompt }]),
+                },
+            })
+            .await
+            .ok();
 
         let start = std::time::Instant::now();
-        let result = session.send(config, prompt, Box::new(|_chunk| {})).await;
+        let delta_context = stream_context.clone();
+        let result = session
+            .send(
+                config,
+                prompt,
+                Box::new(move |chunk| delta_context.emit_text_delta(chunk)),
+            )
+            .await;
         let duration_ms = start.elapsed().as_millis() as u64;
 
         match result {
@@ -3180,7 +3260,7 @@ pub async fn run_oneshot(
                 writer
                     .emit(&SdkEvent::AssistantMessage(AssistantMessageEvent {
                         session_id: session_id.clone(),
-                        message_id: uuid::Uuid::new_v4().to_string(),
+                        message_id: stream_context.message_id,
                         model: model.to_string(),
                         content: serde_json::json!([{ "type": "text", "text": turn.response }]),
                         stop_reason: Some("end_turn".to_string()),
@@ -3396,6 +3476,68 @@ mod tests {
     }
 
     #[test]
+    fn stream_json_text_delta_uses_canonical_ids_and_envelope() {
+        let context = agent::SdkStreamContext {
+            session_id: "session-42".to_string(),
+            message_id: "message-7".to_string(),
+        };
+        let event = serde_json::to_value(context.text_delta_event("hello"))
+            .expect("stream event serializes");
+
+        assert_eq!(event["type"], "stream_event");
+        assert_eq!(event["subtype"], "text_delta");
+        assert_eq!(event["session_id"], "session-42");
+        assert_eq!(event["message_id"], "message-7");
+        assert_eq!(event["delta"], "hello");
+    }
+
+    #[test]
+    fn stream_json_tool_lifecycle_preserves_call_identity_and_result() {
+        let started = crate::tui::app_event::TuiAppEvent::ToolStarted {
+            call_id: "call-9".to_string(),
+            name: "read_file".to_string(),
+            summary: "Read a file".to_string(),
+            input: serde_json::json!({"path": "redacted"}),
+        };
+        let completed = crate::tui::app_event::TuiAppEvent::ToolCompleted {
+            call_id: "call-9".to_string(),
+            name: "read_file".to_string(),
+            status: crate::tui::app_event::ToolStatus::Succeeded,
+            output: "contents".to_string(),
+            duration_ms: 12,
+        };
+
+        let started = serde_json::to_value(
+            sdk_tool_lifecycle_event("session-42", &started).expect("tool start maps"),
+        )
+        .unwrap();
+        let completed = serde_json::to_value(
+            sdk_tool_lifecycle_event("session-42", &completed).expect("tool result maps"),
+        )
+        .unwrap();
+
+        assert_eq!(started["type"], "stream_event");
+        assert_eq!(started["subtype"], "tool_use_start");
+        assert_eq!(started["tool_use_id"], "call-9");
+        assert_eq!(completed["type"], "tool_result");
+        assert_eq!(completed["tool_use_id"], "call-9");
+        assert_eq!(completed["is_error"], false);
+        assert_eq!(completed["content"], "contents");
+    }
+
+    #[test]
+    fn stream_json_rejects_the_incompatible_legacy_event_schema() {
+        assert!(Cli::try_parse_from([
+            "agiworkforce",
+            "--output-format",
+            "stream-json",
+            "--json-events",
+            "hello",
+        ])
+        .is_err());
+    }
+
+    #[test]
     fn parses_claude_style_global_options_into_normalized_contract() {
         let cli = Cli::try_parse_from([
             "agiworkforce",
@@ -3542,7 +3684,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_bidirectional_sdk_flags_are_not_active_cli_surface() {
+    fn sdk_input_and_redundant_partial_flags_are_not_active_cli_surface() {
         assert!(
             Cli::try_parse_from(["agiworkforce", "--input-format", "stream-json", "hello",])
                 .is_err(),
@@ -3550,7 +3692,7 @@ mod tests {
         );
         assert!(
             Cli::try_parse_from(["agiworkforce", "--include-partial-messages", "hello"]).is_err(),
-            "--include-partial-messages must not be accepted until partial deltas are wired"
+            "stream-json emits live deltas by contract; a redundant compatibility flag is not exposed"
         );
     }
 
