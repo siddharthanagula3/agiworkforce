@@ -59,26 +59,30 @@ credits.
 
 Configure these values on the protected environment:
 
-| Kind     | Name                                      | Purpose                                                    |
-| -------- | ----------------------------------------- | ---------------------------------------------------------- |
-| Variable | `ASC_APP_ID`                              | Numeric App Store Connect Apple ID                         |
-| Variable | `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`       | Live public Clerk key used by the production app           |
-| Secret   | `EXPO_TOKEN`                              | Token for non-interactive access to the linked EAS project |
-| Secret   | `ASC_API_KEY_ID`                          | App Store Connect API key ID                               |
-| Secret   | `ASC_API_KEY_ISSUER_ID`                   | App Store Connect API issuer ID                            |
-| Secret   | `ASC_API_PRIVATE_KEY_BASE64`              | Base64-encoded contents of the App Store Connect `.p8` key |
-| Secret   | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64` | Base64-encoded Play Console service-account JSON           |
+| Kind     | Name                                         | Purpose                                                    |
+| -------- | -------------------------------------------- | ---------------------------------------------------------- |
+| Variable | `ASC_APP_ID`                                 | Numeric App Store Connect Apple ID                         |
+| Variable | `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`          | Live public Clerk key used by the production app           |
+| Variable | `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS` | Real Play App Signing SHA-256 fingerprint matching Web     |
+| Secret   | `EXPO_TOKEN`                                 | Token for non-interactive access to the linked EAS project |
+| Secret   | `ASC_API_KEY_ID`                             | App Store Connect API key ID                               |
+| Secret   | `ASC_API_KEY_ISSUER_ID`                      | App Store Connect API issuer ID                            |
+| Secret   | `ASC_API_PRIVATE_KEY_BASE64`                 | Base64-encoded contents of the App Store Connect `.p8` key |
+| Secret   | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64`    | Base64-encoded Play Console service-account JSON           |
 
 Also configure the public production variables from `apps/mobile/.env.example`
 in the EAS `production` environment. The GitHub Clerk variable and its EAS
 counterpart must be identical.
 
 The workflow pins EAS CLI, materializes credentials only into the ignored
-`apps/mobile/secrets/` directory, and deletes them even when a job fails. iOS
-uses the production profile and uploads the exact completed build to
-TestFlight. Android uses the production profile and uploads the exact completed
-build to Play Internal Testing as a draft. Promotion to either public store is
-an explicit console action after device validation and store review.
+`apps/mobile/secrets/` directory, and deletes them even when a job fails. Before
+an Android build starts, it fetches both production association documents
+without following redirects and requires the deployed Android fingerprint to
+exactly match the protected Play App Signing value. iOS uses the production
+profile and uploads the exact completed build to TestFlight. Android uses the
+production profile and uploads the exact completed build to Play Internal
+Testing as a draft. Promotion to either public store is an explicit console
+action after device validation and store review.
 
 ## Publish the domain-association files
 
@@ -109,7 +113,9 @@ substitute for Play App Signing.
 
 Both URLs must return HTTP 200 directly, without an authentication redirect,
 with `Content-Type: application/json`. The Android route intentionally returns
-HTTP 503 when the fingerprint is missing or malformed.
+HTTP 503 when the fingerprint is missing or malformed. The protected Android
+release job enforces the same contract automatically; a mismatched, redirected,
+overbroad, or unavailable document blocks the Play build before store upload.
 
 ## Device verification
 

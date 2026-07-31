@@ -16,6 +16,8 @@
     "check:expo-deps": "node scripts/check-expo-deps.mjs",
     "check:tls-pins": "EXPO_PUBLIC_APP_ENV=production node scripts/check-tls-pins.mjs",
     "release:preflight": "bash scripts/release/preflight.sh",
+    "release:verify-associations": "node scripts/release/verify-production-associations.mjs",
+    "test:release-associations": "node --test scripts/release/verify-production-associations.test.mjs",
     "release:ios:beta": "bash scripts/release/ios-beta.sh",
     "release:ios:beta:submit": "bash scripts/release/submit-ios.sh --profile beta",
     "release:ios:prod": "bash scripts/release/ios-prod.sh",
