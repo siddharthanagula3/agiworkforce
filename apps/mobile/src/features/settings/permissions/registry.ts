@@ -227,7 +227,8 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
     reminders: {
       kind: 'reminders',
       label: 'Reminders',
-      description: 'Optional on iOS. This release does not read reminders automatically.',
+      description:
+        'Used only when you explicitly create an Apple Reminder; never read automatically.',
       icon: ListChecks,
       applicableLevels: ['denied', 'allow_always'],
       getStatus: getRemindersStatus,

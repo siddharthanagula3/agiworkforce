@@ -700,14 +700,27 @@ export default function RootLayout() {
       }
       case 'remind': {
         const reminder = getParam('reminder');
-        const when = getParam('when');
+        const due = getParam('due');
         if (reminder) {
-          const message = when ? `Remind me to ${reminder} at ${when}` : `Remind me to ${reminder}`;
-          router.push(
-            `/(app)/share-preview?text=${encodeURIComponent(message)}` as Parameters<
-              typeof router.push
-            >[0],
-          );
+          if (Platform.OS === 'ios') {
+            router.push(
+              `/(app)/reminder-review?title=${encodeURIComponent(reminder)}${
+                due ? `&due=${encodeURIComponent(due)}` : ''
+              }` as Parameters<typeof router.push>[0],
+            );
+          } else {
+            const dueDate = due ? new Date(due) : null;
+            const dueLabel =
+              dueDate && Number.isFinite(dueDate.getTime()) ? dueDate.toLocaleString() : null;
+            const message = dueLabel
+              ? `Remind me to ${reminder} at ${dueLabel}`
+              : `Remind me to ${reminder}`;
+            router.push(
+              `/(app)/share-preview?text=${encodeURIComponent(message)}` as Parameters<
+                typeof router.push
+              >[0],
+            );
+          }
         }
         break;
       }

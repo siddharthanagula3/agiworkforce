@@ -1545,7 +1545,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
                   }
                 }
               >
-                Optional on iOS. This release does not read reminders automatically.
+                Used only when you explicitly create an Apple Reminder; never read automatically.
               </Text>
             </View>
             <View

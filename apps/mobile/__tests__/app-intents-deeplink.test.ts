@@ -6,6 +6,15 @@
 // that path is tested by integration/E2E. These tests verify the URL
 // construction contract that Swift's AGIIntentDispatch must honour.
 
+import fs from 'fs';
+import path from 'path';
+
+const reminderIntentSource = fs.readFileSync(
+  path.join(__dirname, '..', 'native', 'ios', 'AGIAppIntents', 'SetReminderIntent.swift'),
+  'utf8',
+);
+const rootLayoutSource = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
+
 const SCHEME = 'agiworkforce';
 const HOST = 'intent';
 
@@ -80,16 +89,25 @@ describe('App Intents deep-link URL construction', () => {
     expect(u.searchParams.get('imageUri')).toBe('file:///tmp/doc.jpg');
   });
 
-  it('SetReminder URL carries reminder and when', () => {
-    const u = makeIntentUrl('remind', { reminder: 'call dentist', when: 'tomorrow at 9am' });
+  it('SetReminder URL carries reminder and a timezone-aware ISO due date', () => {
+    const due = '2030-05-06T14:30:00-05:00';
+    const u = makeIntentUrl('remind', { reminder: 'call dentist', due });
     expect(u.pathname).toBe('/remind');
     expect(u.searchParams.get('reminder')).toBe('call dentist');
-    expect(u.searchParams.get('when')).toBe('tomorrow at 9am');
+    expect(u.searchParams.get('due')).toBe(due);
   });
 
-  it('SetReminder URL without when omits that param', () => {
+  it('SetReminder URL without a due date omits that param', () => {
     const u = makeIntentUrl('remind', { reminder: 'buy milk' });
-    expect(u.searchParams.get('when')).toBeNull();
+    expect(u.searchParams.get('due')).toBeNull();
+  });
+
+  it('SetReminder opens an explicit native-write review instead of drafting model input', () => {
+    expect(reminderIntentSource).toContain('var when: Date?');
+    expect(reminderIntentSource).toContain('ISO8601DateFormatter().string(from: when)');
+    expect(reminderIntentSource).toContain('params["due"]');
+    expect(rootLayoutSource).toContain('/(app)/reminder-review?title=');
+    expect(rootLayoutSource).toContain("Platform.OS === 'ios'");
   });
 
   it('Share URL (Android ACTION_SEND/ACTION_PROCESS_TEXT rewrite) carries text param', () => {

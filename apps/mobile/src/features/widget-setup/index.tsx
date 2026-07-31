@@ -69,7 +69,7 @@ const SIRI_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; descripti
   {
     icon: Bell,
     label: 'Set Reminder',
-    description: 'Draft a reminder request in chat for you to review',
+    description: 'Review and create a real Apple Reminder',
   },
 ];
 

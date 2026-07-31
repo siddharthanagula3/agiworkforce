@@ -1244,8 +1244,8 @@
   {
     "item": "reminders-integration",
     "surface": "apps/mobile",
-    "status": "partial",
-    "evidence": "apps/mobile/native/ios/AGIAppIntents/SetReminderIntent.swift:1-37 is a real Siri AppIntent ('Set Reminder via AGI') that dispatches agiworkforce://intent/remind, handled in apps/mobile/app/_layout.tsx:701-713 by pushing a pre-filled chat draft."
+    "status": "built",
+    "evidence": "apps/mobile/native/ios/AGIAppIntents/SetReminderIntent.swift:1-38 is a real Siri AppIntent with a typed optional Date parameter that opens the containing app with a timezone-aware ISO due date; it never writes silently. apps/mobile/app/_layout.tsx:701-725 routes iOS into the explicit /(app)/reminder-review screen while retaining an honest chat-draft fallback on Android, where Expo has no Reminders analogue. apps/mobile/src/features/reminders/index.tsx:27-259 provides editable title/date/time review, validation feedback, permission recovery, and the sole Create Reminder action. apps/mobile/src/features/reminders/service.ts:67-144 validates undated/all-day/timed values, requests iOS Reminders permission only after confirmation, fails closed on denial/non-iOS, and calls expo-calendar createReminderAsync against the default Apple Reminders list; timed items receive an EventKit-backed absolute alarm. Quick Access and permission copy disclose the real boundary. Verified by reminders-service.test.ts, reminder-review-screen.test.tsx, app-intents-deeplink.test.ts, widget-setup-page.test.tsx, permissions-calendar-reminders.test.ts, the Permissions snapshot, standalone iOS 17 Swift typecheck, and a 4,833-module iOS production export."
   },
   {
     "item": "health-data-integration",
