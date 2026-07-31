@@ -1,7 +1,8 @@
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -177,6 +178,110 @@ fn auth_path() -> Result<PathBuf> {
     Ok(crate::config::CliConfig::config_dir()?.join("auth.json"))
 }
 
+const AUTH_KEYRING_SERVICE: &str = "com.agiworkforce.cli.auth";
+const AUTH_INDEX_VERSION: u8 = 1;
+const AUTH_INDEX_STORAGE: &str = "os-keyring";
+
+/// Non-secret discovery metadata. Keyring APIs do not provide a portable way
+/// to enumerate accounts, so auth.json retains provider names only; credential
+/// material lives in one OS-keyring entry per provider.
+#[derive(Debug, Serialize, Deserialize)]
+struct AuthKeyringIndex {
+    version: u8,
+    storage: String,
+    providers: Vec<String>,
+}
+
+fn keyring_disabled() -> bool {
+    std::env::var("AGIWORKFORCE_NO_KEYRING")
+        .map(|value| !value.is_empty() && value != "0")
+        .unwrap_or(false)
+}
+
+pub fn credential_storage_label() -> &'static str {
+    if keyring_disabled() {
+        "owner-only credential file (OS keyring explicitly disabled)"
+    } else {
+        "OS credential store"
+    }
+}
+
+fn auth_keyring_account(provider: &str) -> String {
+    let digest = Sha256::digest(provider.as_bytes());
+    format!("provider:{digest:x}")
+}
+
+fn auth_keyring_entry(provider: &str) -> Result<keyring::Entry> {
+    keyring::Entry::new(AUTH_KEYRING_SERVICE, &auth_keyring_account(provider))
+        .context("Could not open the OS credential store")
+}
+
+fn parse_auth_keyring_index(data: &str) -> Option<AuthKeyringIndex> {
+    let index = serde_json::from_str::<AuthKeyringIndex>(data).ok()?;
+    (index.version == AUTH_INDEX_VERSION && index.storage == AUTH_INDEX_STORAGE).then_some(index)
+}
+
+fn write_auth_file(path: &Path, data: &str) -> Result<()> {
+    std::fs::write(path, data).context("Failed to write auth.json")?;
+    set_file_permissions(path).context("Failed to set auth.json file permissions")
+}
+
+fn load_keyring_auth(index: AuthKeyringIndex) -> Result<AuthStore> {
+    let mut entries = HashMap::with_capacity(index.providers.len());
+    for provider in index.providers {
+        let secret = auth_keyring_entry(&provider)?
+            .get_password()
+            .with_context(|| format!("Could not read the saved {provider} credential"))?;
+        let entry = serde_json::from_str::<AuthEntry>(&secret)
+            .with_context(|| format!("Saved {provider} credential is invalid"))?;
+        entries.insert(provider, entry);
+    }
+    Ok(AuthStore {
+        entries,
+        copilot_cache: None,
+    })
+}
+
+fn save_keyring_auth(path: &Path, store: &AuthStore) -> Result<()> {
+    let previous_providers = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|data| parse_auth_keyring_index(&data))
+        .map(|index| index.providers.into_iter().collect::<BTreeSet<_>>())
+        .unwrap_or_default();
+    let current_providers = store.entries.keys().cloned().collect::<BTreeSet<_>>();
+
+    for provider in &current_providers {
+        let entry = store
+            .entries
+            .get(provider)
+            .context("Credential index changed during save")?;
+        let secret = serde_json::to_string(entry).context("Failed to serialize credential")?;
+        auth_keyring_entry(provider)?
+            .set_password(&secret)
+            .with_context(|| {
+                format!("Could not save the {provider} credential in the OS keyring")
+            })?;
+    }
+
+    for provider in previous_providers.difference(&current_providers) {
+        match auth_keyring_entry(provider)?.delete_password() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("Could not remove the saved {provider} credential"));
+            }
+        }
+    }
+
+    let index = AuthKeyringIndex {
+        version: AUTH_INDEX_VERSION,
+        storage: AUTH_INDEX_STORAGE.to_string(),
+        providers: current_providers.into_iter().collect(),
+    };
+    let data = serde_json::to_string_pretty(&index).context("Failed to serialize auth index")?;
+    write_auth_file(path, &data)
+}
+
 impl AuthStore {
     pub fn load() -> Result<Self> {
         let path = auth_path()?;
@@ -184,7 +289,19 @@ impl AuthStore {
             return Ok(Self::default());
         }
         let data = std::fs::read_to_string(&path).context("Failed to read auth.json")?;
+        if let Some(index) = parse_auth_keyring_index(&data) {
+            return load_keyring_auth(index);
+        }
+
+        // One-time migration from the legacy owner-readable JSON file. We do
+        // not silently fall back to plaintext when the OS keyring fails; an
+        // explicit headless opt-out is required for that compatibility mode.
         let store: AuthStore = serde_json::from_str(&data).context("Failed to parse auth.json")?;
+        if !keyring_disabled() {
+            save_keyring_auth(&path, &store).context(
+                "Could not migrate auth.json into the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to retain the owner-only file store",
+            )?;
+        }
         Ok(store)
     }
 
@@ -192,10 +309,14 @@ impl AuthStore {
         let dir = crate::config::CliConfig::config_dir()?;
         std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
         let path = auth_path()?;
-        let data = serde_json::to_string_pretty(self).context("Failed to serialize auth store")?;
-        std::fs::write(&path, &data).context("Failed to write auth.json")?;
-        set_file_permissions(&path).context("Failed to set auth.json file permissions")?;
-        Ok(())
+        if keyring_disabled() {
+            let data =
+                serde_json::to_string_pretty(self).context("Failed to serialize auth store")?;
+            return write_auth_file(&path, &data);
+        }
+        save_keyring_auth(&path, self).context(
+            "Could not persist credentials in the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to use an owner-only file",
+        )
     }
 }
 
@@ -256,7 +377,13 @@ pub fn auth_status() -> Result<Vec<AuthStatusEntry>> {
     let store = AuthStore::load()?;
     let now_ms = chrono::Utc::now().timestamp_millis();
     let perms_secure = auth_path()
-        .map(|p| check_file_permissions_secure(&p))
+        .map(|path| {
+            std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|data| parse_auth_keyring_index(&data))
+                .is_some()
+                || check_file_permissions_secure(&path)
+        })
         .unwrap_or(false);
     let results = auth_status_from_store(&store, now_ms, perms_secure);
     Ok(results)
@@ -1051,9 +1178,10 @@ pub async fn interactive_api_key_login_for_provider(provider: &str) -> Result<()
 
     save_auth_entry(provider.id, AuthEntry::ApiKey { key })?;
     println!(
-        "  {} {} API key saved to auth.json.",
+        "  {} {} API key saved to the {}.",
         ts::success_header("Done!"),
         provider.label,
+        credential_storage_label(),
     );
     Ok(())
 }
@@ -1097,7 +1225,7 @@ pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()
 
 /// Interactive API key setup (used by onboarding wizard).
 ///
-/// Prompts for provider selection and API key entry, then persists to auth.json.
+/// Prompts for provider selection and API key entry, then persists to the OS keyring.
 pub async fn interactive_api_key_login() -> Result<()> {
     let mut choices: Vec<String> = API_KEY_PROVIDERS
         .iter()
@@ -1518,6 +1646,42 @@ mod tests {
         let debug = format!("{:?}", RedactedAuthEntry(&entry));
         // Debug delegates to Display, so should also be redacted
         assert!(!debug.contains("sk-abcdefghij1234567890"));
+    }
+
+    #[test]
+    fn keyring_accounts_do_not_disclose_provider_names() {
+        let account = auth_keyring_account("private-enterprise-provider");
+        assert!(account.starts_with("provider:"));
+        assert_eq!(account.len(), "provider:".len() + 64);
+        assert!(!account.contains("private-enterprise-provider"));
+    }
+
+    #[test]
+    fn auth_index_contains_metadata_but_no_credentials() {
+        let index = AuthKeyringIndex {
+            version: AUTH_INDEX_VERSION,
+            storage: AUTH_INDEX_STORAGE.to_string(),
+            providers: vec!["openai".to_string(), "agiworkforce".to_string()],
+        };
+        let serialized = serde_json::to_string(&index).unwrap();
+
+        assert!(parse_auth_keyring_index(&serialized).is_some());
+        assert!(serialized.contains("openai"));
+        assert!(!serialized.contains("sk-secret"));
+        assert!(!serialized.contains("access_token"));
+        assert!(!serialized.contains("refresh_token"));
+    }
+
+    #[test]
+    fn auth_index_rejects_unknown_versions_and_backends() {
+        assert!(
+            parse_auth_keyring_index(r#"{"version":2,"storage":"os-keyring","providers":[]}"#)
+                .is_none()
+        );
+        assert!(
+            parse_auth_keyring_index(r#"{"version":1,"storage":"plaintext","providers":[]}"#)
+                .is_none()
+        );
     }
 
     // ── RefreshError classification ──

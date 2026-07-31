@@ -572,12 +572,12 @@ fn model_access_checks(config: &CliConfig) -> Vec<DoctorCheck> {
                     .is_some()
                 {
                     details.push(format!(
-                        "api key env `{env_name}` is not set; auth.json has a saved {provider} API key"
+                        "api key env `{env_name}` is not set; the credential store has a saved {provider} API key"
                     ));
                 } else {
                     status = DoctorStatus::Warn;
                     details.push(format!(
-                        "api key env `{env_name}` is not set and auth.json has no {provider} API key"
+                        "api key env `{env_name}` is not set and the credential store has no {provider} API key"
                     ));
                 }
             } else if provider_config.base_url.is_some() {

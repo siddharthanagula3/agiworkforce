@@ -410,30 +410,17 @@ pub fn print_divider() {
 
 /// Print a one-line compact header shown on every interactive launch.
 ///
-/// Format: `agi 0.1.0 · provider: anthropic · ~/.agiworkforce/auth.json`
+/// Format: `agiworkforce 0.1.0 · provider: anthropic · credentials: OS keyring`
 pub fn print_compact_header(provider: &str) {
     let version = env!("CARGO_PKG_VERSION");
-    // Resolve auth.json path — fall back to a tilde-prefixed literal if
-    // config_dir() is unavailable (e.g., $HOME not set).
-    let auth_path = crate::config::CliConfig::config_dir()
-        .map(|d| {
-            let p = d.join("auth.json");
-            // Prefer the tilde-abbreviated form for readability.
-            if let Ok(home) = std::env::var("HOME") {
-                let home_path = std::path::Path::new(&home);
-                if let Ok(rel) = p.strip_prefix(home_path) {
-                    return format!("~/{}", rel.display());
-                }
-            }
-            p.display().to_string()
-        })
-        .unwrap_or_else(|_| "~/.agiworkforce/auth.json".to_string());
 
     eprintln!(
         "{}",
         ts::muted(format!(
-            "agiworkforce {} · provider: {} · {}",
-            version, provider, auth_path
+            "agiworkforce {} · provider: {} · credentials: {}",
+            version,
+            provider,
+            crate::auth::credential_storage_label(),
         ))
     );
 }
