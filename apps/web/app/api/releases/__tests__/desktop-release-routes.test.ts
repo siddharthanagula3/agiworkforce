@@ -72,6 +72,22 @@ function githubReleaseList() {
   ];
 }
 
+function updaterRelease(id: number, version: string, prerelease: boolean) {
+  const tag = `v-desktop-${version}`;
+  const name = `AGI.Workforce_${version}_amd64.AppImage`;
+  const url = `https://github.com/siddharthanagula3/agiworkforce/releases/download/${tag}/${name}`;
+  return {
+    release: githubRelease(id, tag, {
+      prerelease,
+      assets: [
+        githubAsset(id * 10 + 1, name, url),
+        githubAsset(id * 10 + 2, `${name}.sig`, `${url}.sig`),
+      ],
+    }),
+    url,
+  };
+}
+
 function makeRequest(url: string): never {
   return new Request(url, { method: 'GET' }) as never;
 }
@@ -85,7 +101,7 @@ beforeEach(() => {
   });
   fetchMock.mockImplementation(async (input: string | URL | Request) => {
     const url = String(input);
-    if (url === RAW_SIGNATURE_URL) {
+    if (url.startsWith('https://github.com/') && url.endsWith('.sig')) {
       return new Response('tauri-signature\n', { status: 200 });
     }
     if (url === RAW_APPIMAGE_URL) {
@@ -144,7 +160,7 @@ describe('desktop release routes', () => {
       update_available: true,
       current_version: '1.9.0',
       latest_version: '1.10.0',
-      download_url: 'https://agiworkforce.com/api/releases/latest/linux-x86_64',
+      download_url: 'https://agiworkforce.com/api/releases/latest/linux-x86_64?channel=stable',
     });
   });
 
@@ -280,5 +296,93 @@ describe('desktop release routes', () => {
 
     expect(response.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('page=2'), expect.any(Object));
+  });
+
+  it('keeps beta and nightly Tauri clients on their inferred release channels', async () => {
+    const beta = updaterRelease(10, '1.11.0-beta.2', true);
+    const olderBeta = updaterRelease(11, '1.11.0-beta.1', true);
+    const nightly = updaterRelease(12, '1.12.0-nightly.4', true);
+    const newerStable = updaterRelease(13, '9.0.0', false);
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith('https://github.com/') && url.endsWith('.sig')) {
+        return new Response('channel-signature\n', { status: 200 });
+      }
+      return Response.json([newerStable.release, nightly.release, olderBeta.release, beta.release]);
+    });
+
+    const betaResponse = await getTauriUpdate(
+      makeRequest('https://agi.example/api/releases/linux-x86_64/1.11.0-beta.1'),
+      {
+        params: Promise.resolve({
+          target: 'linux-x86_64',
+          version: '1.11.0-beta.1',
+        }),
+      },
+    );
+    expect(betaResponse.status).toBe(200);
+    expect(await betaResponse.json()).toMatchObject({
+      version: '1.11.0-beta.2',
+      platforms: { 'linux-x86_64': { url: beta.url } },
+    });
+
+    const nightlyResponse = await getTauriUpdate(
+      makeRequest('https://agi.example/api/releases/linux-x86_64/1.12.0-nightly.3'),
+      {
+        params: Promise.resolve({
+          target: 'linux-x86_64',
+          version: '1.12.0-nightly.3',
+        }),
+      },
+    );
+    expect(nightlyResponse.status).toBe(200);
+    expect(await nightlyResponse.json()).toMatchObject({
+      version: '1.12.0-nightly.4',
+      platforms: { 'linux-x86_64': { url: nightly.url } },
+    });
+  });
+
+  it('serves beta and nightly GitHub fallbacks only when explicitly requested', async () => {
+    const beta = updaterRelease(14, '2.0.0-beta.3', true);
+    const nightly = updaterRelease(15, '2.1.0-nightly.5', true);
+    const stable = updaterRelease(16, '8.0.0', false);
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith('https://github.com/') && url.endsWith('.sig')) {
+        return new Response('channel-signature\n', { status: 200 });
+      }
+      return Response.json([stable.release, nightly.release, beta.release]);
+    });
+
+    const betaCheck = await checkRelease(
+      makeRequest(
+        'https://agi.example/api/releases/check?version=1.9.0-beta.1&platform=linux-x86_64&channel=beta',
+      ),
+    );
+    expect(betaCheck.status).toBe(200);
+    expect(await betaCheck.json()).toMatchObject({
+      latest_version: '2.0.0-beta.3',
+      download_url: 'https://agiworkforce.com/api/releases/latest/linux-x86_64?channel=beta',
+    });
+
+    const nightlyManifest = await getLatestRelease(
+      makeRequest('https://agi.example/api/releases/latest/linux-x86_64?channel=nightly'),
+      { params: Promise.resolve({ platform: 'linux-x86_64' }) },
+    );
+    expect(nightlyManifest.status).toBe(200);
+    expect(await nightlyManifest.json()).toMatchObject({
+      version: '2.1.0-nightly.5',
+      platforms: { 'linux-x86_64': { url: nightly.url } },
+    });
+  });
+
+  it('rejects unknown release channels instead of falling back to stable', async () => {
+    const response = await getLatestRelease(
+      makeRequest('https://agi.example/api/releases/latest/linux-x86_64?channel=preview'),
+      { params: Promise.resolve({ platform: 'linux-x86_64' }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
