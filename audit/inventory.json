@@ -1508,8 +1508,8 @@
   {
     "item": "process-manager",
     "surface": "apps/cli",
-    "status": "partial",
-    "evidence": "apps/cli/src/features/exec/tools/task_registry/mod.rs:25-348 implements a `SessionRegistry` (in-memory HashMap, apps/cli/src/features/exec/tools/task_registry/mod.rs:55-75) with `task_create`/`task_get`/`task_list`/`task_update`/`task_stop`/`task_output` handlers, wired as real agent tools (registered in apps/cli/src/platform/runtime/tool_catalog.rs:103-149,507-600 and dispatched from apps/cli/src/features/exec/tools/mod.rs:300-305), so the model can call them mid-turn."
+    "status": "missing",
+    "evidence": "This record's former Partial evidence described a placeholder caller-maintained task registry that has since been removed. apps/cli/src/platform/runtime/tool_catalog.rs:875-889 now explicitly asserts that task_create/task_get/task_list/task_update/task_stop/task_output definitions and aliases remain absent until a real execution lifecycle exists; apps/cli/src/features/exec/tools/mod.rs dispatches none of them. Both CLI frontends and the shared command registry omit /tasks, /background, and /bg, with crates/agiworkforce-command-registry/tests/slash_palette_golden.rs:120-122 pinning that honest absence. run_command and powershell remain synchronous approval-gated foreground execution, while the separate task tool is foreground subagent orchestration rather than an OS process manager. This matches the canonical packages/core-agent process-monitor-tool and task-create-list-tools Missing records; no background process poll/output/kill capability is claimed."
   },
   {
     "item": "session-resume",
