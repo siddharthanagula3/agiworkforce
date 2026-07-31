@@ -2840,8 +2840,8 @@
   {
     "item": "mcp-apps-embedded-ui",
     "surface": "packages/tools/mcp",
-    "status": "unwired",
-    "evidence": "Real, security-conscious implementation: apps/desktop/src/features/mcp/McpAppRenderer.tsx:1-239 (sandboxed iframe, postMessage bridge, origin validation), stores/mcpAppStore.ts:1-127 (registerApp/updateApp/recordInteraction), MCPAppComponents.tsx / MCPAppRegistry.tsx / MCPAppDefinitionRenderer.tsx / McpAppGallery.tsx / McpAppCard.tsx. But `registerApp` (mcpAppStore.ts:50, the only entry point that would populate an app from an MCP tool result) is never called anywhere in the repo, and features/mcp/index.tsx (which re-exports McpAppRenderer/McpAppGallery/McpAppCard) is never imported by any other file — confirmed via repo-wide grep."
+    "status": "missing",
+    "evidence": "There is no MCP Apps host in the shipped product. Two unreachable Desktop prototypes were removed on 2026-07-30: an arbitrary HTML/URL iframe store using private `mcp_action` messages, and a separate client-generated component-definition renderer. Neither implemented the MCP Apps contract. The current MCP catalog does not preserve tool `_meta.ui.resourceUri`, the shared client exposes no `resources/read` path for `ui://` resources, and the mounted transcript has no standard JSON-RPC App bridge, CSP/permission policy, or tool-result delivery lifecycle. Reachable MCP server configuration, credentials, health, tool browsing, and tool execution remain."
   },
   {
     "item": "mcp-tasks-extension",

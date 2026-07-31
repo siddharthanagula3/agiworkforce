@@ -24,7 +24,6 @@ export * from './mcp/mcpOAuthStore';
 
 // Re-export the absorbed sub-stores so that any import of their named
 // exports from 'stores/mcpStore' resolves (task-w58 placed them here).
-export * from './mcpAppStore';
 export * from './mcpbStore';
 export * from './mcpServerStore';
 
