@@ -26,6 +26,8 @@ export function ConnectionsTab() {
       </div>
 
       <section
+        data-setting-search-id="remote-control"
+        tabIndex={-1}
         aria-label="Mobile companion pairing"
         className="min-h-0 overflow-hidden rounded-xl border border-border/70 bg-card"
       >
