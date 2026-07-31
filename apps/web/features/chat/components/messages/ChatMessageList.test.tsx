@@ -29,9 +29,22 @@ const ttsMock = vi.hoisted(() => {
 // Global setup
 // ---------------------------------------------------------------------------
 
-// jsdom doesn't implement scrollIntoView · mock it globally for all tests
+// jsdom doesn't implement element scrolling. Mirror the browser contract
+// react-window uses and emit the scroll event that drives its visible range.
 beforeEach(() => {
-  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  window.HTMLElement.prototype.scrollTo = vi.fn(function (
+    this: HTMLElement,
+    options?: ScrollToOptions | number,
+    y?: number,
+  ) {
+    const top = typeof options === 'number' ? (y ?? 0) : (options?.top ?? 0);
+    Object.defineProperty(this, 'scrollTop', {
+      configurable: true,
+      writable: true,
+      value: top,
+    });
+    this.dispatchEvent(new Event('scroll'));
+  });
   ttsMock.state.isSpeaking = false;
   ttsMock.speak.mockClear();
   ttsMock.stop.mockClear();
@@ -477,21 +490,21 @@ describe('ChatMessageList actions', () => {
 
 describe('ChatMessageList auto-scroll', () => {
   it('scrolls to bottom when messages are first rendered', async () => {
-    const scrollIntoView = window.HTMLElement.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+    const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
     const messages = [makeMessage({ id: '1', role: 'user', content: 'hi' })];
     render(<ChatMessageList messages={messages} />);
 
     await waitFor(() => {
-      expect(scrollIntoView).toHaveBeenCalled();
+      expect(scrollTo).toHaveBeenCalled();
     });
   });
 
   it('scrolls to bottom when new messages are added', async () => {
-    const scrollIntoView = window.HTMLElement.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+    const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
     const initialMessages = [makeMessage({ id: '1', role: 'user', content: 'hi' })];
     const { rerender } = render(<ChatMessageList messages={initialMessages} />);
 
-    const callsBefore = scrollIntoView.mock.calls.length;
+    const callsBefore = scrollTo.mock.calls.length;
 
     const updatedMessages = [
       ...initialMessages,
@@ -503,18 +516,18 @@ describe('ChatMessageList auto-scroll', () => {
     });
 
     await waitFor(() => {
-      expect(scrollIntoView.mock.calls.length).toBeGreaterThan(callsBefore);
+      expect(scrollTo.mock.calls.length).toBeGreaterThan(callsBefore);
     });
   });
 
   it('scrolls to bottom when streaming content grows', async () => {
-    const scrollIntoView = window.HTMLElement.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+    const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
     const messages = [
       makeMessage({ id: 's1', role: 'assistant', content: 'part 1', isStreaming: true }),
     ];
     const { rerender } = render(<ChatMessageList messages={messages} />);
 
-    const callsBefore = scrollIntoView.mock.calls.length;
+    const callsBefore = scrollTo.mock.calls.length;
 
     act(() => {
       rerender(
@@ -532,8 +545,30 @@ describe('ChatMessageList auto-scroll', () => {
     });
 
     await waitFor(() => {
-      expect(scrollIntoView.mock.calls.length).toBeGreaterThan(callsBefore);
+      expect(scrollTo.mock.calls.length).toBeGreaterThan(callsBefore);
     });
+  });
+
+  it('recycles a long transcript while keeping the newest history scroll-reachable', async () => {
+    const messages = Array.from({ length: 120 }, (_, index) =>
+      makeMessage({
+        id: `long-${index}`,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `Message ${index}`,
+      }),
+    );
+
+    render(<ChatMessageList conversationId="long-thread" messages={messages} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('bubble-long-119')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('bubble-long-0')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /show earlier messages/i }),
+    ).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[data-testid^="bubble-long-"]').length).toBeLessThan(30);
   });
 
   it('shows scroll-to-bottom button when user scrolls up', async () => {

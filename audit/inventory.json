@@ -164,8 +164,8 @@
   {
     "item": "virtualized-message-list",
     "surface": "apps/web",
-    "status": "partial",
-    "evidence": "apps/web/features/chat/components/messages/ChatMessageList.tsx:673-684 explicitly states 'there is no virtualization anywhere in this surface'; instead it caps the mounted DOM to the most recent GROUP_WINDOW_SIZE=40 message-groups with a manual 'Show earlier messages (N hidden)' button (lines 1033-1046) - a fixed-window fallback, not true windowed/variable-height virtualization (no react-window/react-virtual, no scroll-position-based recycling of arbitrary history)."
+    "status": "built",
+    "evidence": "apps/web/features/chat/components/messages/ChatMessageList.tsx:742-813 defines the recycled variable-height row, :887-900 owns the ResizeObserver-backed height cache and bottom-alignment spacer, :969-1090 preserves scroll ownership across new turns, streaming growth, and post-render height corrections, and :1309-1333 mounts the complete transcript through react-window with six-row overscan. ChatMessageList.test.tsx:491-570 verifies initial/new/streaming bottom-follow plus a 120-turn transcript where the newest turn remains reachable and fewer than 30 bubbles are mounted. Browser verification on a persisted rich-markdown conversation measured 8 mounted virtual rows and exact bottom pinning (scrollTop 1213.5 = scrollHeight 1605 - clientHeight 392), then confirmed manual history scroll exposes the existing return-to-bottom control."
   },
   {
     "item": "conversation-list",
