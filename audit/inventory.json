@@ -1586,8 +1586,8 @@
   {
     "item": "resume-search-by-pr-url",
     "surface": "apps/cli",
-    "status": "partial",
-    "evidence": "apps/cli/src/lib.rs:2176-2178 (--search flag) and apps/cli/src/repl/registry.rs:414-435 ('/sessions search <query>') both call sessions::search_sessions (apps/cli/src/sessions.rs:531-547), a generic case-insensitive substring search over saved session titles and message text."
+    "status": "built",
+    "evidence": "Both reachable discovery paths remain shared: apps/cli/src/lib.rs:2176-2178 (`--search`) and apps/cli/src/repl/registry.rs:414-435 (`/sessions search`) call sessions::search_sessions. That implementation at apps/cli/src/sessions.rs:48-59,524-542,562-584 now extracts and canonicalizes GitHub pull-request identity as lowercase `owner/repo#number` from full `http(s)://github.com/<owner>/<repo>/pull/<number>` URLs (including trailing `/files` or query fragments) and `owner/repo#number` shorthand in the query, title, or persisted message content. It therefore matches the same PR across URL/shorthand/case variants while keeping repositories with the same PR number isolated; ordinary case-insensitive session search remains unchanged. Regression coverage at sessions.rs:849-902 proves URL-to-shorthand and shorthand-to-URL lookup plus cross-repository non-matching, and the result feeds the existing visible session list from which users resume by ID."
   },
   {
     "item": "project-purge-command",
