@@ -3698,8 +3698,8 @@
   {
     "item": "admin-console",
     "surface": "admin-and-billing",
-    "status": "partial",
-    "evidence": "apps/web/app/admin/layout.tsx:1-27 gates /admin behind a real Clerk auth + role check (publicMetadata.role === 'admin'|'owner'); apps/web/app/admin/page.tsx + apps/web/features/admin/pages/AdminConsolePage.tsx:98-216 render a page, but its content is a hardcoded 'readiness ledger' built from static policy constants (DEFAULT_ENTERPRISE_ADMIN_POLICY), not live org data. The genuinely functional admin actions (suspend/ban/reactivate user, security event feed) live in apps/web/app/api/admin/security/route.ts:79-418 but have zero UI callers (grep for 'api/admin/security' outside the route file and its own test returns nothing). Real, functional org/team administration (create org, add/remove member, change role) lives at /settings (TeamSection.tsx), not /admin."
+    "status": "built",
+    "evidence": "apps/web/app/admin/layout.tsx gates /admin behind Clerk authentication and the admin/owner role. apps/web/features/admin/components/SecurityOperationsPanel.tsx is a live operations UI embedded by AdminConsolePage: it loads authenticated cross-tenant security metrics, alert states, the latest 25 audit events, and top source IPs through apps/web/features/admin/services/admin-security-client.ts. The same panel provides audited suspend, ban, and reactivate controls with required target/reason inputs; every mutation sends the Clerk bearer token plus a CSRF token to the guarded apps/web/app/api/admin/security/route.ts and refreshes live state after success. SecurityMonitoringService normalizes legacy and current stored severity taxonomies at the API boundary. Component/client/service/page tests cover live rendering, authenticated reads, protected mutation wiring, errors, normalization, and page reachability. Organization/team membership administration remains correctly owned by Settings rather than duplicated here."
   },
   {
     "item": "member-management",

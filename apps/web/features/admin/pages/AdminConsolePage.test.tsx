@@ -12,6 +12,10 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import AdminConsolePage from './AdminConsolePage';
 
+vi.mock('../components/SecurityOperationsPanel', () => ({
+  default: () => <div data-testid="security-operations-panel">Live security operations</div>,
+}));
+
 const FORBIDDEN_PATTERNS = [/waitlist/i, /private beta/i, /launch gate/i, /public_launch_blocked/i];
 
 afterEach(() => {
@@ -25,6 +29,11 @@ function expectNoForbiddenLanguage(text: string): void {
 }
 
 describe('AdminConsolePage — managed compute status honesty', () => {
+  it('includes the live security operations surface', () => {
+    render(<AdminConsolePage />);
+    expect(screen.getByTestId('security-operations-panel')).toBeInTheDocument();
+  });
+
   it('states public alpha / open by default (env unset), with no waitlist/private-beta/launch-gate language', () => {
     vi.stubEnv('AGI_MANAGED_COMPUTE_PRIVATE_BETA', '');
     const { container } = render(<AdminConsolePage />);

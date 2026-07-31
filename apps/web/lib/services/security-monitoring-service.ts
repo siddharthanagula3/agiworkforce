@@ -22,7 +22,8 @@ import type { SecurityEventType, SecurityEventSeverity } from '@/lib/security-au
 export interface SecurityEvent {
   id: string;
   user_id: string | null;
-  event_type: SecurityEventType;
+  /** Historical rows may contain event names outside the current write taxonomy. */
+  event_type: string;
   severity: SecurityEventSeverity;
   ip_address: string | null;
   user_agent: string | null;
@@ -56,6 +57,26 @@ export interface AlertStatus {
   threshold: number;
   window_minutes: number;
   severity: 'warning' | 'critical';
+}
+
+type StoredSecurityEventSeverity = SecurityAuditLogRow['severity'] | SecurityEventSeverity;
+type StoredSecurityAuditLogRow = Omit<SecurityAuditLogRow, 'severity'> & {
+  severity: StoredSecurityEventSeverity;
+};
+
+function normalizeSecuritySeverity(severity: StoredSecurityEventSeverity): SecurityEventSeverity {
+  if (severity === 'info') return 'low';
+  if (severity === 'warning') return 'medium';
+  if (severity === 'error') return 'high';
+  return severity;
+}
+
+function toSecurityEvent(row: StoredSecurityAuditLogRow): SecurityEvent {
+  return {
+    ...row,
+    severity: normalizeSecuritySeverity(row.severity),
+    details: row.details ?? {},
+  };
 }
 
 // Default alert thresholds
@@ -135,8 +156,8 @@ export class SecurityMonitoringService {
       const where = conditions.length > 0 ? `where ${conditions.join(' and ')}` : '';
       const sql = `select * from security_audit_logs ${where} order by created_at desc limit $1`;
 
-      const rows = await db.query<SecurityAuditLogRow>(sql, params);
-      return rows as unknown as SecurityEvent[];
+      const rows = await db.query<StoredSecurityAuditLogRow>(sql, params);
+      return rows.map(toSecurityEvent);
     } catch (error) {
       logger.error({ error }, 'Error in getRecentEvents');
       throw error;
@@ -157,7 +178,7 @@ export class SecurityMonitoringService {
       // Fetch events from last 7 days for all metrics
       const events = await db.query<
         Pick<
-          SecurityAuditLogRow,
+          StoredSecurityAuditLogRow,
           'event_type' | 'severity' | 'ip_address' | 'user_id' | 'created_at'
         >
       >(
@@ -199,10 +220,9 @@ export class SecurityMonitoringService {
       let highCount = 0;
 
       for (const event of events24h) {
+        const severity = normalizeSecuritySeverity(event.severity);
         // Count by severity
-        if (event.severity in bySeverity) {
-          bySeverity[event.severity as SecurityEventSeverity]++;
-        }
+        bySeverity[severity]++;
 
         // Count by event type
         if (event.event_type in byEventType) {
@@ -218,9 +238,9 @@ export class SecurityMonitoringService {
         }
 
         // Count critical/error severity
-        if (event.severity === 'critical') {
+        if (severity === 'critical') {
           criticalCount++;
-        } else if (event.severity === 'error') {
+        } else if (severity === 'high') {
           highCount++;
         }
       }
@@ -358,14 +378,14 @@ export class SecurityMonitoringService {
   static async getEventsByUser(userId: string, limit: number = 50): Promise<SecurityEvent[]> {
     try {
       const db = getNeonDb();
-      const rows = await db.query<SecurityAuditLogRow>(
+      const rows = await db.query<StoredSecurityAuditLogRow>(
         `select * from security_audit_logs
          where user_id = $1
          order by created_at desc
          limit $2`,
         [userId, limit],
       );
-      return rows as unknown as SecurityEvent[];
+      return rows.map(toSecurityEvent);
     } catch (error) {
       logger.error({ error, userId }, 'Error in getEventsByUser');
       throw error;
