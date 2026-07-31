@@ -240,10 +240,17 @@ export async function registerForPushNotifications(
     // an uncaught rejection here surfaces as a red error overlay in dev and is a
     // silent crash risk in prod. Push simply stays off for this session.
     if (__DEV__) {
-      console.warn(
-        '[push] registration skipped (non-fatal):',
-        err instanceof Error ? err.message : String(err),
-      );
+      const message = err instanceof Error ? err.message : String(err);
+      // A missing "aps-environment" entitlement is the expected, unavoidable
+      // outcome on the Simulator and on dev builds using the minimal
+      // entitlement set — not a defect worth a warning on every launch. Keep
+      // warn for everything else (APNs unreachable, backend token sync failed),
+      // where the diagnostic is the whole point.
+      if (message.includes('aps-environment')) {
+        console.info('[push] not available in this build (no aps-environment entitlement)');
+      } else {
+        console.warn('[push] registration skipped (non-fatal):', message);
+      }
     }
     return null;
   }
