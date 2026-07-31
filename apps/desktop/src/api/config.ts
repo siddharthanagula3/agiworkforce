@@ -22,7 +22,7 @@ export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || 'https:
 
 /** Public web app base URL (Next.js). */
 export const WEB_APP_URL: string =
-  (import.meta.env['VITE_WEB_APP_URL'] as string | undefined) ?? 'https://agiworkforce.com';
+  (import.meta.env['VITE_WEB_APP_URL'] as string | undefined) || 'https://agiworkforce.com';
 
 /**
  * Express api-gateway base URL.
@@ -34,5 +34,5 @@ export const WEB_APP_URL: string =
  * guard blocks them identically in Local/BYOK mode.
  */
 export const GATEWAY_BASE_URL: string =
-  (import.meta.env['VITE_GATEWAY_BASE_URL'] as string | undefined) ??
+  (import.meta.env['VITE_GATEWAY_BASE_URL'] as string | undefined) ||
   'https://api.agiworkforce.com';
