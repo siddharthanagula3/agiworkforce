@@ -16,19 +16,10 @@ pub use logging::{get_current_log_path, LogConfig};
 pub use metrics::{MetricsCollector, OperationMetrics, Timer};
 pub use tracing::{capture_error, init_tracing};
 
-#[cfg(feature = "sentry")]
-pub use tracing::init_sentry;
-
 use anyhow::Result;
 
 pub fn init() -> Result<TelemetryGuard> {
-    let log_config = LogConfig::default();
-
-    if let Some(guard) = initialize_sentry_if_configured(&log_config)? {
-        return Ok(guard);
-    }
-
-    init_with_config(log_config)
+    init_with_config(LogConfig::default())
 }
 
 pub fn init_with_config(log_config: LogConfig) -> Result<TelemetryGuard> {
@@ -40,8 +31,6 @@ pub fn init_with_config(log_config: LogConfig) -> Result<TelemetryGuard> {
         metrics,
         _file_guard,
         _stdout_guard,
-        #[cfg(feature = "sentry")]
-        _sentry_guard: None,
     };
 
     ::tracing::info!(
@@ -52,65 +41,6 @@ pub fn init_with_config(log_config: LogConfig) -> Result<TelemetryGuard> {
     Ok(guard)
 }
 
-#[cfg(feature = "sentry")]
-pub fn init_with_sentry(
-    log_config: LogConfig,
-    sentry_dsn: &str,
-    environment: &str,
-) -> Result<TelemetryGuard> {
-    let (_file_guard, _stdout_guard) = init_tracing(log_config.clone())?;
-    let metrics = MetricsCollector::new();
-    let sentry_guard = init_sentry(sentry_dsn, environment)?;
-
-    Ok(TelemetryGuard {
-        _log_config: log_config,
-        metrics,
-        _file_guard,
-        _stdout_guard,
-        _sentry_guard: Some(sentry_guard),
-    })
-}
-
-#[cfg(feature = "sentry")]
-fn initialize_sentry_if_configured(log_config: &LogConfig) -> Result<Option<TelemetryGuard>> {
-    if let Ok(dsn_raw) = std::env::var("SENTRY_DSN") {
-        let dsn = dsn_raw.trim().to_string();
-        if !dsn.is_empty() {
-            let environment =
-                std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
-            let environment = environment.trim().to_string();
-
-            match init_with_sentry(log_config.clone(), &dsn, &environment) {
-                Ok(guard) => {
-                    ::tracing::info!(
-                        "Sentry crash reporting enabled (environment: {})",
-                        environment
-                    );
-                    return Ok(Some(guard));
-                }
-                Err(e) => {
-                    ::tracing::error!(
-                        "Failed to initialize Sentry: {}. Crash reporting will be disabled.",
-                        e
-                    );
-                    return Ok(None);
-                }
-            }
-        } else {
-            ::tracing::debug!("SENTRY_DSN env var present but empty; crash reporting not enabled");
-        }
-    } else {
-        ::tracing::debug!("SENTRY_DSN not set; crash reporting disabled");
-    }
-
-    Ok(None)
-}
-
-#[cfg(not(feature = "sentry"))]
-fn initialize_sentry_if_configured(_log_config: &LogConfig) -> Result<Option<TelemetryGuard>> {
-    Ok(None)
-}
-
 pub struct TelemetryGuard {
     pub(crate) _log_config: LogConfig,
     pub metrics: MetricsCollector,
@@ -119,8 +49,6 @@ pub struct TelemetryGuard {
     // `tracing::` call (see the comment on `tracing::init_tracing`).
     _file_guard: tracing_appender::non_blocking::WorkerGuard,
     _stdout_guard: tracing_appender::non_blocking::WorkerGuard,
-    #[cfg(feature = "sentry")]
-    _sentry_guard: Option<sentry::ClientInitGuard>,
 }
 
 impl TelemetryGuard {
