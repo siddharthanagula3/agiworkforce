@@ -78,7 +78,6 @@ export interface ArtifactLocalPublishResult {
   shareUrl: string;
   shareToken: string;
   publishedAt: string;
-  waitlistGated: false;
 }
 
 /**
@@ -90,7 +89,6 @@ export interface ArtifactCloudPublishResult {
   kind: 'cloud';
   shareUrl: string;
   publishedAt: string;
-  waitlistGated: false;
 }
 
 /**
@@ -105,27 +103,13 @@ export interface ArtifactCloudUnavailablePublishResult {
   kind: 'unavailable';
   shareUrl: null;
   reason: string;
-  waitlistGated: false;
-}
-
-/**
- * @deprecated AUDIT-FIX ART-27 — retained only so a host still returning the
- * pre-2026-06-27 shape keeps type-checking. The panel renders it exactly like
- * `unavailable`: no waitlist, no sign-up link. Remove once every adapter
- * (notably `apps/web/lib/artifact-publisher.ts`) has been migrated.
- */
-export interface ArtifactWaitlistPublishResult {
-  kind: 'waitlist';
-  shareUrl: null;
-  waitlistGated: true;
 }
 
 /** Discriminated union of possible publish outcomes. */
 export type ArtifactPublishResult =
   | ArtifactLocalPublishResult
   | ArtifactCloudPublishResult
-  | ArtifactCloudUnavailablePublishResult
-  | ArtifactWaitlistPublishResult;
+  | ArtifactCloudUnavailablePublishResult;
 
 export interface ArtifactPanelProps {
   artifact: Artifact | null;
@@ -407,7 +391,7 @@ export function ArtifactPanel({
   const [editDraft, setEditDraft] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   // Publish state — tracks in-flight publish and the last result so the
-  // panel can show the share-URL toast / waitlist CTA without a sonner dep.
+  // panel can show the share URL or honest host-unavailable state without a sonner dep.
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState<ArtifactPublishResult | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -1040,25 +1024,20 @@ export function ArtifactPanel({
               actually true when we land here is narrower and duller: THIS host
               injected no cloud publisher, so there is nothing to publish to.
               Say that, and say what the user can do instead — Download works. */}
-          {!isPublishing &&
-            (publishResult?.kind === 'unavailable' || publishResult?.kind === 'waitlist') && (
-              <>
-                <Globe size={11} className="shrink-0 text-[var(--chat-text-muted)]" />
-                <span className="text-[var(--chat-text-secondary)]">
-                  {publishResult.kind === 'unavailable'
-                    ? publishResult.reason
-                    : 'Cloud publish is not wired up on this surface yet.'}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDownload}
-                  className="ml-auto h-6 shrink-0 px-2 text-[11px] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
-                >
-                  Download instead
-                </Button>
-              </>
-            )}
+          {!isPublishing && publishResult?.kind === 'unavailable' && (
+            <>
+              <Globe size={11} className="shrink-0 text-[var(--chat-text-muted)]" />
+              <span className="text-[var(--chat-text-secondary)]">{publishResult.reason}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDownload}
+                className="ml-auto h-6 shrink-0 px-2 text-[11px] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+              >
+                Download instead
+              </Button>
+            </>
+          )}
 
           {!isPublishing && publishError && (
             <>

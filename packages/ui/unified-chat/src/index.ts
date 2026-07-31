@@ -167,7 +167,6 @@ export type {
   ArtifactPanelProps,
   ArtifactPublishResult,
   ArtifactLocalPublishResult,
-  ArtifactWaitlistPublishResult,
 } from './components/ArtifactPanel';
 export { DownloadCard } from './components/DownloadCard';
 export type { DownloadCardProps } from './components/DownloadCard';
