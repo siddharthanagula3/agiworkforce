@@ -205,7 +205,8 @@ fn append_repl_shortcuts(help: &mut String) {
     );
     let _ = writeln!(help, "  {:<22} Multi-line input", "\\");
     let _ = writeln!(help, "  {:<22} Cancel input / Ctrl-D exits", "Ctrl-C");
-    let _ = writeln!(help, "  {:<22} Enable vim keybindings", "AGIWORKFORCE_VI=1");
+    let _ = writeln!(help, "  {:<22} Enable vi editing", "ui.edit_mode = \"vi\"");
+    let _ = writeln!(help, "  {:<22} Show active bindings", "/keybindings");
 }
 
 fn append_tui_shortcuts(help: &mut String) {
@@ -222,6 +223,7 @@ fn append_tui_shortcuts(help: &mut String) {
     let _ = writeln!(help, "  {:<14} Scroll chat history", "Up/Down");
     let _ = writeln!(help, "  {:<14} Clear screen", "Ctrl-L");
     let _ = writeln!(help, "  {:<14} Clear input", "Ctrl-C");
+    let _ = writeln!(help, "  Customize global actions with [ui.keybindings]");
 
     help.push_str("\nModes (cycle with Shift+Tab):\n");
     let _ = writeln!(help, "  {:<14} Normal conversation (grey)", "Default");

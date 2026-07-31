@@ -175,8 +175,7 @@ pub async fn run_repl(
     )
     .await;
 
-    let edit_mode = if std::env::var("AGIWORKFORCE_VI").is_ok_and(|v| v == "1" || v == "true")
-        || std::env::var("EDITOR").is_ok_and(|e| e.contains("vi"))
+    let edit_mode = if crate::keybindings::resolved_edit_mode(config.ui.edit_mode.as_deref()) == "vi"
     {
         EditMode::Vi
     } else {

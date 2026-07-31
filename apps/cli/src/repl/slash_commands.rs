@@ -47,6 +47,17 @@ pub(super) async fn handle_slash_command(
     let cmd = parts[0].to_lowercase();
     let arg = parts.get(1).map(|s| s.trim()).unwrap_or_default();
 
+    if matches!(cmd.as_str(), "/keybindings" | "/keys") {
+        let bindings = crate::keybindings::Keybindings::from_config(&config.ui.keybindings);
+        eprintln!(
+            "{}",
+            bindings.render_help(crate::keybindings::resolved_edit_mode(
+                config.ui.edit_mode.as_deref()
+            ))
+        );
+        return SlashResult::Handled;
+    }
+
     match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, session) {
         crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
             persist_shared_ui_config(cmd.as_str(), arg, session, config);
