@@ -391,6 +391,46 @@ requireIncludes(
   'apps/extension/scripts/prepare-package.mjs',
   'packageManifest.version !== chromeManifest.version',
 );
+requireIncludes('.github/workflows/release-chrome-extension.yml', "- 'v-ext-*'");
+requireIncludes(
+  '.github/workflows/release-chrome-extension.yml',
+  "grep -Eq '^v-ext-[0-9]+\\.[0-9]+\\.[0-9]+$'",
+);
+requireIncludes('.github/workflows/release-chrome-extension.yml', 'does not match Chrome versions');
+requireIncludes(
+  '.github/workflows/release-chrome-extension.yml',
+  'pnpm --filter @agiworkforce/extension test',
+);
+requireIncludes('.github/workflows/release-chrome-extension.yml', 'sha256sum --check');
+requireIncludes('.github/workflows/release-chrome-extension.yml', 'name: chrome-web-store');
+requireIncludes('.github/workflows/release-chrome-extension.yml', 'id-token: write');
+requireIncludes(
+  '.github/workflows/release-chrome-extension.yml',
+  'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0',
+);
+requireIncludes(
+  '.github/workflows/release-chrome-extension.yml',
+  'access_token_scopes: https://www.googleapis.com/auth/chromewebstore',
+);
+requireIncludes(
+  '.github/workflows/release-chrome-extension.yml',
+  'publish-chrome-web-store.mjs "$ARCHIVE_PATH"',
+);
+for (const forbiddenCredential of [
+  'credentials_json',
+  'SERVICE_ACCOUNT_KEY',
+  'CLIENT_SECRET',
+  'REFRESH_TOKEN',
+]) {
+  requireNotIncludes('.github/workflows/release-chrome-extension.yml', forbiddenCredential);
+}
+requireIncludes('apps/extension/scripts/publish-chrome-web-store.mjs', 'blockOnWarnings: true');
+requireIncludes('apps/extension/scripts/publish-chrome-web-store.mjs', 'skipReview: false');
+requireIncludes(
+  'apps/extension/scripts/publish-chrome-web-store.mjs',
+  '/upload/v2/${itemName}:upload',
+);
+requireIncludes('apps/extension/scripts/verify-package.mjs', 'validateReleaseManifest');
 
 requireIncludes('.github/workflows/build-windows-release.yml', 'group: release-desktop-windows\n');
 requireIncludes(
