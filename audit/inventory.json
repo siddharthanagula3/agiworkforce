@@ -1856,8 +1856,8 @@
   {
     "item": "at-file-mention-with-line-range",
     "surface": "apps/ide-extensions",
-    "status": "partial",
-    "evidence": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2384-2422 implements @mention autocomplete (detectMention/insertMention) that inserts only a bare filename token ('@' + file + ' '), no line syntax. apps/extension-vscode/src/core/commandSetup.ts:170-186 (mentionFileInChat) and :1497-1520 (mentionFileFromProject) build queries as '@agi #file:' + relPath with no line range component."
+    "status": "built",
+    "evidence": "Native VS Code Chat: apps/extension-vscode/src/core/commandSetup.ts:70-80 emits #selection for a non-empty selection in the target editor and #file otherwise; apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:201-202,348-362 converts request.references into local-runtime user inputs; apps/extension-vscode/src/features/chat-participant/promptReferences.ts:60-111 reads a native Location with document.getText(range), preserves its exact line range, validates workspace/sensitive paths, deduplicates, rejects binary data, caps reference count/content, and wraps content as untrusted user data. Custom sidebar: apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts returns active-selection coordinates with file-search results and accepts only references whose @path#Lx-Ly token is visible in the submitted text; apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts displays and inserts the line-range token, then sends the structured range; buildWorkspaceReferenceInputs applies the same guarded boundary. Regression coverage: promptReferences.test.ts, mentionFileInChat.test.ts, chatParticipant.test.ts, chatStateManager.test.ts, and fileMention.webview.test.ts."
   },
   {
     "item": "lsp-diagnostics-bridge",

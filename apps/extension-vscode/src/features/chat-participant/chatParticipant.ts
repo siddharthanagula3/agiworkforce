@@ -37,6 +37,7 @@ import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
 import { buildCustomInstructionInput } from '../instructions';
+import { buildPromptReferenceInputs } from './promptReferences';
 
 // ─── Context gathering ────────────────────────────────────────────────────────
 
@@ -198,6 +199,7 @@ export function createChatHandler(
     }
 
     const editorCtx = gatherEditorContext();
+    const promptReferenceInputs = await buildPromptReferenceInputs(request.references ?? []);
     const planOnly = Config.agentMode() === 'plan' && !isExecutionConfirmation(request.prompt);
     if (planOnly) {
       stream.markdown(
@@ -349,13 +351,14 @@ export function createChatHandler(
         input: [
           ...(customInstructionInput === undefined ? [] : [customInstructionInput]),
           { type: 'text', text: userMessage, text_elements: [] },
+          ...promptReferenceInputs,
           ...(memoryInput === undefined ? [] : [memoryInput]),
         ],
         agentMode: planOnly ? 'plan' : Config.agentMode() === 'plan' ? 'auto' : Config.agentMode(),
         reasoningEffort: Config.agentEffort(),
         ...contextFilesParam(cwd),
         ...(isAutoRoutingModel(model)
-          ? { model, routingTaskType: classifyDeveloperTurn(userMessage) }
+          ? { model, routingTaskType: classifyDeveloperTurn(userMessage, promptReferenceInputs) }
           : { model }),
       });
       turnId = turn.id;
