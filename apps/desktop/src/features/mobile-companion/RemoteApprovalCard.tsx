@@ -2,13 +2,8 @@ import { useEffect, useState } from 'react';
 import { Check, X, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '@/components/ui/Button';
-import {
-  useToolStore,
-  type ApprovalRequest,
-  type ApprovalRiskLevel,
-} from '../../stores/chat/toolStore';
-
-const AUTO_DENY_SECONDS = 30;
+import type { ApprovalRequest, ApprovalRiskLevel } from '../../stores/chat/toolStore';
+import { useApprovalActions } from '../../hooks/useApprovalActions';
 
 const RISK_CONFIG: Record<ApprovalRiskLevel, { label: string; badge: string; border: string }> = {
   low: {
@@ -33,39 +28,61 @@ interface RemoteApprovalCardProps {
 }
 
 export function RemoteApprovalCard({ approval }: RemoteApprovalCardProps) {
-  const approveOperation = useToolStore((state) => state.approveOperation);
-  const rejectOperation = useToolStore((state) => state.rejectOperation);
-
-  const [secondsLeft, setSecondsLeft] = useState(AUTO_DENY_SECONDS);
+  const { resolveApproval } = useApprovalActions();
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [acting, setActing] = useState<'approve' | 'deny' | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const riskConfig = RISK_CONFIG[approval.riskLevel] ?? RISK_CONFIG['medium'];
 
-  // Countdown timer — auto-deny for security when time runs out
   useEffect(() => {
-    if (secondsLeft <= 0) {
-      rejectOperation(approval.id, 'Auto-denied: approval timed out after 30 seconds');
-      return;
+    if (!approval.timeoutSeconds) {
+      setSecondsLeft(null);
+      return undefined;
     }
+
+    const deadline = new Date(approval.createdAt).getTime() + approval.timeoutSeconds * 1_000;
+    const updateCountdown = () => {
+      setSecondsLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1_000)));
+    };
+    updateCountdown();
     const interval = window.setInterval(() => {
-      setSecondsLeft((s) => s - 1);
+      updateCountdown();
     }, 1000);
     return () => window.clearInterval(interval);
-  }, [secondsLeft, approval.id, rejectOperation]);
+  }, [approval.createdAt, approval.timeoutSeconds]);
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     setActing('approve');
-    approveOperation(approval.id);
+    setError(null);
+    try {
+      await resolveApproval(approval, 'approve');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not approve this action.');
+      setActing(null);
+    }
   };
 
-  const handleDeny = () => {
+  const handleDeny = async () => {
     setActing('deny');
-    rejectOperation(approval.id, 'Denied by user via Mobile Companion panel');
+    setError(null);
+    try {
+      await resolveApproval(approval, 'reject', {
+        reason: 'Denied by user via Mobile Companion panel',
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not deny this action.');
+      setActing(null);
+    }
   };
 
   const isActing = acting !== null;
   const timerColor =
-    secondsLeft <= 5 ? 'text-rose-600' : secondsLeft <= 10 ? 'text-amber-600' : 'text-slate-500';
+    secondsLeft !== null && secondsLeft <= 5
+      ? 'text-rose-600'
+      : secondsLeft !== null && secondsLeft <= 10
+        ? 'text-amber-600'
+        : 'text-slate-500';
 
   return (
     <div className={cn('rounded-lg border bg-white shadow-xs p-4 space-y-3', riskConfig.border)}>
@@ -95,31 +112,40 @@ export function RemoteApprovalCard({ approval }: RemoteApprovalCardProps) {
         {/* Countdown */}
         <div className={cn('flex items-center gap-1 shrink-0 text-xs font-mono', timerColor)}>
           <Clock className="h-3 w-3" />
-          {secondsLeft}s
+          {secondsLeft === null ? 'Waiting' : `${secondsLeft}s`}
         </div>
       </div>
 
-      {/* Progress bar for countdown */}
-      <div className="h-1 w-full rounded-full bg-slate-100 overflow-hidden">
-        <div
-          className={cn(
-            'h-full rounded-full transition-all duration-1000',
-            secondsLeft <= 5
-              ? 'bg-rose-500'
-              : secondsLeft <= 10
-                ? 'bg-amber-400'
-                : 'bg-emerald-500',
-          )}
-          style={{ width: `${(secondsLeft / AUTO_DENY_SECONDS) * 100}%` }}
-        />
-      </div>
+      {secondsLeft !== null && approval.timeoutSeconds ? (
+        <div className="h-1 w-full rounded-full bg-slate-100 overflow-hidden">
+          <div
+            className={cn(
+              'h-full rounded-full transition-all duration-1000',
+              secondsLeft <= 5
+                ? 'bg-rose-500'
+                : secondsLeft <= 10
+                  ? 'bg-amber-400'
+                  : 'bg-emerald-500',
+            )}
+            style={{
+              width: `${Math.min(100, (secondsLeft / approval.timeoutSeconds) * 100)}%`,
+            }}
+          />
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="text-xs text-rose-600" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {/* Action buttons */}
       <div className="flex gap-2">
         <Button
           size="sm"
           className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
-          onClick={handleApprove}
+          onClick={() => void handleApprove()}
           disabled={isActing}
         >
           <Check className="h-3.5 w-3.5" />
@@ -129,7 +155,7 @@ export function RemoteApprovalCard({ approval }: RemoteApprovalCardProps) {
           size="sm"
           variant="outline"
           className="flex-1 border-rose-300 text-rose-700 hover:bg-rose-50 gap-1"
-          onClick={handleDeny}
+          onClick={() => void handleDeny()}
           disabled={isActing}
         >
           <X className="h-3.5 w-3.5" />

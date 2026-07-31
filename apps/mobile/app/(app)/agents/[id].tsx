@@ -29,7 +29,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { colors } from '@/src/ui/theme';
-import { sendAgentCommand, sendApprovalResponse, getRiskBadgeColor } from '@/services/companion';
+import { sendAgentCommand, getRiskBadgeColor } from '@/services/companion';
 import type { ApprovalRequest, StatusStep, ToolCall } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
@@ -268,7 +268,6 @@ export default function AgentDetailScreen() {
     (approvalId: string) => {
       if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       approveRequest(approvalId);
-      sendApprovalResponse(approvalId, true);
     },
     [approveRequest, hapticsEnabled],
   );
@@ -277,7 +276,6 @@ export default function AgentDetailScreen() {
     (approvalId: string) => {
       if (hapticsEnabled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       rejectRequest(approvalId);
-      sendApprovalResponse(approvalId, false);
     },
     [rejectRequest, hapticsEnabled],
   );

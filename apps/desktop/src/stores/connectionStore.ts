@@ -9,6 +9,7 @@ import {
   initDispatchSession,
   resetDispatchSession,
   extractDispatchSalt,
+  isDispatchSessionActive,
   signOutbound,
   verifyInbound,
 } from '../services/dispatch';
@@ -131,6 +132,13 @@ export async function sendCompanionControl(
   action: string,
   payload: Record<string, unknown>,
 ): Promise<boolean> {
+  if (
+    !isDispatchSessionActive() ||
+    (controlChannel?.readyState !== 'open' && signalingClient === null)
+  ) {
+    return false;
+  }
+
   try {
     const signedJson = await signOutbound({ ...payload, action }, action);
     if (controlChannel?.readyState === 'open') {

@@ -210,6 +210,67 @@ export interface DispatchTaskStatusEvent {
 }
 
 // ============================================================================
+// Companion Approvals
+// ============================================================================
+
+export type CompanionApprovalRiskLevel = 'low' | 'medium' | 'high';
+
+export type CompanionApprovalType =
+  | 'file_delete'
+  | 'command'
+  | 'api_call'
+  | 'data_modification'
+  | 'other';
+
+/**
+ * A bounded summary of an authoritative Desktop approval. The Mobile
+ * companion may display and answer this request, but Desktop remains the
+ * source of truth for its lifecycle and tool metadata.
+ */
+export interface CompanionApprovalRequestEvent {
+  action: 'approval_request';
+  version: 1;
+  requestId: string;
+  toolName: string;
+  description: string;
+  riskLevel: CompanionApprovalRiskLevel;
+  type: CompanionApprovalType;
+  createdAt: string;
+  expiresAt?: string;
+  countdown?: number;
+}
+
+/**
+ * A signed decision from Mobile. Desktop resolves the request by ID against
+ * its current pending-approval store and never trusts Mobile-supplied tool
+ * metadata.
+ */
+export interface CompanionApprovalResponse {
+  action: 'approval_response';
+  version: 1;
+  requestId: string;
+  approved: boolean;
+  respondedAt: string;
+  reason?: string;
+}
+
+/** Desktop notification that a previously relayed approval is no longer pending. */
+export interface CompanionApprovalClosedEvent {
+  action: 'approval_closed';
+  version: 1;
+  requestId: string;
+  closedAt: string;
+}
+
+/** Authoritative pending IDs sent during a companion state refresh. */
+export interface CompanionApprovalSnapshotEvent {
+  action: 'approval_snapshot';
+  version: 1;
+  pendingRequestIds: string[];
+  syncedAt: string;
+}
+
+// ============================================================================
 // Device Pairing
 // ============================================================================
 

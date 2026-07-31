@@ -1,10 +1,17 @@
 import type {
+  CompanionApprovalRequestEvent,
+  CompanionApprovalResponse,
+  CompanionApprovalSnapshotEvent,
+  CompanionApprovalType,
+  CompanionApprovalClosedEvent,
   DispatchTaskControlRequest,
   DispatchTaskLifecycleStatus,
   DispatchTaskStatusEvent,
 } from '@agiworkforce/types';
 
+import { resolveApprovalRequest } from './approvalResolution';
 import { type AgentTask, type AgentTaskStatus, useAgentTaskStore } from '../stores/agentTaskStore';
+import { type ApprovalRequest, useToolStore } from '../stores/chat/toolStore';
 import { useCoworkDispatchStore } from '../stores/coworkDispatchStore';
 import { sendCompanionControl } from '../stores/connectionStore';
 
@@ -12,6 +19,9 @@ const MAX_REQUEST_ID_LENGTH = 128;
 const MAX_PROMPT_LENGTH = 20_000;
 const MAX_TITLE_LENGTH = 160;
 const MAX_STATUS_TEXT_LENGTH = 4_000;
+const MAX_APPROVAL_TOOL_NAME_LENGTH = 120;
+const MAX_APPROVAL_DESCRIPTION_LENGTH = 1_000;
+const MAX_APPROVAL_REASON_LENGTH = 500;
 
 interface MobileCompanionControlDetail {
   action: string;
@@ -26,6 +36,9 @@ interface ActiveDispatch {
 
 const dispatchesByRequest = new Map<string, ActiveDispatch>();
 const requestIdByTask = new Map<string, string>();
+const relayedApprovalIds = new Set<string>();
+const relayingApprovalIds = new Set<string>();
+const resolvingApprovalIds = new Set<string>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -88,6 +101,194 @@ export function parseDispatchTaskControl(
   }
 
   return null;
+}
+
+export function parseCompanionApprovalResponse(payload: unknown): CompanionApprovalResponse | null {
+  if (
+    !isRecord(payload) ||
+    (payload['version'] !== undefined && payload['version'] !== 1) ||
+    typeof payload['approved'] !== 'boolean'
+  ) {
+    return null;
+  }
+
+  const requestId = boundedString(payload['requestId'], MAX_REQUEST_ID_LENGTH);
+  const respondedAt = payload['respondedAt'];
+  const reasonValue = payload['reason'];
+  const reason =
+    reasonValue === undefined ? undefined : boundedString(reasonValue, MAX_APPROVAL_REASON_LENGTH);
+  if (
+    !requestId ||
+    !isIsoTimestamp(respondedAt) ||
+    (reasonValue !== undefined && reason === null)
+  ) {
+    return null;
+  }
+
+  return {
+    action: 'approval_response',
+    version: 1,
+    requestId,
+    approved: payload['approved'],
+    respondedAt,
+    ...(reason ? { reason } : {}),
+  };
+}
+
+function approvalTypeForMobile(type: ApprovalRequest['type']): CompanionApprovalType {
+  switch (type) {
+    case 'file_delete':
+      return 'file_delete';
+    case 'terminal_command':
+      return 'command';
+    case 'api_call':
+      return 'api_call';
+    case 'data_modification':
+      return 'data_modification';
+    default:
+      return 'other';
+  }
+}
+
+function readApprovalDetail(approval: ApprovalRequest, key: string): string | null {
+  return boundedString(approval.details[key], MAX_APPROVAL_TOOL_NAME_LENGTH);
+}
+
+export function buildCompanionApprovalRequest(
+  approval: ApprovalRequest,
+  now = Date.now(),
+): CompanionApprovalRequestEvent | null {
+  const requestId = boundedString(approval.id, MAX_REQUEST_ID_LENGTH);
+  const description = boundedString(approval.description, MAX_APPROVAL_DESCRIPTION_LENGTH);
+  const toolName =
+    readApprovalDetail(approval, 'tool') ??
+    readApprovalDetail(approval, 'toolName') ??
+    readApprovalDetail(approval, 'command') ??
+    boundedString(approval.type.replaceAll('_', ' '), MAX_APPROVAL_TOOL_NAME_LENGTH);
+  const createdAt = new Date(approval.createdAt);
+
+  if (!requestId || !description || !toolName || !Number.isFinite(createdAt.getTime())) {
+    return null;
+  }
+
+  const timeoutSeconds =
+    typeof approval.timeoutSeconds === 'number' &&
+    Number.isFinite(approval.timeoutSeconds) &&
+    approval.timeoutSeconds > 0
+      ? Math.min(3_600, Math.floor(approval.timeoutSeconds))
+      : undefined;
+  const deadline = timeoutSeconds ? createdAt.getTime() + timeoutSeconds * 1_000 : undefined;
+  const countdown = deadline ? Math.max(0, Math.ceil((deadline - now) / 1_000)) : undefined;
+
+  return {
+    action: 'approval_request',
+    version: 1,
+    requestId,
+    toolName,
+    description,
+    riskLevel: approval.riskLevel,
+    type: approvalTypeForMobile(approval.type),
+    createdAt: createdAt.toISOString(),
+    ...(deadline !== undefined
+      ? {
+          expiresAt: new Date(deadline).toISOString(),
+          countdown,
+        }
+      : {}),
+  };
+}
+
+async function publishApproval(approval: ApprovalRequest, force = false): Promise<void> {
+  if (
+    approval.status !== 'pending' ||
+    relayingApprovalIds.has(approval.id) ||
+    (!force && relayedApprovalIds.has(approval.id))
+  ) {
+    return;
+  }
+
+  const event = buildCompanionApprovalRequest(approval);
+  if (!event) return;
+
+  relayingApprovalIds.add(approval.id);
+  try {
+    const sent = await sendCompanionControl(event.action, { ...event });
+    if (sent) {
+      const stillPending = useToolStore
+        .getState()
+        .pendingApprovals.some(
+          (candidate) => candidate.id === approval.id && candidate.status === 'pending',
+        );
+      if (stillPending) {
+        relayedApprovalIds.add(approval.id);
+      } else {
+        await publishApprovalClosed(approval.id);
+      }
+    }
+  } finally {
+    relayingApprovalIds.delete(approval.id);
+  }
+}
+
+async function publishPendingApprovals(force = false): Promise<void> {
+  const pending = useToolStore
+    .getState()
+    .pendingApprovals.filter((approval) => approval.status === 'pending');
+  if (force) {
+    const snapshot: CompanionApprovalSnapshotEvent = {
+      action: 'approval_snapshot',
+      version: 1,
+      pendingRequestIds: pending
+        .map((approval) => boundedString(approval.id, MAX_REQUEST_ID_LENGTH))
+        .filter((requestId): requestId is string => requestId !== null)
+        .slice(0, 50),
+      syncedAt: new Date().toISOString(),
+    };
+    await sendCompanionControl(snapshot.action, { ...snapshot });
+  }
+  await Promise.all(pending.map((approval) => publishApproval(approval, force)));
+}
+
+async function publishApprovalClosed(requestId: string): Promise<void> {
+  const event: CompanionApprovalClosedEvent = {
+    action: 'approval_closed',
+    version: 1,
+    requestId,
+    closedAt: new Date().toISOString(),
+  };
+  await sendCompanionControl(event.action, { ...event });
+}
+
+async function resolveCompanionApproval(response: CompanionApprovalResponse): Promise<void> {
+  if (resolvingApprovalIds.has(response.requestId)) return;
+
+  const approval = useToolStore
+    .getState()
+    .pendingApprovals.find(
+      (candidate) => candidate.id === response.requestId && candidate.status === 'pending',
+    );
+  if (!approval || !buildCompanionApprovalRequest(approval)) return;
+
+  resolvingApprovalIds.add(response.requestId);
+  try {
+    await resolveApprovalRequest(approval, response.approved ? 'approve' : 'reject', {
+      trust: false,
+      reason:
+        response.reason ??
+        (response.approved ? 'Approved from Mobile companion' : 'Denied from Mobile companion'),
+    });
+    relayedApprovalIds.delete(response.requestId);
+  } catch (error) {
+    // Keep Desktop authoritative and pending when the native resolver fails.
+    // Re-publish the request so Mobile's optimistic state returns to pending.
+    relayedApprovalIds.delete(response.requestId);
+    queueMicrotask(() => {
+      void publishPendingApprovals();
+    });
+    throw error;
+  } finally {
+    resolvingApprovalIds.delete(response.requestId);
+  }
 }
 
 function statusForAgentTask(status: AgentTaskStatus): DispatchTaskLifecycleStatus {
@@ -297,7 +498,12 @@ async function handleCompanionControl(event: Event): Promise<void> {
     return;
   }
   if (detail.action === 'sync_request') {
-    await publishAgentSnapshot();
+    await Promise.all([publishAgentSnapshot(), publishPendingApprovals(true)]);
+    return;
+  }
+  if (detail.action === 'approval_response') {
+    const response = parseCompanionApprovalResponse(detail.payload);
+    if (response) await resolveCompanionApproval(response);
     return;
   }
 
@@ -351,13 +557,35 @@ export function initializeCoworkDispatchRuntime(): () => void {
     }
   });
 
+  const unsubscribeApprovals = useToolStore.subscribe((state, previous) => {
+    if (state.pendingApprovals === previous.pendingApprovals) return;
+
+    const pendingIds = new Set(state.pendingApprovals.map((approval) => approval.id));
+    for (const approval of previous.pendingApprovals) {
+      if (!pendingIds.has(approval.id) && relayedApprovalIds.delete(approval.id)) {
+        void publishApprovalClosed(approval.id);
+      }
+    }
+
+    // addApprovalRequest stamps configurable timeout metadata in a second
+    // synchronous store update. Publish in a microtask so Mobile receives the
+    // final authoritative deadline rather than an intermediate request.
+    queueMicrotask(() => {
+      void publishPendingApprovals();
+    });
+  });
+
   return () => {
     window.removeEventListener('mobile-companion:control', onControl);
     unsubscribeTasks();
+    unsubscribeApprovals();
   };
 }
 
 export function resetCoworkDispatchRuntimeForTests(): void {
   dispatchesByRequest.clear();
   requestIdByTask.clear();
+  relayedApprovalIds.clear();
+  relayingApprovalIds.clear();
+  resolvingApprovalIds.clear();
 }
