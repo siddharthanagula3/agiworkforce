@@ -1503,6 +1503,20 @@ static DISCOVERED_LOCAL_MODELS: std::sync::OnceLock<
     std::sync::Mutex<Vec<crate::model_catalog::Model>>,
 > = std::sync::OnceLock::new();
 
+/// Compose every live picker source in one place so opening, searching, and
+/// keyboard navigation cannot silently drop a dynamic source.
+fn available_picker_models() -> Vec<crate::model_catalog::Model> {
+    let mut models = crate::model_catalog::catalog().all().to_vec();
+    models.extend(crate::models::openrouter_models::load_cached_models());
+    models.extend(crate::models::gateway_models::cached_picker_models());
+    if let Some(cache) = DISCOVERED_LOCAL_MODELS.get() {
+        if let Ok(local) = cache.lock() {
+            models.extend(local.iter().cloned());
+        }
+    }
+    models
+}
+
 /// Map a discovered local model into a catalog `Model`. Provider is what places
 /// the row in the picker's Local section (`ProviderId::from_catalog_name`); the
 /// other fields are presentation-only defaults since context window, tool
@@ -2235,8 +2249,7 @@ fn handle_agent_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
 fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     use super::widgets::model_picker::{handle_key, PickerAction};
 
-    let mut all_models = crate::model_catalog::catalog().all().to_vec();
-    all_models.extend(crate::models::openrouter_models::load_cached_models());
+    let all_models = available_picker_models();
     let action = handle_key(&mut app.model_picker, key, &all_models);
 
     match action {
@@ -2252,12 +2265,18 @@ fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
 
         PickerAction::Select {
             model_id,
+            provider_id,
             effort: _effort,
             banner,
         } => {
             app.input.clear();
             app.cursor = 0;
-            let text = match app.session.switch_model(&model_id) {
+            let switched = if provider_id == crate::design_system::ProviderId::AGICloud {
+                app.session.switch_managed_model(&model_id)
+            } else {
+                app.session.switch_model(&model_id)
+            };
+            let text = match switched {
                 Ok(()) => banner,
                 Err(err) => format!("Model switch failed: {err}"),
             };
@@ -2512,16 +2531,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/model" | "/m" => {
             if arg.is_empty() {
                 // Open the interactive model picker overlay.
-                let mut all = crate::model_catalog::catalog().all().to_vec();
-                all.extend(crate::models::openrouter_models::load_cached_models());
-                // Merge locally-discovered models (Ollama / LM Studio) so the
-                // picker's Local section reflects what's actually installed —
-                // these are dynamic and absent from the static catalog.
-                if let Some(cache) = DISCOVERED_LOCAL_MODELS.get() {
-                    if let Ok(local) = cache.lock() {
-                        all.extend(local.iter().cloned());
-                    }
-                }
+                let all = available_picker_models();
                 let current = app.model_name.clone();
                 app.model_picker.open(&all, &current);
                 SlashResult::SystemMessage(String::new()) // picker UI handles confirmation
@@ -3481,6 +3491,18 @@ pub async fn run(
             }
         });
     }
+
+    // Discover the account's managed-cloud roster without delaying terminal
+    // startup. The trusted-host/JWT boundary lives in gateway_models; the
+    // picker reads the resulting process-local catalog when `/model` opens.
+    tokio::spawn(async move {
+        match crate::models::gateway_models::discover_gateway_models().await {
+            Ok(catalog) => crate::models::gateway_models::store_live_catalog(catalog),
+            Err(error) => {
+                tracing::debug!("managed model discovery unavailable during TUI startup: {error}")
+            }
+        }
+    });
 
     // Hooks
     let hooks_config = session.hooks_config().clone();
