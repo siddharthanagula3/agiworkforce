@@ -85,6 +85,5 @@ export * as skills from './skills';
 export * as hooks from './hooks';
 export * as promptEnhancement from './promptEnhancement';
 export * as scheduler from './scheduler';
-export * as workspace from './workspace';
 export * as dotfiles from './dotfiles';
 export * as feedback from './feedback';

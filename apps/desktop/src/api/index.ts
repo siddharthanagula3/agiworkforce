@@ -340,7 +340,6 @@ export * from './orchestrator';
 export * from './reflection';
 export * from './teamsApi';
 export * from './accountApi';
-export * from './workspace';
 
 // AGI Core - Goal submission, swarm execution, knowledge base
 export * from './agi';
