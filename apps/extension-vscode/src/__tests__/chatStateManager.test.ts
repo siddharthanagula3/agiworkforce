@@ -1224,6 +1224,63 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('promotes update_plan tool input to a structured plan message', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Plan this change' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_784_335_200_000,
+      toolCallId: 'plan-1',
+      name: 'update_plan',
+      category: 'other',
+      summary: 'Updating the plan',
+      input: {
+        explanation: 'Implement and verify.',
+        plan: [
+          { step: 'Inspect the flow', status: 'completed' },
+          { step: 'Build the UI', status: 'in_progress' },
+          { step: 'Run tests', status: 'pending' },
+        ],
+      },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    await send;
+    expect(harness.posted).toContainEqual({
+      type: 'planUpdate',
+      payload: {
+        explanation: 'Implement and verify.',
+        plan: [
+          { step: 'Inspect the flow', status: 'completed' },
+          { step: 'Build the UI', status: 'in_progress' },
+          { step: 'Run tests', status: 'pending' },
+        ],
+      },
+    });
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({
+        type: 'toolCallStart',
+        payload: expect.objectContaining({ name: 'update_plan' }),
+      }),
+    );
+  });
+
   it('settles the UI turn when the local app-server disconnects', async () => {
     const harness = makeHarness();
     let settled = false;
