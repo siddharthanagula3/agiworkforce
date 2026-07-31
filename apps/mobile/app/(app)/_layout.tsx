@@ -1,8 +1,8 @@
-import { useWindowDimensions } from 'react-native';
 import { Drawer } from 'expo-router/drawer';
 import { DrawerContent } from '@/src/features/drawer/components/DrawerContent';
 import { ContinuityOnboardingGate } from '@/src/features/continuity';
 import { useThemeColors } from '@/src/ui/theme';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 
 // Expo Router only wires up a route's error boundary when the route file
 // itself has a named `ErrorBoundary` export — a separate ./error.tsx file is
@@ -36,9 +36,8 @@ export { default as ErrorBoundary } from './error';
 const HIDDEN = { drawerItemStyle: { display: 'none' as const } };
 
 export default function AppLayout() {
-  const { width } = useWindowDimensions();
   const colors = useThemeColors();
-  const isTablet = width >= 768;
+  const { drawerWidth, usesPersistentDrawer } = useResponsiveLayout();
 
   return (
     <>
@@ -46,15 +45,15 @@ export default function AppLayout() {
         drawerContent={(props) => <DrawerContent {...props} />}
         screenOptions={{
           headerShown: false,
-          drawerType: isTablet ? 'permanent' : 'front',
+          drawerType: usesPersistentDrawer ? 'permanent' : 'front',
           drawerStyle: {
-            width: isTablet ? 280 : 300,
+            width: drawerWidth,
             backgroundColor: colors.background,
             borderRightColor: colors.border,
             borderRightWidth: 1,
           },
           overlayColor: colors.scrim,
-          swipeEnabled: !isTablet,
+          swipeEnabled: !usesPersistentDrawer,
           swipeEdgeWidth: 40,
         }}
       >

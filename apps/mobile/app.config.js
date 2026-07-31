@@ -69,6 +69,10 @@ const config = {
   },
   ios: {
     supportsTablet: true,
+    // Keep iPad multitasking enabled. Expo's iOS prebuild then emits every
+    // required iPad orientation while the top-level portrait lock remains in
+    // effect for iPhone.
+    requireFullScreen: false,
     bundleIdentifier: 'com.agiworkforce.app',
     buildNumber: '2',
     // AUDIT-FIX: H-11 — declare the canonical apex host so iOS verifies the AASA file on
