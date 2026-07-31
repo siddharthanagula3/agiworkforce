@@ -458,8 +458,8 @@
   {
     "item": "macos-target",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "apps/desktop/src-tauri/tauri.conf.json:64-71 configures macOS bundle (entitlements.plist, signingIdentity, Info.plist); apps/desktop/src-tauri/Info.plist and entitlements.plist are fully authored for macOS distribution. .github/workflows/ci.yml:430-463 only runs a macOS 'smoke' job (cargo check + clippy, no bundling). No workflow builds/signs/publishes a macOS .app/.dmg: release-desktop.yml explicitly builds Linux-only (comment at top of file, and release notes text at line 244 'This workflow does not publish macOS or Windows desktop artifacts'), and scripts/check-ci-guardrails.mjs:129 asserts release-desktop.yml must NOT contain 'macos-universal-artifacts'."
+    "status": "built",
+    "evidence": ".github/workflows/release-desktop.yml now has a protected `macos-release` job on macos-15 that installs both Apple Rust targets and asks the pinned Tauri action for `--target universal-apple-darwin --bundles app,dmg`. apps/desktop/scripts/build-native-messaging-host.mjs builds arm64 and x86_64 native hosts, merges them with lipo, and stages the external binary where Tauri's universal bundler consumes it. The release job rejects the result unless the app executable and embedded host are both universal, the generated bundle version matches the release, and the notarized app/DMG plus signed updater archive pass their trust checks. An unsigned local Tauri bundle rehearsal produced AGI.app and AGI.app.tar.gz with CFBundleShortVersionString/CFBundleVersion 1.2.0, identifier com.agiworkforce.desktop, and x86_64+arm64 app/sidecar binaries; Developer ID/notarization remains credentialed protected-CI evidence rather than a local claim."
   },
   {
     "item": "windows-target",
@@ -524,20 +524,20 @@
   {
     "item": "code-signing",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "Windows: fully implemented and CI-verified — build-windows-release.yml signs via Azure Artifact Signing (lines 208-278) and asserts Get-AuthenticodeSignature status is 'Valid' before publishing (lines 280-297). macOS: apps/desktop/src-tauri/tauri.conf.json:64-70 declares a Developer ID signingIdentity, but no CI workflow exercises it (no APPLE_CERTIFICATE/APPLE_SIGNING_IDENTITY secrets referenced anywhere; scripts/launch-readiness-check.sh:120 lists 'APPLE_CERTIFICATE ... (for desktop, optional now)'). Linux: only the Tauri-updater artifact signature (minisign/Ed25519, release-desktop.yml:406-420) exists, not an OS package signature."
+    "status": "built",
+    "evidence": "Windows releases are Authenticode-signed through Azure Artifact Signing and fail unless Get-AuthenticodeSignature reports Valid (.github/workflows/build-windows-release.yml). Linux updater artifacts are Tauri/minisign-signed and verified before publication. macOS now runs in the protected `macos-release` environment with required APPLE_CERTIFICATE and APPLE_CERTIFICATE_PASSWORD secrets, the exact Developer ID Application identity/team from tauri.conf.json, and Tauri updater signing credentials; release-desktop.yml rejects the app unless codesign deep/strict verification, the expected authority/team, hardened-runtime flag, Gatekeeper assessment, DMG signature, and updater minisign verification all pass. apps/desktop/MACOS_RELEASE_RUNBOOK.md documents credential setup and rotation. The unsigned local rehearsal contained only an ad-hoc linker signature, as expected, and is not presented as Developer ID proof."
   },
   {
     "item": "notarization",
     "surface": "apps/desktop",
-    "status": "missing",
-    "evidence": "Grepped the whole repo (excluding node_modules/target/dist) for 'notariz' — only 3 hits, none of which perform notarization: scripts/launch-readiness-check.sh:121 lists 'APPLE_ID + APPLE_PASSWORD + APPLE_TEAM_ID (for notarization, optional now)' as an unset/optional secret; entitlements.plist:5 has a comment 'Required for notarization'; native_messaging_host.rs:31 has a comment referencing 'the notarized .app'. No workflow, script, or tauri-action config anywhere sets APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID or calls notarytool/altool."
+    "status": "built",
+    "evidence": ".github/workflows/release-desktop.yml decodes a required protected APPLE_API_PRIVATE_KEY into AuthKey_<key-id>.p8, exports APPLE_API_KEY_PATH, supplies APPLE_API_KEY/APPLE_API_ISSUER to the pinned Tauri action, and does not permit --skip-stapling. Publication is blocked unless Gatekeeper accepts the Developer ID app and `xcrun stapler validate` succeeds for both the app and DMG. The exact protected-environment setup, approval procedure, post-release checks, and key/certificate rotation are documented in apps/desktop/MACOS_RELEASE_RUNBOOK.md. No signed exported artifact or Apple credentials were available to the local unsigned rehearsal, so live Apple acceptance is intentionally not claimed outside the protected release job."
   },
   {
     "item": "installer-per-os",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "Windows produces a signed NSIS .exe installer (build-windows-release.yml, tauri.conf.json:52-59 nsis config). Linux produces a self-contained .AppImage (release-desktop.yml, no separate 'installer' step needed by design). macOS would produce a .app/.dmg per tauri.conf.json bundle.targets:\"all\" but this is never built by any CI pipeline (see macos-target)."
+    "status": "built",
+    "evidence": "All three desktop OS release formats are implemented: .github/workflows/build-windows-release.yml produces and Authenticode-verifies the Windows NSIS .exe; .github/workflows/release-desktop.yml produces Linux .AppImage and .deb artifacts; and its protected macOS job produces a universal notarized .dmg plus .app.tar.gz updater. The macOS job structurally validates the DMG/app/updater and publishes only after Linux and macOS succeed, while updater ingestion maps the same verified universal archive to darwin-aarch64 and darwin-x86_64. An unsigned local bundle-only rehearsal verified the real AGI.app and updater archive paths; signed/notarized release evidence remains in protected CI."
   },
   {
     "item": "protocol-registration",

@@ -82,6 +82,10 @@ Local mode must keep user files and generated files local unless an explicit pre
 
 Desktop release requires platform packaging, signing/notarization where applicable, updater metadata, and verification that local data paths and generated-file locations are stable.
 
+The protected universal macOS release procedure, Apple credential boundary,
+artifact checks, and recovery steps are documented in
+`MACOS_RELEASE_RUNBOOK.md`.
+
 ## Known Caveats
 
 - Desktop is one of the largest surfaces; product UI domains now live under `src/features`, while `src/components` is reserved for shared UI primitives.

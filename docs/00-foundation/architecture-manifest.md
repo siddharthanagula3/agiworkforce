@@ -88,7 +88,7 @@ Invariants: `AGI-TRUST-0001`…`AGI-TRUST-0004`, `AGI-SYNC-0001` ([requirement-i
 Documented so no future doc repeats an aspirational claim:
 
 - Local desktop chat invoke path is broken end-to-end (`docs/agent-context/known-flaws.md`: `LOCAL-CHAT-NOINVOKE-01`).
-- RLS dormant on live path (§7). Egress guard opt-in (§8). Pricing has divergent sources (see inventory). CI currently red. Desktop macOS/Windows release builds disabled.
+- RLS dormant on live path (§7). Egress guard opt-in (§8). Pricing has divergent sources (see inventory). CI currently red. Desktop releases use separate protected Linux/macOS and Windows signing pipelines; a signed and notarized macOS artifact still requires those protected credentials and cannot be proven by an unsigned local rehearsal.
 
 ## 12. Target architecture (AGI platform vision)
 

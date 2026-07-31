@@ -248,7 +248,6 @@ requireIncludes('.github/workflows/release-desktop.yml', 'Tauri updater signatur
 requireNotIncludes('.github/workflows/release-desktop.yml', 'last shipped');
 requireNotIncludes('.github/workflows/release-desktop.yml', '$249/yr');
 requireNotIncludes('.github/workflows/release-desktop.yml', '${tag}...HEAD');
-requireNotIncludes('.github/workflows/release-desktop.yml', 'macos-universal-artifacts');
 requireNotIncludes('.github/workflows/release-desktop.yml', 'windows-x64-artifacts');
 requireNotIncludes('.github/workflows/release-desktop.yml', 'apps/desktop/src-tauri/target/');
 requireIncludes(
@@ -266,6 +265,37 @@ requireIncludes('.github/workflows/release-desktop.yml', 'includeUpdaterJson: fa
 requireIncludes('.github/workflows/release-desktop.yml', 'Verify Linux release artifacts');
 requireIncludes('.github/workflows/release-desktop.yml', 'minisign -Vm');
 requireIncludes('.github/workflows/release-desktop.yml', 'dpkg-deb --info');
+requireIncludes('.github/workflows/release-desktop.yml', 'runs-on: macos-15');
+requireIncludes('.github/workflows/release-desktop.yml', 'name: macos-release');
+requireIncludes(
+  '.github/workflows/release-desktop.yml',
+  'target: aarch64-apple-darwin,x86_64-apple-darwin',
+);
+requireIncludes(
+  '.github/workflows/release-desktop.yml',
+  'args: --target universal-apple-darwin --bundles app,dmg',
+);
+requireIncludes('.github/workflows/release-desktop.yml', 'APPLE_CERTIFICATE:');
+requireIncludes(
+  '.github/workflows/release-desktop.yml',
+  'echo "APPLE_API_KEY_PATH=${key_path}" >> "$GITHUB_ENV"',
+);
+requireIncludes('.github/workflows/release-desktop.yml', 'lipo "$main_executable" -verify_arch');
+requireIncludes('.github/workflows/release-desktop.yml', 'lipo "${sidecars[0]}" -verify_arch');
+requireIncludes('.github/workflows/release-desktop.yml', 'codesign --verify --deep --strict');
+requireIncludes('.github/workflows/release-desktop.yml', 'spctl --assess --type execute');
+requireIncludes('.github/workflows/release-desktop.yml', 'xcrun stapler validate');
+requireIncludes('.github/workflows/release-desktop.yml', 'macos-universal-artifacts');
+requireIncludes(
+  '.github/workflows/release-desktop.yml',
+  'macos-universal-artifacts darwin-aarch64 .app.tar.gz',
+);
+requireIncludes(
+  '.github/workflows/release-desktop.yml',
+  'macos-universal-artifacts darwin-x86_64 .app.tar.gz',
+);
+requireNotIncludes('.github/workflows/release-desktop.yml', '--no-sign');
+requireNotIncludes('.github/workflows/release-desktop.yml', '--skip-stapling');
 requireIncludes(
   '.github/workflows/release-desktop.yml',
   'NEON_DATABASE_URL is required before a desktop release',
@@ -301,11 +331,15 @@ requireIncludes(
 );
 requireIncludes(
   '.github/workflows/release-desktop.yml',
-  'needs: [prepare-release, build-linux, publish-release]',
+  'needs: [prepare-release, build-linux, build-macos, publish-release]',
 );
 requireNotIncludes(
   '.github/workflows/release-desktop.yml',
   'needs: [prepare-release, build-linux, update-database]',
+);
+requireIncludes(
+  '.github/workflows/release-desktop.yml',
+  'needs: [prepare-release, build-linux, build-macos]',
 );
 requireIncludes(
   '.github/workflows/release-desktop.yml',
