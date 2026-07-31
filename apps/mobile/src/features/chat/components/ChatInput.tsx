@@ -126,6 +126,12 @@ export function ChatInput({
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
   const [voiceResetSignal, setVoiceResetSignal] = useState(0);
+  // Once the message no longer fits one line, the composer restacks: the text
+  // takes the full width and [+] / mic drop to a row beneath it. Keeping the
+  // single row would squeeze long text into a ~278pt column between the two
+  // 40pt buttons while the pill grew tall — the "width goes very large but
+  // only the middle" report. Both ChatGPT and Claude restack the same way.
+  const [isMultiline, setIsMultiline] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const recordingStartTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -482,6 +488,9 @@ export function ChatInput({
   );
 
   const hasContent = text.trim().length > 0 || attachments.length > 0;
+  // Recording and transcribing keep the compact row: both render short,
+  // fixed-height content and morph the row's buttons in place.
+  const stacked = isMultiline && !isRecording && !isTranscribing;
 
   const showCommandPalette = text.startsWith('/') && !isStreaming;
 
@@ -613,9 +622,18 @@ export function ChatInput({
           left button becomes cancel (X), the pill shows a live waveform +
           timer (then a "Transcribing" spinner), and the right circle becomes
           the accept arrow. Nothing overlays the composer. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        {/* Left button -- [+] Add to Chat, or cancel-recording while recording */}
-        {isRecording || isTranscribing ? (
+      <View
+        style={{
+          flexDirection: 'row',
+          // A tall composer should keep the send button on the baseline of its
+          // last line rather than floating halfway up the card.
+          alignItems: stacked ? 'flex-end' : 'center',
+          gap: 8,
+        }}
+      >
+        {/* Left button -- [+] Add to Chat, or cancel-recording while recording.
+            While stacked it moves inside the card, onto the controls row. */}
+        {stacked ? null : isRecording || isTranscribing ? (
           <Pressable
             onPress={isRecording ? handleOverlayCancel : undefined}
             disabled={!isRecording}
@@ -654,19 +672,21 @@ export function ChatInput({
           </Pressable>
         )}
 
-        {/* Pill -- text input + mic, inside the rounded border */}
+        {/* Pill -- text input + mic, inside the rounded border. When stacked it
+            becomes a card: square-ish corners, text on its own full-width row,
+            and a controls row underneath. */}
         <View
           style={{
             flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
+            flexDirection: stacked ? 'column' : 'row',
+            alignItems: stacked ? 'stretch' : 'center',
             backgroundColor: themeColors.surfaceElevated,
-            borderRadius: radii.full,
+            borderRadius: stacked ? radii['2xl'] : radii.full,
             borderWidth: 1,
             borderColor: themeColors.composerBorder,
             paddingLeft: 16,
-            paddingRight: 6,
-            paddingVertical: 4,
+            paddingRight: stacked ? 10 : 6,
+            paddingVertical: stacked ? 10 : 4,
             minHeight: 44,
           }}
         >
@@ -731,7 +751,11 @@ export function ChatInput({
             ref={inputRef}
             testID="chat.composer.input"
             style={{
-              flex: 1,
+              // `flex: 1` means width in the compact row but height in the
+              // stacked column, where it would collapse the input to the
+              // card's minHeight and scroll the text behind a 2-line window.
+              // Stretch for width and let the content drive height instead.
+              ...(stacked ? { alignSelf: 'stretch' } : { flex: 1 }),
               color: themeColors.textPrimary,
               fontSize: 15,
               paddingVertical: 0,
@@ -745,6 +769,14 @@ export function ChatInput({
             placeholderTextColor={themeColors.textMuted}
             value={text}
             onChangeText={handleChangeText}
+            // Measure the rendered text rather than counting characters, so
+            // wrapped long words and pasted newlines are both caught. The 4pt
+            // band above one line's height debounces sub-pixel jitter that
+            // would otherwise flip the layout back and forth on every keystroke.
+            onContentSizeChange={(event) => {
+              const height = event.nativeEvent.contentSize.height;
+              setIsMultiline((current) => (current ? height > 30 : height > 34));
+            }}
             multiline
             numberOfLines={MAX_INPUT_LINES}
             selectionColor={themeColors.teal}
@@ -756,11 +788,47 @@ export function ChatInput({
           />
 
           {/* Kept mounted while recording -- VoiceInputButton owns the live
-              capture session; unmounting it mid-recording would kill it. */}
+              capture session; unmounting it mid-recording would kill it. That
+              also rules out moving it between parents when the layout stacks,
+              so the controls row below re-parents nothing: this wrapper simply
+              becomes a full-width row that hosts [+] alongside the mic. */}
           <View
             testID="chat.composer.mic"
-            style={{ display: isRecording || isTranscribing ? 'none' : 'flex' }}
+            style={{
+              display: isRecording || isTranscribing ? 'none' : 'flex',
+              ...(stacked
+                ? {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginTop: 8,
+                    marginLeft: -6,
+                  }
+                : null),
+            }}
           >
+            {stacked ? (
+              <>
+                <Pressable
+                  onPress={handlePlusPress}
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: radii.full,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: themeColors.inputSurface,
+                  }}
+                  hitSlop={6}
+                  accessibilityLabel="Add to chat"
+                  accessibilityHint="Opens attachment, mode, and feature options"
+                  accessibilityRole="button"
+                >
+                  <Plus size={18} color={themeColors.textMuted} />
+                </Pressable>
+                <View style={{ flex: 1 }} />
+              </>
+            ) : null}
             <VoiceInputButton
               onTranscription={handleTranscription}
               onRecordingStart={handleRecordingStart}
