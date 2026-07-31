@@ -57,6 +57,14 @@ fn write_default_config(home: &Path) -> Result<()> {
 # Environment variables (e.g. AGIWORKFORCE_MODEL) override these values.
 #
 # Optional settings (uncomment to enable):
+# [ui]
+# edit_mode = "vi" # or "emacs"
+#
+# [ui.keybindings]
+# open_palette = "ctrl+p"
+# quit = "ctrl+q"
+# Actions: quit, cycle_mode, clear_chat, clear_input, open_palette
+#
 # [default]
 # temperature = 0.7
 	# fallback_chain = ["<primary-model-from-agi-models-list>", "<backup-model-from-agi-models-list>"]

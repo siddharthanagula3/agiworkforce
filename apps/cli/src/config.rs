@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 /// Tracks where each config value originated (global file, project file, or env var).
@@ -43,6 +43,14 @@ pub struct UiConfig {
     /// `/theme` survives a restart.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
+
+    /// Line-editing mode for the classic REPL: `emacs` or `vi`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edit_mode: Option<String>,
+
+    /// Full-screen TUI action bindings such as `ctrl+p` or `f2`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub keybindings: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -561,6 +569,14 @@ impl CliConfig {
         if other.ui.privacy_mode.is_some() {
             self.ui.privacy_mode = other.ui.privacy_mode.clone();
         }
+        if other.ui.edit_mode.is_some() {
+            self.ui.edit_mode = other.ui.edit_mode.clone();
+        }
+        for (action, binding) in &other.ui.keybindings {
+            self.ui
+                .keybindings
+                .insert(action.clone(), binding.clone());
+        }
         // Merge providers: other's entries override self's for matching keys
         for (key, value) in &other.providers {
             self.providers.insert(key.clone(), value.clone());
@@ -741,6 +757,15 @@ impl CliConfig {
         if let Some(ref mode) = self.ui.privacy_mode {
             out.push_str(&format!("Privacy mode: {}\n", mode));
         }
+        if let Some(ref edit_mode) = self.ui.edit_mode {
+            out.push_str(&format!("REPL edit mode: {}\n", edit_mode));
+        }
+        if !self.ui.keybindings.is_empty() {
+            out.push_str("Keybindings:\n");
+            for (action, binding) in &self.ui.keybindings {
+                out.push_str(&format!("  {action}: {binding}\n"));
+            }
+        }
 
         out.push_str("\nProviders:\n");
         for (name, pc) in &self.providers {
@@ -791,6 +816,13 @@ impl CliConfig {
                 bail!("ui.privacy_mode must be one of: local, byok, managed");
             }
         }
+        if let Some(edit_mode) = self.ui.edit_mode.as_deref() {
+            if !matches!(edit_mode.trim().to_ascii_lowercase().as_str(), "emacs" | "vi") {
+                bail!("ui.edit_mode must be one of: emacs, vi");
+            }
+        }
+        crate::keybindings::validate_config(&self.ui.keybindings)
+            .map_err(anyhow::Error::msg)?;
         Ok(())
     }
 
@@ -814,7 +846,11 @@ impl CliConfig {
             "fast-model" => self.default.fast_model.clone(),
             "output-style" | "ui.output-style" | "ui.output_style" => self.ui.output_style.clone(),
             "privacy-mode" | "ui.privacy-mode" | "ui.privacy_mode" => self.ui.privacy_mode.clone(),
-            _ => None,
+            "edit-mode" | "ui.edit-mode" | "ui.edit_mode" => self.ui.edit_mode.clone(),
+            _ => key
+                .strip_prefix("ui.keybindings.")
+                .or_else(|| key.strip_prefix("keybindings."))
+                .and_then(|action| self.ui.keybindings.get(action).cloned()),
         }
     }
 
@@ -878,10 +914,30 @@ impl CliConfig {
                 }
                 self.ui.privacy_mode = Some(value.trim().to_ascii_lowercase());
             }
-            _ => bail!(
-                "Unknown config key: '{}'. Valid keys: model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode",
-                key
-            ),
+            "edit-mode" | "ui.edit-mode" | "ui.edit_mode" => {
+                let mode = value.trim().to_ascii_lowercase();
+                if !matches!(mode.as_str(), "emacs" | "vi") {
+                    bail!("edit-mode must be one of: emacs, vi");
+                }
+                self.ui.edit_mode = Some(mode);
+            }
+            _ => {
+                if let Some(action) = key
+                    .strip_prefix("ui.keybindings.")
+                    .or_else(|| key.strip_prefix("keybindings."))
+                {
+                    let mut candidate = self.ui.keybindings.clone();
+                    candidate.insert(action.to_string(), value.trim().to_string());
+                    crate::keybindings::validate_config(&candidate)
+                        .map_err(anyhow::Error::msg)?;
+                    self.ui.keybindings = candidate;
+                } else {
+                    bail!(
+                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, and ui.keybindings.<action>",
+                        key
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -974,6 +1030,8 @@ mod tests {
         assert!(config.providers.contains_key("ollama-cloud"));
         assert!(config.ui.output_style.is_none());
         assert!(config.ui.privacy_mode.is_none());
+        assert!(config.ui.edit_mode.is_none());
+        assert!(config.ui.keybindings.is_empty());
     }
 
     #[test]
@@ -990,6 +1048,31 @@ mod tests {
     fn test_default_config_passes_validation() {
         let config = CliConfig::default();
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_ui_edit_mode_and_keybindings() {
+        let mut config = CliConfig::default();
+        config.ui.edit_mode = Some("vi".to_string());
+        config
+            .ui
+            .keybindings
+            .insert("open_palette".to_string(), "ctrl+p".to_string());
+        assert!(config.validate().is_ok());
+
+        config.ui.edit_mode = Some("nano".to_string());
+        assert!(config.validate().unwrap_err().to_string().contains("edit_mode"));
+
+        config.ui.edit_mode = Some("emacs".to_string());
+        config
+            .ui
+            .keybindings
+            .insert("quit".to_string(), "ctrl+l".to_string());
+        assert!(config
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("duplicates"));
     }
 
     #[test]
@@ -1528,11 +1611,21 @@ privacy_mode = "local"
         let mut other = CliConfig::default();
         other.ui.output_style = Some("learning".to_string());
         other.ui.privacy_mode = Some("local".to_string());
+        other.ui.edit_mode = Some("vi".to_string());
+        other
+            .ui
+            .keybindings
+            .insert("open_palette".to_string(), "ctrl+p".to_string());
 
         base.merge_from(&other);
 
         assert_eq!(base.ui.output_style.as_deref(), Some("learning"));
         assert_eq!(base.ui.privacy_mode.as_deref(), Some("local"));
+        assert_eq!(base.ui.edit_mode.as_deref(), Some("vi"));
+        assert_eq!(
+            base.ui.keybindings.get("open_palette").map(String::as_str),
+            Some("ctrl+p")
+        );
     }
 
     // --- Display with sources ---
@@ -1729,12 +1822,26 @@ base_url = "http://localhost:11434"
         let mut config = CliConfig::default();
         config.set_value("output-style", "learning").unwrap();
         config.set_value("privacy-mode", "local").unwrap();
+        config.set_value("edit-mode", "vi").unwrap();
+        config
+            .set_value("ui.keybindings.open_palette", "ctrl+p")
+            .unwrap();
 
         assert_eq!(
             config.get_value("output-style"),
             Some("learning".to_string())
         );
         assert_eq!(config.get_value("privacy-mode"), Some("local".to_string()));
+        assert_eq!(config.get_value("edit-mode"), Some("vi".to_string()));
+        assert_eq!(
+            config.get_value("ui.keybindings.open_palette"),
+            Some("ctrl+p".to_string())
+        );
+        assert!(config
+            .set_value("ui.keybindings.quit", "ctrl+l")
+            .unwrap_err()
+            .to_string()
+            .contains("duplicates"));
     }
 
     #[test]

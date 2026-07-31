@@ -207,6 +207,7 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
 struct TuiApp {
     session: AgentSession,
     config: CliConfig,
+    keybindings: crate::keybindings::Keybindings,
     chat_messages: Vec<ChatMessage>,
     input: String,
     cursor: usize,
@@ -373,9 +374,12 @@ impl TuiApp {
             register_mcp_prompt_commands(&mut command_registry, prompts);
         }
 
+        let keybindings = crate::keybindings::Keybindings::from_config(&config.ui.keybindings);
+
         Self {
             session,
             config,
+            keybindings,
             chat_messages,
             input: String::new(),
             cursor: 0,
@@ -1846,37 +1850,64 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
 
     if app.is_loading {
-        if key.code == KeyCode::Esc {
+        if app
+            .keybindings
+            .matches(crate::keybindings::KeybindingAction::Quit, key)
+        {
             return InputAction::Quit;
         }
         return InputAction::None;
     }
 
+    // These legacy text-rendered dialogs advertise Esc as their local close
+    // affordance. Keep that dismissal stable even when global quit changes.
+    if key.code == KeyCode::Esc
+        && app.chat_messages.last().is_some_and(|message| {
+            message.role == ChatRole::System
+                && super::widgets::screen_renderers::is_dialog_frame(&message.text)
+        })
+    {
+        app.chat_messages.pop();
+        return InputAction::None;
+    }
+
+    if app
+        .keybindings
+        .matches(crate::keybindings::KeybindingAction::Quit, key)
+    {
+        return InputAction::Quit;
+    }
+    if app
+        .keybindings
+        .matches(crate::keybindings::KeybindingAction::CycleMode, key)
+    {
+        return InputAction::CycleMode;
+    }
+    if app
+        .keybindings
+        .matches(crate::keybindings::KeybindingAction::ClearInput, key)
+    {
+        app.input.clear();
+        app.cursor = 0;
+        return InputAction::None;
+    }
+    if app
+        .keybindings
+        .matches(crate::keybindings::KeybindingAction::ClearChat, key)
+    {
+        return InputAction::ClearChat;
+    }
+    if app.input.is_empty()
+        && app.cursor == 0
+        && app
+            .keybindings
+            .matches(crate::keybindings::KeybindingAction::OpenPalette, key)
+    {
+        open_command_popup(app);
+        return InputAction::None;
+    }
+
     match key.code {
-        // A handful of slash commands (/mcp, /plugin, /usage, …)
-        // render a boxed "dialog" — complete with its own "Esc to
-        // cancel"/"Esc to close"/"Esc to back" footer — as a plain system
-        // chat message rather than a real overlay (see
-        // `screen_renderers::is_dialog_frame` doc comment). Without this
-        // check, Esc always fell through to the global quit binding below,
-        // silently exiting the whole app instead of honoring the footer's
-        // own affordance. Dismiss the dialog message first; only quit when
-        // the last message isn't one of these fake dialogs.
-        KeyCode::Esc
-            if app.chat_messages.last().is_some_and(|m| {
-                m.role == ChatRole::System
-                    && super::widgets::screen_renderers::is_dialog_frame(&m.text)
-            }) =>
-        {
-            app.chat_messages.pop();
-            InputAction::None
-        }
-
-        KeyCode::Esc => InputAction::Quit,
-
-        // Shift+Tab → cycle mode
-        KeyCode::BackTab => InputAction::CycleMode,
-
         // Shift+Enter or Alt+Enter → insert newline (multiline composer)
         KeyCode::Enter
             if key.modifiers.contains(KeyModifiers::SHIFT)
@@ -1896,21 +1927,6 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.cursor = 0;
             app.scroll_offset = 0;
             InputAction::SendMessage(text)
-        }
-
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.input.clear();
-            app.cursor = 0;
-            InputAction::None
-        }
-
-        KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            InputAction::ClearChat
-        }
-
-        KeyCode::Char('/') if app.cursor == 0 && app.input.is_empty() => {
-            open_command_popup(app);
-            InputAction::None
         }
 
         KeyCode::Char(c) => {
@@ -3219,6 +3235,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             }
             SlashResult::SystemMessage(lines.join("\n"))
         }
+
+        "/keybindings" | "/keys" => SlashResult::SystemMessage(app.keybindings.render_help(
+            crate::keybindings::resolved_edit_mode(app.config.ui.edit_mode.as_deref()),
+        )),
 
         _ => {
             if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
@@ -5026,6 +5046,35 @@ mod tests {
         assert!(app.active_overlay.is_some());
         assert_eq!(app.input, "");
         assert_eq!(app.cursor, 0);
+    }
+
+    #[test]
+    fn configured_palette_binding_replaces_the_default_in_live_dispatch() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = minimal_app();
+        app.config
+            .ui
+            .keybindings
+            .insert("open_palette".to_string(), "ctrl+p".to_string());
+        app.keybindings = crate::keybindings::Keybindings::from_config(
+            &app.config.ui.keybindings,
+        );
+
+        let action = handle_key_event(&mut app, make_key(KeyCode::Char('/')));
+        assert!(matches!(action, InputAction::None));
+        assert!(app.active_overlay.is_none());
+        assert_eq!(app.input, "/");
+
+        app.input.clear();
+        app.cursor = 0;
+        let action = handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
+        );
+        assert!(matches!(action, InputAction::None));
+        assert!(app.active_overlay.is_some());
+        assert!(app.input.is_empty());
     }
 
     #[test]
