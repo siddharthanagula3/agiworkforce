@@ -1,4 +1,4 @@
-import * as BackgroundFetch from 'expo-background-fetch';
+import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { api } from './api';
@@ -49,14 +49,14 @@ function approvalNotificationKey(approvals: AgentStatusResponse['pendingApproval
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   const settings = useSettingsStore.getState?.();
   if (!settings?.backgroundFetchEnabled) {
-    return BackgroundFetch.BackgroundFetchResult.NoData;
+    return BackgroundTask.BackgroundTaskResult.Success;
   }
   // notificationsEnabled is mode-specific: check the active mode's store.
   const appMode = useChatAppModeStore.getState?.()?.appMode ?? 'local';
   const modeSettings =
     appMode === 'cloud' ? useCloudSettingsStore.getState?.() : useLocalSettingsStore.getState?.();
   if (!modeSettings?.notificationsEnabled) {
-    return BackgroundFetch.BackgroundFetchResult.NoData;
+    return BackgroundTask.BackgroundTaskResult.Success;
   }
 
   const controller = new AbortController();
@@ -80,7 +80,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
       if (result.pendingApprovals.length > 0) {
         const notificationKey = approvalNotificationKey(result.pendingApprovals);
         if (notificationKey && notificationKey === lastApprovalNotificationKey) {
-          return BackgroundFetch.BackgroundFetchResult.NoData;
+          return BackgroundTask.BackgroundTaskResult.Success;
         }
 
         // Honor the user's Notification Preferences (Approvals category + quiet
@@ -88,7 +88,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
         // consulted them. We do NOT record lastApprovalNotificationKey here, so
         // re-enabling the category (or leaving quiet hours) re-evaluates this batch.
         if (!notificationAllowed('agent_approval_needed')) {
-          return BackgroundFetch.BackgroundFetchResult.NoData;
+          return BackgroundTask.BackgroundTaskResult.Success;
         }
 
         for (const approval of result.pendingApprovals) {
@@ -115,11 +115,11 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
           // app (behind biometric) to see per-approval detail.
           break;
         }
-        return BackgroundFetch.BackgroundFetchResult.NewData;
+        return BackgroundTask.BackgroundTaskResult.Success;
       }
 
       lastApprovalNotificationKey = null;
-      return BackgroundFetch.BackgroundFetchResult.NoData;
+      return BackgroundTask.BackgroundTaskResult.Success;
     } catch (err) {
       lastError = err;
       // Don't retry abort errors
@@ -131,7 +131,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     '[backgroundFetch] Agent status check failed after retries:',
     lastError instanceof Error ? lastError.message : lastError,
   );
-  return BackgroundFetch.BackgroundFetchResult.Failed;
+  return BackgroundTask.BackgroundTaskResult.Failed;
 });
 
 /**
@@ -139,15 +139,21 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
  * Call once during app initialization.
  */
 export async function registerBackgroundFetch(): Promise<void> {
-  const status = await BackgroundFetch.getStatusAsync();
+  const status = await BackgroundTask.getStatusAsync();
 
-  if (status === BackgroundFetch.BackgroundFetchStatus.Denied) {
-    console.warn('[backgroundFetch] Background fetch is denied by the OS');
-    return;
-  }
-
-  if (status === BackgroundFetch.BackgroundFetchStatus.Restricted) {
-    console.warn('[backgroundFetch] Background fetch is restricted');
+  // expo-background-task collapses the old Denied/Restricted pair into a
+  // single Restricted state — it does not distinguish a user denial from an
+  // OS-level restriction (Low Power Mode, Screen Time, managed device).
+  if (status === BackgroundTask.BackgroundTaskStatus.Restricted) {
+    // Info, not warn: BGTaskScheduler does not exist on the Simulator at all,
+    // so Restricted is the only answer it can ever give and flags nothing about
+    // the app. On real hardware it means Low Power Mode, Screen Time or an MDM
+    // policy — still the user's setting rather than a defect. Distinguishing
+    // the two needs expo-device, which is a native module and a rebuild for a
+    // log level, so name both causes instead.
+    console.info(
+      '[backgroundFetch] Background tasks unavailable (Simulator, Low Power Mode, or device policy) — approval polling is off',
+    );
     return;
   }
 
@@ -168,10 +174,12 @@ export async function registerBackgroundFetch(): Promise<void> {
     return; // already registered
   }
 
-  await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-    minimumInterval: 15 * 60, // 15 minutes (in seconds)
-    stopOnTerminate: false,
-    startOnBoot: true,
+  // minimumInterval is MINUTES here, not seconds as in expo-background-fetch —
+  // passing the old `15 * 60` would ask for a 15-hour period. 15 is also the
+  // floor the OS accepts. stopOnTerminate/startOnBoot are gone: registrations
+  // are persisted and restored on launch by default.
+  await BackgroundTask.registerTaskAsync(BACKGROUND_FETCH_TASK, {
+    minimumInterval: 15,
   });
 }
 
@@ -181,7 +189,7 @@ export async function registerBackgroundFetch(): Promise<void> {
 export async function unregisterBackgroundFetch(): Promise<void> {
   const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
   if (isRegistered) {
-    await BackgroundFetch.unregisterTaskAsync(BACKGROUND_FETCH_TASK);
+    await BackgroundTask.unregisterTaskAsync(BACKGROUND_FETCH_TASK);
   }
 }
 
