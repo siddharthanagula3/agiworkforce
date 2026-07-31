@@ -344,8 +344,8 @@
   {
     "item": "approval-inbox",
     "surface": "apps/web",
-    "status": "partial",
-    "evidence": "Inline per-turn tool approval is fully wired: apps/web/features/chat/components/messages/MessageBubble.tsx:379-421 approve/reject handlers via useToolApprovalResolver (apps/web/lib/hooks/useChatStream.ts), rendered on the awaiting_approval tool card at lines 874-877,923,939,990."
+    "status": "built",
+    "evidence": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx derives a deduplicated centralized queue from the safe persisted cloudApproval projection (with legacy awaiting-tool fallback), shows the exact request input and pending count, distinguishes expired requests, and routes per-tool Approve/Reject through the same resolveToolApproval function as the inline card. WebChatPage.tsx mounts the inbox in the active-chat header. ApprovalInbox.test.tsx covers projection precedence, legacy fallback, canonical resolver dispatch, and expired-state safety; real-browser validation confirmed the pending inbox alongside the inline card at 390px and 1440px without horizontal overflow."
   },
   {
     "item": "scheduled-task-ui",
