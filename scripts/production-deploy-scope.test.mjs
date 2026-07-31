@@ -8,13 +8,16 @@ import {
   isEligibleProductionRun,
 } from './production-deploy-scope.mjs';
 
-test('web-only changes do not spend gateway, signaling, desktop, or native runners', () => {
+test('web-only changes do not spend unrelated expensive runners', () => {
   assert.deepEqual(classifyDeployScope(['apps/web/app/page.tsx']), {
     web: true,
     gateway: false,
     signaling: false,
     desktop: false,
     native: false,
+    extension: false,
+    vscode: false,
+    mobile: false,
   });
 });
 
@@ -25,6 +28,9 @@ test('service and native paths select only their owning expensive lanes', () => 
     signaling: true,
     desktop: false,
     native: false,
+    extension: false,
+    vscode: false,
+    mobile: false,
   });
   assert.deepEqual(classifyDeployScope(['services/api-gateway/src/index.ts']), {
     web: false,
@@ -32,6 +38,9 @@ test('service and native paths select only their owning expensive lanes', () => 
     signaling: false,
     desktop: false,
     native: false,
+    extension: false,
+    vscode: false,
+    mobile: false,
   });
   assert.deepEqual(classifyDeployScope(['apps/desktop/src-tauri/src/lib.rs']), {
     web: false,
@@ -39,6 +48,9 @@ test('service and native paths select only their owning expensive lanes', () => 
     signaling: false,
     desktop: true,
     native: true,
+    extension: false,
+    vscode: false,
+    mobile: false,
   });
 });
 
@@ -54,6 +66,9 @@ test('gateway image and host contracts select only the gateway deploy lane', () 
       signaling: false,
       desktop: false,
       native: false,
+      extension: false,
+      vscode: false,
+      mobile: false,
     });
   }
 });
@@ -66,6 +81,9 @@ test('shared build inputs conservatively rebuild every deployable lane', () => {
     signaling: true,
     desktop: true,
     native: true,
+    extension: true,
+    vscode: true,
+    mobile: true,
   });
   assert.match(formatGithubOutputs(scope), /^web=true$/m);
   assert.match(formatGithubOutputs(scope), /^native=true$/m);
@@ -78,6 +96,35 @@ test('documentation-only changes do not allocate deploy or native work', () => {
     signaling: false,
     desktop: false,
     native: false,
+    extension: false,
+    vscode: false,
+    mobile: false,
+  });
+});
+
+test('product-shell paths select their real E2E lane', () => {
+  const expectedBase = {
+    web: false,
+    gateway: false,
+    signaling: false,
+    desktop: false,
+    native: false,
+    extension: false,
+    vscode: false,
+    mobile: false,
+  };
+
+  assert.deepEqual(classifyDeployScope(['apps/extension/src/background.ts']), {
+    ...expectedBase,
+    extension: true,
+  });
+  assert.deepEqual(classifyDeployScope(['apps/extension-vscode/src/extension.ts']), {
+    ...expectedBase,
+    vscode: true,
+  });
+  assert.deepEqual(classifyDeployScope(['apps/mobile/app/index.tsx']), {
+    ...expectedBase,
+    mobile: true,
   });
 });
 
