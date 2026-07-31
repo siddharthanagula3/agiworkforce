@@ -677,8 +677,6 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       } as T;
 
     // MCP connector manifests
-    case 'get_connector_manifests':
-      return [] as T;
 
     // Model capabilities command
     case 'get_model_capabilities':

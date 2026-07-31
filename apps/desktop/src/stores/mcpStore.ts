@@ -45,7 +45,6 @@ import type {
   McpToolInfo,
   McpServersConfig,
 } from '../types/mcp';
-import type { ConnectorManifest } from '../api/mcp';
 
 interface McpState {
   servers: McpServerInfo[];
@@ -59,7 +58,6 @@ interface McpState {
   toolExecutionStats: McpToolExecutionStats[];
   registry: McpRegistryPackage[];
   extensions: McpExtensionInfo[];
-  connectorManifests: ConnectorManifest[];
   connectedProviders: string[];
   isInitialized: boolean;
   activeOperations: number;
@@ -113,7 +111,6 @@ interface McpState {
   stopAllExtensions: () => Promise<void>;
   refreshConnectedProviders: () => Promise<void>;
   connectConnector: (connectorId: string) => Promise<void>;
-  refreshConnectorManifests: () => Promise<void>;
   runtimeServerConfig: McpRuntimeServerConfig | null;
   runtimeServerStatus: boolean;
   runtimeServerTools: unknown[];
@@ -169,7 +166,6 @@ export const useMcpStore = create<McpState>()(
         toolExecutionStats: [],
         registry: [],
         extensions: [],
-        connectorManifests: [],
         connectedProviders: [],
         runtimeServerConfig: null,
         runtimeServerStatus: false,
@@ -958,22 +954,6 @@ export const useMcpStore = create<McpState>()(
           }
         },
 
-        refreshConnectorManifests: async () => {
-          if (!isTauri) return;
-          try {
-            const connectorManifests = await McpClient.getConnectorManifests();
-            set({ connectorManifests, error: null }, undefined, 'mcp/refreshConnectorManifests');
-          } catch (error) {
-            set(
-              {
-                error: error instanceof Error ? error.message : 'Failed to get connector manifests',
-              },
-              undefined,
-              'mcp/refreshConnectorManifests/error',
-            );
-          }
-        },
-
         getRuntimeServerConfig: async () => {
           if (!isTauri) throw new Error('Runtime server not available outside Tauri');
           try {
@@ -1337,7 +1317,6 @@ export const useMcpStore = create<McpState>()(
               toolExecutionStats: [],
               registry: [],
               extensions: [],
-              connectorManifests: [],
               connectedProviders: [],
               runtimeServerConfig: null,
               runtimeServerStatus: false,
