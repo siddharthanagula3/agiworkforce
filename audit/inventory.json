@@ -2000,8 +2000,8 @@
   {
     "item": "oauth-install-flow",
     "surface": "apps/slack-app",
-    "status": "partial",
-    "evidence": "apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs:347 (auth_url 'https://slack.com/oauth/v2/authorize'), :362 (token_url 'oauth.v2.access'), :388-390 (default scopes channels:read/chat:write/users:read/files:read); registered as Tauri commands mcp_oauth_start/callback/status/disconnect/refresh at apps/desktop/src-tauri/src/lib.rs:1973-1979; reachable from UI via apps/desktop/src/features/connectors/connectorDefinitions.ts:123-136 (id:'slack', authType:'oauth', oauthScopes)"
+    "status": "missing",
+    "evidence": "No first-party Slack app OAuth install flow exists: there is no apps/slack-app directory, Slack app manifest, app-owned install/callback route, workspace-installation store, or tenant lifecycle. The adjacent Desktop connector at apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs is a local BYO-OAuth-client flow that requires each operator to supply client credentials and stores tokens only on that device; it is not an install flow for an AGI Workforce Slack app. Its Slack MCP mapping also supplies only SLACK_BOT_TOKEN while the referenced @modelcontextprotocol/server-slack runtime requires both a token and SLACK_TEAM_ID. The CLI's /install-slack-app compatibility command only opens Slack's create-app page after user confirmation. These manual/generic connector paths are not partial implementation of the specifically first-party apps/slack-app capability."
   },
   {
     "item": "org-wide-install",
