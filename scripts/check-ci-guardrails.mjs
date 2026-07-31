@@ -69,6 +69,12 @@ requireIncludes('.github/workflows/ci.yml', 'pnpm db:migrate -- verify');
 requireIncludes('.github/workflows/ci.yml', 'pnpm db:rls-probe -- --target ci');
 requireIncludes('.github/workflows/ci.yml', 'node scripts/production-deploy-scope.mjs');
 requireIncludes('.github/workflows/ci.yml', 'web_changed: ${{ steps.scope.outputs.web }}');
+requireIncludes(
+  '.github/workflows/ci.yml',
+  'extension_changed: ${{ steps.scope.outputs.extension }}',
+);
+requireIncludes('.github/workflows/ci.yml', 'vscode_changed: ${{ steps.scope.outputs.vscode }}');
+requireIncludes('.github/workflows/ci.yml', 'mobile_changed: ${{ steps.scope.outputs.mobile }}');
 requireIncludes('.github/workflows/ci.yml', "if: needs.check.outputs.native_changed == 'true'");
 requireIncludes('.github/workflows/ci.yml', "if: needs.check.outputs.web_changed == 'true'");
 requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
@@ -85,6 +91,29 @@ requireIncludes(
   'cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib',
 );
 requireIncludes('.github/workflows/ci.yml', 'bash apps/desktop/check-wiring.sh');
+requireIncludes('.github/workflows/ci.yml', 'cargo test -p agiworkforce-cli');
+requireNotIncludes(
+  '.github/workflows/ci.yml',
+  'cargo test -p agiworkforce-desktop -p agiworkforce-cli --lib',
+);
+requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/extension test:e2e');
+requireIncludes(
+  '.github/workflows/ci.yml',
+  'xvfb-run --auto-servernum pnpm --filter agi-workforce test:integration',
+);
+requireIncludes(
+  '.github/workflows/ci.yml',
+  'pnpm --filter @agiworkforce/mobile exec detox build --configuration ios.sim.release',
+);
+requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/mobile test:e2e:ios:ci');
+requireIncludes(
+  '.github/workflows/ci.yml',
+  'pnpm exec playwright test public-auth-clean.spec.ts --project=chromium --workers=1',
+);
+requireIncludes('apps/mobile/detox.config.js', 'ONLY_ACTIVE_ARCH=YES');
+requireIncludes('apps/mobile/detox.config.js', 'DETOX_IOS_DEVICE');
+requireIncludes('apps/mobile/package.json', '"test:e2e:ios:ci"');
+requireIncludes('apps/mobile/scripts/screenshots/specs/ci-smoke.spec.ts', "by.id('age-gate-root')");
 requireIncludes('.github/workflows/ci.yml', '--project=visual-regression');
 requireIncludes('.github/workflows/ci.yml', '--project=accessibility-audit');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/web a11y:audit');
