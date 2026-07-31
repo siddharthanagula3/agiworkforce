@@ -66,6 +66,7 @@ const USER_OWNED_TABLES = new Set([
   'user_memories',
   'conversation_tags',
   'conversation_branches',
+  'conversation_branch_messages',
   'chat_folders',
   'message_bookmarks',
   'message_reactions',

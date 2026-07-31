@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MessageBubble, messageListVariants, messageBubbleVariants } from './MessageBubble';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -607,6 +608,64 @@ describe('MessageBubble', () => {
       const { container } = render(<MessageBubble message={msg} hasBranches />);
       const forkIcon = container.querySelector('.text-primary');
       expect(forkIcon).toBeInTheDocument();
+    });
+
+    it('renders persisted branch navigation and switches to the selected conversation', () => {
+      const onSwitch = vi.fn();
+      const msg = makeMessage({ id: 'fork-point', role: 'assistant', content: 'branched' });
+      render(
+        <MessageBubble
+          message={msg}
+          branchNavigation={{
+            branches: [
+              {
+                id: 'conversation-main',
+                name: 'Original',
+                forkPointMessageId: 'fork-point',
+              },
+              {
+                id: 'conversation-branch',
+                name: 'Alternative',
+                forkPointMessageId: 'fork-point',
+              },
+            ],
+            activeBranchId: 'conversation-main',
+            onSwitch,
+          }}
+        />,
+      );
+
+      expect(screen.getByText('1/2')).toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText('Next branch'));
+      expect(onSwitch).toHaveBeenCalledWith('conversation-branch');
+    });
+
+    it('creates a branch from the message actions menu', async () => {
+      const user = userEvent.setup();
+      const onBranch = vi.fn();
+      const msg = makeMessage({ id: 'fork-point', role: 'assistant', content: 'branch me' });
+      render(<MessageBubble message={msg} onBranch={onBranch} />);
+
+      await user.click(screen.getByLabelText('More message actions'));
+      const branchAction = await screen.findByText('Branch conversation');
+      await user.click(branchAction);
+
+      expect(onBranch).toHaveBeenCalledWith('fork-point');
+    });
+
+    it('disables duplicate branch creation while the request is in flight', async () => {
+      const user = userEvent.setup();
+      render(
+        <MessageBubble
+          message={makeMessage({ role: 'assistant' })}
+          onBranch={vi.fn()}
+          isBranching
+        />,
+      );
+
+      await user.click(screen.getByLabelText('More message actions'));
+      const branchAction = await screen.findByText('Creating branch…');
+      expect(branchAction.closest('[role="menuitem"]')).toHaveAttribute('data-disabled');
     });
   });
 

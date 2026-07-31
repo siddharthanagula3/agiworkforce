@@ -33,7 +33,7 @@ CAP-031,Understanding checks,UnderstandingChecks,partial-unwired,M,Product decis
 CAP-032,Unified chat code and work shell,UnifiedApp,partial-unwired,M,Phase 1,Wire,Open,Desktop,Mount or remove the orphaned desktop code-mode panels
 CAP-033,Uploaded learning materials,UploadedMaterials,partial-unwired,M,Product decision,Defer,Deferred,Product,Do not invent course and lesson state until learning mode is selected
 CAP-034,Workspace and organization switcher,WorkspaceSwitcher,partial-unwired,M,Phase 3,Defer,Deferred,Enterprise,Requires real multi-organization selection and request propagation
-CAP-035,Conversation branching across surfaces,BranchChat,implemented-unwired,M,Phase 1,Wire,Open,Multi-surface,Desktop branching exists while shared web and mobile paths remain unmounted
+CAP-035,Conversation branching across surfaces,BranchChat,partial-unwired,M,Phase 1,Wire,Open,Multi-surface,"Desktop branching remains available; Web now has owner-scoped persisted branch creation and sibling navigation through the shared BranchNavigator, while Mobile still performs only a whole-thread copy without a branch relation"
 CAP-036,Extension access enforcement,ExtensionAccess,implemented-unwired,S,Phase 2,Wire,Open,Extensions,Enforce stored per-surface cloud-sync policy on request paths
 CAP-037,Authoritative extension directory,ExtensionDirectory,implemented-unwired,M,Phase 1,Wire or cut,Open,Extensibility,Replace static catalog claims or label the curated offline scope
 CAP-038,Docked inspector pane,InspectorPane,implemented-unwired,S,Phase 1,Wire,Open,Desktop,Mount the shared sidecar as a resizable rail instead of a full-area overlay

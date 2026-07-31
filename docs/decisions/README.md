@@ -10,6 +10,7 @@ For higher-level architectural narrative, see `docs/architecture/foundation-2026
 
 ### Current integration decisions
 
+- [2026-07-30-web-conversation-branching.md](2026-07-30-web-conversation-branching.md) — persist Web branches as idempotent owner-scoped conversation copies and mount direct sibling navigation at the mapped fork point.
 - [2026-07-30-fail-closed-visual-baselines.md](2026-07-30-fail-closed-visual-baselines.md) — keep visual baselines as reviewed artifacts, require explicit regeneration, and block CI on pixel drift.
 - [2026-07-30-web-message-surface-adapters.md](2026-07-30-web-message-surface-adapters.md) — keep Web message/thinking orchestration as a surface adapter while sharing host-neutral renderers and the canonical ToolCallCard.
 - [2026-07-30-enterprise-local-verifier-retention.md](2026-07-30-enterprise-local-verifier-retention.md) — retain the zero-runtime-consumer TypeScript and Rust Enterprise Local verifiers solely as a cross-language contract-test foundation until a complete runtime trust boundary is approved.

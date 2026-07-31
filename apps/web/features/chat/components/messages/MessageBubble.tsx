@@ -50,7 +50,11 @@ import {
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
-import { AgentActivityTimeline } from '@agiworkforce/unified-chat';
+import {
+  AgentActivityTimeline,
+  BranchNavigator,
+  type BranchItem,
+} from '@agiworkforce/unified-chat';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 
 const MarkdownContent = dynamic(
@@ -321,6 +325,12 @@ interface MessageBubbleProps {
   onPin?: (messageId: string) => void;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onBranch?: (messageId: string) => void;
+  isBranching?: boolean;
+  branchNavigation?: {
+    branches: BranchItem[];
+    activeBranchId: string;
+    onSwitch: (branchId: string) => void;
+  };
   /** Browser-native speech control owned by the parent message list. */
   onReadAloud?: (messageId: string, content: string) => void;
   /** True only for the single response currently being spoken. */
@@ -349,7 +359,9 @@ const MessageBubbleComponent = function MessageBubble({
   onRegenerate,
   onDelete,
   onPin,
-  // onBranch kept in interface for future wiring; not rendered until connected
+  onBranch,
+  isBranching = false,
+  branchNavigation,
   onReact,
   onReadAloud,
   isReadingAloud = false,
@@ -862,12 +874,23 @@ const MessageBubbleComponent = function MessageBubble({
           {/* Slim badge row · only rendered when a marker is present (no name/timestamp) */}
           {(message.metadata?.isPinned ||
             hasBranches ||
+            branchNavigation ||
             (isUser && message.metadata?.isPasted)) && (
             <div className="mb-1 flex items-center gap-1.5">
               {message.metadata?.isPinned && (
                 <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
               )}
-              {hasBranches && <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />}
+              {(hasBranches || branchNavigation) && (
+                <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />
+              )}
+              {branchNavigation && (
+                <BranchNavigator
+                  branches={branchNavigation.branches}
+                  activeBranchId={branchNavigation.activeBranchId}
+                  onSwitch={branchNavigation.onSwitch}
+                  messageId={message.id}
+                />
+              )}
               {isUser && message.metadata?.isPasted && (
                 <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                   pasted
@@ -1640,6 +1663,12 @@ const MessageBubbleComponent = function MessageBubble({
                         Edit
                       </DropdownMenuItem>
                     )}
+                    {onBranch && (
+                      <DropdownMenuItem disabled={isBranching} onClick={() => onBranch(message.id)}>
+                        <GitFork className="mr-2 h-4 w-4" aria-hidden="true" />
+                        {isBranching ? 'Creating branch…' : 'Branch conversation'}
+                      </DropdownMenuItem>
+                    )}
                     {message.metadata?.tokensUsed && (
                       <>
                         <DropdownMenuSeparator />
@@ -1865,6 +1894,8 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onRegenerateImage !== next.onRegenerateImage) return false;
 
   // Check flags
+  if (prev.isBranching !== next.isBranching) return false;
+  if (prev.branchNavigation !== next.branchNavigation) return false;
   if (prev.isReadingAloud !== next.isReadingAloud) return false;
   if (prev.isReadAloudSupported !== next.isReadAloudSupported) return false;
   if (prev.hasBranches !== next.hasBranches) return false;
