@@ -157,7 +157,6 @@ imageproc = "0.26.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
-sentry = { version = "0.33", optional = true }
 
 
 webrtc = { version = "0.14", optional = true }
@@ -291,7 +290,6 @@ devtools = ["tauri/devtools"]
 ocr = ["tesseract"]
 local-llm = ["llama-cpp-2"]
 webrtc-support = ["webrtc"]
-sentry = ["dep:sentry"]
 billing = []
 shell = ["dep:tauri-plugin-shell"]
 updater = ["dep:tauri-plugin-updater"]

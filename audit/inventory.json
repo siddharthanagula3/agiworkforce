@@ -734,8 +734,8 @@
   {
     "item": "crash-dump-upload",
     "surface": "apps/desktop",
-    "status": "partial",
-    "evidence": "A JS-error-to-Sentry HTTP reporter is built and wired: apps/desktop/src-tauri/src/sys/commands/error_reporting.rs:15-79 `error_report` posts a Sentry-formatted event over HTTP (manual, not the sentry crate) when the `SENTRY_DSN` env var is set; registered lib.rs:2242 and invoked from apps/desktop/src/stores/ui.ts:496. Separately, the panic hook at lib.rs:161-175 only logs the panic location/message via `tracing::error!`/`eprintln!` — it writes no dump file and uploads nothing. The `sentry` cargo feature (Cargo.toml:160,294, which would add native crash/panic capture via the `sentry` crate) is NOT in the default feature set (Cargo.toml:284 `default = [\"shell\", \"updater\", \"billing\", \"vad\"]`) and is not enabled by .github/workflows/release-desktop.yml, so shipped builds compile it out."
+    "status": "missing",
+    "evidence": "Native crash-dump upload is intentionally absent. The Desktop panic hook in apps/desktop/src-tauri/src/lib.rs records panic location/message only to the redacted local tracing/log pipeline. The dormant optional Rust Sentry dependency/feature was removed because no release enabled it, packaged GUI processes had no reliable runtime DSN, and startup-time native capture could not honor the renderer-owned opt-in/trust-boundary state. The separate hand-rolled Sentry HTTP sender was removed from error_reporting.rs; its commands now retain diagnostics locally. Consent-gated Managed-mode renderer exception reporting remains built in apps/desktop/src/services/errorTracking.ts. docs/adr/wire-or-cut.md records the product boundary."
   },
   {
     "item": "proxy-config",
@@ -3572,8 +3572,8 @@
   {
     "item": "crash-reporting",
     "surface": "packages/platform",
-    "status": "partial",
-    "evidence": "Desktop Rust backend: panic hook at apps/desktop/src-tauri/src/lib.rs:161-175 only logs locally via tracing::error!/eprintln! — no remote crash aggregation for native-process crashes. Desktop/web renderer JS exceptions are captured by the same Sentry init as error-monitoring (apps/desktop/src/services/errorTracking.ts:42-60). Mobile and both extensions have no crash-reporting SDK at all: apps/mobile/src/features/settings/cloud-privacy/index.tsx:34 explicitly states 'No third-party analytics or crash-reporting SDK (such as Sentry or PostHog) is bundled in the app'; grep for @sentry in apps/mobile/package.json, apps/extension/package.json, apps/extension-vscode/package.json returns nothing."
+    "status": "built",
+    "evidence": "Remote crash/error reporting is built on the product surfaces that advertise it and explicitly bounded elsewhere. Web initializes @sentry/nextjs only in configured production runtimes, with client consent and centralized PII scrubbing in apps/web/lib/sentry-shared.ts plus instrumentation-client.ts/instrumentation.ts. Desktop renderer reporting in apps/desktop/src/services/errorTracking.ts requires the error-reporting opt-in and rejects Local/BYOK trust boundaries; tests pin both gates. Native Desktop crashes, Mobile, Chrome, and VS Code remain local-only by explicit product policy rather than carrying dormant or bypassing upload code: the unused native Sentry feature and hand-rolled HTTP sender were removed, Mobile discloses its local-only diagnostics in cloud-privacy/index.tsx, and neither extension advertises remote collection. The surface matrix and reconsideration requirements are recorded in docs/adr/wire-or-cut.md."
   },
   {
     "item": "i18n",
