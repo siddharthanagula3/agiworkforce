@@ -211,7 +211,7 @@ export default function ProjectDetailPage() {
           data-design="agi"
           style={{
             minHeight: '100%',
-            background: 'var(--agi-bg-2)',
+            background: 'hsl(var(--background))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -232,7 +232,7 @@ export default function ProjectDetailPage() {
           data-design="agi"
           style={{
             minHeight: '100%',
-            background: 'var(--agi-bg-2)',
+            background: 'hsl(var(--background))',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -258,9 +258,9 @@ export default function ProjectDetailPage() {
           data-design="agi"
           style={{
             minHeight: '100%',
-            background: 'var(--agi-bg-2)',
+            background: 'hsl(var(--background))',
             padding: '48px 32px',
-            color: 'var(--agi-ink)',
+            color: 'hsl(var(--foreground))',
           }}
         >
           <div style={{ maxWidth: 680, margin: '0 auto' }}>
@@ -284,7 +284,7 @@ export default function ProjectDetailPage() {
               style={{
                 fontFamily: 'var(--serif)',
                 fontSize: 22,
-                color: 'var(--agi-ink)',
+                color: 'hsl(var(--foreground))',
                 margin: '24px 0 8px',
               }}
             >
@@ -305,7 +305,11 @@ export default function ProjectDetailPage() {
     <WebAppShell>
       <main
         data-design="agi"
-        style={{ minHeight: '100%', background: 'var(--agi-bg-2)', color: 'var(--agi-ink)' }}
+        style={{
+          minHeight: '100%',
+          background: 'hsl(var(--background))',
+          color: 'hsl(var(--foreground))',
+        }}
       >
         {/* Single centered column, ChatGPT-style */}
         <div
@@ -430,7 +434,7 @@ export default function ProjectDetailPage() {
                         border: 0,
                         textAlign: 'left',
                         fontSize: 13,
-                        color: 'var(--agi-ink)',
+                        color: 'hsl(var(--foreground))',
                         cursor: 'pointer',
                       }}
                       onMouseEnter={(e) => {
@@ -465,7 +469,7 @@ export default function ProjectDetailPage() {
                         border: 0,
                         textAlign: 'left',
                         fontSize: 13,
-                        color: 'var(--agi-ink)',
+                        color: 'hsl(var(--foreground))',
                         cursor: 'pointer',
                       }}
                       onMouseEnter={(e) => {
@@ -527,7 +531,7 @@ export default function ProjectDetailPage() {
                 fontFamily: 'var(--serif)',
                 fontSize: 26,
                 fontWeight: 600,
-                color: 'var(--agi-ink)',
+                color: 'hsl(var(--foreground))',
                 margin: 0,
               }}
             >
@@ -700,7 +704,7 @@ export default function ProjectDetailPage() {
                           >
                             <span
                               style={{
-                                color: 'var(--agi-ink)',
+                                color: 'hsl(var(--foreground))',
                                 fontSize: 13,
                                 fontWeight: 500,
                                 overflow: 'hidden',
@@ -778,7 +782,7 @@ function EmptyChatsState({ projectName }: EmptyChatsStateProps) {
         style={{
           fontSize: 14,
           fontWeight: 600,
-          color: 'var(--agi-ink)',
+          color: 'hsl(var(--foreground))',
           margin: '0 0 6px',
         }}
       >

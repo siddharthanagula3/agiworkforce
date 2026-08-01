@@ -155,9 +155,10 @@ export default function ProjectsPage() {
         data-design="agi"
         style={{
           minHeight: '100%',
-          background: 'var(--agi-bg-2)',
+          // App-shell tokens, not the marketing palette — see chat/library/page.tsx.
+          background: 'hsl(var(--background))',
           padding: '48px 32px',
-          color: 'var(--agi-ink)',
+          color: 'hsl(var(--foreground))',
         }}
       >
         <div
@@ -301,7 +302,8 @@ export default function ProjectsPage() {
                         cursor: 'pointer',
                       }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'var(--agi-bg-2)';
+                        (e.currentTarget as HTMLButtonElement).style.background =
+                          'hsl(var(--muted))';
                       }}
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
