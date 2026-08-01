@@ -263,6 +263,10 @@ pub(super) async fn prepare_send_message(
         debug!("[Chat] Incognito mode: skipping memory injection");
     }
 
+    // Connected servers' own usage guidance. Injected regardless of incognito:
+    // it is the server describing its tools, not anything about this user.
+    inject_mcp_server_instructions(&mcp_state.client, &mut llm_messages);
+
     llm_messages.push(ChatMessage {
         role: "system".to_string(),
         content: build_os_context(),

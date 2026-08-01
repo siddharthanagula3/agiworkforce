@@ -64,7 +64,8 @@ use crate::sys::commands::chat::attachments::{
 };
 use crate::sys::commands::chat::browser_context::inject_browser_page_context;
 use crate::sys::commands::chat::message_context::{
-    append_history_messages, emit_stream_failure, inject_memory_context,
+    append_history_messages, emit_stream_failure, inject_mcp_server_instructions,
+    inject_memory_context,
 };
 use crate::sys::commands::chat::persistence::{
     compute_or_skip_stats, save_or_skip_assistant_message,
