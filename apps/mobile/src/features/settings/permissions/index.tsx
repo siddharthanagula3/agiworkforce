@@ -8,16 +8,15 @@
  * screen handles the actual request/Settings redirect.
  */
 import { useCallback } from 'react';
-import { View, ScrollView } from 'react-native';
+import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Separator } from '@/components/ui/separator';
-import { useTheme, useThemeColors } from '@/src/ui/theme';
+import { SettingsScreenShell } from '@/src/features/settings/common';
+import { useThemeColors } from '@/src/ui/theme';
 import { usePermissionsStore } from '@/stores/permissionsStore';
 import { PERMISSION_REGISTRY, PERMISSION_KINDS, isPermissionGranted } from './registry';
 import type { MobilePermissionKind } from './types';
@@ -125,7 +124,7 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
 
 export default function PermissionsScreen() {
   const router = useRouter();
-  const { colors: c, statusBarStyle } = useTheme();
+  const c = useThemeColors();
   const setObservedStatus = usePermissionsStore((s) => s.setObservedStatus);
 
   // Read-only OS status poll on every focus (useFocusEffect so back-from-Settings refreshes)
@@ -148,10 +147,6 @@ export default function PermissionsScreen() {
     }, [setObservedStatus]),
   );
 
-  const handleBack = useCallback(() => {
-    router.navigate('/(app)/settings/safety-security' as Parameters<typeof router.navigate>[0]);
-  }, [router]);
-
   const handlePressDetail = useCallback(
     (kind: MobilePermissionKind) => {
       router.push(`/(app)/settings/permissions/${kind}` as Parameters<typeof router.push>[0]);
@@ -160,97 +155,59 @@ export default function PermissionsScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
-      <StatusBar style={statusBarStyle} />
-      {/* Header */}
-      <View
-        style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}
-      >
-        <Pressable
-          onPress={handleBack}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-          hitSlop={8}
-          style={({ pressed }) => ({
-            width: 42,
-            height: 42,
-            borderRadius: 21,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: pressed ? c.neutralSurface : 'transparent',
-          })}
-        >
-          <ArrowLeft size={22} color={c.textPrimary} />
-        </Pressable>
+    // Reached from Settings → Safety & Security and from Capabilities, so the
+    // shell pops the real stack and keeps `backHref` only for deep links.
+    <SettingsScreenShell title="Permissions" backHref="/(app)/settings/safety-security">
+      <View style={{ marginTop: 10, marginBottom: 12 }}>
         <Text
           style={{
-            flex: 1,
-            color: c.textPrimary,
-            fontSize: 20,
+            color: c.textMuted,
+            fontSize: 12,
             fontWeight: '700',
-            marginLeft: 4,
+            textTransform: 'uppercase',
           }}
         >
-          Permissions
+          App Permissions
         </Text>
       </View>
 
-      <ScrollView
-        className="flex-1 px-4"
-        contentContainerStyle={{ paddingBottom: 44 }}
-        showsVerticalScrollIndicator={false}
+      {/* Permission card */}
+      <View
+        style={{
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: c.border,
+          backgroundColor: c.surfaceElevated,
+          overflow: 'hidden',
+          paddingHorizontal: 10,
+        }}
       >
-        <View style={{ marginTop: 10, marginBottom: 12 }}>
-          <Text
-            style={{
-              color: c.textMuted,
-              fontSize: 12,
-              fontWeight: '700',
-              textTransform: 'uppercase',
-            }}
-          >
-            App Permissions
-          </Text>
-        </View>
+        {PERMISSION_KINDS.map((kind, idx) => (
+          <PermissionRow
+            key={kind}
+            kind={kind}
+            isLast={idx === PERMISSION_KINDS.length - 1}
+            onPressDetail={handlePressDetail}
+          />
+        ))}
+      </View>
 
-        {/* Permission card */}
-        <View
-          style={{
-            borderRadius: 18,
-            borderWidth: 1,
-            borderColor: c.border,
-            backgroundColor: c.surfaceElevated,
-            overflow: 'hidden',
-            paddingHorizontal: 10,
-          }}
-        >
-          {PERMISSION_KINDS.map((kind, idx) => (
-            <PermissionRow
-              key={kind}
-              kind={kind}
-              isLast={idx === PERMISSION_KINDS.length - 1}
-              onPressDetail={handlePressDetail}
-            />
-          ))}
-        </View>
-
-        {/* Footer info */}
-        <View
-          style={{
-            marginTop: 16,
-            borderRadius: 18,
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-            backgroundColor: c.surfaceElevated,
-            borderWidth: 1,
-            borderColor: c.border,
-          }}
-        >
-          <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18 }}>
-            Permissions are managed by your device. Changing a permission may open Settings.
-          </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      {/* Footer info */}
+      <View
+        style={{
+          marginTop: 16,
+          borderRadius: 18,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          backgroundColor: c.surfaceElevated,
+          borderWidth: 1,
+          borderColor: c.border,
+        }}
+      >
+        <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18 }}>
+          Permissions are managed by your device. Changing a permission may open Settings.
+        </Text>
+      </View>
+    </SettingsScreenShell>
   );
 }

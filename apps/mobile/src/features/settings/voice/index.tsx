@@ -1,19 +1,21 @@
-import { useCallback, useMemo } from 'react';
-import { ScrollView, View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
+import { useMemo } from 'react';
+import { View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Check, Headphones, Lock, Mic, Play, Volume2 } from 'lucide-react-native';
+import { Headphones, Lock, Mic, Play, Volume2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useSettingsStore, type TTSProvider } from '@/stores/settingsStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/common';
-import { useTheme, useThemeColors } from '@/src/ui/theme';
+import {
+  SettingsGroup,
+  SettingsInfo,
+  SettingsRow,
+  SettingsScreenShell,
+} from '@/src/features/settings/common';
+import { useThemeColors } from '@/src/ui/theme';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
 
 function ToggleRow({
@@ -51,63 +53,6 @@ function ToggleRow({
       </View>
       <Switch value={value} onValueChange={onValueChange} accessibilityLabel={label} />
     </View>
-  );
-}
-
-function ProviderOption({
-  label,
-  description,
-  selected,
-  disabled,
-  onPress,
-}: {
-  label: string;
-  description: string;
-  selected: boolean;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  const colors = useThemeColors();
-
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityState={{ selected, disabled }}
-      accessibilityLabel={`${label} voice provider`}
-      style={({ pressed }) => ({
-        minHeight: 68,
-        padding: 12,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: selected ? colors.accentBorder : colors.border,
-        backgroundColor: selected
-          ? colors.accentSurface
-          : pressed && !disabled
-            ? colors.surfaceHover
-            : colors.inputSurface,
-        opacity: disabled ? 0.68 : 1,
-        gap: 8,
-      })}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text
-          numberOfLines={1}
-          style={{ flex: 1, color: colors.textPrimary, fontSize: 14, fontWeight: '700' }}
-        >
-          {label}
-        </Text>
-        {disabled ? (
-          <Lock size={16} color={colors.textMuted} />
-        ) : selected ? (
-          <Check size={16} color={colors.teal} />
-        ) : null}
-      </View>
-      <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 16, flexShrink: 1 }}>
-        {description}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -155,7 +100,7 @@ function VoiceSlider({
 
 export default function VoiceSettingsScreen() {
   const router = useRouter();
-  const { colors, statusBarStyle } = useTheme();
+  const colors = useThemeColors();
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
   // Device-global voice settings (same across modes)
@@ -163,8 +108,6 @@ export default function VoiceSettingsScreen() {
   const setVoiceEnabled = useSettingsStore((s) => s.setVoiceEnabled);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
-  const ttsProvider = useSettingsStore((s) => s.ttsProvider);
-  const setTtsProvider = useSettingsStore((s) => s.setTtsProvider);
   const speechRate = useSettingsStore((s) => s.speechRate);
   const setSpeechRate = useSettingsStore((s) => s.setSpeechRate);
   const speechPitch = useSettingsStore((s) => s.speechPitch);
@@ -178,10 +121,6 @@ export default function VoiceSettingsScreen() {
   const autoListenEnabled = isCloud ? cloudAutoListenEnabled : localAutoListenEnabled;
   const setAutoListenEnabled = isCloud ? cloudSetAutoListenEnabled : localSetAutoListenEnabled;
 
-  const handleBack = useCallback(() => {
-    router.navigate('/(app)/(tabs)/settings' as Parameters<typeof router.navigate>[0]);
-  }, [router]);
-
   const selectedVoiceLabel = useMemo(() => {
     const preset = VOICE_PRESETS.find((item) => item.id === selectedPresetId);
     if (preset) return preset.name;
@@ -189,137 +128,89 @@ export default function VoiceSettingsScreen() {
     return 'System default';
   }, [selectedPresetId, selectedVoiceId]);
 
-  const handleProviderSelect = (provider: TTSProvider) => {
-    if (provider === 'cloud') {
-      return;
-    }
-    setTtsProvider(provider);
-  };
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
-      <StatusBar style={statusBarStyle} />
-      <View
-        style={{ height: 50, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}
-      >
-        <Pressable
-          onPress={handleBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ArrowLeft size={21} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}>Voice</Text>
-      </View>
+    <SettingsScreenShell title="Voice">
+      <SettingsInfo
+        title="Voice on this device"
+        body="Choose how AGI listens and speaks on this device."
+        icon={Headphones}
+      />
+      <SettingsInfo
+        title="Foreground conversations only"
+        body="Voice listening and speech stop when AGI moves to the background or the device locks. The microphone does not stay active in other apps."
+        icon={Lock}
+      />
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 36 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <SettingsInfo
-          title="Voice on this device"
-          body="Choose how AGI listens and speaks in Local Mode. Cloud voice remains separate from local voice settings."
-          icon={Headphones}
+      <SettingsGroup>
+        <ToggleRow
+          label="Voice Input"
+          description="Use the microphone for dictation and voice conversations."
+          value={voiceEnabled}
+          onValueChange={setVoiceEnabled}
         />
-        <SettingsInfo
-          title="Foreground conversations only"
-          body="Voice listening and speech stop when AGI moves to the background or the device locks. The microphone does not stay active in other apps."
-          icon={Lock}
+        <ToggleRow
+          label="Auto-listen"
+          description="Start listening again after AGI finishes speaking."
+          value={autoListenEnabled}
+          onValueChange={setAutoListenEnabled}
+          isLast
         />
+      </SettingsGroup>
 
-        <SettingsGroup>
-          <ToggleRow
-            label="Voice Input"
-            description="Use the microphone for dictation and voice conversations."
-            value={voiceEnabled}
-            onValueChange={setVoiceEnabled}
-          />
-          <ToggleRow
-            label="Auto-listen"
-            description="Start listening again after AGI finishes speaking."
-            value={autoListenEnabled}
-            onValueChange={setAutoListenEnabled}
-            isLast
-          />
-        </SettingsGroup>
+      <SettingsGroup>
+        <SettingsRow
+          label="Voice"
+          icon={Volume2}
+          value={selectedVoiceLabel}
+          onPress={() =>
+            router.push('/(app)/settings/voice-language' as Parameters<typeof router.push>[0])
+          }
+          isLast
+        />
+        {/* The device speech engine is the only one that exists on mobile, so it
+            is stated here as a caption instead of offered as a choice. */}
+        <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
+          <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 16 }}>
+            Spoken by the system speech engine, using voices installed on this device.
+          </Text>
+        </View>
+      </SettingsGroup>
 
-        <SettingsGroup>
-          <View style={{ padding: 14, gap: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Volume2 size={18} color={colors.textSecondary} />
-              <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
-                Speech
-              </Text>
-            </View>
-            <View style={{ gap: 10 }}>
-              <ProviderOption
-                label="System"
-                description="Uses voices installed on this device."
-                selected={ttsProvider === 'system'}
-                onPress={() => handleProviderSelect('system')}
-              />
-              <ProviderOption
-                label="Cloud"
-                description="Cloud voice isn't available on mobile yet."
-                selected={ttsProvider === 'cloud'}
-                disabled
-                onPress={() => handleProviderSelect('cloud')}
-              />
-            </View>
-          </View>
-        </SettingsGroup>
+      <SettingsGroup>
+        <VoiceSlider
+          label="Speed"
+          value={speechRate}
+          valueLabel={`${speechRate.toFixed(2)}x`}
+          minimumValue={0.5}
+          maximumValue={2}
+          step={0.05}
+          onValueChange={setSpeechRate}
+        />
+        <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 14 }} />
+        <VoiceSlider
+          label="Pitch"
+          value={speechPitch}
+          valueLabel={`${speechPitch.toFixed(2)}x`}
+          minimumValue={0.5}
+          maximumValue={2}
+          step={0.05}
+          onValueChange={setSpeechPitch}
+        />
+      </SettingsGroup>
 
-        <SettingsGroup>
-          <SettingsRow
-            label="Voice"
-            icon={Volume2}
-            value={selectedVoiceLabel}
-            onPress={() =>
-              router.push('/(app)/settings/voice-language' as Parameters<typeof router.push>[0])
-            }
-            isLast
-          />
-        </SettingsGroup>
-
-        <SettingsGroup>
-          <VoiceSlider
-            label="Speed"
-            value={speechRate}
-            valueLabel={`${speechRate.toFixed(2)}x`}
-            minimumValue={0.5}
-            maximumValue={2}
-            step={0.05}
-            onValueChange={setSpeechRate}
-          />
-          <View style={{ height: 1, backgroundColor: colors.border, marginHorizontal: 14 }} />
-          <VoiceSlider
-            label="Pitch"
-            value={speechPitch}
-            valueLabel={`${speechPitch.toFixed(2)}x`}
-            minimumValue={0.5}
-            maximumValue={2}
-            step={0.05}
-            onValueChange={setSpeechPitch}
-          />
-        </SettingsGroup>
-
-        <SettingsGroup>
-          <SettingsRow
-            label="Open Voice Companion"
-            icon={Play}
-            onPress={() =>
-              router.push({
-                pathname: '/(app)/voice',
-                params: { returnTo: '/(app)/settings/voice' },
-              } as Parameters<typeof router.push>[0])
-            }
-            isLast
-          />
-        </SettingsGroup>
-      </ScrollView>
-    </SafeAreaView>
+      <SettingsGroup>
+        <SettingsRow
+          label="Open Voice Companion"
+          icon={Play}
+          onPress={() =>
+            router.push({
+              pathname: '/(app)/voice',
+              params: { returnTo: '/(app)/settings/voice' },
+            } as Parameters<typeof router.push>[0])
+          }
+          isLast
+        />
+      </SettingsGroup>
+    </SettingsScreenShell>
   );
 }

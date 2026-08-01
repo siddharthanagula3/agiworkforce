@@ -530,7 +530,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
       {
         "alignItems": "center",
         "flexDirection": "row",
-        "height": 58,
+        "height": 50,
         "paddingHorizontal": 8,
       }
     }
@@ -571,17 +571,15 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "transparent",
-          "borderRadius": 21,
-          "height": 42,
+          "height": 40,
           "justifyContent": "center",
-          "width": 42,
+          "width": 40,
         }
       }
     >
       <View
         color="#fff"
-        size={22}
+        size={21}
         testID="icon-ArrowLeft"
       />
     </View>
@@ -589,10 +587,8 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
       style={
         {
           "color": "#fff",
-          "flex": 1,
-          "fontSize": 20,
+          "fontSize": 17,
           "fontWeight": "700",
-          "marginLeft": 4,
         }
       }
     >
@@ -600,10 +596,12 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
     </Text>
   </View>
   <RCTScrollView
-    className="flex-1 px-4"
+    className="flex-1"
     contentContainerStyle={
       {
-        "paddingBottom": 44,
+        "paddingBottom": 36,
+        "paddingHorizontal": 16,
+        "paddingTop": 8,
       }
     }
     showsVerticalScrollIndicator={false}
