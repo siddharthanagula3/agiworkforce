@@ -2,15 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, SectionList, TextInput, View, type SectionListData } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   MessageSquare,
   Pin,
   ChevronRight,
-  Search,
   SlidersHorizontal,
   SquarePen,
-  X,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 // NativeWind's JSX interop silently drops function-form `style` on Pressable,
@@ -18,7 +16,12 @@ import { Text } from '@/components/ui/text';
 // components/ui/pressable-box.tsx.
 import { PressableBox } from '@/components/ui/pressable-box';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
+import {
+  FloatingPrimaryAction,
+  FLOATING_PRIMARY_ACTION_LIST_PADDING,
+} from '@/src/shared/components/FloatingPrimaryAction';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useThemeColors } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
@@ -122,7 +125,6 @@ function searchSection(
 
 export function ChatsListScreen() {
   const colors = useThemeColors();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
   // The drawer's icon-only search button hands off to this screen rather than
@@ -454,7 +456,10 @@ export function ChatsListScreen() {
             </Text>
           </View>
         )}
-        contentContainerStyle={{ paddingBottom: 126, flexGrow: hasResults ? 0 : 1 }}
+        contentContainerStyle={{
+          paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
+          flexGrow: hasResults ? 0 : 1,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
@@ -483,78 +488,26 @@ export function ChatsListScreen() {
         }
       />
 
-      <PressableBox
+      <FloatingPrimaryAction
+        label="New chat"
+        icon={SquarePen}
         onPress={() => router.push('/(app)/(tabs)/chat')}
-        accessibilityRole="button"
-        accessibilityLabel="New chat"
-        style={({ pressed }) => ({
-          position: 'absolute',
-          right: 18,
-          // Sits ABOVE the bottom-anchored search field, matching Claude's
-          // chats list. Clears the home indicator (this SafeAreaView claims
-          // only the top edge) plus the field's own height and margin, or the
-          // pill renders clipped behind it.
-          bottom: insets.bottom + 10 + 44 + 12,
-          minHeight: 48,
-          borderRadius: 24,
-          paddingHorizontal: 18,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          backgroundColor: colors.teal,
-          opacity: pressed ? 0.82 : 1,
-        })}
-      >
-        <SquarePen size={18} color={colors.accentText} />
-        <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '700' }}>New chat</Text>
-      </PressableBox>
+      />
 
       {/* Search is bottom-anchored: both references put it within thumb
           reach at the bottom of the list (claude_reference/117 puts it below
           the New-chat pill; ChatGPT does the same on Projects, IMG_0691).
-          It sat at the top here, and was ALSO duplicated in the drawer. */}
-      <View
-        style={{
-          height: 44,
-          marginHorizontal: 16,
-          // Clear the home indicator: this SafeAreaView only claims the top
-          // edge, so a bare margin leaves the field flush to the screen edge.
-          marginBottom: insets.bottom + 10,
-          borderRadius: 22,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surfaceElevated,
-          paddingHorizontal: 14,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <Search size={17} color={colors.textMuted} />
-        <TextInput
-          ref={searchInputRef}
-          autoFocus={autoFocusSearch}
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search"
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Search chats, projects, files, library, and artifacts"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          style={{ flex: 1, color: colors.textPrimary, fontSize: 14, paddingVertical: 0 }}
-        />
-        {isSearching ? (
-          <Pressable
-            onPress={() => setQuery('')}
-            accessibilityRole="button"
-            accessibilityLabel="Clear search"
-            hitSlop={8}
-          >
-            <X size={17} color={colors.textMuted} />
-          </Pressable>
-        ) : null}
-      </View>
+          It sat at the top here, and was ALSO duplicated in the drawer.
+          Now the shared implementation Library, Projects and the connectors
+          directory adopt too, so sibling list screens cannot drift apart. */}
+      <BottomSearchBar
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search"
+        accessibilityLabel="Search chats, projects, files, library, and artifacts"
+        inputRef={searchInputRef}
+        autoFocus={autoFocusSearch}
+      />
     </SafeAreaView>
   );
 }
