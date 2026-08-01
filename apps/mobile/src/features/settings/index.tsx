@@ -27,6 +27,7 @@ import {
   Sparkles,
   SunMoon,
   UserRound,
+  Users,
   X,
   Zap,
   type LucideIcon,
@@ -35,7 +36,7 @@ import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
-import { canUseBillingPlanCapability, getBillingPlanPricing } from '@agiworkforce/types';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -268,8 +269,6 @@ export default function SettingsTabScreen() {
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
-  const canManageWorkspace =
-    isClerkSignedIn && canUseBillingPlanCapability(subscriptionTier, 'team_admin');
 
   const push = useCallback(
     (path: string) => () => router.push(path as Parameters<typeof router.push>[0]),
@@ -341,17 +340,19 @@ export default function SettingsTabScreen() {
             tone: 'cloud',
             onPress: openCloudRoute('/(app)/settings/shared-links'),
           },
-          ...(canManageWorkspace
-            ? [
-                {
-                  key: 'workspace-admin',
-                  label: 'Workspace administration',
-                  icon: UserRound,
-                  value: 'Web',
-                  onPress: () => void openExternalUrl('https://agiworkforce.com/settings/team'),
-                },
-              ]
-            : []),
+          // Always listed. Whether the account can actually administer a
+          // workspace is decided by the server (`access.canManageTeam`) and
+          // explained on the screen itself. The row used to be hidden behind a
+          // local plan check — a second copy of a rule only the server owns,
+          // and a hidden row cannot explain why the option is missing.
+          {
+            key: 'workspace',
+            label: 'Workspace',
+            icon: Users,
+            tag: cloudAccessTag,
+            tone: 'cloud',
+            onPress: openCloudRoute('/(app)/settings/workspace'),
+          },
         ],
       },
       {
@@ -573,7 +574,6 @@ export default function SettingsTabScreen() {
       accountValue,
       appVersion,
       cloudAccessTag,
-      canManageWorkspace,
       handleSignOut,
       isClerkLoaded,
       isClerkSignedIn,
