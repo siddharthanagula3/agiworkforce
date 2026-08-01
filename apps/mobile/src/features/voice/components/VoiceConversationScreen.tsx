@@ -1,5 +1,13 @@
 import { useCallback, useEffect } from 'react';
-import { Alert, Keyboard, View, Pressable, StatusBar, useWindowDimensions } from 'react-native';
+import {
+  Alert,
+  Keyboard,
+  View,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  useWindowDimensions,
+} from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -269,7 +277,11 @@ export function VoiceConversationScreen({
       entering={reducedMotion ? undefined : SlideInDown.springify().dampingRatio(1)}
       exiting={reducedMotion ? undefined : SlideOutDown.springify().dampingRatio(1)}
       className="absolute inset-0 z-50"
-      style={{ backgroundColor: colors.voiceConversationBgEnd }}
+      // StyleSheet.absoluteFillObject alongside `inset-0`: the overlay must fill
+      // the screen from its own style, not inherit height from its children.
+      // Relying on the content's intrinsic height meant the layout silently
+      // depended on how tall the bottom controls happened to be.
+      style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.voiceConversationBgEnd }]}
     >
       <StatusBar barStyle="light-content" />
 
