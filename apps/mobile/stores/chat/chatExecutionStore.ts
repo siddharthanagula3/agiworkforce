@@ -756,7 +756,15 @@ export function citationsFromToolCalls(
   return citations;
 }
 
-function captureArtifactsFromMessage(
+/**
+ * Derive and store artifacts for one assistant message.
+ *
+ * Exported because history needs it too: this used to run only as a turn
+ * finished streaming, so every conversation reopened from the server had its
+ * artifacts silently missing. `deriveAndMapToMobileArtifacts` is pure and its
+ * ids are deterministic, so re-deriving the same content is idempotent.
+ */
+export function captureArtifactsFromMessage(
   content: string,
   messageId: string,
   conversationId: string,
