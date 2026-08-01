@@ -2,7 +2,7 @@
 
 Status: Active
 Owner: Founder + platform lead
-Last updated: 2026-07-26
+Last updated: 2026-08-01
 Detailed plan: `docs/plans/monorepo-restructure-2026-07-08.md`
 Organization sequence: `docs/plans/pre-release-repo-organization-2026-05-20.md`
 
@@ -11,9 +11,9 @@ Organization sequence: `docs/plans/pre-release-repo-organization-2026-05-20.md`
 > 10,272 passing tests, 27 green operability guardrails). The active phase is now
 > **surface production quality**: Desktop Cloud and Mobile Cloud to the standard
 > Web already meets, and the VS Code and Chrome extensions to the frontend UI/UX
-> standard of ChatGPT's equivalents. The executable queue for that phase is
-> `TODO.md`. The objective and boundaries below still govern; only the sequencing
-> has moved on.
+> standard of ChatGPT's equivalents. The executable queue for that phase lives in
+> the **Exact Resume Point** section of this file. The objective and boundaries
+> below still govern; only the sequencing has moved on.
 
 ## Objective
 
@@ -234,12 +234,83 @@ Remaining program work, in order of dependency:
    flight; star/archive + branch schema fixes; desktop project scoping after
    W7; the 12 stale-model-ID `routing_logic_tests` reds in desktop core/llm).
 5. External release gates (founder-run or scheduled, cannot be faked):
-   apply+probe migrations 0056 → 0057/0058 on prod Neon BEFORE merging this
-   branch to `main`; W7 live-provider + desktop-device smoke; desktop
-   restart-persistence smoke; W10 on-device mobile QA.
+   apply+probe the unapplied `apps/web/db/neon` migrations from 0056 through
+   the current head (`0080_device_refresh_token_rotation.sql`) on prod Neon
+   BEFORE merging this branch to `main` — re-read the directory listing rather
+   than trusting this number, it moves every time a web slice lands; W7
+   live-provider + desktop-device smoke; desktop restart-persistence smoke;
+   W10 on-device mobile QA.
 6. The final requirement-by-requirement completion audit (Remaining
    Workstream 8) recorded in CHANGELOG with unresolved external
    prerequisites listed separately.
+
+2026-08-01: THE AUDIT-REMEDIATION BRANCH IS PARKED, MEASURED, NOT MERGED.
+`fix/audit-remediation-2026-07-25` now carries 47 commits ahead of `main` and
+0 behind, tip `07b87a6fd` — 46 remediation commits dated 2026-07-31..08-01 plus
+the `chore(deps)` lockfile commit that pairs the working-tree `pnpm-lock.yaml`
+with the already-committed `apps/mobile/package.json` swap
+(`@expo-google-fonts/newsreader` and `expo-font` added,
+`expo-background-fetch` replaced by `expo-background-task`). By slice theme:
+30 mobile commits (the brand/UX parity sweep — artifacts in the transcript and
+on the cached path, account-security parity with web, archived chats, accent
+contrast, reflect and team surfaces), 9 desktop (six of them the MCP work:
+protocol-revision negotiation on both the client and our own server, an honest
+message when a server speaks only the stateless revision, server-instruction
+delivery to the model with a read-and-cap step, and sanitisation extended from
+tool descriptions to parameter descriptions; plus the reasoning-effort control,
+the dead safety-tab repair, and the isolated wdio build config that desktop e2e
+always required), 6 web (upgrade CTA on top plans, artifacts panel lifecycle
+and its sandbox CSP, brand shell tokens and the spinning idle mark, managed
+code presented as coming soon), and 1 i18n commit naming the schedules surface
+identically on every platform.
+
+The evidence battery was run against this tip and is recorded honestly, red
+included. Green: `pnpm typecheck:all` 46/46 tasks in 5m20.944s with zero
+`error TS`; `cargo check --workspace` clean, zero warnings; every JS/TS surface
+passing in isolation — web 4,638, desktop 1,951, mobile 2,316, extension 1,221,
+VS Code 727, i.e. 10,853 across the five named surfaces against the
+2026-07-26 baseline of 10,272 (+581), and 14,146 passed repo-wide across all 45
+turbo test tasks. The aggregate `pnpm test` exited 1, but every failure in it
+was a bare 5s timeout under CPU contention from concurrent batteries and every
+affected package reran green alone; note `turbo run test` has no `--continue`,
+so the first red task cancels the rest and its counts are lower bounds. Red,
+and still open: (a) `pnpm check:llm-operability` is 32 of 34 guardrails passing
+— `check:mobile-hygiene` and `check:readme-ownership` both fail on the same
+three missing files, `apps/mobile/src/features/{archived-chats,reflect,team}/README.md`,
+each of which must carry the `Status:`, `Owner` and `Purpose` markers that
+`scripts/check-readme-ownership.mjs` enforces; this is a regression this branch
+introduced and it blocks the pre-push gate. (b) `cargo test --workspace --lib`
+is 6,770 passed / 4 failed / 34 ignored across 14 binaries, all four failures
+inside `agiworkforce-desktop` and all four reproducing deterministically in
+isolation — two effort-catalog assertions in `core::llm` that contradict
+`claude-sonnet-5`'s `supportedEfforts` since `3044350c5`, and two `v59`
+migration tests that expose a real hazard where the `v76` step runs
+`CREATE INDEX` against `realtime_metrics` without guarding that the table
+exists. All four files are byte-identical between `main` and this branch, so
+this is pre-existing `main` breakage surfaced by the battery, not a regression
+here — but it does mean the CHANGELOG 2026-07-26 claim of a green
+`cargo test --workspace --lib` is stale and must not be re-asserted without
+re-qualification. Guardrail count also moved: 34 in the chain now, not the 27
+that entry records.
+
+Founder decisions standing as of this checkpoint: the branch is **not pushed**
+and **no PR is open**, deliberately — origin's copy is an ancestor 280 commits
+behind, so a push would fast-forward whenever it is authorized. The full
+successor briefing, including tree disposition and the not-run list, is
+`docs/agent-context/remediation-handoff-2026-08-01.md`; read it before resuming.
+Finally, `TODO.md` was deleted in `906fe5cda`, so this Exact Resume Point
+section is now the executable queue — add new work here, not to a new root
+control doc.
+
+Same-day update (2026-08-01, post-checkpoint): RED 1 is cleared — `528ba8bc3`
+adds the three missing mobile feature READMEs and a fresh
+`pnpm check:llm-operability` run exits 0 (34/34), so the pre-push gate is green
+again. RED 2 (the four pre-existing desktop cargo failures, including the v76
+`realtime_metrics` migration hazard) remains open and is now filed in
+`docs/agent-context/known-flaws.md`. The active phase work is mobile parity
+against the ChatGPT/Claude iOS reference sets on the founder's Desktop; the
+prioritized backlog lives with the session that produced it and lands here as
+commits.
 
 ## Current Evidence Commands
 

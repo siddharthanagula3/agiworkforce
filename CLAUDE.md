@@ -29,9 +29,9 @@ Claude-specific notes must also follow
   (`pnpm-lock.yaml`, `Cargo.lock`, etc.) are blocked — change manifests and
   run the package manager instead — and saved files are auto-formatted with
   Prettier, so do not hand-reformat or fight post-save diffs.
-- Use `PLAN.md` for the active production restructure, `TODO.md` for executable
-  work, `CHANGELOG.md` for verified completed slices, and
-  `docs/agent-context/known-flaws.md` for durable defects.
+- Use `PLAN.md` for the active production restructure and its executable queue
+  (the Exact Resume Point section), `CHANGELOG.md` for verified completed
+  slices, and `docs/agent-context/known-flaws.md` for durable defects.
 - Keep Claude-specific loader configuration under `.claude/`; it is not a
   product or architecture source of truth.
 - Do not add Claude-generated attribution footers to commits or pull requests.
