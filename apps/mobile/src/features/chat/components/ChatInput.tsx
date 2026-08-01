@@ -16,7 +16,16 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, AudioLines, ArrowUp, X, Telescope, Terminal, Paintbrush } from 'lucide-react-native';
+import {
+  Plus,
+  AudioLines,
+  ArrowUp,
+  Square,
+  X,
+  Telescope,
+  Terminal,
+  Paintbrush,
+} from 'lucide-react-native';
 import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
@@ -860,11 +869,20 @@ export function ChatInput({
                 opacity: isRecording ? 1 : 0.5,
               }}
               hitSlop={6}
-              accessibilityLabel="Use recording"
+              accessibilityLabel="Stop recording"
               accessibilityHint="Stops recording and transcribes it into the message"
               accessibilityRole="button"
             >
-              <ArrowUp size={18} color={themeColors.surfaceElevated} />
+              {/* A stop square, not a send arrow. This control ends capture and
+                  drops the transcript into the composer for review — it does not
+                  send. Drawn as an up-arrow it read as "send", so the row looked
+                  like it offered only cancel-or-send and users could not find a
+                  way to stop. ChatGPT shows a stop square in the same slot. */}
+              <Square
+                size={14}
+                color={themeColors.surfaceElevated}
+                fill={themeColors.surfaceElevated}
+              />
             </Pressable>
           ) : sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
             <Pressable
