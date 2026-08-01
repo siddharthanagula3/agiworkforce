@@ -65,7 +65,12 @@ export type SettingsNavKey =
   | 'team'
   | 'reflect'
   | 'time-focus'
-  | 'skills';
+  | 'skills'
+  // Conversation-data sections. Web registers these as settings sections and
+  // routes to them, but deliberately keeps them out of SETTINGS_NAV_GROUPS_WEB
+  // and links to them from its Privacy section instead.
+  | 'archived'
+  | 'shared-links';
 
 export interface SettingsNavEntry {
   key: SettingsNavKey;
