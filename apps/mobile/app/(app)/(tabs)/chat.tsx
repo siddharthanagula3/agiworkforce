@@ -655,13 +655,11 @@ export default function ChatTabScreen() {
               style={{
                 fontSize: 26,
                 lineHeight: 30,
-                // The brand wordmark is a SERIF. Web renders it with
-                // `var(--font-newsreader), Georgia, 'Times New Roman', serif`;
-                // mobile loads no custom fonts (no expo-font), so it takes the
-                // same chain from Georgia onward. A sans wordmark here did not
-                // read as the logo at all.
-                fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-                fontWeight: '500',
+                // Newsreader — the same brand typeface web uses via
+                // `var(--font-newsreader)`. Loaded in app/_layout.tsx. The
+                // weight lives in the family name, so no fontWeight here:
+                // setting one makes iOS synthesise a bolder face over it.
+                fontFamily: 'Newsreader_600SemiBold',
                 letterSpacing: 0.5,
                 color: c.textPrimary,
               }}

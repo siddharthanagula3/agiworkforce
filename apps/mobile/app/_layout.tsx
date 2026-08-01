@@ -23,6 +23,8 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { Fingerprint } from 'lucide-react-native';
+import { useFonts } from 'expo-font';
+import { Newsreader_500Medium, Newsreader_600SemiBold } from '@expo-google-fonts/newsreader';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
@@ -195,6 +197,14 @@ function ClerkTokenBridge() {
 }
 
 export default function RootLayout() {
+  // The AGI wordmark is set in Newsreader, the brand typeface. Loading it here
+  // (rather than per-screen) means every surface that renders the lockup gets
+  // the real face instead of a Georgia fallback. Render is NOT blocked on it:
+  // a missing font must never gate the app, and RN falls back until it lands.
+  useFonts({
+    Newsreader_500Medium,
+    Newsreader_600SemiBold,
+  });
   const [isMmkvReady, setIsMmkvReady] = useState(false);
   const session = useAuthStore((s) => s.session);
   const isLoading = useAuthStore((s) => s.isLoading);
