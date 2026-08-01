@@ -6,6 +6,7 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/src/features/auth/store';
+import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -33,7 +34,12 @@ import {
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import { setCloudMessageReactionRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { getDurableGeneratedImagePath } from '@/src/features/image/services/imagegen';
-import { generatedImageToMobileArtifact, useArtifactStore } from '@/src/features/artifacts/store';
+import {
+  deriveAndMapToMobileArtifacts,
+  generatedImageToMobileArtifact,
+  useArtifactStore,
+} from '@/src/features/artifacts/store';
+import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
 import { getConversationMessageStore } from './conversationRepository';
 import { useCloudSyncStateStore } from './cloudSyncStateStore';
 // SEPARATION-FIX: cloud conversations are physically separated into their own store.
@@ -368,6 +374,21 @@ export const useChatMessageStore = create<MessageState>()(
               messages: { ...state.messages, [conversationId]: normalizedMessages },
             }));
           }
+
+          // Artifacts for history, not just for the turn that produced them.
+          //
+          // Capture ran only as a response finished streaming, so reopening a
+          // conversation from the server showed its code and documents as plain
+          // markdown — the artifact card, the gallery entry and the full-screen
+          // viewer were all missing for anything not generated in this session.
+          // Derivation is pure and its ids are deterministic, so re-deriving a
+          // message the app already captured is a no-op.
+          captureArtifactsForLoadedMessages(
+            normalizedMessages,
+            conversationId,
+            conversation?.title ?? '',
+            cloudConversation ? 'cloud' : 'local',
+          );
         } catch {
           if (!cloudConversation) {
             set((state) => ({
@@ -833,6 +854,53 @@ async function deleteCloudConversationWithRetry(id: string, maxAttempts = 3): Pr
     }
   }
   return false;
+}
+
+/**
+ * Derive artifacts for a transcript that came from the server.
+ *
+ * Only assistant turns carry artifacts, and cloud artifacts must be stamped
+ * with the owning account: `MobileArtifactProvenance` requires an ownerId for
+ * scope 'cloud', and the store rejects a record without one. If there is no
+ * signed-in owner, cloud artifacts are skipped rather than mis-attributed.
+ */
+function captureArtifactsForLoadedMessages(
+  messages: ChatMessage[],
+  conversationId: string,
+  conversationTitle: string,
+  scope: 'local' | 'cloud',
+): void {
+  // The SAME owner source the artifact store gates on. addArtifacts drops any
+  // cloud row whose ownerId !== captureCloudAccountEpoch()'s, silently, so a
+  // different-but-plausible source (useAuthStore.clerkUserId) produced rows
+  // that were derived correctly and then discarded on write.
+  const ownerId = captureCloudAccountEpoch()?.ownerId ?? null;
+  if (scope === 'cloud' && !ownerId) return;
+  const provenance: MobileArtifactProvenance =
+    scope === 'cloud' ? { scope: 'cloud', ownerId: ownerId as string } : { scope: 'local' };
+
+  // Derive here rather than calling chatExecutionStore's copy: that store
+  // already lazy-requires THIS one to break a cycle, and importing back the
+  // other way would close it at module-init time. Derivation only needs the
+  // artifacts feature, which this module already depends on.
+  try {
+    const artifacts = messages
+      .filter((message) => message.role === 'assistant' && message.content.trim().length > 0)
+      .flatMap((message) =>
+        deriveAndMapToMobileArtifacts(
+          message.content,
+          conversationId,
+          message.id,
+          message.createdAt,
+          conversationTitle,
+          agiNativeColors.dark,
+          provenance,
+        ),
+      );
+    if (artifacts.length > 0) useArtifactStore.getState().addArtifacts(artifacts);
+  } catch {
+    // Non-fatal — artifact capture must never block opening a conversation.
+  }
 }
 
 function shouldLoadCloudConversationList(): boolean {
