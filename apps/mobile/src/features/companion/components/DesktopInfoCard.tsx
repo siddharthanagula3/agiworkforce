@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AgentDashboard } from '@/src/features/companion/components/AgentDashboard';
 import { DispatchTaskComposer } from '@/src/features/companion/components/DispatchTaskComposer';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { RemoteWorkspaceBoundaryNotice } from './RemoteWorkspaceBoundaryNotice';
 import { SingleDesktopSessionNotice } from './SingleDesktopSessionNotice';
 
@@ -22,6 +22,7 @@ export function DesktopInfoCard({
   desktopMetadata,
   onDisconnect,
 }: DesktopInfoCardProps) {
+  const colors = useThemeColors();
   return (
     <Animated.View entering={SlideInDown.duration(300).springify()} className="flex-1">
       <View className="px-4 mb-3">

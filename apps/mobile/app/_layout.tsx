@@ -40,7 +40,7 @@ import {
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
-import { useTheme } from '@/src/ui/theme';
+import { ThemeVars, useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import {
@@ -890,7 +890,12 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <SafeAreaProvider>
             <StatusBar style={statusBarStyle} />
-            <Slot />
+            {/* Publishes the resolved palette to NativeWind, so class-styled
+                screens follow the theme instead of the dark constants Tailwind
+                compiled in. Must wrap Slot, not sit beside it. */}
+            <ThemeVars>
+              <Slot />
+            </ThemeVars>
             {/* Global offline banner — renders above all content when NetInfo is offline */}
             <OfflineBanner />
           </SafeAreaProvider>

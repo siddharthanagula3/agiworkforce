@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 export interface DesktopCompanionWidgetProps {
   /** When true, renders a compact single-row variant for the home screen.
@@ -73,6 +73,7 @@ interface ConnectedWidgetProps {
 }
 
 function ConnectedWidget({ compact, onPressDashboard, onPressApprovals }: ConnectedWidgetProps) {
+  const colors = useThemeColors();
   const desktopName = useConnectionStore((s) => s.desktopName);
   const desktopMetadata = useConnectionStore((s) => s.desktopMetadata);
   // Select the raw (stable-reference) arrays and filter in memos — filtering
@@ -281,6 +282,7 @@ interface DisconnectedWidgetProps {
 }
 
 function DisconnectedWidget({ compact, onPress }: DisconnectedWidgetProps) {
+  const colors = useThemeColors();
   const desktopName = useConnectionStore((s) => s.desktopName);
 
   if (compact) {

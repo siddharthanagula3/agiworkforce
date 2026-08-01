@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Wifi, WifiOff, Loader2, Monitor } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface StatusConfig {
   icon: typeof Wifi;
@@ -12,7 +12,11 @@ interface StatusConfig {
   bgColor: string;
 }
 
-function getConfig(status: ConnectionStatus, desktopName: string | null): StatusConfig {
+function getConfig(
+  status: ConnectionStatus,
+  desktopName: string | null,
+  colors: ReturnType<typeof useThemeColors>,
+): StatusConfig {
   switch (status) {
     case 'connected':
       return {
@@ -52,11 +56,12 @@ function getConfig(status: ConnectionStatus, desktopName: string | null): Status
  * Use this anywhere you need to show connection status.
  */
 export function ConnectionStatusBar() {
+  const colors = useThemeColors();
   const router = useRouter();
   const status = useConnectionStore((s) => s.status);
   const desktopName = useConnectionStore((s) => s.desktopName);
 
-  const config = getConfig(status, desktopName);
+  const config = getConfig(status, desktopName, colors);
   const Icon = config.icon;
 
   return (
@@ -81,9 +86,10 @@ export function ConnectionStatusBar() {
  * Suitable for headers or compact layouts.
  */
 export function ConnectionDot() {
+  const colors = useThemeColors();
   const status = useConnectionStore((s) => s.status);
   const desktopName = useConnectionStore((s) => s.desktopName);
-  const config = getConfig(status, desktopName);
+  const config = getConfig(status, desktopName, colors);
 
   return (
     <View

@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { ScheduleRunHistory } from './ScheduleRunHistory';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { Schedule } from '../store';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
 
@@ -141,6 +141,7 @@ function getStatusBadge(status: Schedule['lastRunStatus']): {
 // ---------------------------------------------------------------------------
 
 export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: ScheduleCardProps) {
+  const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const statusBadge = getStatusBadge(schedule.lastRunStatus);
   const [historyExpanded, setHistoryExpanded] = useState(false);

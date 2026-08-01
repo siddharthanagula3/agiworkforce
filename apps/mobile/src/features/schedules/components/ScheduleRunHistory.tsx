@@ -10,7 +10,7 @@ import { View, Pressable, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { CheckCircle2, XCircle, Clock, RefreshCw, Loader } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { useScheduleStore, type ScheduleRun } from '../store';
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,7 @@ interface RunRowProps {
 }
 
 function RunRow({ run }: RunRowProps) {
+  const colors = useThemeColors();
   const isSuccess = run.status === 'success';
   const isFailed = run.status === 'failed';
   const isRunning = run.status === 'running';
@@ -138,6 +139,7 @@ interface ScheduleRunHistoryProps {
 }
 
 export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHistoryProps) {
+  const colors = useThemeColors();
   const fetchRuns = useScheduleStore((s) => s.fetchRuns);
   const getRuns = useScheduleStore((s) => s.getRuns);
   const loading = useScheduleStore((s) => s.runsLoadingBySchedule[scheduleId] ?? false);

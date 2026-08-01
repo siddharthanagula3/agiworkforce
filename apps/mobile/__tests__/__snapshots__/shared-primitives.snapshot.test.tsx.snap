@@ -5,8 +5,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
   accessibilityLabel="Project: Snapshot project"
   style={
     {
-      "backgroundColor": "#1a1a1a",
-      "borderColor": "#333",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(255, 255, 255, 0.10)",
       "borderRadius": 12,
       "borderWidth": 1,
       "flexDirection": "column",
@@ -66,7 +66,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
           numberOfLines={1}
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "fontSize": 16,
               "fontWeight": "600",
             }
@@ -106,7 +106,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
         numberOfLines={2}
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 12,
             "marginTop": 2,
           }
@@ -207,14 +207,14 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       }
     >
       <View
-        color="#777"
+        color="rgba(244, 244, 244, 0.48)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -234,7 +234,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -256,8 +256,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -268,7 +268,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -282,8 +282,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -294,7 +294,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -308,8 +308,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -320,7 +320,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -340,8 +340,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
   accessibilityLabel="Project: Snapshot project"
   style={
     {
-      "backgroundColor": "#1a1a1a",
-      "borderColor": "#333",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(255, 255, 255, 0.10)",
       "borderRadius": 12,
       "borderWidth": 1,
       "flexDirection": "column",
@@ -401,7 +401,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
           numberOfLines={1}
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "fontSize": 16,
               "fontWeight": "600",
             }
@@ -441,7 +441,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
         numberOfLines={2}
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 12,
             "marginTop": 2,
           }
@@ -542,14 +542,14 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       }
     >
       <View
-        color="#777"
+        color="rgba(244, 244, 244, 0.48)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -569,7 +569,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -591,8 +591,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -603,7 +603,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -617,8 +617,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -629,7 +629,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -643,8 +643,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -655,7 +655,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -675,8 +675,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
   accessibilityLabel="Project: Snapshot project"
   style={
     {
-      "backgroundColor": "#1a1a1a",
-      "borderColor": "#333",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(255, 255, 255, 0.10)",
       "borderRadius": 12,
       "borderWidth": 1,
       "flexDirection": "column",
@@ -736,7 +736,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
           numberOfLines={1}
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "fontSize": 16,
               "fontWeight": "600",
             }
@@ -776,7 +776,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
         numberOfLines={2}
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 12,
             "marginTop": 2,
           }
@@ -877,14 +877,14 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       }
     >
       <View
-        color="#777"
+        color="rgba(244, 244, 244, 0.48)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -904,7 +904,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -924,7 +924,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -944,7 +944,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -966,8 +966,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -978,7 +978,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -992,8 +992,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -1004,7 +1004,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -1018,8 +1018,8 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -1030,7 +1030,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,

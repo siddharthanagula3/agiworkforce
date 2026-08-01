@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 import { Text } from './text';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface AvatarProps {
   name?: string;
@@ -29,11 +30,14 @@ function getInitials(name: string): string {
 }
 
 export function Avatar({ name, size = 'md', variant = 'user' }: AvatarProps) {
+  const colors = useThemeColors();
   const bgClass = variant === 'assistant' ? 'bg-teal-500' : 'bg-blue-500';
 
   return (
     <View className={`${sizeClasses[size]} ${bgClass} rounded-full items-center justify-center`}>
-      <Text className={`${textSizes[size]} font-semibold text-white`}>
+      {/* Literal white: this sits on a saturated teal/blue circle, not on a
+          themed surface, so it must not follow the foreground token. */}
+      <Text className={`${textSizes[size]} font-semibold`} style={{ color: colors.white }}>
         {name ? getInitials(name) : variant === 'assistant' ? 'AI' : 'U'}
       </Text>
     </View>
