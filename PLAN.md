@@ -306,9 +306,13 @@ Founder decisions (2026-08-01, evening): build 11 of the 13 undecided missing
 surfaces (all except Finances; Plugins resolves to Connectors permanently) —
 the full list with external gates is recorded in
 `docs/current/parity-implementation-matrix.md` §2026-08-01 Founder Scope
-Decisions. Additionally: always-stack the mobile composer (model chip
-permanently visible), sonnet-5 low/medium effort follows the catalog (tests
-updated), and the branch is authorized for a plain push to origin (no PR).
+Decisions. Additionally: sonnet-5 low/medium effort follows the catalog (tests
+updated and green), and the branch is authorized for a plain push to origin
+(no PR). Reversed later the same evening: the model picker stays in the "+"
+sheet / stacked control row — no always-stacked composer. New top priority
+(founder, same evening): desktop Cloud mode presentable at parity with web,
+verified manually through the wdio e2e harness — this outranks the remaining
+mobile P1/P2 queue and the missing-surfaces program until done.
 
 Same-day update (2026-08-01, post-checkpoint): RED 1 is cleared — `528ba8bc3`
 adds the three missing mobile feature READMEs and a fresh
