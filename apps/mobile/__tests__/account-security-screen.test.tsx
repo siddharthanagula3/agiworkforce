@@ -5,6 +5,10 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 const mockPush = jest.fn();
 const mockOpenExternalUrl = jest.fn();
 const mockFetchStatus = jest.fn();
+const mockFetchSessionTimeout = jest.fn();
+const mockSaveSessionTimeout = jest.fn();
+const mockFetchAuditLog = jest.fn();
+const mockUpdatePassword = jest.fn();
 const mockSetAppMode = jest.fn();
 let mockAppMode: 'local' | 'cloud' = 'cloud';
 let mockOwnerId = 'account-a';
@@ -48,8 +52,22 @@ jest.mock('../src/features/chat/store/appModeStore', () => ({
   ) => selector({ appMode: mockAppMode, setAppMode: mockSetAppMode }),
 }));
 
+// The screen reads the Clerk user to offer "Change password" — Clerk owns the
+// credential, so this is the same updatePassword call web makes rather than a
+// second password store. No ClerkProvider wraps a unit render, so stub it.
+jest.mock('@clerk/expo', () => ({
+  useUser: () => ({ user: { updatePassword: mockUpdatePassword } }),
+}));
+
 jest.mock('../src/features/settings/account-security/service', () => ({
   fetchAccountSecurityStatus: (...args: unknown[]) => mockFetchStatus(...args),
+  fetchSessionTimeout: (...args: unknown[]) => mockFetchSessionTimeout(...args),
+  saveSessionTimeout: (...args: unknown[]) => mockSaveSessionTimeout(...args),
+  fetchAuditLog: (...args: unknown[]) => mockFetchAuditLog(...args),
+  groupAuditEntries: jest.requireActual('../src/features/settings/account-security/service')
+    .groupAuditEntries,
+  SESSION_TIMEOUT_MINUTES: [15, 30, 60, 120, 480],
+  DEFAULT_SESSION_TIMEOUT: 60,
 }));
 
 jest.mock('../src/features/settings/common', () => {
@@ -122,6 +140,9 @@ describe('Mobile Account Security screen', () => {
       enabledAt: '2026-07-30T12:00:00.000Z',
       backupCodesRemaining: 4,
     });
+    mockFetchSessionTimeout.mockResolvedValue(60);
+    mockSaveSessionTimeout.mockResolvedValue(undefined);
+    mockFetchAuditLog.mockResolvedValue([]);
   });
 
   it('renders authoritative factor and current-session state with bounded Web handoffs', async () => {
@@ -158,9 +179,54 @@ describe('Mobile Account Security screen', () => {
 
     expect(screen.getByText('Chat is set to Local Mode')).toBeTruthy();
     expect(mockFetchStatus).not.toHaveBeenCalled();
+    // Session timeout and the activity log are account reads on the same
+    // boundary — Local Mode must not reach for either.
+    expect(mockFetchSessionTimeout).not.toHaveBeenCalled();
+    expect(mockFetchAuditLog).not.toHaveBeenCalled();
 
     fireEvent.press(screen.getByLabelText('Switch to AGI Cloud'));
     expect(mockSetAppMode).toHaveBeenCalledWith('cloud');
+  });
+
+  it('shows the account session timeout and recent activity in Cloud Mode', async () => {
+    mockFetchSessionTimeout.mockResolvedValue(30);
+    mockFetchAuditLog.mockResolvedValue([
+      { id: 'a1', action: 'login_success', ipAddress: null, createdAt: '2026-07-31T18:00:00.000Z' },
+      {
+        id: 'a2',
+        action: 'rate_limit_exceeded',
+        ipAddress: null,
+        createdAt: '2026-07-31T17:59:00.000Z',
+      },
+      {
+        id: 'a3',
+        action: 'rate_limit_exceeded',
+        ipAddress: null,
+        createdAt: '2026-07-31T17:58:00.000Z',
+      },
+    ]);
+
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByText('Session timeout')).toBeTruthy());
+    expect(screen.getByText('30 min')).toBeTruthy();
+    expect(screen.getByText('Change password')).toBeTruthy();
+    // The repeat run is collapsed with its count rather than filling the list.
+    await waitFor(() => expect(screen.getByText('Rate limit exceeded ×2')).toBeTruthy());
+    expect(screen.getByText('Login success')).toBeTruthy();
+  });
+
+  it('restores the previous session timeout when the account rejects the change', async () => {
+    mockSaveSessionTimeout.mockRejectedValue(new Error('nope'));
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByText('1 hr')).toBeTruthy());
+    fireEvent.press(screen.getByText('Session timeout'));
+
+    // 60 → 120 optimistically, then back to 60 once the save fails, so the row
+    // never reports a timeout the account never accepted.
+    await waitFor(() => expect(mockSaveSessionTimeout).toHaveBeenCalledWith(120));
+    await waitFor(() => expect(screen.getByText('1 hr')).toBeTruthy());
   });
 
   it('sign-in gates direct route access before any account request', () => {
