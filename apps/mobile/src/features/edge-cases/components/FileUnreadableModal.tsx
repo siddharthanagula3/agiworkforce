@@ -103,7 +103,7 @@ export function FileUnreadableModal({ visible, onDismiss }: FileUnreadableModalP
             accessibilityRole="button"
             accessibilityLabel={EDGE_COPY.fileUnreadable.cta}
           >
-            <Text style={{ color: colors.white, fontWeight: '700', fontSize: 15 }}>
+            <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: 15 }}>
               {EDGE_COPY.fileUnreadable.cta}
             </Text>
           </Pressable>

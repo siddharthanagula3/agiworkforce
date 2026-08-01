@@ -169,7 +169,7 @@ export function CloudAccountRequired({
           opacity: pressed ? 0.8 : 1,
         })}
       >
-        <Text style={{ color: colors.white, fontSize: 14, fontWeight: '700' }}>Sign in</Text>
+        <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '700' }}>Sign in</Text>
       </Pressable>
     </View>
   );
@@ -224,7 +224,7 @@ export function CloudSyncBlockedBanner({ onSwitchToCloud }: { onSwitchToCloud: (
           opacity: pressed ? 0.8 : 1,
         })}
       >
-        <Text style={{ color: colors.white, fontSize: 13, fontWeight: '600' }}>
+        <Text style={{ color: colors.accentText, fontSize: 13, fontWeight: '600' }}>
           Switch to AGI Cloud
         </Text>
       </Pressable>
