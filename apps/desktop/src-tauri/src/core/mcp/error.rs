@@ -29,6 +29,12 @@ pub enum McpError {
     #[error("Invalid server configuration: {0}")]
     InvalidConfig(String),
 
+    /// The peer speaks a protocol revision this client does not implement.
+    /// Distinct from a transport failure: the connection is fine, the contract
+    /// is not, and retrying will not help.
+    #[error("Unsupported MCP protocol revision: {0}")]
+    UnsupportedProtocolVersion(String),
+
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 
