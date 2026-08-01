@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, ScrollView, TextInput, View } from 'react-native';
+import { FlatList, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { BookImage, FileText, ImageIcon, Search, Sparkles, X } from 'lucide-react-native';
+import { BookImage, FileText, ImageIcon, Sparkles } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
+import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useChatStore } from '@/stores/chatStore';
@@ -270,45 +271,6 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         />
       </ScrollView>
 
-      <View
-        style={{
-          minHeight: 44,
-          marginHorizontal: 16,
-          marginBottom: 12,
-          borderRadius: 22,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 9,
-          paddingHorizontal: 13,
-          backgroundColor: c.surfaceElevated,
-          borderWidth: 1,
-          borderColor: c.border,
-        }}
-      >
-        <Search size={17} color={c.textMuted} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search library"
-          placeholderTextColor={c.textMuted}
-          accessibilityLabel="Search library"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          style={{ flex: 1, minHeight: 42, color: c.textPrimary, fontSize: 14 }}
-        />
-        {query ? (
-          <Pressable
-            onPress={() => setQuery('')}
-            accessibilityRole="button"
-            accessibilityLabel="Clear library search"
-            hitSlop={8}
-          >
-            <X size={17} color={c.textMuted} />
-          </Pressable>
-        ) : null}
-      </View>
-
       <FlatList
         key={`library-${gridColumns}`}
         data={items}
@@ -320,12 +282,29 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         contentContainerStyle={{
           paddingHorizontal: HORIZONTAL_PADDING,
           paddingTop: 4,
-          paddingBottom: 56,
+          // The search pill below is in normal flow, so the grid already ends
+          // above it; this is breathing room under the last row, not clearance.
+          paddingBottom: 24,
           alignSelf: 'center',
           width: Math.min(contentWidth, MAX_GRID_CONTENT_WIDTH),
         }}
         ListEmptyComponent={<LibraryEmptyState filter={filter} query={query} />}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+      />
+
+      {/* Bottom-anchored, not between the chips and the grid. Both references
+          float search as a pill under the thumb (IMG_0690, IMG_0753) and the
+          chats list already shipped that treatment — sitting at the top here
+          cost ~56pt of first-screen grid and made two sibling list screens
+          contradict each other. */}
+      <BottomSearchBar
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search library"
+        accessibilityLabel="Search library"
+        clearAccessibilityLabel="Clear library search"
+        testID="library-search"
       />
 
       <ImageFullScreen

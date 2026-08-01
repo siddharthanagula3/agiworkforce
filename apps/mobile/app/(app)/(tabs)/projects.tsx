@@ -14,7 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { FolderOpen, Plus, X } from 'lucide-react-native';
+import { Filter, FolderOpen, Plus, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { ProjectCard } from '@/src/features/projects';
@@ -22,7 +22,12 @@ import { useProjectStore, type Project } from '@/src/features/projects/store';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme } from '@/src/ui/theme';
+import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
+import {
+  FloatingPrimaryAction,
+  FLOATING_PRIMARY_ACTION_LIST_PADDING,
+} from '@/src/shared/components/FloatingPrimaryAction';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -55,6 +60,46 @@ function toDisplayProject(p: Project | CloudProject): DisplayProject {
   };
 }
 
+/**
+ * List order. Both references pair the bottom search pill with a funnel chip
+ * offering exactly these orders; the list used to render raw store order, which
+ * made the relative timestamp on every card meaningless.
+ *
+ * NOT offered: "Created by you" / "Shared with you" ownership filters. Neither
+ * project record carries an owner — `CloudProject`
+ * (stores/projects/cloudProjectStore.ts:26-51) has no owner, creator or shared
+ * field, and its `source` is the originating *device*, not a person. Shipping
+ * ownership chips today would mean inventing the field they filter on.
+ */
+type ProjectSort = 'recent' | 'name' | 'active';
+
+const SORT_LABELS: Record<ProjectSort, string> = {
+  recent: 'Recently updated',
+  name: 'Name',
+  active: 'Active first',
+};
+
+function sortDisplayProjects(
+  projects: readonly DisplayProject[],
+  sort: ProjectSort,
+  activeProjectId: string | null,
+): DisplayProject[] {
+  const byRecent = (a: DisplayProject, b: DisplayProject) =>
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  const sorted = [...projects];
+  if (sort === 'name') {
+    sorted.sort((a, b) => a.name.localeCompare(b.name));
+    return sorted;
+  }
+  sorted.sort(byRecent);
+  if (sort === 'active') {
+    // Stable on top of the recency order, so the remaining rows keep the
+    // default ordering rather than an arbitrary one.
+    sorted.sort((a, b) => Number(b.id === activeProjectId) - Number(a.id === activeProjectId));
+  }
+  return sorted;
+}
+
 export default function ProjectsTabScreen() {
   const { colors, statusBarStyle } = useTheme();
   const navigation = useNavigation();
@@ -84,6 +129,8 @@ export default function ProjectsTabScreen() {
   const deleteProject = useProjectStore((s) => s.deleteProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
 
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<ProjectSort>('recent');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingProject, setEditingProject] = useState<DisplayProject | null>(null);
   const [formName, setFormName] = useState('');
@@ -252,6 +299,33 @@ export default function ProjectsTabScreen() {
     setActiveProject(null);
   }, [isScopeCurrent, setActiveProject]);
 
+  // Search + sort are applied together: the funnel chip orders whatever the
+  // search left, so a filtered list is never in raw store order either.
+  const visibleProjects = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    const matches = normalized
+      ? projects.filter(
+          (project) =>
+            project.name.toLocaleLowerCase().includes(normalized) ||
+            project.description.toLocaleLowerCase().includes(normalized),
+        )
+      : projects;
+    return sortDisplayProjects(matches, sort, activeProjectId);
+  }, [activeProjectId, projects, query, sort]);
+
+  const openSort = useCallback(() => {
+    const option = (value: ProjectSort) => ({
+      text: `${sort === value ? '✓ ' : ''}${SORT_LABELS[value]}`,
+      onPress: () => setSort(value),
+    });
+    Alert.alert('Sort projects', 'Choose the order projects appear in this list.', [
+      option('recent'),
+      option('name'),
+      option('active'),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [sort]);
+
   const handleOpenDrawer = useCallback(() => {
     openNearestDrawer(navigation);
   }, [navigation]);
@@ -271,18 +345,29 @@ export default function ProjectsTabScreen() {
           )}
         </View>
 
+        {/* Sort chip. Creation moved to the floating pill below: this header
+            square was 32×32, under the 44pt iOS minimum, and was the only way
+            to make a project. */}
         <Pressable
-          onPress={openCreateModal}
-          className="w-8 h-8 rounded-lg items-center justify-center"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? colors.surfaceHover : colors.accentSurface,
-            borderWidth: 1,
-            borderColor: colors.accentBorder,
-          })}
-          accessibilityLabel="Create new project"
+          onPress={openSort}
+          accessibilityLabel={`Sort projects. ${SORT_LABELS[sort]}`}
           accessibilityRole="button"
+          hitSlop={8}
+          style={({ pressed }) => ({
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor:
+              sort === 'recent'
+                ? pressed
+                  ? colors.surfaceHover
+                  : colors.transparent
+                : colors.accentSurface,
+          })}
         >
-          <Plus size={18} color={colors.teal} />
+          <Filter size={19} color={sort === 'recent' ? colors.textSecondary : colors.teal} />
         </Pressable>
       </View>
 
@@ -333,8 +418,9 @@ export default function ProjectsTabScreen() {
           </Text>
           <Pressable
             onPress={openCreateModal}
-            className="px-5 py-2.5 rounded-xl active:opacity-80"
-            style={{ backgroundColor: colors.textPrimary }}
+            className="px-5 rounded-xl items-center justify-center active:opacity-80"
+            // 44pt minimum touch target; `py-2.5` alone left it at ~38pt.
+            style={{ backgroundColor: colors.textPrimary, minHeight: 44 }}
             accessibilityRole="button"
             accessibilityLabel="Create project"
           >
@@ -345,8 +431,13 @@ export default function ProjectsTabScreen() {
         </View>
       ) : (
         <FlatList
-          data={projects}
-          contentContainerStyle={{ padding: 12 }}
+          testID="projects-list"
+          data={visibleProjects}
+          contentContainerStyle={{
+            padding: 12,
+            // Clears the floating create pill and the search field it stacks on.
+            paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
+          }}
           ItemSeparatorComponent={() => <View className="h-3" />}
           renderItem={({ item, index }) => (
             <View className="px-1">
@@ -360,8 +451,45 @@ export default function ProjectsTabScreen() {
             </View>
           )}
           keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            <View className="items-center px-8" style={{ paddingTop: 48, gap: 8 }}>
+              <Text
+                className="text-[15px] font-semibold text-center"
+                style={{ color: colors.textPrimary }}
+              >
+                No matches
+              </Text>
+              <Text className="text-[13px] text-center" style={{ color: colors.textMuted }}>
+                No project matches “{query.trim()}”.
+              </Text>
+            </View>
+          }
         />
       )}
+
+      {/* Bottom-anchored search + floating create pill, the same pair the
+          chats list uses (PAR-M30/M31). Both are hidden while there is nothing
+          to search — the empty state above carries its own create action, so
+          the screen never shows two competing create affordances. */}
+      {projects.length > 0 ? (
+        <>
+          <FloatingPrimaryAction
+            label="New project"
+            icon={Plus}
+            onPress={openCreateModal}
+            accessibilityLabel="Create new project"
+          />
+          <BottomSearchBar
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search projects"
+            accessibilityLabel="Search projects"
+            clearAccessibilityLabel="Clear project search"
+            testID="projects-search"
+          />
+        </>
+      ) : null}
 
       {/* Create/Edit Modal */}
       <Modal
