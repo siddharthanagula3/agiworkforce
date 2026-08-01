@@ -104,10 +104,14 @@ capability, no empty destination ships.
 (MS-2); the drawer gains a Connectors entry point (MS-22) and the Plugins
 matrix row scopes mobile out by decision, not omission.
 
-**Also decided the same day:** the mobile composer becomes an always-stacked
-card (reference-matching; makes the model chip permanently visible);
-`claude-sonnet-5` low/medium effort is catalog-correct (economy route,
-`3044350c5`) and the desktop tests follow the catalog.
+**Also decided the same day:** the model picker stays in the "+" sheet and the
+stacked control row — it does NOT need to be persistently visible (founder
+reversed the earlier always-stack call the same evening; the composer keeps
+its compact single-line pill). `claude-sonnet-5` low/medium effort is
+catalog-correct (economy route, `3044350c5`) and the desktop tests follow the
+catalog (resolved same day). Priority shifted the same evening: desktop Cloud
+mode parity with web, verified through the wdio e2e harness, outranks the
+remaining mobile P1/P2 queue.
 
 ## Global Product Rules
 

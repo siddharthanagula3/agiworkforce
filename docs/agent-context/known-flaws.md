@@ -23,7 +23,12 @@ pre-existing on `main` unless noted.
   hazard explained in a code comment. Both v59 migration tests that reproduced
   it pass; desktop lib suite at 4,577 passed with only the two
   effort-catalog-drift tests (below) remaining.
-- **`DESKTOP-EFFORT-TESTS-CATALOG-DRIFT-01` (open, needs product decision):**
+- **Resolved — `DESKTOP-EFFORT-TESTS-CATALOG-DRIFT-01` (founder decision
+  2026-08-01: the catalog is right):** both assertions updated to follow the
+  catalog, the misleading `haiku` binding renamed to `sonnet`, and a new
+  drop-path case added (an effort VALUE the catalog does not declare is still
+  stripped). All three effort tests pass. Original finding kept below for the
+  record:
   `models_config.rs:770` asserts `claude-sonnet-5` does not support `low`
   effort and `provider_adapter_tests.rs:1028` asserts its `output_config` is
   dropped, but `3044350c5` ("fix(models): admit economy reasoning route",

@@ -1021,11 +1021,21 @@ mod tests {
         assert!(opus.get("effort").is_none());
         assert_eq!(opus["output_config"]["effort"], "high");
 
-        let haiku = adapter
+        let sonnet = adapter
             .adapt_request(&request_for("claude-sonnet-5", None))
-            .expect("Haiku request should adapt without unsupported effort");
-        assert!(haiku.get("effort").is_none());
-        assert!(haiku.get("output_config").is_none());
+            .expect("Sonnet effort request should adapt");
+        assert!(sonnet.get("effort").is_none());
+        assert_eq!(sonnet["output_config"]["effort"], "high");
+
+        // An effort value the catalog does not declare must still be dropped.
+        let dropped = adapter
+            .adapt_request(&LLMRequest {
+                effort: Some("minimal".to_string()),
+                ..request_for("claude-opus-5", None)
+            })
+            .expect("Unsupported effort value should adapt without output_config");
+        assert!(dropped.get("effort").is_none());
+        assert!(dropped.get("output_config").is_none());
 
         let structured = adapter
             .adapt_request(&request_for(
