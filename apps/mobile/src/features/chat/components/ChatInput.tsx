@@ -661,25 +661,7 @@ export function ChatInput({
           >
             <X size={20} color={themeColors.textPrimary} />
           </Pressable>
-        ) : (
-          <Pressable
-            onPress={handlePlusPress}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: radii.full,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: themeColors.inputSurface,
-            }}
-            hitSlop={6}
-            accessibilityLabel="Add to chat"
-            accessibilityHint="Opens attachment, mode, and feature options"
-            accessibilityRole="button"
-          >
-            <Plus size={20} color={themeColors.textMuted} />
-          </Pressable>
-        )}
+        ) : null}
 
         {/* Pill -- text input + mic, inside the rounded border. When stacked it
             becomes a card: square-ish corners, text on its own full-width row,
@@ -693,12 +675,37 @@ export function ChatInput({
             borderRadius: stacked ? radii['2xl'] : radii.full,
             borderWidth: 1,
             borderColor: themeColors.composerBorder,
-            paddingLeft: 16,
+            paddingLeft: stacked ? 16 : 6,
             paddingRight: stacked ? 10 : 6,
             paddingVertical: stacked ? 10 : 4,
             minHeight: 44,
           }}
         >
+          {/* [+] sits INSIDE the pill on the left, matching ChatGPT
+              (IMG_0674, references-2/voice-03). It previously sat outside as a
+              separate 40pt circle, which is Claude's arrangement, not
+              ChatGPT's — and the founder chose ChatGPT style. Hidden while the
+              pill is showing recording/transcribing state, and while stacked,
+              where the plus moves to the controls row beneath the text. */}
+          {!stacked && !isRecording && !isTranscribing ? (
+            <Pressable
+              onPress={handlePlusPress}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: radii.full,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              hitSlop={8}
+              accessibilityLabel="Add to chat"
+              accessibilityHint="Opens attachment, mode, and feature options"
+              accessibilityRole="button"
+            >
+              <Plus size={20} color={themeColors.textMuted} />
+            </Pressable>
+          ) : null}
+
           {/* Live waveform + timer while recording (in place of the input) */}
           {isRecording ? (
             <View
