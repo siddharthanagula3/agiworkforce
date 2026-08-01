@@ -393,46 +393,6 @@ export function ChatsListScreen() {
         </Pressable>
       </View>
 
-      <View
-        style={{
-          height: 44,
-          marginHorizontal: 16,
-          marginTop: 6,
-          marginBottom: 8,
-          borderRadius: 22,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surfaceElevated,
-          paddingHorizontal: 14,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        <Search size={17} color={colors.textMuted} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search chats, projects, files, library, and artifacts"
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Search chats, projects, files, library, and artifacts"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          style={{ flex: 1, color: colors.textPrimary, fontSize: 14, paddingVertical: 0 }}
-        />
-        {isSearching ? (
-          <Pressable
-            onPress={() => setQuery('')}
-            accessibilityRole="button"
-            accessibilityLabel="Clear search"
-            hitSlop={8}
-          >
-            <X size={17} color={colors.textMuted} />
-          </Pressable>
-        ) : null}
-      </View>
-
       <SectionList
         testID="chats-list"
         initialNumToRender={20}
@@ -497,10 +457,11 @@ export function ChatsListScreen() {
         style={({ pressed }) => ({
           position: 'absolute',
           right: 18,
-          // This SafeAreaView only claims the top edge, so `bottom` is measured
-          // from the physical screen edge — a fixed 24 put the FAB underneath
-          // the home indicator. Offset by the real inset instead.
-          bottom: insets.bottom + 16,
+          // Sits ABOVE the bottom-anchored search field, matching Claude's
+          // chats list. Clears the home indicator (this SafeAreaView claims
+          // only the top edge) plus the field's own height and margin, or the
+          // pill renders clipped behind it.
+          bottom: insets.bottom + 10 + 44 + 12,
           minHeight: 48,
           borderRadius: 24,
           paddingHorizontal: 18,
@@ -514,6 +475,51 @@ export function ChatsListScreen() {
         <SquarePen size={18} color={colors.accentText} />
         <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '700' }}>New chat</Text>
       </PressableBox>
+
+      {/* Search is bottom-anchored: both references put it within thumb
+          reach at the bottom of the list (claude_reference/117 puts it below
+          the New-chat pill; ChatGPT does the same on Projects, IMG_0691).
+          It sat at the top here, and was ALSO duplicated in the drawer. */}
+      <View
+        style={{
+          height: 44,
+          marginHorizontal: 16,
+          // Clear the home indicator: this SafeAreaView only claims the top
+          // edge, so a bare margin leaves the field flush to the screen edge.
+          marginBottom: insets.bottom + 10,
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surfaceElevated,
+          paddingHorizontal: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <Search size={17} color={colors.textMuted} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search"
+          placeholderTextColor={colors.textMuted}
+          accessibilityLabel="Search chats, projects, files, library, and artifacts"
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          style={{ flex: 1, color: colors.textPrimary, fontSize: 14, paddingVertical: 0 }}
+        />
+        {isSearching ? (
+          <Pressable
+            onPress={() => setQuery('')}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            hitSlop={8}
+          >
+            <X size={17} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
     </SafeAreaView>
   );
 }

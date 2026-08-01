@@ -191,6 +191,9 @@ const config = {
   },
   plugins: [
     'expo-asset',
+    // Embeds the Newsreader faces used by the AGI wordmark so the brand
+    // lockup renders in the real typeface instead of a Georgia fallback.
+    'expo-font',
     // Registers the BGTaskScheduler identifier and the `processing` background
     // mode that expo-background-task needs; without it registerTaskAsync throws
     // at runtime. Replaces expo-background-fetch, which Expo deprecated.
