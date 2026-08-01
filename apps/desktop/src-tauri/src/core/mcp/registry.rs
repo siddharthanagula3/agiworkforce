@@ -41,6 +41,14 @@ static INJECTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 /// 1. Strip non-printable control characters (keep normal Unicode).
 /// 2. Truncate to `MCP_DESC_MAX_LEN` with a notice suffix.
 /// 3. Replace every detected injection marker with `[removed]`.
+pub(crate) fn strip_injection_markers(text: &str) -> String {
+    let mut out = text.to_string();
+    for pat in INJECTION_PATTERNS.iter() {
+        out = pat.replace_all(&out, "[removed]").to_string();
+    }
+    out
+}
+
 fn sanitize_untrusted_text(raw: &str) -> String {
     // Step 1: strip non-printable control chars (keep tabs/newlines for readability).
     let stripped: String = raw
@@ -69,13 +77,9 @@ fn sanitize_untrusted_text(raw: &str) -> String {
         stripped
     };
 
-    // Step 3: strip injection markers.
-    let mut sanitised = truncated;
-    for pat in INJECTION_PATTERNS.iter() {
-        sanitised = pat.replace_all(&sanitised, "[removed]").to_string();
-    }
-
-    sanitised
+    // Step 3: strip injection markers (shared with the session's
+    // `instructions` guard so the two cannot drift apart).
+    strip_injection_markers(&truncated)
 }
 
 /// RT-03 fix: Sanitise a raw MCP tool description before it is inserted into
