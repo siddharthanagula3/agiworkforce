@@ -4362,6 +4362,12 @@ fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool
     stmt.exists([table, column])
 }
 
+fn table_exists(conn: &Connection, table: &str) -> Result<bool> {
+    let mut stmt = conn
+        .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND lower(name) = lower(?1)")?;
+    stmt.exists([table])
+}
+
 /// Migration v48: Add last_accessed column to user_memory for importance decay
 /// This column tracks when a memory was last accessed, enabling time-based decay
 /// of memory importance for memories that aren't frequently accessed.
@@ -6054,7 +6060,11 @@ fn apply_migration_v76(conn: &Connection) -> Result<()> {
              CREATE INDEX idx_metrics_timestamp
                  ON realtime_metrics(timestamp DESC);",
         )?;
-    } else {
+    } else if table_exists(conn, "realtime_metrics")? {
+        // IF NOT EXISTS guards only the index name, never the table. A database
+        // that reached v58 without realtime_metrics (the baseline CREATE TABLE
+        // runs only for fresh installs) must skip this index or the whole
+        // migration chain aborts on "no such table".
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_metrics_automation_name
              ON realtime_metrics(automation_name, timestamp DESC)
