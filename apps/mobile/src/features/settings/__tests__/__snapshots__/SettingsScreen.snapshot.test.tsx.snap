@@ -1639,6 +1639,190 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
+            accessibilityLabel="Reflect. Sign in"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 1,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#f59e0b"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-Sparkles"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flex": 1,
+                  "fontSize": 15,
+                }
+              }
+            >
+              Reflect
+            </Text>
+            <View
+              style={
+                {
+                  "backgroundColor": "#f59e0b14",
+                  "borderColor": "#f59e0b2D",
+                  "borderRadius": 999,
+                  "borderWidth": 1,
+                  "paddingHorizontal": 8,
+                  "paddingVertical": 2,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#f59e0b",
+                    "fontSize": 10,
+                    "fontWeight": "700",
+                  }
+                }
+              >
+                Sign in
+              </Text>
+            </View>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            accessibilityLabel="Archived Chats. Sign in"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 1,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#f59e0b"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-Archive"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flex": 1,
+                  "fontSize": 15,
+                }
+              }
+            >
+              Archived Chats
+            </Text>
+            <View
+              style={
+                {
+                  "backgroundColor": "#f59e0b14",
+                  "borderColor": "#f59e0b2D",
+                  "borderRadius": 999,
+                  "borderWidth": 1,
+                  "paddingHorizontal": 8,
+                  "paddingVertical": 2,
+                }
+              }
+            >
+              <Text
+                style={
+                  {
+                    "color": "#f59e0b",
+                    "fontSize": 10,
+                    "fontWeight": "700",
+                  }
+                }
+              >
+                Sign in
+              </Text>
+            </View>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
             accessibilityLabel="Cloud Data Controls. Sign in"
             accessibilityRole="button"
             accessibilityState={

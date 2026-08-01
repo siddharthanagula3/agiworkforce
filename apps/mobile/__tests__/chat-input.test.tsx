@@ -171,7 +171,7 @@ jest.mock('../src/features/voice/components/VoiceInputButton', () => {
     VoiceInputButton: (props: { resetSignal?: number; onRecordingStart?: () => void }) => {
       lastVoiceResetSignal = props.resetSignal;
       // Capture onRecordingStart so tests can drive the component into its
-      // recording state (which reveals the inline "Use recording" send button
+      // recording state (which reveals the inline "Stop recording" button
       // wired to handleOverlaySend — the RecordingOverlay component was removed).
       capturedRecordingStart = props.onRecordingStart;
       return (
@@ -745,7 +745,7 @@ describe('ChatInput', () => {
       const signalBefore = lastVoiceResetSignal;
 
       await act(async () => {
-        fireEvent.press(getByLabelText('Use recording'));
+        fireEvent.press(getByLabelText('Stop recording'));
       });
 
       await waitFor(() => {
@@ -768,7 +768,7 @@ describe('ChatInput', () => {
       const signalBefore = lastVoiceResetSignal;
 
       await act(async () => {
-        fireEvent.press(getByLabelText('Use recording'));
+        fireEvent.press(getByLabelText('Stop recording'));
       });
 
       await waitFor(() => {

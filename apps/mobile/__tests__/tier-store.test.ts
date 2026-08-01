@@ -65,6 +65,7 @@ jest.mock('../services/api', () => {
 // ---------------------------------------------------------------------------
 
 import { useTierStore } from '../src/features/billing/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { api } from '../services/api';
 import {
   __resetCloudAccountSessionForTests,
@@ -162,6 +163,10 @@ beforeEach(() => {
   jest.clearAllMocks();
   __resetCloudAccountSessionForTests();
   activateCloudAccount('tier-test-user-a');
+  // refreshTier returns early outside Cloud Mode — Local Mode has no
+  // managed-cloud plan to read and egressGuard blocks /api/me before any
+  // network I/O. The store default is 'local', so these tests must opt in.
+  useChatAppModeStore.setState({ appMode: 'cloud' });
   resetStore();
 });
 
