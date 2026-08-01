@@ -54,9 +54,18 @@ const CHIPS: SuggestionChip[] = [
 interface GreetingBannerProps {
   /** Called when the user clicks a suggestion chip. */
   onSendMessage?: (prompt: string) => void;
+  /**
+   * Whether a turn is actually in flight. The mark spins ONLY then.
+   *
+   * It previously span permanently on the idle empty state, where a
+   * perpetual spinner reads as "still loading" — users waited for a screen
+   * that had already finished. Rotation is the app's busy signal, so it has
+   * to mean something.
+   */
+  busy?: boolean;
 }
 
-export function GreetingBanner({ onSendMessage }: GreetingBannerProps) {
+export function GreetingBanner({ onSendMessage, busy = false }: GreetingBannerProps) {
   const { headline } = useGreeting();
 
   return (
@@ -67,7 +76,7 @@ export function GreetingBanner({ onSendMessage }: GreetingBannerProps) {
         className="flex h-10 w-10 items-center justify-center rounded-full"
         role="presentation"
       >
-        <AgiMark size={28} spinning />
+        <AgiMark size={28} spinning={busy} />
       </div>
 
       {/* Time-aware headline */}
