@@ -104,7 +104,6 @@ function makeSections(input: {
           tone: 'device',
           label: 'Voice',
           description: 'Adjust local voice input and speech output.',
-          value: 'Device',
           href: '/(app)/settings/voice',
         },
         {
@@ -113,7 +112,6 @@ function makeSections(input: {
           tone: 'device',
           label: 'Camera and files',
           description: 'Review camera, microphone, photo, and file access.',
-          value: 'Device',
           href: '/(app)/settings/permissions',
         },
       ],

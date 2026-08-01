@@ -166,7 +166,16 @@ export default function PermissionDetailScreen() {
   const currentLevel = entry ? osStatusToLevel(osStatus, kind) : 'denied';
   const selectedLevel = permState?.userIntent ?? currentLevel;
 
+  // Pop the real stack. A hard navigate to the Permissions list dropped anyone
+  // who reached a permission detail from somewhere else (an onboarding prompt,
+  // a deep link, Capabilities) onto a screen they never came from; the list
+  // stays only as the no-history fallback. Same contract as
+  // `SettingsScreenShell` in ../common.tsx.
   const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
     router.navigate('/(app)/settings/permissions' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 

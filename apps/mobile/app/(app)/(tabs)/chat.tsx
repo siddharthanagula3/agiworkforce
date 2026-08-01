@@ -4,7 +4,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { Download, Menu } from 'lucide-react-native';
+import { Download } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -50,6 +50,7 @@ import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -601,19 +602,12 @@ export default function ChatTabScreen() {
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 h-12">
         <View className="flex-row items-center gap-2">
-          <Pressable
-            onPress={handleOpenDrawer}
-            className="w-8 h-8 rounded-full items-center justify-center"
-            style={({ pressed }) => ({ backgroundColor: pressed ? c.surfaceHover : c.transparent })}
-            accessibilityLabel="Open navigation drawer"
-            accessibilityRole="button"
-          >
-            <Menu size={18} color={c.textSecondary} />
-          </Pressable>
+          <DrawerButton onPress={handleOpenDrawer} />
           {/* The header owns ONLY the execution-mode toggle (Local | Cloud).
-              Model selection lives exclusively in the composer's model chip —
-              the old model pill here duplicated it and confusingly read
-              "AGI Cloud" like the toggle's Cloud segment. */}
+              Model selection lives on the composer's control row, in the model
+              chip beside the attach and voice controls (ChatInput) — the old
+              model pill here duplicated it and confusingly read "AGI Cloud"
+              like the toggle's Cloud segment. */}
           <ModeToggle
             mode={activeMode}
             cloudJoined={waitlistJoined}

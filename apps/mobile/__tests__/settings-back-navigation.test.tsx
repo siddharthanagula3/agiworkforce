@@ -137,13 +137,16 @@ describe('settings sub-screen back navigation', () => {
     mockCanGoBack.mockReturnValue(true);
   });
 
-  // Queried by row title rather than by the full accessibility label, which
-  // Capabilities owns and rewords independently of this navigation contract.
+  // The exact labels matter here: both rows used to end in a constant "Device"
+  // status pill, which read as live state on a screen whose whole job is
+  // reporting what the assistant may do. Navigation-only rows carry no pill.
   it('reaches Permissions and Voice from Capabilities, so their parent is not fixed', () => {
-    const { getByText } = render(<CapabilitiesScreen />);
+    const { getByLabelText } = render(<CapabilitiesScreen />);
 
-    fireEvent.press(getByText('Camera and files'));
-    fireEvent.press(getByText('Voice'));
+    fireEvent.press(
+      getByLabelText('Camera and files. Review camera, microphone, photo, and file access'),
+    );
+    fireEvent.press(getByLabelText('Voice. Adjust local voice input and speech output'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/permissions');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/voice');

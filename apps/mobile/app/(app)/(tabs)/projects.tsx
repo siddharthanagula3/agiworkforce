@@ -13,7 +13,8 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { FolderOpen, Menu, Plus, X } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { FolderOpen, Plus, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { ProjectCard } from '@/src/features/projects';
@@ -21,6 +22,7 @@ import { useProjectStore, type Project } from '@/src/features/projects/store';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme } from '@/src/ui/theme';
+import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -32,7 +34,7 @@ import {
 
 /**
  * Projects tab -- manage project contexts that apply instructions to chat.
- * Tap a project to set it active, long-press for edit/delete.
+ * Tap a project to open it; long-press for Set active / Rename / Delete.
  */
 /** Project shape shared across local and cloud for display purposes. */
 type DisplayProject = {
@@ -56,6 +58,7 @@ function toDisplayProject(p: Project | CloudProject): DisplayProject {
 export default function ProjectsTabScreen() {
   const { colors, statusBarStyle } = useTheme();
   const navigation = useNavigation();
+  const router = useRouter();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isCloud = appMode === 'cloud';
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
@@ -171,14 +174,18 @@ export default function ProjectsTabScreen() {
     updateProject,
   ]);
 
+  // A project row is a navigation affordance in both references: tapping it
+  // opens the project's own screen with its chats and sources. This used to
+  // toggle the active-context flag and nothing else, so a tap looked like a
+  // dead control while `/(app)/projects/[id]` — implemented and registered —
+  // was reachable only from the drawer, the chats list and the in-conversation
+  // project chip. "Set as active context" now lives on the long-press sheet.
   const handleProjectPress = useCallback(
     (id: string) => {
-      const actionScope = activeScopeRef.current;
-      if (!isScopeCurrent(actionScope)) return;
-      // Toggle active: tap again to deactivate
-      setActiveProject(activeProjectId === id ? null : id);
+      if (!isScopeCurrent(activeScopeRef.current)) return;
+      router.push({ pathname: '/(app)/projects/[id]', params: { id } });
     },
-    [activeProjectId, isScopeCurrent, setActiveProject],
+    [isScopeCurrent, router],
   );
 
   const handleProjectLongPress = useCallback(
@@ -187,10 +194,25 @@ export default function ProjectsTabScreen() {
       if (!isScopeCurrent(actionScope)) return;
       const project = projects.find((p) => p.id === id);
       if (!project) return;
+      const isActive = activeProjectId === id;
 
       Alert.alert(project.name, 'Choose an action', [
         {
-          text: 'Edit',
+          text: 'Open',
+          onPress: () => {
+            if (!isScopeCurrent(actionScope)) return;
+            router.push({ pathname: '/(app)/projects/[id]', params: { id } });
+          },
+        },
+        {
+          text: isActive ? 'Clear active' : 'Set active',
+          onPress: () => {
+            if (!isScopeCurrent(actionScope)) return;
+            setActiveProject(isActive ? null : id);
+          },
+        },
+        {
+          text: 'Rename',
           onPress: () => openEditModal(project, actionScope),
         },
         {
@@ -214,7 +236,15 @@ export default function ProjectsTabScreen() {
         { text: 'Cancel', style: 'cancel' },
       ]);
     },
-    [deleteProject, isScopeCurrent, openEditModal, projects],
+    [
+      activeProjectId,
+      deleteProject,
+      isScopeCurrent,
+      openEditModal,
+      projects,
+      router,
+      setActiveProject,
+    ],
   );
 
   const handleClearActiveProject = useCallback(() => {
@@ -231,22 +261,7 @@ export default function ProjectsTabScreen() {
       <StatusBar style={statusBarStyle} />
       {/* Header */}
       <View className="flex-row items-center px-3 h-12 gap-2">
-        <Pressable
-          onPress={handleOpenDrawer}
-          style={({ pressed }) => ({
-            width: 36,
-            height: 36,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-          })}
-          accessibilityLabel="Open navigation drawer"
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <Menu size={20} color={colors.textSecondary} />
-        </Pressable>
+        <DrawerButton onPress={handleOpenDrawer} />
         <View className="flex-row items-center gap-2 flex-1">
           <Text variant="subheading" style={{ color: colors.textPrimary }}>
             Projects

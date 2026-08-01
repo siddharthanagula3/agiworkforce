@@ -3,6 +3,7 @@ import { View, Pressable, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import {
+  Bell,
   BookImage,
   BookOpen,
   Boxes,
@@ -11,6 +12,7 @@ import {
   HelpCircle,
   MessageSquare,
   Pin,
+  Search,
   Settings,
   Sparkles,
   SquarePen,
@@ -42,6 +44,7 @@ type RoutePath =
   | '/(app)/skills'
   | '/(app)/schedules'
   | '/(app)/agents'
+  | '/(app)/notifications'
   | '/(app)/(tabs)/settings'
   | '/(app)/about'
   | '/(app)/profile'
@@ -49,7 +52,15 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'chats' | 'projects' | 'artifacts' | 'library' | 'skills' | 'tasks' | 'schedules';
+  key:
+    | 'chats'
+    | 'projects'
+    | 'artifacts'
+    | 'library'
+    | 'skills'
+    | 'tasks'
+    | 'schedules'
+    | 'notifications';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -101,6 +112,16 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     icon: CalendarClock,
     route: '/(app)/schedules',
     cloud: true,
+  },
+  // The notification centre had no inbound navigation at all: Tasks and
+  // Schedules wrote into it and nothing ever led the user back out. This row
+  // is the drawer half of that entry point; the header badge
+  // (shared/components/DrawerButton) is the always-visible half.
+  {
+    key: 'notifications',
+    label: 'Notifications',
+    icon: Bell,
+    route: '/(app)/notifications',
   },
 ];
 
@@ -296,6 +317,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     router.push({ pathname: '/(app)/(tabs)/chat' as const });
   }, [closeDrawer, router]);
 
+  // Chats owns search for chats, projects, files, library and artifacts, so
+  // this hands off to it with its field already focused rather than keeping a
+  // second search implementation in the drawer.
+  const handleOpenSearch = useCallback(() => {
+    navigate('/(app)/chats', { focusSearch: '1' });
+  }, [navigate]);
+
   const displayedConversations = useMemo(() => {
     // Each mode's history comes from the store that owns it. Cloud rows live in
     // useChatCloudMessageStore (where loadConversations writes the server list);
@@ -335,6 +363,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
         if (item.key === 'tasks' && !FEATURES.cloudTasks) return false;
         if (item.key === 'skills' && !FEATURES.skills) return false;
+        // The notification centre renders nothing without cloudChat (it early
+        // returns null), so the row would open a blank screen. Not appMode:
+        // notifications are readable in both modes.
+        if (item.key === 'notifications' && !FEATURES.cloudChat) return false;
         if (appMode === 'cloud') return true;
         return !item.cloud;
       }),
@@ -351,6 +383,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'skills') return p.includes('/skills');
       if (key === 'schedules') return p.includes('/schedules');
       if (key === 'tasks') return p.includes('/agents');
+      // `/settings/notifications` is the notification PREFERENCES screen, a
+      // different destination that also matches a bare `/notifications` test.
+      if (key === 'notifications') return p.includes('/notifications') && !p.includes('/settings');
       return false;
     },
     [pathname],
@@ -383,6 +418,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           >
             AGI
           </Text>
+          {/* Icon-only, fixed at 34pt. The founder's complaint was that the old
+              drawer search field's placeholder text widened it; deleting the
+              entry point entirely over-corrected and cost an extra navigation
+              to reach search at all. A circular glyph cannot widen. */}
+          <HeaderIconButton label="Search" icon={Search} onPress={handleOpenSearch} />
           {/* New-chat sits in the header beside the profile symbol (its original,
               thumb-and-eye-level home) — not dropped to a bottom pill. */}
           <HeaderIconButton label="New chat" icon={SquarePen} onPress={handleNewChat} />
@@ -393,11 +433,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           />
         </View>
 
-        {/* No search field here. It navigated to /chats rather than searching,
-            so it read as a search box but behaved as a nav button — and Chats
-            now carries a real bottom-anchored search of its own. Claude's
-            drawer (claude_reference/118) has no search either; one entry
-            point, in the place both references put it. */}
         <ScrollView
           style={{ flex: 1, marginTop: 14 }}
           contentContainerStyle={{ paddingBottom: 96 }}
