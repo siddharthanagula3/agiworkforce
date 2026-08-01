@@ -13,8 +13,14 @@ import { useThemeColors } from '@/src/ui/theme';
 const SPOKE_COUNT = 12;
 const INNER_R = 4.6;
 const OUTER_R = 9;
-/** Brand amber — the accent spoke, so rotation reads as motion. */
-const BRAND_AMBER = '#d9822b';
+/**
+ * Brand amber — the accent spoke, so rotation reads as motion.
+ *
+ * Sampled from the brand asset (AGI-Logo-Color-*-Transparent.png) and matching
+ * `--agi-amber` in apps/web/app/globals.css, so the mark is the same colour on
+ * every surface. An earlier hand-picked value here was noticeably darker.
+ */
+const BRAND_AMBER = '#f0a84a';
 
 const STROKE_W = 1.5;
 const SPOKES = Array.from({ length: SPOKE_COUNT }, (_, i) => {
