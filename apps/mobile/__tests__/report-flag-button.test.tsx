@@ -34,9 +34,23 @@ jest.mock('lucide-react-native', () => {
   return { Flag: (props: Record<string, unknown>) => <RN.View {...props} /> };
 });
 
-const mockSaveContentReport = jest.fn().mockResolvedValue({ id: 'rpt_1' });
+const mockReport = {
+  id: 'rpt_1',
+  messageId: 'msg-1',
+  conversationId: 'conv-1',
+  contentExcerpt: 'Some assistant response text',
+  category: 'inaccurate',
+  userNote: '',
+  createdAt: '2026-08-01T00:00:00.000Z',
+  emailHandoffOpened: false,
+};
+const mockSaveContentReport = jest
+  .fn()
+  .mockResolvedValue({ report: mockReport, delivery: { kind: 'stored-on-device' } });
+const mockOpenSupportEmail = jest.fn().mockResolvedValue(true);
 jest.mock('@/services/contentReport', () => ({
   saveContentReport: (...args: unknown[]) => mockSaveContentReport(...args),
+  openSupportEmail: (...args: unknown[]) => mockOpenSupportEmail(...args),
 }));
 
 import { ReportFlagButton } from '@/src/features/chat/components/ReportFlagButton';
@@ -44,6 +58,12 @@ import { ReportFlagButton } from '@/src/features/chat/components/ReportFlagButto
 describe('ReportFlagButton', () => {
   beforeEach(() => {
     mockSaveContentReport.mockClear();
+    mockOpenSupportEmail.mockClear();
+    mockSaveContentReport.mockResolvedValue({
+      report: mockReport,
+      delivery: { kind: 'stored-on-device' },
+    });
+    mockOpenSupportEmail.mockResolvedValue(true);
   });
 
   const renderButton = () =>
@@ -71,21 +91,29 @@ describe('ReportFlagButton', () => {
     ]) {
       expect(getByLabelText(label)).toBeTruthy();
     }
-    expect(getByText('Select the reason that best describes the issue.')).toBeTruthy();
+    expect(getByText(/Select the reason that best describes the issue/)).toBeTruthy();
   });
 
   it('exposes the email opt-in checkbox with an accessibility label', () => {
     const { getByLabelText } = renderButton();
     fireEvent.press(getByLabelText('Report this response'));
 
-    expect(getByLabelText('Send report to support team via email')).toBeTruthy();
+    expect(getByLabelText('Email this report to support')).toBeTruthy();
   });
 
-  it('disables Submit until a category is selected, then submits the chosen category', async () => {
+  it('says up front that the report stays on the device', () => {
+    const { getByLabelText, getByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+
+    expect(getByText(/saved on this device/i)).toBeTruthy();
+    expect(getByText(/nothing is sent unless you email it/i)).toBeTruthy();
+  });
+
+  it('disables Save until a category is selected, then saves the chosen category', async () => {
     const { getByLabelText } = renderButton();
     fireEvent.press(getByLabelText('Report this response'));
 
-    const submitButton = getByLabelText('Submit Report');
+    const submitButton = getByLabelText('Save report');
     expect(submitButton.props.accessibilityState?.disabled).toBe(true);
 
     fireEvent.press(getByLabelText('Inaccurate or misleading'));
@@ -104,12 +132,43 @@ describe('ReportFlagButton', () => {
     );
   });
 
-  it('shows a thank-you confirmation after a successful submission', async () => {
-    const { getByLabelText, getByText } = renderButton();
+  it('confirms what actually happened — stored locally, not transmitted', async () => {
+    const { getByLabelText, getByText, queryByText } = renderButton();
     fireEvent.press(getByLabelText('Report this response'));
     fireEvent.press(getByLabelText('Harmful or dangerous'));
-    fireEvent.press(getByLabelText('Submit Report'));
+    fireEvent.press(getByLabelText('Save report'));
 
-    await waitFor(() => expect(getByText('Thank you for your report')).toBeTruthy());
+    await waitFor(() => expect(getByText('Report saved on this device')).toBeTruthy());
+    expect(getByText(/nothing was sent/i)).toBeTruthy();
+    // The old copy asserted an outcome the service never produced.
+    expect(queryByText('Thank you for your report')).toBeNull();
+    expect(queryByText(/we (will )?(review|received)/i)).toBeNull();
+  });
+
+  it('offers the email hand-off from the saved state and reports its result', async () => {
+    const { getByLabelText, getByTestId, getByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() => expect(getByText('Report saved on this device')).toBeTruthy());
+    fireEvent.press(getByTestId('report-email-handoff-btn'));
+
+    await waitFor(() => expect(mockOpenSupportEmail).toHaveBeenCalledWith(mockReport));
+    await waitFor(() => expect(getByText(/Your mail app opened/i)).toBeTruthy());
+  });
+
+  it('does not claim a hand-off when no mail client could be opened', async () => {
+    mockOpenSupportEmail.mockResolvedValue(false);
+
+    const { getByLabelText, getByTestId, getByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() => expect(getByText('Report saved on this device')).toBeTruthy());
+    fireEvent.press(getByTestId('report-email-handoff-btn'));
+
+    await waitFor(() => expect(getByText(/No mail app is set up/i)).toBeTruthy());
   });
 });

@@ -4,11 +4,20 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
-import { ArrowLeft, Sparkles, ExternalLink, MessageCircle, Mail, Info } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Sparkles,
+  ExternalLink,
+  FileText,
+  MessageCircle,
+  Mail,
+  Info,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useThemeColors } from '@/src/ui/theme';
+import { openExternalUrl } from '@/lib/safeOpenURL';
 // Metro's default config supports importing package.json — read versions from
 // the manifest so the About screen never drifts from the actual installed deps.
 import pkg from '../../package.json';
@@ -109,13 +118,20 @@ export default function AboutScreen() {
     else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
-  const openURL = useCallback(async (url: string) => {
+  // Web pages go through the allowlist helper; only the support address stays
+  // on raw Linking, since a mailto: is not an https: URL it can accept.
+  const openWebPage = useCallback(async (url: string) => {
+    const opened = await openExternalUrl(url);
+    if (!opened) Alert.alert('Error', 'Could not open the link. Please try again.');
+  }, []);
+
+  const openMail = useCallback(async (url: string) => {
     try {
       const supported = await Linking.canOpenURL(url);
       if (supported) {
         await Linking.openURL(url);
       } else {
-        Alert.alert('Error', `Cannot open URL: ${url}`);
+        Alert.alert('Error', 'No mail app is set up on this device.');
       }
     } catch {
       Alert.alert('Error', 'Could not open the link. Please try again.');
@@ -221,25 +237,29 @@ export default function AboutScreen() {
           <LinkRow
             icon={ExternalLink}
             label="Website"
-            onPress={() => openURL('https://agiworkforce.com')}
+            onPress={() => void openWebPage('https://agiworkforce.com')}
           />
           <Separator />
           <LinkRow
             icon={ExternalLink}
             label="Privacy Policy"
-            onPress={() => openURL('https://agiworkforce.com/privacy')}
+            onPress={() => void openWebPage('https://agiworkforce.com/privacy')}
           />
           <Separator />
           <LinkRow
             icon={ExternalLink}
             label="Terms of Service"
-            onPress={() => openURL('https://agiworkforce.com/terms')}
+            onPress={() => void openWebPage('https://agiworkforce.com/terms')}
           />
           <Separator />
+          {/* In-app, not a web page: there is no /licenses route on the site,
+              and store review expects the attribution inside the app. */}
           <LinkRow
-            icon={ExternalLink}
+            icon={FileText}
             label="Open Source Licenses"
-            onPress={() => openURL('https://agiworkforce.com/licenses')}
+            onPress={() =>
+              router.push('/(app)/legal/licenses' as Parameters<typeof router.push>[0])
+            }
           />
         </Card>
 
@@ -281,7 +301,7 @@ export default function AboutScreen() {
           <LinkRow
             icon={Mail}
             label="Contact Support"
-            onPress={() => openURL('mailto:support@agiworkforce.com')}
+            onPress={() => void openMail('mailto:support@agiworkforce.com')}
           />
         </Card>
 

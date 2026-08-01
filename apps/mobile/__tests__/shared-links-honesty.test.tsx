@@ -25,37 +25,24 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-jest.mock('@/src/ui/theme', () => ({
-  useTheme: () => ({
-    statusBarStyle: 'dark',
-    colors: {
-      surfaceBase: '#fff',
-      surfaceHover: '#eee',
-      transparent: 'transparent',
-      textPrimary: '#111',
-      textSecondary: '#555',
-      textMuted: '#888',
-      warningBorder: '#f90',
-      warningSurface: '#fff8e8',
-      agentWarning: '#a60',
-      agentError: '#c00',
-      accentSurface: '#eef',
-      teal: '#077',
-      white: '#fff',
-    },
-  }),
-  useThemeColors: () => ({
-    surfaceElevated: '#fff',
-    border: '#ddd',
-  }),
-}));
+jest.mock('@/src/ui/theme', () => {
+  const tokens = jest.requireActual('@/src/ui/theme/tokens');
+  return {
+    ...tokens,
+    useTheme: () => ({ statusBarStyle: 'dark', colors: tokens.lightColors }),
+    useThemeColors: () => tokens.lightColors,
+  };
+});
 
 import SharedLinksScreen from '../app/(app)/settings/shared-links';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 
 describe('Shared Links capability honesty', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGet.mockResolvedValue({ shares: [] });
+    // Shared links are Managed Cloud data; Local Mode is covered separately.
+    useChatAppModeStore.setState({ appMode: 'cloud' });
   });
 
   it('does not advertise a waitlist or invitation path', async () => {
@@ -137,5 +124,53 @@ describe('Shared Links capability honesty', () => {
     // which is a different and wrong statement.
     expect(await screen.findByText(/Could not load shared links/i)).toBeTruthy();
     expect(screen.queryByText('No shared links yet')).toBeNull();
+  });
+
+  it('never renders the failure message it was handed', async () => {
+    // The egress guard's refusal and any HTTP/transport text are developer
+    // strings; the screen must render its own sentence instead.
+    mockGet.mockRejectedValue(new Error('Request failed with status 503 at https://api.example'));
+
+    render(<SharedLinksScreen />);
+
+    expect(await screen.findByText(/Could not load shared links/i)).toBeTruthy();
+    expect(screen.queryByText(/status 503/)).toBeNull();
+    expect(screen.queryByText(/https:\/\//)).toBeNull();
+  });
+});
+
+describe('Shared Links in Local Mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useChatAppModeStore.setState({ appMode: 'local' });
+  });
+
+  it('renders the Local Mode banner and never attempts the request', async () => {
+    render(<SharedLinksScreen />);
+
+    expect(await screen.findByText('Chat is set to Local Mode')).toBeTruthy();
+    expect(screen.getByLabelText('Switch to AGI Cloud')).toBeTruthy();
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(screen.queryByText('No shared links yet')).toBeNull();
+  });
+
+  it('maps a refused request to the banner instead of the guard message', async () => {
+    // Entering the screen in Cloud mode and having the guard refuse mid-flight
+    // is the same user-facing situation as starting in Local mode.
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const blocked = Object.assign(
+      new Error(
+        'egressGuard refused: outbound request to our managed-cloud host "api.agiworkforce.com" ' +
+          'is blocked in Local mode.',
+      ),
+      { code: 'EGRESS_BLOCKED_LOCAL_MODE' },
+    );
+    mockGet.mockRejectedValue(blocked);
+
+    render(<SharedLinksScreen />);
+
+    expect(await screen.findByText('Chat is set to Local Mode')).toBeTruthy();
+    expect(screen.queryByText(/egressGuard refused/)).toBeNull();
+    expect(screen.queryByText(/Could not load shared links/i)).toBeNull();
   });
 });
