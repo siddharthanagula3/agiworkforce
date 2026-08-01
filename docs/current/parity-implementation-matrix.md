@@ -74,6 +74,41 @@ Critical evidence:
 - Chrome restricted-page UX now keeps Managed Cloud chat usable, shows an accessible restriction notice, and disables only page context/browser automation instead of silently removing the visible state.
 - `packages/ai/model-registry/catalog/harnesses.json` remains the authority for `wired`, `partial`, and `unwired` runtime capability states.
 
+## 2026-08-01 Founder Scope Decisions (Mobile Missing Surfaces)
+
+Decided by the founder on 2026-08-01 against the 22 missing-surface findings of
+the mobile parity audit (backlog: `~/Desktop/mobile-parity-backlog-2026-08-01.md`
+§Missing Surfaces; P0/P1 remediation tracked in CHANGELOG and PLAN.md). These
+decisions add tracked scope; none of it is built until its row says so.
+
+**Build (11):** Apple Health vertical (MS-1, needs HealthKit plugin +
+entitlements — external gate), Parental account linking (MS-19, needs a new
+account-linking server contract), Trusted contact flow (MS-20, real enrolment
+replaces the dead announcement card), StoreKit purchase + restore (MS-5,
+external gate: App Store Connect products; billing flag stays honest until the
+flow is real), Location capability (MS-6, expo-location + coarse-location
+preference, strictly excluded from Local Mode), Background/lock-screen voice
+(MS-13, UIBackgroundModes audio + surviving session), Safety model fallback
+(MS-16, retry path first, then the toggle), Code sessions (MS-3, blocked on a
+real host-relay contract — build the contract, not a placeholder screen),
+Remote-control device grants (MS-18, requires promoting session keys to
+revocable device grants), Per-site browser permissions (MS-17, scoped to the
+real in-app browser path), Live video/screen share in voice (MS-4, needs a
+streaming media contract; screen capture never available in Local Mode without
+explicit egress consent).
+
+**Not built:** Finances hub (MS-21) — recorded as an unbuilt reference
+capability, no empty destination ships.
+
+**Resolved concept:** Plugins on mobile is permanently the Connectors surface
+(MS-2); the drawer gains a Connectors entry point (MS-22) and the Plugins
+matrix row scopes mobile out by decision, not omission.
+
+**Also decided the same day:** the mobile composer becomes an always-stacked
+card (reference-matching; makes the model chip permanently visible);
+`claude-sonnet-5` low/medium effort is catalog-correct (economy route,
+`3044350c5`) and the desktop tests follow the catalog.
+
 ## Global Product Rules
 
 | Rule                                             | Applies to             | Required implementation behavior                                                                                                                                                                                                                                               | AGI anchors                                                                                               |
