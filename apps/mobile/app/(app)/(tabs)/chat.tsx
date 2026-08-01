@@ -643,10 +643,25 @@ export default function ChatTabScreen() {
           showsVerticalScrollIndicator={false}
           accessibilityLabel={activeMode === 'cloud' ? 'New AGI Cloud chat' : 'New local chat'}
         >
-          {/* Brand mark above the greeting — the empty-state visual anchor. Sits low
-              (bottom-anchored) above the composer, ChatGPT-mobile style. */}
-          <View style={{ marginBottom: 14 }}>
-            <AgiMark size={44} />
+          {/* Brand LOCKUP, not the bare mark. The mark is a twelve-spoke
+              starburst, which is indistinguishable from a loading spinner —
+              shown alone and static above a greeting it reads as a stalled
+              loader ("users are thinking its still loading"). The wordmark
+              disambiguates it instantly. The bare mark stays reserved for
+              genuine busy states, where it spins. */}
+          <View style={{ marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <AgiMark size={30} />
+            <Text
+              style={{
+                fontSize: 26,
+                lineHeight: 30,
+                fontWeight: '600',
+                letterSpacing: -0.4,
+                color: c.textPrimary,
+              }}
+            >
+              AGI
+            </Text>
           </View>
           <Text
             style={{
