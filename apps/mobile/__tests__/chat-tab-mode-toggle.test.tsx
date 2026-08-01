@@ -118,13 +118,6 @@ jest.mock('@/src/features/model-picker/components/ModelPickerSheet', () => {
   };
 });
 
-jest.mock('@/src/features/voice/components/VoiceConversationScreen', () => {
-  const { View } = require('react-native');
-  return {
-    VoiceConversationScreen: () => <View testID="voice-conversation-screen" />,
-  };
-});
-
 jest.mock('expo-image-picker', () => ({
   requestCameraPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
   launchCameraAsync: jest.fn(async () => ({ canceled: true, assets: [] })),

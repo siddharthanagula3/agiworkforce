@@ -2,16 +2,20 @@
  * E2E spec — 06: voice-record-and-send
  *
  * Critical path:
- *   Long-press mic in chat composer → VoiceConversationScreen appears
- *   Pulsing orb is visible (voice-conversation-orb)
- *   Tap the orb → listening phase begins
- *   Voice transcription returns text through the app's real voice path
- *   thinking → speaking phases progress
- *   Tap end-call → VoiceConversationScreen dismissed
- *   Chat screen with composer is visible again
+ *   Long-press mic in chat composer → the inline voice bar appears
+ *   The orb is visible (voice-orb) with the thread still behind it
+ *   Mute reports itself on the button, unmistakably
+ *   Tap the white X → voice dismissed, composer visible again
  *
- * Precondition: onboarding is complete and microphone permission is granted on
- * the simulator. This spec does not seed transcripts through launch arguments.
+ * Rewritten for PAR-M01: the full-screen VoiceConversationScreen this spec used
+ * to drive was deleted. Voice is now one presentation — an inline bar over the
+ * live thread — and it is hands-free, so capture starts with the bar rather
+ * than on an orb tap. Phase labels are no longer rendered on screen; the bar
+ * signals state through the orb and the mic button.
+ *
+ * Precondition: onboarding is complete (including the voice recording
+ * disclosure) and microphone permission is granted on the simulator. This spec
+ * does not seed transcripts through launch arguments.
  *
  * NOTE: Detox must be installed before running.
  *   pnpm add -D detox@20
@@ -47,45 +51,38 @@ describe('Voice record and send — on-device STT', () => {
       .withTimeout(4000);
   });
 
-  it('long-pressing the mic button opens VoiceConversationScreen', async () => {
+  it('long-pressing the mic button opens inline voice', async () => {
     await element(by.id('chat.composer.mic')).longPress(700);
-    await waitFor(element(by.id('voice-conversation-screen')))
+    await waitFor(element(by.id('voice-inline-bar')))
       .toBeVisible()
       .withTimeout(8000);
   });
 
-  it('the pulsing orb is visible', async () => {
-    await waitFor(element(by.id('voice-conversation-orb')))
+  it('the orb is visible', async () => {
+    await waitFor(element(by.id('voice-orb')))
       .toBeVisible()
       .withTimeout(4000);
   });
 
-  it('tapping the orb starts listening phase', async () => {
-    await element(by.id('voice-conversation-orb')).tap();
-    // The screen shows "Listening..." accessible label on the orb button
-    await waitFor(element(by.label('Listening...')))
+  it('the mic reports itself as live', async () => {
+    // The label names the action the current state affords, so "Mute" showing
+    // means the microphone is open.
+    await waitFor(element(by.label('Mute microphone')))
       .toBeVisible()
       .withTimeout(6000);
   });
 
-  it('tapping orb again stops recording and triggers thinking', async () => {
-    // Wait 1 s to simulate some recording duration.
-    await new Promise<void>((r) => setTimeout(r, 1000));
-    await element(by.id('voice-conversation-orb')).tap();
-    await waitFor(element(by.label('Thinking...')))
+  it('muting is visible on the button, not just in the handler', async () => {
+    await element(by.label('Mute microphone')).tap();
+    await waitFor(element(by.label('Unmute microphone')))
       .toBeVisible()
-      .withTimeout(6000);
+      .withTimeout(4000);
+    await device.takeScreenshot('06-voice-muted');
   });
 
-  it('speaking phase follows (mocked TTS returns immediately)', async () => {
-    await waitFor(element(by.label('Speaking...')))
-      .toBeVisible()
-      .withTimeout(10000);
-  });
-
-  it('tapping end-call dismisses the voice conversation screen', async () => {
-    await element(by.id('voice-conversation-end-call')).tap();
-    await waitFor(element(by.id('voice-conversation-screen')))
+  it('exiting dismisses inline voice', async () => {
+    await element(by.label('Exit voice mode')).tap();
+    await waitFor(element(by.id('voice-inline-bar')))
       .not.toBeVisible()
       .withTimeout(6000);
   });
