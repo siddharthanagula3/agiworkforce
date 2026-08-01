@@ -2,9 +2,63 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-26
+Last updated: 2026-08-01
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — mobile parity P0 wave: all 20 demo blockers closed] — 2026-08-01
+
+### Verified
+
+- **Mobile-scoped evidence for the eight parity commits below** (this is not a
+  full cross-surface battery; that battery's own record is the same-day entry
+  in `docs/agent-context/remediation-handoff-2026-08-01.md` §1): mobile Jest
+  **278 suites / 2,429 tests / 31 snapshots, 0 failures** (up from 264/2,316
+  before the wave), `tsc --noEmit` clean, `pnpm check:llm-operability` exit 0
+  at 34/34 guardrails, ESLint clean including the new literal-color rule.
+  Source: the tiered backlog synthesized from 87 ChatGPT/Claude iOS reference
+  captures (8 auditors + adversarial synthesis; two false auditor blockers
+  disproven and recorded). Manual simulator passes for the visual items are
+  still owed and tracked in the backlog.
+
+### Fixed
+
+- **Voice is one surface now.** Three parallel voice implementations with
+  divergent entry points (first tap → inline bar, second tap → full-screen
+  purple takeover) collapsed onto `VoiceInlineBar` with one shared,
+  EMA-smoothed `VoiceOrb`; `VoiceConversationScreen` is deleted. The
+  founder-reported orb shake is fixed on the screen chat actually opens — the
+  earlier fix had landed in a file no chat entry point reaches. Mute now shows
+  an unmistakable red `MicOff` state; the composer pill no longer advertises a
+  dead tap target; leaving voice via the keyboard pill lands in a focused
+  composer.
+- **The composer handles long text.** A pasted wall of text can expand into a
+  full-screen editor sharing the same draft state and send handler (the
+  founder's paste-width complaint); the model answering the chat is finally
+  visible as a control-row chip with an honest effort suffix, wired to the
+  picker through a prop that had been dead code.
+- **Navigation stops lying.** Settings back buttons pop the real stack instead
+  of teleporting; the settings X no longer destroys history and stays pinned;
+  project rows open the project; the drawer regained an icon-only search
+  button (the width complaint had been over-corrected by deleting search
+  entirely); library filter chips scroll; the orphaned notification center is
+  reachable behind an unread badge shared by all four headers.
+- **Trust surfaces tell the truth.** Capabilities badges derive from the real
+  stores instead of hardcoded strings; the content report no longer claims
+  submission while writing only to device storage (truthful copy + explicit
+  email hand-off; the missing intake endpoint is filed as
+  `MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01`); Shared Links renders the
+  Local-mode banner instead of a raw egressGuard developer error; About's dead
+  licenses URL became a real in-app OSS attribution screen generated from the
+  dependency graph (628 packages, license bodies verified intact); the
+  permanently-inert Cloud voice option is gone.
+- **Dispatch pairing is bounded and readable.** Literal black/white surfaces
+  now theme correctly in light mode with an ESLint rule preventing
+  regression; pairing gets a 25s watchdog, a Cancel, and a recovery checklist
+  instead of an infinite spinner or raw transport text.
+- **Artifacts render.** Document artifacts display as formatted markdown in
+  both viewers instead of raw `#`/fence source; code artifacts keep monospace
+  with horizontal scroll.
 
 ## [Unreleased — audit remediation verified; scheduling honesty; documentation sweep] — 2026-07-26
 
