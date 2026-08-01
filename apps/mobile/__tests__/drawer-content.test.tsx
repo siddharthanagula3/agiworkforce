@@ -298,7 +298,9 @@ describe('DrawerContent', () => {
   it('opens the full global-search and chat-history surface', () => {
     const { getByLabelText } = renderDrawer();
 
-    fireEvent.press(getByLabelText('Search chats, projects, files, library, and artifacts'));
+    // The drawer's separate search row was folded into the Chats destination,
+    // which owns search for chats, projects, files, library and artifacts.
+    fireEvent.press(getByLabelText('Chats'));
 
     expect(mockCloseDrawer).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/chats');

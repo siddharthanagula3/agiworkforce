@@ -38,14 +38,13 @@ jest.mock('@clerk/expo/native', () => {
   };
 });
 
-jest.mock('@/src/ui/theme', () => ({
-  useThemeColors: () => ({
-    surfaceBase: '#000000',
-    surfaceElevated: '#212121',
-    textPrimary: '#f4f4f4',
-    border: 'rgba(255, 255, 255, 0.10)',
-  }),
-}));
+// Hand-listing four tokens meant any component on this screen that reached for
+// a fifth got `undefined` and crashed (AgiMark reads `teal` to decide whether
+// its accent spoke would be invisible). Use the real dark palette instead.
+jest.mock('@/src/ui/theme', () => {
+  const tokens = jest.requireActual('../src/ui/theme/tokens');
+  return { useThemeColors: () => tokens.colors };
+});
 
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');

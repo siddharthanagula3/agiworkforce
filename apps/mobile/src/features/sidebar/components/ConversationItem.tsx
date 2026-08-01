@@ -2,9 +2,6 @@ import { useCallback, useState } from 'react';
 import { View, Pressable, Alert, Platform, Modal, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Pin, Trash2 } from 'lucide-react-native';
-import { archiveConversation } from '@/src/features/archived-chats';
-import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
-import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -92,52 +89,31 @@ export function ConversationItem({ conversation, isActive, snippet }: Conversati
     pinConversation(conversation.id);
   }, [conversation.id, pinConversation, hapticsEnabled]);
 
-  // `archived` is a column on web_conversations, so archiving only exists for
-  // Cloud chats. Local Mode conversations never leave the device and have no
-  // archived set to move into — offering the action there would be the same
-  // dead menu entry this row used to render for everyone.
-  const isCloudConversation = executionModeForConversation(conversation) === 'cloud';
-
-  const handleArchive = useCallback(() => {
-    void (async () => {
-      try {
-        await archiveConversation(conversation.id);
-        // Only hide the row once the server has acknowledged the write; a
-        // swallowed failure would leave the chat visibly gone here and still
-        // present on web and desktop.
-        useChatCloudMessageStore.getState().removeCloudConversation(conversation.id);
-      } catch (error) {
-        Alert.alert(
-          'Could not archive',
-          error instanceof Error ? error.message : 'Check your connection and try again.',
-        );
-      }
-    })();
-  }, [conversation.id]);
-
   const handleLongPress = useCallback(() => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
+    // No "Archive" entry here. Archiving is wired in DrawerContent, which is
+    // the menu the app actually renders — this component is not mounted by any
+    // screen. Adding it here would only have been a second copy to keep in
+    // step, and its import of the archived-chats feature pulled the whole
+    // cloud-contracts graph into this module for no reachable benefit.
     Alert.alert(conversation.title, undefined, [
       { text: conversation.pinned ? 'Unpin' : 'Pin', onPress: handlePin },
       { text: 'Rename', onPress: handleRename },
-      ...(isCloudConversation ? [{ text: 'Archive', onPress: handleArchive }] : []),
       {
         text: 'Delete',
-        style: 'destructive' as const,
+        style: 'destructive',
         onPress: handleDelete,
       },
-      { text: 'Cancel', style: 'cancel' as const },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   }, [
     conversation.title,
     conversation.pinned,
     hapticsEnabled,
-    isCloudConversation,
     handlePin,
     handleRename,
-    handleArchive,
     handleDelete,
   ]);
 

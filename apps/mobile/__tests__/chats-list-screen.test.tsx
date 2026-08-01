@@ -88,20 +88,24 @@ jest.mock('../src/navigation/openNearestDrawer', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  // The screen reads insets to keep the bottom search field and the New chat
+  // button clear of the home indicator.
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  return {
-    Menu: Icon,
-    MessageSquare: Icon,
-    Pin: Icon,
-    Search: Icon,
-    SlidersHorizontal: Icon,
-    SquarePen: Icon,
-    X: Icon,
-  };
+  // A Proxy rather than a fixed list: an icon the screen adds later would
+  // otherwise arrive as `undefined`, and the failure surfaces deep inside
+  // nativewind's JSX interop reading `.displayName` off it — nowhere near the
+  // missing name.
+  return new Proxy(
+    {},
+    {
+      get: (_target, name) => (name === '__esModule' ? true : Icon),
+    },
+  );
 });
 
 jest.mock('../src/ui/theme', () => {
@@ -158,6 +162,9 @@ jest.mock('../src/features/artifacts/store', () => ({
     }),
   mergeMobileArtifactsForGallery: () => mockArtifacts,
   accentColorForKind: () => '#fff',
+  // Chat rows show a relative-time subtitle, reusing the artifact gallery's
+  // formatter rather than carrying a second relative-time implementation.
+  formatAgeLabel: () => '2h ago',
 }));
 
 jest.mock('../src/features/library/collectGeneratedImages', () => ({
