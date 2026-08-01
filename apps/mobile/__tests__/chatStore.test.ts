@@ -91,6 +91,17 @@ jest.mock('../storage/installedModels', () => ({
   markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
 }));
 
+// Memory retrieval is the observable for "did this turn inject memory?" — the
+// real implementations read SQLite / the cloud memory store, which is not the
+// unit under test here.
+jest.mock('../src/features/memory/store', () => ({
+  retrieveMemoryContext: jest.fn(async () => []),
+}));
+
+jest.mock('../src/features/memory/services/pastChatContext', () => ({
+  retrievePastChatContext: jest.fn(async () => null),
+}));
+
 jest.mock('../src/features/memory/services/consolidation', () => ({
   consolidateFactsFromTurn: jest.fn(),
   shouldConsolidateMemoryOnClient: jest.fn(
@@ -147,7 +158,10 @@ import type { StreamCallbacks } from '../services/streaming';
 import { useAuthStore } from '../src/features/auth/store';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { consolidateFactsFromTurn } from '../src/features/memory/services/consolidation';
+import { retrieveMemoryContext } from '../src/features/memory/store';
+import { retrievePastChatContext } from '../src/features/memory/services/pastChatContext';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -172,6 +186,12 @@ const mockMarkInstalledModelUsed = markInstalledModelUsed as jest.MockedFunction
 >;
 const mockConsolidateFactsFromTurn = consolidateFactsFromTurn as jest.MockedFunction<
   typeof consolidateFactsFromTurn
+>;
+const mockRetrieveMemoryContext = retrieveMemoryContext as jest.MockedFunction<
+  typeof retrieveMemoryContext
+>;
+const mockRetrievePastChatContext = retrievePastChatContext as jest.MockedFunction<
+  typeof retrievePastChatContext
 >;
 let capturedLocalGenerateOptions: Parameters<typeof localGenerate>[1] | null = null;
 
@@ -274,6 +294,7 @@ describe('chatStore — streaming state', () => {
     useSettingsStore.setState({ reduceSensitiveContent: false });
     useSettingsStore.setState({ isTemporaryChat: false });
     useLocalSettingsStore.setState({
+      memoryEnabled: true,
       referencePastChats: true,
       generateMemoryFromHistory: true,
     });
@@ -365,7 +386,10 @@ describe('chatStore — streaming state', () => {
       expect(capturedBody?.web_search).toBe(true);
     });
 
-    it('ignores a stale persisted web-search opt-out because search is ambient', async () => {
+    it('omits web_search when the user turned the Capabilities preference off', async () => {
+      // PAR-M33: search stays ambient (no per-turn composer toggle), but the
+      // Capabilities switch is a real privacy control — a user who turned it
+      // off must never have a cloud turn silently search the web.
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
       useChatStore.setState({
@@ -377,7 +401,7 @@ describe('chatStore — streaming state', () => {
           new Promise<void>((resolve) => {
             capturedBody = body;
             setTimeout(() => {
-              callbacks.onDelta({ content: 'ambient search' });
+              callbacks.onDelta({ content: 'no ambient search' });
               callbacks.onDone();
               resolve();
             }, 0);
@@ -388,7 +412,36 @@ describe('chatStore — streaming state', () => {
         await getState().sendMessage(CONV_ID, 'just chat normally', CLOUD_MODEL);
       });
 
-      expect(capturedBody?.web_search).toBe(true);
+      expect(capturedBody?.web_search).toBeUndefined();
+    });
+
+    it('keeps the model capability clamp when the web-search preference is on', async () => {
+      // The preference can only ever REMOVE the flag: an unsupported model must
+      // still not receive a cosmetic web_search:true.
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      const unsupportedSearchModel = 'qwen-3.7-plus';
+      useTierStore.setState({ tier: 'max', genericWebSearchAvailable: false });
+      seedCloudConversation(unsupportedSearchModel);
+      useChatStore.setState({
+        features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
+      });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'search for me', unsupportedSearchModel);
+      });
+
+      expect(capturedBody?.web_search).toBeUndefined();
     });
 
     it('omits web_search when neither the model nor deployment can execute it', async () => {
@@ -835,6 +888,125 @@ describe('chatStore — streaming state', () => {
       expect(assistantMsg?.content).toBe('Final answer.');
       const reasoning = assistantMsg?.reasoning ?? '';
       expect(reasoning.match(/Step one\. Step two\./g)?.length).toBe(1);
+    });
+  });
+
+  describe('memory master switch', () => {
+    const STORED_FACT = 'user prefers rust over python';
+    const PAST_CHAT_EXCERPT = 'Earlier chat: shipped the rust migration';
+
+    function systemContentsOf(body: Parameters<typeof streamChat>[0] | null): string[] {
+      const messages = (body as { messages?: Array<{ role: string; content: unknown }> } | null)
+        ?.messages;
+      return (messages ?? [])
+        .filter((message) => message.role === 'system')
+        .map((message) => String(message.content));
+    }
+
+    function captureCloudTurn(): { read: () => Parameters<typeof streamChat>[0] | null } {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'ok' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+      return { read: () => capturedBody };
+    }
+
+    beforeEach(() => {
+      mockRetrieveMemoryContext.mockResolvedValue([
+        {
+          id: 'memory-1',
+          fact: STORED_FACT,
+          source_conversation_id: null,
+          pinned: true,
+          created_at: 1,
+        },
+      ]);
+      mockRetrievePastChatContext.mockResolvedValue(PAST_CHAT_EXCERPT);
+    });
+
+    // mockResolvedValue survives clearAllMocks, so restore the module-factory
+    // defaults or every later suite would see this memory injected.
+    afterEach(() => {
+      mockRetrieveMemoryContext.mockResolvedValue([]);
+      mockRetrievePastChatContext.mockResolvedValue(null);
+    });
+
+    it('injects saved memory and past-chat excerpts while memory is on', async () => {
+      useCloudSettingsStore.setState({ memoryEnabled: true, referencePastChats: true });
+      seedCloudConversation();
+      const turn = captureCloudTurn();
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'which language should I use', CLOUD_MODEL);
+      });
+
+      expect(mockRetrieveMemoryContext).toHaveBeenCalled();
+      expect(mockRetrievePastChatContext).toHaveBeenCalled();
+      const systemContents = systemContentsOf(turn.read());
+      expect(systemContents.some((content) => content.includes(STORED_FACT))).toBe(true);
+      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(true);
+    });
+
+    it('suppresses memory injection in the send path when the master switch is off', async () => {
+      // PAR-M41: memoryEnabled must win over the mode-scoped sub-preference —
+      // a Cloud settings pull from another device can set referencePastChats
+      // back to true underneath a user who turned memory off on this device.
+      useCloudSettingsStore.setState({ memoryEnabled: false, referencePastChats: true });
+      seedCloudConversation();
+      const turn = captureCloudTurn();
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'which language should I use', CLOUD_MODEL);
+      });
+
+      expect(mockRetrieveMemoryContext).not.toHaveBeenCalled();
+      expect(mockRetrievePastChatContext).not.toHaveBeenCalled();
+      const systemContents = systemContentsOf(turn.read());
+      expect(systemContents.some((content) => content.includes(STORED_FACT))).toBe(false);
+      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(false);
+    });
+
+    it('stops writing new Local memories when the master switch is off', async () => {
+      useLocalSettingsStore.setState({
+        memoryEnabled: false,
+        referencePastChats: true,
+        generateMemoryFromHistory: true,
+      });
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockResolvedValue({
+        text: 'Nice to meet you.',
+        runtime: 'executorch',
+        aborted: false,
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'My name is Grace Hopper.', LOCAL_MODEL);
+      });
+
+      expect(mockRetrieveMemoryContext).not.toHaveBeenCalled();
+      expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
     });
   });
 
