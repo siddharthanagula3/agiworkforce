@@ -57,7 +57,7 @@ export function DispatchTaskComposer() {
             value={prompt}
             onChangeText={setPrompt}
             placeholder="What should Desktop work on?"
-            placeholderTextColor="rgba(255,255,255,0.32)"
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={20_000}
             className="min-h-[72px] text-sm text-white"

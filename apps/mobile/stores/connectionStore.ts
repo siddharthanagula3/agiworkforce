@@ -130,6 +130,54 @@ function isCurrentConnectionAttempt(attemptId: number): boolean {
 }
 
 /**
+ * PAR-M14: bounded connect watchdog.
+ *
+ * Nothing else moves the status off `'connecting'` when the desktop peer never
+ * shows up — a structurally valid code paired against a closed desktop app left
+ * "Connecting to Desktop..." on screen forever. The timer is deliberately NOT
+ * cleared on `registered`: registration only proves the signaling server
+ * accepted us, and `registered` with `peerConnected: false` is exactly the hang
+ * this guards. It clears when the session actually settles (peer_ready) or is
+ * torn down (error/close/terminated/expiry/disconnect).
+ */
+const CONNECT_WATCHDOG_MS = 25_000;
+let connectWatchdogTimer: ReturnType<typeof setTimeout> | undefined;
+
+function clearConnectWatchdog(): void {
+  if (connectWatchdogTimer !== undefined) {
+    clearTimeout(connectWatchdogTimer);
+    connectWatchdogTimer = undefined;
+  }
+}
+
+function startConnectWatchdog(attemptId: number): void {
+  clearConnectWatchdog();
+  connectWatchdogTimer = setTimeout(() => {
+    connectWatchdogTimer = undefined;
+    if (!isCurrentConnectionAttempt(attemptId)) return;
+    if (useConnectionStore.getState().status !== 'connecting') return;
+
+    // Make the failure terminal: a half-open socket must not flip the screen
+    // back to connected behind the recovery UI. `error: null` keeps transport
+    // text out of the view — ErrorView renders the pairing checklist instead.
+    invalidateConnectionAttempt();
+    if (signalingClient) {
+      signalingClient.close();
+      signalingClient = null;
+    }
+    cleanupPeerConnection();
+    hmacState = null;
+    pendingControlQueue.length = 0;
+    useConnectionStore.setState({
+      status: 'error',
+      error: null,
+      connectionQuality: 'disconnected',
+      reconnectStartedAt: null,
+    });
+  }, CONNECT_WATCHDOG_MS);
+}
+
+/**
  * HIGH-MOB-05 fix (2026-05-04, v2 nonce scheme 2026-05-05): per-session
  * HMAC state. Initialised when a pairing code is resolved to a shared secret.
  * Outgoing messages are signed; incoming messages are verified before dispatch.
@@ -859,6 +907,8 @@ export const useConnectionStore = create<ConnectionState>()(
           reconnectStartedAt: isReconnect ? Date.now() : state.reconnectStartedAt,
         }));
 
+        startConnectWatchdog(attemptId);
+
         // HIGH-MOB-05 fix (v2 nonce scheme 2026-05-05): derive the per-session
         // HMAC key from the pairing code + a random session salt via HKDF-SHA-256.
         // The salt is generated here so it is unique per connect() call (even on
@@ -888,6 +938,7 @@ export const useConnectionStore = create<ConnectionState>()(
               set({ pairToken, sessionExpiresAt: claim.expiresAt });
             } catch (error) {
               if (!isCurrentConnectionAttempt(attemptId)) return;
+              clearConnectWatchdog();
               set({
                 status: 'error',
                 error:
@@ -934,6 +985,7 @@ export const useConnectionStore = create<ConnectionState>()(
             console.warn('[dispatch] HMAC secret derivation failed:', err);
             hmacState = null;
             pendingControlQueue.length = 0;
+            clearConnectWatchdog();
             set({
               status: 'error',
               error:
@@ -975,6 +1027,7 @@ export const useConnectionStore = create<ConnectionState>()(
                   break;
 
                 case 'peer_ready': {
+                  clearConnectWatchdog();
                   const metadata = (event.metadata ?? {}) as DesktopMetadata;
                   const wasReconnecting =
                     get().status === 'reconnecting' ||
@@ -1036,6 +1089,7 @@ export const useConnectionStore = create<ConnectionState>()(
                   break;
 
                 case 'terminated':
+                  clearConnectWatchdog();
                   set({
                     status: 'disconnected',
                     pairingCode: null,
@@ -1048,6 +1102,7 @@ export const useConnectionStore = create<ConnectionState>()(
                   break;
 
                 case 'error':
+                  clearConnectWatchdog();
                   set({
                     status: 'error',
                     error: friendlyErrorMessage(event.error),
@@ -1055,6 +1110,7 @@ export const useConnectionStore = create<ConnectionState>()(
                   break;
 
                 case 'close':
+                  clearConnectWatchdog();
                   // Only set disconnected if not already in error state
                   if (get().status !== 'error') {
                     set({ status: 'disconnected' });
@@ -1135,6 +1191,7 @@ export const useConnectionStore = create<ConnectionState>()(
 
       markSessionExpired: () => {
         invalidateConnectionAttempt();
+        clearConnectWatchdog();
         // Clear any queued messages — session is gone
         pendingControlQueue.length = 0;
         set({
@@ -1151,6 +1208,7 @@ export const useConnectionStore = create<ConnectionState>()(
 
       disconnect: () => {
         invalidateConnectionAttempt();
+        clearConnectWatchdog();
         if (signalingClient) {
           signalingClient.close();
           signalingClient = null;
