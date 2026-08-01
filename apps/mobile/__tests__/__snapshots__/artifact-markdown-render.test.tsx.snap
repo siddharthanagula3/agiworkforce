@@ -1,0 +1,464 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered document tree 1`] = `
+<Modal
+  accessibilityViewIsModal={true}
+  animationType="slide"
+  onRequestClose={[MockFunction]}
+  presentationStyle="overFullScreen"
+  statusBarTranslucent={true}
+  transparent={true}
+  visible={true}
+>
+  <View
+    style={
+      {
+        "backgroundColor": "#ffffff",
+        "flex": 1,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "backgroundColor": "#f7f7f7",
+          "borderBottomColor": "rgba(17, 17, 17, 0.09)",
+          "borderBottomWidth": 1,
+          "paddingBottom": 10,
+          "paddingHorizontal": 12,
+          "paddingTop": 8,
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 8,
+          }
+        }
+      >
+        <Text
+          accessibilityLabel="plan.md · DOCUMENT"
+          className="text-sm text-white "
+          numberOfLines={1}
+          style={
+            [
+              {
+                "color": "#111111",
+                "flex": 1,
+                "fontSize": 15,
+                "fontWeight": "600",
+              },
+              {
+                "lineHeight": 19,
+              },
+            ]
+          }
+        >
+          plan.md · DOCUMENT
+        </Text>
+        <View
+          accessibilityLabel="Download artifact"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": false,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "rgba(17, 17, 17, 0.08)",
+              "borderRadius": 8,
+              "opacity": 1,
+              "padding": 8,
+            }
+          }
+        />
+        <View
+          accessibilityLabel="Copy content"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "rgba(17, 17, 17, 0.08)",
+              "borderRadius": 8,
+              "padding": 8,
+            }
+          }
+        />
+        <View
+          accessibilityLabel="Close"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "rgba(17, 17, 17, 0.08)",
+              "borderRadius": 8,
+              "padding": 8,
+            }
+          }
+        />
+      </View>
+    </View>
+    <RCTScrollView
+      contentContainerStyle={
+        {
+          "padding": 16,
+          "paddingBottom": 24,
+        }
+      }
+      horizontal={false}
+      showsVerticalScrollIndicator={true}
+      style={
+        {
+          "flex": 1,
+        }
+      }
+    >
+      <View>
+        <View
+          testID="artifact-fullscreen-markdown"
+        >
+          <Text
+            className="text-sm text-white "
+            selectable={true}
+            style={
+              {
+                "color": "#111111",
+                "fontSize": 22,
+                "fontWeight": "700",
+                "lineHeight": 29.700000000000003,
+                "marginBottom": 4,
+                "marginTop": 8,
+              }
+            }
+          >
+            Quarterly Plan
+          </Text>
+          <View
+            style={
+              {
+                "height": 8,
+              }
+            }
+          />
+          <Text
+            className="text-sm text-white "
+            selectable={true}
+            style={
+              {
+                "color": "#111111",
+                "fontSize": 15,
+                "lineHeight": 23,
+              }
+            }
+          >
+            A 
+            <Text
+              className="text-sm text-white "
+              style={
+                {
+                  "color": "#111111",
+                  "fontWeight": "700",
+                }
+              }
+            >
+              bold
+            </Text>
+             opening paragraph.
+          </Text>
+          <View
+            style={
+              {
+                "height": 8,
+              }
+            }
+          />
+          <Text
+            className="text-sm text-white "
+            selectable={true}
+            style={
+              {
+                "color": "#111111",
+                "fontSize": 19,
+                "fontWeight": "700",
+                "lineHeight": 25.650000000000002,
+                "marginBottom": 4,
+                "marginTop": 8,
+              }
+            }
+          >
+            Milestones
+          </Text>
+          <View
+            style={
+              {
+                "height": 8,
+              }
+            }
+          />
+          <View
+            style={
+              {
+                "gap": 2,
+                "marginVertical": 4,
+              }
+            }
+          >
+            <View
+              style={
+                {
+                  "flexDirection": "row",
+                  "gap": 8,
+                  "paddingLeft": 4,
+                }
+              }
+            >
+              <Text
+                className="text-sm text-white "
+                style={
+                  {
+                    "color": "#111111",
+                    "fontSize": 15,
+                    "lineHeight": 22,
+                    "textAlign": "center",
+                    "width": 12,
+                  }
+                }
+              >
+                •
+              </Text>
+              <Text
+                className="text-sm text-white "
+                selectable={true}
+                style={
+                  {
+                    "color": "#111111",
+                    "flex": 1,
+                    "fontSize": 15,
+                    "lineHeight": 22,
+                  }
+                }
+              >
+                Ship the mobile viewer
+              </Text>
+            </View>
+            <View
+              style={
+                {
+                  "flexDirection": "row",
+                  "gap": 8,
+                  "paddingLeft": 4,
+                }
+              }
+            >
+              <Text
+                className="text-sm text-white "
+                style={
+                  {
+                    "color": "#111111",
+                    "fontSize": 15,
+                    "lineHeight": 22,
+                    "textAlign": "center",
+                    "width": 12,
+                  }
+                }
+              >
+                •
+              </Text>
+              <Text
+                className="text-sm text-white "
+                selectable={true}
+                style={
+                  {
+                    "color": "#111111",
+                    "flex": 1,
+                    "fontSize": 15,
+                    "lineHeight": 22,
+                  }
+                }
+              >
+                Close the parity backlog
+              </Text>
+            </View>
+          </View>
+          <View
+            style={
+              {
+                "height": 8,
+              }
+            }
+          />
+          <View
+            style={
+              {
+                "backgroundColor": "#ececec",
+                "borderColor": "rgba(17, 17, 17, 0.09)",
+                "borderRadius": 8,
+                "borderWidth": 1,
+                "marginVertical": 6,
+                "overflow": "hidden",
+              }
+            }
+          >
+            <View
+              accessibilityLabel="Copy code"
+              accessibilityRole="button"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": undefined,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onFocus={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "backgroundColor": "rgba(17, 17, 17, 0.08)",
+                  "borderRadius": 4,
+                  "padding": 4,
+                  "position": "absolute",
+                  "right": 6,
+                  "top": 6,
+                }
+              }
+            />
+            <RCTScrollView
+              horizontal={true}
+              scrollEventThrottle={16}
+              showsHorizontalScrollIndicator={true}
+              style={
+                {
+                  "paddingBottom": 10,
+                  "paddingHorizontal": 10,
+                  "paddingTop": 28,
+                }
+              }
+            >
+              <View>
+                <Text
+                  className="text-sm text-white "
+                  selectable={true}
+                  style={
+                    {
+                      "color": "#111111",
+                      "fontFamily": "Menlo",
+                      "fontSize": 13,
+                      "lineHeight": 19,
+                    }
+                  }
+                >
+                  pnpm test
+                </Text>
+              </View>
+            </RCTScrollView>
+          </View>
+        </View>
+      </View>
+    </RCTScrollView>
+  </View>
+</Modal>
+`;

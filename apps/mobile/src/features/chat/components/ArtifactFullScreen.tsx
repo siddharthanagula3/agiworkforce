@@ -16,6 +16,7 @@ import {
 } from '@/services/fileCreation';
 import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
 import type { Artifact } from '@/types/chat';
+import { renderMarkdownContent } from './MessageContentRenderer';
 import { GeneratedFileCard } from './GeneratedFileCard';
 import { SafeArtifactPreview, type PreviewableKind } from './SafeArtifactPreview';
 
@@ -60,6 +61,17 @@ function isPreviewable(artifact: Artifact): boolean {
   const mime = artifact.generatedFile?.mimeType?.toLowerCase() ?? '';
   if (mime === 'application/pdf' || mime.includes('officedocument')) return true;
   return false;
+}
+
+/**
+ * True when the source view should render syntax-highlighted monospace. Every
+ * other type (document / research / email / chart) carries markdown prose and
+ * is rendered through {@link renderMarkdownContent} instead.
+ */
+function isMonospaceArtifact(artifact: Artifact): boolean {
+  return (
+    artifact.type === 'code' || PREVIEWABLE_LANGUAGES.has(artifact.language?.toLowerCase() ?? '')
+  );
 }
 
 /** Derives the TYPE label shown next to the title (language takes priority). */
@@ -112,7 +124,10 @@ export function ArtifactFullScreen({
   // Tokenized source spans for the monospace view. Unknown languages and
   // oversize content come back as one plain token, matching the old render.
   const sourceTokens = useMemo(
-    () => (artifact ? tokenizeCode(artifact.content, artifact.language) : []),
+    () =>
+      artifact && isMonospaceArtifact(artifact)
+        ? tokenizeCode(artifact.content, artifact.language)
+        : [],
     [artifact],
   );
 
@@ -209,8 +224,7 @@ export function ArtifactFullScreen({
 
   const canPreview = isPreviewable(artifact);
   const previewKind = livePreviewKind(artifact);
-  const isCode = artifact.type === 'code';
-  const isMonospace = isCode || PREVIEWABLE_LANGUAGES.has(artifact.language?.toLowerCase() ?? '');
+  const isMonospace = isMonospaceArtifact(artifact);
 
   const titleLabel = `${artifact.title} · ${typeLabel(artifact)}`;
 
@@ -516,49 +530,54 @@ export function ArtifactFullScreen({
               </View>
             ) : null}
 
-            {/* Main content — horizontally scrollable monospace for code */}
-            <ScrollView
-              horizontal={isMonospace}
-              showsHorizontalScrollIndicator={isMonospace}
-              style={
-                isMonospace
-                  ? {
-                      backgroundColor: colors.surfaceBase,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                    }
-                  : undefined
-              }
-              contentContainerStyle={isMonospace ? { padding: 12 } : undefined}
-            >
-              <Text
+            {/* Main content — horizontally scrollable monospace for code, formatted
+             * markdown for prose artifacts. Prose previously shared the monospace
+             * path's single flat Text, which printed heading/list/emphasis markers
+             * literally instead of rendering them. */}
+            {isMonospace ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator
                 style={{
-                  fontSize: isMonospace ? 13 : 15,
-                  lineHeight: isMonospace ? 20 : 24,
-                  color: colors.textPrimary,
-                  fontFamily: isMonospace
-                    ? Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-                    : undefined,
+                  backgroundColor: colors.surfaceBase,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.border,
                 }}
-                selectable
+                contentContainerStyle={{ padding: 12 }}
               >
-                {isMonospace
-                  ? sourceTokens.map((token, tokenIdx) =>
-                      token.type === 'plain' ? (
-                        token.text
-                      ) : (
-                        <Text
-                          key={`src-tok-${tokenIdx}`}
-                          style={{ color: syntaxTokenColor(token.type, colors) }}
-                        >
-                          {token.text}
-                        </Text>
-                      ),
-                    )
-                  : artifact.content}
-              </Text>
-            </ScrollView>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    lineHeight: 20,
+                    color: colors.textPrimary,
+                    fontFamily: Platform.select({
+                      ios: 'Menlo',
+                      android: 'monospace',
+                      default: 'monospace',
+                    }),
+                  }}
+                  selectable
+                >
+                  {sourceTokens.map((token, tokenIdx) =>
+                    token.type === 'plain' ? (
+                      token.text
+                    ) : (
+                      <Text
+                        key={`src-tok-${tokenIdx}`}
+                        style={{ color: syntaxTokenColor(token.type, colors) }}
+                      >
+                        {token.text}
+                      </Text>
+                    ),
+                  )}
+                </Text>
+              </ScrollView>
+            ) : (
+              <View testID="artifact-fullscreen-markdown">
+                {renderMarkdownContent(artifact.content, colors)}
+              </View>
+            )}
 
             {/* Research citations */}
             {artifact.type === 'research' && artifact.metadata?.citations != null && (
