@@ -109,16 +109,22 @@ function ConnectedWidget({ compact, onPressDashboard, onPressApprovals }: Connec
           accessibilityLabel={`Connected to ${displayName}. Tap to view dashboard.`}
           accessibilityRole="button"
         >
-          <Card variant="outline" className="border-teal-500/25">
+          <Card variant="outline" style={{ borderColor: colors.accentBorder }}>
             <View className="flex-row items-center gap-3">
               {/* Connection indicator */}
-              <View className="w-10 h-10 rounded-xl bg-teal-500/15 items-center justify-center">
+              <View
+                className="w-10 h-10 rounded-xl items-center justify-center"
+                style={{ backgroundColor: colors.accentSurface }}
+              >
                 <View className="relative items-center justify-center">
                   <Animated.View
-                    style={[pulseStyle]}
-                    className="absolute w-5 h-5 rounded-full bg-teal-500/25"
+                    style={[pulseStyle, { backgroundColor: colors.accentBorder }]}
+                    className="absolute w-5 h-5 rounded-full"
                   />
-                  <View className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+                  <View
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: colors.teal }}
+                  />
                 </View>
               </View>
 
@@ -146,7 +152,9 @@ function ConnectedWidget({ compact, onPressDashboard, onPressApprovals }: Connec
                     </View>
                   )}
                   {activeAgents.length === 0 && pendingApprovals.length === 0 && (
-                    <Text className="text-[11px] text-teal-500/70">Connected</Text>
+                    <Text className="text-[11px]" style={{ color: colors.textSecondary }}>
+                      Connected
+                    </Text>
                   )}
                 </View>
               </View>
@@ -180,16 +188,19 @@ function ConnectedWidget({ compact, onPressDashboard, onPressApprovals }: Connec
   // Full (non-compact) variant
   return (
     <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)}>
-      <Card variant="outline" className="border-teal-500/25">
+      <Card variant="outline" style={{ borderColor: colors.accentBorder }}>
         {/* Header row */}
         <View className="flex-row items-center gap-3 mb-3">
-          <View className="w-10 h-10 rounded-xl bg-teal-500/15 items-center justify-center">
+          <View
+            className="w-10 h-10 rounded-xl items-center justify-center"
+            style={{ backgroundColor: colors.accentSurface }}
+          >
             <View className="relative items-center justify-center">
               <Animated.View
-                style={[pulseStyle]}
-                className="absolute w-5 h-5 rounded-full bg-teal-500/25"
+                style={[pulseStyle, { backgroundColor: colors.accentBorder }]}
+                className="absolute w-5 h-5 rounded-full"
               />
-              <View className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+              <View className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors.teal }} />
             </View>
           </View>
           <View className="flex-1">
@@ -257,12 +268,17 @@ function ConnectedWidget({ compact, onPressDashboard, onPressApprovals }: Connec
           )}
           <Pressable
             onPress={onPressDashboard}
-            className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg bg-teal-500/15 active:bg-teal-500/25"
+            className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.accentBorder : colors.accentSurface,
+            })}
             accessibilityLabel="View agent dashboard"
             accessibilityRole="button"
           >
             <Monitor size={14} color={colors.teal} />
-            <Text className="text-xs font-medium text-teal-400">View Dashboard</Text>
+            <Text className="text-xs font-medium" style={{ color: colors.teal }}>
+              View Dashboard
+            </Text>
           </Pressable>
         </View>
       </Card>
@@ -291,9 +307,12 @@ function DisconnectedWidget({ compact, onPress }: DisconnectedWidgetProps) {
           accessibilityLabel="Connect to desktop. Tap to scan QR code."
           accessibilityRole="button"
         >
-          <Card variant="outline" className="border-teal-500/20">
+          <Card variant="outline" style={{ borderColor: colors.accentBorder }}>
             <View className="flex-row items-center gap-3">
-              <View className="w-10 h-10 rounded-xl bg-teal-500/10 items-center justify-center">
+              <View
+                className="w-10 h-10 rounded-xl items-center justify-center"
+                style={{ backgroundColor: colors.accentSurface }}
+              >
                 <QrCode size={20} color={colors.teal} />
               </View>
               <View className="flex-1">
@@ -320,10 +339,13 @@ function DisconnectedWidget({ compact, onPress }: DisconnectedWidgetProps) {
         accessibilityLabel="Connect to desktop. Tap to scan QR code."
         accessibilityRole="button"
       >
-        <Card variant="outline" className="border-teal-500/20">
+        <Card variant="outline" style={{ borderColor: colors.accentBorder }}>
           {/* QR illustration row */}
           <View className="items-center py-2 mb-3">
-            <View className="w-14 h-14 rounded-2xl bg-teal-500/10 items-center justify-center mb-3">
+            <View
+              className="w-14 h-14 rounded-2xl items-center justify-center mb-3"
+              style={{ backgroundColor: colors.accentSurface }}
+            >
               <Smartphone size={26} color={colors.teal} />
             </View>
             <Text className="text-sm font-semibold text-white mb-1">Connect to Desktop</Text>
@@ -339,9 +361,14 @@ function DisconnectedWidget({ compact, onPress }: DisconnectedWidgetProps) {
           </View>
 
           {/* CTA */}
-          <View className="flex-row items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-500/15 active:bg-teal-500/25">
+          <View
+            className="flex-row items-center justify-center gap-2 py-2.5 rounded-lg"
+            style={{ backgroundColor: colors.accentSurface }}
+          >
             <QrCode size={15} color={colors.teal} />
-            <Text className="text-sm font-medium text-teal-400">Scan QR Code</Text>
+            <Text className="text-sm font-medium" style={{ color: colors.teal }}>
+              Scan QR Code
+            </Text>
           </View>
         </Card>
       </Pressable>

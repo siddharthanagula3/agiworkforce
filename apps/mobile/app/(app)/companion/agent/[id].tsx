@@ -153,10 +153,15 @@ export default function AgentDetailScreen() {
           </Text>
           <Pressable
             onPress={handleBack}
-            className="mt-4 px-5 py-2.5 rounded-xl bg-teal-500/10 active:bg-teal-500/20"
+            className="mt-4 px-5 py-2.5 rounded-xl"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.accentBorder : colors.accentSurface,
+            })}
             accessibilityRole="button"
           >
-            <Text className="text-teal-400 text-sm font-medium">Back to Dashboard</Text>
+            <Text className="text-sm font-medium" style={{ color: colors.teal }}>
+              Back to Dashboard
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -290,12 +295,17 @@ export default function AgentDetailScreen() {
               ) : (
                 <Pressable
                   onPress={() => handleCommand('resume')}
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-teal-500/10 active:bg-teal-500/20"
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl"
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? colors.accentBorder : colors.accentSurface,
+                  })}
                   accessibilityLabel="Resume agent"
                   accessibilityRole="button"
                 >
                   <Play size={14} color={colors.teal} />
-                  <Text className="text-sm text-teal-400 font-medium">Resume</Text>
+                  <Text className="text-sm font-medium" style={{ color: colors.teal }}>
+                    Resume
+                  </Text>
                 </Pressable>
               )}
               <Pressable

@@ -204,7 +204,9 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           accessibilityLabel="Back to QR Scanner"
           accessibilityRole="button"
         >
-          <Text className="text-teal-400 text-sm">Back to QR Scanner</Text>
+          <Text className="text-sm" style={{ color: colors.teal }}>
+            Back to QR Scanner
+          </Text>
         </Pressable>
       </View>
     );
@@ -239,11 +241,20 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
             overflow: 'hidden',
           }}
         >
-          {/* Corner brackets */}
-          <View style={[styles.cornerTopLeft, { borderColor: colors.teal }]} />
-          <View style={[styles.cornerTopRight, { borderColor: colors.teal }]} />
-          <View style={[styles.cornerBottomLeft, { borderColor: colors.teal }]} />
-          <View style={[styles.cornerBottomRight, { borderColor: colors.teal }]} />
+          {/*
+            Corner brackets + scan line sit ON the live camera feed, so they
+            must NOT use `colors.teal`: that token resolves to the neutral
+            foreground (#111111 in light theme, and #000000 under high
+            contrast light), which draws a black frame and a black scan line
+            over a dark camera image. `cameraScanRegionBorder` is the
+            camera-overlay token and stays high-contrast in every theme.
+          */}
+          <View style={[styles.cornerTopLeft, { borderColor: colors.cameraScanRegionBorder }]} />
+          <View style={[styles.cornerTopRight, { borderColor: colors.cameraScanRegionBorder }]} />
+          <View style={[styles.cornerBottomLeft, { borderColor: colors.cameraScanRegionBorder }]} />
+          <View
+            style={[styles.cornerBottomRight, { borderColor: colors.cameraScanRegionBorder }]}
+          />
 
           {/* Scanning line */}
           <Animated.View
@@ -253,9 +264,9 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
                 left: 8,
                 right: 8,
                 height: 2,
-                backgroundColor: colors.teal,
+                backgroundColor: colors.cameraScanRegionBorder,
                 borderRadius: 1,
-                shadowColor: colors.teal,
+                shadowColor: colors.cameraScanRegionBorder,
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.8,
                 shadowRadius: 8,
@@ -304,8 +315,11 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           accessibilityLabel="Enter code manually"
           accessibilityRole="button"
         >
-          <Keyboard size={16} color={colors.teal} />
-          <Text className="text-teal-400 text-sm font-medium">Enter code manually</Text>
+          {/* Also on the camera feed — overlay palette, not the accent token. */}
+          <Keyboard size={16} color={colors.cameraOverlayText} />
+          <Text className="text-sm font-medium" style={{ color: colors.cameraOverlayText }}>
+            Enter code manually
+          </Text>
         </Pressable>
       </View>
     </View>

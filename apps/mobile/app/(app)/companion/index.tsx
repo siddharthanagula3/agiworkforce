@@ -22,6 +22,10 @@ import {
   SessionExpiredView,
 } from '@/src/features/companion/components/ConnectionStateViews';
 import { DesktopInfoCard } from '@/src/features/companion/components/DesktopInfoCard';
+import {
+  DesktopSetupChecklistView,
+  useDispatchSetupStore,
+} from '@/src/features/companion/components/DesktopSetupChecklistView';
 import { ApprovalModal, useApprovalModal } from '@/src/shared/components/ApprovalModal';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useAgentStore } from '@/stores/agentStore';
@@ -47,6 +51,10 @@ export default function CompanionScreen() {
   const [showScanner, setShowScanner] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const hasSeenDemo = useDemoStore((s) => s.hasSeenDemo);
+  // PAR-M28: first entry gets the desktop setup checklist instead of a bare
+  // "Scan QR Code" — prerequisites, a download hand-off, and the remote-
+  // execution risk disclosure all land before any pairing action is possible.
+  const hasSeenDispatchSetup = useDispatchSetupStore((s) => s.hasSeenDispatchSetup);
   const {
     currentApproval,
     showApproval,
@@ -247,7 +255,12 @@ export default function CompanionScreen() {
         </View>
       )}
 
-      {status === 'disconnected' && <DisconnectedView onScanPress={() => setShowScanner(true)} />}
+      {status === 'disconnected' &&
+        (hasSeenDispatchSetup ? (
+          <DisconnectedView onScanPress={() => setShowScanner(true)} />
+        ) : (
+          <DesktopSetupChecklistView />
+        ))}
       {status === 'connecting' && <ConnectingView onCancel={disconnect} />}
       {status === 'error' && <ErrorView error={error} onRetry={handleRetry} />}
       {status === 'session_expired' && <SessionExpiredView onRePair={() => setShowScanner(true)} />}

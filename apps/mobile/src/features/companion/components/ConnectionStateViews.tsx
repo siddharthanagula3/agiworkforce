@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { View, ActivityIndicator, Pressable } from 'react-native';
+import { View, ActivityIndicator, Pressable, ScrollView } from 'react-native';
 import {
   QrCode,
   Wifi,
@@ -14,6 +14,7 @@ import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
+import { PairingRiskDisclosure } from './PairingRiskDisclosure';
 
 export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
   const colors = useThemeColors();
@@ -47,59 +48,71 @@ export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
 export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
   const colors = useThemeColors();
   return (
-    <Animated.View
-      entering={FadeIn.duration(300)}
-      className="flex-1 items-center justify-center px-8"
-    >
-      <View className="w-24 h-24 rounded-3xl bg-white/5 items-center justify-center mb-6">
-        <QrCode size={44} color={colors.teal} />
-      </View>
-
-      <Text variant="heading" className="text-center mb-2">
-        Pair with Desktop
-      </Text>
-      <Text className="text-white/50 text-center text-sm mb-8 leading-5">
-        Scan the QR code shown in your AGI Workforce desktop app to connect and control your agents
-        remotely.
-      </Text>
-
-      <View
-        accessibilityRole="text"
-        accessibilityLabel="Desktop setup requirement. Sign in on Desktop and switch to Managed Cloud before generating a code. The short-lived pairing code authorizes this phone; accounts are not compared."
-        className="w-full rounded-2xl border border-teal-500/20 bg-teal-500/10 px-4 py-3 mb-5"
+    <Animated.View entering={FadeIn.duration(300)} className="flex-1">
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: 32,
+          paddingBottom: 32,
+          flexGrow: 1,
+          justifyContent: 'center',
+        }}
+        showsVerticalScrollIndicator={false}
       >
-        <View className="flex-row items-center gap-2 mb-1.5">
-          <ShieldCheck size={15} color={colors.teal} />
-          <Text className="text-sm font-semibold text-white">Desktop setup required</Text>
+        <View className="items-center">
+          <View className="w-24 h-24 rounded-3xl bg-white/5 items-center justify-center mb-6">
+            <QrCode size={44} color={colors.teal} />
+          </View>
+
+          <Text variant="heading" className="text-center mb-2">
+            Pair with Desktop
+          </Text>
+          <Text className="text-white/50 text-center text-sm mb-6 leading-5">
+            Scan the QR code shown in your AGI Workforce desktop app to connect and control your
+            agents remotely.
+          </Text>
         </View>
-        <Text className="text-xs text-white/60 leading-5">
-          Sign in on Desktop and switch to Managed Cloud before generating a code. The short-lived
-          QR or pairing code authorizes this phone; the apps do not compare account identities.
-        </Text>
-      </View>
 
-      <Button
-        title="Scan QR Code"
-        variant="primary"
-        size="lg"
-        onPress={onScanPress}
-        className="w-full mb-3"
-      />
+        <View
+          accessibilityRole="text"
+          accessibilityLabel="Desktop setup requirement. Sign in on Desktop and switch to Managed Cloud before generating a code. The short-lived pairing code authorizes this phone; accounts are not compared."
+          className="w-full rounded-2xl border px-4 py-3 mb-5"
+          style={{ borderColor: colors.accentBorder, backgroundColor: colors.accentSurface }}
+        >
+          <View className="flex-row items-center gap-2 mb-1.5">
+            <ShieldCheck size={15} color={colors.teal} />
+            <Text className="text-sm font-semibold text-white">Desktop setup required</Text>
+          </View>
+          <Text className="text-xs text-white/60 leading-5">
+            Sign in on Desktop and switch to Managed Cloud before generating a code. The short-lived
+            QR or pairing code authorizes this phone; the apps do not compare account identities.
+          </Text>
+        </View>
 
-      <View className="flex-row items-center gap-3 mt-6 px-4">
-        <View className="flex-1 h-px bg-white/10" />
-        <Text className="text-xs text-white/30">HOW IT WORKS</Text>
-        <View className="flex-1 h-px bg-white/10" />
-      </View>
+        {/*
+          PAR-M28: the prerequisites used to render BELOW the primary CTA under
+          a "HOW IT WORKS" divider — scan first, read later. They now precede
+          the button, and the risk disclosure follows it, so no path reaches
+          the scanner without both being on screen first.
+        */}
+        <PairingChecklist
+          className="mb-8"
+          steps={[
+            'Open Desktop in Managed Cloud',
+            'Go to Settings and select "Connections"',
+            'Generate and scan the short-lived code',
+          ]}
+        />
 
-      <PairingChecklist
-        className="mt-5"
-        steps={[
-          'Open Desktop in Managed Cloud',
-          'Go to Settings and select "Connections"',
-          'Generate and scan the short-lived code',
-        ]}
-      />
+        <Button
+          title="Scan QR Code"
+          variant="primary"
+          size="lg"
+          onPress={onScanPress}
+          className="w-full"
+        />
+
+        <PairingRiskDisclosure className="mt-4" />
+      </ScrollView>
     </Animated.View>
   );
 }
@@ -122,10 +135,16 @@ export function PairingChecklist({ steps, className }: { steps: string[]; classN
 }
 
 function StepRow({ number, text }: { number: number; text: string }) {
+  const colors = useThemeColors();
   return (
     <View className="flex-row items-center gap-3">
-      <View className="w-7 h-7 rounded-full bg-teal-500/20 items-center justify-center">
-        <Text className="text-xs font-bold text-teal-400">{number}</Text>
+      <View
+        className="w-7 h-7 rounded-full items-center justify-center"
+        style={{ backgroundColor: colors.accentSurface }}
+      >
+        <Text className="text-xs font-bold" style={{ color: colors.teal }}>
+          {number}
+        </Text>
       </View>
       <Text className="text-sm text-white/60 flex-1">{text}</Text>
     </View>

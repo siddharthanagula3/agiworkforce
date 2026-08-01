@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Input } from '@/components/ui/input';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useThemeColors } from '@/src/ui/theme';
 import type { RecurrenceType } from '../store';
 import {
   MOBILE_SCHEDULE_CADENCE_NOTE,
@@ -79,6 +80,7 @@ export function RecurrencePicker({
   scheduledDate,
   onChange,
 }: RecurrencePickerProps) {
+  const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [localDate, setLocalDate] = useState(scheduledDate ?? '');
   const [dateError, setDateError] = useState<string | undefined>();
@@ -175,16 +177,20 @@ export function RecurrencePicker({
                 key={recurrence}
                 onPress={() => handleTypeChange(recurrence)}
                 className={`px-4 py-2 rounded-full border ${
-                  selected
-                    ? 'bg-teal-500/20 border-teal-500'
-                    : 'bg-surface-elevated border-white/10'
+                  selected ? '' : 'bg-surface-elevated border-white/10'
                 }`}
+                style={
+                  selected
+                    ? { backgroundColor: colors.accentSurface, borderColor: colors.accentBorder }
+                    : undefined
+                }
                 accessibilityLabel={`Recurrence: ${RECURRENCE_LABELS[recurrence]}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
               >
                 <Text
-                  className={`text-xs font-medium ${selected ? 'text-teal-400' : 'text-white/60'}`}
+                  className={`text-xs font-medium ${selected ? '' : 'text-white/60'}`}
+                  style={selected ? { color: colors.teal } : undefined}
                 >
                   {RECURRENCE_LABELS[recurrence]}
                 </Text>
@@ -213,14 +219,16 @@ export function RecurrencePicker({
                   key={idx}
                   onPress={() => handleDayToggle(idx)}
                   className={`w-9 h-9 rounded-full items-center justify-center ${
-                    selected ? 'bg-teal-500' : 'bg-surface-elevated'
+                    selected ? '' : 'bg-surface-elevated'
                   }`}
+                  style={selected ? { backgroundColor: colors.teal } : undefined}
                   accessibilityLabel={`${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][idx]}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                 >
                   <Text
-                    className={`text-xs font-semibold ${selected ? 'text-white' : 'text-white/50'}`}
+                    className={`text-xs font-semibold ${selected ? '' : 'text-white/50'}`}
+                    style={selected ? { color: colors.accentText } : undefined}
                   >
                     {label}
                   </Text>
@@ -247,14 +255,16 @@ export function RecurrencePicker({
                   key={day}
                   onPress={() => handleDayOfMonthChange(day)}
                   className={`w-9 h-9 rounded-lg items-center justify-center ${
-                    selected ? 'bg-teal-500' : 'bg-surface-elevated'
+                    selected ? '' : 'bg-surface-elevated'
                   }`}
+                  style={selected ? { backgroundColor: colors.teal } : undefined}
                   accessibilityLabel={`Day ${day}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                 >
                   <Text
-                    className={`text-xs font-medium ${selected ? 'text-white' : 'text-white/50'}`}
+                    className={`text-xs font-medium ${selected ? '' : 'text-white/50'}`}
+                    style={selected ? { color: colors.accentText } : undefined}
                   >
                     {day}
                   </Text>
@@ -299,17 +309,15 @@ export function RecurrencePicker({
                     <Pressable
                       key={h}
                       onPress={() => handleHourChange(h)}
-                      className={`h-9 items-center justify-center rounded-md mx-1 ${
-                        selected ? 'bg-teal-500/20' : ''
-                      }`}
+                      className="h-9 items-center justify-center rounded-md mx-1"
+                      style={selected ? { backgroundColor: colors.accentSurface } : undefined}
                       accessibilityLabel={`${h} hours`}
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
                     >
                       <Text
-                        className={`text-sm font-medium ${
-                          selected ? 'text-teal-400' : 'text-white/50'
-                        }`}
+                        className={`text-sm font-medium ${selected ? '' : 'text-white/50'}`}
+                        style={selected ? { color: colors.teal } : undefined}
                       >
                         {h}
                       </Text>
@@ -337,17 +345,15 @@ export function RecurrencePicker({
                     <Pressable
                       key={m}
                       onPress={() => handleMinuteChange(m)}
-                      className={`h-9 items-center justify-center rounded-md mx-1 ${
-                        selected ? 'bg-teal-500/20' : ''
-                      }`}
+                      className="h-9 items-center justify-center rounded-md mx-1"
+                      style={selected ? { backgroundColor: colors.accentSurface } : undefined}
                       accessibilityLabel={`${m} minutes`}
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
                     >
                       <Text
-                        className={`text-sm font-medium ${
-                          selected ? 'text-teal-400' : 'text-white/50'
-                        }`}
+                        className={`text-sm font-medium ${selected ? '' : 'text-white/50'}`}
+                        style={selected ? { color: colors.teal } : undefined}
                       >
                         {m}
                       </Text>
