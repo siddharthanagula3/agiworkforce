@@ -466,6 +466,14 @@ export default function SettingsTabScreen() {
             onPress: openCloudRoute('/(app)/settings/memory?scope=cloud'),
           },
           {
+            key: 'reflect',
+            label: 'Reflect',
+            icon: Sparkles,
+            tag: cloudAccessTag,
+            tone: 'cloud',
+            onPress: openCloudRoute('/(app)/settings/reflect'),
+          },
+          {
             key: 'archived-chats',
             label: 'Archived Chats',
             icon: Archive,

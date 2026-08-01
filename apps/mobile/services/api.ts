@@ -62,6 +62,28 @@ export class ApiPaywallError extends Error {
 }
 
 /**
+ * Thrown for any non-OK response that is not a paywall.
+ *
+ * Carries the HTTP status and, when the body used the structured
+ * `{ error: { code } }` shape, the server's error code. Callers previously had
+ * to regex "HTTP 409" back out of the message to tell one failure from
+ * another, and an object-shaped error body left no way to read the code at
+ * all. The `message` text is unchanged, so existing message-based handling
+ * still behaves the same.
+ */
+export class ApiHttpError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(message: string, status: number, code: string | null = null) {
+    super(message);
+    this.name = 'ApiHttpError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/**
  * Authenticated HTTP client.
  * Injects a Clerk/Web API bearer token when the gated Cloud path provides one.
  *
@@ -324,17 +346,28 @@ async function request<T>(
       // field — surface that instead of dumping the raw JSON payload verbatim,
       // since callers often show this text directly in chat/error UI.
       let friendlyMessage: string | null = null;
+      let errorCode: string | null = null;
       try {
         const parsed = JSON.parse(body) as Record<string, unknown>;
         const candidate = parsed.error ?? parsed.message;
         if (typeof candidate === 'string' && candidate.trim()) {
           friendlyMessage = candidate;
+        } else if (candidate && typeof candidate === 'object') {
+          // `{ error: { code, message } }` — the object shape. Its message is
+          // still the friendliest text available, and the code is the only way
+          // a caller can distinguish this failure from another with the same
+          // status.
+          const nested = candidate as { code?: unknown; message?: unknown };
+          if (typeof nested.code === 'string') errorCode = nested.code;
+          if (typeof nested.message === 'string' && nested.message.trim()) {
+            friendlyMessage = nested.message;
+          }
         }
       } catch {
         // Not JSON — fall back to the raw (truncated) body below.
       }
       if (friendlyMessage) {
-        throw new Error(friendlyMessage);
+        throw new ApiHttpError(friendlyMessage, response.status, errorCode);
       }
       // Non-JSON bodies (HTML error pages, proxy output) must never reach the
       // UI verbatim. Log the raw body for diagnostics and surface a generic,
@@ -343,10 +376,12 @@ async function request<T>(
         const safeBody = body.length > 500 ? body.slice(0, 500) + '...(truncated)' : body;
         console.warn(`[api] ${init.method ?? 'GET'} ${path} -> HTTP ${response.status}:`, safeBody);
       }
-      throw new Error(
+      throw new ApiHttpError(
         response.status >= 500
           ? 'The server hit a problem handling this request. Please try again.'
           : `Request failed (HTTP ${response.status}). Please try again.`,
+        response.status,
+        errorCode,
       );
     }
 
