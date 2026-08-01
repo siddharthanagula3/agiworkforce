@@ -13,7 +13,7 @@ import { View } from 'react-native';
 import { Cloud, Folder, Lock, Users } from 'lucide-react-native';
 import type { ProjectAccentColor, ProjectHeaderPresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 export interface ProjectHeaderProps {
   presentation: ProjectHeaderPresentation;
@@ -128,6 +128,7 @@ function ProviderChip({ presentation }: { presentation: ProjectHeaderPresentatio
 }
 
 function MetaRow({ presentation }: { presentation: ProjectHeaderPresentation }) {
+  const colors = useThemeColors();
   const items = [
     presentation.knowledgeFileCountLabel,
     presentation.memberCountLabel,
@@ -158,6 +159,7 @@ function MetaRow({ presentation }: { presentation: ProjectHeaderPresentation }) 
 }
 
 function SurfaceChips({ presentation }: { presentation: ProjectHeaderPresentation }) {
+  const colors = useThemeColors();
   if (presentation.surfaceChips.length === 0) return null;
   return (
     <View
@@ -194,6 +196,7 @@ function SurfaceChips({ presentation }: { presentation: ProjectHeaderPresentatio
 }
 
 export function ProjectHeader({ presentation }: ProjectHeaderProps) {
+  const colors = useThemeColors();
   const accent = ACCENT_TOKENS[presentation.accentColor] ?? ACCENT_TOKENS.zinc;
   return (
     <View

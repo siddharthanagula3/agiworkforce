@@ -2,7 +2,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { View, Pressable } from 'react-native';
 import { AlertTriangle, SignalZero, Clock, RotateCcw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 const STALE_THRESHOLD_MS = 90_000;
 
@@ -11,6 +11,7 @@ interface StaleApprovalBannerProps {
 }
 
 export function StaleApprovalBanner({ lastHeartbeatAt }: StaleApprovalBannerProps) {
+  const colors = useThemeColors();
   const ageMs = Date.now() - lastHeartbeatAt;
   if (ageMs < STALE_THRESHOLD_MS) return null;
 
@@ -39,6 +40,7 @@ interface DisconnectedDesktopBannerProps {
 }
 
 export function DisconnectedDesktopBanner({ onReconnect }: DisconnectedDesktopBannerProps) {
+  const colors = useThemeColors();
   return (
     <Animated.View entering={FadeIn.duration(300)}>
       <View className="flex-row items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/25">
@@ -66,6 +68,7 @@ interface ReconnectingBannerProps {
 }
 
 export function ReconnectingBanner({ countdown, onReconnect }: ReconnectingBannerProps) {
+  const colors = useThemeColors();
   return (
     <Animated.View entering={FadeIn.duration(300)}>
       <View className="flex-row items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25">

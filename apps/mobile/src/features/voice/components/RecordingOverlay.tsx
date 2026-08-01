@@ -113,7 +113,9 @@ export function RecordingOverlay({
       <View className="flex-row items-center justify-center gap-2 mb-3">
         <PulsingDot />
         <Text className="text-red-400 text-sm font-medium">Recording</Text>
-        <Text className="text-white/50 text-sm font-mono ml-2">{formatClock(durationMs)}</Text>
+        <Text className="text-sm font-mono ml-2" style={{ color: colors.cameraOverlayTextMuted }}>
+          {formatClock(durationMs)}
+        </Text>
       </View>
 
       {/* Waveform preview */}
@@ -135,7 +137,8 @@ export function RecordingOverlay({
         {/* Cancel */}
         <Pressable
           onPress={handleCancel}
-          className="w-12 h-12 rounded-full bg-white/10 items-center justify-center active:bg-white/20"
+          className="w-12 h-12 rounded-full items-center justify-center"
+          style={{ backgroundColor: colors.voiceControlSurface }}
           accessibilityLabel="Cancel recording"
           accessibilityRole="button"
         >

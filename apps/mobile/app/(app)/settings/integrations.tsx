@@ -198,7 +198,7 @@ export default function IntegrationsScreen() {
   if (!FEATURES.connectors) return <FeatureUnavailable feature="Connectors" />;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center px-4 h-12">
         <Pressable

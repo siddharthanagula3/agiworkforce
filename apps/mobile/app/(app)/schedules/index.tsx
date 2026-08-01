@@ -17,7 +17,7 @@ import {
   type ScheduleTemplate,
 } from '@/src/features/schedules';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -26,6 +26,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 
 export default function SchedulesScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -153,7 +154,7 @@ export default function SchedulesScreen() {
   // Loading skeleton
   if (loading && schedules.length === 0) {
     return (
-      <SafeAreaView className="flex-1 bg-surface-base">
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
         <Header
           onBackPress={handleBack}
           onCreatePress={canCreateSchedule ? handleCreate : undefined}
@@ -180,7 +181,7 @@ export default function SchedulesScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <Header
         onBackPress={handleBack}
@@ -275,6 +276,7 @@ function Header({
   onBackPress: () => void;
   onCreatePress?: () => void;
 }) {
+  const colors = useThemeColors();
   return (
     <View className="flex-row items-center px-3 h-12">
       <Pressable
@@ -314,6 +316,7 @@ function EmptyState({
   onUseTemplate: (templateId: ScheduleTemplate['id']) => void;
   canCreateSchedule: boolean;
 }) {
+  const colors = useThemeColors();
   return (
     <ScrollView
       className="flex-1"
@@ -370,6 +373,7 @@ function TemplateCard({
   template: ScheduleTemplate;
   onPress: (templateId: ScheduleTemplate['id']) => void;
 }) {
+  const colors = useThemeColors();
   return (
     <Pressable
       onPress={() => onPress(template.id)}

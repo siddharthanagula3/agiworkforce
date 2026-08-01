@@ -189,7 +189,7 @@ export default function CompanionScreen() {
     status === 'connected' || status === 'stale' || status === 'reconnecting';
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <View className="flex-row items-center px-3 h-12">
         <Pressable
           onPress={handleBack}

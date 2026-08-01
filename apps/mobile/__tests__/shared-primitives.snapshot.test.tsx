@@ -15,16 +15,18 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { summarizeProjectHeader, type ProjectHeaderPresentation } from '@agiworkforce/types';
 
-jest.mock('@/src/ui/theme', () => ({
-  colors: {
-    textPrimary: '#fff',
-    textSecondary: '#aaa',
-    textMuted: '#777',
-    border: '#333',
-    surfaceElevated: '#1a1a1a',
-    surfaceOverlay: '#0e0e0e',
-  },
-}));
+// The real palette rather than a hand-listed copy: these mocks omitted
+// whatever token a component reached for next, and a missing key surfaces as
+// `undefined` deep in a style object instead of as a clear failure.
+jest.mock('@/src/ui/theme', () => {
+  const tokens = jest.requireActual('@/src/ui/theme/tokens');
+  return {
+    ...tokens,
+    colors: tokens.colors,
+    useTheme: () => ({ colors: tokens.colors, isDark: true, statusBarStyle: 'light' }),
+    useThemeColors: () => tokens.colors,
+  };
+});
 
 jest.mock('@/components/ui/text', () => {
   const RN = require('react-native');

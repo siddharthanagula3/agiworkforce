@@ -305,7 +305,11 @@ export default function CompareScreen() {
   }, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
+    <SafeAreaView
+      className="flex-1"
+      style={{ backgroundColor: colors.surfaceBase }}
+      edges={['top']}
+    >
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

@@ -42,7 +42,7 @@ import {
 } from '@/src/features/companion/components/AgentDashboard';
 import { useAgentStore } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { sendAgentCommand, requestAgentRefresh } from '@/services/companion';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
@@ -52,6 +52,7 @@ import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 // ---------------------------------------------------------------------------
 
 function AgentStatusIcon({ status }: { status: 'running' | 'completed' | 'failed' | 'waiting' }) {
+  const colors = useThemeColors();
   switch (status) {
     case 'running':
       return <Loader2 size={20} color={colors.agentActive} />;
@@ -88,6 +89,7 @@ function getStatusBadgeColor(
 // ---------------------------------------------------------------------------
 
 export default function AgentDetailScreen() {
+  const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const agent = useAgentStore((s) => s.agents.find((a) => a.id === id));
@@ -130,7 +132,7 @@ export default function AgentDetailScreen() {
   // Agent not found — may have been removed
   if (!agent) {
     return (
-      <SafeAreaView className="flex-1 bg-surface-base">
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
         <View className="flex-row items-center px-3 h-12">
           <Pressable
             onPress={handleBack}
@@ -175,7 +177,7 @@ export default function AgentDetailScreen() {
   const isControllable = agent.status === 'running' || agent.status === 'waiting';
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center px-3 h-12">
         <Pressable
@@ -430,6 +432,7 @@ export default function AgentDetailScreen() {
 // ---------------------------------------------------------------------------
 
 function ArtifactTypeIcon({ type }: { type: string }) {
+  const colors = useThemeColors();
   switch (type) {
     case 'file_created':
       return (

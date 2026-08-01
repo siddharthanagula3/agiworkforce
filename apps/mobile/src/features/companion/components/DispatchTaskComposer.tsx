@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
 import { cancelDispatchTask, sendDispatchTask } from '@/services/companion';
 import { useDispatchTaskStore } from '@/stores/dispatchTaskStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 const TERMINAL_STATUSES = new Set([
   'ready_for_review',
@@ -30,6 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function DispatchTaskComposer() {
+  const colors = useThemeColors();
   const [prompt, setPrompt] = useState('');
   const tasks = useDispatchTaskStore((state) => state.tasks);
   const visibleTasks = useMemo(() => tasks.slice(0, 4), [tasks]);

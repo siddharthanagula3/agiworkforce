@@ -22,7 +22,7 @@ exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recordi
       style={
         [
           {
-            "backgroundColor": "#ef4444",
+            "backgroundColor": "#f87171",
             "borderRadius": 5,
             "height": 10,
             "width": 10,
@@ -39,7 +39,12 @@ exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recordi
       Recording
     </Text>
     <Text
-      className="text-white/50 text-sm font-mono ml-2"
+      className="text-sm font-mono ml-2"
+      style={
+        {
+          "color": "rgba(255, 255, 255, 0.68)",
+        }
+      }
     >
       00:03
     </Text>
@@ -52,7 +57,7 @@ exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recordi
       audioLevel={0.6}
       barCount={7}
       barWidth={3}
-      color="#ef4444"
+      color="#f87171"
       gap={3}
       maxHeight={32}
       minHeight={4}
@@ -83,7 +88,7 @@ exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recordi
         }
       }
       accessible={true}
-      className="w-12 h-12 rounded-full bg-white/10 items-center justify-center active:bg-white/20"
+      className="w-12 h-12 rounded-full items-center justify-center"
       collapsable={false}
       focusable={true}
       onBlur={[Function]}
@@ -95,9 +100,14 @@ exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recordi
       onResponderTerminate={[Function]}
       onResponderTerminationRequest={[Function]}
       onStartShouldSetResponder={[Function]}
+      style={
+        {
+          "backgroundColor": "rgba(255, 255, 255, 0.10)",
+        }
+      }
     >
       <View
-        color="#aaa"
+        color="rgba(244, 244, 244, 0.74)"
         size={22}
         testID="icon-x"
       />
@@ -137,7 +147,7 @@ exports[`Composer — voice scaffolding snapshots RecordingOverlay locks recordi
       onStartShouldSetResponder={[Function]}
       style={
         {
-          "backgroundColor": "#c0513a",
+          "backgroundColor": "#f4f4f4",
         }
       }
     >
@@ -191,7 +201,7 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks disable
     style={
       [
         {
-          "backgroundColor": undefined,
+          "backgroundColor": "transparent",
           "borderRadius": 8,
           "padding": 6,
         },
@@ -203,7 +213,7 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks disable
     testID="voice-input-button"
   >
     <View
-      color="#aaa"
+      color="rgba(244, 244, 244, 0.74)"
       size={20}
       testID="icon-mic"
     />
@@ -251,7 +261,7 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks idle mi
     style={
       [
         {
-          "backgroundColor": undefined,
+          "backgroundColor": "transparent",
           "borderRadius": 8,
           "padding": 6,
         },
@@ -261,7 +271,7 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks idle mi
     testID="voice-input-button"
   >
     <View
-      color="#aaa"
+      color="rgba(244, 244, 244, 0.74)"
       size={20}
       testID="icon-mic"
     />

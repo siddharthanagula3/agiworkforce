@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { CheckCircle2, XCircle, Search, Terminal, Brain, Code } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { StatusStep, StepIcon } from '@/types/chat';
 
 // ---------------------------------------------------------------------------
@@ -124,6 +124,7 @@ interface TimelineRowProps {
 }
 
 function TimelineRow({ step, index, isLast, timestamp }: TimelineRowProps) {
+  const colors = useThemeColors();
   const isRunning = step.status === 'running';
   const isCompleted = step.status === 'completed';
 
