@@ -655,8 +655,14 @@ export default function ChatTabScreen() {
               style={{
                 fontSize: 26,
                 lineHeight: 30,
-                fontWeight: '600',
-                letterSpacing: -0.4,
+                // The brand wordmark is a SERIF. Web renders it with
+                // `var(--font-newsreader), Georgia, 'Times New Roman', serif`;
+                // mobile loads no custom fonts (no expo-font), so it takes the
+                // same chain from Georgia onward. A sans wordmark here did not
+                // read as the logo at all.
+                fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+                fontWeight: '500',
+                letterSpacing: 0.5,
                 color: c.textPrimary,
               }}
             >
