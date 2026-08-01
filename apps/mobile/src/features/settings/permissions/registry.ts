@@ -6,9 +6,11 @@
  *
  * API surface notes (expo-camera@55, expo-image-picker@55, expo-notifications@55,
  * expo-contacts@55):
- *   - expo-location is NOT a dependency. Location remains in the type registry
- *     for future route compatibility, but it is not surfaced in the visible
- *     settings list until a real Expo adapter exists.
+ *   - expo-location is NOT a dependency, so there is no Location entry at all.
+ *     The stub adapters that used to sit here hard-returned 'undetermined' and
+ *     the kind was excluded from PERMISSION_KINDS, so the row could never
+ *     render while the registry still claimed to model it. Adding Location back
+ *     means adding the dependency and a real adapter in the same change.
  *   - expo-camera@55 exposes getCameraPermissionsAsync / requestCameraPermissionsAsync
  *     and getMicrophonePermissionsAsync / requestMicrophonePermissionsAsync on the
  *     `Camera` named export (not as namespace-level functions).
@@ -31,7 +33,6 @@ import { Camera } from 'expo-camera';
 import {
   Mic,
   Camera as CameraIcon,
-  MapPin,
   Image,
   Bell,
   Users,
@@ -39,7 +40,12 @@ import {
   ListChecks,
   type LucideIcon,
 } from 'lucide-react-native';
-import type { MobilePermissionKind, MobilePermissionLevel, OsPermissionStatus } from './types';
+import {
+  LEVEL_STATUS_LABELS,
+  type MobilePermissionKind,
+  type MobilePermissionLevel,
+  type OsPermissionStatus,
+} from './types';
 
 export interface PermissionRegistryEntry {
   kind: MobilePermissionKind;
@@ -48,6 +54,11 @@ export interface PermissionRegistryEntry {
   icon: LucideIcon;
   /** The levels applicable to this permission kind (ordered lowest → highest). */
   applicableLevels: MobilePermissionLevel[];
+  /**
+   * Per-kind overrides for `LEVEL_STATUS_LABELS`, for grants the generic words
+   * describe inaccurately. Only set this where the shared label would mislead.
+   */
+  levelLabels?: Partial<Record<MobilePermissionLevel, string>>;
   /** Read current OS status without prompting. */
   getStatus: () => Promise<OsPermissionStatus>;
   /** Request a higher OS permission. May or may not prompt (OS decides). */
@@ -83,19 +94,6 @@ async function getCameraStatus(): Promise<OsPermissionStatus> {
 async function requestCamera(): Promise<OsPermissionStatus> {
   const result = await Camera.requestCameraPermissionsAsync();
   return toOsStatus(result.status, result.canAskAgain);
-}
-
-// expo-location is not installed. Location is intentionally not included in
-// PERMISSION_KINDS until a real adapter exists.
-async function getLocationStatus(): Promise<OsPermissionStatus> {
-  return 'undetermined';
-}
-
-async function requestLocation(): Promise<OsPermissionStatus> {
-  // Cannot request without expo-location — caller's handleSelectLevel will
-  // detect 'undetermined' and try to call this, but the UI should route to
-  // Settings for location. This returns 'undetermined' as a safe fallback.
-  return 'undetermined';
 }
 
 async function getPhotosStatus(): Promise<OsPermissionStatus> {
@@ -177,15 +175,6 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
       getStatus: getCameraStatus,
       requestPermission: requestCamera,
     },
-    location: {
-      kind: 'location',
-      label: 'Location',
-      description: 'Not used by Local Mode.',
-      icon: MapPin,
-      applicableLevels: ['denied'],
-      getStatus: getLocationStatus,
-      requestPermission: requestLocation,
-    },
     photos: {
       kind: 'photos',
       label: 'Photos & Files',
@@ -231,6 +220,10 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
         'Used only when you explicitly create an Apple Reminder; never read automatically.',
       icon: ListChecks,
       applicableLevels: ['denied', 'allow_always'],
+      // The iOS Reminders grant is what `createReminderAsync` writes through
+      // (src/features/reminders/service.ts), so "Always" understates it —
+      // granting it hands the app write access to the user's reminders.
+      levelLabels: { allow_always: 'Read & write' },
       getStatus: getRemindersStatus,
       requestPermission: requestReminders,
     },
@@ -268,4 +261,24 @@ export function osStatusToLevel(
  */
 export function isPermissionGranted(status: OsPermissionStatus): boolean {
   return status === 'granted';
+}
+
+/**
+ * The label for the level a permission is actually at right now — the string
+ * the permissions list renders in its trailing slot and speaks to VoiceOver.
+ *
+ * `osStatusToLevel` cannot answer this alone: it folds 'undetermined' into
+ * 'denied' (correct for pre-selecting a radio, since there is no OS grant
+ * either way), which would tell the user a permission was refused when the OS
+ * simply has not asked yet. So 'undetermined' resolves to the 'Ask' label
+ * directly and every other status goes through `osStatusToLevel`.
+ */
+export function permissionStatusLabel(
+  status: OsPermissionStatus,
+  kind: MobilePermissionKind,
+): string {
+  const entry = PERMISSION_REGISTRY[kind];
+  const level: MobilePermissionLevel =
+    status === 'undetermined' ? 'ask_each_time' : osStatusToLevel(status, kind);
+  return entry.levelLabels?.[level] ?? LEVEL_STATUS_LABELS[level];
 }

@@ -642,7 +642,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
       >
         <View>
           <View
-            accessibilityLabel="Microphone permission. Currently not yet asked. Tap to manage."
+            accessibilityLabel="Microphone permission. Access level: Ask. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -777,7 +777,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Camera permission. Currently not yet asked. Tap to manage."
+            accessibilityLabel="Camera permission. Access level: Ask. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -912,7 +912,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Photos & Files permission. Currently not yet asked. Tap to manage."
+            accessibilityLabel="Photos & Files permission. Access level: Ask. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1047,7 +1047,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Notifications permission. Currently not yet asked. Tap to manage."
+            accessibilityLabel="Notifications permission. Access level: Ask. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1182,7 +1182,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Contacts permission. Currently not yet asked. Tap to manage."
+            accessibilityLabel="Contacts permission. Access level: Ask. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1317,7 +1317,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Calendar permission. Currently not yet asked. Tap to manage."
+            accessibilityLabel="Calendar permission. Access level: Ask. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1452,7 +1452,7 @@ exports[`PermissionsScreen — index locks the native-backed permission list car
         </View>
         <View>
           <View
-            accessibilityLabel="Reminders permission. Currently not yet asked. Tap to manage."
+            accessibilityLabel="Reminders permission. Access level: Ask. Tap to manage."
             accessibilityRole="button"
             accessibilityState={
               {
