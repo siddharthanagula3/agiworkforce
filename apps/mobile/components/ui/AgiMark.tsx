@@ -91,7 +91,20 @@ export function AgiMark({ size = 24, mono = false, spinning = false, accentColor
   );
 
   if (spinning) {
-    return <Animated.View style={animatedStyle}>{markSvg}</Animated.View>;
+    return (
+      <Animated.View
+        style={[
+          // An explicit square box centred on the SVG. Without fixed dimensions
+          // the wrapper takes its size from layout, which can leave it
+          // non-square or offset — and a rotate transform pivots about the
+          // VIEW's centre, so the mark orbited instead of spinning in place.
+          { width: size, height: size, alignItems: 'center', justifyContent: 'center' },
+          animatedStyle,
+        ]}
+      >
+        {markSvg}
+      </Animated.View>
+    );
   }
 
   return markSvg;
