@@ -82,11 +82,9 @@ export default function ChatTabScreen() {
   const c = useThemeColors();
   const modelPickerRef = useRef<BottomSheet>(null);
   const addToChatRef = useRef<BottomSheet>(null);
-  const chatInputAttachRef = useRef<{
-    addAttachments: (
-      items: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
-    ) => void;
-  } | null>(null);
+  const chatInputAttachRef = useRef<
+    import('@/src/features/chat/components/ChatInput').ChatInputHandle | null
+  >(null);
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
@@ -532,6 +530,9 @@ export default function ChatTabScreen() {
 
   const handleExitInlineVoice = useCallback(() => {
     setVoiceInlineVisible(false);
+    // The composer only mounts on the next frame; defer so leaving voice via
+    // the keyboard pill lands the user in a focused, ready-to-type field.
+    requestAnimationFrame(() => chatInputAttachRef.current?.focus?.());
   }, []);
 
   // Voice mode replaces the composer, so the "+" sheet's results would land on
