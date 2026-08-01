@@ -49,6 +49,11 @@ export interface AgentControlProps {
   projectId: string | null;
   /** The selected model ID used to resolve its exact effort contract. */
   modelId: string;
+  /** Render the Ask/Auto/Plan/Bypass mode chip. Off where the server owns approval policy. */
+  showMode?: boolean;
+  /** Render the reasoning-effort chip. Independent of showMode — effort is a
+   *  model parameter, not a permission control. */
+  showEffort?: boolean;
   className?: string;
 }
 
@@ -303,7 +308,14 @@ function EffortChip({ conversationId, projectId, modelId, effortOptions }: Effor
 // AgentControl — public composite component
 // ---------------------------------------------------------------------------
 
-export function AgentControl({ conversationId, projectId, modelId, className }: AgentControlProps) {
+export function AgentControl({
+  conversationId,
+  projectId,
+  modelId,
+  showMode = true,
+  showEffort = true,
+  className,
+}: AgentControlProps) {
   const effortOptions = getModelEffortOptions(modelId);
 
   return (
@@ -312,8 +324,8 @@ export function AgentControl({ conversationId, projectId, modelId, className }: 
       role="group"
       aria-label="Agent controls"
     >
-      <ModeChip conversationId={conversationId} projectId={projectId} />
-      {effortOptions.length > 0 && (
+      {showMode && <ModeChip conversationId={conversationId} projectId={projectId} />}
+      {showEffort && effortOptions.length > 0 && (
         <EffortChip
           conversationId={conversationId}
           projectId={projectId}

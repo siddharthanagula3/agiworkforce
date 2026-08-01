@@ -826,6 +826,9 @@ export function ChatInterface({
                 onModelSelectorClick={handleModelSelectorClick}
                 allowModelFallbackModels={allowModelFallbackModels}
                 supportsAgentControl={runtime?.supportsAgentControl !== false}
+                supportsReasoningEffort={
+                  runtime?.supportsReasoningEffort ?? runtime?.supportsAgentControl !== false
+                }
                 hostControls={composerHostControls}
                 sendShortcut={composerSendShortcut}
                 onSelectFolder={onSelectFolderProp ? handleSelectFolder : undefined}

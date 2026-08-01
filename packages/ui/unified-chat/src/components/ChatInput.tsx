@@ -140,6 +140,7 @@ export interface ChatInputProps {
   allowModelFallbackModels?: boolean;
   /** Show Ask/Auto/Plan/Bypass only when the active runtime enforces it. */
   supportsAgentControl?: boolean;
+  supportsReasoningEffort?: boolean;
   /** Keyboard gesture that submits the composer. */
   sendShortcut?: 'enter' | 'mod-enter';
   /**
@@ -231,6 +232,7 @@ export function ChatInput({
   onModelSelectorClick,
   allowModelFallbackModels = true,
   supportsAgentControl = true,
+  supportsReasoningEffort = supportsAgentControl,
   sendShortcut = 'enter',
   hostControls,
   onSelectFolder,
@@ -419,7 +421,11 @@ export function ChatInput({
 
   // Resolve agent control state for the active conversation
   const resolveAgentControl = useAgentControlStore((s) => s.resolve);
-  const showAgentControl = Boolean(conversationId && supportsAgentControl);
+  // Rendered when EITHER capability is on: desktop enables effort only, and
+  // gating the whole row on supportsAgentControl is what hid effort there.
+  const showAgentControl = Boolean(
+    conversationId && (supportsAgentControl || supportsReasoningEffort),
+  );
   const activeAgentMode = useAgentControlStore((state) =>
     conversationId ? state.resolve(conversationId, projectId ?? null).mode : 'ask',
   );
@@ -1007,6 +1013,8 @@ export function ChatInput({
                   conversationId={conversationId}
                   projectId={projectId ?? null}
                   modelId={selectedModelId}
+                  showMode={supportsAgentControl}
+                  showEffort={supportsReasoningEffort}
                   className="min-w-0 max-w-full flex-wrap justify-start gap-1"
                 />
               )}
