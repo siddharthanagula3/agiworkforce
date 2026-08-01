@@ -724,6 +724,9 @@ importers:
       '@clerk/expo':
         specifier: ^3.4.2
         version: 3.4.2(erupvvfh2hvsqxuuvqbmwjmibi)
+      '@expo-google-fonts/newsreader':
+        specifier: ^0.4.1
+        version: 0.4.1
       '@expo/metro-runtime':
         specifier: ~55.0.12
         version: 55.0.12(@expo/dom-webview@55.0.6)(expo@55.0.28)(react-dom@19.2.6(react@19.2.6))(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))(react@19.2.6)
@@ -757,9 +760,9 @@ importers:
       expo-asset:
         specifier: ~55.0.18
         version: 55.0.18(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))(react@19.2.6)(typescript@5.9.3)
-      expo-background-fetch:
-        specifier: ~55.0.18
-        version: 55.0.18(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))
+      expo-background-task:
+        specifier: ~55.0.20
+        version: 55.0.20(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))
       expo-build-properties:
         specifier: ~55.0.16
         version: 55.0.16(expo@55.0.28)
@@ -787,6 +790,9 @@ importers:
       expo-file-system:
         specifier: ~55.0.24
         version: 55.0.24(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))
+      expo-font:
+        specifier: ~55.0.8
+        version: 55.0.8(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))(react@19.2.6)
       expo-haptics:
         specifier: ~55.0.16
         version: 55.0.16(expo@55.0.28)
@@ -3748,6 +3754,9 @@ packages:
 
   '@expo-google-fonts/material-symbols@0.4.27':
     resolution: {integrity: sha512-cnb3DZnWUWpezGFkJ8y4MT5f/lw6FcgDzeJzic+T+vpQHLHG1cg3SC3i1w1i8Bk4xKR4HPY3t9iIRNvtr5ml8A==}
+
+  '@expo-google-fonts/newsreader@0.4.1':
+    resolution: {integrity: sha512-j96W112+mj/VYP06DCq00w+twyw42w0MY7eHB/XXioNK80BcG0cIk/zogjOENZSY7qejzIFbHE/PZYqlh/6VKQ==}
 
   '@expo/cli@55.0.34':
     resolution: {integrity: sha512-b+PnIWiIUxXmSi09hmbzeBNlygP/W1uuRQU6cm6ke9P5sBEknbZ4cpBY0Xz4L1L3Pr6u/BUbIW0KXJBOppzAww==}
@@ -11066,8 +11075,8 @@ packages:
       react: 19.2.6
       react-native: '*'
 
-  expo-background-fetch@55.0.18:
-    resolution: {integrity: sha512-JqZ/KDAFbDf6YsFGAW/5L3+pn4OqkKyneXFltlGEmUMmKWWe2UV21dnSSf2rIugXF8etoMOgClegFFhrf3dTSQ==}
+  expo-background-task@55.0.20:
+    resolution: {integrity: sha512-MIv28f74V3uQtwgmcrZBB5JsyE03ivh07t9RK2Qf9hR6Z12e5pP0j2FnaykoAjoK7PeVR0G6eZU+hJR8EWkBSg==}
     peerDependencies:
       expo: '*'
 
@@ -19507,6 +19516,8 @@ snapshots:
       levn: 0.4.1
 
   '@expo-google-fonts/material-symbols@0.4.27': {}
+
+  '@expo-google-fonts/newsreader@0.4.1': {}
 
   '@expo/cli@55.0.34(@expo/dom-webview@55.0.6)(@expo/metro-runtime@55.0.12)(bufferutil@4.1.0)(expo-constants@55.0.17)(expo-font@55.0.8)(expo-router@55.0.17)(expo@55.0.28)(react-dom@19.2.6(react@19.2.6))(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))(react@19.2.6)(typescript@5.9.3)(utf-8-validate@6.0.6)':
     dependencies:
@@ -28417,7 +28428,7 @@ snapshots:
       - supports-color
       - typescript
 
-  expo-background-fetch@55.0.18(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6)):
+  expo-background-task@55.0.20(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6)):
     dependencies:
       expo: 55.0.28(patch_hash=afdzxrbf6nztsgxkuepwxbjrlq)(@babel/core@7.29.0)(@expo/dom-webview@55.0.6)(@expo/metro-runtime@55.0.12)(bufferutil@4.1.0)(expo-router@55.0.17)(react-dom@19.2.6(react@19.2.6))(react-native-webview@13.16.0(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))(react@19.2.6))(react-native-worklets@0.7.4(@babel/core@7.29.0)(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))(react@19.2.6))(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))(react@19.2.6)(typescript@5.9.3)(utf-8-validate@6.0.6)
       expo-task-manager: 55.0.18(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@types/react@19.2.14)(bufferutil@4.1.0)(react@19.2.6)(utf-8-validate@6.0.6))
