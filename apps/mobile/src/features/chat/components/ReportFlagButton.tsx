@@ -5,6 +5,12 @@
  * assistant turn. This button renders as a small flag icon below assistant
  * messages and opens a modal for category selection + optional support email.
  *
+ * There is no moderation endpoint to submit to (see services/contentReport.ts
+ * for why `/api/mobile/feedback` cannot take one), so this sheet says up front
+ * that the report is stored on the device, and its confirmation reports the
+ * outcome the service actually produced. It must never read as "submitted" for
+ * a report that never left the phone.
+ *
  * Usage: rendered inside MessageBubble for assistant turns only.
  */
 import { useState, useCallback } from 'react';
@@ -20,7 +26,13 @@ import {
 import { Flag } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-import { saveContentReport, type ReportCategory } from '@/services/contentReport';
+import {
+  openSupportEmail,
+  saveContentReport,
+  type ContentReport,
+  type ReportCategory,
+  type ReportDelivery,
+} from '@/services/contentReport';
 
 // ---------------------------------------------------------------------------
 // Category labels
@@ -34,6 +46,19 @@ const CATEGORIES: Array<{ id: ReportCategory; label: string }> = [
   { id: 'privacy', label: 'Privacy concern' },
   { id: 'other', label: 'Other' },
 ];
+
+// ---------------------------------------------------------------------------
+// Outcome copy — one line per outcome the service can actually produce
+// ---------------------------------------------------------------------------
+
+const DELIVERY_BODY: Record<ReportDelivery['kind'], string> = {
+  'stored-on-device':
+    'It stays on this device — nothing was sent. Email it to support if you want someone to review it.',
+  'email-composer-opened':
+    'Your mail app opened with the report filled in. Send that email to reach the support team.',
+  'email-unavailable':
+    'No mail app is set up on this device, so the report could not be handed off. It is still saved here.',
+};
 
 // ---------------------------------------------------------------------------
 // Props
@@ -59,12 +84,14 @@ export function ReportFlagButton({
   const [selectedCategory, setSelectedCategory] = useState<ReportCategory | null>(null);
   const [userNote, setUserNote] = useState('');
   const [sendEmail, setSendEmail] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [saved, setSaved] = useState<{ report: ContentReport; delivery: ReportDelivery } | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleOpen = useCallback(() => {
-    setSubmitted(false);
+    setSaved(null);
     setSelectedCategory(null);
     setUserNote('');
     setSendEmail(false);
@@ -81,7 +108,7 @@ export function ReportFlagButton({
     setLoading(true);
     setErrorMessage(null);
     try {
-      await saveContentReport({
+      const result = await saveContentReport({
         messageId,
         conversationId,
         contentExcerpt,
@@ -89,13 +116,25 @@ export function ReportFlagButton({
         userNote,
         sendEmail,
       });
-      setSubmitted(true);
+      setSaved(result);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Report could not be submitted.');
+      setErrorMessage(err instanceof Error ? err.message : 'Report could not be saved.');
     } finally {
       setLoading(false);
     }
   }, [messageId, conversationId, contentExcerpt, selectedCategory, userNote, sendEmail]);
+
+  /** Post-save hand-off, for a report the user chose not to email at first. */
+  const handleEmailHandoff = useCallback(async () => {
+    if (!saved) return;
+    setLoading(true);
+    const opened = await openSupportEmail(saved.report);
+    setSaved({
+      report: { ...saved.report, emailHandoffOpened: opened || saved.report.emailHandoffOpened },
+      delivery: { kind: opened ? 'email-composer-opened' : 'email-unavailable' },
+    });
+    setLoading(false);
+  }, [saved]);
 
   return (
     <>
@@ -124,21 +163,53 @@ export function ReportFlagButton({
         />
 
         <View style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}>
-          {submitted ? (
-            <View style={styles.thanksContainer}>
+          {saved ? (
+            <View style={styles.resultContainer}>
               <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
-                Thank you for your report
+                Report saved on this device
               </Text>
-              <Text style={[styles.thanksBody, { color: colors.textSecondary }]}>
-                Your feedback helps us improve AGI for everyone.
+              <Text style={[styles.resultBody, { color: colors.textSecondary }]}>
+                {DELIVERY_BODY[saved.delivery.kind]}
               </Text>
+              {saved.delivery.kind !== 'email-composer-opened' && (
+                <Pressable
+                  testID="report-email-handoff-btn"
+                  onPress={() => void handleEmailHandoff()}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Email this report to support"
+                  accessibilityState={{ disabled: loading }}
+                  style={[styles.submitBtn, { backgroundColor: colors.teal }]}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color={colors.accentText} />
+                  ) : (
+                    <Text style={[styles.submitBtnText, { color: colors.accentText }]}>
+                      Email this report to support
+                    </Text>
+                  )}
+                </Pressable>
+              )}
               <Pressable
                 testID="report-close-btn"
                 onPress={handleClose}
                 accessibilityRole="button"
-                style={[styles.submitBtn, { backgroundColor: colors.teal }]}
+                accessibilityLabel="Done"
+                style={
+                  saved.delivery.kind === 'email-composer-opened'
+                    ? [styles.submitBtn, { backgroundColor: colors.teal }]
+                    : styles.cancelBtn
+                }
               >
-                <Text style={[styles.submitBtnText, { color: colors.black }]}>Done</Text>
+                <Text
+                  style={
+                    saved.delivery.kind === 'email-composer-opened'
+                      ? [styles.submitBtnText, { color: colors.accentText }]
+                      : [styles.cancelBtnText, { color: colors.textMuted }]
+                  }
+                >
+                  Done
+                </Text>
               </Pressable>
             </View>
           ) : (
@@ -150,7 +221,8 @@ export function ReportFlagButton({
                 Report this response
               </Text>
               <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
-                Select the reason that best describes the issue.
+                Select the reason that best describes the issue. The report is saved on this device;
+                nothing is sent unless you email it to support below.
               </Text>
 
               {/* Category picker */}
@@ -215,12 +287,13 @@ export function ReportFlagButton({
                 accessibilityLabel="Additional details about the issue"
               />
 
-              {/* Email opt-in */}
+              {/* Email hand-off opt-in — the only path off this device */}
               <Pressable
                 testID="report-email-toggle"
                 onPress={() => setSendEmail((v) => !v)}
                 accessibilityRole="button"
-                accessibilityLabel="Send report to support team via email"
+                accessibilityLabel="Email this report to support"
+                accessibilityHint="Opens your mail app with the report filled in. You still choose to send it."
                 accessibilityState={{ selected: sendEmail }}
                 style={styles.emailRow}
               >
@@ -234,12 +307,19 @@ export function ReportFlagButton({
                   ]}
                 >
                   {sendEmail && (
-                    <Text style={{ color: colors.black, fontSize: 10, fontWeight: '700' }}>✓</Text>
+                    <Text style={{ color: colors.accentText, fontSize: 10, fontWeight: '700' }}>
+                      ✓
+                    </Text>
                   )}
                 </View>
-                <Text style={[styles.emailLabel, { color: colors.textSecondary }]}>
-                  Send report to support team via email
-                </Text>
+                <View style={styles.emailCopy}>
+                  <Text style={[styles.emailLabel, { color: colors.textSecondary }]}>
+                    Email this report to support
+                  </Text>
+                  <Text style={[styles.emailCaption, { color: colors.textMuted }]}>
+                    Opens your mail app with the report filled in.
+                  </Text>
+                </View>
               </Pressable>
 
               {errorMessage && (
@@ -257,13 +337,13 @@ export function ReportFlagButton({
                 </Text>
               )}
 
-              {/* Submit */}
+              {/* Save — "submit" would name a transmission that does not happen */}
               <Pressable
                 testID="report-submit-btn"
                 onPress={handleSubmit}
                 disabled={!selectedCategory || loading}
                 accessibilityRole="button"
-                accessibilityLabel={loading ? 'Submitting report' : 'Submit Report'}
+                accessibilityLabel={loading ? 'Saving report' : 'Save report'}
                 accessibilityState={{ disabled: !selectedCategory || loading }}
                 style={[
                   styles.submitBtn,
@@ -273,9 +353,11 @@ export function ReportFlagButton({
                 ]}
               >
                 {loading ? (
-                  <ActivityIndicator size="small" color={colors.black} />
+                  <ActivityIndicator size="small" color={colors.accentText} />
                 ) : (
-                  <Text style={[styles.submitBtnText, { color: colors.black }]}>Submit Report</Text>
+                  <Text style={[styles.submitBtnText, { color: colors.accentText }]}>
+                    Save report
+                  </Text>
                 )}
               </Pressable>
 
@@ -380,9 +462,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  emailCopy: {
+    flex: 1,
+    gap: 2,
+  },
   emailLabel: {
     fontSize: 14,
-    flex: 1,
+  },
+  emailCaption: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   submitBtn: {
     borderRadius: 9999,
@@ -401,11 +490,11 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     fontSize: 14,
   },
-  thanksContainer: {
+  resultContainer: {
     alignItems: 'center',
     paddingVertical: 16,
   },
-  thanksBody: {
+  resultBody: {
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,

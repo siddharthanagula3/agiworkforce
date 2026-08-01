@@ -5,10 +5,22 @@
  * harmful or inaccurate AI-generated content. This service:
  *
  *   1. Saves the report locally to MMKV (local-first, no server required)
- *   2. Optionally queues a support email if the user opts in at flag time
+ *   2. Optionally hands the report to the device mail client, addressed to
+ *      support, when the user asks for that explicitly
+ *
+ * There is NO server sink. `/api/mobile/feedback` is the only mobile-facing
+ * intake route and its schema is `{ type: 'bug' | 'feature' | 'general',
+ * message }` — it carries no category, message id, conversation id, or
+ * excerpt, and stores rows indistinguishable from feature requests, so a
+ * trust-safety report cannot be filed through it. Reporting also has to work
+ * in Local Mode, where the egress guard refuses our-cloud requests outright.
+ * Until a real moderation endpoint exists, every caller must describe this
+ * outcome truthfully: the report is on the device, and the only egress is the
+ * mail hand-off the user asked for.
  *
  * No new npm deps. Email uses React Native's Linking.openURL with a mailto
- * deep link — the OS mail client handles the actual send.
+ * deep link — the OS mail client handles the actual send, and the user still
+ * has to press send there.
  *
  * MMKV key: "content-reports:v1" → JSON array of ContentReport
  */
@@ -37,8 +49,25 @@ export type ContentReport = {
   category: ReportCategory;
   userNote: string;
   createdAt: string;
-  /** Whether the user opted to email the report to support */
-  emailedToSupport: boolean;
+  /**
+   * Whether the device mail client was actually opened with this report.
+   * Not a claim that the mail was sent — only the user can do that.
+   */
+  emailHandoffOpened: boolean;
+};
+
+/** What genuinely happened to a report, so the UI can say it without lying. */
+export type ReportDelivery =
+  /** Written to this device only. Nothing left the phone. */
+  | { kind: 'stored-on-device' }
+  /** Written to this device, and the mail client opened with it filled in. */
+  | { kind: 'email-composer-opened' }
+  /** Written to this device; no mail client could be opened. */
+  | { kind: 'email-unavailable' };
+
+export type SaveContentReportResult = {
+  report: ContentReport;
+  delivery: ReportDelivery;
 };
 
 // ---------------------------------------------------------------------------
@@ -79,10 +108,47 @@ export function clearContentReports(): void {
 }
 
 /**
- * Saves a content report locally. If sendEmail is true, opens the device
+ * Opens the device mail client with the report pre-filled, addressed to
+ * support, and records that the hand-off happened.
+ *
+ * @returns true only if the mail client was actually opened.
+ */
+export async function openSupportEmail(report: ContentReport): Promise<boolean> {
+  const subject = encodeURIComponent(`[AGI Content Report] ${report.category}`);
+  const body = encodeURIComponent(
+    [
+      `Category: ${report.category}`,
+      `Message ID: ${report.messageId}`,
+      `Conversation ID: ${report.conversationId}`,
+      `Reported at: ${report.createdAt}`,
+      '',
+      'Content excerpt:',
+      report.contentExcerpt,
+      '',
+      'User note:',
+      report.userNote || '(none)',
+    ].join('\n'),
+  );
+  const mailto = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+
+  try {
+    const canOpen = await Linking.canOpenURL(mailto);
+    if (!canOpen) return false;
+    await Linking.openURL(mailto);
+  } catch {
+    // Mail client unavailable — the report is still saved locally.
+    return false;
+  }
+
+  markHandoffOpened(report.id);
+  return true;
+}
+
+/**
+ * Saves a content report locally. If sendEmail is true, also opens the device
  * mail client pre-filled with the report details.
  *
- * @returns The saved ContentReport record.
+ * @returns the saved record plus what actually happened to it.
  */
 export async function saveContentReport(params: {
   messageId: string;
@@ -91,7 +157,7 @@ export async function saveContentReport(params: {
   category: ReportCategory;
   userNote: string;
   sendEmail: boolean;
-}): Promise<ContentReport> {
+}): Promise<SaveContentReportResult> {
   const report: ContentReport = {
     id: `rpt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     messageId: params.messageId,
@@ -100,39 +166,33 @@ export async function saveContentReport(params: {
     category: params.category,
     userNote: params.userNote.trim(),
     createdAt: new Date().toISOString(),
-    emailedToSupport: params.sendEmail,
+    emailHandoffOpened: false,
   };
 
+  // Persist before the mail hand-off so a failing/absent mail client can never
+  // lose the report.
   const existing = readReports();
   const updated = [report, ...existing].slice(0, MAX_STORED_REPORTS);
   writeReports(updated);
 
-  if (params.sendEmail) {
-    const subject = encodeURIComponent(`[AGI Content Report] ${params.category}`);
-    const body = encodeURIComponent(
-      [
-        `Category: ${params.category}`,
-        `Message ID: ${params.messageId}`,
-        `Conversation ID: ${params.conversationId}`,
-        `Reported at: ${report.createdAt}`,
-        '',
-        'Content excerpt:',
-        params.contentExcerpt.slice(0, MAX_EXCERPT_LEN),
-        '',
-        'User note:',
-        params.userNote.trim() || '(none)',
-      ].join('\n'),
-    );
-    const mailto = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
-    try {
-      const canOpen = await Linking.canOpenURL(mailto);
-      if (canOpen) {
-        await Linking.openURL(mailto);
-      }
-    } catch {
-      // Mail client unavailable — report is still saved locally
-    }
+  if (!params.sendEmail) {
+    return { report, delivery: { kind: 'stored-on-device' } };
   }
 
-  return report;
+  const opened = await openSupportEmail(report);
+  if (!opened) return { report, delivery: { kind: 'email-unavailable' } };
+  return {
+    report: { ...report, emailHandoffOpened: true },
+    delivery: { kind: 'email-composer-opened' },
+  };
+}
+
+function markHandoffOpened(reportId: string): void {
+  const reports = readReports();
+  const index = reports.findIndex((entry) => entry.id === reportId);
+  if (index === -1) return;
+  const target = reports[index];
+  if (!target) return;
+  reports[index] = { ...target, emailHandoffOpened: true };
+  writeReports(reports);
 }

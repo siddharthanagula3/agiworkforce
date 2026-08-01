@@ -22,8 +22,14 @@ import { Switch } from '@/components/ui/switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import {
+  useChatAppModeStore,
+  type MobileChatAppMode,
+} from '@/src/features/chat/store/appModeStore';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatStore } from '@/stores/chatStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import type { AutoApproveMode } from '@/types/chat';
 
 type CapabilityTone = 'active' | 'local' | 'device' | 'cloud' | 'desktop' | 'review';
 type ToggleCapability = 'imageGen' | 'codeExecution' | 'research';
@@ -34,7 +40,12 @@ interface CapabilityRowMeta {
   tone: CapabilityTone;
   label: string;
   description: string;
-  value: string;
+  /**
+   * Status pill text. Omitted for rows that only navigate: a pill reads as
+   * live state, so a row with no state to report renders a bare chevron
+   * rather than a constant that can go stale against the screen it opens.
+   */
+  value?: string;
   href?: string;
   toggle?: ToggleCapability;
 }
@@ -44,8 +55,26 @@ interface CapabilitySection {
   rows: CapabilityRowMeta[];
 }
 
-function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
+/**
+ * Pill-sized labels for the stored approval mode. The full sentences belong to
+ * the Action approvals screen; the authority for the value itself is
+ * `useSettingsStore.autoApproveMode`, which is what the chat approval card
+ * actually reads at run time.
+ */
+const APPROVAL_MODE_LABELS: Record<AutoApproveMode, string> = {
+  ask: 'Ask',
+  smart: 'Low-risk',
+  full: 'All actions',
+};
+
+function makeSections(input: {
+  cloudUnlocked: boolean;
+  appMode: MobileChatAppMode;
+  autoApproveMode: AutoApproveMode;
+}): CapabilitySection[] {
+  const { cloudUnlocked, appMode, autoApproveMode } = input;
   const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
+  const localModeActive = appMode === 'local';
 
   return [
     {
@@ -54,10 +83,12 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
         {
           key: 'local-mode',
           icon: Brain,
-          tone: 'active',
+          tone: localModeActive ? 'active' : 'cloud',
           label: 'Local Mode',
-          description: 'Private chat runs on this device.',
-          value: 'Active',
+          description: localModeActive
+            ? 'Private chat runs on this device.'
+            : 'Chat is set to AGI Cloud, so new chats run on our servers.',
+          value: localModeActive ? 'Active' : 'Off',
         },
         {
           key: 'memory',
@@ -65,7 +96,6 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
           tone: 'local',
           label: 'Memory',
           description: 'View and manage local memory saved on this device.',
-          value: 'Local',
           href: '/(app)/settings/memory',
         },
         {
@@ -97,7 +127,6 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
           tone: 'local',
           label: 'Artifacts',
           description: 'Open generated previews and files from chat.',
-          value: 'Available',
           href: '/(app)/artifacts',
         },
         {
@@ -128,7 +157,7 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
           tone: 'review',
           label: 'Action approvals',
           description: 'Choose how AGI asks before tool actions.',
-          value: 'Ask',
+          value: APPROVAL_MODE_LABELS[autoApproveMode],
           href: '/(app)/settings/auto-approve',
         },
       ],
@@ -152,7 +181,6 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
           tone: 'cloud',
           label: 'Cross-device continuity',
           description: 'See how Managed Cloud tasks continue across mobile, web, and desktop.',
-          value: 'Beta',
           href: '/(app)/continuity',
         },
         {
@@ -172,7 +200,7 @@ function makeSections(cloudUnlocked: boolean): CapabilitySection[] {
           tone: 'desktop',
           label: 'Desktop control',
           description: 'Run desktop workflows through paired Desktop sessions.',
-          value: 'Desktop',
+          href: '/(app)/companion',
         },
       ],
     },
@@ -184,7 +212,12 @@ export default function CapabilitiesScreen() {
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const chatFeatures = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
-  const sections = makeSections(cloudUnlocked);
+  // Every badge on this screen has to come from the state it claims to
+  // describe: this screen's whole job is telling the user what the assistant
+  // may do, so a constant rendered inside a status pill is a false statement.
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
+  const sections = makeSections({ cloudUnlocked, appMode, autoApproveMode });
 
   const navigate = useCallback(
     (href: string) => {
@@ -289,7 +322,7 @@ function toneColors(tone: CapabilityTone, colors: ReturnType<typeof useThemeColo
 
 function accessibilityLabelFor(row: CapabilityRowMeta): string {
   const description = row.description.replace(/[.。]+$/, '');
-  return `${row.label}. ${description}. ${row.value}`;
+  return row.value ? `${row.label}. ${description}. ${row.value}` : `${row.label}. ${description}`;
 }
 
 function CapabilityRow({
@@ -365,7 +398,7 @@ function CapabilityRow({
               toggleDisabled ? 'Sign in to change this Managed Cloud preference.' : undefined
             }
           />
-        ) : (
+        ) : row.value ? (
           <View
             style={{
               borderRadius: 999,
@@ -380,7 +413,7 @@ function CapabilityRow({
               {row.value}
             </Text>
           </View>
-        )}
+        ) : null}
         {onPress ? <ChevronRight size={17} color={colors.textMuted} /> : null}
       </View>
     </View>
