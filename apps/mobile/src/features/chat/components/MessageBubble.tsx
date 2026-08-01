@@ -546,7 +546,11 @@ export const MessageBubble = memo(function MessageBubble({
     <Animated.View
       testID={isAssistant && message.isStreaming ? 'chat.message.assistant.streaming' : undefined}
       entering={reducedMotion ? undefined : FadeInDown.duration(200).springify()}
-      className="px-4 py-3"
+      // py-4 rather than py-3: a right-aligned user bubble followed by a
+      // full-width assistant code block left only ~24pt between two filled
+      // surfaces of different widths, which reads as the block overlapping the
+      // bubble's lower-left corner rather than as two separate turns.
+      className="px-4 py-4"
     >
       <Pressable
         onLongPress={handleLongPress}
