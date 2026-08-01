@@ -55,7 +55,9 @@ jest.mock('@/lib/mmkv', () => ({
 
 import CapabilitiesScreen from '../src/features/settings/capabilities';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatStore } from '../stores/chatStore';
+import { useSettingsStore } from '../stores/settingsStore';
 
 describe('Capabilities settings screen', () => {
   beforeEach(() => {
@@ -79,6 +81,8 @@ describe('Capabilities settings screen', () => {
         research: false,
       },
     }));
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useSettingsStore.setState({ autoApproveMode: 'ask' });
   });
 
   it('renders real Cloud preference switches and keeps automatic capabilities as status rows', () => {
@@ -108,7 +112,7 @@ describe('Capabilities settings screen', () => {
     ).toBeTruthy();
     expect(
       getByLabelText(
-        'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop. Beta',
+        'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop',
       ),
     ).toBeTruthy();
     expect(queryAllByRole('switch')).toHaveLength(3);
@@ -123,18 +127,60 @@ describe('Capabilities settings screen', () => {
   it('navigates status rows to real settings surfaces', () => {
     const { getByLabelText } = render(<CapabilitiesScreen />);
 
-    fireEvent.press(
-      getByLabelText('Memory. View and manage local memory saved on this device. Local'),
-    );
+    fireEvent.press(getByLabelText('Memory. View and manage local memory saved on this device'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory');
 
     fireEvent.press(
       getByLabelText(
-        'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop. Beta',
+        'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop',
       ),
     );
     expect(mockPush).toHaveBeenCalledWith('/(app)/continuity');
+  });
+
+  it('tracks the stored approval mode across all three values', () => {
+    // The row used to render a hardcoded "Ask" while the chat approval card
+    // read a different stored mode.
+    const expected: Array<['ask' | 'smart' | 'full', string]> = [
+      ['ask', 'Ask'],
+      ['smart', 'Low-risk'],
+      ['full', 'All actions'],
+    ];
+
+    for (const [mode, label] of expected) {
+      useSettingsStore.setState({ autoApproveMode: mode });
+      const { getByLabelText, unmount } = render(<CapabilitiesScreen />);
+      expect(
+        getByLabelText(`Action approvals. Choose how AGI asks before tool actions. ${label}`),
+      ).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it('reports Local Mode as off while the app runs in Cloud mode', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { getByLabelText, queryByLabelText } = render(<CapabilitiesScreen />);
+
+    expect(
+      getByLabelText('Local Mode. Chat is set to AGI Cloud, so new chats run on our servers. Off'),
+    ).toBeTruthy();
+    expect(queryByLabelText('Local Mode. Private chat runs on this device. Active')).toBeNull();
+  });
+
+  it('renders no status pill on rows that only navigate', () => {
+    const { getByLabelText, queryByText } = render(<CapabilitiesScreen />);
+
+    // Constants rendered inside a status pill read as live state and go stale
+    // against the screen they open, so navigation-only rows carry no pill.
+    for (const stale of ['Local', 'Available', 'Beta', 'Desktop']) {
+      expect(queryByText(stale)).toBeNull();
+    }
+    expect(getByLabelText('Artifacts. Open generated previews and files from chat')).toBeTruthy();
+    expect(
+      getByLabelText('Desktop control. Run desktop workflows through paired Desktop sessions'),
+    ).toBeTruthy();
   });
 
   it('shows Cloud instead of Sign in after cloud access is unlocked', () => {

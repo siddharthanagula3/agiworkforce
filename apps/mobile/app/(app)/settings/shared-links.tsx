@@ -7,6 +7,12 @@
  * invite gate it referenced was removed by the 2026-06-27 public-alpha
  * decision. The only piece genuinely missing was a list endpoint — now
  * GET /api/share.
+ *
+ * The list is Managed Cloud data, so in Local Mode the egress guard refuses
+ * the request before any network I/O. That refusal carries a developer-facing
+ * explanation which must never reach the screen: this file renders the shared
+ * CloudSyncBlockedBanner for that case and a plain sentence for everything
+ * else, so no transport string is ever shown to a user.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, Share, RefreshControl, Alert } from 'react-native';
@@ -18,12 +24,19 @@ import { ArrowLeft, Link2, Trash2, AlertCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import { fetchSharedLinks, revokeSharedLink, type SharedLink } from '@/src/features/shared-links';
 
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'ready'; links: SharedLink[] }
-  | { kind: 'error'; message: string };
+  /** Local Mode: the request is refused on-device, so there is nothing to load. */
+  | { kind: 'blocked' }
+  | { kind: 'error' };
+
+const LOAD_FAILED_MESSAGE = 'Check your connection and try again.';
+const REVOKE_FAILED_MESSAGE = 'The link is still active. Please try again.';
 
 function formatDate(value: string): string {
   if (!value) return '';
@@ -31,9 +44,24 @@ function formatDate(value: string): string {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString();
 }
 
+/**
+ * Structural check rather than an `instanceof` import: pulling the egress
+ * guard into a screen would drag its network dependencies along with it.
+ */
+function isEgressBlocked(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'EGRESS_BLOCKED_LOCAL_MODE'
+  );
+}
+
 export default function SharedLinksScreen() {
   const router = useRouter();
   const { colors: c, statusBarStyle } = useTheme();
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const isCloudMode = appMode === 'cloud';
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -43,16 +71,18 @@ export default function SharedLinksScreen() {
       const links = await fetchSharedLinks();
       setState({ kind: 'ready', links });
     } catch (error) {
-      setState({
-        kind: 'error',
-        message: error instanceof Error ? error.message : 'Could not load shared links.',
-      });
+      setState(isEgressBlocked(error) ? { kind: 'blocked' } : { kind: 'error' });
     }
   }, []);
 
   useEffect(() => {
+    if (!isCloudMode) {
+      setState({ kind: 'blocked' });
+      return;
+    }
+    setState({ kind: 'loading' });
     void load();
-  }, [load]);
+  }, [isCloudMode, load]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -63,10 +93,11 @@ export default function SharedLinksScreen() {
   }, [router]);
 
   const handleRefresh = useCallback(async () => {
+    if (!isCloudMode) return;
     setRefreshing(true);
     await load();
     setRefreshing(false);
-  }, [load]);
+  }, [isCloudMode, load]);
 
   const handleRevoke = useCallback(
     (link: SharedLink) => {
@@ -86,11 +117,8 @@ export default function SharedLinksScreen() {
                 try {
                   await revokeSharedLink(link.token);
                   await load();
-                } catch (error) {
-                  Alert.alert(
-                    'Could not revoke',
-                    error instanceof Error ? error.message : 'Please try again.',
-                  );
+                } catch {
+                  Alert.alert('Could not revoke', REVOKE_FAILED_MESSAGE);
                 } finally {
                   setRevoking(null);
                 }
@@ -140,6 +168,10 @@ export default function SharedLinksScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={c.teal} />
         }
       >
+        {state.kind === 'blocked' && (
+          <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
+        )}
+
         {state.kind === 'loading' && (
           <Text style={{ color: c.textSecondary, fontSize: 13, paddingVertical: 24 }}>
             Loading your shared links…
@@ -156,7 +188,7 @@ export default function SharedLinksScreen() {
               padding: 14,
             }}
             accessible
-            accessibilityLabel={`Could not load shared links. ${state.message}`}
+            accessibilityLabel={`Could not load shared links. ${LOAD_FAILED_MESSAGE}`}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <AlertCircle size={14} color={c.agentWarning} />
@@ -165,7 +197,7 @@ export default function SharedLinksScreen() {
               </Text>
             </View>
             <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
-              {state.message}
+              {LOAD_FAILED_MESSAGE}
             </Text>
             <Pressable
               onPress={() => void load()}

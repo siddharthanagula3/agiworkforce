@@ -10,6 +10,8 @@
  *  - clearContentReports: deletes the MMKV key
  *  - sendEmail=true: Linking.openURL called with a mailto: URL for support address
  *  - sendEmail=false: Linking.openURL NOT called
+ *  - the returned delivery describes what actually happened, and the stored
+ *    record never claims a mail hand-off that did not occur
  *
  * Google Play GenAI policy requires this in-app flagging mechanism.
  */
@@ -43,6 +45,7 @@ import {
   saveContentReport,
   getContentReports,
   clearContentReports,
+  openSupportEmail,
   type ContentReport,
   type ReportCategory,
 } from '../services/contentReport';
@@ -96,14 +99,16 @@ afterEach(() => {
 
 describe('saveContentReport — persistence', () => {
   it('persists a report to MMKV and returns the saved record', async () => {
-    const report = await saveContentReport(makeParams());
+    const { report, delivery } = await saveContentReport(makeParams());
 
     expect(report.messageId).toBe('msg-001');
     expect(report.conversationId).toBe('conv-001');
     expect(report.category).toBe('inaccurate');
-    expect(report.emailedToSupport).toBe(false);
+    expect(report.emailHandoffOpened).toBe(false);
     expect(report.id).toMatch(/^rpt_/);
     expect(report.createdAt).toBeTruthy();
+    // Nothing left the device, and the caller is told exactly that.
+    expect(delivery).toEqual({ kind: 'stored-on-device' });
   });
 
   it('stores the report in MMKV so getContentReports returns it', async () => {
@@ -131,14 +136,14 @@ describe('saveContentReport — persistence', () => {
 describe('saveContentReport — contentExcerpt truncation', () => {
   it('truncates contentExcerpt to 500 characters', async () => {
     const longExcerpt = 'X'.repeat(MAX_EXCERPT_LEN + 100);
-    const report = await saveContentReport(makeParams({ contentExcerpt: longExcerpt }));
+    const { report } = await saveContentReport(makeParams({ contentExcerpt: longExcerpt }));
 
     expect(report.contentExcerpt.length).toBe(MAX_EXCERPT_LEN);
   });
 
   it('does not truncate excerpts within the 500-char limit', async () => {
     const shortExcerpt = 'Short excerpt.';
-    const report = await saveContentReport(makeParams({ contentExcerpt: shortExcerpt }));
+    const { report } = await saveContentReport(makeParams({ contentExcerpt: shortExcerpt }));
 
     expect(report.contentExcerpt).toBe(shortExcerpt);
   });
@@ -231,27 +236,33 @@ describe('saveContentReport — sendEmail=true', () => {
     expect(calledUrl).toContain('body=');
   });
 
-  it('sets emailedToSupport=true on the saved record', async () => {
-    const report = await saveContentReport(makeParams({ sendEmail: true }));
-    expect(report.emailedToSupport).toBe(true);
+  it('records the hand-off only once the mail client actually opened', async () => {
+    const { report, delivery } = await saveContentReport(makeParams({ sendEmail: true }));
+    expect(report.emailHandoffOpened).toBe(true);
+    expect(delivery).toEqual({ kind: 'email-composer-opened' });
+    expect(getContentReports()[0]?.emailHandoffOpened).toBe(true);
   });
 
-  it('still saves the report locally even when Linking.openURL rejects', async () => {
+  it('still saves the report, and does not claim a hand-off, when openURL rejects', async () => {
     openUrlSpy.mockRejectedValueOnce(new Error('no mail client'));
 
-    const report = await saveContentReport(makeParams({ sendEmail: true }));
+    const { report, delivery } = await saveContentReport(makeParams({ sendEmail: true }));
 
-    // The service swallows the Linking error — report must still be persisted
-    expect(report.emailedToSupport).toBe(true);
+    // The report must survive a failed hand-off — but the record must not say
+    // the mail client opened when it did not.
+    expect(report.emailHandoffOpened).toBe(false);
+    expect(delivery).toEqual({ kind: 'email-unavailable' });
     expect(getContentReports().length).toBe(1);
+    expect(getContentReports()[0]?.emailHandoffOpened).toBe(false);
   });
 
   it('does not call Linking.openURL when canOpenURL returns false', async () => {
     canOpenSpy.mockResolvedValueOnce(false);
 
-    await saveContentReport(makeParams({ sendEmail: true }));
+    const { delivery } = await saveContentReport(makeParams({ sendEmail: true }));
 
     expect(openUrlSpy).not.toHaveBeenCalled();
+    expect(delivery).toEqual({ kind: 'email-unavailable' });
   });
 });
 
@@ -265,8 +276,34 @@ describe('saveContentReport — sendEmail=false', () => {
     expect(openUrlSpy).not.toHaveBeenCalled();
   });
 
-  it('sets emailedToSupport=false on the saved record', async () => {
-    const report = await saveContentReport(makeParams({ sendEmail: false }));
-    expect(report.emailedToSupport).toBe(false);
+  it('sets emailHandoffOpened=false on the saved record', async () => {
+    const { report } = await saveContentReport(makeParams({ sendEmail: false }));
+    expect(report.emailHandoffOpened).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// openSupportEmail — the post-save hand-off offered from the confirmation
+// ---------------------------------------------------------------------------
+
+describe('openSupportEmail', () => {
+  it('opens the mail client for an already-stored report and marks the record', async () => {
+    const { report } = await saveContentReport(makeParams({ sendEmail: false }));
+
+    await expect(openSupportEmail(report)).resolves.toBe(true);
+
+    const calledUrl: string = openUrlSpy.mock.calls[0][0] as string;
+    expect(calledUrl.startsWith('mailto:support@agiworkforce.com')).toBe(true);
+    expect(getContentReports()[0]?.emailHandoffOpened).toBe(true);
+  });
+
+  it('returns false and leaves the record untouched when no mail client exists', async () => {
+    const { report } = await saveContentReport(makeParams({ sendEmail: false }));
+    canOpenSpy.mockResolvedValueOnce(false);
+
+    await expect(openSupportEmail(report)).resolves.toBe(false);
+
+    expect(openUrlSpy).not.toHaveBeenCalled();
+    expect(getContentReports()[0]?.emailHandoffOpened).toBe(false);
   });
 });
