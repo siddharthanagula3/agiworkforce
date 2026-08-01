@@ -53,6 +53,25 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
+// The memory store is the SQLite/cloud-sync boundary; this screen only reads the
+// loaded entries to date its Memory row, so stub the boundary and keep the real
+// freshness derivation (describeMemoryFreshness) under test.
+const mockMemoryEntries: Array<{
+  id: string;
+  fact: string;
+  source_conversation_id: string | null;
+  pinned: boolean;
+  created_at: number;
+}> = [];
+const mockFetchMemories = jest.fn(async () => undefined);
+
+jest.mock('../src/features/memory/store', () => {
+  const useMemoryStore = (
+    selector: (state: { entries: unknown[]; fetchMemories: () => Promise<void> }) => unknown,
+  ) => selector({ entries: mockMemoryEntries, fetchMemories: mockFetchMemories });
+  return { useMemoryStore };
+});
+
 import CapabilitiesScreen from '../src/features/settings/capabilities';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
@@ -76,6 +95,7 @@ describe('Capabilities settings screen', () => {
     useChatStore.setState((state) => ({
       features: {
         ...state.features,
+        webSearch: true,
         imageGen: true,
         codeExecution: false,
         research: false,
@@ -83,7 +103,11 @@ describe('Capabilities settings screen', () => {
     }));
     useChatAppModeStore.setState({ appMode: 'local' });
     useSettingsStore.setState({ autoApproveMode: 'ask' });
+    mockMemoryEntries.length = 0;
   });
+
+  const WEB_SEARCH_LABEL =
+    'Web search. Let supported Cloud models search the web automatically when they need current information.';
 
   it('renders real Cloud preference switches and keeps automatic capabilities as status rows', () => {
     const { getByText, getByLabelText, queryAllByRole, queryByText } = render(
@@ -94,11 +118,7 @@ describe('Capabilities settings screen', () => {
     expect(getByText('What AGI can use')).toBeTruthy();
     expect(getByText('On this device')).toBeTruthy();
     expect(getByLabelText('Local Mode. Private chat runs on this device. Active')).toBeTruthy();
-    expect(
-      getByLabelText(
-        'Web search. Uses current web information automatically when the Cloud model supports it. Sign in',
-      ),
-    ).toBeTruthy();
+    expect(getByLabelText(WEB_SEARCH_LABEL)).toBeTruthy();
     expect(
       getByLabelText('AGI Code. Allow supported Cloud models to execute code in a secure sandbox.'),
     ).toBeTruthy();
@@ -115,10 +135,11 @@ describe('Capabilities settings screen', () => {
         'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop',
       ),
     ).toBeTruthy();
-    expect(queryAllByRole('switch')).toHaveLength(3);
+    expect(queryAllByRole('switch')).toHaveLength(4);
     expect(
       getByLabelText('AGI Code. Allow supported Cloud models to execute code in a secure sandbox.'),
     ).toBeDisabled();
+    expect(getByLabelText(WEB_SEARCH_LABEL)).toBeDisabled();
     expect(queryByText(/Claude/i)).toBeNull();
     expect(queryByText(/ChatGPT/i)).toBeNull();
     expect(queryByText(/future/i)).toBeNull();
@@ -183,14 +204,50 @@ describe('Capabilities settings screen', () => {
     ).toBeTruthy();
   });
 
-  it('shows Cloud instead of Sign in after cloud access is unlocked', () => {
+  it('enables the Cloud preference switches after cloud access is unlocked', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
 
     const { getByLabelText } = render(<CapabilitiesScreen />);
 
+    expect(getByLabelText(WEB_SEARCH_LABEL)).not.toBeDisabled();
+  });
+
+  it('binds the Web search row to the persisted send-path preference', () => {
+    // PAR-M33: this row used to be a non-interactive "Automatic" pill, so a
+    // privacy-sensitive user had no way to stop an automatic cloud web search.
+    useWaitlistStore.setState({ cloudUnlocked: true });
+
+    const { getByLabelText } = render(<CapabilitiesScreen />);
+    const webSearchSwitch = getByLabelText(WEB_SEARCH_LABEL);
+    expect(webSearchSwitch.props.value).toBe(true);
+
+    fireEvent(webSearchSwitch, 'valueChange', false);
+    expect(useChatStore.getState().features.webSearch).toBe(false);
+
+    fireEvent(webSearchSwitch, 'valueChange', true);
+    expect(useChatStore.getState().features.webSearch).toBe(true);
+  });
+
+  it('dates the Memory row from the newest stored memory and claims nothing when empty', () => {
+    const { getByLabelText, unmount } = render(<CapabilitiesScreen />);
+    // Empty store: no freshness sentence may be invented.
     expect(
-      getByLabelText(
-        'Web search. Uses current web information automatically when the Cloud model supports it. Automatic',
+      getByLabelText('Memory. View and manage local memory saved on this device'),
+    ).toBeTruthy();
+    unmount();
+
+    mockMemoryEntries.push({
+      id: 'm1',
+      fact: 'prefers dark mode',
+      source_conversation_id: null,
+      pinned: false,
+      created_at: Date.now() - 2 * 86_400_000,
+    });
+
+    const second = render(<CapabilitiesScreen />);
+    expect(
+      second.getByLabelText(
+        'Memory. View and manage local memory saved on this device. Updated 2 days ago',
       ),
     ).toBeTruthy();
   });

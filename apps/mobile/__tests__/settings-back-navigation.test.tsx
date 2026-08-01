@@ -108,6 +108,15 @@ jest.mock('expo-calendar', () => ({
   requestRemindersPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
+// Capabilities dates its Memory row from the memory store; this suite is about
+// navigation, so stub the SQLite/cloud-sync boundary rather than let an async
+// load land after the test finishes.
+jest.mock('../src/features/memory/store', () => ({
+  useMemoryStore: (
+    selector: (state: { entries: unknown[]; fetchMemories: () => Promise<void> }) => unknown,
+  ) => selector({ entries: [], fetchMemories: jest.fn(async () => undefined) }),
+}));
+
 import CapabilitiesScreen from '../src/features/settings/capabilities';
 import NotificationPreferencesScreen from '../src/features/settings/notifications';
 import PermissionsScreen from '../src/features/settings/permissions';

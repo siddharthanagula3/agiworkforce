@@ -76,6 +76,130 @@ export function shouldConsolidateMemoryOnClient(opts: {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Read-only summary — the auditable "what has this learned about me" view.
+// ---------------------------------------------------------------------------
+
+/**
+ * One grouped block of the memory summary. Groups are derived STRICTLY from
+ * fields already stored on the entry (`pinned`, `source_conversation_id`) —
+ * nothing is inferred, classified, or paraphrased, so the screen can never
+ * assert something the stored memory does not say.
+ */
+export interface MemorySummarySection {
+  key: 'pinned' | 'from-chats' | 'added-by-you';
+  title: string;
+  description: string;
+  facts: string[];
+}
+
+export interface MemorySummary {
+  sections: MemorySummarySection[];
+  /** Entries the summary was generated from, before dedupe. */
+  sourceCount: number;
+  /** Distinct facts rendered after dedupe. */
+  includedCount: number;
+  /** Newest entry timestamp in epoch ms, or null when there are no entries. */
+  newestAt: number | null;
+  /** Oldest entry timestamp in epoch ms, or null when there are no entries. */
+  oldestAt: number | null;
+}
+
+const SUMMARY_SECTION_META: Record<
+  MemorySummarySection['key'],
+  { title: string; description: string }
+> = {
+  pinned: {
+    title: 'Pinned',
+    description: 'Kept at the top and preferred whenever nothing else matches.',
+  },
+  'from-chats': {
+    title: 'Learned from chats',
+    description: 'Saved automatically from a conversation turn.',
+  },
+  'added-by-you': {
+    title: 'Added by you',
+    description: 'Written or imported by hand rather than learned from a chat.',
+  },
+};
+
+/**
+ * Build a read-only overview of stored memories.
+ *
+ * This is a local projection, not a model call: it groups, dedupes and counts
+ * the entries the device already holds. Dedupe reuses the same normalized key
+ * the write path uses (`dedupeAgainstExisting`), so the summary can never show
+ * the same disclosure twice while the store legitimately holds two variants.
+ */
+export function summarizeMemoryFacts(entries: MemoryFact[]): MemorySummary {
+  const buckets: Record<MemorySummarySection['key'], MemoryFact[]> = {
+    pinned: [],
+    'from-chats': [],
+    'added-by-you': [],
+  };
+
+  let newestAt: number | null = null;
+  let oldestAt: number | null = null;
+
+  for (const entry of entries) {
+    if (typeof entry.created_at === 'number' && Number.isFinite(entry.created_at)) {
+      newestAt = newestAt === null ? entry.created_at : Math.max(newestAt, entry.created_at);
+      oldestAt = oldestAt === null ? entry.created_at : Math.min(oldestAt, entry.created_at);
+    }
+    if (entry.pinned) {
+      buckets.pinned.push(entry);
+    } else if (entry.source_conversation_id) {
+      buckets['from-chats'].push(entry);
+    } else {
+      buckets['added-by-you'].push(entry);
+    }
+  }
+
+  const sections: MemorySummarySection[] = [];
+  let includedCount = 0;
+  for (const key of ['pinned', 'from-chats', 'added-by-you'] as const) {
+    const facts = dedupeAgainstExisting(
+      buckets[key].map((entry) => entry.fact),
+      [],
+    );
+    if (facts.length === 0) continue;
+    includedCount += facts.length;
+    sections.push({ key, ...SUMMARY_SECTION_META[key], facts });
+  }
+
+  return { sections, sourceCount: entries.length, includedCount, newestAt, oldestAt };
+}
+
+/** Whole days between two epoch-ms instants, floored at 0. */
+function wholeDaysBetween(from: number, to: number): number {
+  return Math.max(0, Math.floor((to - from) / 86_400_000));
+}
+
+/**
+ * Freshness caption for a memory surface, e.g. "Updated 2 days ago".
+ *
+ * Returns null when there is nothing to report — an unknown or empty store must
+ * render no freshness line at all rather than a fabricated one.
+ */
+export function describeMemoryFreshness(
+  entries: MemoryFact[],
+  now: number = Date.now(),
+): string | null {
+  let newestAt: number | null = null;
+  for (const entry of entries) {
+    if (typeof entry.created_at !== 'number' || !Number.isFinite(entry.created_at)) continue;
+    newestAt = newestAt === null ? entry.created_at : Math.max(newestAt, entry.created_at);
+  }
+  if (newestAt === null) return null;
+
+  const days = wholeDaysBetween(newestAt, now);
+  if (days === 0) return 'Updated today';
+  if (days === 1) return 'Updated yesterday';
+  if (days < 30) return `Updated ${days} days ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? 'Updated 1 month ago' : `Updated ${months} months ago`;
+}
+
 export async function consolidateFactsFromTurn(params: {
   message: string;
   conversationId: string | null;

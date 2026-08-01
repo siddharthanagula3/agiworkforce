@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
@@ -29,10 +29,12 @@ import {
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useMemoryStore } from '@/src/features/memory/store';
+import { describeMemoryFreshness } from '@/src/features/memory/services/consolidation';
 import type { AutoApproveMode } from '@/types/chat';
 
 type CapabilityTone = 'active' | 'local' | 'device' | 'cloud' | 'desktop' | 'review';
-type ToggleCapability = 'imageGen' | 'codeExecution' | 'research';
+type ToggleCapability = 'webSearch' | 'imageGen' | 'codeExecution' | 'research';
 
 interface CapabilityRowMeta {
   key: string;
@@ -71,10 +73,15 @@ function makeSections(input: {
   cloudUnlocked: boolean;
   appMode: MobileChatAppMode;
   autoApproveMode: AutoApproveMode;
+  /** Derived from the newest stored memory; null when nothing is stored yet. */
+  memoryFreshness: string | null;
 }): CapabilitySection[] {
-  const { cloudUnlocked, appMode, autoApproveMode } = input;
+  const { cloudUnlocked, appMode, autoApproveMode, memoryFreshness } = input;
   const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
   const localModeActive = appMode === 'local';
+  const memoryDescription = localModeActive
+    ? 'View and manage local memory saved on this device.'
+    : 'View and manage the account memories used by Cloud chats.';
 
   return [
     {
@@ -95,7 +102,11 @@ function makeSections(input: {
           icon: Brain,
           tone: 'local',
           label: 'Memory',
-          description: 'View and manage local memory saved on this device.',
+          // Freshness is appended only when a stored memory can date it. An
+          // empty store renders no freshness claim rather than a made-up one.
+          description: memoryFreshness
+            ? `${memoryDescription} ${memoryFreshness}.`
+            : memoryDescription,
           href: '/(app)/settings/memory',
         },
         {
@@ -169,9 +180,10 @@ function makeSections(input: {
           tone: 'cloud',
           label: 'Web search',
           description: FEATURES.webSearch
-            ? 'Uses current web information automatically when the Cloud model supports it.'
+            ? 'Let supported Cloud models search the web automatically when they need current information.'
             : 'Web search is not available in this mobile release.',
-          value: FEATURES.webSearch ? (cloudUnlocked ? 'Automatic' : 'Sign in') : 'Off',
+          value: FEATURES.webSearch ? cloudValue : 'Off',
+          ...(FEATURES.webSearch ? { toggle: 'webSearch' as const } : {}),
         },
         {
           key: 'continuity',
@@ -215,7 +227,15 @@ export default function CapabilitiesScreen() {
   // may do, so a constant rendered inside a status pill is a false statement.
   const appMode = useChatAppModeStore((s) => s.appMode);
   const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
-  const sections = makeSections({ cloudUnlocked, appMode, autoApproveMode });
+  // Freshness for the Memory row comes from the real store this screen links
+  // to, read through the same mode-aware facade the Memory screen uses.
+  const memoryEntries = useMemoryStore((s) => s.entries);
+  const fetchMemories = useMemoryStore((s) => s.fetchMemories);
+  useEffect(() => {
+    void fetchMemories();
+  }, [fetchMemories, appMode]);
+  const memoryFreshness = useMemo(() => describeMemoryFreshness(memoryEntries), [memoryEntries]);
+  const sections = makeSections({ cloudUnlocked, appMode, autoApproveMode, memoryFreshness });
 
   const navigate = useCallback(
     (href: string) => {

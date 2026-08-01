@@ -38,6 +38,13 @@ export interface LocalSettingsState {
   speechLanguage: string;
   /** Auto-listen after AI speaks in voice conversation mode */
   autoListenEnabled: boolean;
+  /**
+   * Master memory switch for this device. When false, no turn sent from this
+   * device reads saved memories or past-chat excerpts and no new memory is
+   * written, regardless of the two switches below. Existing entries are kept
+   * (memory is disabled, not erased) so turning it back on restores them.
+   */
+  memoryEnabled: boolean;
   /** Search prior Local chats and use relevant saved memories while answering */
   referencePastChats: boolean;
   /** Generate durable Local memories from eligible chat turns */
@@ -51,6 +58,7 @@ export interface LocalSettingsState {
   setNotificationsEnabled: (enabled: boolean) => void;
   setSpeechLanguage: (language: string) => void;
   setAutoListenEnabled: (enabled: boolean) => void;
+  setMemoryEnabled: (enabled: boolean) => void;
   setReferencePastChats: (enabled: boolean) => void;
   setGenerateMemoryFromHistory: (enabled: boolean) => void;
   setPersonalization: (partial: Partial<Personalization>) => void;
@@ -83,6 +91,7 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       autoListenEnabled: true,
       // Preserve the pre-preference Local behavior. Local history never leaves
       // this device.
+      memoryEnabled: true,
       referencePastChats: true,
       generateMemoryFromHistory: true,
       personalization: defaultPersonalization,
@@ -93,6 +102,7 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       setSpeechLanguage: (language) => set({ speechLanguage: language }),
       setAutoListenEnabled: (enabled) => set({ autoListenEnabled: enabled }),
+      setMemoryEnabled: (enabled) => set({ memoryEnabled: enabled }),
       setReferencePastChats: (enabled) => set({ referencePastChats: enabled }),
       setGenerateMemoryFromHistory: (enabled) => set({ generateMemoryFromHistory: enabled }),
       setPersonalization: (partial) =>
@@ -140,6 +150,7 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
                 notificationsEnabled: s.notificationsEnabled ?? true,
                 speechLanguage: s.speechLanguage ?? 'en',
                 autoListenEnabled: s.autoListenEnabled ?? true,
+                memoryEnabled: s.memoryEnabled ?? true,
                 referencePastChats: s.referencePastChats ?? true,
                 generateMemoryFromHistory: s.generateMemoryFromHistory ?? true,
                 personalization: s.personalization ?? defaultPersonalization,

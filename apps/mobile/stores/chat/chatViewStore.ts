@@ -15,8 +15,12 @@ export type ToolAccess = 'auto' | 'on-demand' | 'always';
 /** Feature toggles available in the "Add to Chat" sheet. */
 export interface ChatFeatures {
   /**
-   * @deprecated Retained only for persisted-state compatibility. Search is
-   * automatic and capability-clamped at send time; the composer has no toggle.
+   * User preference for automatic web search, owned by the Capabilities screen
+   * (`src/features/settings/capabilities`). It is ANDed with the deployment
+   * flag, the account capability grant, and the model capability clamp at send
+   * time (`chatExecutionStore`), so turning it on can never force search onto a
+   * model or plan that cannot execute it — but turning it OFF always suppresses
+   * the `web_search` request field.
    */
   webSearch: boolean;
   imageGen: boolean;

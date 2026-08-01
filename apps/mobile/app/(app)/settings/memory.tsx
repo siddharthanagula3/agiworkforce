@@ -4,12 +4,14 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { ArrowLeft, Brain, Search, X, Plus, Upload } from 'lucide-react-native';
+import { ArrowLeft, Brain, FileText, Search, X, Plus, Upload } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
+import { SettingsGroup, SettingsRow } from '@/src/features/settings/common';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
 import { MemoryControlsCard } from '@/src/features/memory/components/MemoryControlsCard';
+import { describeMemoryFreshness } from '@/src/features/memory/services/consolidation';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
@@ -39,26 +41,48 @@ export default function MemoryScreen() {
   const { scope } = useLocalSearchParams<{ scope?: string }>();
   const currentIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
+  const localMemoryEnabled = useLocalSettingsStore((state) => state.memoryEnabled);
   const localReferencePastChats = useLocalSettingsStore((state) => state.referencePastChats);
   const localGenerateMemory = useLocalSettingsStore((state) => state.generateMemoryFromHistory);
+  const setLocalMemoryEnabled = useLocalSettingsStore((state) => state.setMemoryEnabled);
   const setLocalReferencePastChats = useLocalSettingsStore((state) => state.setReferencePastChats);
   const setLocalGenerateMemory = useLocalSettingsStore(
     (state) => state.setGenerateMemoryFromHistory,
   );
+  const cloudMemoryEnabled = useCloudSettingsStore((state) => state.memoryEnabled);
   const cloudReferencePastChats = useCloudSettingsStore((state) => state.referencePastChats);
   const cloudGenerateMemory = useCloudSettingsStore((state) => state.generateMemoryFromHistory);
+  const setCloudMemoryEnabled = useCloudSettingsStore((state) => state.setMemoryEnabled);
   const setCloudReferencePastChats = useCloudSettingsStore((state) => state.setReferencePastChats);
   const setCloudGenerateMemory = useCloudSettingsStore(
     (state) => state.setGenerateMemoryFromHistory,
   );
+  const memoryEnabled = currentIsCloud ? cloudMemoryEnabled : localMemoryEnabled;
   const referencePastChats = currentIsCloud ? cloudReferencePastChats : localReferencePastChats;
   const generateMemoryFromHistory = currentIsCloud ? cloudGenerateMemory : localGenerateMemory;
+  const setMemoryEnabled = currentIsCloud ? setCloudMemoryEnabled : setLocalMemoryEnabled;
   const setReferencePastChats = currentIsCloud
     ? setCloudReferencePastChats
     : setLocalReferencePastChats;
   const setGenerateMemoryFromHistory = currentIsCloud
     ? setCloudGenerateMemory
     : setLocalGenerateMemory;
+
+  /**
+   * The master switch also drives the mode-scoped retrieval preference. In Cloud
+   * mode `setReferencePastChats` is the ONLY existing lever that reaches the
+   * account (`capabilities.memory` via services/cloudSettingsMapping.ts), and
+   * the server gates its own auto-memory writes on exactly that key — so a
+   * master switch that did not move it would leave the server still learning
+   * from this device's turns while the UI claimed memory was off.
+   */
+  const handleMemoryEnabledChange = useCallback(
+    (enabled: boolean) => {
+      setMemoryEnabled(enabled);
+      setReferencePastChats(enabled);
+    },
+    [setMemoryEnabled, setReferencePastChats],
+  );
   // The memory store's read/write path follows the CURRENT chat mode toggle
   // (trust-boundary requirement — chat-time retrieval must match the active
   // conversation's mode). When the user navigates here via a Local- or
@@ -135,6 +159,8 @@ export default function MemoryScreen() {
     }
   }, [error, clearError]);
 
+  const memoryFreshness = useMemo(() => describeMemoryFreshness(entries), [entries]);
+
   // Determine displayed entries: search results or category-filtered entries
   const displayedEntries = useMemo(() => {
     const source = searchQuery.trim() ? filteredEntries : entries;
@@ -175,6 +201,10 @@ export default function MemoryScreen() {
 
   const handleImportPress = useCallback(() => {
     router.push('/(app)/settings/memory-import' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  const handleSummaryPress = useCallback(() => {
+    router.push('/(app)/settings/memory-summary' as Parameters<typeof router.push>[0]);
   }, [router]);
 
   const handleAddPress = useCallback(() => {
@@ -296,11 +326,25 @@ export default function MemoryScreen() {
 
       <MemoryControlsCard
         isCloud={currentIsCloud}
+        memoryEnabled={memoryEnabled}
         referencePastChats={referencePastChats}
         generateMemoryFromHistory={generateMemoryFromHistory}
+        onMemoryEnabledChange={handleMemoryEnabledChange}
         onReferencePastChatsChange={setReferencePastChats}
         onGenerateMemoryFromHistoryChange={setGenerateMemoryFromHistory}
       />
+
+      <View className="px-4">
+        <SettingsGroup>
+          <SettingsRow
+            label="Memory summary"
+            icon={FileText}
+            {...(memoryFreshness ? { value: memoryFreshness } : {})}
+            onPress={handleSummaryPress}
+            isLast
+          />
+        </SettingsGroup>
+      </View>
 
       {/* Count subtitle */}
       <View className="px-4 mb-2">
@@ -325,98 +369,111 @@ export default function MemoryScreen() {
         </Animated.View>
       )}
 
-      {/* Search bar */}
+      {/*
+        Stored entries stay listed, editable and deletable while memory is off —
+        the master switch stops the assistant using them, it does not lock the
+        user out of their own data. Dimming states that they are inert right now.
+      */}
       <View
-        className="mx-4 mb-3 flex-row items-center gap-2 rounded-xl px-3 py-2"
-        style={{
-          backgroundColor: colors.surfaceElevated,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}
+        className="flex-1"
+        style={{ opacity: memoryEnabled ? 1 : 0.45 }}
+        accessibilityLabel={
+          memoryEnabled ? undefined : 'Memory is off. Saved memories are not used in chats.'
+        }
       >
-        <Search size={16} color={colors.textMuted} />
-        <TextInput
-          className="flex-1 py-0"
-          style={{ color: colors.textPrimary, fontSize: 14, letterSpacing: 0 }}
-          placeholder="Search memories..."
-          placeholderTextColor={colors.textMuted}
-          value={searchText}
-          onChangeText={handleSearchChange}
-          selectionColor={colors.teal}
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-        />
-        {searchText.length > 0 && (
-          <Pressable onPress={handleClearSearch} className="p-0.5">
-            <X size={14} color={colors.textMuted} />
-          </Pressable>
-        )}
-      </View>
-
-      {/* Category filter chips */}
-      <View className="mb-3">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        {/* Search bar */}
+        <View
+          className="mx-4 mb-3 flex-row items-center gap-2 rounded-xl px-3 py-2"
+          style={{
+            backgroundColor: colors.surfaceElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
         >
-          {FILTER_CATEGORIES.map((cat) => {
-            const isActive = activeFilter === cat;
-            return (
-              <Pressable
-                key={cat}
-                onPress={() => setActiveFilter(cat)}
-                accessibilityLabel={`${cat} memories`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-                className="px-3 py-1.5 rounded-full"
-                style={{
-                  borderWidth: 1,
-                  borderColor: isActive ? colors.accentBorder : colors.border,
-                  backgroundColor: isActive ? colors.accentSurface : colors.surfaceElevated,
-                }}
-              >
-                <Text
+          <Search size={16} color={colors.textMuted} />
+          <TextInput
+            className="flex-1 py-0"
+            style={{ color: colors.textPrimary, fontSize: 14, letterSpacing: 0 }}
+            placeholder="Search memories..."
+            placeholderTextColor={colors.textMuted}
+            value={searchText}
+            onChangeText={handleSearchChange}
+            selectionColor={colors.teal}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {searchText.length > 0 && (
+            <Pressable onPress={handleClearSearch} className="p-0.5">
+              <X size={14} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
+
+        {/* Category filter chips */}
+        <View className="mb-3">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+          >
+            {FILTER_CATEGORIES.map((cat) => {
+              const isActive = activeFilter === cat;
+              return (
+                <Pressable
+                  key={cat}
+                  onPress={() => setActiveFilter(cat)}
+                  accessibilityLabel={`${cat} memories`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                  className="px-3 py-1.5 rounded-full"
                   style={{
-                    color: isActive ? colors.textPrimary : colors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: '500',
+                    borderWidth: 1,
+                    borderColor: isActive ? colors.accentBorder : colors.border,
+                    backgroundColor: isActive ? colors.accentSurface : colors.surfaceElevated,
                   }}
                 >
-                  {cat}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
+                  <Text
+                    style={{
+                      color: isActive ? colors.textPrimary : colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: '500',
+                    }}
+                  >
+                    {cat}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
 
-      {/* Memory list */}
-      {loading && entries.length === 0 ? (
-        <LoadingSkeleton colors={colors} />
-      ) : displayedEntries.length === 0 ? (
-        <EmptyState
-          hasSearch={searchText.length > 0}
-          isPinnedFilter={activeFilter === 'Pinned'}
-          colors={colors}
-        />
-      ) : (
-        <FlatList
-          data={displayedEntries}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={loading && entries.length > 0}
-              onRefresh={handleRefresh}
-              tintColor={colors.teal}
-            />
-          }
-        />
-      )}
+        {/* Memory list */}
+        {loading && entries.length === 0 ? (
+          <LoadingSkeleton colors={colors} />
+        ) : displayedEntries.length === 0 ? (
+          <EmptyState
+            hasSearch={searchText.length > 0}
+            isPinnedFilter={activeFilter === 'Pinned'}
+            colors={colors}
+          />
+        ) : (
+          <FlatList
+            data={displayedEntries}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={loading && entries.length > 0}
+                onRefresh={handleRefresh}
+                tintColor={colors.teal}
+              />
+            }
+          />
+        )}
+      </View>
 
       {/* Floating action button */}
       {!addSheetOpen ? (
