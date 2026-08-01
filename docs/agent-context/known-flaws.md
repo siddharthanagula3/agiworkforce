@@ -2,9 +2,53 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-07-25
+Last updated: 2026-08-01
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
+
+## 2026-08-01 verification-battery findings
+
+Found by the full battery recorded in
+`docs/agent-context/remediation-handoff-2026-08-01.md`. All four are
+pre-existing on `main` unless noted.
+
+- **`DESKTOP-MIGRATION-V76-REALTIME-METRICS-BRICK-01` (open, production
+  hazard):** the v76 step's else-branch at
+  `apps/desktop/src-tauri/src/data/db/migrations.rs:6058` runs
+  `CREATE INDEX IF NOT EXISTS … ON realtime_metrics(…)` unguarded —
+  `IF NOT EXISTS` protects the index name, never the table. Any database at
+  schema version 58 that lacks `realtime_metrics` (the baseline
+  `CREATE TABLE IF NOT EXISTS` at `migrations.rs:3624` is skipped when
+  upgrading from a stamped v58) hard-errors and aborts the entire migration
+  chain, bricking the upgrade. Reproduced deterministically by
+  `test_migration_v59_rebuilds_and_redacts_auth_sessions` and
+  `test_migration_v59_skips_duplicate_hashed_tokens`. Fix by guarding the
+  else-branch on table existence; do NOT fix by adding the table to test
+  fixtures — that hides the production hazard.
+- **`DESKTOP-EFFORT-TESTS-CATALOG-DRIFT-01` (open, needs product decision):**
+  `models_config.rs:770` asserts `claude-sonnet-5` does not support `low`
+  effort and `provider_adapter_tests.rs:1028` asserts its `output_config` is
+  dropped, but `3044350c5` ("fix(models): admit economy reasoning route",
+  2026-07-29, on `main`) added `low`/`medium` to that model's
+  `supportedEfforts` in `packages/contracts/types/src/models.json`. Either the
+  economy route genuinely admits sonnet-5 low effort (update both tests) or
+  the catalog over-declares (narrow `supportedEfforts`); both tests move
+  together. The `haiku` local binding at `provider_adapter_tests.rs` is a
+  misleading leftover from the haiku retirement and should be renamed in the
+  same change.
+- **`DOCS-RESTRUCTURE-PLAN-DELETED-DANGLING-CITATIONS-01` (open):**
+  `906fe5cda` deleted `docs/plans/monorepo-restructure-2026-07-08.md` (and
+  `docs/plans/rust-engine-extraction-2026-07-09.md`) while `PLAN.md:6`,
+  `PLAN.md` ("Active Workstream" wave reference),
+  `docs/current/technical-architecture.md:9`, and a CHANGELOG entry still cite
+  them — the active restructure currently has no readable detailed plan
+  document. No guardrail catches dangling doc citations.
+- **`REPO-CODEOWNERS-TODOMD-GHOST-ENTRY-01` (open, coupled pair):** root
+  `TODO.md` no longer exists, but `.github/CODEOWNERS:12` still carries a
+  `/TODO.md` entry and `scripts/check-codeowners-contract.mjs:37` still
+  REQUIRES it. `check:codeowners` passes only while both halves stay in sync;
+  removing either alone turns the guardrail red. Drop the entry from both in
+  one change, or restore neither.
 
 ## 2026-07-30 workspace-index boundary update
 
