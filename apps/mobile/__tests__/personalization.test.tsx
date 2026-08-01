@@ -9,6 +9,7 @@
  *   - Pre-fills values from settingsStore
  */
 
+import { Alert } from 'react-native';
 import { act, render, fireEvent } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
@@ -324,5 +325,67 @@ describe('Personalization page', () => {
 
     expect(getByDisplayValue('Account B')).toBeTruthy();
     expect(() => getByDisplayValue('Account A unsaved private draft')).toThrow();
+  });
+});
+
+/**
+ * PAR-M46 — Appearance is owned by the Settings root row alone.
+ *
+ * This screen commits every field through the header Save and offers
+ * "Discard changes?" on back, but the theme card it used to render wrote
+ * straight to the store on tap and was never part of `hasChanges`. Discarding
+ * therefore reverted the text fields while silently keeping the theme change it
+ * had implicitly promised to revert.
+ */
+describe('Personalization theme card removal', () => {
+  beforeEach(() => {
+    resetSettingsStore();
+    useAuthStore.setState({ clerkUserId: null });
+    jest.clearAllMocks();
+    mockCanGoBack.mockReturnValue(true);
+    mockUseLocalSearchParams.mockReturnValue({});
+  });
+
+  it('renders no appearance control at all', () => {
+    const { queryByText, queryByLabelText } = render(<PersonalizationScreen />);
+
+    expect(queryByText('Theme')).toBeNull();
+    expect(queryByText('System follows your device appearance setting.')).toBeNull();
+    for (const label of ['Light', 'Dark', 'System']) {
+      expect(queryByLabelText(label)).toBeNull();
+    }
+  });
+
+  it('leaves the stored theme untouched when a draft edit is discarded', () => {
+    const originalSetThemeMode = useLocalSettingsStore.getState().setThemeMode;
+    const setThemeMode = jest.fn();
+    useLocalSettingsStore.setState({ themeMode: 'dark', setThemeMode } as never);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    try {
+      const { getByLabelText, getByPlaceholderText } = render(<PersonalizationScreen />);
+
+      fireEvent.changeText(getByPlaceholderText('Your full name'), 'Draft only');
+      fireEvent.press(getByLabelText('Go back'));
+
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Discard changes?',
+        'You have unsaved changes.',
+        expect.any(Array),
+      );
+      const buttons = alertSpy.mock.calls[0][2] as { text?: string; onPress?: () => void }[];
+      const discard = buttons.find((button) => button.text === 'Discard');
+      act(() => discard?.onPress?.());
+
+      expect(mockBack).toHaveBeenCalledTimes(1);
+      // Nothing on this screen can write the theme any more, so "Discard"
+      // really does revert everything the screen showed.
+      expect(setThemeMode).not.toHaveBeenCalled();
+      expect(useLocalSettingsStore.getState().themeMode).toBe('dark');
+      expect(useLocalSettingsStore.getState().personalization.fullName).toBe('');
+    } finally {
+      alertSpy.mockRestore();
+      useLocalSettingsStore.setState({ setThemeMode: originalSetThemeMode } as never);
+    }
   });
 });
