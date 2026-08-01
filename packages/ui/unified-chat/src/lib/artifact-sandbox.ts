@@ -83,7 +83,15 @@ function injectHeadContent(documentHtml: string, headContent: string): string {
     return documentHtml.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${headContent}</head>`);
   }
 
-  return `${headContent}${documentHtml}`;
+  // Neither <head> nor <html>, but buildSandboxedHtml already classified this as
+  // a full document — a bare `<!doctype html>` followed by markup does that.
+  // Prepending here left the CSP <meta> outside <head>, and a CSP delivered
+  // outside <head> is IGNORED OUTRIGHT by browsers: the sandbox then executed
+  // model-generated code with no policy at all, silently, with only a console
+  // message to show for it. Build a real head so the meta is always inside one.
+  const doctype = documentHtml.match(/^\s*<!doctype[^>]*>/i)?.[0] ?? '';
+  const body = documentHtml.slice(doctype.length);
+  return `${doctype}<html><head>${headContent}</head><body>${body}</body></html>`;
 }
 
 /**
