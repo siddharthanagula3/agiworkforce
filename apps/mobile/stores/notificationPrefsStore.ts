@@ -9,7 +9,13 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { NotificationEventType } from '@/services/notifications';
-import { isMinuteWithinQuietHours } from '@agiworkforce/types';
+import {
+  isDateWithinQuietHours,
+  type BreakReminderMinutes,
+  type QuietHoursPreferences,
+  type TimeFocusPreferences,
+  type TimeFocusWeekday,
+} from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,12 +29,23 @@ import { isMinuteWithinQuietHours } from '@agiworkforce/types';
  */
 export type NotificationCategory = 'approvals' | 'task_updates' | 'errors' | 'status';
 
-export interface QuietHours {
-  enabled: boolean;
-  /** 24-hour format "HH:MM" */
-  startTime: string;
-  /** 24-hour format "HH:MM" */
-  endTime: string;
+/**
+ * Quiet hours use the shared cross-surface shape so a schedule set on web and
+ * one set on mobile are the same object, evaluated by the same code. Mobile
+ * previously stored only `{enabled, startTime, endTime}` and evaluated with the
+ * day-blind `isMinuteWithinQuietHours`, so a weekends-only schedule saved on
+ * web would have silenced mobile every day of the week.
+ */
+export type QuietHours = QuietHoursPreferences;
+
+export const ALL_WEEKDAYS: readonly TimeFocusWeekday[] = [0, 1, 2, 3, 4, 5, 6];
+
+function deviceTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
 }
 
 export interface NotificationPrefsState {
@@ -38,10 +55,15 @@ export interface NotificationPrefsState {
   vibrationEnabled: Record<'critical' | 'high' | 'normal' | 'low', boolean>;
   /** Quiet hours configuration */
   quietHours: QuietHours;
+  /** How often to nudge for a break, or null for never. Shared with web. */
+  breakReminderMinutes: BreakReminderMinutes | null;
 
   setCategoryEnabled: (category: NotificationCategory, enabled: boolean) => void;
   setVibrationEnabled: (priority: 'critical' | 'high' | 'normal' | 'low', enabled: boolean) => void;
   setQuietHours: (quietHours: Partial<QuietHours>) => void;
+  setBreakReminderMinutes: (minutes: BreakReminderMinutes | null) => void;
+  /** Replace the shared time-and-focus slice wholesale (used when syncing from the account). */
+  applyTimeFocusPreferences: (preferences: TimeFocusPreferences) => void;
 
   /** Returns true if the given event type should fire a notification right now */
   shouldNotify: (type: NotificationEventType) => boolean;
@@ -77,7 +99,7 @@ export function getCategoryForType(type: NotificationEventType): NotificationCat
 export function shouldNotifyWithPreferences(
   type: NotificationEventType,
   preferences: Pick<NotificationPrefsState, 'categoryEnabled' | 'quietHours'>,
-  minuteOfDay: number,
+  now: Date,
 ): boolean {
   const category = getCategoryForType(type);
   if (!preferences.categoryEnabled[category]) return false;
@@ -87,15 +109,7 @@ export function shouldNotifyWithPreferences(
     type === 'emergency_stop_triggered' ||
     type === 'agent_approval_needed' ||
     type === 'approval_pending_escalation';
-  if (
-    preferences.quietHours.enabled &&
-    !isCritical &&
-    isMinuteWithinQuietHours(
-      minuteOfDay,
-      preferences.quietHours.startTime,
-      preferences.quietHours.endTime,
-    )
-  ) {
+  if (!isCritical && isDateWithinQuietHours(now, preferences.quietHours)) {
     return false;
   }
 
@@ -123,9 +137,12 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
       },
       quietHours: {
         enabled: false,
+        days: ALL_WEEKDAYS,
         startTime: '22:00',
         endTime: '08:00',
+        timezone: deviceTimezone(),
       },
+      breakReminderMinutes: null,
 
       setCategoryEnabled: (category, enabled) => {
         set((state) => ({
@@ -145,15 +162,48 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
         }));
       },
 
+      setBreakReminderMinutes: (minutes) => {
+        set({ breakReminderMinutes: minutes });
+      },
+
+      applyTimeFocusPreferences: (preferences) => {
+        set({
+          quietHours: preferences.quietHours,
+          breakReminderMinutes: preferences.breakReminderMinutes,
+        });
+      },
+
       shouldNotify: (type: NotificationEventType): boolean => {
-        const state = get();
-        const now = new Date();
-        return shouldNotifyWithPreferences(type, state, now.getHours() * 60 + now.getMinutes());
+        return shouldNotifyWithPreferences(type, get(), new Date());
       },
     }),
     {
       name: 'notification-prefs-store',
       storage: createJSONStorage(() => mmkvStorage),
+      version: 1,
+      /**
+       * v0 quiet hours had no `days` and no `timezone`, and were evaluated every
+       * day. The shared shape treats an empty `days` list as "disabled", so
+       * migrating a v0 schedule to `days: []` would silently switch quiet hours
+       * OFF for anyone who had them on. Every day is the faithful reading of a
+       * v0 schedule.
+       */
+      migrate: (persisted, version) => {
+        if (version >= 1 || persisted === null || typeof persisted !== 'object') return persisted;
+        const state = persisted as { quietHours?: Partial<QuietHours> };
+        const quiet = state.quietHours;
+        if (!quiet) return persisted;
+        return {
+          ...state,
+          quietHours: {
+            enabled: quiet.enabled === true,
+            days: Array.isArray(quiet.days) && quiet.days.length > 0 ? quiet.days : ALL_WEEKDAYS,
+            startTime: quiet.startTime ?? '22:00',
+            endTime: quiet.endTime ?? '08:00',
+            timezone: quiet.timezone ?? deviceTimezone(),
+          },
+        };
+      },
       // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
