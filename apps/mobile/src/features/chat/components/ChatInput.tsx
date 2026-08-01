@@ -20,6 +20,7 @@ import {
   Plus,
   AudioLines,
   ArrowUp,
+  Maximize2,
   Square,
   X,
   Telescope,
@@ -31,6 +32,8 @@ import { Text } from '@/components/ui/text';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
 import { SendButton } from './SendButton';
+import { ComposerFullScreenEditor } from './ComposerFullScreenEditor';
+import { ModelSelectorButton } from './ModelSelectorButton';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import { Waveform } from '@/src/features/voice/components/Waveform';
@@ -61,6 +64,22 @@ import { formatClock } from '@/src/lib/time';
  *  composer — matching ChatGPT/Claude mobile. */
 const LARGE_PASTE_THRESHOLD = 10_000;
 
+/**
+ * Imperative surface the composer exposes to its host screen.
+ *
+ * `focus` is optional so a host that only ever pushes attachments can keep a
+ * narrower ref type; the composer always provides it.
+ */
+export interface ChatInputHandle {
+  addAttachments: (items: Attachment[]) => void;
+  /**
+   * Put the keyboard back on the composer. Voice mode needs this: leaving
+   * inline voice via "Ask AGI" must land the user in a FOCUSED composer, not
+   * merely on a screen that happens to contain one.
+   */
+  focus?: () => void;
+}
+
 interface ChatInputProps {
   /**
    * Send handler. May return (a promise of) a boolean: `false` means the send
@@ -80,8 +99,11 @@ interface ChatInputProps {
   isOnline?: boolean;
   /** Number of messages currently waiting in the offline queue */
   queueSize?: number;
-  /** Ref to imperatively add attachments from outside (e.g. AddToChatSheet pickers) */
-  attachRef?: React.RefObject<{ addAttachments: (items: Attachment[]) => void } | null>;
+  /**
+   * Ref to drive the composer from outside: add attachments (e.g. AddToChatSheet
+   * pickers) or focus the text field (e.g. returning from inline voice).
+   */
+  attachRef?: React.RefObject<ChatInputHandle | null>;
   /**
    * Per-file privacy label rendered as a chip on attachment thumbnails.
    * Sourced from the host's SendPreviewPresentation. PLAN.md section 5:
@@ -141,6 +163,9 @@ export function ChatInput({
   // 40pt buttons while the pill grew tall — the "width goes very large but
   // only the middle" report. Both ChatGPT and Claude restack the same way.
   const [isMultiline, setIsMultiline] = useState(false);
+  // Full-screen editing of the current message (PAR-M05). No text of its own —
+  // it renders this composer's `text`/`handleChangeText`.
+  const [expandedEditorVisible, setExpandedEditorVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
   const recordingStartTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -239,10 +264,14 @@ export function ChatInput({
     inputRef.current?.focus();
   }, []);
 
-  // Expose addAttachments to parent via ref so pickers can forward results
+  // Expose addAttachments to parent via ref so pickers can forward results,
+  // plus focus() so a host can hand the keyboard back to the composer.
   useImperativeHandle(
     attachRef,
     () => ({
+      focus: () => {
+        inputRef.current?.focus();
+      },
       addAttachments: (items: Attachment[]) => {
         // Validate up front so an unsupported/oversized file is rejected with a
         // specific reason instead of silently becoming an empty stub at send time.
@@ -546,6 +575,21 @@ export function ChatInput({
     onOpenAddToChat?.();
   }, [hapticsEnabled, onOpenAddToChat]);
 
+  const handleExpandEditor = useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setExpandedEditorVisible(true);
+  }, [hapticsEnabled]);
+
+  // Collapse before running the send so a rejected send (auth/egress gate)
+  // leaves the draft in the composer the user is looking at, not behind a
+  // modal that has already been dismissed for them.
+  const handleExpandedSend = useCallback(() => {
+    setExpandedEditorVisible(false);
+    handleSendButtonPress();
+  }, [handleSendButtonPress]);
+
   const queueLabel = queueSize > 0 ? ` (${queueSize} queued)` : '';
   const placeholder = isStreaming
     ? `Reply to ${modelName}...`
@@ -681,6 +725,34 @@ export function ChatInput({
             minHeight: 44,
           }}
         >
+          {/* Expand to a full-screen editor. Pinned inside the card's top-right
+              corner and shown only while stacked, matching the reference's
+              appearance threshold (IMG_0672) — a one-line pill has nothing to
+              expand. The stacked TextInput reserves room for it on the right so
+              the first line never runs underneath the glyph. */}
+          {stacked ? (
+            <Pressable
+              onPress={handleExpandEditor}
+              style={{
+                position: 'absolute',
+                top: 6,
+                right: 6,
+                width: 28,
+                height: 28,
+                borderRadius: radii.full,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              hitSlop={10}
+              testID="chat.composer.expand"
+              accessibilityLabel="Expand message"
+              accessibilityHint="Opens the message in a full-screen editor"
+              accessibilityRole="button"
+            >
+              <Maximize2 size={16} color={themeColors.textMuted} />
+            </Pressable>
+          ) : null}
+
           {/* [+] sits INSIDE the pill on the left, matching ChatGPT
               (IMG_0674, references-2/voice-03). It previously sat outside as a
               separate 40pt circle, which is Claude's arrangement, not
@@ -771,7 +843,7 @@ export function ChatInput({
               // stacked column, where it would collapse the input to the
               // card's minHeight and scroll the text behind a 2-line window.
               // Stretch for width and let the content drive height instead.
-              ...(stacked ? { alignSelf: 'stretch' } : { flex: 1 }),
+              ...(stacked ? { alignSelf: 'stretch', paddingRight: 28 } : { flex: 1 }),
               color: themeColors.textPrimary,
               fontSize: 15,
               paddingVertical: 0,
@@ -842,6 +914,14 @@ export function ChatInput({
                 >
                   <Plus size={18} color={themeColors.textMuted} />
                 </Pressable>
+                {/* The model answering this chat, on the control row beside [+]
+                    — Claude's arrangement (IMG_0730); ChatGPT puts the same
+                    text-only label next to the mic (IMG_0689). It lives here
+                    rather than in a chip row above the composer, which the
+                    founder rejected on 2026-07-29, and rather than in the
+                    compact pill, where it would eat the single-line input's
+                    width — the exact complaint the restack fixed. */}
+                {onOpenModelPicker ? <ModelSelectorButton onPress={onOpenModelPicker} /> : null}
                 <View style={{ flex: 1 }} />
               </>
             ) : null}
@@ -918,6 +998,20 @@ export function ChatInput({
           )}
         </View>
       </View>
+
+      {/* Full-screen editing of the same draft. Rendered from the composer (not
+          the screen) so it shares this component's text state, send handler and
+          large-paste behaviour with no plumbing through the host. */}
+      <ComposerFullScreenEditor
+        visible={expandedEditorVisible}
+        value={text}
+        onChangeText={handleChangeText}
+        placeholder={placeholder}
+        sendState={sendButtonState}
+        canSend={hasContent || isStreaming === true}
+        onClose={() => setExpandedEditorVisible(false)}
+        onSend={handleExpandedSend}
+      />
     </View>
   );
 }
