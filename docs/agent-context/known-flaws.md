@@ -12,19 +12,17 @@ Found by the full battery recorded in
 `docs/agent-context/remediation-handoff-2026-08-01.md`. All four are
 pre-existing on `main` unless noted.
 
-- **`DESKTOP-MIGRATION-V76-REALTIME-METRICS-BRICK-01` (open, production
-  hazard):** the v76 step's else-branch at
-  `apps/desktop/src-tauri/src/data/db/migrations.rs:6058` runs
+- **Resolved — `DESKTOP-MIGRATION-V76-REALTIME-METRICS-BRICK-01` (was a
+  production hazard):** the v76 step's else-branch ran
   `CREATE INDEX IF NOT EXISTS … ON realtime_metrics(…)` unguarded —
-  `IF NOT EXISTS` protects the index name, never the table. Any database at
-  schema version 58 that lacks `realtime_metrics` (the baseline
-  `CREATE TABLE IF NOT EXISTS` at `migrations.rs:3624` is skipped when
-  upgrading from a stamped v58) hard-errors and aborts the entire migration
-  chain, bricking the upgrade. Reproduced deterministically by
-  `test_migration_v59_rebuilds_and_redacts_auth_sessions` and
-  `test_migration_v59_skips_duplicate_hashed_tokens`. Fix by guarding the
-  else-branch on table existence; do NOT fix by adding the table to test
-  fixtures — that hides the production hazard.
+  `IF NOT EXISTS` protects the index name, never the table — so any database
+  at schema version 58 lacking `realtime_metrics` (the baseline
+  `CREATE TABLE IF NOT EXISTS` runs only for fresh installs) aborted the whole
+  migration chain. Fixed the same day it was found: a `table_exists` helper
+  now guards the else-branch (no-op when the table is missing), with the
+  hazard explained in a code comment. Both v59 migration tests that reproduced
+  it pass; desktop lib suite at 4,577 passed with only the two
+  effort-catalog-drift tests (below) remaining.
 - **`DESKTOP-EFFORT-TESTS-CATALOG-DRIFT-01` (open, needs product decision):**
   `models_config.rs:770` asserts `claude-sonnet-5` does not support `low`
   effort and `provider_adapter_tests.rs:1028` asserts its `output_config` is
