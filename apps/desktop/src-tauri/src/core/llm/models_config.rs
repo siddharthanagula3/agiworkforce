@@ -767,7 +767,9 @@ mod tests {
         assert!(model_supports_effort("claude-opus-5", "high"));
         assert!(model_supports_effort("claude-opus-5", "xhigh"));
         assert!(model_supports_effort("claude-opus-5", "max"));
-        assert!(!model_supports_effort("claude-sonnet-5", "low"));
+        // 3044350c5 admitted the economy reasoning route: sonnet-5 now declares
+        // low/medium in the catalog, and support must follow the catalog.
+        assert!(model_supports_effort("claude-sonnet-5", "low"));
         assert!(!model_supports_effort("unknown-anthropic-model", "high"));
         assert!(!model_supports_effort("claude-opus-5", "minimal"));
     }
