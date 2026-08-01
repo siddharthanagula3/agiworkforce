@@ -48,6 +48,40 @@ pre-existing on `main` unless noted.
   removing either alone turns the guardrail red. Drop the entry from both in
   one change, or restore neither.
 
+## 2026-08-01 mobile parity P0 wave
+
+Follow-ups and supersessions from the parity remediation (backlog:
+`~/Desktop/mobile-parity-backlog-2026-08-01.md`; P0 slices landed as the
+`feat(mobile)`/`fix(mobile)` commits of 2026-08-01).
+
+- **Supersedes `MOBILE-VOICE-CLOUD-TTS-DISABLED`:** the disabled Cloud TTS
+  provider option that entry relabeled no longer exists — PAR-M20 removed the
+  option, the dead `provider === 'cloud'` branch, and the provider card
+  entirely; the engine renders as a caption on the Voice row. The
+  `TTSProvider` union in `stores/settingsStore.ts` still includes `'cloud'`
+  and persists `ttsProvider` with no remaining runtime reader — inert state; a
+  store/contract narrowing is a separate change.
+- **`MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01` (open, policy risk):**
+  mobile has no moderation intake endpoint.
+  `apps/web/app/api/mobile/feedback/route.ts` accepts only
+  `{type: bug|feature|general, message}` with no category/messageId/
+  conversationId/excerpt fields, and no report/moderation/abuse route exists
+  under `apps/web/app/api`. The mobile report sheet now states truthfully that
+  reports are stored on device with an explicit email hand-off (PAR-M10), but
+  a Google Play GenAI content report reaches a human only if the user
+  completes the mailto hand-off. Owed: a Cloud-mode-only
+  `POST /api/mobile/content-report` plus an MMKV flush queue, then flip the
+  mobile flow back to real submission.
+- **`MOBILE-RGBA-LITERALS-SWEEP-01` (open, tracked exemptions):** the new
+  ESLint `no-restricted-syntax` rule banning literal white/black rgba under
+  `apps/mobile/src/features/**` carries a `FIXME: PAR-M13-SWEEP` ignore list
+  of 10 pre-existing violator files (sidebar ConversationItem/List/TagFilter,
+  edge-cases modals, AddCustomConnectorModal, QuickSchedule, ToolTimeline,
+  companion ExecutionStream/CompanionDemoWalkthrough/AgentDashboard). Each has
+  an obvious token target (`colors.scrim`/`neutralSurface`/`borderLight`).
+  `src/features/voice/**` is a permanent, intentional exemption (self-painted
+  scrim identical in both themes).
+
 ## 2026-07-30 workspace-index boundary update
 
 - **Partially supersedes `DESKTOP-WORKSPACE-INDEXING-UNWIRED-01`:** the orphaned
