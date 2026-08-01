@@ -11,8 +11,12 @@ interface CodeBlockCopyButtonProps {
 }
 
 /**
- * Floating copy button rendered inside a code block.
+ * Copy control for the code-card header row.
  * Tapping copies the code to clipboard and briefly shows a checkmark.
+ *
+ * Laid out in normal flow (PAR-M40) — it used to be `position: 'absolute'`
+ * over the code body, which forced 28pt of blank reserved padding above every
+ * block and left no room for the language label the card now carries.
  */
 export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
   const colors = useThemeColors();
@@ -33,10 +37,10 @@ export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
   return (
     <Pressable
       onPress={handleCopy}
+      // The glyph is 14pt inside 4pt of padding; hitSlop takes the tap target
+      // to ~38pt without widening the header row.
+      hitSlop={8}
       style={{
-        position: 'absolute',
-        top: 6,
-        right: 6,
         padding: 4,
         borderRadius: 4,
         backgroundColor: colors.neutralSurface,

@@ -5,6 +5,14 @@ jest.mock('../src/features/chat/components/MathBlock', () => ({
   MathBlock: () => null,
 }));
 
+// PAR-M39: http(s) links from assistant output now present the in-app browser
+// sheet instead of backgrounding the app into Safari. `mailto:`/`tel:` handoffs
+// still go to react-native's Linking behind a confirmation alert.
+const mockOpenBrowserAsync = jest.fn();
+jest.mock('expo-web-browser', () => ({
+  openBrowserAsync: (...args: unknown[]) => mockOpenBrowserAsync(...args),
+}));
+
 import { renderMarkdownContent } from '../src/features/chat/components/MessageContentRenderer';
 import { syntaxTokenColor } from '../src/features/chat/utils/syntaxHighlight';
 import { lightColors } from '../src/ui/theme';
@@ -12,6 +20,7 @@ import { lightColors } from '../src/ui/theme';
 describe('MessageContentRenderer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOpenBrowserAsync.mockResolvedValue({ type: 'dismiss' });
   });
 
   afterEach(() => {
@@ -41,7 +50,7 @@ describe('MessageContentRenderer', () => {
     });
   });
 
-  it('opens http and https markdown links', () => {
+  it('opens http and https markdown links in the in-app browser, not Safari', () => {
     const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const { getByText } = render(
       <View>{renderMarkdownContent('[Source](https://docs.example.com)', lightColors)}</View>,
@@ -49,7 +58,12 @@ describe('MessageContentRenderer', () => {
 
     fireEvent.press(getByText('Source'));
 
-    expect(openUrlSpy).toHaveBeenCalledWith('https://docs.example.com');
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+      'https://docs.example.com',
+      expect.objectContaining({ presentationStyle: 'pageSheet' }),
+    );
+    // The app must not be backgrounded — that is the whole point of PAR-M39.
+    expect(openUrlSpy).not.toHaveBeenCalled();
   });
 
   it('does not open non-http markdown links from untrusted message content', () => {
@@ -62,6 +76,7 @@ describe('MessageContentRenderer', () => {
     fireEvent.press(getByText('Bad'));
 
     expect(openUrlSpy).not.toHaveBeenCalled();
+    expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
     expect(alertSpy).not.toHaveBeenCalled();
   });
 
@@ -107,7 +122,6 @@ describe('MessageContentRenderer', () => {
   });
 
   it('opens http links directly without a confirmation alert', () => {
-    const openUrlSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { getByText } = render(
       <View>{renderMarkdownContent('[Docs](https://docs.example.com)', lightColors)}</View>,
@@ -116,7 +130,10 @@ describe('MessageContentRenderer', () => {
     fireEvent.press(getByText('Docs'));
 
     expect(alertSpy).not.toHaveBeenCalled();
-    expect(openUrlSpy).toHaveBeenCalledWith('https://docs.example.com');
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+      'https://docs.example.com',
+      expect.anything(),
+    );
   });
 
   it('renders fenced code blocks with syntax-highlighted spans', () => {
@@ -141,6 +158,7 @@ describe('MessageContentRenderer', () => {
   });
 
   it('handles failed browser opens without throwing from the press handler', () => {
+    mockOpenBrowserAsync.mockRejectedValue(new Error('No browser'));
     jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('No handler'));
     const { getByText } = render(
       <View>{renderMarkdownContent('[Source](https://docs.example.com)', lightColors)}</View>,

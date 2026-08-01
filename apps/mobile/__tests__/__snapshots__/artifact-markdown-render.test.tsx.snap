@@ -375,57 +375,87 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
             style={
               {
                 "backgroundColor": "#ececec",
-                "borderColor": "rgba(17, 17, 17, 0.09)",
                 "borderRadius": 8,
-                "borderWidth": 1,
                 "marginVertical": 6,
                 "overflow": "hidden",
               }
             }
           >
             <View
-              accessibilityLabel="Copy code"
-              accessibilityRole="button"
-              accessibilityState={
-                {
-                  "busy": undefined,
-                  "checked": undefined,
-                  "disabled": undefined,
-                  "expanded": undefined,
-                  "selected": undefined,
-                }
-              }
-              accessibilityValue={
-                {
-                  "max": undefined,
-                  "min": undefined,
-                  "now": undefined,
-                  "text": undefined,
-                }
-              }
-              accessible={true}
-              collapsable={false}
-              focusable={true}
-              onBlur={[Function]}
-              onClick={[Function]}
-              onFocus={[Function]}
-              onResponderGrant={[Function]}
-              onResponderMove={[Function]}
-              onResponderRelease={[Function]}
-              onResponderTerminate={[Function]}
-              onResponderTerminationRequest={[Function]}
-              onStartShouldSetResponder={[Function]}
               style={
                 {
-                  "backgroundColor": "rgba(17, 17, 17, 0.08)",
-                  "borderRadius": 4,
-                  "padding": 4,
-                  "position": "absolute",
-                  "right": 6,
-                  "top": 6,
+                  "alignItems": "center",
+                  "flexDirection": "row",
+                  "gap": 8,
+                  "justifyContent": "space-between",
+                  "paddingBottom": 2,
+                  "paddingLeft": 12,
+                  "paddingRight": 8,
+                  "paddingTop": 8,
                 }
               }
-            />
+            >
+              <Text
+                className="text-sm text-white "
+                numberOfLines={1}
+                style={
+                  [
+                    {
+                      "color": "rgba(17, 17, 17, 0.48)",
+                      "flexShrink": 1,
+                      "fontSize": 11,
+                      "fontWeight": "500",
+                    },
+                    {
+                      "lineHeight": 14,
+                    },
+                  ]
+                }
+              >
+                bash
+              </Text>
+              <View
+                accessibilityLabel="Copy code"
+                accessibilityRole="button"
+                accessibilityState={
+                  {
+                    "busy": undefined,
+                    "checked": undefined,
+                    "disabled": undefined,
+                    "expanded": undefined,
+                    "selected": undefined,
+                  }
+                }
+                accessibilityValue={
+                  {
+                    "max": undefined,
+                    "min": undefined,
+                    "now": undefined,
+                    "text": undefined,
+                  }
+                }
+                accessible={true}
+                collapsable={false}
+                focusable={true}
+                hitSlop={8}
+                onBlur={[Function]}
+                onClick={[Function]}
+                onFocus={[Function]}
+                onResponderGrant={[Function]}
+                onResponderMove={[Function]}
+                onResponderRelease={[Function]}
+                onResponderTerminate={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  {
+                    "backgroundColor": "rgba(17, 17, 17, 0.08)",
+                    "borderRadius": 4,
+                    "padding": 4,
+                  }
+                }
+              />
+            </View>
             <RCTScrollView
               horizontal={true}
               scrollEventThrottle={16}
@@ -433,8 +463,8 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
               style={
                 {
                   "paddingBottom": 10,
-                  "paddingHorizontal": 10,
-                  "paddingTop": 28,
+                  "paddingHorizontal": 12,
+                  "paddingTop": 2,
                 }
               }
             >

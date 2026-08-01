@@ -17,7 +17,7 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useThemeColors } from '@/src/ui/theme';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
 // Metro's default config supports importing package.json — read versions from
 // the manifest so the About screen never drifts from the actual installed deps.
 import pkg from '../../package.json';
@@ -118,10 +118,12 @@ export default function AboutScreen() {
     else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
-  // Web pages go through the allowlist helper; only the support address stays
-  // on raw Linking, since a mailto: is not an https: URL it can accept.
+  // Web pages open in the in-app browser sheet through the allowlist helper
+  // (PAR-M39), so reading the privacy policy never backgrounds the app. Only
+  // the support address stays on raw Linking, since a mailto: is a system-app
+  // handoff, not an https: URL the sheet can render.
   const openWebPage = useCallback(async (url: string) => {
-    const opened = await openExternalUrl(url);
+    const opened = await openInAppBrowser(url);
     if (!opened) Alert.alert('Error', 'Could not open the link. Please try again.');
   }, []);
 
