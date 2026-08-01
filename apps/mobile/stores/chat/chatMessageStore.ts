@@ -142,7 +142,14 @@ export const useChatMessageStore = create<MessageState>()(
           // This store only holds Local Mode conversations.
           if (shouldLoadCloudConversationList()) {
             const data = ManagedCloudConversationListResponseSchema.parse(
-              await api.get<unknown>('/api/chat/conversations?includeHistoryStats=1'),
+              // `archived=exclude` matters: the server default is `include`, so
+              // omitting it put chats the user archived (on any surface) straight
+              // back into the Mobile chat list — archiving looked broken. Web
+              // reads them separately via `archived=only` in Settings → Archived
+              // chats; Mobile now does the same.
+              await api.get<unknown>(
+                '/api/chat/conversations?includeHistoryStats=1&archived=exclude',
+              ),
             );
             getCloudStore()
               .getState()

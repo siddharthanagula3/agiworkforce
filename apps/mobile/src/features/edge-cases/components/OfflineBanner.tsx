@@ -111,10 +111,10 @@ export function OfflineBanner() {
       // @ts-ignore — accessibilityLiveRegion is a valid prop on Android; TS defs are incomplete
       accessibilityLiveRegion="polite"
     >
-      <WifiOff size={14} color={colors.white} strokeWidth={2} />
+      <WifiOff size={14} color={colors.accentText} strokeWidth={2} />
       <Text
         style={{
-          color: colors.white,
+          color: colors.accentText,
           fontSize: 12,
           fontWeight: '600',
           flexShrink: 1,

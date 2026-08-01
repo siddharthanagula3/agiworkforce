@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { useUser } from '@clerk/expo';
 import {
+  Archive,
   Baby,
   Bell,
   Brain,
@@ -463,6 +464,14 @@ export default function SettingsTabScreen() {
             tag: cloudAccessTag,
             tone: 'cloud',
             onPress: openCloudRoute('/(app)/settings/memory?scope=cloud'),
+          },
+          {
+            key: 'archived-chats',
+            label: 'Archived Chats',
+            icon: Archive,
+            tag: cloudAccessTag,
+            tone: 'cloud',
+            onPress: openCloudRoute('/(app)/settings/archived-chats'),
           },
           {
             key: 'cloud-data-controls',

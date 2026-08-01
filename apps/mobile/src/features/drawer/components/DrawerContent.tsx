@@ -30,6 +30,8 @@ import {
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { archiveConversation } from '@/src/features/archived-chats';
+import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 
 type RoutePath =
   | '/(app)/chats'
@@ -216,15 +218,41 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const pinConversation = useChatStore((s) => s.pinConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
 
-  // Long-press a recent chat → pin/unpin or delete. Surfaces the pin/delete store
-  // actions (previously only reachable from the unused sidebar) in the live drawer.
+  // Long-press a recent chat → pin/unpin, archive (Cloud only) or delete.
+  // Surfaces the pin/delete store actions (previously only reachable from the
+  // unused sidebar) in the live drawer.
   const handleConversationLongPress = useCallback(
     (id: string, title: string, pinned: boolean) => {
+      // `archived` is a column on web_conversations, so archiving only exists
+      // for Cloud chats. Local Mode chats never leave the device and have no
+      // archived set to move into.
+      const conversation = conversations.find((c) => c.id === id);
+      const isCloudConversation =
+        conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+
+      const archive = () => {
+        void (async () => {
+          try {
+            await archiveConversation(id);
+            // Only hide the row once the server has acknowledged the write; a
+            // swallowed failure would leave the chat visibly gone here and
+            // still present on web and desktop.
+            useChatCloudMessageStore.getState().removeCloudConversation(id);
+          } catch (error) {
+            Alert.alert(
+              'Could not archive',
+              error instanceof Error ? error.message : 'Check your connection and try again.',
+            );
+          }
+        })();
+      };
+
       Alert.alert(title || 'Chat', undefined, [
         {
           text: pinned ? 'Unpin' : 'Pin',
           onPress: () => void pinConversation(id),
         },
+        ...(isCloudConversation ? [{ text: 'Archive', onPress: archive }] : []),
         {
           text: 'Delete',
           style: 'destructive',
@@ -241,7 +269,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         { text: 'Cancel', style: 'cancel' },
       ]);
     },
-    [pinConversation, deleteConversation],
+    [conversations, pinConversation, deleteConversation],
   );
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);

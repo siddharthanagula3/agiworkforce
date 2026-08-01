@@ -107,7 +107,7 @@ export function ThermalThrottleModal({ visible, onDismiss }: ThermalThrottleModa
             accessibilityRole="button"
             accessibilityLabel={EDGE_COPY.thermalThrottle.cta}
           >
-            <Text style={{ color: colors.white, fontWeight: '700', fontSize: 15 }}>
+            <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: 15 }}>
               {EDGE_COPY.thermalThrottle.cta}
             </Text>
           </Pressable>
