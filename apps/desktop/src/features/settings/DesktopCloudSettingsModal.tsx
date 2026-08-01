@@ -40,7 +40,7 @@ import type {
   ConnectedConnector,
   SettingsNavGroupResolved,
 } from '@agiworkforce/ui';
-import { Brain, Laptop } from 'lucide-react';
+import { Archive, Brain, Laptop, Link2 } from 'lucide-react';
 
 import { CONNECTORS } from '../connectors/connectorDefinitions';
 import {
@@ -101,9 +101,12 @@ const CLOUD_SETTINGS_SECTIONS = new Set([
   'capabilities',
   'cowork',
   'security',
+  'safety',
   'notifications',
   'reflect',
   'time-focus',
+  'archived',
+  'shared-links',
   'connectors',
   'skills',
   'plugins',
@@ -130,15 +133,28 @@ function formatUsageReset(value: string | null): string {
 const DESKTOP_CLOUD_SETTINGS_NAV: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
   (group) => ({
     ...group,
-    items: group.items.flatMap((item) =>
-      item.key === 'capabilities'
-        ? [
-            item,
-            { key: 'cowork' as const, label: 'Cowork', icon: Laptop },
-            { key: 'memory' as const, label: 'Memory', icon: Brain },
-          ]
-        : [item],
-    ),
+    items: group.items.flatMap((item) => {
+      if (item.key === 'capabilities') {
+        return [
+          item,
+          { key: 'cowork' as const, label: 'Cowork', icon: Laptop },
+          { key: 'memory' as const, label: 'Memory', icon: Brain },
+        ];
+      }
+      // Web keeps these two out of its settings nav and links to them from its
+      // Privacy section instead. Desktop's Privacy tab is its own component and
+      // carries no such links, so without nav entries both surfaces were
+      // unreachable here — including the only way to revoke a link this app can
+      // already publish.
+      if (item.key === 'privacy') {
+        return [
+          item,
+          { key: 'archived' as const, label: 'Archived chats', icon: Archive },
+          { key: 'shared-links' as const, label: 'Shared links', icon: Link2 },
+        ];
+      }
+      return [item];
+    }),
   }),
 );
 
@@ -1083,6 +1099,38 @@ export function DesktopCloudSettingsModal({
           description="Manage password, two-factor authentication, and account session timeout."
           path="/settings/security"
           action="Open security controls"
+        />
+      ),
+      // Safety is in SETTINGS_NAV_GROUPS_WEB, which this modal maps over to build
+      // its nav — but it had no entry here, so clicking it rendered the shared
+      // modal's developer fallback ("No content for section \"safety\".") to the
+      // user. It bridges to the same account surface as its neighbours.
+      safety: (
+        <DesktopCloudAccountSection
+          title="Safety"
+          description="Choose additional safeguards for Managed Cloud prompts."
+          path="/settings/safety"
+          action="Open safety controls"
+        />
+      ),
+      // Archived chats and shared links are conversation-data surfaces web
+      // reaches from its Privacy section rather than from the settings nav.
+      // Desktop could already publish a share (DesktopShellV3 calls
+      // createDesktopCloudShare) with no way to list or revoke one.
+      archived: (
+        <DesktopCloudAccountSection
+          title="Archived chats"
+          description="Restore an archived conversation, or delete it permanently."
+          path="/settings/archived"
+          action="Open archived chats"
+        />
+      ),
+      'shared-links': (
+        <DesktopCloudAccountSection
+          title="Shared links"
+          description="Review the conversations you have published as read-only links, and revoke them."
+          path="/settings/shared-links"
+          action="Open shared links"
         />
       ),
       notifications: (
