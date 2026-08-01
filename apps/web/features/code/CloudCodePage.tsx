@@ -323,10 +323,10 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
             <div className={styles['banner']} role="status">
               <AlertTriangle size={17} />
               <div>
-                <strong>Managed Code storage is not ready.</strong>
+                <strong>Managed Code is coming soon.</strong>
                 <br />
-                An operator must apply the latest database migrations before sessions can be
-                created. No environment was started.
+                Cloud sessions are not available yet. Use the desktop app to run code locally in the
+                meantime.
               </div>
             </div>
           )}
