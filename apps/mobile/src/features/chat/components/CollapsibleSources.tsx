@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, Pressable, Linking } from 'react-native';
+import { View, Pressable } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -10,6 +10,7 @@ import { Paperclip, Globe, ChevronRight, ChevronDown, ExternalLink } from 'lucid
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
 import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 
 interface Source {
   url: string;
@@ -61,9 +62,11 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
     overflow: 'hidden' as const,
   }));
 
+  // Citations open in the in-app browser sheet: dismissing it returns straight
+  // to this message instead of cold-starting the app back into the thread.
   const handleSourcePress = useCallback((url: string) => {
     if (isValidExternalHttpUrl(url)) {
-      Linking.openURL(url);
+      void openUntrustedUrlInAppBrowser(url);
     }
   }, []);
 
@@ -132,7 +135,7 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
               onPress={() => handleSourcePress(source.url)}
               accessibilityLabel={`Source ${index + 1}: ${source.title ?? getDomain(source.url)}`}
               accessibilityRole="link"
-              accessibilityHint="Opens in browser"
+              accessibilityHint="Opens in the in-app browser"
             >
               {({ pressed }) => (
                 <View

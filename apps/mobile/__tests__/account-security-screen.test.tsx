@@ -3,7 +3,7 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
-const mockOpenExternalUrl = jest.fn();
+const mockOpenInAppBrowser = jest.fn();
 const mockFetchStatus = jest.fn();
 const mockFetchSessionTimeout = jest.fn();
 const mockSaveSessionTimeout = jest.fn();
@@ -33,8 +33,10 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
+// PAR-M39: the Web handoffs present the in-app browser sheet rather than
+// backgrounding the app, but they keep the same host allowlist.
 jest.mock('../lib/safeOpenURL', () => ({
-  openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
+  openInAppBrowser: (...args: unknown[]) => mockOpenInAppBrowser(...args),
 }));
 
 jest.mock('../src/features/auth/store', () => ({
@@ -162,11 +164,11 @@ describe('Mobile Account Security screen', () => {
     fireEvent.press(screen.getByLabelText('Open Web account. Web'));
     fireEvent.press(screen.getByLabelText('App Lock. On device'));
 
-    expect(mockOpenExternalUrl).toHaveBeenNthCalledWith(
+    expect(mockOpenInAppBrowser).toHaveBeenNthCalledWith(
       1,
       'https://agiworkforce.com/settings/security',
     );
-    expect(mockOpenExternalUrl).toHaveBeenNthCalledWith(
+    expect(mockOpenInAppBrowser).toHaveBeenNthCalledWith(
       2,
       'https://agiworkforce.com/settings/account',
     );

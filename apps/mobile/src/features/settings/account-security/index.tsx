@@ -13,7 +13,7 @@ import {
   Timer,
 } from 'lucide-react-native';
 
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   captureCloudAccountEpoch,
@@ -111,7 +111,9 @@ export default function AccountSecurityScreen() {
     (url: string) => {
       const account = captureCloudAccountEpoch();
       if (!account || account.ownerId !== clerkUserId) return;
-      void openExternalUrl(url);
+      // In-app sheet (PAR-M39): the security handoff stays inside the app so
+      // dismissing it returns to the row the user tapped.
+      void openInAppBrowser(url);
     },
     [clerkUserId],
   );
