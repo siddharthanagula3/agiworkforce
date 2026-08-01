@@ -144,6 +144,11 @@ export function mapGeneratedFilesPayload(payload: unknown): GeneratedFileEntry[]
 export class WebRuntime implements ChatRuntime {
   /** Managed Cloud approval policy is server-owned, not client-selectable. */
   readonly supportsAgentControl = false;
+  // Effort is a model parameter, not a permission control, so it is safe here
+  // even though agent-mode enforcement (Ask/Auto/Plan/Bypass) is not. Desktop
+  // previously had NO reasoning-effort control purely because both lived
+  // behind the single flag above.
+  readonly supportsReasoningEffort = true;
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
   private readonly _approvals = new CloudToolApprovalRegistry();

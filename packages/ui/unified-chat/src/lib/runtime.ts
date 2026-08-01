@@ -207,6 +207,21 @@ export interface ChatRuntime {
   supportsAgentControl?: boolean;
 
   /**
+   * True when the runtime forwards `SendMessageOptions.effort` to the provider.
+   *
+   * Deliberately separate from `supportsAgentControl`: that flag governs a
+   * PERMISSION control (Ask/Auto/Plan/Bypass) and must stay false wherever the
+   * server owns approval policy. Reasoning effort is just a model parameter and
+   * carries no permission meaning, so a runtime can honour it while leaving
+   * agent-mode off. Desktop needed exactly that — it had no effort control at
+   * all purely because the single combined flag was false.
+   *
+   * Defaults to `supportsAgentControl` when unset, so existing runtimes keep
+   * their current behaviour.
+   */
+  supportsReasoningEffort?: boolean;
+
+  /**
    * Resolve one pending tool-approval request from an `x_tool_approval_request`
    * suspension (see the `tool_approval_request` StreamEvent). Only the cloud
    * SSE runtimes implement this. They submit only the server-owned run id and
