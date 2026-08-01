@@ -132,6 +132,15 @@ pub struct InitializeResult {
     pub capabilities: ServerCapabilities,
     #[serde(rename = "serverInfo")]
     pub server_info: Implementation,
+    /// Optional server-authored usage guidance (MCP `InitializeResult.instructions`).
+    ///
+    /// Was not modelled at all, so serde discarded it silently and the field
+    /// could never reach a caller. It is third-party text intended for the
+    /// model's context, so every consumer must treat it exactly like a tool
+    /// description: sanitised and capped. `McpSession::instructions()` is the
+    /// only accessor and does both.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
