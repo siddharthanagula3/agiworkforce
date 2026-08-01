@@ -6,15 +6,7 @@ import {
   useImperativeHandle,
   useLayoutEffect,
 } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  View,
-  TextInput,
-  Pressable,
-  Keyboard,
-  Platform,
-} from 'react-native';
+import { Alert, View, TextInput, Pressable, Keyboard, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Plus,
@@ -57,12 +49,27 @@ import {
 } from '@/src/features/chat/draftStore';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
-import { formatClock } from '@/src/lib/time';
 
 /** A single text insertion at least this large (a paste, never typing) is
  *  converted into a compact "Pasted text" attachment instead of flooding the
  *  composer — matching ChatGPT/Claude mobile. */
 const LARGE_PASTE_THRESHOLD = 10_000;
+
+/**
+ * Fold a dictation transcript into the composer's existing text.
+ *
+ * Shared by both dictation exits (stop-into-composer and stop-and-send) so a
+ * message sent in one tap is composed exactly like one the user reviews first.
+ * Returns `previous` unchanged when the transcript cleans up to nothing.
+ */
+function mergeTranscript(previous: string, transcript: string): string {
+  const cleanedTranscript = cleanupVoiceDictation(transcript);
+  if (!cleanedTranscript) return previous;
+  // A command ("make this shorter") targets the draft that is already there,
+  // so it replaces the text instead of being appended to it.
+  if (detectVoiceCommand(cleanedTranscript)) return cleanedTranscript;
+  return previous ? `${previous} ${cleanedTranscript}` : cleanedTranscript;
+}
 
 /**
  * Imperative surface the composer exposes to its host screen.
@@ -154,7 +161,6 @@ export function ChatInput({
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
   const [voiceResetSignal, setVoiceResetSignal] = useState(0);
   // Once the message no longer fits one line, the composer restacks: the text
@@ -167,8 +173,12 @@ export function ChatInput({
   // it renders this composer's `text`/`handleChangeText`.
   const [expandedEditorVisible, setExpandedEditorVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
-  const recordingStartTimeRef = useRef<number>(0);
-  const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /**
+   * Monotonic id for the in-flight stop -> transcribe run. Cancel bumps it, so
+   * a transcript that resolves after the user abandoned the dictation is
+   * discarded instead of landing in the composer (or, worse, being sent).
+   */
+  const transcriptionRunRef = useRef(0);
   const sendPendingRef = useRef(false);
   const draftIdentity =
     draftProvenance?.scope === 'cloud'
@@ -248,19 +258,10 @@ export function ChatInput({
   ];
 
   const applyTranscript = useCallback((transcript: string) => {
-    const cleanedTranscript = cleanupVoiceDictation(transcript);
-    if (!cleanedTranscript) {
+    if (!cleanupVoiceDictation(transcript)) {
       return;
     }
-
-    const isCommand = detectVoiceCommand(cleanedTranscript);
-    setText((prev) => {
-      if (isCommand) {
-        return cleanedTranscript;
-      }
-
-      return prev ? `${prev} ${cleanedTranscript}` : cleanedTranscript;
-    });
+    setText((prev) => mergeTranscript(prev, transcript));
     inputRef.current?.focus();
   }, []);
 
@@ -287,15 +288,6 @@ export function ChatInput({
     }),
     [],
   );
-
-  // Clean up duration interval on unmount to prevent leak if user navigates away while recording
-  useEffect(() => {
-    return () => {
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
-    };
-  }, []);
 
   // Persist the in-progress draft so it survives unmount / backgrounding.
   // MMKV writes are synchronous + memory-mapped, so per-change persistence is cheap.
@@ -329,44 +321,58 @@ export function ChatInput({
     };
   }, []);
 
+  /**
+   * Send `sourceText` plus the current attachments.
+   *
+   * The text is passed in rather than read from state so the one-tap dictation
+   * send (stop -> transcribe -> send, PAR-M22) can hand over the transcript it
+   * just merged instead of racing the `setText` that puts it on screen.
+   */
+  const sendComposerMessage = useCallback(
+    (sourceText: string) => {
+      if (sendPendingRef.current) return;
+      const trimmed = sourceText.trim();
+      if (!trimmed && attachments.length === 0) return;
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+
+      // Pasted-text attachments are composer UX, not server files — fold their
+      // content back into the outgoing message so the model always sees it.
+      const pastedBlocks = attachments
+        .map((a) => a.pastedText)
+        .filter((t): t is string => Boolean(t));
+      const fileAttachments = attachments.filter((a) => !a.pastedText);
+      const outgoing = [...pastedBlocks, trimmed].filter(Boolean).join('\n\n');
+
+      const sentText = sourceText;
+      const sentAttachmentIds = new Set(attachments.map((a) => a.id));
+      sendPendingRef.current = true;
+
+      // Draft-safe send: the composer clears only once the send is ACCEPTED
+      // (user message committed after all pre-flight gates). A handler that
+      // resolves `false` or throws keeps the draft intact — never clear
+      // optimistically on tap.
+      Promise.resolve(onSend(outgoing, fileAttachments.length > 0 ? fileAttachments : undefined))
+        .then((accepted) => {
+          if (accepted === false) return;
+          clearDraft(draftKey, draftProvenance);
+          setText((current) => (current === sentText ? '' : current));
+          setAttachments((current) => current.filter((a) => !sentAttachmentIds.has(a.id)));
+        })
+        .catch(() => {
+          // Send failed before acceptance — keep the draft.
+        })
+        .finally(() => {
+          sendPendingRef.current = false;
+        });
+    },
+    [attachments, onSend, hapticsEnabled, draftKey, draftProvenance],
+  );
+
   const handleSend = useCallback(() => {
-    if (sendPendingRef.current) return;
-    const trimmed = text.trim();
-    if (!trimmed && attachments.length === 0) return;
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    // Pasted-text attachments are composer UX, not server files — fold their
-    // content back into the outgoing message so the model always sees it.
-    const pastedBlocks = attachments
-      .map((a) => a.pastedText)
-      .filter((t): t is string => Boolean(t));
-    const fileAttachments = attachments.filter((a) => !a.pastedText);
-    const outgoing = [...pastedBlocks, trimmed].filter(Boolean).join('\n\n');
-
-    const sentText = text;
-    const sentAttachmentIds = new Set(attachments.map((a) => a.id));
-    sendPendingRef.current = true;
-
-    // Draft-safe send: the composer clears only once the send is ACCEPTED
-    // (user message committed after all pre-flight gates). A handler that
-    // resolves `false` or throws keeps the draft intact — never clear
-    // optimistically on tap.
-    Promise.resolve(onSend(outgoing, fileAttachments.length > 0 ? fileAttachments : undefined))
-      .then((accepted) => {
-        if (accepted === false) return;
-        clearDraft(draftKey, draftProvenance);
-        setText((current) => (current === sentText ? '' : current));
-        setAttachments((current) => current.filter((a) => !sentAttachmentIds.has(a.id)));
-      })
-      .catch(() => {
-        // Send failed before acceptance — keep the draft.
-      })
-      .finally(() => {
-        sendPendingRef.current = false;
-      });
-  }, [text, attachments, onSend, hapticsEnabled, draftKey, draftProvenance]);
+    sendComposerMessage(text);
+  }, [sendComposerMessage, text]);
 
   /**
    * A very large block dropped into the composer (paste) becomes a compact
@@ -438,12 +444,7 @@ export function ChatInput({
   const handleTranscription = useCallback(
     (transcribedText: string) => {
       setIsRecording(false);
-      setRecordingDurationMs(0);
       setAudioLevel(0);
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-        durationIntervalRef.current = null;
-      }
       applyTranscript(transcribedText);
     },
     [applyTranscript],
@@ -451,21 +452,14 @@ export function ChatInput({
 
   const resetRecordingUi = useCallback(() => {
     setIsRecording(false);
-    setRecordingDurationMs(0);
     setAudioLevel(0);
-    if (durationIntervalRef.current) {
-      clearInterval(durationIntervalRef.current);
-      durationIntervalRef.current = null;
-    }
   }, []);
 
+  // No elapsed-time state: the reference dictation row has no clock
+  // (IMG_0686/0687), and the 10Hz interval that fed one re-rendered the whole
+  // composer for a readout no decision depended on.
   const handleRecordingStart = useCallback(() => {
     setIsRecording(true);
-    setRecordingDurationMs(0);
-    recordingStartTimeRef.current = Date.now();
-    durationIntervalRef.current = setInterval(() => {
-      setRecordingDurationMs(Date.now() - recordingStartTimeRef.current);
-    }, 100);
   }, []);
 
   const handleRecordingStop = useCallback(() => {
@@ -477,44 +471,90 @@ export function ChatInput({
     setAudioLevel(normalized);
   }, []);
 
-  const handleOverlayCancel = useCallback(() => {
+  /**
+   * Abandon the dictation. Stays live through the transcribing state
+   * (IMG_0687): a mis-heard 40-second dictation has to be droppable while the
+   * recognizer is still resolving it, not only while the mic is open.
+   */
+  const handleDictationCancel = useCallback(() => {
+    // Invalidate any in-flight stop -> transcribe run FIRST, so a transcript
+    // that lands after this tap is discarded instead of appearing in (or being
+    // sent from) a composer the user already walked away from.
+    transcriptionRunRef.current += 1;
     resetRecordingUi();
+    setIsTranscribing(false);
     setVoiceResetSignal((value) => value + 1);
-    if (VoiceService.isRecording()) {
-      VoiceService.cancelRecording().catch(() => {
-        // ignore cleanup errors
-      });
-    }
+    // Aborts the capture session and rejects the pending stopRecording() await,
+    // so the recognizer is never left running behind a dismissed UI. A no-op
+    // when no session is active.
+    VoiceService.cancelRecording().catch(() => {
+      // ignore cleanup errors
+    });
   }, [resetRecordingUi]);
 
-  const handleOverlaySend = useCallback(async () => {
-    resetRecordingUi();
-    // Always bump voiceResetSignal on the way out — including when the
-    // recording session already ended before Send was tapped (e.g. no
-    // microphone on the iOS Simulator, or a race with the OS audio session).
-    // The old early-return here skipped the signal entirely, leaving
-    // VoiceInputButton's internal state stuck on "recording" (red mic icon,
-    // "Tap to stop recording" a11y label) with no way to recover short of
-    // tapping it again and hitting the "No recording in progress" error path,
-    // whose handler happens to reset the signal as a side effect.
-    if (!VoiceService.isRecording()) {
-      setVoiceResetSignal((value) => value + 1);
-      return;
-    }
-    setIsTranscribing(true);
-    try {
-      const uri = await VoiceService.stopRecording();
-      const result = await VoiceService.transcribe(uri);
-      if (result.text.trim()) {
-        applyTranscript(result.text.trim());
+  /**
+   * End dictation. `send: false` is the stop square — it drops the transcript
+   * into the composer for review. `send: true` is the outboard arrow: stop,
+   * transcribe and send in one tap (PAR-M22 / IMG_0686), with no round trip
+   * through a composer the user has already finished dictating into.
+   */
+  const finishDictation = useCallback(
+    async ({ send }: { send: boolean }) => {
+      resetRecordingUi();
+      // Always bump voiceResetSignal on the way out — including when the
+      // recording session already ended before this control was tapped (e.g. no
+      // microphone on the iOS Simulator, or a race with the OS audio session).
+      // The old early-return here skipped the signal entirely, leaving
+      // VoiceInputButton's internal state stuck on "recording" (red mic icon,
+      // "Tap to stop recording" a11y label) with no way to recover short of
+      // tapping it again and hitting the "No recording in progress" error path,
+      // whose handler happens to reset the signal as a side effect.
+      if (!VoiceService.isRecording()) {
+        setVoiceResetSignal((value) => value + 1);
+        return;
       }
-    } catch {
-      // ignore transcription errors from overlay send
-    } finally {
-      setIsTranscribing(false);
-      setVoiceResetSignal((value) => value + 1);
-    }
-  }, [applyTranscript, resetRecordingUi]);
+      const run = transcriptionRunRef.current + 1;
+      transcriptionRunRef.current = run;
+      setIsTranscribing(true);
+      try {
+        const uri = await VoiceService.stopRecording();
+        if (transcriptionRunRef.current !== run) return;
+        const result = await VoiceService.transcribe(uri);
+        if (transcriptionRunRef.current !== run) return;
+        const transcript = result.text.trim();
+        if (transcript) {
+          if (send) {
+            const merged = mergeTranscript(text, transcript);
+            // Put it on screen before sending so a send REJECTED by a pre-flight
+            // gate (auth, egress, upload consent) leaves the dictated words in
+            // the composer rather than losing them with no record anywhere.
+            setText(merged);
+            sendComposerMessage(merged);
+          } else {
+            applyTranscript(transcript);
+          }
+        }
+      } catch {
+        // Transcription failed or was aborted — the composer keeps what it had.
+      } finally {
+        // A cancel that superseded this run already reset the UI; re-running
+        // the exit here would flip "Transcribing" back on for a frame.
+        if (transcriptionRunRef.current === run) {
+          setIsTranscribing(false);
+          setVoiceResetSignal((value) => value + 1);
+        }
+      }
+    },
+    [applyTranscript, resetRecordingUi, sendComposerMessage, text],
+  );
+
+  const handleDictationStop = useCallback(() => {
+    void finishDictation({ send: false });
+  }, [finishDictation]);
+
+  const handleDictationSend = useCallback(() => {
+    void finishDictation({ send: true });
+  }, [finishDictation]);
 
   const handleVoiceError = useCallback(
     (message: string) => {
@@ -671,10 +711,9 @@ export function ChatInput({
       {/* Main composer row -- [+] outside-left, single-line pill with the
           mic inside its right edge, circular send/stop/voice button
           outside-right. Matches the ChatGPT mobile composer structure.
-          While recording, the SAME row morphs in place (ChatGPT reference):
-          left button becomes cancel (X), the pill shows a live waveform +
-          timer (then a "Transcribing" spinner), and the right circle becomes
-          the accept arrow. Nothing overlays the composer. */}
+          While dictating, the SAME row morphs in place into the reference's
+          four controls (IMG_0686): cancel (X), a live waveform, a stop square,
+          and an outboard send arrow. Nothing overlays the composer. */}
       <View
         style={{
           flexDirection: 'row',
@@ -684,12 +723,14 @@ export function ChatInput({
           gap: 8,
         }}
       >
-        {/* Left button -- [+] Add to Chat, or cancel-recording while recording.
-            While stacked it moves inside the card, onto the controls row. */}
+        {/* Left button -- [+] Add to Chat, or cancel-dictation while recording.
+            While stacked it moves inside the card, onto the controls row.
+            Cancel is enabled for the WHOLE dictation, transcribing included
+            (IMG_0687): it was previously disabled the moment capture stopped,
+            which stranded a mis-heard long dictation with no way out. */}
         {stacked ? null : isRecording || isTranscribing ? (
           <Pressable
-            onPress={isRecording ? handleOverlayCancel : undefined}
-            disabled={!isRecording}
+            onPress={handleDictationCancel}
             style={{
               width: 40,
               height: 40,
@@ -697,10 +738,11 @@ export function ChatInput({
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: themeColors.inputSurface,
-              opacity: isRecording ? 1 : 0.5,
             }}
             hitSlop={6}
+            testID="chat.composer.dictation-cancel"
             accessibilityLabel="Cancel recording"
+            accessibilityHint="Discards the dictation without adding it to the message"
             accessibilityRole="button"
           >
             <X size={20} color={themeColors.textPrimary} />
@@ -778,8 +820,13 @@ export function ChatInput({
             </Pressable>
           ) : null}
 
-          {/* Live waveform + timer while recording (in place of the input) */}
-          {isRecording ? (
+          {/* Dictation state, in place of the input: one live waveform that
+              FREEZES while the recognizer resolves the transcript. It replaces
+              the old spinner-plus-timer pair — the reference row carries
+              neither a clock nor a second moving indicator (IMG_0686/0687), and
+              the frozen bars already say capture has ended. The label stays for
+              a truthful "still working" signal, muted and text-only. */}
+          {isRecording || isTranscribing ? (
             <View
               style={{
                 flex: 1,
@@ -789,49 +836,26 @@ export function ChatInput({
                 minHeight: 24,
               }}
               accessibilityRole="alert"
-              accessibilityLabel="Recording in progress"
-              testID="chat.composer.recording"
+              accessibilityLabel={isRecording ? 'Recording in progress' : 'Transcribing'}
+              testID={isRecording ? 'chat.composer.recording' : 'chat.composer.transcribing'}
             >
-              <View style={{ flex: 1, alignItems: 'flex-start' }}>
+              <View style={{ flex: 1, alignItems: 'flex-start', overflow: 'hidden' }}>
                 <Waveform
-                  color={themeColors.textSecondary}
-                  active
+                  color={isRecording ? themeColors.textSecondary : themeColors.textMuted}
+                  active={isRecording}
                   audioLevel={audioLevel}
-                  barCount={24}
+                  barCount={isRecording ? 18 : 10}
                   maxHeight={20}
                   minHeight={3}
                   barWidth={2.5}
                   gap={3}
                 />
               </View>
-              <Text
-                style={{
-                  color: themeColors.textMuted,
-                  fontSize: 13,
-                  fontVariant: ['tabular-nums'],
-                }}
-              >
-                {formatClock(recordingDurationMs)}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Transcribing state -- shown after accept, while STT runs */}
-          {!isRecording && isTranscribing ? (
-            <View
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                minHeight: 24,
-              }}
-              accessibilityRole="alert"
-              accessibilityLabel="Transcribing"
-              testID="chat.composer.transcribing"
-            >
-              <ActivityIndicator size="small" color={themeColors.textMuted} />
-              <Text style={{ color: themeColors.textMuted, fontSize: 15 }}>Transcribing</Text>
+              {isTranscribing ? (
+                <Text numberOfLines={1} style={{ color: themeColors.textMuted, fontSize: 13 }}>
+                  Transcribing
+                </Text>
+              ) : null}
             </View>
           ) : null}
 
@@ -938,13 +962,43 @@ export function ChatInput({
           </View>
         </View>
 
-        {/* Right circle -- state slot: idle+empty opens voice mode (the
-            ChatGPT reference's waveform button), idle+content sends,
-            streaming stops. */}
-        <View testID="chat.composer.send">
-          {isRecording || isTranscribing ? (
+        {/* Right controls -- while dictating this is a PAIR, the second half of
+            the reference's four-control row (IMG_0686). The stop square ends
+            capture and drops the transcript into the composer for review; the
+            outboard arrow stops, transcribes and SENDS in one tap, so a spoken
+            message no longer needs a stop-then-review-then-send round trip.
+            Both dim while the transcript resolves; cancel (left) stays live. */}
+        {isRecording || isTranscribing ? (
+          <>
             <Pressable
-              onPress={isRecording ? handleOverlaySend : undefined}
+              onPress={isRecording ? handleDictationStop : undefined}
+              disabled={!isRecording}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: radii.full,
+                alignItems: 'center',
+                justifyContent: 'center',
+                // Secondary weight now that it shares the row with send: the
+                // filled circle belongs to the action that actually sends.
+                backgroundColor: themeColors.inputSurface,
+                opacity: isRecording ? 1 : 0.5,
+              }}
+              hitSlop={6}
+              testID="chat.composer.dictation-stop"
+              accessibilityLabel="Stop recording"
+              accessibilityHint="Stops recording and transcribes it into the message"
+              accessibilityRole="button"
+            >
+              {/* A stop square, not a send arrow. This control ends capture and
+                  drops the transcript into the composer for review — it does not
+                  send. Drawn as an up-arrow it read as "send", so the row looked
+                  like it offered only cancel-or-send and users could not find a
+                  way to stop. ChatGPT shows a stop square in the same slot. */}
+              <Square size={14} color={themeColors.textPrimary} fill={themeColors.textPrimary} />
+            </Pressable>
+            <Pressable
+              onPress={isRecording ? handleDictationSend : undefined}
               disabled={!isRecording}
               style={{
                 width: 40,
@@ -956,47 +1010,43 @@ export function ChatInput({
                 opacity: isRecording ? 1 : 0.5,
               }}
               hitSlop={6}
-              accessibilityLabel="Stop recording"
-              accessibilityHint="Stops recording and transcribes it into the message"
+              testID="chat.composer.dictation-send"
+              accessibilityLabel="Send recording"
+              accessibilityHint="Stops recording, transcribes it, and sends the message"
               accessibilityRole="button"
             >
-              {/* A stop square, not a send arrow. This control ends capture and
-                  drops the transcript into the composer for review — it does not
-                  send. Drawn as an up-arrow it read as "send", so the row looked
-                  like it offered only cancel-or-send and users could not find a
-                  way to stop. ChatGPT shows a stop square in the same slot. */}
-              <Square
-                size={14}
-                color={themeColors.surfaceElevated}
-                fill={themeColors.surfaceElevated}
+              <ArrowUp size={18} color={themeColors.surfaceElevated} />
+            </Pressable>
+          </>
+        ) : (
+          <View testID="chat.composer.send">
+            {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
+              <Pressable
+                onPress={onOpenVoiceMode}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: radii.full,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: themeColors.textPrimary,
+                }}
+                hitSlop={6}
+                accessibilityLabel="Start voice mode"
+                accessibilityHint="Opens hands-free voice conversation"
+                accessibilityRole="button"
+              >
+                <AudioLines size={18} color={themeColors.surfaceElevated} />
+              </Pressable>
+            ) : (
+              <SendButton
+                state={sendButtonState}
+                onPress={handleSendButtonPress}
+                disabled={!hasContent && !isStreaming}
               />
-            </Pressable>
-          ) : sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
-            <Pressable
-              onPress={onOpenVoiceMode}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: radii.full,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: themeColors.textPrimary,
-              }}
-              hitSlop={6}
-              accessibilityLabel="Start voice mode"
-              accessibilityHint="Opens hands-free voice conversation"
-              accessibilityRole="button"
-            >
-              <AudioLines size={18} color={themeColors.surfaceElevated} />
-            </Pressable>
-          ) : (
-            <SendButton
-              state={sendButtonState}
-              onPress={handleSendButtonPress}
-              disabled={!hasContent && !isStreaming}
-            />
-          )}
-        </View>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Full-screen editing of the same draft. Rendered from the composer (not
