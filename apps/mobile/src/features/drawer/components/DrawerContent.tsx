@@ -11,7 +11,6 @@ import {
   HelpCircle,
   MessageSquare,
   Pin,
-  Search,
   Settings,
   Sparkles,
   SquarePen,
@@ -206,37 +205,6 @@ function NavRow({
   );
 }
 
-function SearchBox({ onPress }: { onPress: () => void }) {
-  const colors = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Search chats, projects, files, library, and artifacts"
-      style={{
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: colors.surfaceElevated,
-        borderWidth: 1,
-        borderColor: colors.border,
-        paddingHorizontal: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-      }}
-    >
-      <Search size={17} color={colors.textMuted} />
-      {/* The drawer panel is ~71% of screen width, so a long placeholder wraps
-          to two lines and stretches the pill. numberOfLines pins it to one row
-          regardless of locale/dynamic-type; the search overlay itself already
-          states the full scope (chats, projects, files). */}
-      <Text numberOfLines={1} style={{ flex: 1, color: colors.textMuted, fontSize: 15 }}>
-        Search
-      </Text>
-    </Pressable>
-  );
-}
-
 /**
  * Mobile drawer with AGI-owned labels and cloud gating.
  */
@@ -365,7 +333,19 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             gap: 10,
           }}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '700', flex: 1 }}>
+          {/* Newsreader — the brand typeface, same as the chat empty state and
+              web's var(--font-newsreader). The weight is carried by the family
+              name, so no fontWeight: setting one makes iOS synthesise a bolder
+              face on top of an already-semibold cut. */}
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontSize: 20,
+              fontFamily: 'Newsreader_600SemiBold',
+              letterSpacing: 0.4,
+              flex: 1,
+            }}
+          >
             AGI
           </Text>
           {/* New-chat sits in the header beside the profile symbol (its original,
@@ -378,8 +358,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           />
         </View>
 
-        <SearchBox onPress={() => navigate('/(app)/chats')} />
-
+        {/* No search field here. It navigated to /chats rather than searching,
+            so it read as a search box but behaved as a nav button — and Chats
+            now carries a real bottom-anchored search of its own. Claude's
+            drawer (claude_reference/118) has no search either; one entry
+            point, in the place both references put it. */}
         <ScrollView
           style={{ flex: 1, marginTop: 14 }}
           contentContainerStyle={{ paddingBottom: 96 }}
