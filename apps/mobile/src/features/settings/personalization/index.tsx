@@ -322,8 +322,16 @@ export default function PersonalizationScreen() {
     },
   };
 
+  // `replace` to the Settings root discarded the entry point AND the back
+  // entry, so a user who opened Personalization from a chat or from Profile
+  // landed on Settings with no way back. Pop the real stack; the Settings root
+  // stays only as the deep-link fallback, matching `SettingsScreenShell`.
   const goBack = useCallback(() => {
-    router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.navigate('/(app)/(tabs)/settings' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 
   const hasChanges = useMemo(() => {

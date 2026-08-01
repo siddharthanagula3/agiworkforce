@@ -40,27 +40,16 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+// Proxy, not a hand-listed map: the drawer adding one more lucide glyph should
+// not fail every assertion in this suite with "reading 'displayName'".
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
-  return {
-    BookImage: icon,
-    BookOpen: icon,
-    Boxes: icon,
-    CalendarClock: icon,
-    Cloud: icon,
-    FolderOpen: icon,
-    HelpCircle: icon,
-    Info: icon,
-    MessageSquare: icon,
-    Pin: icon,
-    Plus: icon,
-    Search: icon,
-    Settings: icon,
-    Sparkles: icon,
-    SquarePen: icon,
-    UserCircle: icon,
-    X: icon,
-  };
+  return new Proxy(
+    {},
+    {
+      get: (_target, name) => (name === '__esModule' ? true : icon),
+    },
+  );
 });
 
 jest.mock('@react-navigation/drawer', () => ({}));
@@ -349,5 +338,49 @@ describe('DrawerContent', () => {
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/(tabs)/chat',
     });
+  });
+
+  // PAR-M06. The founder complained the old drawer search field's placeholder
+  // widened it; deleting the entry point outright over-corrected. The
+  // replacement is icon-only (so it cannot widen) and hands off to the screen
+  // that owns search, with its field already focused.
+  it('opens Chats with the search field focused from the icon-only search button', () => {
+    const { getByLabelText, queryByPlaceholderText } = renderDrawer();
+
+    // No search input in the drawer: an icon-only button has no placeholder to
+    // grow, which is the whole point of the fix.
+    expect(queryByPlaceholderText(/search/i)).toBeNull();
+
+    fireEvent.press(getByLabelText('Search'));
+
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith({
+      pathname: '/(app)/chats',
+      params: { focusSearch: '1' },
+    });
+  });
+
+  // PAR-M18. `app/(app)/notifications` had zero inbound navigation, so agent,
+  // task and schedule results landed somewhere the user could not reach.
+  it('reaches the notification centre from the primary nav', () => {
+    const { getByLabelText } = renderDrawer();
+
+    fireEvent.press(getByLabelText('Notifications'));
+
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/notifications');
+  });
+
+  it('marks Notifications active only on the centre, not on notification settings', () => {
+    mockPathname = '/notifications';
+    const centre = renderDrawer();
+    expect(centre.getByLabelText('Notifications').props.accessibilityState.selected).toBe(true);
+    centre.unmount();
+
+    mockPathname = '/settings/notifications';
+    const preferences = renderDrawer();
+    expect(preferences.getByLabelText('Notifications').props.accessibilityState.selected).toBe(
+      false,
+    );
   });
 });

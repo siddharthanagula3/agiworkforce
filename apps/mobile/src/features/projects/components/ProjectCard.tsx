@@ -44,7 +44,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
         }}
         accessibilityLabel={`Project: ${project.name}${isActive ? ', active' : ''}`}
         accessibilityRole="button"
-        accessibilityHint="Tap to set active, long press for options"
+        accessibilityHint="Tap to open, long press for options"
       >
         <View className="p-4 gap-2.5">
           {/* Top row: icon + name + active indicator */}

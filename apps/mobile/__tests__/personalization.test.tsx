@@ -17,12 +17,15 @@ import { act, render, fireEvent } from '@testing-library/react-native';
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
+const mockNavigate = jest.fn();
+const mockCanGoBack = jest.fn<boolean, []>(() => true);
 const mockUseLocalSearchParams = jest.fn(() => ({}) as { scope?: string });
 jest.mock('expo-router', () => ({
   useRouter: () => ({
     push: jest.fn(),
     replace: mockReplace,
-    canGoBack: jest.fn().mockReturnValue(true),
+    navigate: mockNavigate,
+    canGoBack: mockCanGoBack,
     back: mockBack,
   }),
   useLocalSearchParams: () => mockUseLocalSearchParams(),
@@ -123,6 +126,7 @@ describe('Personalization page', () => {
     resetSettingsStore();
     useAuthStore.setState({ clerkUserId: null });
     jest.clearAllMocks();
+    mockCanGoBack.mockReturnValue(true);
     mockUseLocalSearchParams.mockReturnValue({});
   });
 
@@ -207,12 +211,28 @@ describe('Personalization page', () => {
     expect(personalization.fullName).toBe('Alice Wonder');
   });
 
-  it('Save button returns to settings', () => {
+  // PAR-M15 family. `replace('/(app)/(tabs)/settings')` discarded both the
+  // entry point and the back entry, so a user who opened Personalization from
+  // Profile or from a chat landed on the Settings root with no way back.
+  it('Save pops back to whichever screen pushed it', () => {
+    mockCanGoBack.mockReturnValue(true);
     const { getByLabelText } = render(<PersonalizationScreen />);
 
     fireEvent.press(getByLabelText('Save personalization settings'));
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('Save falls back to the Settings root only on a deep link with no history', () => {
+    mockCanGoBack.mockReturnValue(false);
+    const { getByLabelText } = render(<PersonalizationScreen />);
+
+    fireEvent.press(getByLabelText('Save personalization settings'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/(tabs)/settings');
     expect(mockBack).not.toHaveBeenCalled();
-    expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/settings');
   });
 
   it('renders the Save button', () => {

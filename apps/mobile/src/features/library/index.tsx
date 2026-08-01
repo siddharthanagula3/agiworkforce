@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, TextInput, View } from 'react-native';
+import { FlatList, ScrollView, TextInput, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { BookImage, FileText, ImageIcon, Menu, Search, Sparkles, X } from 'lucide-react-native';
+import { BookImage, FileText, ImageIcon, Search, Sparkles, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
+import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
@@ -228,32 +229,29 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       <View className="h-12 flex-row items-center px-3 gap-2">
-        <Pressable
-          testID="library-open-drawer"
-          onPress={openDrawer}
-          style={({ pressed }) => ({
-            width: 36,
-            height: 36,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: pressed ? c.surfaceHover : c.transparent,
-          })}
-          accessibilityLabel="Open navigation drawer"
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <Menu size={20} color={c.textSecondary} />
-        </Pressable>
+        <DrawerButton testID="library-open-drawer" onPress={openDrawer} />
         <Text style={{ flex: 1, color: c.textPrimary, fontSize: 17, fontWeight: '700' }}>
           Library
         </Text>
       </View>
 
-      {/* px-4 keeps the chip row on the same 16pt gutter as the search field
-          below it; pb-4 restores the app's standard 16pt vertical rhythm
-          (12pt read as the two controls being one crowded group). */}
-      <View className="flex-row px-4 pb-4 gap-2">
+      {/* Horizontally scrollable, not a fixed row. The four labels already
+          total ~316pt plus gutters against a 375pt screen, so at any
+          accessibility text size — or with a fifth filter — "Artifacts" was
+          pushed off-screen with no way to reach it. The 16pt content padding
+          keeps the same gutter as the search field below, and the 16pt bottom
+          padding keeps the standard vertical rhythm between the two controls
+          (12pt read as one crowded group). */}
+      <ScrollView
+        testID="library-filter-row"
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        // ScrollView's base style is flexGrow: 1, so without this the chip row
+        // would claim every remaining pixel of this column and push the grid
+        // off the screen.
+        style={{ flexGrow: 0, paddingBottom: 16 }}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
+      >
         <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
         <FilterChip
           label="Images"
@@ -270,7 +268,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           active={filter === 'artifacts'}
           onPress={() => setFilter('artifacts')}
         />
-      </View>
+      </ScrollView>
 
       <View
         style={{

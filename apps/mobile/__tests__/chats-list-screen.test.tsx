@@ -5,6 +5,7 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockOpenDrawer = jest.fn();
+let mockSearchParams: Record<string, string> = {};
 const mockLoadConversations = jest.fn().mockResolvedValue(undefined);
 const mockSearchConversations = jest.fn();
 
@@ -76,6 +77,8 @@ const mockLibraryImages = [
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
+  // The drawer's icon-only search button hands off here with `focusSearch=1`.
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 jest.mock('@react-navigation/native', () => ({
@@ -176,7 +179,27 @@ import ChatsListScreen from '../src/features/chat/ChatsListScreen';
 describe('ChatsListScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSearchParams = {};
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  });
+
+  // PAR-M06: the drawer's icon-only search button is a hand-off, not a second
+  // search implementation, so this screen has to honour the param it arrives
+  // with. Without it the button would just dump the user on an unfocused list.
+  it('focuses the search field when opened with the drawer search param', () => {
+    const unfocused = render(<ChatsListScreen />);
+    expect(
+      unfocused.getByLabelText('Search chats, projects, files, library, and artifacts').props
+        .autoFocus,
+    ).toBe(false);
+    unfocused.unmount();
+
+    mockSearchParams = { focusSearch: '1' };
+    const focused = render(<ChatsListScreen />);
+    expect(
+      focused.getByLabelText('Search chats, projects, files, library, and artifacts').props
+        .autoFocus,
+    ).toBe(true);
   });
 
   it('renders an unbounded mode-scoped history with filter and New chat controls', () => {

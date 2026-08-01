@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, SectionList, TextInput, View, type SectionListData } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Menu,
   MessageSquare,
   Pin,
   ChevronRight,
@@ -19,6 +18,7 @@ import { Text } from '@/components/ui/text';
 // components/ui/pressable-box.tsx.
 import { PressableBox } from '@/components/ui/pressable-box';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useThemeColors } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
@@ -125,6 +125,13 @@ export function ChatsListScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
+  // The drawer's icon-only search button hands off to this screen rather than
+  // keeping a second search implementation of its own, so it arrives with
+  // `focusSearch=1` and expects the field below to already be focused.
+  const params = useLocalSearchParams<{ focusSearch?: string | string[] }>();
+  const autoFocusSearch =
+    (Array.isArray(params.focusSearch) ? params.focusSearch[0] : params.focusSearch) === '1';
+  const searchInputRef = useRef<TextInput>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ChatListFilter>('all');
   const appMode = useChatAppModeStore((state) => state.appMode);
@@ -159,6 +166,14 @@ export function ChatsListScreen() {
   useEffect(() => {
     searchConversations(query);
   }, [query, searchConversations]);
+
+  // Covers the case the declarative `autoFocus` below cannot: the drawer sits
+  // over an already-mounted Chats screen, so there is no mount for autoFocus to
+  // fire on. Runs whenever the param arrives or changes.
+  useEffect(() => {
+    if (!autoFocusSearch) return;
+    searchInputRef.current?.focus();
+  }, [autoFocusSearch]);
 
   // Read each mode's history from the store that OWNS it.
   //
@@ -383,15 +398,7 @@ export function ChatsListScreen() {
           gap: 8,
         }}
       >
-        <Pressable
-          onPress={() => openNearestDrawer(navigation)}
-          accessibilityRole="button"
-          accessibilityLabel="Open navigation drawer"
-          hitSlop={8}
-          style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Menu size={20} color={colors.textSecondary} />
-        </Pressable>
+        <DrawerButton onPress={() => openNearestDrawer(navigation)} />
         <View style={{ flex: 1 }}>
           <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}>Chats</Text>
           <Text style={{ color: colors.textMuted, fontSize: 11 }}>
@@ -525,6 +532,8 @@ export function ChatsListScreen() {
       >
         <Search size={17} color={colors.textMuted} />
         <TextInput
+          ref={searchInputRef}
+          autoFocus={autoFocusSearch}
           value={query}
           onChangeText={setQuery}
           placeholder="Search"
