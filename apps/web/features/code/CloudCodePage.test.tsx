@@ -114,7 +114,7 @@ describe('CloudCodePage', () => {
 
     render(<CloudCodePage api={api} />);
 
-    expect(await screen.findByText('Managed Code storage is not ready.')).toBeInTheDocument();
+    expect(await screen.findByText('Managed Code is coming soon.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeDisabled();
     expect(api.create).not.toHaveBeenCalled();
   });

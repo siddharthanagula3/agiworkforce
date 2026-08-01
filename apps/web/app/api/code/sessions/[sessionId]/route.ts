@@ -32,7 +32,7 @@ function rethrowCloudCodeError(error: unknown): never {
   }
   if (isCloudCodeSchemaUnavailable(error)) {
     throw createError.serviceUnavailable(
-      'Managed Code storage is not ready. Apply the latest database migrations.',
+      'Managed Code is coming soon. Cloud sessions are not available yet.',
     );
   }
   throw error;
