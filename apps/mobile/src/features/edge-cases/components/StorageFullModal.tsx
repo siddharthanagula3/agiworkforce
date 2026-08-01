@@ -118,7 +118,7 @@ export function StorageFullModal({ visible, onCancel }: StorageFullModalProps) {
             accessibilityLabel={EDGE_COPY.storageFull.openSettings}
             accessibilityHint="Opens device storage settings"
           >
-            <Text style={{ color: colors.white, fontWeight: '700', fontSize: 15 }}>
+            <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: 15 }}>
               {EDGE_COPY.storageFull.openSettings}
             </Text>
           </Pressable>

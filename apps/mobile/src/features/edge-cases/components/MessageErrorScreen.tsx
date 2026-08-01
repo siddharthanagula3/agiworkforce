@@ -83,7 +83,9 @@ function ErrorScreen({
           accessibilityRole="button"
           accessibilityLabel={retryLabel}
         >
-          <Text style={{ color: colors.white, fontWeight: '700', fontSize: 15 }}>{retryLabel}</Text>
+          <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: 15 }}>
+            {retryLabel}
+          </Text>
         </Pressable>
       )}
 
