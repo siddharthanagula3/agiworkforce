@@ -13,23 +13,18 @@ const mocks = vi.hoisted(() => ({
   listCloudSkills: vi.fn(),
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
-  SettingsModal: mocks.settingsModal,
-  SETTINGS_NAV_GROUPS_WEB: [
-    {
-      items: [
-        { key: 'general', label: 'General', icon: () => null },
-        { key: 'capabilities', label: 'Capabilities', icon: () => null },
-        { key: 'team', label: 'Team', icon: () => null },
-        { key: 'security', label: 'Security', icon: () => null },
-        { key: 'notifications', label: 'Notifications', icon: () => null },
-        { key: 'reflect', label: 'Reflect', icon: () => null },
-        { key: 'time-focus', label: 'Time and focus', icon: () => null },
-        { key: 'plugins', label: 'Plugins', icon: () => null },
-      ],
-    },
-  ],
-}));
+// The real nav, not a hand-listed stand-in. This modal builds its nav BY
+// MAPPING OVER SETTINGS_NAV_GROUPS_WEB, so a stub that omits an entry hides
+// exactly the bug worth catching: 'safety' shipped in the real nav with no
+// section content behind it, and the shared modal rendered its developer
+// fallback ("No content for section ...") to the user.
+vi.mock('@agiworkforce/ui', async () => {
+  const actual = await vi.importActual<typeof import('@agiworkforce/ui')>('@agiworkforce/ui');
+  return {
+    SettingsModal: mocks.settingsModal,
+    SETTINGS_NAV_GROUPS_WEB: actual.SETTINGS_NAV_GROUPS_WEB,
+  };
+});
 
 vi.mock('../../../api/cloudConnectors', () => ({
   listConnectors: mocks.listConnectors,
@@ -81,6 +76,36 @@ describe('DesktopCloudSettingsModal capability honesty', () => {
     for (const key of ['security', 'notifications', 'reflect', 'time-focus', 'plugins']) {
       expect(props.sectionContent[key]).toBeTruthy();
     }
+  });
+
+  /**
+   * The guard the previous test could not provide: every item the nav renders
+   * must resolve to something. Connectors, skills and plugins are the shared
+   * modal's own built-in panels and legitimately have no entry here.
+   */
+  it('renders content for every item in its own navigation', () => {
+    render(<DesktopCloudSettingsModal open={false} onClose={vi.fn()} />);
+
+    const props = latestSettingsProps();
+    const builtInPanels = new Set(['connectors', 'skills', 'plugins']);
+    const deadItems = (props.navGroups ?? [])
+      .flatMap((group) => group.items)
+      .filter((item) => !builtInPanels.has(item.key) && !props.sectionContent[item.key])
+      .map((item) => item.key);
+
+    expect(deadItems).toEqual([]);
+  });
+
+  it('can reach archived chats and shared links, the surfaces web links from Privacy', () => {
+    render(<DesktopCloudSettingsModal open={false} onClose={vi.fn()} />);
+
+    const props = latestSettingsProps();
+    const navKeys = (props.navGroups ?? []).flatMap((group) => group.items.map((item) => item.key));
+
+    // Desktop can already publish a share; without this it could never revoke one.
+    expect(navKeys).toEqual(expect.arrayContaining(['archived', 'shared-links']));
+    expect(props.sectionContent['archived']).toBeTruthy();
+    expect(props.sectionContent['shared-links']).toBeTruthy();
   });
 
   it('advertises and forwards bearer-token support for custom Cloud connectors', async () => {
