@@ -129,6 +129,7 @@ export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
       },
       capabilities: {
         ...settings.capabilities,
+        memoryEnabled: settings.memoryEnabled,
         referencePastChats: settings.referencePastChats,
         generateMemoryFromHistory: settings.generateMemoryFromHistory,
       },
@@ -232,6 +233,7 @@ export async function resetLocalInMemoryState(): Promise<void> {
     notificationsEnabled: true,
     speechLanguage: 'en',
     autoListenEnabled: true,
+    memoryEnabled: true,
     referencePastChats: true,
     generateMemoryFromHistory: true,
     personalization: defaultPersonalization,

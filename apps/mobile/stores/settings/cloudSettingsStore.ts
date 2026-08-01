@@ -41,6 +41,16 @@ export interface CloudSettingsState {
   speechLanguage: string;
   /** Auto-listen after AI speaks in voice conversation mode */
   autoListenEnabled: boolean;
+  /**
+   * Master memory switch for THIS DEVICE. Device-local and deliberately not part
+   * of the cloud settings payload — there is no account-level master key on the
+   * `/api/settings/sync` `capabilities` namespace (the account owns `memory` and
+   * `generateFromHistory` only, see services/cloudSettingsMapping.ts). Turning
+   * it off hard-gates every memory read and write this device performs; the UI
+   * additionally turns the account-level `referencePastChats` switch off so the
+   * server stops generating account memories from this device's turns too.
+   */
+  memoryEnabled: boolean;
   /** Search prior Cloud chats and use relevant account memories while answering */
   referencePastChats: boolean;
   /** Generate account memories from eligible Cloud chat turns */
@@ -69,6 +79,7 @@ export interface CloudSettingsState {
   setNotificationsEnabled: (enabled: boolean) => void;
   setSpeechLanguage: (language: string) => void;
   setAutoListenEnabled: (enabled: boolean) => void;
+  setMemoryEnabled: (enabled: boolean) => void;
   setReferencePastChats: (enabled: boolean) => void;
   setGenerateMemoryFromHistory: (enabled: boolean) => void;
   setPersonalization: (partial: Partial<Personalization>) => void;
@@ -109,6 +120,7 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
       notificationsEnabled: true,
       speechLanguage: 'en',
       autoListenEnabled: true,
+      memoryEnabled: true,
       // Match the Web privacy-safe default: Cloud memory reads are opt-in.
       referencePastChats: false,
       generateMemoryFromHistory: true,
@@ -129,6 +141,10 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
         set({ speechLanguage: language, settingsUpdatedAt: nowIso() }),
       setAutoListenEnabled: (enabled) =>
         set({ autoListenEnabled: enabled, settingsUpdatedAt: nowIso() }),
+      // Device-local: never projected by toCloudSettings, so it must NOT stamp
+      // the cloud-safe dirty marker or it would push an otherwise unchanged
+      // settings document.
+      setMemoryEnabled: (enabled) => set({ memoryEnabled: enabled }),
       setReferencePastChats: (enabled) =>
         set({
           referencePastChats: enabled,
@@ -189,6 +205,7 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
                 notificationsEnabled: s.notificationsEnabled ?? true,
                 speechLanguage: s.speechLanguage ?? 'en',
                 autoListenEnabled: s.autoListenEnabled ?? true,
+                memoryEnabled: s.memoryEnabled ?? true,
                 referencePastChats: s.referencePastChats ?? false,
                 generateMemoryFromHistory: s.generateMemoryFromHistory ?? true,
                 memoryPolicyInitialized: s.memoryPolicyInitialized ?? false,

@@ -1246,7 +1246,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         ? useCloudSettingsStore.getState()
         : useLocalSettingsStore.getState();
     const isTemporaryChat = useSettingsStore.getState().isTemporaryChat;
-    const memoryContextEnabled = memorySettings.referencePastChats && !isTemporaryChat;
+    // The device master switch wins over the mode-scoped sub-preference. A Cloud
+    // settings pull from another device can set `referencePastChats` back to
+    // true; a user who turned memory off on THIS device must still never have
+    // saved memories or past-chat excerpts injected into their turn.
+    const memoryContextEnabled =
+      memorySettings.memoryEnabled && memorySettings.referencePastChats && !isTemporaryChat;
 
     // Inject personalization plus explicitly enabled, mode-scoped memory context.
     // Local reads stay on device. Cloud history search and saved memories stay
@@ -1290,7 +1295,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const shouldCaptureCompletedLocalTurn = shouldConsolidateMemoryOnClient({
       executionMode,
       isTemporaryChat,
-      memoryEnabled: memorySettings.referencePastChats,
+      memoryEnabled: memorySettings.memoryEnabled && memorySettings.referencePastChats,
       generateMemoryFromHistory: memorySettings.generateMemoryFromHistory,
     });
     let completedLocalMemoryCaptured = false;
@@ -1552,16 +1557,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // onDone so `resolveToolApproval` can rebuild the resume request.
       const turnPendingApprovals: PendingApprovalCall[] = [];
 
-      // Ambient web search: there is no per-turn toggle in the composer.
-      // Automatically offer search when the selected Cloud model or the
-      // configured generic backend can execute it; capability metadata still
-      // clamps the request so unsupported models never receive a cosmetic flag.
-      // The server streams results back as x_search_results deltas, which the
-      // tool-call accumulator already renders.
+      // Automatic web search, gated by the user's own Capabilities preference
+      // (`features.webSearch`). Search stays ambient — there is no per-turn
+      // composer toggle — but a user who turned it off in Settings must never
+      // have a cloud turn silently search the web on their behalf; that is a
+      // privacy control, not a convenience. When the preference is on, the
+      // deployment flag, the account capability grant and the model capability
+      // clamp still apply, so an unsupported model never receives a cosmetic
+      // flag. The server streams results back as x_search_results deltas, which
+      // the tool-call accumulator already renders.
       const executionModelMetadata = getModelMetadataById(executionModel);
       const entitlementState = useTierStore.getState();
       const webSearchEnabled =
         FEATURES.webSearch &&
+        useChatViewStore.getState().features.webSearch &&
         entitlementState.grantedCapabilities.includes('canUseWebSearch') &&
         isWebSearchAvailable({
           provider: executionModelMetadata?.provider,
