@@ -215,6 +215,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
   const pathname = usePathname();
   const conversations = useChatStore((s) => s.conversations);
+  const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
   const pinConversation = useChatStore((s) => s.pinConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
 
@@ -226,7 +227,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       // `archived` is a column on web_conversations, so archiving only exists
       // for Cloud chats. Local Mode chats never leave the device and have no
       // archived set to move into.
-      const conversation = conversations.find((c) => c.id === id);
+      const conversation =
+        conversations.find((c) => c.id === id) ?? cloudConversations.find((c) => c.id === id);
       const isCloudConversation =
         conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
 
@@ -269,7 +271,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         { text: 'Cancel', style: 'cancel' },
       ]);
     },
-    [conversations, pinConversation, deleteConversation],
+    [cloudConversations, conversations, pinConversation, deleteConversation],
   );
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
@@ -295,8 +297,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   }, [closeDrawer, router]);
 
   const displayedConversations = useMemo(() => {
+    // Each mode's history comes from the store that owns it. Cloud rows live in
+    // useChatCloudMessageStore (where loadConversations writes the server list);
+    // filtering the local store for `executionMode: 'cloud'` returned a stale
+    // MMKV mirror that server responses never touched.
+    const source = appMode === 'cloud' ? cloudConversations : conversations;
     return (
-      conversations
+      source
         .filter(
           (conversation) =>
             executionModeForConversation(conversation) === appMode &&
@@ -307,7 +314,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
         .slice(0, DRAWER_RECENT_LIMIT)
     );
-  }, [appMode, conversations]);
+  }, [appMode, cloudConversations, conversations]);
 
   const displayedProjects = useMemo(() => {
     if (!FEATURES.projects) return [];
