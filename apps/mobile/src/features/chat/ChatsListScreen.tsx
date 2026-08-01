@@ -7,6 +7,7 @@ import {
   Menu,
   MessageSquare,
   Pin,
+  ChevronRight,
   Search,
   SlidersHorizontal,
   SquarePen,
@@ -331,7 +332,13 @@ export function ChatsListScreen() {
               {item.kind}
             </Text>
           </View>
-        ) : null}
+        ) : (
+          /* Trailing chevron — the row is tappable and Claude's chats list
+             (claude_reference/117) carries this affordance; without it the row
+             reads as a static card rather than a link. Hidden while searching,
+             where the kind badge occupies the same slot. */
+          <ChevronRight size={16} color={colors.textMuted} />
+        )}
       </PressableBox>
     ),
     [colors, isSearching, openItem],
