@@ -10,13 +10,13 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Slider from '@react-native-community/slider';
-import { ArrowLeft, Check, Sun, Moon, Monitor } from 'lucide-react-native';
+import { ArrowLeft, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import type { ThemeMode, PersonalizationStyle } from '@/stores/settingsStore';
+import type { PersonalizationStyle } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 import {
   PERSONALIZATION_SLIDERS as SLIDERS,
@@ -165,63 +165,16 @@ function StyleSlider({
 }
 
 // ---------------------------------------------------------------------------
-// Theme segmented control
-// ---------------------------------------------------------------------------
-
-const THEME_OPTIONS: { mode: ThemeMode; label: string; Icon: typeof Sun }[] = [
-  { mode: 'light', label: 'Light', Icon: Sun },
-  { mode: 'dark', label: 'Dark', Icon: Moon },
-  { mode: 'system', label: 'System', Icon: Monitor },
-];
-
-function ThemeSegmentedControl({
-  value,
-  onChange,
-}: {
-  value: ThemeMode;
-  onChange: (mode: ThemeMode) => void;
-}) {
-  const c = useThemeColors();
-  return (
-    <View className="gap-2">
-      <Text className="text-sm" style={{ color: c.textMuted }}>
-        Appearance
-      </Text>
-      <View className="flex-row gap-2">
-        {THEME_OPTIONS.map(({ mode, label, Icon }) => {
-          const selected = value === mode;
-          return (
-            <Pressable
-              key={mode}
-              onPress={() => onChange(mode)}
-              className="flex-1 items-center gap-1.5 py-2.5 rounded-xl"
-              style={{
-                backgroundColor: selected ? c.accentSurface : c.surfaceBase,
-                borderWidth: 1,
-                borderColor: selected ? c.accentBorder : c.border,
-              }}
-              accessibilityLabel={label}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-            >
-              <Icon size={16} color={selected ? c.teal : c.textMuted} />
-              <Text className="text-xs" style={{ color: selected ? c.teal : c.textSecondary }}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <Text className="text-[11px] leading-4" style={{ color: c.textMuted }}>
-        System follows your device appearance setting.
-      </Text>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
+//
+// There is deliberately no theme control here. This screen commits every field
+// through the header Save (and offers "Discard changes?" on back), but the
+// theme card wrote straight to the store on tap and was never part of
+// `hasChanges` — so discarding reverted the text fields while silently keeping
+// the theme change it had implicitly promised to revert. Appearance is owned by
+// the Settings root row (`/(app)/settings/appearance`), which has no draft
+// contract to violate.
 
 export default function PersonalizationScreen() {
   const router = useRouter();
@@ -235,18 +188,12 @@ export default function PersonalizationScreen() {
 
   const localPersonalization = useLocalSettingsStore((s) => s.personalization);
   const localSetPersonalization = useLocalSettingsStore((s) => s.setPersonalization);
-  const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
-  const localSetThemeMode = useLocalSettingsStore((s) => s.setThemeMode);
   const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
   const cloudSetPersonalization = useCloudSettingsStore((s) => s.setPersonalization);
-  const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
-  const cloudSetThemeMode = useCloudSettingsStore((s) => s.setThemeMode);
   const clerkUserId = useAuthStore((s) => s.clerkUserId);
 
   const personalization = isCloud ? cloudPersonalization : localPersonalization;
   const setPersonalization = isCloud ? cloudSetPersonalization : localSetPersonalization;
-  const themeMode = isCloud ? cloudThemeMode : localThemeMode;
-  const setThemeMode = isCloud ? cloudSetThemeMode : localSetThemeMode;
 
   // Local editing state — commit on Save
   const [fullName, setFullName] = useState(personalization.fullName);
@@ -442,19 +389,6 @@ export default function PersonalizationScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Theme */}
-        <View>
-          <Text
-            className="text-[11px] uppercase tracking-wider font-semibold mb-3 px-1"
-            style={{ color: c.textMuted }}
-          >
-            Theme
-          </Text>
-          <Card>
-            <ThemeSegmentedControl value={themeMode} onChange={setThemeMode} />
-          </Card>
-        </View>
-
         {/* Text Fields */}
         <Card className="gap-4 mt-2">
           <LabeledInput

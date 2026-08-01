@@ -106,111 +106,116 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
   >
     <View>
       <View
-        accessibilityLabel="Edit profile"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": undefined,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
         style={
           {
-            "alignItems": "center",
-            "backgroundColor": "#1a1a1a",
-            "borderRadius": 24,
-            "flexDirection": "row",
-            "gap": 12,
             "marginBottom": 24,
-            "minHeight": 72,
-            "paddingHorizontal": 14,
           }
         }
       >
         <View
+          accessibilityLabel="Edit profile"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
           style={
             {
               "alignItems": "center",
-              "backgroundColor": undefined,
-              "borderRadius": 21,
-              "height": 42,
-              "justifyContent": "center",
-              "width": 42,
+              "backgroundColor": "#1a1a1a",
+              "borderRadius": 24,
+              "gap": 12,
+              "paddingBottom": 20,
+              "paddingHorizontal": 14,
+              "paddingTop": 20,
             }
           }
         >
-          <Text
+          <View
+            accessibilityLabel="Profile picture"
+            accessible={true}
             style={
               {
-                "color": "#fff",
-                "fontSize": 17,
-                "fontWeight": "700",
+                "alignItems": "center",
+                "backgroundColor": undefined,
+                "borderRadius": 44,
+                "height": 88,
+                "justifyContent": "center",
+                "width": 88,
+              }
+            }
+            testID="settings-profile-avatar"
+          >
+            <Text
+              style={
+                {
+                  "color": "#fff",
+                  "fontSize": 35,
+                  "fontWeight": "700",
+                }
+              }
+            >
+              L
+            </Text>
+          </View>
+          <View
+            style={
+              {
+                "alignItems": "center",
+                "gap": 3,
               }
             }
           >
-            L
-          </Text>
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "fontSize": 20,
+                  "fontWeight": "700",
+                }
+              }
+            >
+              Local profile
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#777",
+                  "fontSize": 13,
+                }
+              }
+            >
+              Local mode active
+            </Text>
+          </View>
         </View>
-        <View
-          style={
-            {
-              "flex": 1,
-            }
-          }
-        >
-          <Text
-            numberOfLines={1}
-            style={
-              {
-                "color": "#fff",
-                "fontSize": 16,
-                "fontWeight": "600",
-              }
-            }
-          >
-            Local profile
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={
-              {
-                "color": "#777",
-                "fontSize": 12,
-                "marginTop": 2,
-              }
-            }
-          >
-            Local mode active
-          </Text>
-        </View>
-        <View
-          color="#777"
-          size={20}
-          testID="icon-UserRound"
-        />
       </View>
       <View
         style={
@@ -869,7 +874,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             />
           </View>
           <View
-            accessibilityLabel="General. llama-3.2-1b"
+            accessibilityLabel="General"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -929,18 +934,6 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               }
             >
               General
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#777",
-                  "fontSize": 13,
-                  "maxWidth": 130,
-                }
-              }
-            >
-              llama-3.2-1b
             </Text>
             <View
               color="#777"

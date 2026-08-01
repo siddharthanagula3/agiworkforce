@@ -30,6 +30,7 @@ import {
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -97,7 +98,6 @@ export default function ProfileScreen() {
   const subtitle = isCloudMode
     ? cloudEmail || (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
     : personalization.occupation || 'Private on this device';
-  const initial = displayName.charAt(0).toUpperCase();
   // Gate cloud account section on the real Clerk signal, not on useAuthStore.user
   // which is permanently null in v1.
   const hasCloudAccount = FEATURES.auth && isClerkSignedIn;
@@ -172,20 +172,15 @@ export default function ProfileScreen() {
             gap: 12,
           }}
         >
-          <View
-            style={{
-              width: 76,
-              height: 76,
-              borderRadius: 38,
-              backgroundColor: colors.surfaceHover,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ color: colors.textPrimary, fontSize: 28, fontWeight: '700' }}>
-              {initial}
-            </Text>
-          </View>
+          {/* Reads the signed-in account's photo, which this screen previously
+              ignored while the Account screen rendered it — the same user saw
+              their picture on one screen and a grey letter tile here. */}
+          <UserAvatar
+            size={76}
+            uri={clerkUser?.imageUrl}
+            initials={displayName}
+            testID="profile-avatar"
+          />
           <View style={{ alignItems: 'center', gap: 3 }}>
             <Text
               numberOfLines={1}
@@ -403,7 +398,9 @@ function ProfileRow({
           {value}
         </Text>
       ) : null}
-      <ChevronRight size={17} color={colors.textMuted} />
+      {/* Log Out raises a confirm Alert instead of pushing a screen, so the
+          danger tone carries no chevron — matching the Settings root. */}
+      {tone === 'danger' ? null : <ChevronRight size={17} color={colors.textMuted} />}
     </Pressable>
   );
 }

@@ -1,9 +1,10 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, View, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
+import * as ImagePicker from 'expo-image-picker';
 import { useUser } from '@clerk/expo';
 import {
   Archive,
@@ -21,6 +22,7 @@ import {
   MessageCircleWarning,
   Mic,
   Palette,
+  Pencil,
   Shield,
   Share2,
   SlidersHorizontal,
@@ -34,11 +36,10 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
-import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { getBillingPlanPricing } from '@agiworkforce/types';
-import { getShortDisplayName } from '@/src/features/model-picker/service';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { UserAvatar } from '@/src/shared/components/UserAvatar';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
@@ -166,20 +167,30 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
           <Text style={{ color: badge.color, fontSize: 10, fontWeight: '700' }}>{row.tag}</Text>
         </View>
       ) : null}
-      <ChevronRight size={17} color={colors.textMuted} />
+      {/* A danger row is terminal — Log Out raises a confirm Alert, it does not
+          push a screen. A chevron there advertises navigation that never
+          happens, so it is suppressed for the whole tone. */}
+      {row.tone === 'danger' ? null : <ChevronRight size={17} color={colors.textMuted} />}
     </Pressable>
   );
 }
+
+/** Avatar geometry for the settings header. */
+const PROFILE_AVATAR_SIZE = 88;
+const PROFILE_PHOTO_BADGE_SIZE = 30;
+const PROFILE_CARD_PADDING_TOP = 20;
 
 function ProfileHeader({ onPress }: { onPress: () => void }) {
   const colors = useThemeColors();
   const { user: clerkUser } = useUser();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const isCloudMode = appMode === 'cloud';
   const localPersonalization = useLocalSettingsStore((s) => s.personalization);
   const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
   const personalization = isCloudMode ? cloudPersonalization : localPersonalization;
+  const [savingPhoto, setSavingPhoto] = useState(false);
   const displayName = isCloudMode
     ? personalization.nickname ||
       personalization.fullName ||
@@ -193,51 +204,127 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
     ? clerkUser?.primaryEmailAddress?.emailAddress ||
       (cloudUnlocked ? 'Cloud access unlocked' : 'Sign in required')
     : personalization.occupation || 'Local mode active';
-  const initial = displayName.charAt(0).toUpperCase();
+  // Local mode has no account that owns a photo, so there is nothing to write
+  // a picked image to — the edit affordance is not rendered there at all
+  // rather than rendered and then failing.
+  const canEditPhoto = isCloudMode && isClerkSignedIn && Boolean(clerkUser);
+
+  const handleEditPhoto = useCallback(async () => {
+    if (!clerkUser || savingPhoto) return;
+    setSavingPhoto(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        quality: 0.85,
+        // Clerk's setProfileImage takes a Blob/File/string; a base64 data URL
+        // is the only one of the three React Native can produce here.
+        base64: true,
+        exif: false,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.base64) {
+        Alert.alert('Photo unavailable', 'That image could not be read. Pick another photo.');
+        return;
+      }
+      await clerkUser.setProfileImage({
+        file: `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`,
+      });
+    } catch {
+      Alert.alert(
+        'Could not update photo',
+        'Your profile photo was not changed. Check your connection and try again.',
+      );
+    } finally {
+      setSavingPhoto(false);
+    }
+  }, [clerkUser, savingPhoto]);
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Edit profile"
-      style={{
-        minHeight: 72,
-        borderRadius: cardRadius,
-        backgroundColor: colors.surfaceElevated,
-        paddingHorizontal: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: 24,
-      }}
-    >
-      <View
+    <View style={{ marginBottom: 24 }}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Edit profile"
         style={{
-          width: 42,
-          height: 42,
-          borderRadius: 21,
-          backgroundColor: colors.surfaceHover,
+          borderRadius: cardRadius,
+          backgroundColor: colors.surfaceElevated,
+          paddingTop: PROFILE_CARD_PADDING_TOP,
+          paddingBottom: 20,
+          paddingHorizontal: 14,
           alignItems: 'center',
-          justifyContent: 'center',
+          gap: 12,
         }}
       >
-        <Text style={{ color: colors.textPrimary, fontSize: 17, fontWeight: '700' }}>
-          {initial}
-        </Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text
-          numberOfLines={1}
-          style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '600' }}
+        <UserAvatar
+          size={PROFILE_AVATAR_SIZE}
+          uri={clerkUser?.imageUrl}
+          initials={displayName}
+          testID="settings-profile-avatar"
+        />
+        <View style={{ alignItems: 'center', gap: 3 }}>
+          <Text
+            numberOfLines={1}
+            style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}
+          >
+            {displayName}
+          </Text>
+          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 13 }}>
+            {subtitle}
+          </Text>
+        </View>
+      </Pressable>
+
+      {/* The badge is an overlay sibling, not a child of the card Pressable:
+          nesting one Pressable inside another is unreliable on Android, and the
+          two targets mean different things (card opens Profile, badge changes
+          the photo). `box-none` lets every other tap fall through to the card. */}
+      {canEditPhoto ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            top: PROFILE_CARD_PADDING_TOP,
+            left: 0,
+            right: 0,
+            height: PROFILE_AVATAR_SIZE,
+            alignItems: 'center',
+          }}
         >
-          {displayName}
-        </Text>
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-          {subtitle}
-        </Text>
-      </View>
-      <UserRound size={20} color={colors.textMuted} />
-    </Pressable>
+          <View
+            pointerEvents="box-none"
+            style={{ width: PROFILE_AVATAR_SIZE, height: PROFILE_AVATAR_SIZE }}
+          >
+            <Pressable
+              testID="settings-profile-photo-badge"
+              onPress={() => void handleEditPhoto()}
+              disabled={savingPhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Change profile photo"
+              accessibilityState={{ disabled: savingPhoto, busy: savingPhoto }}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                position: 'absolute',
+                right: 0,
+                bottom: 0,
+                width: PROFILE_PHOTO_BADGE_SIZE,
+                height: PROFILE_PHOTO_BADGE_SIZE,
+                borderRadius: PROFILE_PHOTO_BADGE_SIZE / 2,
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 2,
+                borderColor: colors.surfaceElevated,
+                backgroundColor: pressed ? colors.surfaceHover : colors.surfaceOverlay,
+                opacity: savingPhoto ? 0.6 : 1,
+              })}
+            >
+              <Pencil size={14} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -261,8 +348,6 @@ export default function SettingsTabScreen() {
   const localAccentColor = useLocalSettingsStore((s) => s.accentColor);
   const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
-  const selectedModel = useModelStore((s) => s.selectedModel);
-  const subscriptionTier = useTierStore((s) => s.tier);
   const billingTier = useTierStore((s) => s.billingTier);
   const { user: clerkUser } = useUser();
   const signOut = useAuthStore((s) => s.signOut);
@@ -380,11 +465,13 @@ export default function SettingsTabScreen() {
             value: formatAccent(accentColor),
             onPress: push('/(app)/settings/accent-color'),
           },
+          // No value: General owns haptics, temporary chat, language, models,
+          // performance and storage — not the model. The model name now sits on
+          // the "Models" row inside General, the row that actually changes it.
           {
             key: 'general',
             label: 'General',
             icon: SlidersHorizontal,
-            value: getShortDisplayName(selectedModel, subscriptionTier),
             onPress: push('/(app)/settings/general'),
           },
           {
@@ -533,17 +620,6 @@ export default function SettingsTabScreen() {
           // Plugins remains unshipped on Mobile, so no dead-end settings row is
           // rendered. Skills now has a supported top-level Cloud catalog in the
           // drawer and is intentionally not duplicated as a settings control.
-          ...(clerkUser
-            ? [
-                {
-                  key: 'logout',
-                  label: 'Log Out',
-                  icon: LogOut,
-                  tone: 'danger' as const,
-                  onPress: handleSignOut,
-                },
-              ]
-            : []),
         ],
       },
       {
@@ -564,7 +640,9 @@ export default function SettingsTabScreen() {
             label: 'Help Center',
             icon: CircleHelp,
             onPress: () => {
-              void openExternalUrl('https://agiworkforce.com/help');
+              // In-app sheet (PAR-M39): Help is read mid-task, so dismissing
+              // it must land back on Settings rather than cold-starting the app.
+              void openInAppBrowser('https://agiworkforce.com/help');
             },
           },
           {
@@ -576,6 +654,26 @@ export default function SettingsTabScreen() {
           },
         ],
       },
+      // Log Out is terminal, so it is last and alone in an untitled card rather
+      // than the 10th row of "Cloud" — where it read as a cloud feature and
+      // pushed Support below the visual end of the list. Gated on the resolved
+      // `isClerkSignedIn` boolean, not on the `clerkUser` object, which is null
+      // during Clerk's loading window and made the row flicker in and out.
+      ...(isClerkSignedIn
+        ? [
+            {
+              rows: [
+                {
+                  key: 'logout',
+                  label: 'Log Out',
+                  icon: LogOut,
+                  tone: 'danger' as const,
+                  onPress: handleSignOut,
+                },
+              ],
+            },
+          ]
+        : []),
     ],
     [
       accentColor,
@@ -588,8 +686,6 @@ export default function SettingsTabScreen() {
       openCloudRoute,
       push,
       router,
-      selectedModel,
-      subscriptionTier,
       themeMode,
       billingTier,
       clerkUser,

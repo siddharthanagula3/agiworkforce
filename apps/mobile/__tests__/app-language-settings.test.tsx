@@ -70,6 +70,22 @@ jest.mock('../stores/settingsStore', () => ({
     }),
 }));
 
+// General settings now renders the active model on its "Models" row (PAR-M21).
+// Stub the catalog stores so this suite stays hermetic — the real stores pull in
+// MMKV/expo-crypto native glue that this suite has no reason to load.
+jest.mock('../src/features/model-picker/store', () => ({
+  useModelStore: (selector: (state: { selectedModel: string }) => unknown) =>
+    selector({ selectedModel: 'claude-opus-4-5' }),
+}));
+
+jest.mock('../src/features/billing/store', () => ({
+  useTierStore: (selector: (state: { tier: string }) => unknown) => selector({ tier: 'free' }),
+}));
+
+jest.mock('../src/features/model-picker/service', () => ({
+  getShortDisplayName: (id: string) => (id === 'claude-opus-4-5' ? 'Claude Opus 4.5' : 'Not set'),
+}));
+
 jest.mock('../src/features/settings/common', () => {
   const RN = require('react-native');
   return {

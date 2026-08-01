@@ -436,6 +436,17 @@ export function getDisplayName(id: string): string {
   return cloudModelSourceMap.get(id)?.name ?? getModelById(id)?.name ?? id;
 }
 
+/**
+ * Shown when a persisted selection matches nothing the catalog knows.
+ *
+ * This helper feeds user-facing chrome (the composer model chip, the Models
+ * settings row, the Add-to-chat sheet). Falling back to the id printed a raw
+ * wire id such as `gpt-5.6-terra` into those surfaces, which is developer
+ * output, not a model name. A neutral label is the truthful answer: the app
+ * cannot name a model it no longer ships.
+ */
+export const UNKNOWN_MODEL_LABEL = 'Not set';
+
 export function getShortDisplayName(id: string, subscriptionTier?: string): string {
   const autoMode = autoModeMap.get(id);
   if (autoMode) return autoMode.name;
@@ -446,7 +457,7 @@ export function getShortDisplayName(id: string, subscriptionTier?: string): stri
   // The tier argument remains for source compatibility; tier controls access,
   // never model identity or provenance labels.
   const model = getModelByIdForCloudAccess(id, true, subscriptionTier);
-  return model?.name ?? id;
+  return model?.name ?? UNKNOWN_MODEL_LABEL;
 }
 
 export function getDefaultSelectableModelId(id?: string | null): string {
