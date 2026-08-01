@@ -4,6 +4,9 @@ import { Alert } from 'react-native';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
+const mockNavigate = jest.fn();
+const mockBack = jest.fn();
+const mockCanGoBack = jest.fn<boolean, []>();
 const mockClerkState: {
   user: null | {
     fullName?: string | null;
@@ -21,8 +24,9 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
-    canGoBack: jest.fn().mockReturnValue(true),
-    back: jest.fn(),
+    navigate: mockNavigate,
+    canGoBack: mockCanGoBack,
+    back: mockBack,
   }),
 }));
 
@@ -86,6 +90,7 @@ import { useAuthStore } from '../src/features/auth/store';
 describe('Settings page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCanGoBack.mockReturnValue(true);
     mockClerkState.user = null;
     useSettingsStore.setState({ themeMode: 'system', accentColor: 'neutral' });
     useChatAppModeStore.setState({ appMode: 'local' });
@@ -305,12 +310,48 @@ describe('Settings page', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');
   });
 
-  it('closes settings back to chat', () => {
+  // PAR-M16. Settings opens over whatever the user was reading, so closing it
+  // must return there. `replace('/(app)/(tabs)/chat')` discarded both the entry
+  // point and the back entry, stranding the user on a blank new chat.
+  it('closes settings back to the screen it was opened from', () => {
     const { getByLabelText } = render(<SettingsTabScreen />);
 
     fireEvent.press(getByLabelText('Close settings'));
 
-    expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('closes to the chat tab only when there is no history to pop', () => {
+    mockCanGoBack.mockReturnValue(false);
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    fireEvent.press(getByLabelText('Close settings'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  // PAR-M16. The title+close row used to be the first child of the ScrollView,
+  // so on this ~30-row list the X scrolled off-screen — and the tab bar is
+  // hidden on this route, leaving no visible way out.
+  it('keeps the close control outside the scrolling list so it cannot scroll away', () => {
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    const hostAncestors = (node: ReturnType<typeof getByLabelText>) => {
+      const types: string[] = [];
+      for (let current = node.parent; current; current = current.parent) {
+        if (typeof current.type === 'string') types.push(current.type);
+      }
+      return types;
+    };
+
+    // The positive case pins the host name down, so the negative case below
+    // cannot pass by asserting against a type string that never renders.
+    expect(hostAncestors(getByLabelText('Appearance. System'))).toContain('RCTScrollView');
+    expect(hostAncestors(getByLabelText('Close settings'))).not.toContain('RCTScrollView');
   });
 
   it('renders version in About row', () => {

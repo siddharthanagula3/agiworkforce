@@ -9,94 +9,102 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
     }
   }
 >
+  <View
+    style={
+      {
+        "paddingBottom": 16,
+        "paddingHorizontal": 16,
+        "paddingTop": 24,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 12,
+          "justifyContent": "space-between",
+          "minHeight": 42,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#fff",
+            "flex": 1,
+            "fontSize": 28,
+            "fontWeight": "700",
+            "lineHeight": 34,
+          }
+        }
+      >
+        Settings
+      </Text>
+      <View
+        accessibilityLabel="Close settings"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        hitSlop={10}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "alignItems": "center",
+            "backgroundColor": "#1a1a1a",
+            "borderRadius": 20,
+            "height": 40,
+            "justifyContent": "center",
+            "width": 40,
+          }
+        }
+      >
+        <View
+          color="#aaa"
+          size={20}
+          testID="icon-X"
+        />
+      </View>
+    </View>
+  </View>
   <RCTScrollView
     className="flex-1"
     contentContainerStyle={
       {
         "paddingBottom": 36,
         "paddingHorizontal": 16,
-        "paddingTop": 24,
       }
     }
     showsVerticalScrollIndicator={false}
   >
     <View>
-      <View
-        style={
-          {
-            "alignItems": "center",
-            "flexDirection": "row",
-            "gap": 12,
-            "justifyContent": "space-between",
-            "marginBottom": 16,
-            "minHeight": 42,
-          }
-        }
-      >
-        <Text
-          style={
-            {
-              "color": "#fff",
-              "flex": 1,
-              "fontSize": 28,
-              "fontWeight": "700",
-              "lineHeight": 34,
-            }
-          }
-        >
-          Settings
-        </Text>
-        <View
-          accessibilityLabel="Close settings"
-          accessibilityRole="button"
-          accessibilityState={
-            {
-              "busy": undefined,
-              "checked": undefined,
-              "disabled": undefined,
-              "expanded": undefined,
-              "selected": undefined,
-            }
-          }
-          accessibilityValue={
-            {
-              "max": undefined,
-              "min": undefined,
-              "now": undefined,
-              "text": undefined,
-            }
-          }
-          accessible={true}
-          collapsable={false}
-          focusable={true}
-          hitSlop={10}
-          onBlur={[Function]}
-          onClick={[Function]}
-          onFocus={[Function]}
-          onResponderGrant={[Function]}
-          onResponderMove={[Function]}
-          onResponderRelease={[Function]}
-          onResponderTerminate={[Function]}
-          onResponderTerminationRequest={[Function]}
-          onStartShouldSetResponder={[Function]}
-          style={
-            {
-              "alignItems": "center",
-              "backgroundColor": "#1a1a1a",
-              "borderRadius": 20,
-              "height": 40,
-              "justifyContent": "center",
-              "width": 40,
-            }
-          }
-        >
-          <View
-            color="#aaa"
-            size={20}
-            testID="icon-X"
-          />
-        </View>
-      </View>
       <View
         accessibilityLabel="Edit profile"
         accessibilityRole="button"

@@ -275,7 +275,15 @@ export default function SettingsTabScreen() {
     [router],
   );
   const closeSettings = useCallback(() => {
-    router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
+    // Settings is opened over whatever the user was reading (a conversation,
+    // the drawer, a tab), so closing must pop back to it. `replace` used to
+    // discard that entry point *and* the back entry, stranding the user on a
+    // blank new chat. The chat tab stays as the deep-link/no-history fallback.
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.navigate('/(app)/(tabs)/chat' as Parameters<typeof router.navigate>[0]);
+    }
   }, [router]);
 
   // Every account-backed Cloud row shares one auth boundary. During Clerk's
@@ -590,19 +598,19 @@ export default function SettingsTabScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{
+      {/* The header sits outside the ScrollView so the close control stays
+          pinned; inside it, X scrolled away for most of this ~30-row list and
+          the tab bar is hidden on this route, leaving no visible way out. */}
+      <View
+        style={{
           paddingHorizontal: 16,
           paddingTop: Math.max(24, insets.top / 2),
-          paddingBottom: 36,
+          paddingBottom: 16,
         }}
-        showsVerticalScrollIndicator={false}
       >
         <View
           style={{
             minHeight: 42,
-            marginBottom: 16,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -637,7 +645,16 @@ export default function SettingsTabScreen() {
             <X size={20} color={colors.textSecondary} />
           </Pressable>
         </View>
+      </View>
 
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingBottom: 36,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
         <ProfileHeader onPress={push('/(app)/profile')} />
 
         {sections.map((section, index) => (
