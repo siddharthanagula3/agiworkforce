@@ -72,6 +72,7 @@
     "lint:extension": "turbo run lint --filter=@agiworkforce/extension",
     "lint:fix": "turbo run lint --filter='!@agiworkforce/extension' -- --fix",
     "check:agent-context": "node scripts/check-agent-context.mjs",
+    "check:connector-logos": "node scripts/check-connector-logos.mjs",
     "check:audit-inventory": "node scripts/check-audit-inventory.mjs",
     "check:capability-gaps": "node scripts/check-capability-gaps.mjs",
     "audit:import-ui-gaps": "node scripts/import-ui-gaps.mjs",
