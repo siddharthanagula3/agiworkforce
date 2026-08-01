@@ -9,48 +9,18 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
-jest.mock('@/src/ui/theme', () => ({
-  colors: {
-    textPrimary: '#fff',
-    textSecondary: '#aaa',
-    textMuted: '#777',
-    border: '#333',
-    teal: '#2dd4bf',
-    background: '#0e0e0e',
-    surfaceElevated: '#1a1a1a',
-    surfaceOverlay: '#0e0e0e',
-    agentError: '#ef4444',
-    white: '#ffffff',
-    terraCotta: '#c0513a',
-  },
-  useTheme: () => ({
-    colors: {
-      textPrimary: '#fff',
-      textSecondary: '#aaa',
-      textMuted: '#777',
-      border: '#333',
-      teal: '#2dd4bf',
-      background: '#0e0e0e',
-      surfaceElevated: '#1a1a1a',
-      surfaceOverlay: '#0e0e0e',
-      agentError: '#ef4444',
-      white: '#ffffff',
-    },
-    isDark: true,
-  }),
-  useThemeColors: () => ({
-    textPrimary: '#fff',
-    textSecondary: '#aaa',
-    textMuted: '#777',
-    border: '#333',
-    teal: '#2dd4bf',
-    background: '#0e0e0e',
-    surfaceElevated: '#1a1a1a',
-    surfaceOverlay: '#0e0e0e',
-    agentError: '#ef4444',
-    white: '#ffffff',
-  }),
-}));
+// The real dark palette, not three hand-listed copies of it. Each copy had
+// drifted from the tokens and omitted whatever a component reached for next —
+// here, the camera-overlay and voice-control tokens, which surfaced as
+// `color: undefined` in the snapshot rather than as a missing-key error.
+jest.mock('@/src/ui/theme', () => {
+  const tokens = jest.requireActual('@/src/ui/theme/tokens');
+  return {
+    colors: tokens.colors,
+    useTheme: () => ({ colors: tokens.colors, isDark: true }),
+    useThemeColors: () => tokens.colors,
+  };
+});
 
 jest.mock('@/components/ui/text', () => {
   const RN = require('react-native');

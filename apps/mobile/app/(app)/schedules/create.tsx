@@ -11,7 +11,7 @@ import {
   useScheduleStore,
   type CreateScheduleInput,
 } from '@/src/features/schedules';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -20,6 +20,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 
 export default function CreateScheduleScreen() {
+  const colors = useThemeColors();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; template?: string }>();
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -142,7 +143,7 @@ export default function CreateScheduleScreen() {
 
   if (!params.id && !canCreateSchedule) {
     return (
-      <SafeAreaView className="flex-1 bg-surface-base">
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
         <View className="flex-row items-center px-4 h-12">
           <Pressable
             onPress={handleCancel}
@@ -176,7 +177,10 @@ export default function CreateScheduleScreen() {
 
   if (params.id && !existingSchedule && (!attemptedScheduleFetch.current || loading)) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-surface-base">
+      <SafeAreaView
+        className="flex-1 items-center justify-center"
+        style={{ backgroundColor: colors.surfaceBase }}
+      >
         <Text className="text-sm text-white/50">Loading schedule…</Text>
       </SafeAreaView>
     );
@@ -184,7 +188,7 @@ export default function CreateScheduleScreen() {
 
   if (params.id && !existingSchedule && !loading) {
     return (
-      <SafeAreaView className="flex-1 bg-surface-base">
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
         <View className="flex-row items-center px-4 h-12">
           <Pressable onPress={handleCancel} className="p-2 -ml-2" accessibilityLabel="Go back">
             <ArrowLeft size={22} color={colors.textSecondary} />
@@ -215,7 +219,7 @@ export default function CreateScheduleScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center px-4 h-12">
         <Pressable

@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { RecurrencePicker } from './RecurrencePicker';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { getDisplayName } from '@/src/features/model-picker/service';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { CreateScheduleInput, Schedule, RecurrenceType } from '../store';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
 import { isoToZonedDateInput, zonedDateAndTimeToIso } from '../timing';
@@ -51,6 +51,7 @@ export function ScheduleForm({
   isLoading = false,
   submitError,
 }: ScheduleFormProps) {
+  const colors = useThemeColors();
   const isEditing = Boolean(initialData?.id);
   const initialTimezone = initialData?.timezone ?? getDeviceTimezone();
 

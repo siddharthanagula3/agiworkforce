@@ -37,7 +37,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useAgentStore } from '@/stores/agentStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { ToolCall } from '@/types/chat';
 
 // ---------------------------------------------------------------------------
@@ -101,6 +101,7 @@ function formatDuration(startedAt: string): string {
 // ---------------------------------------------------------------------------
 
 function ToolIcon({ name, size = 12 }: { name: string; size?: number }) {
+  const colors = useThemeColors();
   const lower = name.toLowerCase();
 
   if (lower.includes('file') && lower.includes('creat')) {
@@ -137,6 +138,7 @@ interface ToolCallRowProps {
 }
 
 function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
+  const colors = useThemeColors();
   const statusColor =
     call.status === 'completed'
       ? colors.agentSuccess
@@ -214,6 +216,7 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
 // ---------------------------------------------------------------------------
 
 function CompletionBanner({ status }: { status: 'completed' | 'failed' }) {
+  const colors = useThemeColors();
   const isSuccess = status === 'completed';
   const bgColor = isSuccess ? 'rgba(16, 185, 129, 0.10)' : 'rgba(239, 68, 68, 0.10)';
   const borderColor = isSuccess ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)';
@@ -246,6 +249,7 @@ function CompletionBanner({ status }: { status: 'completed' | 'failed' }) {
 // ---------------------------------------------------------------------------
 
 export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
+  const colors = useThemeColors();
   const agent = useAgentStore((state) => state.agents.find((a) => a.id === taskId));
   const scrollRef = useRef<ScrollView>(null);
   const prevStatusRef = useRef<string | undefined>(undefined);

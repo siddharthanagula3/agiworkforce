@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { Zap, X, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { useScheduleStore, type CreateScheduleInput } from '../store';
 import { requestsSubDailySchedule } from '../policy';
 
@@ -199,6 +199,7 @@ interface QuickScheduleProps {
 }
 
 export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickScheduleProps) {
+  const colors = useThemeColors();
   const [visible, setVisible] = useState(false);
   const [input, setInput] = useState('');
   const [prompt, setPrompt] = useState(defaultPrompt);

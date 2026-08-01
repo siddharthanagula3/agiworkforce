@@ -164,7 +164,7 @@ export default function WidgetSetupScreen() {
   const isIOS = Platform.OS === 'ios';
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View
         className="flex-row items-center px-3 h-12"

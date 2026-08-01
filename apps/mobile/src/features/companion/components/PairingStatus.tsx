@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Wifi, WifiOff, WifiLow } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { ConnectionStatus, ConnectionQuality } from '@/stores/connectionStore';
 
 interface PairingStatusProps {
@@ -32,6 +32,7 @@ function getStatusConfig(
   status: ConnectionStatus,
   desktopName: string | null,
   error: string | null,
+  colors: ReturnType<typeof useThemeColors>,
 ): StatusConfig {
   switch (status) {
     case 'connected':
@@ -87,6 +88,7 @@ function ConnectionQualityBadge({
   quality: ConnectionQuality;
   latencyMs?: number | null;
 }) {
+  const colors = useThemeColors();
   switch (quality) {
     case 'strong':
       return (
@@ -114,7 +116,8 @@ export function PairingStatus({
   connectionQuality,
   latencyMs,
 }: PairingStatusProps) {
-  const config = getStatusConfig(status, desktopName, error);
+  const colors = useThemeColors();
+  const config = getStatusConfig(status, desktopName, error, colors);
   const pulseOpacity = useSharedValue(1);
   const pulseScale = useSharedValue(1);
 

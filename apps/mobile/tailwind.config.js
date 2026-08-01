@@ -40,13 +40,36 @@ module.exports = {
           800: '#2a2c2c',
           900: '#1f2121',
         },
-        // Surface colors
+        // Surface colors.
+        //
+        // These were compiled constants, so `bg-surface-base` pinned a screen
+        // to the dark palette no matter what theme the user had chosen —
+        // Companion, Compare and Schedules rendered dark inside an otherwise
+        // light app. They are CSS variables now, published at runtime by
+        // ThemeVars (src/ui/theme/ThemeVars.tsx) from the same tokens
+        // useThemeColors() returns, so a class and a hook can no longer
+        // disagree. The values here are the dark defaults, used only if a tree
+        // somehow renders outside the provider.
         surface: {
-          base: '#0f0f0f',
-          elevated: '#1a1a1a',
-          overlay: '#242424',
-          hover: '#2e2e2e',
+          base: 'var(--agi-surface-base, #171717)',
+          elevated: 'var(--agi-surface-elevated, #212121)',
+          overlay: 'var(--agi-surface-overlay, #2a2a2a)',
+          hover: 'var(--agi-surface-hover, #303030)',
         },
+        /**
+         * `white` is the app's FOREGROUND, not the colour white.
+         *
+         * Roughly 250 classNames use `text-white`, `text-white/60`,
+         * `border-white/10` and friends as "the readable colour on this
+         * surface" — which is exactly backwards in a light theme. Pointing it
+         * at the foreground token keeps every one of those opacity ramps
+         * meaning what its author intended in both themes.
+         *
+         * Where literal white IS meant — text over a camera preview, over the
+         * voice gradient — use `colors.white` from the token palette, which
+         * stays #ffffff.
+         */
+        white: 'var(--agi-fg, #f4f4f4)',
         // Agent status colors
         agent: {
           thinking: '#a855f7',

@@ -5,7 +5,7 @@ import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { shareGeneratedImage } from '@/services/fileCreation';
 
@@ -32,6 +32,7 @@ export function GeneratedImage({
   onPress,
   allowEphemeral = false,
 }: GeneratedImageProps) {
+  const colors = useThemeColors();
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const { source, status: sourceStatus } = useGeneratedImageSource(imageUrl, allowEphemeral);
 
