@@ -182,17 +182,34 @@ describe('Settings page', () => {
     expect(getByText('Log Out')).toBeTruthy();
   });
 
-  it('gives Team and Enterprise accounts a visible web administration handoff', () => {
+  /**
+   * The Workspace row is no longer gated on a local plan check.
+   *
+   * Entitlement is decided server-side (`access.canManageTeam` on
+   * /api/settings/organization) and explained on the screen itself. A row
+   * hidden by a client-side guess can disagree with the server in both
+   * directions, and a missing row cannot tell the user why it is missing.
+   */
+  it('always offers the workspace screen rather than gating it on a local plan guess', () => {
     useAuthStore.setState({ isClerkSignedIn: true });
+    useTierStore.setState({
+      tier: 'free',
+      billingTier: 'free',
+      billingStatus: 'none',
+    } as never);
+
+    const freeAccount = render(<SettingsTabScreen />);
+    expect(freeAccount.getByText('Workspace')).toBeTruthy();
+    freeAccount.unmount();
+
     useTierStore.setState({
       tier: 'team',
       billingTier: 'team',
       billingStatus: 'active',
     } as never);
 
-    const { getByLabelText } = render(<SettingsTabScreen />);
-
-    expect(getByLabelText('Workspace administration. Web')).toBeTruthy();
+    const teamAccount = render(<SettingsTabScreen />);
+    expect(teamAccount.getByText('Workspace')).toBeTruthy();
   });
 
   it('shows cloud rows as sign-in-gated instead of live account controls', () => {
