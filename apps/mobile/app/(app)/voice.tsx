@@ -8,29 +8,21 @@
  * silence) and push-to-talk (hold the orb to talk, release to send) via the
  * shared useVoiceConversation hook. The preference persists in settings.
  *
- * Design: pulsing terracotta orb, dark gradient background.
- * All processing is on-device. No audio leaves the device.
+ * Design: the shared VoiceOrb (identical to voice in chat), dark gradient
+ * background. All processing is on-device. No audio leaves the device.
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Alert, View, Pressable, StatusBar, useWindowDimensions, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  Easing,
-  FadeIn,
-} from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { X, MicOff, Mic, Volume2, Hand } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
-import { Waveform } from '@/src/features/voice/components/Waveform';
+import { VoiceOrb } from '@/src/features/voice/components/VoiceOrb';
 import { PerformanceChip } from '@/src/features/chat/components/PerformanceChip';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -76,8 +68,9 @@ function phaseSublabel(phase: Phase, pttMode: boolean): string {
   return PHASE_SUBLABEL[phase];
 }
 
-// terracotta for all phases (brand colour for voice companion)
-const ORB_COLOR = colors.terraCotta;
+// Brand colour for the companion's own chrome. The orb itself is the shared
+// VoiceOrb and carries the same palette as voice in chat — one presentation.
+const PHASE_LABEL_COLOR = colors.terraCotta;
 
 // ---------------------------------------------------------------------------
 // Background
@@ -105,10 +98,10 @@ function DarkGradientBg() {
 }
 
 // ---------------------------------------------------------------------------
-// Pulsing orb
+// Orb — the shared VoiceOrb under the companion's press handling
 // ---------------------------------------------------------------------------
 
-function TerraCottaOrb({
+function CompanionOrb({
   phase,
   audioLevel,
   label,
@@ -125,59 +118,6 @@ function TerraCottaOrb({
   onPressIn?: () => void;
   onPressOut?: () => void;
 }) {
-  const scale = useSharedValue(1);
-  const glowOpacity = useSharedValue(0.15);
-  // Exponential moving average of the mic level. Raw metering is noisy at
-  // ~10-20Hz; feeding it straight into an animation reads as the orb shaking.
-  const smoothedLevel = useRef(0);
-
-  // Phase-driven animations. `audioLevel` is deliberately NOT a dependency:
-  // including it restarted these withRepeat loops on every metering tick, so
-  // the idle and thinking pulses never completed a cycle.
-  useEffect(() => {
-    if (phase === 'thinking') {
-      scale.value = withRepeat(
-        withSequence(withTiming(1.18, { duration: 750 }), withTiming(0.92, { duration: 750 })),
-        -1,
-        true,
-      );
-      glowOpacity.value = withRepeat(withTiming(0.55, { duration: 750 }), -1, true);
-    } else if (phase !== 'listening' && phase !== 'speaking') {
-      // idle — gentle slow pulse
-      scale.value = withRepeat(
-        withSequence(withTiming(1.06, { duration: 2000 }), withTiming(0.97, { duration: 2000 })),
-        -1,
-        true,
-      );
-      glowOpacity.value = withRepeat(
-        withSequence(withTiming(0.3, { duration: 2000 }), withTiming(0.1, { duration: 2000 })),
-        -1,
-        true,
-      );
-    }
-  }, [phase, scale, glowOpacity]);
-
-  // Amplitude-reactive animation, only while the mic/playback is actually live.
-  useEffect(() => {
-    if (phase !== 'listening' && phase !== 'speaking') {
-      smoothedLevel.current = 0;
-      return;
-    }
-    // Weight history heavily so single-frame spikes cannot snap the orb.
-    smoothedLevel.current = smoothedLevel.current * 0.75 + audioLevel * 0.25;
-    const level = smoothedLevel.current;
-    // withTiming rather than withSpring: a spring re-targeted every tick never
-    // settles, and its overshoot is what made the orb visibly jitter.
-    scale.value = withTiming(1 + level * 0.28, { duration: 110, easing: Easing.out(Easing.quad) });
-    glowOpacity.value = withTiming(0.25 + level * 0.4, { duration: 110 });
-  }, [phase, audioLevel, scale, glowOpacity]);
-
-  const orbStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-    transform: [{ scale: scale.value * 1.5 }],
-  }));
-
   return (
     <Pressable
       testID="voice-companion-orb"
@@ -189,32 +129,7 @@ function TerraCottaOrb({
       accessibilityHint={hint}
     >
       <View style={styles.orbWrapper}>
-        {/* Outer glow */}
-        <Animated.View
-          style={[
-            {
-              position: 'absolute',
-              width: 160,
-              height: 160,
-              borderRadius: 80,
-              backgroundColor: ORB_COLOR,
-            },
-            glowStyle,
-          ]}
-        />
-        {/* Main orb */}
-        <Animated.View style={[styles.orb, orbStyle]}>
-          <Waveform
-            color={colors.white}
-            active={phase === 'listening' || phase === 'speaking'}
-            audioLevel={audioLevel}
-            barCount={5}
-            maxHeight={38}
-            minHeight={6}
-            barWidth={4}
-            gap={5}
-          />
-        </Animated.View>
+        <VoiceOrb phase={phase} audioLevel={audioLevel} size={120} glow />
       </View>
     </Pressable>
   );
@@ -341,7 +256,7 @@ export default function VoiceScreen() {
       <View style={styles.content}>
         <Text style={styles.sublabel}>{phaseSublabel(phase, pttMode)}</Text>
 
-        <TerraCottaOrb
+        <CompanionOrb
           phase={phase}
           audioLevel={audioLevel}
           label={phaseLabel(phase, pttMode)}
@@ -351,7 +266,9 @@ export default function VoiceScreen() {
           onPressOut={pttMode ? handleOrbPressOut : undefined}
         />
 
-        <Text style={[styles.phaseLabel, { color: ORB_COLOR }]}>{phaseLabel(phase, pttMode)}</Text>
+        <Text style={[styles.phaseLabel, { color: PHASE_LABEL_COLOR }]}>
+          {phaseLabel(phase, pttMode)}
+        </Text>
 
         {/* Model badge */}
         <Animated.View entering={FadeIn.duration(400)} style={styles.modelBadge}>
@@ -454,14 +371,6 @@ const styles = StyleSheet.create({
   orbWrapper: {
     width: 220,
     height: 220,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  orb: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.terraCotta,
     alignItems: 'center',
     justifyContent: 'center',
   },

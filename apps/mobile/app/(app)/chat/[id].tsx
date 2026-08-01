@@ -33,7 +33,6 @@ import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelect
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
-import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
 import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
@@ -709,7 +708,6 @@ export default function ChatScreen() {
   );
 
   const [refreshing, setRefreshing] = useState(false);
-  const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
@@ -816,16 +814,20 @@ export default function ChatScreen() {
     setVoiceInlineVisible(false);
   }, []);
 
+  // Voice mode replaces the composer, so the "+" sheet's results would land on
+  // an unmounted Composer (its attach ref is null) and vanish silently. Leave
+  // voice first, then open the sheet.
+  const handleVoiceAttach = useCallback(() => {
+    setVoiceInlineVisible(false);
+    handleOpenAddToChat();
+  }, [handleOpenAddToChat]);
+
   const handleOpenCompare = useCallback(() => {
     router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
   }, [router]);
 
   const handleOpenExport = useCallback(() => {
     setExportSheetVisible(true);
-  }, []);
-
-  const handleCloseVoiceMode = useCallback(() => {
-    setVoiceModeVisible(false);
   }, []);
 
   /**
@@ -1031,7 +1033,12 @@ export default function ChatScreen() {
   // the hook is CALLED, so referencing a const declared further down puts it in
   // its temporal dead zone and throws on first render. That exact mistake shipped
   // green in the tab screen last time — no test mounts a chat with voice on.
-  const { phase: inlineVoicePhase, toggleMute: inlineToggleMute } = useVoiceConversation({
+  const {
+    phase: inlineVoicePhase,
+    muted: inlineVoiceMuted,
+    audioLevel: inlineVoiceLevel,
+    toggleMute: inlineToggleMute,
+  } = useVoiceConversation({
     enabled: voiceInlineVisible,
     pttMode: false,
     hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
@@ -1324,18 +1331,16 @@ export default function ChatScreen() {
           onDismiss={handleVoicePickerDismiss}
         />
 
+        {/* The only voice presentation — identical to the new-chat tab's. */}
         <VoiceInlineBar
           visible={voiceInlineVisible}
           phase={inlineVoicePhase}
+          audioLevel={inlineVoiceLevel}
+          muted={inlineVoiceMuted}
+          onAttach={handleVoiceAttach}
+          onOpenKeyboard={handleExitInlineVoice}
           onToggleMic={inlineToggleMute}
           onExit={handleExitInlineVoice}
-        />
-
-        {/* Voice conversation full-screen overlay */}
-        <VoiceConversationScreen
-          visible={voiceModeVisible}
-          onClose={handleCloseVoiceMode}
-          onSendMessage={handleVoiceSendMessage}
         />
 
         {/* Conversation export bottom sheet */}

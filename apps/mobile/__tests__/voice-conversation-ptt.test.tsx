@@ -3,6 +3,12 @@
  * Voice conversation push-to-talk + hands-free turn-taking tests.
  * Covers: PTT press-in/press-out capture lifecycle, the persisted mode toggle,
  * recognizer auto-final processing without a tap, and the double-processing guard.
+ *
+ * Hosted on the /voice companion route because it is now the only surface that
+ * offers push-to-talk: PAR-M01 collapsed the full-screen VoiceConversationScreen
+ * overlay these tests used to mount into the single inline presentation, which
+ * is hands-free only. The subject was always `useVoiceConversation`, and driving
+ * it through a real screen rather than a bespoke test host is the point.
  */
 import React from 'react';
 import { AppState } from 'react-native';
@@ -79,10 +85,37 @@ jest.mock('react-native-svg', () => {
     default: ({ children }: { children?: React.ReactNode }) => <View>{children}</View>,
     Defs: () => null,
     RadialGradient: () => null,
+    LinearGradient: () => null,
     Stop: () => null,
     Rect: () => null,
     Circle: () => null,
   };
+});
+
+jest.mock('expo-router', () => ({
+  __esModule: true,
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    back: jest.fn(),
+    canGoBack: () => true,
+  }),
+  useLocalSearchParams: () => ({}),
+}));
+
+// The companion route owns its own conversation, so the store IS the send path
+// under test here. Kept as one mutable state object so `useChatStore(selector)`
+// and `useChatStore.getState()` — the screen uses both — see the same values.
+jest.mock('@/stores/chatStore', () => {
+  const state = {
+    createConversation: jest.fn(async () => 'voice-conv-1'),
+    sendMessage: jest.fn(async () => true),
+    messages: {} as Record<string, unknown[]>,
+    error: null as string | null,
+  };
+  const useChatStore = (selector: (s: typeof state) => unknown) => selector(state);
+  useChatStore.getState = () => state;
+  return { __esModule: true, useChatStore };
 });
 
 // Proxy, not a hand-listed map: swapping one lucide icon in the screen should not
@@ -107,7 +140,7 @@ jest.mock('@/src/features/model-picker/store', () => ({
     selector({ selectedModel: 'test-model' }),
 }));
 
-import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
+import VoiceScreen from '@/app/(app)/voice';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import { useSettingsStore } from '../stores/settingsStore';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
@@ -120,10 +153,33 @@ const speechRecognitionMock = jest.requireMock('expo-speech-recognition') as {
   __clearListeners: () => void;
 };
 
+interface MockChatState {
+  createConversation: jest.Mock;
+  sendMessage: jest.Mock;
+  messages: Record<string, unknown[]>;
+  error: string | null;
+}
+
+function chatState(): MockChatState {
+  const mod = jest.requireMock('@/stores/chatStore') as {
+    useChatStore: { getState: () => MockChatState };
+  };
+  return mod.useChatStore.getState();
+}
+
+/**
+ * `onSendMessage` stands in for the chat dispatch: the screen calls
+ * `sendMessage(conversationId, text, model)`, so the spy is handed the
+ * transcript alone and the store contract (truthy = accepted) is kept here.
+ */
 function renderScreen(onSendMessage: jest.Mock) {
-  return render(
-    <VoiceConversationScreen visible onClose={jest.fn()} onSendMessage={onSendMessage} />,
-  );
+  const state = chatState();
+  state.createConversation.mockResolvedValue('voice-conv-1');
+  state.sendMessage.mockImplementation(async (_conversationId: string, text: string) => {
+    await onSendMessage(text);
+    return true;
+  });
+  return render(<VoiceScreen />);
 }
 
 describe('Voice conversation PTT + hands-free', () => {
@@ -145,7 +201,7 @@ describe('Voice conversation PTT + hands-free', () => {
     const onSendMessage = jest.fn().mockResolvedValue('AI reply');
     const { getByTestId } = renderScreen(onSendMessage);
 
-    const orb = getByTestId('voice-conversation-orb');
+    const orb = getByTestId('voice-companion-orb');
     await act(async () => {
       fireEvent(orb, 'pressIn');
     });
@@ -171,7 +227,7 @@ describe('Voice conversation PTT + hands-free', () => {
     const { getByTestId, getByText } = renderScreen(onSendMessage);
 
     await act(async () => {
-      fireEvent.press(getByTestId('voice-conversation-orb'));
+      fireEvent.press(getByTestId('voice-companion-orb'));
     });
     await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
 
@@ -194,7 +250,7 @@ describe('Voice conversation PTT + hands-free', () => {
     const onSendMessage = jest.fn().mockResolvedValue(null);
     const { getByTestId } = renderScreen(onSendMessage);
 
-    const orb = getByTestId('voice-conversation-orb');
+    const orb = getByTestId('voice-companion-orb');
     await act(async () => {
       fireEvent(orb, 'pressIn');
     });
@@ -224,7 +280,7 @@ describe('Voice conversation PTT + hands-free', () => {
     expect(useSettingsStore.getState().voicePushToTalk).toBe(false);
     expect(queryByText('Hold to talk')).toBeNull();
 
-    const toggle = getByTestId('voice-conversation-ptt-toggle');
+    const toggle = getByTestId('voice-companion-ptt-toggle');
     expect(toggle.props.accessibilityState.selected).toBe(false);
     fireEvent.press(toggle);
 
@@ -256,7 +312,7 @@ describe('Voice conversation PTT + hands-free', () => {
     const { getByTestId, getByText, unmount } = renderScreen(onSendMessage);
 
     await act(async () => {
-      fireEvent.press(getByTestId('voice-conversation-orb'));
+      fireEvent.press(getByTestId('voice-companion-orb'));
     });
     await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
 
