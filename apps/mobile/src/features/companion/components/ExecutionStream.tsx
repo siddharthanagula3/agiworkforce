@@ -202,7 +202,7 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
 
         {/* File path hint */}
         {call.filePath && (
-          <Text className="text-[10px] text-teal-400/70 mt-0.5" numberOfLines={1}>
+          <Text className="text-[10px] mt-0.5" style={{ color: colors.teal }} numberOfLines={1}>
             {call.filePath}
           </Text>
         )}

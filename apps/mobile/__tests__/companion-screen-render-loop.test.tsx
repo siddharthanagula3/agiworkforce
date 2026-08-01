@@ -94,15 +94,31 @@ jest.mock('@/src/features/companion/components/StatusBanners', () => ({
   DisconnectedDesktopBanner: () => null,
   ReconnectingBanner: () => null,
 }));
-jest.mock('@/src/features/companion/components/ConnectionStateViews', () => ({
-  DisconnectedView: () => null,
-  ConnectingView: () => null,
-  ErrorView: () => null,
-  SessionExpiredView: () => null,
-}));
+jest.mock('@/src/features/companion/components/ConnectionStateViews', () => {
+  const RN = require('react-native');
+  return {
+    DisconnectedView: () => <RN.View testID="disconnected-view" />,
+    ConnectingView: () => null,
+    ErrorView: () => null,
+    SessionExpiredView: () => null,
+  };
+});
 jest.mock('@/src/features/companion/components/DesktopInfoCard', () => ({
   DesktopInfoCard: () => null,
 }));
+// PAR-M28 added a first-run setup gate ahead of DisconnectedView. Stubbed like
+// every other companion child here — the checklist's own content is covered by
+// __tests__/dispatch-setup-checklist.test.tsx; what matters at this level is
+// which of the two the screen picks.
+let mockHasSeenDispatchSetup = true;
+jest.mock('@/src/features/companion/components/DesktopSetupChecklistView', () => {
+  const RN = require('react-native');
+  return {
+    DesktopSetupChecklistView: () => <RN.View testID="dispatch-setup-checklist" />,
+    useDispatchSetupStore: (selector: (s: { hasSeenDispatchSetup: boolean }) => unknown) =>
+      selector({ hasSeenDispatchSetup: mockHasSeenDispatchSetup }),
+  };
+});
 jest.mock('@/src/shared/components/ApprovalModal', () => ({
   ApprovalModal: () => null,
   useApprovalModal: () => ({
@@ -133,10 +149,12 @@ jest.mock('@/services/authSession', () => ({
 
 import CompanionScreen from '../app/(app)/companion/index';
 import { useAgentStore } from '../stores/agentStore';
+import { useConnectionStore } from '../stores/connectionStore';
 
 describe('CompanionScreen', () => {
   beforeEach(() => {
     useAgentStore.setState({ pendingApprovals: [] });
+    mockHasSeenDispatchSetup = true;
   });
 
   it('renders without a "Maximum update depth exceeded" infinite render loop', () => {
@@ -158,5 +176,30 @@ describe('CompanionScreen', () => {
     });
 
     expect(() => render(<CompanionScreen />)).not.toThrow();
+  });
+});
+
+describe('CompanionScreen — PAR-M28 first-run setup gate', () => {
+  beforeEach(() => {
+    useAgentStore.setState({ pendingApprovals: [] });
+    useConnectionStore.setState({ status: 'disconnected' });
+  });
+
+  it('shows the desktop setup checklist instead of the scan CTA on first entry', () => {
+    mockHasSeenDispatchSetup = false;
+
+    const screen = render(<CompanionScreen />);
+
+    expect(screen.getByTestId('dispatch-setup-checklist')).toBeTruthy();
+    expect(screen.queryByTestId('disconnected-view')).toBeNull();
+  });
+
+  it('shows the disconnected pairing screen once the checklist has been cleared', () => {
+    mockHasSeenDispatchSetup = true;
+
+    const screen = render(<CompanionScreen />);
+
+    expect(screen.getByTestId('disconnected-view')).toBeTruthy();
+    expect(screen.queryByTestId('dispatch-setup-checklist')).toBeNull();
   });
 });

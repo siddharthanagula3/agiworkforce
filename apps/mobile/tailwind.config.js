@@ -23,18 +23,21 @@ module.exports = {
           800: '#4d2618',
           900: '#27130c',
         },
-        teal: {
-          50: '#8fd9e3',
-          100: '#7dd3df',
-          200: '#5ac7d7',
-          300: '#3ab5c5',
-          400: '#2d9ba8',
-          500: '#21808d',
-          600: '#196068',
-          700: '#124043',
-          800: '#0a201e',
-          900: '#000000',
-        },
+        // NOTE: there is deliberately no `teal` ramp here.
+        //
+        // It used to be a literal teal (`500: '#21808d'`) with no var()
+        // backing, so `bg-teal-500/15` painted a second hue the brand palette
+        // does not have — and disagreed with the `teal` *token*
+        // (src/ui/theme/tokens.ts), which resolves to the neutral foreground or
+        // the user's chosen accent. Class-styled and hook-styled halves of the
+        // same Dispatch card rendered in two different colours.
+        //
+        // Accent surfaces now come from the palette instead:
+        //   bg-teal-500/N     -> style={{ backgroundColor: colors.accentSurface }}
+        //   border-teal-500/N -> style={{ borderColor: colors.accentBorder }}
+        //   text-teal-400     -> style={{ color: colors.teal }}
+        // Do not reintroduce the ramp; `pnpm --filter @agiworkforce/mobile test`
+        // has a guard asserting zero `teal-` classes survive.
         charcoal: {
           700: '#363838',
           800: '#2a2c2c',

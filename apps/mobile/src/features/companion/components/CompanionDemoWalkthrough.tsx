@@ -263,8 +263,14 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             >
               <Icon size={28} color={step.iconColor} />
             </View>
-            <View className="px-2 py-0.5 rounded-full bg-teal-500/15">
-              <Text className="text-[10px] font-semibold text-teal-400 uppercase tracking-wider">
+            <View
+              className="px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: colors.accentSurface }}
+            >
+              <Text
+                className="text-[10px] font-semibold uppercase tracking-wider"
+                style={{ color: colors.teal }}
+              >
                 Step {step.stepNumber} of {DEMO_STEPS.length}
               </Text>
             </View>
@@ -278,7 +284,9 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
 
           {/* Hint pill */}
           <View className="flex-row items-start gap-2 px-4 py-3 rounded-xl bg-white/5 mb-6">
-            <Text className="text-[11px] text-teal-400 font-semibold mt-0.5">TIP</Text>
+            <Text className="text-[11px] font-semibold mt-0.5" style={{ color: colors.teal }}>
+              TIP
+            </Text>
             <Text className="text-[11px] text-white/50 flex-1 leading-4">{step.hint}</Text>
           </View>
 

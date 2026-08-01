@@ -28,7 +28,10 @@ export function DesktopInfoCard({
       <View className="px-4 mb-3">
         <Card variant="elevated">
           <View className="flex-row items-center gap-3 mb-3">
-            <View className="w-10 h-10 rounded-xl bg-teal-500/20 items-center justify-center">
+            <View
+              className="w-10 h-10 rounded-xl items-center justify-center"
+              style={{ backgroundColor: colors.accentSurface }}
+            >
               <Monitor size={20} color={colors.teal} />
             </View>
             <View className="flex-1">
