@@ -39,7 +39,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useAgentStore, type Agent, type RunArtifact } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import {
   requestAgentRefresh,
   sendAgentCommand,
@@ -54,6 +54,7 @@ import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 // ---------------------------------------------------------------------------
 
 function AgentStatusIcon({ status }: { status: Agent['status'] }) {
+  const colors = useThemeColors();
   switch (status) {
     case 'running':
       return <Loader2 size={16} color={colors.agentActive} />;
@@ -145,6 +146,7 @@ function estimateTimeRemaining(
 // ---------------------------------------------------------------------------
 
 function ArtifactIcon({ type }: { type: RunArtifact['type'] }) {
+  const colors = useThemeColors();
   switch (type) {
     case 'file_created':
       return <FilePlus size={11} color={colors.agentSuccess} />;
@@ -159,7 +161,10 @@ function ArtifactIcon({ type }: { type: RunArtifact['type'] }) {
   }
 }
 
-function getArtifactTextColor(type: RunArtifact['type']): string {
+function getArtifactTextColor(
+  type: RunArtifact['type'],
+  colors: ReturnType<typeof useThemeColors>,
+): string {
   switch (type) {
     case 'file_created':
       return colors.agentSuccess;
@@ -183,6 +188,7 @@ interface RunArtifactsProps {
 }
 
 function RunArtifactsList({ artifacts, maxVisible = 3 }: RunArtifactsProps) {
+  const colors = useThemeColors();
   const [expanded, setExpanded] = useState(false);
 
   if (artifacts.length === 0) return null;
@@ -200,7 +206,7 @@ function RunArtifactsList({ artifacts, maxVisible = 3 }: RunArtifactsProps) {
           </View>
           <Text
             className="text-[11px] flex-1"
-            style={{ color: getArtifactTextColor(artifact.type) }}
+            style={{ color: getArtifactTextColor(artifact.type, colors) }}
             numberOfLines={1}
           >
             {artifact.label}
@@ -238,6 +244,7 @@ interface ToolCallLogProps {
 }
 
 function ToolCallLog({ toolCalls, maxVisible = 10 }: ToolCallLogProps) {
+  const colors = useThemeColors();
   const [expanded, setExpanded] = useState(false);
 
   if (toolCalls.length === 0) return null;
@@ -308,11 +315,17 @@ const RISK_BG_COLORS: Record<RiskLevel, string> = {
   high: 'rgba(239, 68, 68, 0.08)',
 };
 
-const RISK_TEXT_COLORS: Record<RiskLevel, string> = {
-  low: colors.agentSuccess,
-  medium: colors.agentWarning,
-  high: colors.agentError,
-};
+// Status colours differ per theme, so this is derived rather than frozen.
+function riskTextColor(risk: RiskLevel, colors: ReturnType<typeof useThemeColors>): string {
+  switch (risk) {
+    case 'low':
+      return colors.agentSuccess;
+    case 'medium':
+      return colors.agentWarning;
+    case 'high':
+      return colors.agentError;
+  }
+}
 
 const RISK_LABELS: Record<RiskLevel, string> = {
   low: 'Safe',
@@ -337,6 +350,7 @@ interface ApprovalCardProps {
 }
 
 function ApprovalCard({ request }: ApprovalCardProps) {
+  const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const approveRequest = useAgentStore((state) => state.approveRequest);
   const rejectRequest = useAgentStore((state) => state.rejectRequest);
@@ -379,7 +393,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
   if (request.status !== 'pending') return null;
 
   const TypeIcon = TYPE_ICONS[request.type];
-  const riskColor = RISK_TEXT_COLORS[request.riskLevel];
+  const riskColor = riskTextColor(request.riskLevel, colors);
   const RiskShieldIcon = request.riskLevel === 'high' ? ShieldAlert : ShieldCheck;
   return (
     <Animated.View
@@ -474,6 +488,7 @@ interface AgentCardProps {
 }
 
 function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps) {
+  const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const handleCommand = useCallback(
@@ -739,6 +754,7 @@ interface FileResultsSectionProps {
 }
 
 function FileResultsSection({ agents }: FileResultsSectionProps) {
+  const colors = useThemeColors();
   const [expanded, setExpanded] = useState(true);
 
   // Collect all file artifacts from all agents
@@ -791,7 +807,7 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
                 <View className="flex-1">
                   <Text
                     className="text-[11px]"
-                    style={{ color: getArtifactTextColor(art.type) }}
+                    style={{ color: getArtifactTextColor(art.type, colors) }}
                     numberOfLines={1}
                   >
                     {art.label}
@@ -819,6 +835,7 @@ interface TaskResultsSectionProps {
 }
 
 function TaskResultsSection({ agents }: TaskResultsSectionProps) {
+  const colors = useThemeColors();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const completedAgents = agents.filter((a) => a.status === 'completed' || a.status === 'failed');
@@ -932,6 +949,7 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
 // ---------------------------------------------------------------------------
 
 export function AgentDashboard() {
+  const colors = useThemeColors();
   const agents = useAgentStore((s) => s.agents);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const selectAgent = useAgentStore((s) => s.selectAgent);

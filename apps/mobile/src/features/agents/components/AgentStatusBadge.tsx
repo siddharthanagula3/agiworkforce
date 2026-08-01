@@ -9,14 +9,19 @@ import Animated, {
 import { useEffect } from 'react';
 import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { Agent } from '@/stores/agentStore';
 
 interface AgentStatusBadgeProps {
   status: Agent['status'];
 }
 
-const STATUS_CONFIG: Record<
+/**
+ * Built from the live palette rather than the static dark one: the status
+ * colours differ between themes (error is #f87171 in dark, #dc2626 in light),
+ * and a module-scope constant can only ever hold one of them.
+ */
+function statusConfig(colors: ReturnType<typeof useThemeColors>): Record<
   Agent['status'],
   {
     icon: typeof Loader2;
@@ -24,32 +29,34 @@ const STATUS_CONFIG: Record<
     color: string;
     bgClass: string;
   }
-> = {
-  running: {
-    icon: Loader2,
-    label: 'Running',
-    color: colors.agentActive,
-    bgClass: 'bg-blue-500/15',
-  },
-  completed: {
-    icon: CheckCircle2,
-    label: 'Done',
-    color: colors.agentSuccess,
-    bgClass: 'bg-emerald-500/15',
-  },
-  failed: {
-    icon: XCircle,
-    label: 'Failed',
-    color: colors.agentError,
-    bgClass: 'bg-red-500/15',
-  },
-  waiting: {
-    icon: Clock,
-    label: 'Waiting',
-    color: colors.agentWarning,
-    bgClass: 'bg-amber-500/15',
-  },
-};
+> {
+  return {
+    running: {
+      icon: Loader2,
+      label: 'Running',
+      color: colors.agentActive,
+      bgClass: 'bg-blue-500/15',
+    },
+    completed: {
+      icon: CheckCircle2,
+      label: 'Done',
+      color: colors.agentSuccess,
+      bgClass: 'bg-emerald-500/15',
+    },
+    failed: {
+      icon: XCircle,
+      label: 'Failed',
+      color: colors.agentError,
+      bgClass: 'bg-red-500/15',
+    },
+    waiting: {
+      icon: Clock,
+      label: 'Waiting',
+      color: colors.agentWarning,
+      bgClass: 'bg-amber-500/15',
+    },
+  };
+}
 
 function PulsingDot({ color }: { color: string }) {
   const opacity = useSharedValue(0.3);
@@ -76,7 +83,8 @@ function PulsingDot({ color }: { color: string }) {
 }
 
 export function AgentStatusBadge({ status }: AgentStatusBadgeProps) {
-  const config = STATUS_CONFIG[status];
+  const colors = useThemeColors();
+  const config = statusConfig(colors)[status];
   const Icon = config.icon;
 
   return (

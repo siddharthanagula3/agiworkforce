@@ -11,7 +11,7 @@ import Animated, {
 import { Zap, ZapOff, Keyboard, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { isValidPairingCode } from '@/services/companion';
 
 interface QRScannerProps {
@@ -25,6 +25,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const VIEWFINDER_SIZE = Math.min(SCREEN_WIDTH * 0.7, 280);
 
 export function QRScanner({ onScan, onClose }: QRScannerProps) {
+  const colors = useThemeColors();
   const [permission, requestPermission] = useCameraPermissions();
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
@@ -231,10 +232,10 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           }}
         >
           {/* Corner brackets */}
-          <View style={styles.cornerTopLeft} />
-          <View style={styles.cornerTopRight} />
-          <View style={styles.cornerBottomLeft} />
-          <View style={styles.cornerBottomRight} />
+          <View style={[styles.cornerTopLeft, { borderColor: colors.teal }]} />
+          <View style={[styles.cornerTopRight, { borderColor: colors.teal }]} />
+          <View style={[styles.cornerBottomLeft, { borderColor: colors.teal }]} />
+          <View style={[styles.cornerBottomRight, { borderColor: colors.teal }]} />
 
           {/* Scanning line */}
           <Animated.View
@@ -321,7 +322,6 @@ const styles = StyleSheet.create({
     borderTopWidth: CORNER_THICKNESS,
     borderLeftWidth: CORNER_THICKNESS,
     borderTopLeftRadius: CORNER_RADIUS,
-    borderColor: colors.teal,
   },
   cornerTopRight: {
     ...cornerBase,
@@ -330,7 +330,6 @@ const styles = StyleSheet.create({
     borderTopWidth: CORNER_THICKNESS,
     borderRightWidth: CORNER_THICKNESS,
     borderTopRightRadius: CORNER_RADIUS,
-    borderColor: colors.teal,
   },
   cornerBottomLeft: {
     ...cornerBase,
@@ -339,7 +338,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: CORNER_THICKNESS,
     borderLeftWidth: CORNER_THICKNESS,
     borderBottomLeftRadius: CORNER_RADIUS,
-    borderColor: colors.teal,
   },
   cornerBottomRight: {
     ...cornerBase,
@@ -348,6 +346,5 @@ const styles = StyleSheet.create({
     borderBottomWidth: CORNER_THICKNESS,
     borderRightWidth: CORNER_THICKNESS,
     borderBottomRightRadius: CORNER_RADIUS,
-    borderColor: colors.teal,
   },
 });

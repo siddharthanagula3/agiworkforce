@@ -28,7 +28,7 @@ import { useAgentStore } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { sendAgentCommand, getRiskBadgeColor } from '@/services/companion';
 import type { ApprovalRequest, StatusStep, ToolCall } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -66,6 +66,7 @@ function ProgressBar({ progress, color }: { progress: number; color: string }) {
 // ---------------------------------------------------------------------------
 
 function StepRow({ step, index }: { step: StatusStep; index: number }) {
+  const colors = useThemeColors();
   const dotColor =
     step.status === 'completed'
       ? colors.agentSuccess
@@ -106,6 +107,7 @@ function StepRow({ step, index }: { step: StatusStep; index: number }) {
 // ---------------------------------------------------------------------------
 
 function ToolCallRow({ tool }: { tool: ToolCall }) {
+  const colors = useThemeColors();
   const statusColor =
     tool.status === 'completed'
       ? colors.agentSuccess
@@ -173,6 +175,7 @@ function ApprovalRow({
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
 }) {
+  const colors = useThemeColors();
   if (request.status !== 'pending') return null;
 
   const isHigh = request.riskLevel === 'high';
@@ -230,6 +233,7 @@ function ApprovalRow({
 // ---------------------------------------------------------------------------
 
 export default function AgentDetailScreen() {
+  const colors = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
