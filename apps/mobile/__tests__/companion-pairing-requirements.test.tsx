@@ -76,7 +76,7 @@ describe('Companion pairing requirements', () => {
   });
 
   it('does not claim the devices need the same local network', () => {
-    const screen = render(<ConnectingView />);
+    const screen = render(<ConnectingView onCancel={jest.fn()} />);
 
     expect(screen.getByText(/connect across different networks/)).toBeTruthy();
     expect(screen.queryByText(/same network/i)).toBeNull();

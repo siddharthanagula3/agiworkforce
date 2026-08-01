@@ -78,11 +78,19 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     onScan(trimmed);
   }, [manualCode, onScan]);
 
-  // Permission not yet determined
+  // Permission not yet determined.
+  //
+  // Only the camera preview and the controls that sit ON it are literal dark
+  // (`cameraOverlay*`). Every screen below renders instead of the preview, on
+  // the app's own surface — using the overlay palette here put near-black text
+  // on black in light theme.
   if (!permission) {
     return (
-      <View className="flex-1 items-center justify-center bg-black">
-        <Text style={{ color: colors.cameraOverlayTextMuted }}>Requesting camera access...</Text>
+      <View
+        className="flex-1 items-center justify-center"
+        style={{ backgroundColor: colors.surfaceBase }}
+      >
+        <Text style={{ color: colors.textSecondary }}>Requesting camera access...</Text>
       </View>
     );
   }
@@ -90,20 +98,20 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   // Permission denied
   if (!permission.granted) {
     return (
-      <View className="flex-1 items-center justify-center bg-black px-8 gap-6">
+      <View
+        className="flex-1 items-center justify-center px-8 gap-6"
+        style={{ backgroundColor: colors.surfaceBase }}
+      >
         <View
           className="w-20 h-20 rounded-full items-center justify-center"
-          style={{ backgroundColor: colors.cameraOverlaySurface }}
+          style={{ backgroundColor: colors.neutralSurface }}
         >
           <ZapOff size={36} color={colors.textMuted} />
         </View>
-        <Text
-          className="text-center text-base font-medium"
-          style={{ color: colors.cameraOverlayText }}
-        >
+        <Text className="text-center text-base font-medium" style={{ color: colors.textPrimary }}>
           Camera access is required to scan QR codes
         </Text>
-        <Text className="text-center text-sm" style={{ color: colors.cameraOverlayTextMuted }}>
+        <Text className="text-center text-sm" style={{ color: colors.textSecondary }}>
           Enable camera access in your device settings, or enter the pairing code manually below.
         </Text>
         <View className="gap-3 w-full">
@@ -122,7 +130,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   // Manual entry mode
   if (showManualEntry) {
     return (
-      <View className="flex-1 bg-black px-6 pt-16 gap-6">
+      <View className="flex-1 px-6 pt-16 gap-6" style={{ backgroundColor: colors.surfaceBase }}>
         {/* Header */}
         <View className="flex-row items-center justify-between">
           <Text variant="subheading">Enter Pairing Code</Text>
@@ -140,7 +148,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           </Pressable>
         </View>
 
-        <Text className="text-sm" style={{ color: colors.cameraOverlayTextMuted }}>
+        <Text className="text-sm" style={{ color: colors.textSecondary }}>
           Open AGI Workforce on Desktop, go to Settings → Connections, and enter the 12-character
           code shown below the QR code.
         </Text>

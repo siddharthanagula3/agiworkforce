@@ -6,6 +6,70 @@ import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import importPlugin from 'eslint-plugin-import';
 import prettierConfig from 'eslint-config-prettier';
 
+// Prevention-layer selectors, shared by every `no-restricted-syntax` block.
+//
+// Flat config merges rules by NAME, so a later scoped block that declares
+// `no-restricted-syntax` replaces these options wholesale rather than adding to
+// them. Any block that needs an extra selector must spread this list first or
+// the model-catalog and egress gates silently stop applying to its files.
+const PREVENTION_LAYER_RESTRICTED_SYNTAX = [
+  {
+    // Hardcoded model IDs — the catalog (models.json) is the SSOT.
+    // The selector matches string literals that look like a real
+    // model ID, not generic prefix tokens. The regex requires a
+    // digit (or canonical model-family word) immediately after
+    // the provider prefix so substring tests like
+    // `model.includes('claude-')` and tool-name strings like
+    // `'claude-code'` are NOT flagged. Matches: `'gpt-5.5'`,
+    // `"gpt-5.4-mini"`, `'claude-opus-5'`, `'claude-sonnet-4.6'`,
+    // `'gemini-3.5-flash-lite'`, `'grok-4.3'`, `'o1-mini'`.
+    // Misses: `'claude-'`, `'gpt-'`, `'claude-code'` (tool name),
+    // `'claude-cookbook'` (doc reference).
+    selector:
+      'Literal[value=/^(gpt-[0-9]|claude-(?:opus|sonnet|haiku|[1-9])|gemini-[0-9]|grok-[0-9]|o[1-9]-[a-z])/]',
+    message:
+      'Hardcoded model ID detected. Read from models.json via packages/contracts/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel) — NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
+  },
+  {
+    // Deprecated-alias gate — PRD V5 lock #24, urgent action 2026-05-17.
+    //
+    // These IDs are EOL on a known cutoff date and must NEVER be inlined
+    // outside `models.json` (where they live ONLY as canonicalization
+    // alias keys for transitional legacy-ID resolution):
+    //   - `kimi-k2-*` family: dies 2026-05-25 (Moonshot deprecation).
+    //   - `deepseek-chat`: superseded by `deepseek-v4-flash`.
+    //   - `deepseek-reasoner`: superseded by `deepseek-v4-pro`.
+    //
+    // The regex anchors on `^` so legitimate substrings (e.g. inside a
+    // URL or comment) inside string literals are not flagged. The exact
+    // family-suffix `kimi-k2-` (with a trailing `-`) is required so the
+    // *current* model `kimi-k2.6` (note the `.`, not `-`) is NOT caught.
+    //
+    // Resolution: import `@agiworkforce/types` and use:
+    //   - `kimi-k2.6` for any Kimi K2 routing.
+    //   - `deepseek-v4-flash` for budget/fast lanes.
+    //   - `deepseek-v4-pro` for premium/reasoning lanes — resolve the
+    //     active routing-slot model via `getRoutingSlotModel()` /
+    //     `resolveAutoModeModel()` from `@agiworkforce/types` (catalog-driven).
+    selector: 'Literal[value=/^(kimi-k2-[^.]|deepseek-chat$|deepseek-reasoner$)/]',
+    message:
+      'Deprecated model alias literal detected (kimi-k2-*, deepseek-chat, or deepseek-reasoner). These IDs are EOL — kimi-k2-* family dies 2026-05-25; deepseek-chat/reasoner are superseded. Never hardcode model IDs: read from packages/contracts/types/src/models.json via @agiworkforce/types (getModelMetadataById / getRoutingSlotModel / resolveAutoModeModel / getDefaultModelFor) so routing stays catalog-driven.',
+  },
+  {
+    // Egress chokepoint (trust-boundary P0). A raw fetch() to an our-cloud
+    // URL built from WEB_APP_URL / API_BASE_URL bypasses the central guard
+    // and can silently upload a Local- or BYOK-mode session to our cloud.
+    // Route every such call through guardedFetch (apps/desktop/src/lib/
+    // egressGuard.ts), which fails closed when privacyMode !== 'managed'.
+    // BYOK provider hosts are intentionally NOT covered. In practice this
+    // only matches apps/desktop — the sole surface defining these constants.
+    selector:
+      "CallExpression[callee.name='fetch']:has(TemplateLiteral Identifier[name=/^(WEB_APP_URL|API_BASE_URL)$/])",
+    message:
+      'Raw fetch() to an our-cloud URL (WEB_APP_URL/API_BASE_URL) bypasses the egress chokepoint and can leak a Local/BYOK session to our cloud. Use guardedFetch from @/lib/egressGuard so non-managed sessions fail closed. See apps/desktop/src/lib/egressGuard.ts.',
+  },
+];
+
 export default [
   // Global ignores
   {
@@ -399,64 +463,7 @@ export default [
       '**/*.d.ts',
     ],
     rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          // Hardcoded model IDs — the catalog (models.json) is the SSOT.
-          // The selector matches string literals that look like a real
-          // model ID, not generic prefix tokens. The regex requires a
-          // digit (or canonical model-family word) immediately after
-          // the provider prefix so substring tests like
-          // `model.includes('claude-')` and tool-name strings like
-          // `'claude-code'` are NOT flagged. Matches: `'gpt-5.5'`,
-          // `"gpt-5.4-mini"`, `'claude-opus-5'`, `'claude-sonnet-4.6'`,
-          // `'gemini-3.5-flash-lite'`, `'grok-4.3'`, `'o1-mini'`.
-          // Misses: `'claude-'`, `'gpt-'`, `'claude-code'` (tool name),
-          // `'claude-cookbook'` (doc reference).
-          selector:
-            'Literal[value=/^(gpt-[0-9]|claude-(?:opus|sonnet|haiku|[1-9])|gemini-[0-9]|grok-[0-9]|o[1-9]-[a-z])/]',
-          message:
-            'Hardcoded model ID detected. Read from models.json via packages/contracts/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel) — NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
-        },
-        {
-          // Deprecated-alias gate — PRD V5 lock #24, urgent action 2026-05-17.
-          //
-          // These IDs are EOL on a known cutoff date and must NEVER be inlined
-          // outside `models.json` (where they live ONLY as canonicalization
-          // alias keys for transitional legacy-ID resolution):
-          //   - `kimi-k2-*` family: dies 2026-05-25 (Moonshot deprecation).
-          //   - `deepseek-chat`: superseded by `deepseek-v4-flash`.
-          //   - `deepseek-reasoner`: superseded by `deepseek-v4-pro`.
-          //
-          // The regex anchors on `^` so legitimate substrings (e.g. inside a
-          // URL or comment) inside string literals are not flagged. The exact
-          // family-suffix `kimi-k2-` (with a trailing `-`) is required so the
-          // *current* model `kimi-k2.6` (note the `.`, not `-`) is NOT caught.
-          //
-          // Resolution: import `@agiworkforce/types` and use:
-          //   - `kimi-k2.6` for any Kimi K2 routing.
-          //   - `deepseek-v4-flash` for budget/fast lanes.
-          //   - `deepseek-v4-pro` for premium/reasoning lanes — resolve the
-          //     active routing-slot model via `getRoutingSlotModel()` /
-          //     `resolveAutoModeModel()` from `@agiworkforce/types` (catalog-driven).
-          selector: 'Literal[value=/^(kimi-k2-[^.]|deepseek-chat$|deepseek-reasoner$)/]',
-          message:
-            'Deprecated model alias literal detected (kimi-k2-*, deepseek-chat, or deepseek-reasoner). These IDs are EOL — kimi-k2-* family dies 2026-05-25; deepseek-chat/reasoner are superseded. Never hardcode model IDs: read from packages/contracts/types/src/models.json via @agiworkforce/types (getModelMetadataById / getRoutingSlotModel / resolveAutoModeModel / getDefaultModelFor) so routing stays catalog-driven.',
-        },
-        {
-          // Egress chokepoint (trust-boundary P0). A raw fetch() to an our-cloud
-          // URL built from WEB_APP_URL / API_BASE_URL bypasses the central guard
-          // and can silently upload a Local- or BYOK-mode session to our cloud.
-          // Route every such call through guardedFetch (apps/desktop/src/lib/
-          // egressGuard.ts), which fails closed when privacyMode !== 'managed'.
-          // BYOK provider hosts are intentionally NOT covered. In practice this
-          // only matches apps/desktop — the sole surface defining these constants.
-          selector:
-            "CallExpression[callee.name='fetch']:has(TemplateLiteral Identifier[name=/^(WEB_APP_URL|API_BASE_URL)$/])",
-          message:
-            'Raw fetch() to an our-cloud URL (WEB_APP_URL/API_BASE_URL) bypasses the egress chokepoint and can leak a Local/BYOK session to our cloud. Use guardedFetch from @/lib/egressGuard so non-managed sessions fail closed. See apps/desktop/src/lib/egressGuard.ts.',
-        },
-      ],
+      'no-restricted-syntax': ['error', ...PREVENTION_LAYER_RESTRICTED_SYNTAX],
     },
   },
 
@@ -761,6 +768,74 @@ export default [
     files: ['apps/mobile/**/*.ts', 'apps/mobile/**/*.tsx'],
     rules: {
       '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // MOBILE THEME GATE — literal monochrome colours (PAR-M13).
+  //
+  // `tailwind.config.js` aliases `white` to `var(--agi-fg)` and ThemeVars
+  // publishes it from the active palette, so class-based opacity ramps follow
+  // the theme. An inline `rgba(255, 255, 255, …)` / `rgba(0, 0, 0, …)` bypasses
+  // that entirely: Dispatch shipped 32%-opacity white placeholder text on a
+  // near-white surface in light theme. Every one of these has a token —
+  // `border`/`borderLight`, `neutralSurface`, `inputSurface`, `progressTrack`,
+  // `scrim`, `cameraOverlay*` (src/ui/theme/tokens.ts).
+  //
+  // Scope is `src/features/**` + `src/shared/**`: the palette SSOT itself
+  // (`src/ui/theme/tokens.ts`) is where these literals legitimately live.
+  // ---------------------------------------------------------------------------
+  {
+    files: [
+      'apps/mobile/src/features/**/*.ts',
+      'apps/mobile/src/features/**/*.tsx',
+      'apps/mobile/src/shared/**/*.ts',
+      'apps/mobile/src/shared/**/*.tsx',
+    ],
+    ignores: [
+      // Tests and mocks assert against literal palette values on purpose.
+      'apps/mobile/src/**/*.test.ts',
+      'apps/mobile/src/**/*.test.tsx',
+      'apps/mobile/src/**/__tests__/**',
+      'apps/mobile/src/**/__mocks__/**',
+
+      // INTENTIONAL — literal white over a permanently dark surface.
+      // The voice sheet paints its own `rgba(12,12,16,0.97)` scrim in both
+      // themes (VoiceRecording.tsx:155), so its foreground must stay literal
+      // white; the same reasoning tailwind.config.js:69 records for the voice
+      // gradient and the camera preview.
+      'apps/mobile/src/features/voice/**',
+
+      // BASELINE — pre-dating sites outside the Dispatch surface this rule
+      // shipped with. Each is a modal scrim (→ `colors.scrim`) or a subtle
+      // surface tint (→ `colors.neutralSurface` / `colors.borderLight`).
+      // FIXME: PAR-M13-SWEEP — migrate and delete the entry so the rule
+      // starts enforcing on the file again.
+      'apps/mobile/src/features/sidebar/components/TagFilter.tsx',
+      'apps/mobile/src/features/sidebar/components/ConversationList.tsx',
+      'apps/mobile/src/features/sidebar/components/ConversationItem.tsx',
+      'apps/mobile/src/features/settings/cloud-connectors/AddCustomConnectorModal.tsx',
+      'apps/mobile/src/features/edge-cases/components/*.tsx',
+      'apps/mobile/src/features/schedules/components/QuickSchedule.tsx',
+      'apps/mobile/src/features/agents/components/ToolTimeline.tsx',
+      'apps/mobile/src/features/companion/components/ExecutionStream.tsx',
+      'apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx',
+      'apps/mobile/src/features/companion/components/AgentDashboard.tsx',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...PREVENTION_LAYER_RESTRICTED_SYNTAX,
+        {
+          // Matches `rgba(255,255,255,…)` and `rgba(0,0,0,…)` with any inner
+          // spacing, in a plain string (including a JSX attribute value) or a
+          // template literal chunk.
+          selector:
+            ':matches(Literal[value=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/], TemplateElement[value.raw=/rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgba\\(\\s*0\\s*,\\s*0\\s*,\\s*0/])',
+          message:
+            'Literal rgba white/black bypasses the theme. `white` is aliased to var(--agi-fg) and every shade here has a token — use useThemeColors(): border/borderLight, neutralSurface, inputSurface, progressTrack, scrim, cameraOverlay* (apps/mobile/src/ui/theme/tokens.ts). Literal monochrome is only correct over the camera preview or the voice sheet, which have their own cameraOverlay*/voice* tokens.',
+        },
+      ],
     },
   },
 

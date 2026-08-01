@@ -60,6 +60,10 @@ jest.mock('@/src/features/companion/components/DispatchTaskComposer', () => ({
   DispatchTaskComposer: jest.fn().mockReturnValue(null),
 }));
 
+jest.mock('@clerk/expo', () => ({
+  useUser: () => ({ user: null, isLoaded: true, isSignedIn: false }),
+}));
+
 jest.mock('@/src/ui/theme', () => ({
   colors: {
     teal: '#14b8a6',
@@ -120,7 +124,7 @@ describe('ConnectionStateViews', () => {
   });
 
   it('ConnectingView renders without crash', () => {
-    const { toJSON } = render(<ConnectingView />);
+    const { toJSON } = render(<ConnectingView onCancel={jest.fn()} />);
     expect(toJSON()).not.toBeNull();
   });
 
