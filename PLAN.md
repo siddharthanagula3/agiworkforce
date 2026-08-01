@@ -302,6 +302,14 @@ Finally, `TODO.md` was deleted in `906fe5cda`, so this Exact Resume Point
 section is now the executable queue — add new work here, not to a new root
 control doc.
 
+Founder decisions (2026-08-01, evening): build 11 of the 13 undecided missing
+surfaces (all except Finances; Plugins resolves to Connectors permanently) —
+the full list with external gates is recorded in
+`docs/current/parity-implementation-matrix.md` §2026-08-01 Founder Scope
+Decisions. Additionally: always-stack the mobile composer (model chip
+permanently visible), sonnet-5 low/medium effort follows the catalog (tests
+updated), and the branch is authorized for a plain push to origin (no PR).
+
 Same-day update (2026-08-01, post-checkpoint): RED 1 is cleared — `528ba8bc3`
 adds the three missing mobile feature READMEs and a fresh
 `pnpm check:llm-operability` run exits 0 (34/34), so the pre-push gate is green
