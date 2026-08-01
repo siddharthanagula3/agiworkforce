@@ -40,3 +40,23 @@ export async function savePreferenceNamespace<T extends object>(
 ): Promise<void> {
   await api.put('/api/settings/preferences', { namespace, value });
 }
+
+/**
+ * The same endpoint also carries un-namespaced account settings (the
+ * `{ settings }` body shape) — `session_timeout`, `two_factor_enabled` and
+ * friends. Reads without a `namespace` query return that top-level document.
+ *
+ * The server persists only the delta it is given, so a partial write here
+ * cannot clobber a key this app does not know about.
+ */
+export async function fetchAccountSettings(): Promise<Record<string, unknown>> {
+  const data = await api.get<PreferenceReadResponse>('/api/settings/preferences');
+  const settings = data?.settings;
+  return settings && typeof settings === 'object' && !Array.isArray(settings)
+    ? (settings as Record<string, unknown>)
+    : {};
+}
+
+export async function saveAccountSettings(settings: Record<string, unknown>): Promise<void> {
+  await api.put('/api/settings/preferences', { settings });
+}

@@ -1,4 +1,52 @@
 import { api } from '@/services/api';
+import { fetchAccountSettings, saveAccountSettings } from '@/services/preferences';
+
+/** Same option set the web security section offers. */
+export const SESSION_TIMEOUT_MINUTES = [15, 30, 60, 120, 480] as const;
+export type SessionTimeoutMinutes = (typeof SESSION_TIMEOUT_MINUTES)[number];
+
+/** Web's default when the account has never been told otherwise. */
+export const DEFAULT_SESSION_TIMEOUT: SessionTimeoutMinutes = 60;
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+export interface GroupedAuditEntry {
+  id: string;
+  action: string;
+  createdAt: string;
+  repeats: number;
+}
+
+/**
+ * Collapse consecutive repeats of the same action.
+ *
+ * A retry burst against one rate-limited endpoint can fill the entire page
+ * with identical rows — the live account returned twenty "Rate limit exceeded"
+ * entries, six inside the same second — burying the sign-ins and account
+ * changes this section exists to show. Nothing is dropped: the count is
+ * displayed, and a different action always starts a new row.
+ */
+export function groupAuditEntries(entries: AuditLogEntry[]): GroupedAuditEntry[] {
+  return entries.reduce<GroupedAuditEntry[]>((grouped, entry) => {
+    const previous = grouped[grouped.length - 1];
+    if (previous && previous.action === entry.action) {
+      previous.repeats += 1;
+      return grouped;
+    }
+    grouped.push({
+      id: entry.id,
+      action: entry.action,
+      createdAt: entry.createdAt,
+      repeats: 1,
+    });
+    return grouped;
+  }, []);
+}
 
 export interface AccountSecurityStatus {
   twoFactorEnabled: boolean;
@@ -48,4 +96,55 @@ export async function fetchAccountSecurityStatus(
 ): Promise<AccountSecurityStatus> {
   const response = await api.get<unknown>('/api/settings/2fa', { signal });
   return parseAccountSecurityStatus(response);
+}
+
+function isSessionTimeout(value: unknown): value is SessionTimeoutMinutes {
+  return SESSION_TIMEOUT_MINUTES.includes(value as SessionTimeoutMinutes);
+}
+
+/**
+ * Session timeout lives in the account's un-namespaced settings document —
+ * the same key and the same endpoint the web security section writes.
+ */
+export async function fetchSessionTimeout(): Promise<SessionTimeoutMinutes> {
+  const settings = await fetchAccountSettings();
+  const stored = settings['session_timeout'];
+  return isSessionTimeout(stored) ? stored : DEFAULT_SESSION_TIMEOUT;
+}
+
+export async function saveSessionTimeout(minutes: SessionTimeoutMinutes): Promise<void> {
+  await saveAccountSettings({ session_timeout: minutes });
+}
+
+/**
+ * Recent security activity for this account. Web renders the same rows with
+ * filtering and paging; mobile shows the most recent page, which is what the
+ * "did anything happen to my account" question actually needs.
+ */
+export async function fetchAuditLog(limit = 20, signal?: AbortSignal): Promise<AuditLogEntry[]> {
+  const response = await api.get<unknown>(
+    `/api/settings/audit-logs?limit=${limit}`,
+    signal ? { signal } : undefined,
+  );
+  if (!isRecord(response) || !Array.isArray(response['entries'])) return [];
+
+  return response['entries'].flatMap((raw): AuditLogEntry[] => {
+    if (!isRecord(raw)) return [];
+    const id = raw['id'];
+    const action = raw['action'];
+    const createdAt = raw['createdAt'];
+    // An entry with no id, action or timestamp cannot be rendered as activity;
+    // drop it rather than showing "undefined" in a security log.
+    if (typeof id !== 'string' || typeof action !== 'string' || typeof createdAt !== 'string') {
+      return [];
+    }
+    return [
+      {
+        id,
+        action,
+        ipAddress: typeof raw['ipAddress'] === 'string' ? raw['ipAddress'] : null,
+        createdAt,
+      },
+    ];
+  });
 }
