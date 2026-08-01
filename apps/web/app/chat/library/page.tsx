@@ -20,9 +20,13 @@ export default function LibraryPage() {
         data-design="agi"
         style={{
           minHeight: '100%',
-          background: 'var(--agi-bg-2)',
+          // App-shell tokens, not the marketing palette. `--agi-bg-2` resolves
+          // to #f3ecdf under [data-theme='light'][data-design='agi'], so this
+          // page rendered the landing page's cream background inside the
+          // product shell while the sidebar beside it stayed on --background.
+          background: 'hsl(var(--background))',
           padding: '48px 32px',
-          color: 'var(--agi-ink)',
+          color: 'hsl(var(--foreground))',
         }}
       >
         <LibraryView />
