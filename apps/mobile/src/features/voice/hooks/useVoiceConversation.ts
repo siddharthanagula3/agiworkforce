@@ -31,7 +31,12 @@ export interface UseVoiceConversationOptions {
   /** Whether the conversation surface is active (visible / mounted). */
   enabled: boolean;
   /** Push-to-talk: mic is live only while the orb is held; auto-relisten is off. */
-  pttMode: boolean;
+  /**
+   * Hold-to-talk. Optional, defaulting to hands-free: the chat voice overlay
+   * drops push-to-talk for ChatGPT parity while Settings > Voice still offers
+   * it, so the two surfaces differ without forking the hook.
+   */
+  pttMode?: boolean;
   hapticsEnabled: boolean;
   /** Send the final transcript to the chat engine; resolves with assistant text to speak. */
   sendMessage: (text: string) => Promise<string | null | undefined>;
