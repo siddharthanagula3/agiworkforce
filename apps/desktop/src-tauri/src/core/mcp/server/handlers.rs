@@ -67,11 +67,46 @@ pub async fn dispatch(
     }
 }
 
+/// Legacy revisions this server can serve, newest first.
+///
+/// Both are `initialize`-based and differ only in features this server does not
+/// expose (it serves `tools/list` and `tools/call` and nothing else), so either
+/// is honest. 2026-07-28 is absent: that revision is stateless and requires
+/// `server/discover` plus per-request `_meta` handling, none of which this
+/// server implements — a modern client probing us gets `-32601` and correctly
+/// falls back, which is the outcome the spec's compatibility matrix expects.
+const SERVER_SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2024-11-05"];
+
+/// Pick the revision to answer `initialize` with.
+///
+/// The spec has the server confirm the revision it will speak: echo the
+/// client's request when we can serve it, otherwise name our own preference and
+/// let the client decide whether to proceed. Answering a fixed 2024-11-05 to
+/// everyone — as this did — tells a 2025-11-25 client we are two revisions
+/// behind, and a client that validates the response (as ours now does) drops
+/// the connection over a difference that does not exist in what we serve.
+fn negotiate_protocol_version(requested: Option<&str>) -> &'static str {
+    requested
+        .and_then(|want| {
+            SERVER_SUPPORTED_PROTOCOL_VERSIONS
+                .iter()
+                .find(|supported| **supported == want)
+                .copied()
+        })
+        .unwrap_or(SERVER_SUPPORTED_PROTOCOL_VERSIONS[0])
+}
+
 fn handle_initialize(request: &JsonRpcRequest) -> JsonRpcResponse {
+    let requested = request
+        .params
+        .as_ref()
+        .and_then(|params| params.get("protocolVersion"))
+        .and_then(|value| value.as_str());
+
     JsonRpcResponse::success(
         request.id.clone(),
         json!({
-            "protocolVersion": "2024-11-05",
+            "protocolVersion": negotiate_protocol_version(requested),
             "capabilities": {
                 "tools": {}
             },
@@ -309,6 +344,47 @@ mod tests {
         assert_eq!(
             response.result.as_ref().unwrap()["structuredContent"]["reason"],
             "boom"
+        );
+    }
+}
+
+#[cfg(test)]
+mod protocol_version_tests {
+    use super::*;
+
+    /// The client asked for a revision we serve, so confirm that one. Answering
+    /// a fixed older revision made us look two behind to every modern client.
+    #[test]
+    fn test_supported_request_is_echoed_back() {
+        assert_eq!(negotiate_protocol_version(Some("2025-11-25")), "2025-11-25");
+        assert_eq!(negotiate_protocol_version(Some("2024-11-05")), "2024-11-05");
+    }
+
+    /// A revision we cannot serve gets our preference, not silence and not the
+    /// client's own string echoed back as if we understood it.
+    #[test]
+    fn test_unsupported_request_falls_back_to_our_preference() {
+        assert_eq!(negotiate_protocol_version(Some("2026-07-28")), "2025-11-25");
+        assert_eq!(negotiate_protocol_version(Some("1900-01-01")), "2025-11-25");
+        assert_eq!(negotiate_protocol_version(None), "2025-11-25");
+    }
+
+    /// This server is `initialize`-based only. Claiming the stateless revision
+    /// would promise `server/discover` and per-request `_meta` handling that
+    /// does not exist here.
+    #[test]
+    fn test_stateless_revision_is_not_advertised() {
+        assert!(!SERVER_SUPPORTED_PROTOCOL_VERSIONS.contains(&"2026-07-28"));
+    }
+
+    /// The whole point is agreeing with the client's own list; our desktop
+    /// client validates against exactly this string.
+    #[test]
+    fn test_preferred_revision_matches_the_desktop_client() {
+        assert_eq!(
+            SERVER_SUPPORTED_PROTOCOL_VERSIONS[0],
+            crate::core::mcp::session::SUPPORTED_PROTOCOL_VERSIONS[0],
+            "server preference and client preference must not drift apart"
         );
     }
 }
