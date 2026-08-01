@@ -33,6 +33,7 @@ import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import {
   accentColorForKind,
+  formatAgeLabel,
   mergeMobileArtifactsForGallery,
   useArtifactStore,
 } from '@/src/features/artifacts/store';
@@ -81,7 +82,13 @@ function groupHistory(conversations: ReadonlyArray<ConversationSummary>): ChatsL
       kind: 'chat',
       id: conversation.id,
       title: conversation.title || 'Untitled chat',
-      subtitle: conversation.lastMessage ?? 'Chat',
+      // Relative time, not a message preview. Claude's chats list
+      // (claude_reference/117) shows "1 day ago" per row, and a preview of the
+      // last message is frequently noise here — a code fence, or a bare
+      // "1 2 3 4 5 6 7 8 9 10..." — which tells the user nothing about which
+      // conversation this is. Reuses the artifact gallery's formatter rather
+      // than adding a second relative-time implementation.
+      subtitle: formatAgeLabel(conversation.updatedAt),
       pinned: conversation.pinned,
     };
     if (conversation.pinned) {
