@@ -81,7 +81,14 @@ import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { CapabilityProvider } from '@/src/lib/capabilities';
+import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
 import '../global.css';
+
+// Module scope, not an effect: Expo tears the native launch screen down at the
+// first drawn frame, which is before encrypted storage has hydrated and before
+// the Newsreader faces have landed. Holding it here and releasing it below
+// keeps the launch screen up until the first in-app frame is the real one.
+holdLaunchSplash();
 
 LogBox.ignoreLogs([
   '[React Native ExecuTorch] No content-length header for ',
@@ -201,11 +208,17 @@ export default function RootLayout() {
   // (rather than per-screen) means every surface that renders the lockup gets
   // the real face instead of a Georgia fallback. Render is NOT blocked on it:
   // a missing font must never gate the app, and RN falls back until it lands.
-  useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Newsreader_500Medium,
     Newsreader_600SemiBold,
   });
   const [isMmkvReady, setIsMmkvReady] = useState(false);
+
+  // Release the native launch screen only once the first React frame will be
+  // the real one: encrypted storage hydrated AND the brand faces resolved. A
+  // font FAILURE counts as resolved — a missing typeface must never gate the
+  // app, it just falls back, which is the same contract as the render below.
+  useLaunchSplashRelease(isMmkvReady && (fontsLoaded || fontError !== null));
   const session = useAuthStore((s) => s.session);
   const isLoading = useAuthStore((s) => s.isLoading);
   const isInitialized = useAuthStore((s) => s.isInitialized);
