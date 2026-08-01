@@ -3,7 +3,7 @@ import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated'
 import { Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { AgentStatusBadge } from './AgentStatusBadge';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import type { Agent } from '@/stores/agentStore';
 
@@ -13,16 +13,28 @@ interface AgentCardProps {
   onPress: (id: string) => void;
 }
 
-const STATUS_BAR_COLOR: Record<Agent['status'], string> = {
-  running: colors.agentActive,
-  completed: colors.agentSuccess,
-  failed: colors.agentError,
-  waiting: colors.agentWarning,
-};
+// Derived from the live palette: the status colours differ per theme, so a
+// module-scope constant would freeze one theme's values into both.
+function statusBarColor(
+  status: Agent['status'],
+  colors: ReturnType<typeof useThemeColors>,
+): string {
+  switch (status) {
+    case 'running':
+      return colors.agentActive;
+    case 'completed':
+      return colors.agentSuccess;
+    case 'failed':
+      return colors.agentError;
+    case 'waiting':
+      return colors.agentWarning;
+  }
+}
 
 export function AgentCard({ agent, index, onPress }: AgentCardProps) {
+  const colors = useThemeColors();
   const reducedMotion = useReducedMotion();
-  const barColor = STATUS_BAR_COLOR[agent.status];
+  const barColor = statusBarColor(agent.status, colors);
   const lastUpdated = agent.updatedAt ?? agent.startedAt;
 
   return (

@@ -28,6 +28,20 @@ jest.mock('react-native-webview', () => ({
   WebView: jest.fn().mockReturnValue(null),
 }));
 
+// MathFallback reads the LIVE palette now (the accent differs per theme, so a
+// module-scope StyleSheet could only bake in one of them). Pin the hook to the
+// same tokens this test imports, so the assertions still compare a token
+// against a token — the guard is "not a raw literal", not "this exact hex".
+jest.mock('@/src/ui/theme', () => {
+  const tokens = jest.requireActual('@/src/ui/theme/tokens');
+  return {
+    ...tokens,
+    colors: tokens.colors,
+    useThemeColors: () => tokens.colors,
+    useTheme: () => ({ colors: tokens.colors, isDark: true, statusBarStyle: 'light' }),
+  };
+});
+
 // Text mock follows the pattern in generated-file-card.test.tsx:
 // wrap RN.Text so css-interop's wrap-jsx can read .displayName from the
 // component type, while still rendering a real host node that appears in

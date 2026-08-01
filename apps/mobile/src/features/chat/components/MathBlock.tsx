@@ -16,7 +16,7 @@ import { Text } from '@/components/ui/text';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { agiPalette } from '@agiworkforce/design-tokens';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 // KaTeX CDN — pinned minor version for stability.
 const KATEX_VERSION = '0.16.21';
@@ -129,6 +129,7 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
  * small block that visually reads as "between text segments".
  */
 export function MathBlock({ latex, display }: MathBlockProps) {
+  const colors = useThemeColors();
   const systemScheme = useColorScheme();
   const isDark = systemScheme !== 'light';
   const [height, setHeight] = useState<number>(display ? 60 : 32);
@@ -242,9 +243,15 @@ export function MathBlock({ latex, display }: MathBlockProps) {
 
 /** Fallback plain-text render used while WebView loads or on error. */
 export function MathFallback({ latex, display }: MathBlockProps) {
+  const colors = useThemeColors();
   if (display) {
     return (
-      <View style={styles.fallbackBlock}>
+      <View
+        style={[
+          styles.fallbackBlock,
+          { backgroundColor: `${colors.teal}14`, borderLeftColor: colors.teal },
+        ]}
+      >
         <Text style={styles.fallbackText} selectable>
           {latex}
         </Text>
@@ -252,7 +259,7 @@ export function MathFallback({ latex, display }: MathBlockProps) {
     );
   }
   return (
-    <Text style={styles.fallbackInline} selectable>
+    <Text style={[styles.fallbackInline, { backgroundColor: `${colors.teal}14` }]} selectable>
       {` ${latex} `}
     </Text>
   );
@@ -276,15 +283,16 @@ const styles = StyleSheet.create({
   },
   webView: {
     flex: 1,
-    backgroundColor: colors.transparent,
+    backgroundColor: 'transparent',
   },
+  // Accent-tinted colours are applied by the components below: the accent
+  // differs per theme (#111111 light, #f4f4f4 dark), so a module-scope
+  // StyleSheet can only ever bake in one of them.
   fallbackBlock: {
-    backgroundColor: `${colors.teal}14`,
     borderRadius: 6,
     padding: 8,
     marginVertical: 6,
     borderLeftWidth: 2,
-    borderLeftColor: colors.teal,
   },
   fallbackText: {
     fontFamily: 'Menlo',
@@ -297,6 +305,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Menlo',
     fontStyle: 'italic',
     fontSize: 13,
-    backgroundColor: `${colors.teal}14`,
   },
 });
