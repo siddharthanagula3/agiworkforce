@@ -458,12 +458,11 @@ describe('AGI Desktop v3 Sidebar', () => {
     await clickSelector('aside[data-v3-sidebar] [role="tab"][aria-selected="false"]');
     await browser.pause(400);
 
-    const toastText = await browser.execute(() => document.body.textContent ?? '');
-    const hasComingSoonCopy = toastText.includes('AGI Cloud is available on Web & Mobile');
-    console.log('CLOUD TOGGLE: coming-soon toast text present:', hasComingSoonCopy);
-    // Real assertion: PA-3's honest interim copy must actually be on screen —
-    // not "available on desktop", not silence.
-    expect(hasComingSoonCopy).toBe(true);
+    const bodyText = await browser.execute(() => document.body.textContent ?? '');
+    // The PA-3 "Web & Mobile only" gate was retired by the DCL-4 public-alpha
+    // decision (appModeStore.setMode now unconditionally accepts 'cloud').
+    // Its old refusal copy must never resurface.
+    expect(bodyText.includes('AGI Cloud is available on Web & Mobile')).toBe(false);
 
     const modeAfterClick = await browser.execute(() => {
       const tabs = Array.from(
@@ -474,18 +473,29 @@ describe('AGI Desktop v3 Sidebar', () => {
         selected: t.getAttribute('aria-selected'),
       }));
     });
-    console.log(
-      'CLOUD TOGGLE: tab state unchanged (stays on Local, gate refuses the switch):',
-      JSON.stringify(modeAfterClick),
-    );
-    // Real assertion: the PA-3 gate (`appModeStore.setMode`) must refuse the
-    // switch — Local stays selected, Cloud never becomes active. If this ever
-    // flips to Cloud being selected, the PA-3 gate has been lifted/bypassed
-    // without DCL-4 completing, which is a locked-decision violation.
-    expect(modeAfterClick[0]?.selected).toBe('true');
-    expect(modeAfterClick[1]?.selected).toBe('false');
+    console.log('CLOUD TOGGLE: tab state after click:', JSON.stringify(modeAfterClick));
+    // Current contract: clicking Cloud actually selects Cloud. Signed out,
+    // the shell must then present a real path into a session (the device
+    // sign-in surface), not a dead tab.
+    expect(modeAfterClick[1]?.selected).toBe('true');
+    const offersSignIn =
+      bodyText.includes('Sign in') ||
+      (await browser.execute(() => document.body.textContent ?? '')).includes('Sign in');
+    expect(offersSignIn).toBe(true);
 
-    await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-11-cloud-toggle-toast.png`);
+    await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-11-cloud-toggle.png`);
+
+    // Restore Local through the real UI so this file cannot leak Cloud mode
+    // into the next spec's boot (the smoke-failure poisoning on this branch).
+    await clickSelector('aside[data-v3-sidebar] [role="tab"]:first-child');
+    await browser.pause(400);
+    const restored = await browser.execute(
+      () =>
+        document
+          .querySelector('aside[data-v3-sidebar] [role="tab"]')
+          ?.getAttribute('aria-selected') ?? '',
+    );
+    expect(restored).toBe('true');
   });
 
   it('Account/profile footer: renders a working control with no dead buttons', async function () {

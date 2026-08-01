@@ -3,10 +3,15 @@
 // native window/element checks that Playwright (driving :5175 in a plain
 // browser) cannot — real macOS window chrome, native dialogs, tray, etc.
 //
-// Requires a debug build with the embedded WebDriver plugin linked:
-//   (cd src-tauri && cargo build)
+// Requires the ISOLATED debug build (com.agiworkforce.desktop.wdio bundle
+// identifier, own app-data directory — never the user's installed-app
+// database, and no macOS keychain prompt at startup):
+//   pnpm run test:e2e:build
+//   (= cd src-tauri && TAURI_CONFIG="$(cat tauri.conf.wdio.json)" cargo build
+//    — TAURI_CONFIG takes the merge-config JSON CONTENT, not a file path)
 // and the Vite dev server running on the devUrl the binary was built against:
 //   pnpm run dev:vite
+// onPrepare below refuses to start against a production-identifier binary.
 //
 // IPC mocking: tauri-plugin-wdio (Cargo.toml) + @wdio/tauri-plugin (this
 // package's devDependencies) add browser.tauri.execute()/mock()/restoreAllMocks()
@@ -36,6 +41,37 @@ export const config: WebdriverIO.Config = {
   runner: 'local',
   specs: ['./wdio/specs/**/*.spec.ts'],
   maxInstances: 1,
+
+  // A stale production-identifier binary hangs every spec ~3 minutes on the
+  // macOS keychain prompt and opens the user's real app database. Fail fast
+  // instead: the isolated build (test:e2e:build) bakes the wdio identifier
+  // into the binary, so its absence means the wrong artifact is on disk.
+  onPrepare: async () => {
+    const { spawnSync } = await import('node:child_process');
+    const { resolve } = await import('node:path');
+    const binary = resolve(__dirname, appBinaryPath);
+    const probe = spawnSync('grep', ['-aq', 'com.agiworkforce.desktop.wdio', binary]);
+    if (probe.status !== 0) {
+      throw new Error(
+        `WDIO refuses to drive ${binary}: it does not embed the isolated ` +
+          'com.agiworkforce.desktop.wdio identifier. Build it with ' +
+          '`pnpm run test:e2e:build` first (see header of this file).',
+      );
+    }
+  },
+
+  // Specs share one app-data profile per worker; a spec that persists a mode
+  // or layout choice must not leak it into the next file (the
+  // sidebar-navigation -> smoke Cloud-boot poisoning on this branch). Start
+  // every session from a known-clean persisted state.
+  before: async () => {
+    await browser.execute(() => {
+      window.localStorage.removeItem('app-mode-store');
+      window.localStorage.removeItem('sidebar-collapsed');
+      window.location.reload();
+    });
+    await browser.pause(1500);
+  },
 
   services: [
     [
