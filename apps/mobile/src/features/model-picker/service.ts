@@ -417,10 +417,23 @@ export function isAutoMode(id: string): boolean {
   return autoModeMap.has(id);
 }
 
+/**
+ * Resolve a model id to the name a user should see.
+ *
+ * `allModelMap` holds the local models plus ONE preview cloud model per
+ * provider (LOCKED_CLOUD_MODELS), not the whole cloud catalog — so looking a
+ * cloud id up there missed almost every cloud model and fell through to the
+ * raw wire id. The Models screen rendered "gpt-5.6-terra" as the active model
+ * while the composer chip, which goes through getShortDisplayName, said
+ * "GPT-5.6 Terra" for the same selection.
+ *
+ * Consulting the full cloud source first makes both helpers agree. The id
+ * remains the last-resort fallback for an id no registry knows.
+ */
 export function getDisplayName(id: string): string {
   const autoMode = autoModeMap.get(id);
   if (autoMode) return autoMode.name;
-  return getModelById(id)?.name ?? id;
+  return cloudModelSourceMap.get(id)?.name ?? getModelById(id)?.name ?? id;
 }
 
 export function getShortDisplayName(id: string, subscriptionTier?: string): string {
