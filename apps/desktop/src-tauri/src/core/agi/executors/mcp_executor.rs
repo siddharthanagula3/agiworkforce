@@ -622,6 +622,16 @@ impl McpExecutor {
             McpError::ServerNotFound(msg) => {
                 format!("The requested service is not available. {}", msg)
             }
+            // Not retryable and not the user's doing: the server speaks a
+            // protocol revision this build does not implement, so say what the
+            // remedy actually is rather than offering "try again".
+            McpError::UnsupportedProtocolVersion(msg) => {
+                format!(
+                    "This service uses a newer version of the connector protocol than this app \
+                     supports. Updating AGI Workforce should resolve it. ({})",
+                    msg
+                )
+            }
             McpError::ToolNotFound(msg) => {
                 format!("The requested action is not available. {}", msg)
             }

@@ -79,6 +79,9 @@ pub struct McpSession {
     /// Server-authored usage guidance from `initialize`, stored ALREADY
     /// sanitised and capped — see `McpSession::instructions`.
     instructions: Arc<RwLock<Option<String>>>,
+    /// Protocol revision the server selected. Recorded so later code can branch
+    /// on the negotiated level rather than assume one.
+    negotiated_version: Arc<RwLock<Option<String>>>,
 
     tools: Arc<RwLock<Vec<McpToolDefinition>>>,
 
@@ -91,6 +94,15 @@ pub struct McpSession {
     /// [`ElicitationResponse`] to the task waiting in [`McpSession::request_elicitation`].
     pending_elicitations: Arc<parking_lot::Mutex<HashMap<String, PendingElicitation>>>,
 }
+
+/// Protocol revisions this client actually implements, preferred first.
+///
+/// Deliberately does NOT list 2026-07-28: that revision moves to a stateless
+/// core with per-request capability negotiation and a `server/discover`
+/// response, and this session still speaks the stateful `initialize` handshake.
+/// Advertising a revision we do not implement would make servers select it and
+/// then talk past us.
+pub(crate) const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25"];
 
 /// Cap for server-authored `instructions`.
 ///
@@ -168,6 +180,7 @@ impl McpSession {
             server_info: Arc::new(RwLock::new(None)),
             capabilities: Arc::new(RwLock::new(None)),
             instructions: Arc::new(RwLock::new(None)),
+            negotiated_version: Arc::new(RwLock::new(None)),
             tools: Arc::new(RwLock::new(Vec::new())),
             initialized: AtomicBool::new(false),
             pending_elicitations: Arc::new(parking_lot::Mutex::new(HashMap::new())),
@@ -203,12 +216,18 @@ impl McpSession {
             server_info: Arc::new(RwLock::new(None)),
             capabilities: Arc::new(RwLock::new(None)),
             instructions: Arc::new(RwLock::new(None)),
+            negotiated_version: Arc::new(RwLock::new(None)),
             tools: Arc::new(RwLock::new(Vec::new())),
             initialized: AtomicBool::new(false),
             pending_elicitations: Arc::new(parking_lot::Mutex::new(HashMap::new())),
         };
 
         Ok(session)
+    }
+
+    /// Protocol revision the server selected during `initialize`.
+    pub fn negotiated_protocol_version(&self) -> Option<String> {
+        self.negotiated_version.read().clone()
     }
 
     /// Server-authored usage guidance, already sanitised and capped.
@@ -234,7 +253,7 @@ impl McpSession {
         tracing::info!("[MCP Session] Initializing session for '{}'", self.name);
 
         let params = InitializeParams {
-            protocol_version: "2025-11-25".to_string(),
+            protocol_version: SUPPORTED_PROTOCOL_VERSIONS[0].to_string(),
             capabilities: ClientCapabilities::default(),
             client_info: Implementation {
                 name: "AGI Workforce".to_string(),
@@ -277,6 +296,26 @@ impl McpSession {
                 )));
             }
         };
+
+        // The server answers with the revision it will actually speak, which
+        // need not be the one we asked for. This was ignored entirely, so a
+        // server selecting a revision we do not implement was met with
+        // 2025-11-25 semantics and the mismatch surfaced later as malformed
+        // payloads rather than a clear failure here.
+        if !SUPPORTED_PROTOCOL_VERSIONS.contains(&result.protocol_version.as_str()) {
+            self.initialized.store(false, Ordering::SeqCst);
+            return Err(McpError::UnsupportedProtocolVersion(format!(
+                "Server '{}' selected MCP protocol revision '{}', which this client does not \
+                 implement (supported: {}).",
+                self.name,
+                result.protocol_version,
+                SUPPORTED_PROTOCOL_VERSIONS.join(", ")
+            )));
+        }
+        {
+            let mut negotiated = self.negotiated_version.write();
+            *negotiated = Some(result.protocol_version.clone());
+        }
 
         // Update server info and capabilities with RwLock protection
         {
@@ -576,6 +615,47 @@ impl McpSession {
 
 #[cfg(test)]
 mod tests {
+    /// We must not advertise a revision we do not implement: a server would
+    /// select it and then speak past us.
+    #[test]
+    fn test_supported_versions_exclude_the_stateless_revision() {
+        assert!(
+            !super::SUPPORTED_PROTOCOL_VERSIONS.contains(&"2026-07-28"),
+            "2026-07-28 moves to a stateless core with server/discover; this session \
+             still speaks the stateful initialize handshake"
+        );
+        assert_eq!(super::SUPPORTED_PROTOCOL_VERSIONS[0], "2025-11-25");
+    }
+
+    /// The server answers with the revision it will actually speak, which need
+    /// not be the one we asked for.
+    #[test]
+    fn test_unsupported_server_revision_is_rejected() {
+        let unsupported = "2026-07-28";
+        assert!(
+            !super::SUPPORTED_PROTOCOL_VERSIONS.contains(&unsupported),
+            "precondition: the revision under test must be one we do not implement"
+        );
+
+        let err = super::McpError::UnsupportedProtocolVersion(format!(
+            "Server 'files' selected MCP protocol revision '{unsupported}'"
+        ));
+        // Distinct variant, so callers can tell "wrong contract" from "bad wire".
+        assert!(matches!(err, super::McpError::UnsupportedProtocolVersion(_)));
+        assert!(err.to_string().contains(unsupported));
+    }
+
+    /// A matching revision must be accepted and recorded, not merely tolerated.
+    #[test]
+    fn test_supported_server_revision_is_accepted() {
+        for version in super::SUPPORTED_PROTOCOL_VERSIONS {
+            assert!(
+                super::SUPPORTED_PROTOCOL_VERSIONS.contains(version),
+                "every advertised revision must pass the same gate the server response hits"
+            );
+        }
+    }
+
     /// `instructions` was absent from InitializeResult, so serde discarded it
     /// and no caller could ever see it. Parsing it is the point of the field.
     #[test]
