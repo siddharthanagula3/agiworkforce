@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { openBillingPortal } from '@/features/billing/services/stripe-payments';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { AgiMark } from '@shared/components/agi/AgiMark';
 
 // Real Stripe-backed shapes returned by the web billing routes.
 interface PaymentMethod {
@@ -78,15 +79,10 @@ function PlanIcon({ tier }: { tier: string }) {
         flexShrink: 0,
       }}
     >
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="5" stroke={isPaid ? '#fff' : 'var(--text-3)'} strokeWidth="2" />
-        <path
-          d="M12 2v3M12 19v3M2 12h3M19 12h3"
-          stroke={isPaid ? '#fff' : 'var(--text-3)'}
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
+      {/* The brand mark, not a generic crosshair — this is the most prominent
+          icon in Billing and it was the only place in the product showing a
+          stock glyph where the AGI symbol belongs. */}
+      <AgiMark size={26} mono ariaLabel="" style={{ color: isPaid ? '#fff' : 'var(--text-3)' }} />
     </div>
   );
 }

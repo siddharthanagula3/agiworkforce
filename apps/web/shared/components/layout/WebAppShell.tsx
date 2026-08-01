@@ -53,6 +53,7 @@ import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { toast } from 'sonner';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 interface WebAppShellProps {
   children: React.ReactNode;
@@ -275,8 +276,11 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const displayName = user?.name || user?.email?.split('@')[0] || 'User';
   const userInitial = displayName.charAt(0).toUpperCase();
   const currentTier = subscription?.tier ?? 'free';
-  const tierLabel =
-    currentTier === 'free' ? 'Free' : currentTier.charAt(0).toUpperCase() + currentTier.slice(1);
+  // Capitalising the raw tier id rendered "Max_15x" for max_15x, which the
+  // badge's `uppercase` class then showed as "MAX_15X". Use the catalog's own
+  // label ("Max 15x") — the same source the chat sidebar and shared
+  // UserProfile already use, so all three footers agree.
+  const tierLabel = getBillingPlanPricing(currentTier).label;
 
   const handleLogout = useCallback(async () => {
     await logout();
