@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { View, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Alert, Keyboard, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
@@ -21,7 +21,6 @@ import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
-import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
 import { VoiceOnboardingSheet } from '@/src/features/voice/components/VoiceOnboardingSheet';
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
@@ -87,7 +86,6 @@ export default function ChatTabScreen() {
       items: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
     ) => void;
   } | null>(null);
-  const [voiceModeVisible, setVoiceModeVisible] = useState(false);
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
@@ -500,13 +498,18 @@ export default function ChatTabScreen() {
   );
 
   const handleOpenVoiceMode = useCallback(() => {
-    // The intro carries the recording disclosure, so it has to land BEFORE the
-    // conversation screen opens a live microphone — not alongside it.
+    // Dismiss first: the composer keeps focus otherwise and the keyboard sits
+    // on top of the bar we are about to raise.
+    Keyboard.dismiss();
+    // The intro carries the recording disclosure, so it has to land BEFORE
+    // anything opens a live microphone — not alongside it.
     if (!useSettingsStore.getState().voiceOnboardingSeen) {
       setVoiceIntroVisible(true);
       return;
     }
-    setVoiceModeVisible(true);
+    // Identical to the first-run path below and to chat/[id].tsx: one voice
+    // presentation, whichever entry point reached it.
+    setVoiceInlineVisible(true);
   }, []);
 
   // Intro -> pick a voice -> conversation. The picker only fronts the FIRST
@@ -530,6 +533,14 @@ export default function ChatTabScreen() {
     setVoiceInlineVisible(false);
   }, []);
 
+  // Voice mode replaces the composer, so the "+" sheet's results would land on
+  // an unmounted ChatInput (its attach ref is null) and vanish silently. Leave
+  // voice first, then open the sheet.
+  const handleVoiceAttach = useCallback(() => {
+    setVoiceInlineVisible(false);
+    handleOpenAddToChat();
+  }, [handleOpenAddToChat]);
+
   // Dismissing without acknowledging must not start voice, and must not mark
   // the disclosure as seen — the sheet returns next time.
   const handleVoiceIntroDismiss = useCallback(() => {
@@ -539,10 +550,6 @@ export default function ChatTabScreen() {
   const handleOpenCompare = useCallback(() => {
     router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
   }, [router]);
-
-  const handleCloseVoiceMode = useCallback(() => {
-    setVoiceModeVisible(false);
-  }, []);
 
   const handleVoiceSendMessage = useCallback(
     async (text: string): Promise<string> => {
@@ -568,10 +575,15 @@ export default function ChatTabScreen() {
     [handleSend],
   );
 
-  // Same hook the full-screen voice screen uses. `enabled` is what starts and
+  // Same hook the /voice companion route uses. `enabled` is what starts and
   // stops capture, so the bar's visibility IS the session lifecycle — no second
   // copy of the STT/TTS wiring to drift from the first.
-  const { phase: inlineVoicePhase, toggleMute: inlineToggleMute } = useVoiceConversation({
+  const {
+    phase: inlineVoicePhase,
+    muted: inlineVoiceMuted,
+    audioLevel: inlineVoiceLevel,
+    toggleMute: inlineToggleMute,
+  } = useVoiceConversation({
     enabled: voiceInlineVisible,
     pttMode: false,
     hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
@@ -764,11 +776,14 @@ export default function ChatTabScreen() {
       />
 
       {/* Inline voice: the thread stays visible, only the composer changes.
-          references-2 voice-03/05. The full-screen VoiceConversationScreen
-          below remains for the immersive path. */}
+          This is the only voice presentation — every entry point lands here. */}
       <VoiceInlineBar
         visible={voiceInlineVisible}
         phase={inlineVoicePhase}
+        audioLevel={inlineVoiceLevel}
+        muted={inlineVoiceMuted}
+        onAttach={handleVoiceAttach}
+        onOpenKeyboard={handleExitInlineVoice}
         onToggleMic={inlineToggleMute}
         onExit={handleExitInlineVoice}
       />
@@ -778,13 +793,6 @@ export default function ChatTabScreen() {
         visible={voicePickerVisible}
         onStart={handleVoicePickerStart}
         onDismiss={handleVoicePickerDismiss}
-      />
-
-      {/* Voice conversation full-screen overlay */}
-      <VoiceConversationScreen
-        visible={voiceModeVisible}
-        onClose={handleCloseVoiceMode}
-        onSendMessage={handleVoiceSendMessage}
       />
     </SafeAreaView>
   );

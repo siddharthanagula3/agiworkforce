@@ -4,8 +4,8 @@ import * as Haptics from 'expo-haptics';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 
 /**
- * useVoiceConversation — shared turn-taking loop for the two-way voice screens
- * (VoiceConversationScreen overlay and the /voice companion route).
+ * useVoiceConversation — shared turn-taking loop for the two-way voice surfaces
+ * (the inline VoiceInlineBar in chat and the /voice companion route).
  *
  * Owns the listen → think → speak cycle in both interaction modes:
  *  - hands-free: tap the orb to start; the recognizer finalizes on its own
