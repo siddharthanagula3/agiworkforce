@@ -34,7 +34,6 @@ function makeDefaults(): AllPermissionsMap {
   return {
     microphone: { ...DEFAULT_STATE },
     camera: { ...DEFAULT_STATE },
-    location: { ...DEFAULT_STATE },
     photos: { ...DEFAULT_STATE },
     notifications: { ...DEFAULT_STATE },
     contacts: { ...DEFAULT_STATE },

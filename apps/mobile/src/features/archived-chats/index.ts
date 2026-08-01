@@ -4,8 +4,10 @@
  * section against the same endpoints.
  */
 export {
+  archiveAllConversations,
   archiveConversation,
   deleteAllArchivedConversations,
+  deleteAllConversations,
   deleteArchivedConversation,
   fetchArchivedConversations,
   restoreArchivedConversation,

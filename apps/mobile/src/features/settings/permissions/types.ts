@@ -10,13 +10,19 @@
  */
 
 /**
- * Permission kinds known to Mobile. The visible settings list only includes
- * permissions backed by installed native adapters.
+ * Permission kinds known to Mobile. Every kind here is backed by an installed
+ * native adapter and rendered in the settings list.
+ *
+ * `location` used to sit here with stub adapters that hard-returned
+ * 'undetermined' (no `expo-location` dependency) and was excluded from
+ * PERMISSION_KINDS, so it could never render. A half-wired permission in the
+ * type registry is worse than none — it invites callers to read a level the OS
+ * was never asked for — so it was removed. Re-adding location means adding the
+ * dependency and a real adapter together, never the type alone.
  */
 export type MobilePermissionKind =
   | 'microphone'
   | 'camera'
-  | 'location'
   | 'photos'
   | 'notifications'
   | 'contacts'
@@ -61,6 +67,25 @@ export const LEVEL_LABELS: Readonly<Record<MobilePermissionLevel, string>> = Obj
   denied: 'Never',
   ask_each_time: 'Ask each time',
   allow_while_using: 'While using the app',
+  allow_always: 'Always',
+});
+
+/**
+ * Compact label naming the level a permission is actually at, for the trailing
+ * slot of the permissions list and its accessibility label.
+ *
+ * The list used to collapse every kind to On / Ask / Off, which threw away the
+ * distinction the registry already models: "granted" means foreground-only for
+ * the microphone and unconditional for notifications, and those are different
+ * grants. Naming the level turns the list into an audit view.
+ *
+ * A kind whose grant is not honestly described by these words overrides them
+ * per level via `PermissionRegistryEntry.levelLabels` (see registry.ts).
+ */
+export const LEVEL_STATUS_LABELS: Readonly<Record<MobilePermissionLevel, string>> = Object.freeze({
+  denied: 'Never',
+  ask_each_time: 'Ask',
+  allow_while_using: 'While using',
   allow_always: 'Always',
 });
 

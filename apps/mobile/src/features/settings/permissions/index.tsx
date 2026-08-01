@@ -18,7 +18,12 @@ import { Separator } from '@/components/ui/separator';
 import { SettingsScreenShell } from '@/src/features/settings/common';
 import { useThemeColors } from '@/src/ui/theme';
 import { usePermissionsStore } from '@/stores/permissionsStore';
-import { PERMISSION_REGISTRY, PERMISSION_KINDS, isPermissionGranted } from './registry';
+import {
+  PERMISSION_REGISTRY,
+  PERMISSION_KINDS,
+  isPermissionGranted,
+  permissionStatusLabel,
+} from './registry';
 import type { MobilePermissionKind } from './types';
 
 // ---------------------------------------------------------------------------
@@ -38,23 +43,21 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
   const permState = usePermissionsStore((s) => s.permissions[kind]);
   const status = permState?.lastObservedStatus ?? 'undetermined';
   const granted = isPermissionGranted(status);
-  const statusLabel = granted ? 'On' : status === 'undetermined' ? 'Ask' : 'Off';
-  // Mirror statusLabel's three states here — collapsing 'undetermined' into
-  // 'denied' told VoiceOver users a permission was rejected when the OS
-  // simply hasn't asked yet, which reads as needing a trip to Settings to
-  // fix something that was never actually broken.
-  const accessibilityStatus = granted
-    ? 'allowed'
-    : status === 'undetermined'
-      ? 'not yet asked'
-      : 'denied';
+  // Name the level the OS actually granted rather than collapsing every kind to
+  // On/Ask/Off: "granted" means foreground-only for the microphone and
+  // unconditional for notifications, and the row should say which. The same
+  // string drives VoiceOver, so sighted and screen-reader users read the same
+  // audit value — and 'Ask' stays distinct from 'Never', because telling
+  // VoiceOver a permission was denied when the OS has not asked yet sends the
+  // user to Settings to fix something that was never broken.
+  const statusLabel = permissionStatusLabel(status, kind);
 
   return (
     <View>
       <Pressable
         onPress={() => onPressDetail(kind)}
         accessibilityRole="button"
-        accessibilityLabel={`${entry.label} permission. Currently ${accessibilityStatus}. Tap to manage.`}
+        accessibilityLabel={`${entry.label} permission. Access level: ${statusLabel}. Tap to manage.`}
         style={{
           minHeight: 72,
           flexDirection: 'row',

@@ -143,7 +143,8 @@ jest.mock('expo-camera', () => ({
   CameraView: 'CameraView',
 }));
 
-// expo-location is not installed in mobile v1 and is not surfaced in settings.
+// expo-location is not installed in mobile v1, so there is no Location
+// permission kind at all — nothing to mock here.
 
 jest.mock('expo-image-picker', () => ({
   getMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
@@ -175,7 +176,6 @@ const mockPermissionsState = {
   permissions: {
     microphone: { ...mockDefaultPerm },
     camera: { ...mockDefaultPerm },
-    location: { ...mockDefaultPerm },
     photos: { ...mockDefaultPerm },
     notifications: { ...mockDefaultPerm },
     contacts: { ...mockDefaultPerm },
