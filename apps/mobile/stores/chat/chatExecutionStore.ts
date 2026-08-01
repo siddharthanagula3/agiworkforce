@@ -1638,8 +1638,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // text so reconnect replay never duplicates an already-visible prefix.
       let unacknowledgedPublicText = '';
 
-      // Honor the user's per-model Thinking toggle — the same state that drives
-      // the Brain badge on ModelSelectorButton. Hardcoding `thinking: true`
+      // Honor the user's per-model Thinking toggle — the same state behind the
+      // ModelPickerSheet "With thinking" switch and the composer model label's
+      // effort suffix. Hardcoding `thinking: true`
       // here made that toggle a dead control (thinking ran on every cloud turn
       // regardless of choice) and broke free-trial sends on non-thinking
       // models, which the server rejects when thinking/effort is requested

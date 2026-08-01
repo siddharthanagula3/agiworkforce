@@ -121,11 +121,9 @@ export default function ChatScreen() {
   const [modelPickerScope, setModelPickerScope] = useState<'local' | 'cloud'>('local');
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
   const [projectPickerOpenSignal, setProjectPickerOpenSignal] = useState(0);
-  const chatInputAttachRef = useRef<{
-    addAttachments: (
-      items: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
-    ) => void;
-  } | null>(null);
+  const chatInputAttachRef = useRef<
+    import('@/src/features/chat/components/ChatInput').ChatInputHandle | null
+  >(null);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameText, setRenameText] = useState('');
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
@@ -812,6 +810,9 @@ export default function ChatScreen() {
 
   const handleExitInlineVoice = useCallback(() => {
     setVoiceInlineVisible(false);
+    // The composer only mounts on the next frame; defer so leaving voice via
+    // the keyboard pill lands the user in a focused, ready-to-type field.
+    requestAnimationFrame(() => chatInputAttachRef.current?.focus?.());
   }, []);
 
   // Voice mode replaces the composer, so the "+" sheet's results would land on
