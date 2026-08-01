@@ -1,11 +1,18 @@
-import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Bot, Brain, ChevronDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import {
+  EFFORT_LABEL,
+  getModelEffortOptions,
+  getModelReasoning,
+  type Effort,
+} from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { getShortDisplayName, isAutoMode, getModelById } from '@/src/features/model-picker/service';
+import { useChatStore } from '@/stores/chatStore';
+import { useAgentControlStore } from '@/stores/agentControlStore';
+import { getShortDisplayName } from '@/src/features/model-picker/service';
+import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors, radii } from '@/src/ui/theme';
 
@@ -14,23 +21,43 @@ interface ModelSelectorButtonProps {
 }
 
 /**
- * Compact button that sits inside the ChatInput bar.
- * Shows provider icon + current model name (or "Auto") and opens the ModelPickerSheet.
- * Displays a small Brain badge when thinking mode is enabled for the selected model.
+ * The model label on the composer's control row (PAR-M19).
+ *
+ * Both references keep the answering model readable and one tap from being
+ * changed: Claude renders "Opus 5 High" — display name plus reasoning effort as
+ * a muted suffix (IMG_0730) — and ChatGPT renders "5.6 Sol Light" beside the mic
+ * (IMG_0689). Neither draws a chip: no icon, no chevron, no filled pill. This
+ * was previously a 150pt icon+chevron chip that was exported and mounted
+ * nowhere while the composer's `onOpenModelPicker` prop sat unused, so the model
+ * in use was invisible everywhere in the app.
+ *
+ * The effort suffix is the effort the NEXT turn will actually carry, resolved
+ * through the same helpers as the send path (`resolveTurnEffort` +
+ * `getModelEffortOptions`) rather than the raw stored value — a model with no
+ * effort axis, or a stale effort it does not support, renders no suffix instead
+ * of advertising a setting that will be dropped.
  */
 export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   const colors = useThemeColors();
   const selectedModel = useModelStore((s) => s.selectedModel);
-  const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
+  const thinkingEnabled = useModelStore((s) => s.thinkingEnabledPerModel[s.selectedModel] ?? false);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const subscriptionTier = useTierStore((s) => s.tier);
+  // Effort resolution mirrors ModelPickerSheet/chatExecutionStore: the open
+  // conversation's override first, else the '__default__' project default.
+  // `currentConversationId` is null on the new-chat tab, which is exactly the
+  // conversation-less case the picker resolves the same way.
+  const conversationId = useChatStore((s) => s.currentConversationId);
+  const selectedEffort = useAgentControlStore((s) => s.resolve(conversationId ?? '', null).effort);
 
-  const isAuto = isAutoMode(selectedModel);
   const label = getShortDisplayName(selectedModel, subscriptionTier);
-  const thinkingOn = thinkingEnabledPerModel[selectedModel] ?? false;
-
-  const model = isAuto ? null : getModelById(selectedModel);
-  const iconColor = isAuto ? colors.textMuted : colors.teal;
+  const turnEffort = resolveTurnEffort({
+    selectedEffort,
+    supportedEfforts: getModelEffortOptions(selectedModel),
+    reasoningControl: getModelReasoning(selectedModel).control,
+    thinkingEnabled,
+  });
+  const effortLabel = turnEffort ? EFFORT_LABEL[turnEffort as Effort] : undefined;
 
   const handlePress = () => {
     if (hapticsEnabled) {
@@ -43,73 +70,49 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
     <Pressable
       onPress={handlePress}
       style={({ pressed }) => ({
-        minWidth: 150,
-        height: 36,
-        borderRadius: radii.full,
-        paddingHorizontal: 10,
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-        backgroundColor: pressed ? colors.surfaceHover : colors.inputSurface,
+        gap: 5,
+        minHeight: 30,
+        flexShrink: 1,
+        paddingHorizontal: 6,
+        borderRadius: radii.full,
+        backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
       })}
-      hitSlop={6}
-      accessibilityLabel={`Model: ${label}${thinkingOn ? ', thinking mode on' : ''}`}
+      hitSlop={8}
+      testID="chat.composer.model"
+      accessibilityLabel={
+        effortLabel ? `Model: ${label}, reasoning effort ${effortLabel}` : `Model: ${label}`
+      }
       accessibilityRole="button"
-      accessibilityHint="Opens model picker"
+      accessibilityHint="Opens the model picker"
     >
-      <View
+      <Text
+        numberOfLines={1}
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 5,
-          minWidth: 128,
+          color: colors.textSecondary,
+          fontSize: 13,
+          lineHeight: 16,
+          fontWeight: '500',
+          flexShrink: 1,
+          includeFontPadding: false,
         }}
       >
-        {/* Provider icon with thinking indicator */}
-        <View style={{ position: 'relative', width: 18, height: 18 }}>
-          <Bot size={18} color={iconColor} />
-
-          {/* Per-model thinking indicator — small purple dot */}
-          {thinkingOn && (
-            <View
-              style={{
-                position: 'absolute',
-                top: -2,
-                right: -2,
-                width: 10,
-                height: 10,
-                borderRadius: 5,
-                borderWidth: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: colors.purple,
-                borderColor: colors.surfaceBase,
-              }}
-            >
-              <Brain size={6} color={colors.accentText} />
-            </View>
-          )}
-        </View>
-
-        {/* Truncated label */}
+        {label}
+      </Text>
+      {effortLabel ? (
         <Text
+          numberOfLines={1}
           style={{
-            color: model ? colors.teal : colors.textMuted,
-            fontSize: 12,
-            lineHeight: 15,
-            fontWeight: '500',
-            maxWidth: 88,
-            flexShrink: 1,
+            color: colors.textMuted,
+            fontSize: 13,
+            lineHeight: 16,
             includeFontPadding: false,
           }}
-          numberOfLines={1}
         >
-          {label}
+          {effortLabel}
         </Text>
-
-        <ChevronDown size={12} color={colors.textMuted} />
-      </View>
+      ) : null}
     </Pressable>
   );
 }

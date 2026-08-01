@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { View } from 'react-native';
-import { ChatInput } from '@/src/features/chat/components/ChatInput';
+import { ChatInput, type ChatInputHandle } from '@/src/features/chat/components/ChatInput';
 import { type TaskChipType } from '@/src/features/chat/components/TaskChips';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { DraftProvenance } from '@/src/features/chat/draftStore';
@@ -22,7 +22,11 @@ interface ComposerProps {
   onOpenAddToChat?: () => void;
   isOnline?: boolean;
   queueSize?: number;
-  attachRef?: React.RefObject<{ addAttachments: (items: Attachment[]) => void } | null>;
+  /**
+   * Forwarded straight to the composer: add attachments, or focus the field
+   * (e.g. handing the keyboard back when inline voice exits).
+   */
+  attachRef?: React.RefObject<ChatInputHandle | null>;
   /** Whether to show task chips above the input (shown on empty chat) */
   showChips?: boolean;
   /** When false, thread has messages and placeholder reads "Reply to AGI" */
