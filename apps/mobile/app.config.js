@@ -20,6 +20,16 @@ function envIsTruthy(name) {
   return value === '1' || value === 'true' || value === 'yes';
 }
 
+// Launch-screen palette. These MUST stay equal to `background` in each half of
+// `src/ui/theme/tokens.ts` — the native launch screen is drawn before any JS
+// runs, so any drift is visible as a colour flash at the handoff to the first
+// React frame. `__tests__/splash-launch-config.test.ts` pins them to the tokens.
+const SPLASH_BACKGROUND_LIGHT = '#ffffff';
+const SPLASH_BACKGROUND_DARK = '#0f0f0f';
+// Rendered width of the brand lockup on the launch screen, in dp. The source
+// PNGs are 4x this, so the same asset is crisp on iOS @3x and Android xxxhdpi.
+const SPLASH_IMAGE_WIDTH = 220;
+
 // Default behavior:
 // - production/preview-like app-env => keep full entitlement set (Push, SIWA, Siri, Translate).
 // - development app-env => use minimal entitlements for basic dev provisioning.
@@ -63,11 +73,11 @@ const config = {
   icon: './assets/icon.png',
   scheme: 'agiworkforce',
   userInterfaceStyle: 'automatic',
-  splash: {
-    image: './assets/splash-icon.png',
-    resizeMode: 'contain',
-    backgroundColor: '#0f0f0f',
-  },
+  // NOTE: there is deliberately no top-level `splash` key. It has no dark
+  // variant (see @expo/prebuild-config getIosSplashConfig — only the plugin
+  // props and `ios.splash` carry `dark`), so the single background it declared
+  // flashed near-black before every light-theme launch. The expo-splash-screen
+  // plugin below owns the launch screen for both themes.
   ios: {
     supportsTablet: true,
     // Keep iPad multitasking enabled. Expo's iOS prebuild then emits every
@@ -194,6 +204,26 @@ const config = {
     // Embeds the Newsreader faces used by the AGI wordmark so the brand
     // lockup renders in the real typeface instead of a Georgia fallback.
     'expo-font',
+    // Launch screen. `userInterfaceStyle` is 'automatic', so the OS decides
+    // which variant a cold launch shows and both must exist. The image is the
+    // full brand LOCKUP (mark + Newsreader wordmark), not the bare mark: the
+    // mark alone is a static twelve-spoke starburst, which reads as a stalled
+    // loading spinner — the same reasoning already recorded on the chat empty
+    // state in app/(app)/(tabs)/chat.tsx. Regenerate both PNGs with
+    // `python3 apps/mobile/scripts/generate_logo_assets.py lockups`.
+    [
+      'expo-splash-screen',
+      {
+        image: './assets/splash-lockup.png',
+        imageWidth: SPLASH_IMAGE_WIDTH,
+        resizeMode: 'contain',
+        backgroundColor: SPLASH_BACKGROUND_LIGHT,
+        dark: {
+          image: './assets/splash-lockup-dark.png',
+          backgroundColor: SPLASH_BACKGROUND_DARK,
+        },
+      },
+    ],
     // Registers the BGTaskScheduler identifier and the `processing` background
     // mode that expo-background-task needs; without it registerTaskAsync throws
     // at runtime. Replaces expo-background-fetch, which Expo deprecated.
