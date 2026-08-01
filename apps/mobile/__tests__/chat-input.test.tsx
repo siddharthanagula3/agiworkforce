@@ -3,15 +3,18 @@
  * Tests for ChatInput component.
  *
  * Validates the restructured chat input bar:
- * - [+] button, model pill, mic button, send button presence
+ * - [+] button, model label, mic button, send button presence
  * - [+] calls onOpenAddToChat
  * - Streaming state: placeholder text, stop button
  * - Send triggers message send
  * - Disabled state shows "You're offline" placeholder
+ * - PAR-M05: expand-to-full-screen editor on the stacked composer card
+ * - PAR-M19: the model label on the composer's control row
  */
 
 import React from 'react';
-import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { TextInput } from 'react-native';
+import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports
@@ -94,18 +97,9 @@ const mockDraftStore = require('../src/features/chat/draftStore') as {
 const mockGetDraft = mockDraftStore.getDraft;
 const mockSetDraft = mockDraftStore.setDraft;
 
-// Mock sub-components to simplify testing
-jest.mock('../src/features/chat/components/ModelSelectorButton', () => {
-  const React = require('react');
-  const { Pressable, Text } = require('react-native');
-  return {
-    ModelSelectorButton: ({ onPress }: { onPress: () => void }) => (
-      <Pressable onPress={onPress} testID="model-selector-button">
-        <Text>Model</Text>
-      </Pressable>
-    ),
-  };
-});
+// ModelSelectorButton is deliberately NOT mocked: PAR-M19's whole point is that
+// the composer renders a real model label (display name, never a wire id) wired
+// to onOpenModelPicker, and a stub would assert nothing about that.
 
 let capturedAttachmentPreviewProps:
   | {
@@ -246,25 +240,12 @@ jest.mock('../stores/settingsStore', () => ({
     selector({ hapticsEnabled: false, themeMode: 'dark' }),
 }));
 
-jest.mock('../src/ui/theme', () => ({
-  useTheme: () => ({
-    colors: {
-      textPrimary: '#fff',
-      textMuted: '#888',
-      textSecondary: '#bbb',
-      surfaceElevated: '#1a1a1a',
-      surfaceHover: '#303030',
-      inputSurface: '#242424',
-      accentSurface: '#292929',
-      accentBorder: '#555',
-      border: '#444',
-      teal: '#14b8a6',
-      terraCotta: '#e07a5f',
-      transparent: 'transparent',
-    },
-    isDark: true,
-  }),
-  colors: {
+jest.mock('../src/ui/theme', () => {
+  // Declared inside the factory: the factory runs while ChatInput is being
+  // required, which is before any module-scope const in this file initialises.
+  const themeColors = {
+    background: '#0f0f0f',
+    surfaceBase: '#171717',
     teal: '#14b8a6',
     terraCotta: '#e07a5f',
     textMuted: '#888',
@@ -276,18 +257,24 @@ jest.mock('../src/ui/theme', () => ({
     accentSurface: '#292929',
     accentBorder: '#555',
     border: '#444',
+    composerBorder: '#333',
     transparent: 'transparent',
-  },
-  radii: {
-    sm: 6,
-    md: 8,
-    lg: 12,
-    xl: 16,
-    '2xl': 24,
-    '3xl': 32,
-    full: 9999,
-  },
-}));
+  };
+  return {
+    useTheme: () => ({ colors: themeColors, isDark: true }),
+    useThemeColors: () => themeColors,
+    colors: themeColors,
+    radii: {
+      sm: 6,
+      md: 8,
+      lg: 12,
+      xl: 16,
+      '2xl': 24,
+      '3xl': 32,
+      full: 9999,
+    },
+  };
+});
 
 jest.mock('../lib/constants', () => ({
   MAX_INPUT_LINES: 6,
@@ -297,7 +284,7 @@ jest.mock('../lib/constants', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { ChatInput } from '../src/features/chat/components/ChatInput';
+import { ChatInput, type ChatInputHandle } from '../src/features/chat/components/ChatInput';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -316,6 +303,18 @@ const defaultProps = {
 
 function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInput>> = {}) {
   return render(<ChatInput {...defaultProps} {...overrides} />);
+}
+
+/**
+ * Drive the composer into its stacked (card) layout the way the real one gets
+ * there: the TextInput reports a rendered height taller than a single line.
+ * Character count alone never restacks it — the layout is measured, not counted
+ * — so a paste has to be followed by the content-size event it would fire.
+ */
+function stackComposer(input: ReturnType<typeof renderInput>['getByLabelText']) {
+  fireEvent(input('Message input'), 'contentSizeChange', {
+    nativeEvent: { contentSize: { width: 280, height: 96 } },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -422,11 +421,14 @@ describe('ChatInput', () => {
       expect(getByLabelText('Add to chat')).toBeTruthy();
     });
 
-    // The model pill moved out of the composer into the "+" sheet
-    // (AddToChatSheet -> "Model" row), founder 2026-07-29.
-    it('does not render a Model pill above the composer', () => {
+    // No chip row ABOVE the composer (founder 2026-07-29 moved Model into the
+    // "+" sheet). PAR-M19 puts the label back INSIDE the composer, on the
+    // control row that only exists once the card stacks — never as a separate
+    // row above it, and never in the compact pill where it would eat the
+    // single-line input's width.
+    it('keeps the model label out of the compact pill', () => {
       const { queryByTestId } = renderInput();
-      expect(queryByTestId('model-selector-button')).toBeNull();
+      expect(queryByTestId('chat.composer.model')).toBeNull();
     });
 
     it('renders mic button', () => {
@@ -566,7 +568,7 @@ describe('ChatInput', () => {
   // ---- Sending messages ----
 
   describe('sending messages', () => {
-    it('send button triggers onSend with text', () => {
+    it('send button triggers onSend with text', async () => {
       const onSend = jest.fn();
       const { getByLabelText, getByTestId } = renderInput({ onSend });
 
@@ -574,8 +576,11 @@ describe('ChatInput', () => {
       const input = getByLabelText('Message input');
       fireEvent.changeText(input, 'Hello world');
 
-      // Press send
-      fireEvent.press(getByTestId('send-button'));
+      // Press send. Awaited: acceptance resolves on a microtask and clears the
+      // draft, so an un-awaited press leaves that update outside act().
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
 
       expect(onSend).toHaveBeenCalledWith('Hello world', undefined);
     });
@@ -674,7 +679,7 @@ describe('ChatInput', () => {
       expect(capturedAttachmentPreviewProps?.attachments ?? []).toHaveLength(0);
     });
 
-    it('folds pasted text back into the outgoing message on send', () => {
+    it('folds pasted text back into the outgoing message on send', async () => {
       const onSend = jest.fn();
       const { getByLabelText, getByTestId } = renderInput({ onSend });
 
@@ -682,7 +687,9 @@ describe('ChatInput', () => {
       const bigBlock = 'y'.repeat(11_000);
       fireEvent.changeText(input, bigBlock);
       fireEvent.changeText(getByLabelText('Message input'), 'summarize this');
-      fireEvent.press(getByTestId('send-button'));
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
 
       expect(onSend).toHaveBeenCalledTimes(1);
       const [sentText, sentAttachments] = onSend.mock.calls[0];
@@ -775,6 +782,164 @@ describe('ChatInput', () => {
         expect(lastVoiceResetSignal).toBe((signalBefore ?? 0) + 1);
       });
       expect(VoiceService.stopRecording).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ---- PAR-M05: expand a long message into a full-screen editor ----
+
+  describe('expand to full-screen editor', () => {
+    const LONG_PASTE = 'a'.repeat(800);
+
+    it('offers no expand control while the composer is a one-line pill', () => {
+      const { queryByTestId } = renderInput();
+      expect(queryByTestId('chat.composer.expand')).toBeNull();
+    });
+
+    it('reveals the expand control once a long paste stacks the card', () => {
+      const { getByLabelText, queryByTestId } = renderInput();
+
+      fireEvent.changeText(getByLabelText('Message input'), LONG_PASTE);
+      // Below LARGE_PASTE_THRESHOLD, so it stays in the input rather than
+      // becoming a "Pasted text" attachment — this is the IMG_0672 case.
+      expect(getByLabelText('Message input').props.value).toBe(LONG_PASTE);
+      expect(queryByTestId('chat.composer.expand')).toBeNull();
+
+      stackComposer(getByLabelText);
+
+      expect(queryByTestId('chat.composer.expand')).not.toBeNull();
+    });
+
+    it('round-trips the message through the modal and back into the composer', () => {
+      const { getByLabelText, getByTestId, queryByTestId } = renderInput();
+
+      fireEvent.changeText(getByLabelText('Message input'), LONG_PASTE);
+      stackComposer(getByLabelText);
+      fireEvent.press(getByTestId('chat.composer.expand'));
+
+      // Opened with the composer's exact text — no fork, no truncation.
+      const expanded = getByTestId('chat.composer.fullscreen.input');
+      expect(expanded.props.value).toBe(LONG_PASTE);
+
+      // Edits made full screen land in the composer's own state.
+      fireEvent.changeText(expanded, `${LONG_PASTE} edited`);
+      expect(getByTestId('chat.composer.fullscreen.input').props.value).toBe(
+        `${LONG_PASTE} edited`,
+      );
+
+      fireEvent.press(getByTestId('chat.composer.fullscreen.collapse'));
+
+      expect(queryByTestId('chat.composer.fullscreen.input')).toBeNull();
+      expect(getByLabelText('Message input').props.value).toBe(`${LONG_PASTE} edited`);
+    });
+
+    it('sends from the expanded editor and closes it', async () => {
+      const onSend = jest.fn();
+      const { getByLabelText, getByTestId, queryByTestId } = renderInput({ onSend });
+
+      fireEvent.changeText(getByLabelText('Message input'), LONG_PASTE);
+      stackComposer(getByLabelText);
+      fireEvent.press(getByTestId('chat.composer.expand'));
+
+      // Scoped: the inline composer's send button is still mounted behind the
+      // modal, so an unscoped testID query would match two nodes.
+      const expandedSend = within(getByTestId('chat.composer.fullscreen.send')).getByTestId(
+        'send-button',
+      );
+      // Awaited: acceptance of the send resolves a promise that clears the
+      // draft, and that state update has to settle inside act().
+      await act(async () => {
+        fireEvent.press(expandedSend);
+      });
+
+      expect(onSend).toHaveBeenCalledWith(LONG_PASTE, undefined);
+      expect(queryByTestId('chat.composer.fullscreen.input')).toBeNull();
+      expect(getByLabelText('Message input').props.value).toBe('');
+    });
+
+    it('matches the composer snapshot in both layouts', () => {
+      const compact = renderInput();
+      expect(compact.toJSON()).toMatchSnapshot('compact (stacked=false)');
+      compact.unmount();
+
+      const stacked = renderInput();
+      fireEvent.changeText(stacked.getByLabelText('Message input'), LONG_PASTE);
+      stackComposer(stacked.getByLabelText);
+      expect(stacked.toJSON()).toMatchSnapshot('stacked (stacked=true)');
+    });
+  });
+
+  // ---- PAR-M19: the model answering the chat is readable and tappable ----
+
+  describe('model label', () => {
+    it('renders the display name on the control row and opens the picker', () => {
+      const onOpenModelPicker = jest.fn();
+      const { getByLabelText, getByTestId, queryByText } = renderInput({ onOpenModelPicker });
+
+      stackComposer(getByLabelText);
+
+      const label = getByTestId('chat.composer.model');
+      // The display name, never the wire id.
+      expect(within(label).getByText('Claude Sonnet 5')).toBeTruthy();
+      expect(queryByText('claude-sonnet-5')).toBeNull();
+      expect(label.props.accessibilityLabel).toContain('Model: Claude Sonnet 5');
+
+      fireEvent.press(label);
+      expect(onOpenModelPicker).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders no label when the host offers no way to change the model', () => {
+      const { getByLabelText, queryByTestId } = renderInput({ onOpenModelPicker: undefined });
+
+      stackComposer(getByLabelText);
+
+      expect(queryByTestId('chat.composer.model')).toBeNull();
+    });
+  });
+
+  // ---- Imperative handle ----
+
+  describe('composer handle', () => {
+    it('exposes focus() and drives the real text field with it', () => {
+      // VoiceInlineBar's "Ask AGI" pill has to land the user in a FOCUSED
+      // composer; without this the host can only re-render a blurred one.
+      // Spying on the TextInput instance method (rather than asserting the
+      // handle merely exists) is what proves the handle is wired to the field.
+      const focusSpy = jest.spyOn(TextInput.prototype, 'focus');
+      const ref = React.createRef<ChatInputHandle>();
+
+      try {
+        renderInput({ attachRef: ref });
+
+        expect(typeof ref.current?.focus).toBe('function');
+        expect(focusSpy).not.toHaveBeenCalled();
+
+        act(() => {
+          ref.current!.focus!();
+        });
+
+        expect(focusSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        focusSpy.mockRestore();
+      }
+    });
+
+    it('still forwards attachments through the same handle', () => {
+      const ref = React.createRef<ChatInputHandle>();
+      renderInput({ attachRef: ref });
+
+      act(() => {
+        ref.current!.addAttachments([
+          {
+            id: 'a1',
+            uri: 'file:///tmp/a.png',
+            mimeType: 'image/png',
+            fileName: 'a.png',
+            fileSize: 128,
+          },
+        ]);
+      });
+
+      expect(capturedAttachmentPreviewProps?.attachments).toHaveLength(1);
     });
   });
 });
