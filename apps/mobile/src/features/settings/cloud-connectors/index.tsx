@@ -21,20 +21,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  Image,
-  Pressable,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
-  TextInput,
-} from 'react-native';
+import { View, Image, Pressable, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Plug, Link, CheckCircle, ChevronRight, RefreshCw, Search } from 'lucide-react-native';
+import { Plug, Link, CheckCircle, ChevronRight, RefreshCw } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { BottomSearchBar, useBottomSearchBarSpace } from '@/src/shared/components/BottomSearchBar';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
@@ -646,6 +639,7 @@ export default function CloudConnectorsScreen({
   backHref?: string;
 } = {}) {
   const colors = useThemeColors();
+  const bottomSearchSpace = useBottomSearchBarSpace();
   const router = useRouter();
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
@@ -847,6 +841,16 @@ export default function CloudConnectorsScreen({
     router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
   }, [router]);
 
+  // The directory (and therefore its search field) is visible only once the
+  // account, mode and capability gates have all resolved. Named once so the
+  // bottom-anchored field and the list it filters cannot drift apart.
+  const directoryVisible =
+    FEATURES.connectors &&
+    isCloudModeActive &&
+    !capabilityHandshakePending &&
+    canUseConnectors &&
+    !error;
+
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
       <SettingsScreenShell title="Connectors" backHref={backHref}>
@@ -856,132 +860,109 @@ export default function CloudConnectorsScreen({
   }
 
   return (
-    <SettingsScreenShell title="Connectors" backHref={backHref}>
-      <SettingsInfo
-        title="Connect your tools to AGI Cloud"
-        body="Only providers marked Connect are configured in this deployment. Custom MCP tokens are encrypted and never shown again."
-        icon={Plug}
-      />
+    // The shell owns the ScrollView, so the search field cannot be a sibling of
+    // the list the way it is on Chats/Library/Projects. Wrapping the shell lets
+    // the field be pinned over it instead of scrolling away on a long
+    // directory; `pointerEvents="box-none"` keeps the rest of the screen
+    // tappable through the wrapper.
+    <View style={{ flex: 1 }}>
+      <SettingsScreenShell title="Connectors" backHref={backHref}>
+        <SettingsInfo
+          title="Connect your tools to AGI Cloud"
+          body="Only providers marked Connect are configured in this deployment. Custom MCP tokens are encrypted and never shown again."
+          icon={Plug}
+        />
 
-      {!FEATURES.connectors && <WaitlistPlaceholder />}
+        {!FEATURES.connectors && <WaitlistPlaceholder />}
 
-      {FEATURES.connectors && !isCloudModeActive && (
-        <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
-      )}
+        {FEATURES.connectors && !isCloudModeActive && (
+          <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
+        )}
 
-      {FEATURES.connectors && capabilityHandshakePending && (
-        <View
-          accessibilityLabel="Checking connector access"
-          style={{ alignItems: 'center', gap: 10, paddingVertical: 32 }}
-        >
-          <ActivityIndicator size="large" color={colors.teal} />
-          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-            Checking connector access…
-          </Text>
-        </View>
-      )}
-
-      {FEATURES.connectors &&
-        isCloudModeActive &&
-        !capabilityHandshakePending &&
-        !canUseConnectors && (
+        {FEATURES.connectors && capabilityHandshakePending && (
           <View
-            style={{
-              borderRadius: 12,
-              backgroundColor: colors.neutralSurface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              padding: 14,
-              marginBottom: 18,
-            }}
+            accessibilityLabel="Checking connector access"
+            style={{ alignItems: 'center', gap: 10, paddingVertical: 32 }}
           >
+            <ActivityIndicator size="large" color={colors.teal} />
             <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-              Connectors are not available for this account.
+              Checking connector access…
             </Text>
           </View>
         )}
 
-      {FEATURES.connectors &&
-        isCloudModeActive &&
-        !capabilityHandshakePending &&
-        canUseConnectors &&
-        loading &&
-        !connections && (
-          <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-            <ActivityIndicator size="large" color={colors.teal} />
-          </View>
-        )}
-
-      {FEATURES.connectors &&
-        isCloudModeActive &&
-        !capabilityHandshakePending &&
-        canUseConnectors &&
-        error && (
-          <View
-            style={{
-              borderRadius: 12,
-              backgroundColor: colors.dangerSurface,
-              borderWidth: 1,
-              borderColor: colors.dangerBorder,
-              padding: 12,
-              marginBottom: 18,
-            }}
-          >
-            <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
-            <Pressable
-              onPress={() => void load()}
-              disabled={loading}
-              accessibilityLabel="Retry loading connectors"
-              accessibilityRole="button"
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                marginTop: 10,
-                minHeight: 32,
-              }}
-            >
-              <RefreshCw size={14} color={colors.agentError} />
-              <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
-                {loading ? 'Retrying…' : 'Retry'}
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
-      {FEATURES.connectors &&
-        isCloudModeActive &&
-        !capabilityHandshakePending &&
-        canUseConnectors &&
-        !error && (
-          <>
-            {/* Search field */}
+        {FEATURES.connectors &&
+          isCloudModeActive &&
+          !capabilityHandshakePending &&
+          !canUseConnectors && (
             <View
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
                 borderRadius: 12,
-                backgroundColor: colors.surfaceElevated,
+                backgroundColor: colors.neutralSurface,
                 borderWidth: 1,
                 borderColor: colors.border,
-                paddingHorizontal: 12,
-                height: 42,
-                marginBottom: 12,
+                padding: 14,
+                marginBottom: 18,
               }}
             >
-              <Search size={16} color={colors.textMuted} />
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Search connectors"
-                placeholderTextColor={colors.textMuted}
-                accessibilityLabel="Search connectors"
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={{ flex: 1, color: colors.textPrimary, fontSize: 15, paddingVertical: 0 }}
-              />
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                Connectors are not available for this account.
+              </Text>
             </View>
+          )}
+
+        {FEATURES.connectors &&
+          isCloudModeActive &&
+          !capabilityHandshakePending &&
+          canUseConnectors &&
+          loading &&
+          !connections && (
+            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+              <ActivityIndicator size="large" color={colors.teal} />
+            </View>
+          )}
+
+        {FEATURES.connectors &&
+          isCloudModeActive &&
+          !capabilityHandshakePending &&
+          canUseConnectors &&
+          error && (
+            <View
+              style={{
+                borderRadius: 12,
+                backgroundColor: colors.dangerSurface,
+                borderWidth: 1,
+                borderColor: colors.dangerBorder,
+                padding: 12,
+                marginBottom: 18,
+              }}
+            >
+              <Text style={{ color: colors.agentError, fontSize: 13 }}>{error}</Text>
+              <Pressable
+                onPress={() => void load()}
+                disabled={loading}
+                accessibilityLabel="Retry loading connectors"
+                accessibilityRole="button"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginTop: 10,
+                  minHeight: 32,
+                }}
+              >
+                <RefreshCw size={14} color={colors.agentError} />
+                <Text style={{ color: colors.agentError, fontSize: 13, fontWeight: '600' }}>
+                  {loading ? 'Retrying…' : 'Retry'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+        {directoryVisible && (
+          <>
+            {/* Search moved to the bottom-anchored pill below — it used to sit
+              inside this ScrollView and scrolled away on a long directory. */}
 
             {/* Add a user-owned custom remote-MCP connector (works today; no OAuth
               app registration needed — server validates the HTTPS URL). */}
@@ -1090,17 +1071,39 @@ export default function CloudConnectorsScreen({
                 ))}
               </View>
             )}
+
+            {/* Matches the paddingBottom the other list screens give their
+              content containers: the pinned field overlays this ScrollView, so
+              without it the last connector row cannot be scrolled clear. */}
+            <View style={{ height: bottomSearchSpace }} />
           </>
         )}
 
-      <AddCustomConnectorModal
-        visible={addCustomVisible}
-        onClose={() => setAddCustomVisible(false)}
-        onAdded={() => {
-          setAddCustomVisible(false);
-          void load();
-        }}
-      />
-    </SettingsScreenShell>
+        <AddCustomConnectorModal
+          visible={addCustomVisible}
+          onClose={() => setAddCustomVisible(false)}
+          onAdded={() => {
+            setAddCustomVisible(false);
+            void load();
+          }}
+        />
+      </SettingsScreenShell>
+
+      {directoryVisible ? (
+        <View
+          pointerEvents="box-none"
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
+        >
+          <BottomSearchBar
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search connectors"
+            accessibilityLabel="Search connectors"
+            clearAccessibilityLabel="Clear connector search"
+            testID="connectors-search"
+          />
+        </View>
+      ) : null}
+    </View>
   );
 }

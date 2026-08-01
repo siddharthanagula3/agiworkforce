@@ -17,6 +17,9 @@ jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return {
     SafeAreaView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    // The bottom-anchored search pill (src/shared/components/BottomSearchBar)
+    // reads the safe-area inset so it clears the home indicator.
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
   };
 });
 
