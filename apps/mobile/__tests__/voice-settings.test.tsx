@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockNavigate = jest.fn();
@@ -9,6 +9,8 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({
     push: mockPush,
     navigate: mockNavigate,
+    back: jest.fn(),
+    canGoBack: () => true,
   }),
 }));
 
@@ -36,18 +38,16 @@ jest.mock('expo-status-bar', () => ({
   StatusBar: () => null,
 }));
 
+// Proxy, not a hand-listed map: a screen adding one more lucide icon should not
+// blow up unrelated assertions with "Cannot read properties of undefined".
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
-  return {
-    ArrowLeft: icon,
-    Check: icon,
-    ChevronRight: icon,
-    Headphones: icon,
-    Lock: icon,
-    Mic: icon,
-    Play: icon,
-    Volume2: icon,
-  };
+  return new Proxy(
+    {},
+    {
+      get: (_target, name) => (name === '__esModule' ? true : icon),
+    },
+  );
 });
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -71,22 +71,29 @@ describe('Voice settings', () => {
     });
   });
 
-  it('keeps Cloud voice visibly locked and non-interactive in Local Mode', () => {
-    const { getByLabelText } = render(<VoiceSettingsScreen />);
-    const cloudProvider = getByLabelText('Cloud voice provider');
+  // PAR-M20. The Cloud provider option was permanently `disabled` — half the
+  // Speech card advertising an engine that has no synthesis path on mobile.
+  // Removing it leaves one engine, so the card collapses to a caption.
+  it('offers no provider option that can never be selected', () => {
+    const { queryByLabelText, queryAllByRole } = render(<VoiceSettingsScreen />);
 
-    expect(cloudProvider.props.accessibilityState.disabled).toBe(true);
-
-    fireEvent.press(cloudProvider);
-
-    expect(useSettingsStore.getState().ttsProvider).toBe('system');
+    expect(queryByLabelText('Cloud voice provider')).toBeNull();
+    expect(queryByLabelText('System voice provider')).toBeNull();
+    expect(
+      queryAllByRole('button').filter((node) => node.props.accessibilityState?.disabled === true),
+    ).toHaveLength(0);
   });
 
-  it('labels Cloud voice honestly (not built) rather than implying Cloud access unlocks it', () => {
+  it('states the device speech engine as a caption on the Voice row', () => {
     const { getByText, queryByText } = render(<VoiceSettingsScreen />);
-    // Regression for MOBILE-VOICE-CLOUD-TTS-DISABLED: the old copy "Requires AGI
-    // Cloud access." misled cloud users into thinking they could pick it.
-    expect(getByText("Cloud voice isn't available on mobile yet.")).toBeTruthy();
+
+    expect(
+      getByText('Spoken by the system speech engine, using voices installed on this device.'),
+    ).toBeTruthy();
+    // Regression for MOBILE-VOICE-CLOUD-TTS-DISABLED: neither the old
+    // "Requires AGI Cloud access." copy nor its honest replacement should
+    // survive, because there is no Cloud engine to describe at all.
+    expect(queryByText("Cloud voice isn't available on mobile yet.")).toBeNull();
     expect(queryByText('Requires AGI Cloud access.')).toBeNull();
   });
 
