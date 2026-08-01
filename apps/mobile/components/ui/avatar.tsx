@@ -31,14 +31,24 @@ function getInitials(name: string): string {
 
 export function Avatar({ name, size = 'md', variant = 'user' }: AvatarProps) {
   const colors = useThemeColors();
-  const bgClass = variant === 'assistant' ? 'bg-teal-500' : 'bg-blue-500';
+  const isAssistant = variant === 'assistant';
 
   return (
-    <View className={`${sizeClasses[size]} ${bgClass} rounded-full items-center justify-center`}>
-      {/* Literal white: this sits on a saturated teal/blue circle, not on a
-          themed surface, so it must not follow the foreground token. */}
-      <Text className={`${textSizes[size]} font-semibold`} style={{ color: colors.white }}>
-        {name ? getInitials(name) : variant === 'assistant' ? 'AI' : 'U'}
+    <View
+      className={`${sizeClasses[size]} ${isAssistant ? '' : 'bg-blue-500'} rounded-full items-center justify-center`}
+      // The assistant circle used `bg-teal-500` from a literal teal ramp that
+      // no longer exists (PAR-M27). `colors.teal` is the accent-aware token —
+      // it follows the user's accent choice and the theme.
+      style={isAssistant ? { backgroundColor: colors.teal } : undefined}
+    >
+      {/* The user circle sits on a saturated blue, so its label stays literal
+          white. The assistant circle sits on the accent, whose readable
+          on-colour is `accentText` (white on light, black on dark). */}
+      <Text
+        className={`${textSizes[size]} font-semibold`}
+        style={{ color: isAssistant ? colors.accentText : colors.white }}
+      >
+        {name ? getInitials(name) : isAssistant ? 'AI' : 'U'}
       </Text>
     </View>
   );

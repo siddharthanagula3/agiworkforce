@@ -89,10 +89,14 @@ function getStatusBadgeColor(status: Agent['status']): 'blue' | 'green' | 'red' 
 // ---------------------------------------------------------------------------
 
 function ProgressBar({ progress }: { progress: number }) {
+  const colors = useThemeColors();
   const clamped = Math.max(0, Math.min(100, progress));
   return (
     <View className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-      <View className="h-full rounded-full bg-teal-500" style={{ width: `${clamped}%` }} />
+      <View
+        className="h-full rounded-full"
+        style={{ width: `${clamped}%`, backgroundColor: colors.teal }}
+      />
     </View>
   );
 }
@@ -220,7 +224,7 @@ function RunArtifactsList({ artifacts, maxVisible = 3 }: RunArtifactsProps) {
           accessibilityLabel={expanded ? 'Show fewer artifacts' : 'Show more artifacts'}
           accessibilityRole="button"
         >
-          <Text className="text-[10px] text-teal-400">
+          <Text className="text-[10px]" style={{ color: colors.teal }}>
             {expanded ? 'Show less' : `+${artifacts.length - maxVisible} more`}
           </Text>
           {expanded ? (
@@ -533,7 +537,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
       >
         <Card
           variant={isSelected ? 'elevated' : 'default'}
-          className={isSelected ? 'border border-teal-500/30' : ''}
+          style={isSelected ? { borderColor: colors.accentBorder } : undefined}
         >
           {/* Header row */}
           <View className="flex-row items-center justify-between mb-2">
@@ -616,12 +620,17 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                 /* waiting status — show resume */
                 <Pressable
                   onPress={() => handleCommand('resume')}
-                  className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md bg-teal-500/10 active:bg-teal-500/20"
+                  className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md"
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? colors.accentBorder : colors.accentSurface,
+                  })}
                   accessibilityLabel="Resume agent"
                   accessibilityRole="button"
                 >
                   <Play size={12} color={colors.teal} />
-                  <Text className="text-xs text-teal-400 font-medium">Resume</Text>
+                  <Text className="text-xs font-medium" style={{ color: colors.teal }}>
+                    Resume
+                  </Text>
                 </Pressable>
               )}
               <Pressable

@@ -70,14 +70,22 @@ export function DispatchTaskComposer() {
               onPress={handleSend}
               disabled={!canSend}
               className={`flex-row items-center gap-1.5 rounded-lg px-3 py-2 ${
-                canSend ? 'bg-teal-500 active:bg-teal-400' : 'bg-white/10'
+                canSend ? '' : 'bg-white/10'
               }`}
+              style={
+                canSend
+                  ? ({ pressed }) => ({
+                      backgroundColor: pressed ? colors.textPrimary : colors.teal,
+                    })
+                  : undefined
+              }
               accessibilityRole="button"
               accessibilityLabel="Send task to Desktop"
             >
-              <Send size={13} color={canSend ? '#071514' : colors.textMuted} />
+              <Send size={13} color={canSend ? colors.accentText : colors.textMuted} />
               <Text
-                className={`text-xs font-semibold ${canSend ? 'text-slate-950' : 'text-white/30'}`}
+                className="text-xs font-semibold"
+                style={{ color: canSend ? colors.accentText : colors.textMuted }}
               >
                 Send
               </Text>
