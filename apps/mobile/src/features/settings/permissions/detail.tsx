@@ -41,12 +41,18 @@ function isMobilePermissionKind(value: string | undefined): value is MobilePermi
 
 interface LevelRowProps {
   level: MobilePermissionLevel;
+  /**
+   * Title for this level. Comes from the registry's per-kind override when it
+   * has one, so this screen never disagrees with the label the permissions
+   * list renders for the same state.
+   */
+  label: string;
   isSelected: boolean;
   isLast: boolean;
   onSelect: (level: MobilePermissionLevel) => void;
 }
 
-function LevelRow({ level, isSelected, isLast, onSelect }: LevelRowProps) {
+function LevelRow({ level, label, isSelected, isLast, onSelect }: LevelRowProps) {
   const c = useThemeColors();
   return (
     <View>
@@ -54,7 +60,7 @@ function LevelRow({ level, isSelected, isLast, onSelect }: LevelRowProps) {
         onPress={() => onSelect(level)}
         accessibilityRole="button"
         accessibilityState={{ selected: isSelected }}
-        accessibilityLabel={`${LEVEL_LABELS[level]}. ${LEVEL_DESCRIPTIONS[level]}`}
+        accessibilityLabel={`${label}. ${LEVEL_DESCRIPTIONS[level]}`}
         style={{
           minHeight: 74,
           flexDirection: 'row',
@@ -89,9 +95,7 @@ function LevelRow({ level, isSelected, isLast, onSelect }: LevelRowProps) {
         </View>
 
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ color: c.textPrimary, fontSize: 16, fontWeight: '600' }}>
-            {LEVEL_LABELS[level]}
-          </Text>
+          <Text style={{ color: c.textPrimary, fontSize: 16, fontWeight: '600' }}>{label}</Text>
           <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18, marginTop: 2 }}>
             {LEVEL_DESCRIPTIONS[level]}
           </Text>
@@ -369,6 +373,7 @@ export default function PermissionDetailScreen() {
             <LevelRow
               key={level}
               level={level}
+              label={entry.levelLabels?.[level] ?? LEVEL_LABELS[level]}
               isSelected={selectedLevel === level}
               isLast={idx === entry.applicableLevels.length - 1}
               onSelect={handleSelectLevel}
