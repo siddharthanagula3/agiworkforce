@@ -13,17 +13,20 @@ import {
   getSystemIntentPrompt,
 } from '@/src/features/chat/utils/externalUrls';
 import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 
 /**
- * Opens an assistant-emitted link. http/https opens directly; system-intent
- * schemes (mailto:/sms:/tel:/geo:) are zero-permission handoffs to the default
- * system app but still require a confirmation tap because the URL is untrusted
- * model output. Everything else is silently ignored.
+ * Opens an assistant-emitted link. http/https opens in the in-app browser
+ * sheet, so reading a cited page never backgrounds the app out of the
+ * conversation; system-intent schemes (mailto:/sms:/tel:/geo:) are
+ * zero-permission handoffs to the default system app but still require a
+ * confirmation tap because the URL is untrusted model output. Everything else
+ * is silently ignored.
  */
 function openAssistantLink(url: string): void {
   const kind = classifyExternalLink(url);
   if (kind === 'http') {
-    Linking.openURL(url).catch(() => undefined);
+    void openUntrustedUrlInAppBrowser(url);
     return;
   }
   if (kind !== 'system-intent') return;
@@ -529,28 +532,59 @@ export function renderMarkdownContent(
       elements.push(<MathBlock key={`bmath-${keyCounter++}`} latex={mathContent} display={true} />);
     } else if (match[4] !== undefined) {
       const codeContent = match[4].trim();
-      const codeTokens = tokenizeCode(codeContent, match[3]);
+      const fenceLanguage = match[3];
+      // The fence language used to be handed to the tokenizer and then thrown
+      // away, so a reader could never tell what a block was. It is now the
+      // card's header label; an unlabelled fence reads "Plain text" rather
+      // than leaving the slot blank.
+      const languageLabel =
+        fenceLanguage && fenceLanguage.trim().length > 0 ? fenceLanguage : 'Plain text';
+      const codeTokens = tokenizeCode(codeContent, fenceLanguage);
       elements.push(
         <View
           key={`code-${keyCounter++}`}
           style={{
+            // The elevated fill alone separates the card from the bubble —
+            // the old 1px border double-drew that edge (PAR-M40).
             backgroundColor: renderColors.surfaceHover,
             borderRadius: 8,
             marginVertical: 6,
-            borderWidth: 1,
-            borderColor: renderColors.border,
             overflow: 'hidden',
           }}
         >
-          <CodeBlockCopyButton code={codeContent} />
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              paddingLeft: 12,
+              paddingRight: 8,
+              paddingTop: 8,
+              paddingBottom: 2,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: '500',
+                color: renderColors.textMuted,
+                flexShrink: 1,
+              }}
+              numberOfLines={1}
+            >
+              {languageLabel}
+            </Text>
+            <CodeBlockCopyButton code={codeContent} />
+          </View>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={true}
             scrollEventThrottle={16}
             style={{
-              paddingTop: 28,
+              paddingTop: 2,
               paddingBottom: 10,
-              paddingHorizontal: 10,
+              paddingHorizontal: 12,
             }}
           >
             <Text

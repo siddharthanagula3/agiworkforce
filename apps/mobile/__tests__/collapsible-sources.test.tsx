@@ -11,11 +11,22 @@
  */
 
 import { render, fireEvent } from '@testing-library/react-native';
-import { Linking } from 'react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
+
+// PAR-M39: citations present the in-app browser sheet instead of handing the
+// URL to Safari, so dismissing returns straight to the message.
+const mockOpenBrowserAsync = jest.fn();
+jest.mock('expo-web-browser', () => ({
+  openBrowserAsync: (...args: unknown[]) => mockOpenBrowserAsync(...args),
+}));
+
+const mockLinkingOpenURL = jest.fn();
+jest.mock('expo-linking', () => ({
+  openURL: (...args: unknown[]) => mockLinkingOpenURL(...args),
+}));
 
 jest.mock('react-native-reanimated', () => {
   const { View } = require('react-native');
@@ -142,8 +153,9 @@ describe('CollapsibleSources', () => {
     expect(getByText('Wikipedia Article')).toBeTruthy();
   });
 
-  it('tapping a source opens the URL via Linking', () => {
-    const openURLSpy = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined as never);
+  it('tapping a source opens the URL in the in-app browser, not Safari', () => {
+    mockOpenBrowserAsync.mockReset().mockResolvedValue({ type: 'dismiss' });
+    mockLinkingOpenURL.mockReset();
 
     const { getByLabelText } = render(<CollapsibleSources sources={MOCK_SOURCES} />);
 
@@ -153,8 +165,12 @@ describe('CollapsibleSources', () => {
     // Tap the first source
     fireEvent.press(getByLabelText('Source 1: Getting Started Guide'));
 
-    expect(openURLSpy).toHaveBeenCalledWith('https://docs.example.com/guide');
-    openURLSpy.mockRestore();
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+      'https://docs.example.com/guide',
+      expect.objectContaining({ presentationStyle: 'pageSheet' }),
+    );
+    // Backgrounding the app is the defect PAR-M39 removed.
+    expect(mockLinkingOpenURL).not.toHaveBeenCalled();
   });
 
   it('source without title uses domain in accessibility label', () => {
