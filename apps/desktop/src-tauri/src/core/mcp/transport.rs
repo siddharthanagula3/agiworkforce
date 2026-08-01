@@ -106,6 +106,23 @@ enum EngineCommand {
 fn map_engine_error(e: agiworkforce_mcp::McpError) -> McpError {
     let msg = format!("{:#}", e.as_anyhow());
     if msg.contains("MCP error ") {
+        // A server that speaks only the 2026-07-28 stateless revision rejects
+        // our legacy `initialize` with -32022 and, per spec, names the
+        // revisions it does support. That message exists precisely because a
+        // legacy client cannot fall forward — it may be the only diagnostic the
+        // user ever gets, so it is worth classifying rather than folding into
+        // the generic server-error bucket where it reads as a transient fault.
+        //
+        // Matched on the rendered code because the engine flattens JSON-RPC
+        // error frames to a string before this point; the structured
+        // `data.supported` list does not survive that conversion, so the
+        // versions reach the user only as part of the message text.
+        if msg.contains(&format!(
+            "MCP error {}",
+            crate::core::mcp::protocol::UNSUPPORTED_PROTOCOL_VERSION_CODE
+        )) {
+            return McpError::UnsupportedProtocolVersion(msg);
+        }
         McpError::RmcpError(msg)
     } else {
         McpError::ConnectionError(msg)
@@ -1233,6 +1250,46 @@ impl<'de> serde::Deserialize<'de> for HttpSseConfig {
             timeout_secs: helper.timeout_secs,
             verify_ssl: helper.verify_ssl,
         })
+    }
+}
+
+
+#[cfg(test)]
+mod protocol_era_tests {
+    use super::*;
+
+    /// A modern-only server rejects our legacy `initialize` with -32022. That
+    /// must not read as a transient server fault: retrying cannot help, and the
+    /// remedy is a client update.
+    #[test]
+    fn test_unsupported_version_frame_is_classified_separately() {
+        let engine_err = agiworkforce_mcp::McpError::from(anyhow::anyhow!(
+            "MCP error -32022: Unsupported protocol version"
+        ));
+        assert!(matches!(
+            map_engine_error(engine_err),
+            McpError::UnsupportedProtocolVersion(_)
+        ));
+    }
+
+    /// Every other JSON-RPC error frame keeps its existing classification.
+    #[test]
+    fn test_other_jsonrpc_frames_stay_server_errors() {
+        let engine_err = agiworkforce_mcp::McpError::from(anyhow::anyhow!(
+            "MCP error -32601: Method not found"
+        ));
+        assert!(matches!(map_engine_error(engine_err), McpError::RmcpError(_)));
+    }
+
+    /// Transport faults are not protocol faults.
+    #[test]
+    fn test_io_failures_remain_connection_errors() {
+        let engine_err =
+            agiworkforce_mcp::McpError::from(anyhow::anyhow!("broken pipe while writing"));
+        assert!(matches!(
+            map_engine_error(engine_err),
+            McpError::ConnectionError(_)
+        ));
     }
 }
 
