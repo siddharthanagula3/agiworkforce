@@ -45,7 +45,7 @@ function getConfig(
         icon: WifiOff,
         label: 'Desktop not connected',
         color: colors.textMuted,
-        bgColor: 'rgba(255, 255, 255, 0.03)',
+        bgColor: colors.neutralSurface,
       };
   }
 }

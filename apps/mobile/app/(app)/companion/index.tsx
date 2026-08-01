@@ -248,7 +248,7 @@ export default function CompanionScreen() {
       )}
 
       {status === 'disconnected' && <DisconnectedView onScanPress={() => setShowScanner(true)} />}
-      {status === 'connecting' && <ConnectingView />}
+      {status === 'connecting' && <ConnectingView onCancel={disconnect} />}
       {status === 'error' && <ErrorView error={error} onRetry={handleRetry} />}
       {status === 'session_expired' && <SessionExpiredView onRePair={() => setShowScanner(true)} />}
       {isConnectedOrActive && (

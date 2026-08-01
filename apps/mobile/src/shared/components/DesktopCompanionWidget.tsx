@@ -218,9 +218,7 @@ function ConnectedWidget({ compact, onPressDashboard, onPressApprovals }: Connec
             className="flex-1 rounded-lg p-2.5"
             style={{
               backgroundColor:
-                pendingApprovals.length > 0
-                  ? 'rgba(245, 158, 11, 0.08)'
-                  : 'rgba(255, 255, 255, 0.03)',
+                pendingApprovals.length > 0 ? colors.warningSurface : colors.neutralSurface,
             }}
           >
             <View className="flex-row items-center gap-1.5 mb-0.5">
