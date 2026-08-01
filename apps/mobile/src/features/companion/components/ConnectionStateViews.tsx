@@ -3,9 +3,10 @@ import { View, ActivityIndicator } from 'react-native';
 import { QrCode, Wifi, WifiOff, Clock, ShieldCheck } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
+  const colors = useThemeColors();
   return (
     <Animated.View
       entering={FadeIn.duration(300)}
@@ -34,6 +35,7 @@ export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
 }
 
 export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
+  const colors = useThemeColors();
   return (
     <Animated.View
       entering={FadeIn.duration(300)}
@@ -101,6 +103,7 @@ function StepRow({ number, text }: { number: number; text: string }) {
 }
 
 export function ConnectingView() {
+  const colors = useThemeColors();
   return (
     <Animated.View
       entering={FadeIn.duration(300)}
@@ -122,6 +125,7 @@ export function ConnectingView() {
 }
 
 export function ErrorView({ error, onRetry }: { error: string | null; onRetry: () => void }) {
+  const colors = useThemeColors();
   return (
     <Animated.View
       entering={FadeIn.duration(300)}

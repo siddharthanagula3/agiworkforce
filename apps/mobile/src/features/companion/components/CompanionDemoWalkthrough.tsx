@@ -26,7 +26,7 @@ import {
   CheckCircle2,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
@@ -46,52 +46,56 @@ interface DemoStep {
   hint: string;
 }
 
-const DEMO_STEPS: DemoStep[] = [
-  {
-    id: 'pair',
-    icon: QrCode,
-    iconBgColor: 'rgba(33, 128, 141, 0.15)',
-    iconColor: colors.teal,
-    stepNumber: 1,
-    title: 'Pair with Desktop',
-    description:
-      'Sign in on Desktop, switch to Managed Cloud, then open Settings > Connections. Generate a short-lived QR or pairing code and scan it from this screen.',
-    hint: 'The code authorizes this phone. Account identities are not compared, and the devices only need to be online — they do not need the same Wi-Fi.',
-  },
-  {
-    id: 'monitor',
-    icon: Bot,
-    iconBgColor: 'rgba(59, 130, 246, 0.15)',
-    iconColor: colors.agentActive,
-    stepNumber: 2,
-    title: 'Monitor Agents',
-    description:
-      'Once paired, the Agent Dashboard shows all running tasks. You can see progress, current action, step counts, and estimated time remaining for each agent.',
-    hint: 'Tap an agent card to expand details. Tap the arrow to see the full run log.',
-  },
-  {
-    id: 'approve',
-    icon: ShieldCheck,
-    iconBgColor: 'rgba(16, 185, 129, 0.15)',
-    iconColor: colors.agentSuccess,
-    stepNumber: 3,
-    title: 'Approve Actions',
-    description:
-      'When an agent wants to delete files, run commands, or call APIs, an approval card appears. You can review the risk level and approve or deny directly from your phone.',
-    hint: 'High-risk actions trigger a push notification so you never miss a critical decision.',
-  },
-  {
-    id: 'remote_control',
-    icon: Pause,
-    iconBgColor: 'rgba(245, 158, 11, 0.15)',
-    iconColor: colors.agentWarning,
-    stepNumber: 4,
-    title: 'Remote Control',
-    description:
-      'Pause, resume, or cancel any running agent from your phone. In an emergency, the red "Emergency Stop" button cancels ALL running tasks on the desktop instantly.',
-    hint: 'Agent controls appear when you tap a running agent card.',
-  },
-];
+// A function of the palette rather than a module constant: the accent and
+// status colours differ per theme, and a constant freezes one theme's values.
+function demoSteps(colors: ReturnType<typeof useThemeColors>): DemoStep[] {
+  return [
+    {
+      id: 'pair',
+      icon: QrCode,
+      iconBgColor: 'rgba(33, 128, 141, 0.15)',
+      iconColor: colors.teal,
+      stepNumber: 1,
+      title: 'Pair with Desktop',
+      description:
+        'Sign in on Desktop, switch to Managed Cloud, then open Settings > Connections. Generate a short-lived QR or pairing code and scan it from this screen.',
+      hint: 'The code authorizes this phone. Account identities are not compared, and the devices only need to be online — they do not need the same Wi-Fi.',
+    },
+    {
+      id: 'monitor',
+      icon: Bot,
+      iconBgColor: 'rgba(59, 130, 246, 0.15)',
+      iconColor: colors.agentActive,
+      stepNumber: 2,
+      title: 'Monitor Agents',
+      description:
+        'Once paired, the Agent Dashboard shows all running tasks. You can see progress, current action, step counts, and estimated time remaining for each agent.',
+      hint: 'Tap an agent card to expand details. Tap the arrow to see the full run log.',
+    },
+    {
+      id: 'approve',
+      icon: ShieldCheck,
+      iconBgColor: 'rgba(16, 185, 129, 0.15)',
+      iconColor: colors.agentSuccess,
+      stepNumber: 3,
+      title: 'Approve Actions',
+      description:
+        'When an agent wants to delete files, run commands, or call APIs, an approval card appears. You can review the risk level and approve or deny directly from your phone.',
+      hint: 'High-risk actions trigger a push notification so you never miss a critical decision.',
+    },
+    {
+      id: 'remote_control',
+      icon: Pause,
+      iconBgColor: 'rgba(245, 158, 11, 0.15)',
+      iconColor: colors.agentWarning,
+      stepNumber: 4,
+      title: 'Remote Control',
+      description:
+        'Pause, resume, or cancel any running agent from your phone. In an emergency, the red "Emergency Stop" button cancels ALL running tasks on the desktop instantly.',
+      hint: 'Agent controls appear when you tap a running agent card.',
+    },
+  ];
+}
 
 // ---------------------------------------------------------------------------
 // Demo state store (tracks if user has seen the walkthrough)
@@ -129,6 +133,7 @@ rehydrateWhenMmkvReady(useDemoStore, 'companion-demo-store');
 // ---------------------------------------------------------------------------
 
 function StepDots({ total, current }: { total: number; current: number }) {
+  const colors = useThemeColors();
   return (
     <View className="flex-row items-center gap-1.5">
       {Array.from({ length: total }).map((_, i) => (
@@ -161,6 +166,8 @@ interface CompanionDemoWalkthroughProps {
 }
 
 export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkthroughProps) {
+  const colors = useThemeColors();
+  const DEMO_STEPS = demoSteps(colors);
   const [currentStep, setCurrentStep] = useState(0);
   const markDemoSeen = useDemoStore((s) => s.markDemoSeen);
 
