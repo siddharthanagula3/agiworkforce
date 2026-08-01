@@ -327,7 +327,22 @@ export const useChatMessageStore = create<MessageState>()(
         const existingLocalMsgs = get().messages[conversationId];
         const existingCloudMsgs = cloudStore.getState().messages[conversationId];
         const existing = localConversation ? existingLocalMsgs : existingCloudMsgs;
-        if (existing && existing.length > 0 && !existing.some((m) => m.isStreaming)) return;
+        if (existing && existing.length > 0 && !existing.some((m) => m.isStreaming)) {
+          // Derive from the cache too, not only from a network response.
+          //
+          // This early return is the common path — a transcript is cached after
+          // the first open — so capturing only after the fetch meant a chat the
+          // user had already visited never gained its artifacts. Derivation is
+          // idempotent, so running it on cached messages costs a no-op when
+          // they were already captured.
+          captureArtifactsForLoadedMessages(
+            existing,
+            conversationId,
+            conversation?.title ?? '',
+            cloudConversation ? 'cloud' : 'local',
+          );
+          return;
+        }
         // A new-chat navigation and its first send run concurrently: the screen
         // mounts and starts this read while sendMessage is still committing the
         // optimistic user/assistant rows. Keep the exact request-start objects
