@@ -154,20 +154,29 @@ const SI: Record<string, { path: string; hex: string }> = {
 // ---------------------------------------------------------------------------
 // Official brand-asset URL map (mirrors ConnectorLogo.tsx CONNECTOR_LOGO_URLS)
 // Used for brands absent from simple-icons v16
+//
+// Kept in step by scripts/check-connector-logos.mjs. This is a hand-copy of a
+// hand-copy — packages/ui/ui is deliberately self-contained and mobile cannot
+// import it — and it had already drifted: Outlook, OneDrive and Teams still
+// pointed at hashed /wikipedia/commons/x/xx/ paths that Commons re-hashes on
+// rename. All three returned 404, so those three connectors showed plain-letter
+// tiles on Mobile while Web and Desktop showed the real logos. Use the stable
+// Special:FilePath redirect for Commons assets.
 // ---------------------------------------------------------------------------
 
 const LOGO_URLS: Record<string, string> = {
   slack: 'https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png',
   outlook:
-    'https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg',
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Outlook%20%282018%E2%80%93present%29.svg',
   onedrive:
-    'https://upload.wikimedia.org/wikipedia/commons/3/3c/Microsoft_Office_OneDrive_%282019%E2%80%93present%29.svg',
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20OneDrive%20%282019%E2%80%93present%29.svg',
   teams:
-    'https://upload.wikimedia.org/wikipedia/commons/c/c9/Microsoft_Office_Teams_%282018%E2%80%93present%29.svg',
+    'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Teams%20%282025%E2%80%93present%29.svg',
   salesforce: 'https://upload.wikimedia.org/wikipedia/commons/f/f9/Salesforce.com_logo.svg',
   openai: 'https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg',
   linkedin: 'https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png',
-  canva: 'https://upload.wikimedia.org/wikipedia/commons/b/bb/Canva_Logo.svg',
+  // Was a hashed Commons path that now 404s; matches packages/ui/ui.
+  canva: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64',
   adobe: 'https://upload.wikimedia.org/wikipedia/commons/8/8d/Adobe_Corporate_Logo.png',
   aws: 'https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg',
   monday: 'https://upload.wikimedia.org/wikipedia/commons/c/c6/Monday_logo.svg',
