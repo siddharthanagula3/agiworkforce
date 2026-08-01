@@ -24,6 +24,7 @@ import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useArtifactStore, accentColorForKind, mergeMobileArtifactsForGallery } from './store';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 import { GeneratedImage } from '@/src/features/chat/components/GeneratedImage';
+import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   captureAccountScopedUiState,
@@ -517,14 +518,36 @@ function ArtifactPreviewModal({
               revisedPrompt={artifact.previewLines[0]}
               width={Math.min(420, Math.max(240, 320))}
             />
-          ) : (
-            <Text
+          ) : artifact.kind === 'code' ? (
+            <ScrollView
               testID="artifact-preview-content"
-              className="text-[18px] leading-[30px]"
-              style={{ color: c.textPrimary }}
+              horizontal
+              showsHorizontalScrollIndicator
+              className="rounded-xl border"
+              style={{ borderColor: c.border, backgroundColor: c.surfaceElevated }}
+              contentContainerStyle={{ padding: 12 }}
             >
-              {artifact.content}
-            </Text>
+              <Text
+                className="text-[13px] leading-[19px]"
+                style={{
+                  color: c.textPrimary,
+                  fontFamily: Platform.select({
+                    ios: 'Menlo',
+                    android: 'monospace',
+                    default: 'monospace',
+                  }),
+                }}
+                selectable
+              >
+                {artifact.content}
+              </Text>
+            </ScrollView>
+          ) : (
+            /* Prose artifacts carry markdown. Dumping them into one proportional
+             * Text printed heading/list/emphasis markers literally. */
+            <View testID="artifact-preview-content">
+              {renderMarkdownContent(artifact.content, c)}
+            </View>
           )}
         </ScrollView>
       </View>
