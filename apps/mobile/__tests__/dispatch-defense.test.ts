@@ -288,6 +288,7 @@ jest.mock('@agiworkforce/types', () => {
   const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
   return {
     isMinuteWithinQuietHours: actual.isMinuteWithinQuietHours,
+    isDateWithinQuietHours: actual.isDateWithinQuietHours,
     createAuditEvent: jest.fn((params: Record<string, unknown>) => ({
       eventId: 'audit-test-id',
       userId: params.userId,
@@ -1620,12 +1621,19 @@ describe('NotificationPrefsStore — shouldNotify real logic', () => {
     };
     const quietHours = {
       enabled: overrides.quietHoursEnabled ?? false,
+      days: [0, 1, 2, 3, 4, 5, 6] as const,
       startTime: overrides.quietStart ?? '22:00',
       endTime: overrides.quietEnd ?? '08:00',
+      timezone: 'UTC',
     };
 
+    // Noon UTC on a Friday — outside the default 22:00–08:00 window.
     return (type: Parameters<typeof shouldNotifyWithPreferences>[0]): boolean =>
-      shouldNotifyWithPreferences(type, { categoryEnabled, quietHours }, 12 * 60);
+      shouldNotifyWithPreferences(
+        type,
+        { categoryEnabled, quietHours },
+        new Date('2026-07-31T12:00:00Z'),
+      );
   }
 
   it('returns true when category is enabled and quiet hours are off', () => {
