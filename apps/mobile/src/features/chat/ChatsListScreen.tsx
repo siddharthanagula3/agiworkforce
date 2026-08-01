@@ -25,6 +25,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useAuthStore } from '@/src/features/auth/store';
 import {
   executionModeForConversation,
   isHistoryVisibleConversation,
@@ -127,6 +128,7 @@ export function ChatsListScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ChatListFilter>('all');
   const appMode = useChatAppModeStore((state) => state.appMode);
+  const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
 
   const conversations = useChatStore((state) => state.conversations);
   const messages = useChatStore((state) => state.messages);
@@ -142,23 +144,40 @@ export function ChatsListScreen() {
   const cloudArtifacts = useArtifactStore((state) => state.cloudArtifacts);
   const cloudArtifactsOwnerId = useArtifactStore((state) => state.cloudArtifactsOwnerId);
 
+  // Re-run when the gate inputs change, not only on mount.
+  //
+  // loadConversations no-ops unless Cloud Mode is active AND Clerk has
+  // hydrated, and it swallows failures to stay usable offline. On a cold start
+  // the mount usually wins that race, so the one-shot effect fetched nothing
+  // and the screen kept rendering whatever MMKV had persisted — indefinitely,
+  // since nothing re-triggered it. Chats archived on another surface stayed
+  // visible here for exactly that reason.
   useEffect(() => {
     void loadConversations();
-  }, [loadConversations]);
+  }, [appMode, isClerkSignedIn, loadConversations]);
 
   useEffect(() => {
     searchConversations(query);
   }, [query, searchConversations]);
 
-  const modeConversations = useMemo(
-    () =>
-      conversations.filter(
-        (conversation) =>
-          executionModeForConversation(conversation) === appMode &&
-          isHistoryVisibleConversation(conversation),
-      ),
-    [appMode, conversations],
-  );
+  // Read each mode's history from the store that OWNS it.
+  //
+  // Cloud conversations live in useChatCloudMessageStore — that is the store
+  // loadConversations() writes the server list into, and the SEPARATION-FIX in
+  // chatMessageStore.ts stopped cloud rows being written into the local store
+  // at all. This screen was still filtering the LOCAL store for rows tagged
+  // `executionMode: 'cloud'`, so in Cloud Mode it rendered a stale MMKV mirror
+  // that no server response ever touched: chats archived (or deleted, or
+  // renamed) elsewhere stayed exactly as they were, and the `archived=exclude`
+  // filter on the list request could not affect what was displayed.
+  const modeConversations = useMemo(() => {
+    const source = appMode === 'cloud' ? cloudConversations : conversations;
+    return source.filter(
+      (conversation) =>
+        executionModeForConversation(conversation) === appMode &&
+        isHistoryVisibleConversation(conversation),
+    );
+  }, [appMode, cloudConversations, conversations]);
 
   const filteredHistory = useMemo(() => {
     if (filter === 'pinned') return modeConversations.filter((conversation) => conversation.pinned);

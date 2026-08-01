@@ -92,6 +92,7 @@ jest.mock('../src/features/chat/components/ModeSwitchModal', () => {
 
 import { DrawerContent } from '../src/features/drawer/components/DrawerContent';
 import { useChatStore } from '../stores/chatStore';
+import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useProjectStore } from '../src/features/projects/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
@@ -113,6 +114,26 @@ describe('DrawerContent', () => {
     jest.clearAllMocks();
     mockPathname = '/chat';
 
+    // Cloud rows live in useChatCloudMessageStore — that is where
+    // loadConversations() writes the server list, and the local store stopped
+    // holding cloud conversations at all. Seeding this into the LOCAL store
+    // would exercise a path the app no longer has.
+    useChatCloudMessageStore.setState({
+      conversations: [
+        {
+          id: 'conv-cloud',
+          title: 'Cloud Chat',
+          updatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          messageCount: 2,
+          pinned: false,
+          model: DEFAULT_CLOUD_MODEL_ID,
+          provider: 'cloud_managed',
+          executionMode: 'cloud',
+        },
+      ],
+    } as never);
+
     useChatStore.setState({
       conversations: [
         {
@@ -131,17 +152,6 @@ describe('DrawerContent', () => {
           messageCount: 1,
           pinned: false,
           executionMode: 'local',
-        },
-        {
-          id: 'conv-cloud',
-          title: 'Cloud Chat',
-          updatedAt: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          messageCount: 2,
-          pinned: false,
-          model: DEFAULT_CLOUD_MODEL_ID,
-          provider: 'cloud_managed',
-          executionMode: 'cloud',
         },
       ],
       messages: {},
