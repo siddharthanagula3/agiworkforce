@@ -50,10 +50,48 @@ impl OsDatabaseKeyStore {
         keyring::Entry::new(&self.service, DATABASE_KEYRING_ACCOUNT)
             .map_err(|error| DatabaseKeyError::SecureStorage(error.to_string()))
     }
+
+    /// Key supplied by the automated-E2E harness instead of the OS Keychain.
+    ///
+    /// Reading a Keychain item blocks on a GUI approval dialog whenever the
+    /// requesting binary's signature is unknown, and every `cargo build`
+    /// re-signs the debug binary. Under WDIO nobody can click Allow, so the
+    /// app hangs before it opens its database and no native E2E can run.
+    ///
+    /// This escape hatch is deliberately narrow: it applies ONLY to the
+    /// isolated `*.wdio` bundle identifier, which is never shipped and owns a
+    /// throwaway app-data directory. A production or BYOK bundle ignores the
+    /// variable entirely, so no shipped trust boundary depends on it.
+    fn harness_key(&self) -> Option<[u8; DATABASE_KEY_BYTES]> {
+        if !self.service.ends_with(".wdio") {
+            return None;
+        }
+
+        let raw = std::env::var("AGI_DESKTOP_WDIO_DATABASE_KEY").ok()?;
+        let trimmed = raw.trim();
+        if trimmed.len() != DATABASE_KEY_BYTES * 2 {
+            tracing::warn!(
+                "AGI_DESKTOP_WDIO_DATABASE_KEY must be {} hex characters; ignoring it",
+                DATABASE_KEY_BYTES * 2
+            );
+            return None;
+        }
+
+        let mut key = [0u8; DATABASE_KEY_BYTES];
+        for (index, slot) in key.iter_mut().enumerate() {
+            let byte = trimmed.get(index * 2..index * 2 + 2)?;
+            *slot = u8::from_str_radix(byte, 16).ok()?;
+        }
+        Some(key)
+    }
 }
 
 impl DatabaseKeyStore for OsDatabaseKeyStore {
     fn load(&self) -> Result<Option<[u8; DATABASE_KEY_BYTES]>, DatabaseKeyError> {
+        if let Some(key) = self.harness_key() {
+            return Ok(Some(key));
+        }
+
         let secret = match self.entry()?.get_secret() {
             Ok(secret) => secret,
             Err(keyring::Error::NoEntry) => return Ok(None),
@@ -68,6 +106,12 @@ impl DatabaseKeyStore for OsDatabaseKeyStore {
     }
 
     fn store(&self, key: &[u8; DATABASE_KEY_BYTES]) -> Result<(), DatabaseKeyError> {
+        // The harness key is supplied per run and owns a throwaway profile;
+        // writing it back would put an E2E secret in the user's Keychain.
+        if self.harness_key().is_some() {
+            return Ok(());
+        }
+
         self.entry()?
             .set_secret(key)
             .map_err(|error| DatabaseKeyError::SecureStorage(error.to_string()))
@@ -308,6 +352,70 @@ pub fn open_main_database<S: DatabaseKeyStore>(
     match last_unreadable {
         Some(error) => Err(error.into()),
         None => Err(DatabaseKeyError::UnidentifiedDatabase),
+    }
+}
+
+#[cfg(test)]
+mod harness_key_tests {
+    use super::*;
+
+    /// One process-wide lock: these cases mutate a shared environment variable.
+    static ENV_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    const VALID_HEX: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+    fn with_env<T>(value: Option<&str>, body: impl FnOnce() -> T) -> T {
+        let _guard = ENV_GUARD.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        match value {
+            Some(value) => std::env::set_var("AGI_DESKTOP_WDIO_DATABASE_KEY", value),
+            None => std::env::remove_var("AGI_DESKTOP_WDIO_DATABASE_KEY"),
+        }
+        let outcome = body();
+        std::env::remove_var("AGI_DESKTOP_WDIO_DATABASE_KEY");
+        outcome
+    }
+
+    fn store_for(identifier: &str) -> OsDatabaseKeyStore {
+        OsDatabaseKeyStore::for_bundle_identifier(identifier).expect("valid identifier")
+    }
+
+    #[test]
+    fn harness_key_is_used_only_by_the_isolated_wdio_bundle() {
+        with_env(Some(VALID_HEX), || {
+            let harness = store_for("com.agiworkforce.desktop.wdio")
+                .harness_key()
+                .expect("wdio bundle should accept the harness key");
+            assert_eq!(harness[0], 0x00);
+            assert_eq!(harness[31], 0xff);
+
+            // The shipped bundles must never honour it, or an environment
+            // variable could dictate a production database key.
+            assert!(store_for("com.agiworkforce.desktop").harness_key().is_none());
+            assert!(store_for("com.agiworkforce.desktop.wdio.other")
+                .harness_key()
+                .is_none());
+        });
+    }
+
+    #[test]
+    fn harness_key_is_absent_without_a_well_formed_value() {
+        let wdio = "com.agiworkforce.desktop.wdio";
+        with_env(None, || assert!(store_for(wdio).harness_key().is_none()));
+        with_env(Some("deadbeef"), || {
+            assert!(store_for(wdio).harness_key().is_none(), "short value")
+        });
+        with_env(Some(&"zz".repeat(32)), || {
+            assert!(store_for(wdio).harness_key().is_none(), "non-hex value")
+        });
+    }
+
+    #[test]
+    fn harness_store_never_writes_the_run_key_into_the_keychain() {
+        with_env(Some(VALID_HEX), || {
+            let store = store_for("com.agiworkforce.desktop.wdio");
+            assert!(store.store(&[7u8; DATABASE_KEY_BYTES]).is_ok());
+            // Still the env-provided key, never the value just "stored".
+            assert_eq!(store.load().expect("load").expect("some")[0], 0x00);
+        });
     }
 }
 
