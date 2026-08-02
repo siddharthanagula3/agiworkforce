@@ -49,32 +49,13 @@ export function planEditRollback(
 }
 
 /**
- * Plan the rollback for regenerating the assistant message `assistantId`.
- *
- * Regeneration deletes the user turn being regenerated (the nearest preceding
- * user message), its assistant reply, and anything after, then re-sends the user
- * content. The rollback range MUST start at that user message — rolling back only
- * from the assistant leaves the original user message in place, so re-sending its
- * content produces a duplicate user message. Returns the user message index (so
- * the caller can read its content/attachments/metadata) plus the ids to delete,
- * or `null` if there's no regenerable user turn.
+ * `planRegenerateRollback` moved to `@agiworkforce/unified-chat`
+ * (`packages/ui/unified-chat/src/lib/regenerateReplay.ts`) alongside the
+ * regenerate replay decision it is always used with, so Desktop Cloud's
+ * Regenerate rolls back over exactly the same range web does. Re-exported here
+ * to keep web's import path (and its tests) unchanged.
  */
-export function planRegenerateRollback(
-  messages: readonly MinimalMessage[],
-  assistantId: string,
-): { userIndex: number; rollbackIds: string[] } | null {
-  const idx = messages.findIndex((m) => m.id === assistantId);
-  if (idx <= 0) return null;
-  let userIndex = -1;
-  for (let i = idx - 1; i >= 0; i--) {
-    if (messages[i]?.role === 'user') {
-      userIndex = i;
-      break;
-    }
-  }
-  if (userIndex < 0) return null;
-  return { userIndex, rollbackIds: messages.slice(userIndex).map((m) => m.id) };
-}
+export { planRegenerateRollback } from '@agiworkforce/unified-chat';
 
 /**
  * Resolve a stashed rollback at send time.
