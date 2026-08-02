@@ -34,14 +34,17 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://agiworkforce.com https://avatars.githubusercontent.com https://lh3.googleusercontent.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; connect-src 'self' ipc: https://api.agiworkforce.com https://agiworkforce.com https://api.stripe.com https://agiworkforce-signaling.fly.dev wss://agiworkforce-signaling.fly.dev; frame-src 'self' https://js.stripe.com; frame-ancestors 'none'; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "csp": "default-src 'self' https://js.stripe.com artifact: http://artifact.localhost; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://agiworkforce.com https://avatars.githubusercontent.com https://lh3.googleusercontent.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; connect-src 'self' ipc: https://api.agiworkforce.com https://agiworkforce.com https://api.stripe.com https://agiworkforce-signaling.fly.dev wss://agiworkforce-signaling.fly.dev; frame-ancestors 'none'; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'",
       "pattern": {
         "use": "isolation",
         "options": {
           "dir": "isolation"
         }
       },
-      "capabilities": ["default", "recorder-hud"]
+      "capabilities": [
+        "default",
+        "recorder-hud"
+      ]
     }
   },
   "bundle": {
@@ -55,14 +58,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/native_messaging_host"],
+    "externalBin": [
+      "binaries/native_messaging_host"
+    ],
     "windows": {
       "digestAlgorithm": "sha256",
       "timestampUrl": "https://timestamp.digicert.com",
       "nsis": {
         "installerIcon": "icons/icon.ico",
         "installMode": "currentUser",
-        "languages": ["English"]
+        "languages": [
+          "English"
+        ]
       },
       "wix": {
         "language": "en-US"
@@ -81,7 +88,9 @@
     "deep-link": {
       "mobile": [],
       "desktop": {
-        "schemes": ["agiworkforce"]
+        "schemes": [
+          "agiworkforce"
+        ]
       }
     },
     "updater": {
