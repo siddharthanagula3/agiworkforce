@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   analyzeHitlRequirements,
   analyzeWiring,
+  collectReachableRendererFiles,
   extractHitlRequirements,
   extractRegisteredCommands,
   INVOKE_CALL_PATTERN,
@@ -96,4 +97,73 @@ test('preserves HITL handler enforcement and ignores commented-out approval call
     'terminal_exec -> handlers/terminal.rs has no request_confirmation_simple call',
     'open_url -> missing handler handlers/browser.rs',
   ]);
+});
+
+test('a command whose only caller is an unreachable module is reported, not counted as wired', () => {
+  const lexical = new Set(['mounted_command', 'orphan_tree_command']);
+  const reachable = new Set(['mounted_command']);
+
+  const unguarded = analyzeWiring({
+    registeredCommands: ['mounted_command', 'orphan_tree_command'],
+    frontendCalls: lexical,
+    rustDefinitions: new Set(['mounted_command', 'orphan_tree_command']),
+    allowlisted: new Set(),
+    reachableFrontendCalls: reachable,
+    reachabilityAllowlisted: new Set(),
+  });
+
+  // The lexical group stays green - this is exactly why the old check passed.
+  assert.deepEqual(unguarded.registeredWithoutFrontend, []);
+  // The reachability group catches it.
+  assert.deepEqual(unguarded.registeredWithoutReachableCaller, ['orphan_tree_command']);
+});
+
+test('a reviewed reachability allowlist entry passes until its caller becomes reachable', () => {
+  const accepted = analyzeWiring({
+    registeredCommands: ['orphan_tree_command'],
+    frontendCalls: new Set(['orphan_tree_command']),
+    rustDefinitions: new Set(['orphan_tree_command']),
+    allowlisted: new Set(),
+    reachableFrontendCalls: new Set(),
+    reachabilityAllowlisted: new Set(['orphan_tree_command']),
+  });
+  assert.deepEqual(accepted.registeredWithoutReachableCaller, []);
+  assert.deepEqual(accepted.staleReachabilityAllowlist, []);
+
+  const wired = analyzeWiring({
+    registeredCommands: ['orphan_tree_command'],
+    frontendCalls: new Set(['orphan_tree_command']),
+    rustDefinitions: new Set(['orphan_tree_command']),
+    allowlisted: new Set(),
+    reachableFrontendCalls: new Set(['orphan_tree_command']),
+    reachabilityAllowlisted: new Set(['orphan_tree_command']),
+  });
+  assert.deepEqual(wired.staleReachabilityAllowlist, ['orphan_tree_command']);
+});
+
+test('omitting the reachable set keeps the legacy lexical semantics', () => {
+  const result = analyzeWiring({
+    registeredCommands: ['a'],
+    frontendCalls: new Set(['a']),
+    rustDefinitions: new Set(['a']),
+    allowlisted: new Set(),
+  });
+  assert.deepEqual(result.registeredWithoutReachableCaller, []);
+  assert.deepEqual(result.staleReachabilityAllowlist, []);
+});
+
+test('the renderer reachability walk reaches the real desktop entry point', () => {
+  const reachable = collectReachableRendererFiles();
+  assert.ok(
+    reachable.size > 100,
+    `expected the renderer graph to contain the app, got ${reachable.size} module(s)`,
+  );
+  assert.ok(
+    [...reachable].some((file) => file.endsWith('/apps/desktop/src/main.tsx')),
+    'main.tsx must be in its own reachable set',
+  );
+  assert.ok(
+    [...reachable].some((file) => file.endsWith('/apps/desktop/src/App.tsx')),
+    'App.tsx must be reachable from main.tsx, otherwise the walk is misconfigured',
+  );
 });
