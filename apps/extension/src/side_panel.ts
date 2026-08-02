@@ -35,6 +35,11 @@ import {
   claimConversationOwner,
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
+import {
+  backgroundConversationId,
+  takePendingResultConversation,
+  OPEN_BROWSER_CONVERSATION_MESSAGE,
+} from './features/background/background-results';
 import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
 import { el } from './features/side-panel/dom';
 import { buildBubbleWithTools } from './features/side-panel/bubbles';
@@ -60,6 +65,7 @@ import {
   ArrowUp,
   Clock,
   Trash2,
+  MessageSquare,
   Monitor,
   Mic,
   Camera,
@@ -143,6 +149,17 @@ let refreshCloudAccountUI: (forceAuthRefresh?: boolean) => Promise<void> = async
 let refreshModelPickerUI: () => void = () => {
   /* no-op until buildUI() initialises the real implementation */
 };
+
+/**
+ * Load a stored conversation into the panel by id.
+ *
+ * Background runs (scheduled tasks, prompt shortcuts) file their answers into
+ * the same conversation store the History drawer reads. This hook lets the
+ * module-scope message listener, the boot sequence, and the Workflows task
+ * rows all open one of those results using the same restore path a history
+ * entry uses. Real implementation is installed by buildUI().
+ */
+let openStoredConversation: (conversationId: string) => Promise<boolean> = async () => false;
 let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
 type ManagedCloudChatState = 'loading' | 'ready' | 'signed_out' | 'unavailable';
@@ -1973,6 +1990,8 @@ function injectStyles(): void {
     .sp-wf-task-toggle:checked::after { transform: translateX(14px); }
     .sp-wf-task-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
     .sp-wf-task-delete:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-wf-task-result { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+    .sp-wf-task-result:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-focus); }
     .sp-wf-new-task-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-new-task-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
@@ -4923,6 +4942,24 @@ function buildUI(): void {
     renderMessages();
     scrollToBottom();
   }
+
+  // Install the module-scope hook so notification clicks, the boot sequence and
+  // the Workflows task rows can open a stored background result through the
+  // same restore path a history entry uses.
+  openStoredConversation = async (conversationId: string): Promise<boolean> => {
+    try {
+      const entry = await getConversation(conversationId);
+      if (!entry) return false;
+      restoreHistoryEntry(entry);
+      // Restoring while Workflows or Computer Use is showing would put the
+      // conversation behind whatever tab the click came from.
+      switchTab('chat');
+      return true;
+    } catch (err) {
+      console.warn('[SidePanel] failed to open stored conversation:', err);
+      return false;
+    }
+  };
 
   // #sp-settings-bar removed in Phase 3: the drawer's Bridge URL section
   // supersedes it. The bridge-url save logic is in the drawer (drawerSaveBridgeUrl).
@@ -7948,58 +7985,95 @@ function refreshWorkflowsShortcuts(): void {
         });
         return;
       }
-      for (const sc of shortcuts) {
-        const item = el('div', { class: 'sp-wf-shortcut-item' });
-        const isPromptBased = sc.prompt && Array.isArray(sc.actions) && sc.actions.length === 0;
-        const shortcutIcon = el('div', { class: 'sp-wf-shortcut-icon' });
-        if (isPromptBased) {
-          shortcutIcon.textContent = '/';
-        } else {
-          shortcutIcon.appendChild(renderIcon(Zap, 14));
-        }
-        item.appendChild(shortcutIcon);
-        const info = el('div', { class: 'sp-wf-shortcut-info' });
-        info.appendChild(el('div', { class: 'sp-wf-shortcut-name' }, sc.name));
-        const actionsCount = Array.isArray(sc.actions) ? sc.actions.length : 0;
-        const dateStr = new Date(sc.createdAt).toLocaleDateString([], {
-          month: 'short',
-          day: 'numeric',
-        });
-        // Legacy records may still carry `scheduled`, but shortcut scheduling
-        // never had an executor. Do not present that dormant bit as a live state;
-        // actual scheduled work is managed in the Scheduled Tasks section below.
-        const metaText = isPromptBased
-          ? `prompt shortcut · ${dateStr}`
-          : `${actionsCount} actions · ${dateStr}`;
-        info.appendChild(el('div', { class: 'sp-wf-shortcut-meta' }, metaText));
-        item.appendChild(info);
-        const btns = el('div', { class: 'sp-wf-shortcut-btns' });
-        const playBtn = el(
-          'button',
-          { class: 'sp-wf-btn-replay', title: 'Replay workflow' },
-          ' Play',
-        );
-        playBtn.addEventListener('click', () => {
-          playBtn.textContent = '...';
-          (playBtn as HTMLButtonElement).disabled = true;
-          chrome.runtime.sendMessage({ type: 'REPLAY_SHORTCUT', shortcutId: sc.id }, () => {
-            playBtn.textContent = ' Play';
-            (playBtn as HTMLButtonElement).disabled = false;
-          });
-        });
-        btns.appendChild(playBtn);
-        const delBtn = iconButton({ class: 'sp-wf-btn-delete', title: 'Delete' }, Trash2);
-        delBtn.addEventListener('click', () => {
-          chrome.runtime.sendMessage({ type: 'DELETE_SHORTCUT', shortcutId: sc.id }, () => {
-            if (!chrome.runtime.lastError) refreshWorkflowsShortcuts();
-          });
-        });
-        btns.appendChild(delBtn);
-        item.appendChild(btns);
-        list.appendChild(item);
-      }
+      // A prompt shortcut's answer is filed under a shortcut-scoped
+      // conversation. Only offer "View last result" where one actually exists.
+      void listConversations()
+        .catch(() => [] as ConversationEntry[])
+        .then((entries) => renderShortcutRows(list, shortcuts, new Set(entries.map((e) => e.id))));
     },
   );
+}
+
+function renderShortcutRows(
+  list: HTMLElement,
+  shortcuts: Array<{
+    id: string;
+    name: string;
+    actions: unknown[];
+    createdAt: number;
+    prompt?: string;
+    startUrl?: string;
+    scheduled?: boolean;
+  }>,
+  storedConversationIds: ReadonlySet<string>,
+): void {
+  clearChildren(list);
+  for (const sc of shortcuts) {
+    const item = el('div', { class: 'sp-wf-shortcut-item' });
+    const isPromptBased = sc.prompt && Array.isArray(sc.actions) && sc.actions.length === 0;
+    const shortcutIcon = el('div', { class: 'sp-wf-shortcut-icon' });
+    if (isPromptBased) {
+      shortcutIcon.textContent = '/';
+    } else {
+      shortcutIcon.appendChild(renderIcon(Zap, 14));
+    }
+    item.appendChild(shortcutIcon);
+    const info = el('div', { class: 'sp-wf-shortcut-info' });
+    info.appendChild(el('div', { class: 'sp-wf-shortcut-name' }, sc.name));
+    const actionsCount = Array.isArray(sc.actions) ? sc.actions.length : 0;
+    const dateStr = new Date(sc.createdAt).toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    });
+    // Legacy records may still carry `scheduled`, but shortcut scheduling
+    // never had an executor. Do not present that dormant bit as a live state;
+    // actual scheduled work is managed in the Scheduled Tasks section below.
+    const metaText = isPromptBased
+      ? `prompt shortcut · ${dateStr}`
+      : `${actionsCount} actions · ${dateStr}`;
+    info.appendChild(el('div', { class: 'sp-wf-shortcut-meta' }, metaText));
+    item.appendChild(info);
+    const btns = el('div', { class: 'sp-wf-shortcut-btns' });
+    const resultConversationId = backgroundConversationId('shortcut', sc.id);
+    const playBtn = el('button', { class: 'sp-wf-btn-replay', title: 'Replay workflow' }, ' Play');
+    playBtn.addEventListener('click', () => {
+      playBtn.textContent = '...';
+      (playBtn as HTMLButtonElement).disabled = true;
+      chrome.runtime.sendMessage(
+        { type: 'REPLAY_SHORTCUT', shortcutId: sc.id },
+        (resp: { success?: boolean } | undefined) => {
+          playBtn.textContent = ' Play';
+          (playBtn as HTMLButtonElement).disabled = false;
+          // A prompt shortcut produces an answer rather than a page effect.
+          // Show it here instead of leaving the user with a spinner that
+          // finished and nothing to read.
+          if (chrome.runtime.lastError || !resp?.success) return;
+          if (!isPromptBased || !resultConversationId) return;
+          void openStoredConversation(resultConversationId);
+        },
+      );
+    });
+    btns.appendChild(playBtn);
+    if (isPromptBased && resultConversationId && storedConversationIds.has(resultConversationId)) {
+      const resultBtn = iconButton(
+        { class: 'sp-wf-task-result', title: 'View last result' },
+        MessageSquare,
+      );
+      resultBtn.addEventListener('click', () => {
+        void openStoredConversation(resultConversationId);
+      });
+      btns.appendChild(resultBtn);
+    }
+    const delBtn = iconButton({ class: 'sp-wf-btn-delete', title: 'Delete' }, Trash2);
+    delBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'DELETE_SHORTCUT', shortcutId: sc.id }, () => {
+        if (!chrome.runtime.lastError) refreshWorkflowsShortcuts();
+      });
+    });
+    btns.appendChild(delBtn);
+    item.appendChild(btns);
+    list.appendChild(item);
+  }
 }
 
 function refreshWorkflowsTasks(): void {
@@ -8031,48 +8105,95 @@ function refreshWorkflowsTasks(): void {
         setChild(list, { tag: 'div', className: 'sp-wf-empty', text: 'No scheduled tasks' });
         return;
       }
-      for (const task of tasks) {
-        const item = el('div', { class: 'sp-wf-task-item' });
-        const toggle = el('input', {
-          type: 'checkbox',
-          class: 'sp-wf-task-toggle',
-        }) as HTMLInputElement;
-        toggle.checked = task.enabled;
-        toggle.addEventListener('change', () => {
-          const previousState = !toggle.checked;
-          chrome.runtime.sendMessage(
-            {
-              type: 'UPDATE_SCHEDULED_TASK',
-              taskId: task.id,
-              updates: { enabled: toggle.checked },
-            },
-            (resp: { success?: boolean } | undefined) => {
-              if (chrome.runtime.lastError || !resp?.success) {
-                toggle.checked = previousState;
-              }
-            },
-          );
-        });
-        item.appendChild(toggle);
-        const info = el('div', { class: 'sp-wf-task-info' });
-        info.appendChild(el('div', { class: 'sp-wf-task-name' }, task.name));
-        info.appendChild(el('span', { class: 'sp-wf-task-schedule-badge' }, task.scheduleType));
-        item.appendChild(info);
-        const delBtn = iconButton({ class: 'sp-wf-task-delete', title: 'Delete task' }, Trash2);
-        delBtn.addEventListener('click', () => {
-          chrome.runtime.sendMessage({ type: 'DELETE_SCHEDULED_TASK', taskId: task.id }, () => {
-            if (!chrome.runtime.lastError) refreshWorkflowsTasks();
-          });
-        });
-        item.appendChild(delBtn);
-        list.appendChild(item);
-      }
+      // A scheduled run files its answer under a task-scoped conversation id.
+      // Look up which of those exist so "View result" is only rendered when it
+      // has something to open — an always-on button would be the dead control
+      // this fix is closing.
+      void listConversations()
+        .catch(() => [] as ConversationEntry[])
+        .then((entries) => renderTaskRows(list, tasks, new Set(entries.map((e) => e.id))));
     },
   );
 }
 
+function renderTaskRows(
+  list: HTMLElement,
+  tasks: Array<{
+    id: string;
+    name: string;
+    enabled: boolean;
+    scheduleType: string;
+    scheduleValue: string;
+    lastRun?: number;
+  }>,
+  storedConversationIds: ReadonlySet<string>,
+): void {
+  clearChildren(list);
+  for (const task of tasks) {
+    const item = el('div', { class: 'sp-wf-task-item' });
+    const toggle = el('input', {
+      type: 'checkbox',
+      class: 'sp-wf-task-toggle',
+    }) as HTMLInputElement;
+    toggle.checked = task.enabled;
+    toggle.addEventListener('change', () => {
+      const previousState = !toggle.checked;
+      chrome.runtime.sendMessage(
+        {
+          type: 'UPDATE_SCHEDULED_TASK',
+          taskId: task.id,
+          updates: { enabled: toggle.checked },
+        },
+        (resp: { success?: boolean } | undefined) => {
+          if (chrome.runtime.lastError || !resp?.success) {
+            toggle.checked = previousState;
+          }
+        },
+      );
+    });
+    item.appendChild(toggle);
+    const info = el('div', { class: 'sp-wf-task-info' });
+    info.appendChild(el('div', { class: 'sp-wf-task-name' }, task.name));
+    info.appendChild(el('span', { class: 'sp-wf-task-schedule-badge' }, task.scheduleType));
+    item.appendChild(info);
+    const resultConversationId = backgroundConversationId('task', task.id);
+    if (resultConversationId && storedConversationIds.has(resultConversationId)) {
+      const resultBtn = iconButton(
+        { class: 'sp-wf-task-result', title: 'View last result' },
+        MessageSquare,
+      );
+      resultBtn.addEventListener('click', () => {
+        void openStoredConversation(resultConversationId);
+      });
+      item.appendChild(resultBtn);
+    }
+    const delBtn = iconButton({ class: 'sp-wf-task-delete', title: 'Delete task' }, Trash2);
+    delBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'DELETE_SCHEDULED_TASK', taskId: task.id }, () => {
+        if (!chrome.runtime.lastError) refreshWorkflowsTasks();
+      });
+    });
+    item.appendChild(delBtn);
+    list.appendChild(item);
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg: unknown) => {
   const envelope = msg as { type: string };
+
+  // A completion notification for a scheduled task / shortcut was clicked while
+  // this panel was already open. Open the conversation holding its answer.
+  if (envelope.type === OPEN_BROWSER_CONVERSATION_MESSAGE) {
+    const request = msg as { conversationId?: unknown };
+    if (typeof request.conversationId === 'string' && request.conversationId.length > 0) {
+      void openStoredConversation(request.conversationId).then((opened) => {
+        // The boot-time pointer is the fallback for a panel that was not yet
+        // listening; consume it here so the result is not opened twice.
+        if (opened) void takePendingResultConversation();
+      });
+    }
+    return;
+  }
 
   if (envelope.type === 'WEBMCP_TOOLS_CHANGED') {
     const toolsMsg = msg as { tools: WebMCPToolEntry[] };
@@ -8257,6 +8378,9 @@ void (async () => {
       // Check for pending chat from context menu (selection, summarize, explain, translate)
       checkPendingChat();
       void checkPendingContextHandoff();
+      // A notification click opens the panel without being able to pass a
+      // payload, so the conversation it pointed at is parked in session storage.
+      void checkPendingBackgroundResult();
     })
     .catch((err) => {
       // Boot errors must not surface to the user, but log for debugging.
@@ -8295,6 +8419,18 @@ async function probeBridgeStatus(): Promise<void> {
     // A restarting native worker never blocks Managed Cloud chat.
     hideLegacyOfflineOnboarding();
   }
+}
+
+/**
+ * Open the background result a notification click pointed at.
+ *
+ * The pointer is consumed unconditionally so a stale id (its conversation was
+ * deleted, or aged out of the 30-day store) cannot re-fire on every boot.
+ */
+async function checkPendingBackgroundResult(): Promise<void> {
+  const conversationId = await takePendingResultConversation();
+  if (!conversationId) return;
+  await openStoredConversation(conversationId);
 }
 
 function checkPendingChat(): void {
