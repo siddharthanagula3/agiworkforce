@@ -6,6 +6,11 @@ import { DESKTOP_CLOUD_TAGLINE } from '../../../../constants/cloudAvailability';
 const LazyAccountSettings = lazy(() =>
   import('../../AccountSettings').then((m) => ({ default: m.AccountSettings })),
 );
+// Account identifier, sessions, API keys and account deletion — the controls
+// web has under Account and Desktop had no equivalent for at all (DES-C21).
+const LazyCloudAccountControls = lazy(() =>
+  import('./CloudAccountControls').then((m) => ({ default: m.CloudAccountControls })),
+);
 function Fallback({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
@@ -58,8 +63,15 @@ export function AccountTab({ scope = 'local' }: { scope?: 'local' | 'cloud' }) {
   }
 
   return (
-    <Suspense fallback={<Fallback label="Loading account settings..." />}>
-      <LazyAccountSettings />
-    </Suspense>
+    <div className="flex flex-col gap-8">
+      <Suspense fallback={<Fallback label="Loading account settings..." />}>
+        <LazyAccountSettings />
+      </Suspense>
+      <div className="border-t border-border pt-8">
+        <Suspense fallback={<Fallback label="Loading account controls..." />}>
+          <LazyCloudAccountControls />
+        </Suspense>
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 import { WEB_APP_URL } from '../api/config';
 import { OWNED_CLOUD_WINDOW_LABELS, waitForOwnedWebviewWindow } from './ownedWebviewWindow';
+import { recordOwnedWindowPresentation, resolveContentProtection } from './ownedWindowPresentation';
 
 const CLOUD_CONNECTOR_WINDOW_LABEL = OWNED_CLOUD_WINDOW_LABELS.connectorInstall;
 const CONNECTOR_POLL_INTERVAL_MS = 1_500;
@@ -24,12 +25,17 @@ export interface DesktopCloudConnectorInstallOptions {
  * The provider may navigate the child window away from AGI temporarily, while
  * the main webview polls only AGI's authenticated connector API. No provider
  * credential or callback payload crosses into the Desktop JavaScript context.
+ *
+ * The install window is an authorization-consent surface, not a credential
+ * form, so it stays capturable — a black window here is indistinguishable from
+ * a hung install during a screen-shared walkthrough.
  */
 export async function completeDesktopCloudConnectorInstall(
   rawUrl: string,
   { isConnected }: DesktopCloudConnectorInstallOptions,
 ): Promise<void> {
   const url = trustedInstallUrl(rawUrl);
+  const contentProtected = resolveContentProtection('connector-install');
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
 
   const existing = await WebviewWindow.getByLabel(CLOUD_CONNECTOR_WINDOW_LABEL);
@@ -50,9 +56,14 @@ export async function completeDesktopCloudConnectorInstall(
     maximizable: false,
     minimizable: false,
     skipTaskbar: true,
-    contentProtected: true,
+    contentProtected,
   });
 
+  recordOwnedWindowPresentation(
+    CLOUD_CONNECTOR_WINDOW_LABEL,
+    'connector-install',
+    contentProtected,
+  );
   await waitForOwnedWebviewWindow(installWindow, 'Could not open the connector window');
 
   let closedByUser = false;
