@@ -1,4 +1,18 @@
-import { useState, useEffect } from 'react';
+'use client';
+
+// SIX-25: this banner is the only thing that can turn analytics on. It was
+// fully built and never mounted while `GoogleAnalytics` loaded gtag.js for
+// every visitor, which contradicted the published /cookies policy ("Analytics
+// is opt-in"). It is now mounted in app/layout.tsx and paired with
+// `AnalyticsConsentGate`.
+//
+// Only the categories the site actually uses are offered. The previous
+// "Marketing Cookies" switch controlled nothing and contradicted /cookies
+// ("Advertising: None. We do not run ads."), so it is gone rather than shipped
+// as a dead control.
+
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { X, Cookie, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -11,73 +25,51 @@ import {
   DialogTitle,
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
-
-interface CookiePreferences {
-  necessary: boolean;
-  analytics: boolean;
-  marketing: boolean;
-}
-
-const STORAGE_KEY = 'cookie-consent';
+import {
+  ALL_ACCEPTED_PREFERENCES,
+  COOKIE_CONSENT_OPEN_EVENT,
+  NECESSARY_ONLY_PREFERENCES,
+  readCookiePreferences,
+  writeCookiePreferences,
+  type CookiePreferences,
+} from '@shared/lib/cookie-consent';
 
 export const CookieConsent = () => {
   const [showBanner, setShowBanner] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [preferences, setPreferences] = useState<CookiePreferences>({
-    necessary: true, // Always true, can't be disabled
-    analytics: false,
-    marketing: false,
-  });
+  const [preferences, setPreferences] = useState<CookiePreferences>(NECESSARY_ONLY_PREFERENCES);
 
   useEffect(() => {
-    const consent = localStorage.getItem(STORAGE_KEY);
-    if (!consent) {
-      // Show banner after 1 second delay
-      const timer = setTimeout(() => setShowBanner(true), 1000);
-      return () => clearTimeout(timer);
+    const stored = readCookiePreferences();
+    if (stored) {
+      // Already decided: no banner, but the dialog must open showing the real
+      // stored choice if the user reopens it from /cookies.
+      setPreferences(stored);
+      return undefined;
     }
-    return undefined;
+
+    // Short delay so the banner does not fight the first paint.
+    const timer = setTimeout(() => setShowBanner(true), 1000);
+    return () => clearTimeout(timer);
   }, []);
 
-  const savePreferences = (prefs: CookiePreferences) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  // Withdrawing consent has to be as reachable as giving it. The /cookies page
+  // dispatches this event so a decided user can change their mind.
+  useEffect(() => {
+    const openSettings = () => {
+      setPreferences(readCookiePreferences() ?? NECESSARY_ONLY_PREFERENCES);
+      setShowSettings(true);
+    };
+    window.addEventListener(COOKIE_CONSENT_OPEN_EVENT, openSettings);
+    return () => window.removeEventListener(COOKIE_CONSENT_OPEN_EVENT, openSettings);
+  }, []);
+
+  const savePreferences = useCallback((prefs: CookiePreferences) => {
+    setPreferences(prefs);
     setShowBanner(false);
     setShowSettings(false);
-
-    // Dispatch a custom DOM event so analytics/marketing scripts can react to consent changes
-    // without coupling this component to specific analytics libraries
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('cookie-consent-updated', {
-          detail: {
-            analytics: prefs.analytics,
-            marketing: prefs.marketing,
-          },
-        }),
-      );
-    }
-  };
-
-  const acceptAll = () => {
-    const allAccepted = {
-      necessary: true,
-      analytics: true,
-      marketing: true,
-    };
-    savePreferences(allAccepted);
-  };
-
-  const acceptNecessary = () => {
-    savePreferences({
-      necessary: true,
-      analytics: false,
-      marketing: false,
-    });
-  };
-
-  const saveCustom = () => {
-    savePreferences(preferences);
-  };
+    writeCookiePreferences(prefs);
+  }, []);
 
   return (
     <>
@@ -88,13 +80,15 @@ export const CookieConsent = () => {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             className="fixed bottom-0 left-0 right-0 z-50 p-4 md:p-6"
+            role="region"
+            aria-label="Cookie consent"
           >
             <div className="mx-auto max-w-7xl">
               <div className="relative rounded-lg border bg-card p-3 shadow-2xl backdrop-blur-sm sm:p-4 md:p-6">
                 <button
                   onClick={() => setShowBanner(false)}
                   className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full hover:bg-muted"
-                  aria-label="Close banner"
+                  aria-label="Ask me later"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -103,11 +97,14 @@ export const CookieConsent = () => {
                   <div className="flex flex-1 items-start gap-3">
                     <Cookie className="mt-1 h-6 w-6 flex-shrink-0 text-primary" />
                     <div>
-                      <h3 className="mb-1 font-semibold">We Value Your Privacy</h3>
-                      <p className="text-sm text-muted-foreground">
-                        We use cookies to enhance your browsing experience, provide personalized
-                        content, and analyze our traffic. By clicking &quot;Accept All&quot;, you
-                        consent to our use of cookies.
+                      <h3 className="mb-1 font-semibold">We value your privacy</h3>
+                      <p className="pr-10 text-sm text-muted-foreground">
+                        Cookies that keep you signed in are always on. Analytics is off until you
+                        turn it on, and we never set advertising cookies. Read the{' '}
+                        <Link href="/cookies" className="underline underline-offset-2">
+                          cookie policy
+                        </Link>
+                        .
                       </p>
                     </div>
                   </div>
@@ -122,11 +119,15 @@ export const CookieConsent = () => {
                       <Settings className="h-4 w-4" />
                       Customize
                     </Button>
-                    <Button variant="outline" size="sm" onClick={acceptNecessary}>
-                      Necessary Only
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => savePreferences(NECESSARY_ONLY_PREFERENCES)}
+                    >
+                      Necessary only
                     </Button>
-                    <Button size="sm" onClick={acceptAll}>
-                      Accept All
+                    <Button size="sm" onClick={() => savePreferences(ALL_ACCEPTED_PREFERENCES)}>
+                      Allow analytics
                     </Button>
                   </div>
                 </div>
@@ -136,58 +137,48 @@ export const CookieConsent = () => {
         )}
       </AnimatePresence>
 
-      {/* Settings Dialog */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Cookie Preferences</DialogTitle>
+            <DialogTitle>Cookie preferences</DialogTitle>
             <DialogDescription>
-              Manage your cookie preferences. You can enable or disable different types of cookies
-              below.
+              These are the only cookie categories this site uses. See the{' '}
+              <Link href="/cookies" className="underline underline-offset-2">
+                cookie policy
+              </Link>{' '}
+              for what each one covers.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {/* Necessary Cookies */}
             <div className="flex items-center justify-between space-x-2">
               <div className="flex-1">
-                <Label className="font-medium">Necessary Cookies</Label>
+                <Label className="font-medium">Necessary</Label>
                 <p className="text-sm text-muted-foreground">
-                  Required for the website to function properly. Cannot be disabled.
+                  Auth session, CSRF token and locale. Required for the site to work, so this cannot
+                  be switched off.
                 </p>
               </div>
-              <Switch checked={true} disabled />
+              <Switch checked disabled aria-label="Necessary cookies (always on)" />
             </div>
 
-            {/* Analytics Cookies */}
             <div className="flex items-center justify-between space-x-2">
               <div className="flex-1">
-                <Label className="font-medium">Analytics Cookies</Label>
+                <Label className="font-medium" htmlFor="cookie-analytics">
+                  Analytics
+                </Label>
                 <p className="text-sm text-muted-foreground">
-                  Help us understand how visitors interact with our website.
+                  Aggregated page views (Google Analytics 4), with no personally identifying
+                  information. Off by default.
                 </p>
               </div>
               <Switch
+                id="cookie-analytics"
                 checked={preferences.analytics}
                 onCheckedChange={(checked) =>
-                  setPreferences({ ...preferences, analytics: checked })
+                  setPreferences({ necessary: true, analytics: checked })
                 }
-              />
-            </div>
-
-            {/* Marketing Cookies */}
-            <div className="flex items-center justify-between space-x-2">
-              <div className="flex-1">
-                <Label className="font-medium">Marketing Cookies</Label>
-                <p className="text-sm text-muted-foreground">
-                  Used to track visitors across websites for marketing purposes.
-                </p>
-              </div>
-              <Switch
-                checked={preferences.marketing}
-                onCheckedChange={(checked) =>
-                  setPreferences({ ...preferences, marketing: checked })
-                }
+                aria-label="Analytics cookies"
               />
             </div>
           </div>
@@ -196,7 +187,7 @@ export const CookieConsent = () => {
             <Button variant="outline" onClick={() => setShowSettings(false)}>
               Cancel
             </Button>
-            <Button onClick={saveCustom}>Save Preferences</Button>
+            <Button onClick={() => savePreferences(preferences)}>Save preferences</Button>
           </div>
         </DialogContent>
       </Dialog>

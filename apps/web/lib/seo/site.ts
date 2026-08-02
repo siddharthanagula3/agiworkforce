@@ -49,6 +49,40 @@ export const SOCIAL_PROFILES = [
 export const SUPPORT_EMAIL = 'contact@agiworkforce.com';
 
 /**
+ * Paths kept out of every crawler's index: API surface, admin, auth flows, the
+ * authenticated app itself (chat, settings, billing, projects, user,
+ * customize), and the non-production QA harnesses.
+ *
+ * The app routes carry per-user state. The harness routes (`/dev/*`,
+ * `/qa-artifacts`) render hand-authored, fabricated transcripts and must never
+ * be indexed as if they were product output — SIX-24. Those two already
+ * `notFound()` under `NODE_ENV === 'production'` via their segment layouts, so
+ * these entries are belt-and-braces that also cover preview/staging domains.
+ *
+ * Lives here rather than in `app/robots.ts` so `sitemap.ts` and the SEO tests
+ * can read the same list; `robots.ts` is a Next metadata route and should only
+ * export its default.
+ *
+ * Keep in lockstep with sitemap.ts — nothing here may appear there.
+ */
+export const DISALLOW_APP = [
+  '/api/',
+  '/admin/',
+  '/auth/',
+  '/dashboard/',
+  '/account/',
+  '/chat',
+  '/chat/schedules',
+  '/settings',
+  '/billing',
+  '/chat/projects',
+  '/user',
+  '/chat/customize',
+  '/dev/',
+  '/qa-artifacts',
+] as const;
+
+/**
  * Build an absolute canonical URL for a public path.
  * `/` maps to the bare origin; every other path is appended verbatim.
  */

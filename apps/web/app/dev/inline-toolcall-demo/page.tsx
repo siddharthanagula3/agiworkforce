@@ -57,6 +57,10 @@ const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
 ];
 
 export default function InlineToolCallDemoPage() {
+  // SIX-24: `app/dev/layout.tsx` already 404s this whole segment under
+  // NODE_ENV=production (a real 404 status, unlike the 200-with-empty-body this
+  // branch produces). Kept as defence-in-depth for the case where that layout
+  // is removed.
   if (process.env.NODE_ENV === 'production') {
     return null;
   }
